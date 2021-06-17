@@ -1,21 +1,24 @@
 {
-  "name": "module",
-  "title": "New Module",
-  "description": "",
+  "name": "elevated-vision",
+  "title": "Elevated Vision",
+  "description": "Modify Foundry VTT vision and lighting based on terrain, token, or wall elevations",
   "version": "This is auto replaced",
-  "library": "false",
+  "library": false,
   "manifestPlusVersion": "1.0.0",
-  "minimumCoreVersion": "0.7.9",
-  "compatibleCoreVersion": "0.7.9",
+  "minimumCoreVersion": "0.8.6",
+  "compatibleCoreVersion": "0.8.7",
   "authors": [
     {
-      "name": "The League of Extraordinary FVTT Developers",
-      "url": "https://github.com/League-of-Foundry-Developers",
-      "discord": "discordID#0001"
+      "name": "caewok",
+      "url": "https://github.com/caewok",
+      "discord": "caewok#9192"
     }
   ],
   "dependencies": [
-
+    {
+      "name": "lib-wrapper",
+        "manifest": "https://raw.githubusercontent.com/ruipin/fvtt-lib-wrapper/master/module.json"
+    }
   ],
   "conflicts": [
     
@@ -23,9 +26,7 @@
   "esmodules": [
     "/scripts/module.js"
   ],
-  "scripts": [
-    "/scripts/lib/lib.js"
-  ],
+
   "styles": [
     "/styles/module.css"
   ],
