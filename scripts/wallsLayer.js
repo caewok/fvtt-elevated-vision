@@ -34,7 +34,7 @@ export function evComputePolygon(wrapped, ...args) {
    */
 export function evTestWall(wrapped, ...args) {
   const res = wrapped(...args)
-  log("evTestWall", ...args, res);  
+  //log("evTestWall", ...args, res);  
   return res;
 }
 
