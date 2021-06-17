@@ -30,6 +30,8 @@ Hooks.once('devModeReady', ({ registerPackageDebugFlag }) => {
 
 Hooks.on('sightRefresh', (obj) => {
   log("sightRefresh", obj);
+  
+  // called on load (twice?)
 });
 
 

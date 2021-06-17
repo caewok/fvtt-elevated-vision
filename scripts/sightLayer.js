@@ -4,6 +4,8 @@ import { log } from "./module.js";
    * Restrict the visibility of certain canvas assets (like Tokens or DoorControls) based on the visibility polygon
    * These assets should only be displayed if they are visible given the current player's field of view
    */
+
+// no args, no return
 export function evRestrictVisiblity(wrapped, ...args) {
   const res = wrapped(...args)
   log("evRestrictVisiblity", ...args, res);
@@ -21,6 +23,20 @@ export function evRestrictVisiblity(wrapped, ...args) {
    *
    * @return {boolean}              Whether the point is currently visible.
    */
+   
+/*
+point: 
+x: 1610
+​
+y: 1890
+
+tolerance: 35
+
+object: looks like a token. e.g., Randal token. (only other token on the map)
+// iterates through each object (token) on the map
+
+return: false
+*/   
 export function evTestVisibility(wrapped, ...args) {
   const res = wrapped(...args)
   log("evTestVisibility", ...args, res);
