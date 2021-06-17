@@ -1,3 +1,5 @@
+import { registerPatches } from "./patching.js";
+
 export const MODULE_ID = 'elevated-vision';
 const FORCE_DEBUG = false; // used for logging before dev mode is set up
 
@@ -19,8 +21,6 @@ Hooks.once('init', async function() {
 
 Hooks.once('ready', async function() {
   registerPatches();
-
-
 });
 
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
