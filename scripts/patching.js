@@ -9,5 +9,5 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, 'SightLayer.prototype.testVisibility', evTestVisibility, 'WRAPPER');
   
   libWrapper.register(MODULE_ID, 'WallsLayer.prototype.computePolygon', evComputePolygon, 'WRAPPER');
-  libWrapper.register(MODULE_ID, 'WallsLayer.prototype.testWall', evTestWall, 'WRAPPER');
+  libWrapper.register(MODULE_ID, 'WallsLayer.testWall', evTestWall, 'WRAPPER');
 }
