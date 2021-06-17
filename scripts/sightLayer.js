@@ -40,5 +40,7 @@ return: false
 export function evTestVisibility(wrapped, ...args) {
   const res = wrapped(...args)
   log("evTestVisibility", ...args, res);
+  log("evTestVisibility this", this);
+  
   return res;
 }
