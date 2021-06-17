@@ -1,11 +1,11 @@
 import { log } from "./module.js";
 
-export evComputePolygon(wrapped, ...args) {
+export function evComputePolygon(wrapped, ...args) {
   const res = wrapped(...args)
   log("evComputePolygon", ...args, res);
 }
 
-export evTestWall(wrapped, ...args) {
+export function evTestWall(wrapped, ...args) {
   const res = wrapped(...args)
   log("evTestWall", ...args, res);  
 }
