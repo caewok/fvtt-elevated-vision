@@ -34,4 +34,16 @@ Hooks.on('sightRefresh', (obj) => {
   // called on load (twice?)
 });
 
-
+// Need hook for updating elevation?
+// DEBUG | Calling updateToken hook with args: foundry.js:147:15
+// Array(4) [ {…}, {…}, {…}, "eXzk9tB2nubjuVL3" ]
+// ​
+// 0: Object { apps: {}, _sheet: null, _object: {…}, … }
+// ​
+// 1: Object { elevation: 20, _id: "RiuUZYvERLIZ17ex" }
+// ​
+// 2: Object { diff: true, render: true }
+// ​
+// 3: "eXzk9tB2nubjuVL3"
+// ​
+// length: 4
