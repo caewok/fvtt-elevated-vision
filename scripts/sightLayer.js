@@ -43,6 +43,9 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   log("evTestVisibility this", this);
   log(`evTestVisibility wrapped returned ${res}`);
   
+  const debug = canvas.controls.debug;
+  debug.clear();
+  
   // need a token object
   if(!object) return res;
   
@@ -83,6 +86,7 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
      // find terrain walls that intersect the ray between the source and the test token
      // origin is the point to be tested
      let ray = new Ray(point, { x: s.x, y: s.y });
+     debug.lineStyle(1, 0x00FF00).moveTo(r.A.x, r.A.y).lineTo(r.B.x, r.B.y);
      
      // TO DO: faster to check rectangles first? 
      // could do t.x, t.x + t.width, t.y, t.y + t.height
@@ -91,7 +95,11 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
 //        ray.intersectSegment?
        
        // probably faster than checking everything in the polygon?
-       if(!testBounds(t, ray)) return false;
+       if(!testBounds(t, ray)) {
+         log("tested bounds returned false", t, ray);
+         return false;
+       
+       }
        
        // for lines at each points, determine if intersect
        // last point is same as first point (if closed). Always open? 
@@ -124,6 +132,9 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
 function testBounds(terrain, ray) {
   //  An array of coordinates [x0, y0, x1, y1] which defines a line segment
   // rect points are A, B, C, D clockwise from upper left
+  const debug = canvas.controls.debug;
+  debug.lineStyle(0).beginFill(0x66FFFF, 0.1).drawShape(terrain.getBounds());
+  
   const A = {x: terrain.data.x, y: terrain.data.y};
   const B = {x: terrain.data.x + terrain.data.width, y: terrain.data.y};
   const C = {x: B.x, y: terrain.data.y + terrain.data.height};
@@ -132,15 +143,20 @@ function testBounds(terrain, ray) {
   //log("testBounds bounds of terrain", terrain.getLocalBounds(), terrain.getBounds());
   
   // top 
+  
+  debug.lineStyle(1, 0xFF0000).moveTo(A.x, A.y).lineTo(B.x, B.y);
   if(ray.intersectSegment([A.x, A.y, B.x, B.y])) return true;
   
   // right
+  debug.lineStyle(1, 0xFF0000).moveTo(B.x, B.y).lineTo(C.x, C.y);
   if(ray.intersectSegment([B.x, B.y, C.x, C.y])) return true;
   
   // bottom
+  debug.lineStyle(1, 0xFF0000).moveTo(C.x, C.y).lineTo(D.x, D.y);
   if(ray.intersectSegment([C.x, C.y, D.x, D.y])) return true;
   
   // left
+  debug.lineStyle(1, 0xFF0000).moveTo(D.x, D.y).lineTo(A.x, A.y);
   if(ray.intersectSegment([D.x, D.y, A.x, A.y])) return true;
   
   return false;
