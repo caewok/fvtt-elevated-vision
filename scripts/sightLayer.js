@@ -65,15 +65,16 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   // t.data.height, width, x, y gives the rectangle. x,y is upper left corner?
   // t.data.points are the points of the polygon relative to x,y
   log("evTestVisiblity terrains", terrains);
-  const obj_elevation = object.data.elevation || 0;
+  const obj_elevation = toGridDistance(object.data.elevation || 0);
   
   // this.sources is a map of selected tokens (may be size 0)
   // all tokens contribute to the vision
   // so iterate through the tokens
-  const visible_to_sources = [...this.sources].forEach(s => {
+  if(!this.sources || this.sources.size === 0) return res;
+  const visible_to_sources = [...this.sources].map(s => {
      // get the token elevation
      log("evTestVisibility source", s);
-     const src_elevation = s.object.data.elevation || 0;
+     const src_elevation = toGridDistance(s.object.data.elevation || 0);
      
      // find terrain walls that intersect the ray between the source and the test token
      // origin is the point to be tested
@@ -92,7 +93,7 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
          return false;
        }
        
-       const terrain_elevation = t.max || 0; // Number.NEGATIVE_INFINITY may be a better option? But then should just return false...
+       const terrain_elevation = toGridDistance(t.max || 0); // Number.NEGATIVE_INFINITY may be a better option? But then should just return false...
        
        // for lines at each points, determine if intersect
        // last point is same as first point (if closed). Always open? 
@@ -122,15 +123,25 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
        //return t.shape.contains(testX, testY);
      });  // terrains.map
      // if any terrain blocks, then the token is not visible for that sight source
-     const is_visible = terrains_block.reduce((total, curr) => total || curr, false);
+     const is_visible = !terrains_block.reduce((total, curr) => total || curr, false);
+     log(`terrains ${is_visible ? "do not block" : "do block"}`, terrains_block);
+  
      return is_visible;
      
   }); // [...this.sources].forEach
   
   // if any source has vision to the token, the token is visible
   const is_visible = visible_to_sources.reduce((total, curr) => total || curr, false);
+  log(`object ${is_visible ? "is visible" : "is not visible"} to sources`, visible_to_sources);
   
   return is_visible;
+}
+
+/* 
+ * Helper function to convert absolute increments to grid distance
+ */
+export function toGridDistance(increment) {
+  return Math.round(increment * canvas.scene.data.gridDistance * 100) / 100;
 }
 
 function intersectionBlocks(intersection, ray, src_elevation, obj_elevation, terrain_elevation) {
@@ -154,16 +165,24 @@ e|    \     |    |
  Ø = theta
  T = terrain wall
 */  
-  
+   
   
   // theta is the angle between the 3-D sight line and the sight line in 2-D
   let ray_to_intersect = new Ray(ray.A, intersection);
   
-  const theta = invTan((src_elevation - terrain_elevation) / ray_to_intersect.distance);
+  const opposite = src_elevation - terrain_elevation;
+  const ratio = opposite / ray_to_intersect.distance; // ray_to_intersect.distance is the adjacent side of the triangle
+  const theta = invTan(ratio);
   const x = src_elevation / Math.tan(theta);
-  console.log(`src_elevation: ${src_elevation}; obj_elevation: ${obj_elevation}; terrain_elevation: ${terrain_elevation}`);
-  console.log(`distance to wall intersect: ${ray_to_intersect.distance}`, ray_to_intersect);
-  console.log(`theta: ${theta}; x: ${x}`);
+  log(`src_elevation: ${src_elevation}; obj_elevation: ${obj_elevation}; terrain_elevation: ${terrain_elevation}`);
+  log(`opposite: ${opposite};  ratio: ${ratio}`);
+  log(`distance to wall intersect (adjacent): ${ray_to_intersect.distance}`, ray_to_intersect);
+  log(`(e-h): ${(src_elevation - terrain_elevation)}`); 
+  log(`theta: ${theta}; x: ${x}`);
+  log(`ray distance: ${ray.distance}`, ray);
+  log(`tan(theta) = ((e - h) / d): tan(${theta}) = ((${src_elevation} - ${terrain_elevation}) / ${ray_to_intersect.distance})`);
+  log(`x = e / tan(theta): ${x} = ${src_elevation} / tan(${theta})`);
+
   
   return (x > ray.distance); // x is the distance at which the terrain segment blocks for the given elevations.
 }
