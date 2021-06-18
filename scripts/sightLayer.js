@@ -65,23 +65,16 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   // t.data.height, width, x, y gives the rectangle. x,y is upper left corner?
   // t.data.points are the points of the polygon relative to x,y
   log("evTestVisiblity terrains", terrains);
-  //terrains = terrains.map(t => {
-  //  t.data.points = t.data.points.map(p => {
-  //    return[t.x + p[0], t.y + p[1]];
-  //  });
-  //  return t;
-  //});
-  //log("evTestVisiblity terrains after conversion to actual points", terrains);
-
-  // get the object elevation
-  
+  const obj_elevation = object.data.elevation || 0;
   
   // this.sources is a map of selected tokens (may be size 0)
   // all tokens contribute to the vision
   // so iterate through the tokens
-  [...this.sources].forEach(s => {
+  const visible_to_sources = [...this.sources].forEach(s => {
      // get the token elevation
      log("evTestVisibility source", s);
+     const src_elevation = s.object.data.elevation || 0;
+     
      // find terrain walls that intersect the ray between the source and the test token
      // origin is the point to be tested
      let ray = new Ray(point, { x: s.x, y: s.y });
@@ -90,15 +83,16 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
      // TO DO: faster to check rectangles first? 
      // could do t.x, t.x + t.width, t.y, t.y + t.height
      
-     const filtered_terrains = terrains.filter(t => {
+     const terrains_block = terrains.map(t => {
 //        ray.intersectSegment?
        
        // probably faster than checking everything in the polygon?
        if(!testBounds(t, ray)) {
          log("tested bounds returned false", t, ray);
          return false;
-       
        }
+       
+       const terrain_elevation = t.max || 0; // Number.NEGATIVE_INFINITY may be a better option? But then should just return false...
        
        // for lines at each points, determine if intersect
        // last point is same as first point (if closed). Always open? 
@@ -114,21 +108,71 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
          if(intersection) {
            log(`Intersection found at i = ${i}!`, segment, intersection);
            debug.lineStyle(1, 0xFFA500).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
+           
+           if(intersectionBlocks(intersection, ray, src_elevation, obj_elevation, terrain_elevation)) return true; // once we find a blocking segment we are done
+           
          } else {
            debug.lineStyle(1, 0x00FF00).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
          }
        }
        
-       return true;
+       return false;
        
        // Ray.fromArrays(p[0], p[1])
        //return t.shape.contains(testX, testY);
-     });
+     });  // terrains.map
+     // if any terrain blocks, then the token is not visible for that sight source
+     const is_visible = terrains_block.reduce((total, curr) => total || curr, false);
+     return is_visible;
      
-  });
+  }); // [...this.sources].forEach
+  
+  // if any source has vision to the token, the token is visible
+  const is_visible = visible_to_sources.reduce((total, curr) => total || curr, false);
+  
+  return is_visible;
+}
+
+function intersectionBlocks(intersection, ray, src_elevation, obj_elevation, terrain_elevation) {
+  // terrain segment operates as the fulcrum of a see-saw, where the sight ray in 3-D moves
+  //   depending on elevations: as src moves up, it can see an obj that is lower in elevation.  
+  // the geometry is a rectangle with the 3-D sight line running from upper left corner to 
+  //   lower right (or lower left to upper right) and the wall vertical in the middle.
+  // draw a line from the vision source to the target (this should be ray)
+  // get distance from source to the intersection point on the canvas
+/*
+
+ V----------T----------?
+ | \ Ø      |    |
+e|    \     |    |
+ |       \  |    |  
+ |          \    |
+ |          |  \ | <- point where obj can be seen by V for given elevations 
+ ----------------------
+ |<-   x       ->|
+ e = height of V (vision object)
+ Ø = theta
+ T = terrain wall
+*/  
   
   
-  return res;
+  // theta is the angle between the 3-D sight line and the sight line in 2-D
+  let ray_to_intersect = new Ray(ray.A, intersection);
+  
+  const theta = invTan((src_elevation - terrain_elevation) / ray_to_intersect.distance);
+  const x = src_elevation / Math.tan(theta);
+  console.log(`src_elevation: ${src_elevation}; obj_elevation: ${obj_elevation}; terrain_elevation: ${terrain_elevation}`);
+  console.log(`distance to wall intersect: ${ray_to_intersect.distance}`, ray_to_intersect);
+  console.log(`theta: ${theta}; x: ${x}`);
+  
+  return (x > ray.distance); // x is the distance at which the terrain segment blocks for the given elevations.
+}
+
+/*
+ * Helper function to calculate inverse tan, or tan-1
+ */
+function invTan(x) {
+  return Math.atan(x) * (180 / Math.PI);
 }
 
 /*
