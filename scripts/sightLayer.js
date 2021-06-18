@@ -103,7 +103,7 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
        // for lines at each points, determine if intersect
        // last point is same as first point (if closed). Always open? 
        for(let i = 0; i < (t.data.points.length - 1); i++) {
-         log(`Testing intersection (${t.data.x + t.data.points[i][0]}, ${t.data.y + t.data.points[i][1]}), (${t.data.x + t.data.points[i + 1][0]}, ${t.data.y + t.data.points[i + 1][1]}`, ray);
+         //log(`Testing intersection (${t.data.x + t.data.points[i][0]}, ${t.data.y + t.data.points[i][1]}), (${t.data.x + t.data.points[i + 1][0]}, ${t.data.y + t.data.points[i + 1][1]}`, ray);
          const segment = { A: { x: t.data.x + t.data.points[i][0],
                                 y: t.data.y + t.data.points[i][1] },
                            B: { x: t.data.x + t.data.points[i + 1][0],
@@ -112,10 +112,10 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
          const intersection = ray.intersectSegment([segment.A.x, segment.A.y,
                                                     segment.B.x, segment.B.y]);
          if(intersection) {
-           log("Intersection found at i = ${i}!", segment, intersection);
-           debug.lineStyle(1, 0x00FF00).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
+           log(`Intersection found at i = ${i}!`, segment, intersection);
+           debug.lineStyle(1, 0xFFA500).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
          } else {
-           debug.lineStyle(1, 0x90ee90).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
+           debug.lineStyle(1, 0x00FF00).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
          }
        }
        
