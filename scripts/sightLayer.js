@@ -144,54 +144,66 @@ export function toGridDistance(increment) {
   return Math.round(increment * canvas.scene.data.gridDistance * 100) / 100;
 }
 
-function intersectionBlocks(intersection, ray, src_elevation, obj_elevation, terrain_elevation) {
+/*
+ * Calculate whether a terrain or wall segment blocks vision of an object.
+ * @param intersection {t0: Number, t1: Number, x: Number, y: Number} Point at which the
+ *   ray between the vision point and the object intersects the terrain/wall segment
+ * @param ray_VO {Ray} Ray representing vision line between vision point and object. 
+ *   Runs through intersection.
+ * @param Ve {Number} Vision elevation in the same units as intersection and ray_VO.
+ * @param Oe {Number} Object elevation in the same units as intersection and ray_VO.
+ * @param Te {Number} Terrain/wall segment elevation in the same units as intersection and ray_VO.
+ * return {Boolean} true if the segment blocks vision of object from view at vision point. 
+ */
+function intersectionBlocks(intersection, ray_VO, Ve, Oe, Te) {
   // terrain segment operates as the fulcrum of a see-saw, where the sight ray in 3-D moves
   //   depending on elevations: as src moves up, it can see an obj that is lower in elevation.  
   // the geometry is a rectangle with the 3-D sight line running from upper left corner to 
   //   lower right (or lower left to upper right) and the wall vertical in the middle.
-  // draw a line from the vision source to the target (this should be ray)
-  // get distance from source to the intersection point on the canvas
+  // draw line from vision source to the intersection point on the canvas
+  // use the height of the terrain to figure out theta and then use the angle to infer 
+  //   whether the height of O is sufficient to be seen
 /*
 
- V----------T----------?
- | \ Ø      |    |
-e|    \     |    |
- |       \  |    |  
- |          \    |
- |          |  \ | <- point where obj can be seen by V for given elevations 
- ----------------------
- |<-   x       ->|
+  V----------T----------?
+  | \ Ø      |    |
+Ve|    \     |    |
+  |       \  |    |  
+  |          \    |
+  |        Te|  \ | <- point where obj can be seen by V for given elevations 
+  ---------------------
+  |<-   VOd      ->|
  e = height of V (vision object)
  Ø = theta
  T = terrain wall
 */  
-   
+  // if any elevation is negative, normalize so that the lowest elevation is 0
+  const min_elevation = Math.min(Ve, Oe, Te);
+  if(min_elevation < 0) {
+    const adder = abs(min_elevation);
+    Ve = Ve + min_elevation;
+    Oe = Oe + min_elevation;
+    Te = Te + min_elevation;
+  }
+
+  // if the vision elevation is less than the terrain elevation, 
+  //   the wall blocks unless the object is higher than the wall 
+  if(Ve <= Te && Oe <= Ve) return true;
   
+ 
+  // looking up, over the wall or
+  // looking down at the wall; the wall shades some parts near it.
+  const ray_VT = new Ray(ray_VO.A, { x: intersection.x, y: intersection.y }); 
+
   // theta is the angle between the 3-D sight line and the sight line in 2-D
-  let ray_to_intersect = new Ray(ray.A, intersection);
-  
-  const opposite = src_elevation - terrain_elevation;
-  const ratio = opposite / ray_to_intersect.distance; // ray_to_intersect.distance is the adjacent side of the triangle
-  const theta = invTan(ratio);
-  const x = src_elevation / Math.tan(theta);
-  log(`src_elevation: ${src_elevation}; obj_elevation: ${obj_elevation}; terrain_elevation: ${terrain_elevation}`);
-  log(`opposite: ${opposite};  ratio: ${ratio}`);
-  log(`distance to wall intersect (adjacent): ${ray_to_intersect.distance}`, ray_to_intersect);
-  log(`(e-h): ${(src_elevation - terrain_elevation)}`); 
-  log(`theta: ${theta}; x: ${x}`);
-  log(`ray distance: ${ray.distance}`, ray);
-  log(`tan(theta) = ((e - h) / d): tan(${theta}) = ((${src_elevation} - ${terrain_elevation}) / ${ray_to_intersect.distance})`);
-  log(`x = e / tan(theta): ${x} = ${src_elevation} / tan(${theta})`);
+  const theta = Math.atan((Ve - Te) / ray_VT.distance);
+  log(`theta = Math.atan((Ve - Te) / ray_VT.distance) = atan((${Ve} - ${Te}) / ${ray_VT.distance}) = ${theta}`);
 
-  
-  return (x > ray.distance); // x is the distance at which the terrain segment blocks for the given elevations.
-}
+  // elevation of O needed to see O from vision point.
+  const Oe_needed = Math.tan(theta) * ray_VO.distance;
+  log(`Oe_needed = Math.tan(theta) * ray_VO.distance = tan(${theta}) * ${ray_VO.distance} = ${Oe_needed}; Oe = ${Oe}`);
 
-/*
- * Helper function to calculate inverse tan, or tan-1
- */
-function invTan(x) {
-  return Math.atan(x) * (180 / Math.PI);
+  return Oe_needed > Oe;  
 }
 
 /*
