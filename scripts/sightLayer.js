@@ -1,4 +1,4 @@
-import { log } from "./module.js";
+import { log, MODULE_ID } from "./module.js";
 
  /**
    * Restrict the visibility of certain canvas assets (like Tokens or DoorControls) based on the visibility polygon
@@ -50,7 +50,7 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   if(!res) return res;
   
   // temporary; will eventually check for wall height as well
-  if(!game.settings.get(MODULE_ID, "enable-terrain-elevation")) return res;
+  if(!game.modules.get("enhanced-terrain-layer")?.active) return res;
   
   const terrain_layer = canvas.layers.filter(l => l?.options?.objectClass?.name === "Terrain")[0];
   if(!terrain_layer) return res;
@@ -62,13 +62,15 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   // do here to avoid repeating this later
   // t.data.height, width, x, y gives the rectangle. x,y is upper left corner?
   // t.data.points are the points of the polygon relative to x,y
-  terrains = terrains.map(t => {
-    t.points = t.points.map(p => {
-      return[t.x + p[0], t.y + p[1]];
-    });
-    return t;
-  });
-  
+  log("evTestVisiblity terrains", terrains);
+  //terrains = terrains.map(t => {
+  //  t.data.points = t.data.points.map(p => {
+  //    return[t.x + p[0], t.y + p[1]];
+  //  });
+  //  return t;
+  //});
+  //log("evTestVisiblity terrains after conversion to actual points", terrains);
+
   // get the object elevation
   
   
@@ -77,7 +79,7 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   // so iterate through the tokens
   [...this.sources].forEach(s => {
      // get the token elevation
-     
+     log("evTestVisibility source", s);
      // find terrain walls that intersect the ray between the source and the test token
      // origin is the point to be tested
      let ray = new Ray(point, { x: s.x, y: s.y });
@@ -85,7 +87,7 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
      // TO DO: faster to check rectangles first? 
      // could do t.x, t.x + t.width, t.y, t.y + t.height
      
-     let terrains = terrains.filter(t => {
+     const filtered_terrains = terrains.filter(t => {
 //        ray.intersectSegment?
        
        // probably faster than checking everything in the polygon?
@@ -93,15 +95,17 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
        
        // for lines at each points, determine if intersect
        // last point is same as first point (if closed). Always open? 
-       for(let i = 0; i < (t.points.length - 1); i++) {
-         const intersection = ray.intersectSegment([t.points[i][0], t.points[i][1],
-                                                    t.points[i + 1][0], t.points[i + 1][1]]);
+       for(let i = 0; i < (t.data.points.length - 1); i++) {
+         log(`Testing intersection (${t.data.x + t.data.points[i][0]}, ${t.data.y + t.data.points[i][1]}), (${t.data.x + t.data.points[i + 1][0]}, ${t.data.y + t.data.points[i + 1][1]}`, ray);
+         const intersection = ray.intersectSegment([t.data.x + t.data.points[i][0], t.data.y + t.data.points[i][1],
+                                                    t.data.x + t.data.points[i + 1][0], t.data.y + t.data.points[i + 1][1]]);
          if(intersection) {
            log("Intersection found at i = ${i}!", intersection);
          }
        
        }
        
+       return true;
        
        // Ray.fromArrays(p[0], p[1])
        //return t.shape.contains(testX, testY);
@@ -120,11 +124,12 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
 function testBounds(terrain, ray) {
   //  An array of coordinates [x0, y0, x1, y1] which defines a line segment
   // rect points are A, B, C, D clockwise from upper left
-  const A = {x: terrain.x, y: terrain.y};
-  const B = {x: terrain.x + terrain.width, terrain.y};
-  const C = {x: B.x, terrain.y + terrain.height};
-  const D = {x: terrain.x, y: C.y};
+  const A = {x: terrain.data.x, y: terrain.data.y};
+  const B = {x: terrain.data.x + terrain.data.width, y: terrain.data.y};
+  const C = {x: B.x, y: terrain.data.y + terrain.data.height};
+  const D = {x: terrain.data.x, y: C.y};
   
+  //log("testBounds bounds of terrain", terrain.getLocalBounds(), terrain.getBounds());
   
   // top 
   if(ray.intersectSegment([A.x, A.y, B.x, B.y])) return true;
@@ -136,7 +141,7 @@ function testBounds(terrain, ray) {
   if(ray.intersectSegment([C.x, C.y, D.x, D.y])) return true;
   
   // left
-  if(ray.intersectSegment([Dx, D.y, A.x, A.y])) return true;
+  if(ray.intersectSegment([D.x, D.y, A.x, A.y])) return true;
   
   return false;
 } 
