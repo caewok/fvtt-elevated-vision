@@ -104,12 +104,19 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
        // last point is same as first point (if closed). Always open? 
        for(let i = 0; i < (t.data.points.length - 1); i++) {
          log(`Testing intersection (${t.data.x + t.data.points[i][0]}, ${t.data.y + t.data.points[i][1]}), (${t.data.x + t.data.points[i + 1][0]}, ${t.data.y + t.data.points[i + 1][1]}`, ray);
-         const intersection = ray.intersectSegment([t.data.x + t.data.points[i][0], t.data.y + t.data.points[i][1],
-                                                    t.data.x + t.data.points[i + 1][0], t.data.y + t.data.points[i + 1][1]]);
+         const segment = { A: { x: t.data.x + t.data.points[i][0],
+                                y: t.data.y + t.data.points[i][1] },
+                           B: { x: t.data.x + t.data.points[i + 1][0],
+                                y: t.data.y + t.data.points[i + 1][1] }};
+         
+         const intersection = ray.intersectSegment([segment.A.x, segment.A.y,
+                                                    segment.B.x, segment.B.y]);
          if(intersection) {
-           log("Intersection found at i = ${i}!", intersection);
+           log("Intersection found at i = ${i}!", segment, intersection);
+           debug.lineStyle(1, 0x00FF00).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
+         } else {
+           debug.lineStyle(1, 0x90ee90).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
          }
-       
        }
        
        return true;
@@ -137,8 +144,13 @@ function testBounds(terrain, ray) {
   // getLocalBounds returns the correct size but all are tied to upper left corner (no location at all)
   // bounds object is {x, y, width, height, type: 1}
   //debug.lineStyle(0).beginFill(0x66FFFF, 0.1).drawShape(terrain.getLocalBounds());
-  debug.lineStyle(0).beginFill(0x66FFFF, 0.1).drawShape(new NormalizedRectangle(terrain.data.x, terrain.data.y, terrain.data.width, terrain.data.height));
+  const bounds_rect = new NormalizedRectangle(terrain.data.x, terrain.data.y, terrain.data.width, terrain.data.height);
+  debug.lineStyle(0).beginFill(0x66FFFF, 0.1).drawShape(bounds_rect);
 
+  // if the ray origin or destination is within the bounds, need to test the polygon
+  // could actually be outside the polygon but inside the rectangle bounds
+  if(bounds_rect.contains(ray.A.x, ray.A.y) || bounds_rect.contains(ray.B.x, ray.B.y)) return true;
+  
 
   const A = {x: terrain.data.x, y: terrain.data.y};
   const B = {x: terrain.data.x + terrain.data.width, y: terrain.data.y};
