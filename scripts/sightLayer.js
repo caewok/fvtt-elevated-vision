@@ -44,7 +44,6 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   log(`evTestVisibility wrapped returned ${res}`);
   
   const debug = canvas.controls.debug;
-  debug.clear();
   
   // need a token object
   if(!object) return res;
@@ -86,7 +85,7 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
      // find terrain walls that intersect the ray between the source and the test token
      // origin is the point to be tested
      let ray = new Ray(point, { x: s.x, y: s.y });
-     debug.lineStyle(1, 0x00FF00).moveTo(r.A.x, r.A.y).lineTo(r.B.x, r.B.y);
+     debug.lineStyle(1, 0x00FF00).moveTo(ray.A.x, ray.A.y).lineTo(ray.B.x, ray.B.y);
      
      // TO DO: faster to check rectangles first? 
      // could do t.x, t.x + t.width, t.y, t.y + t.height
@@ -133,14 +132,20 @@ function testBounds(terrain, ray) {
   //  An array of coordinates [x0, y0, x1, y1] which defines a line segment
   // rect points are A, B, C, D clockwise from upper left
   const debug = canvas.controls.debug;
-  debug.lineStyle(0).beginFill(0x66FFFF, 0.1).drawShape(terrain.getBounds());
-  
+
+  // getBounds returns the correct size and location but at the upper left corner (relative location but no real location data)
+  // getLocalBounds returns the correct size but all are tied to upper left corner (no location at all)
+  // bounds object is {x, y, width, height, type: 1}
+  //debug.lineStyle(0).beginFill(0x66FFFF, 0.1).drawShape(terrain.getLocalBounds());
+  debug.lineStyle(0).beginFill(0x66FFFF, 0.1).drawShape(new NormalizedRectangle(terrain.data.x, terrain.data.y, terrain.data.width, terrain.data.height));
+
+
   const A = {x: terrain.data.x, y: terrain.data.y};
   const B = {x: terrain.data.x + terrain.data.width, y: terrain.data.y};
   const C = {x: B.x, y: terrain.data.y + terrain.data.height};
   const D = {x: terrain.data.x, y: C.y};
   
-  //log("testBounds bounds of terrain", terrain.getLocalBounds(), terrain.getBounds());
+  //log("testBounds bounds of terrain", terrain.getLocalBounds(), terrain.getBounds(), terrain.data);
   
   // top 
   
