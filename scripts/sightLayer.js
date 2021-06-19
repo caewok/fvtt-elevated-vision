@@ -1,4 +1,4 @@
-import { log, MODULE_ID } from "./module.js";
+import { log, MODULE_ID, DEBUG_VISUALIZATION_ID } from "./module.js";
 
  /**
    * Restrict the visibility of certain canvas assets (like Tokens or DoorControls) based on the visibility polygon
@@ -43,7 +43,8 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   log("evTestVisibility this", this);
   log(`evTestVisibility wrapped returned ${res}`);
   
-  const debug = canvas.controls.debug;
+  const isDebuggingVision = window.DEV?.getPackageDebugValue(DEBUG_VISUALIZATION_ID);
+  const debug = isDebuggingVision ? canvas.controls.debug : undefined;
   
   // need a token object
   if(!object) return res;
@@ -78,7 +79,7 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
      // find terrain walls that intersect the ray between the source and the test token
      // origin is the point to be tested
      let ray_VO = new Ray({ x: s.x, y: s.y }, point);
-     debug.lineStyle(1, 0x00FF00).moveTo(ray_VO.A.x, ray_VO.A.y).lineTo(ray_VO.B.x, ray_VO.B.y);
+     if(isDebuggingVision) debug.lineStyle(1, 0x00FF00).moveTo(ray_VO.A.x, ray_VO.A.y).lineTo(ray_VO.B.x, ray_VO.B.y);
      log(`evTestVisibility source at distance ${ray_VO.distance} and elevation ${src_elevation}.`, s);
      
      // TO DO: faster to check rectangles first? 
@@ -107,12 +108,12 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
                                                     segment.B.x, segment.B.y]);
          if(intersection) {
            log(`Intersection found at i = ${i}!`, segment, intersection);
-           debug.lineStyle(1, 0xFFA500).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
+           if(isDebuggingVision) debug.lineStyle(1, 0xFFA500).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
            
            if(intersectionBlocks(intersection, ray_VO, src_elevation, obj_elevation, terrain_elevation, object.data.name)) return true; // once we find a blocking segment we are done
            
          } else {
-           debug.lineStyle(1, 0x00FF00).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
+           if(isDebuggingVision) debug.lineStyle(1, 0x00FF00).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
          }
        }
        
@@ -219,14 +220,15 @@ Ve|    \     |    |
 function testBounds(terrain, ray) {
   //  An array of coordinates [x0, y0, x1, y1] which defines a line segment
   // rect points are A, B, C, D clockwise from upper left
-  const debug = canvas.controls.debug;
+  const isDebuggingVision = window.DEV?.getPackageDebugValue(DEBUG_VISUALIZATION_ID);
+  const debug = isDebuggingVision ? canvas.controls.debug : undefined;
 
   // getBounds returns the correct size and location but at the upper left corner (relative location but no real location data)
   // getLocalBounds returns the correct size but all are tied to upper left corner (no location at all)
   // bounds object is {x, y, width, height, type: 1}
   //debug.lineStyle(0).beginFill(0x66FFFF, 0.1).drawShape(terrain.getLocalBounds());
   const bounds_rect = new NormalizedRectangle(terrain.data.x, terrain.data.y, terrain.data.width, terrain.data.height);
-  debug.lineStyle(0).beginFill(0x66FFFF, 0.1).drawShape(bounds_rect);
+  if(isDebuggingVision) debug.lineStyle(0).beginFill(0x66FFFF, 0.1).drawShape(bounds_rect);
 
   // if the ray origin or destination is within the bounds, need to test the polygon
   // could actually be outside the polygon but inside the rectangle bounds
@@ -242,19 +244,19 @@ function testBounds(terrain, ray) {
   
   // top 
   
-  debug.lineStyle(1, 0xFF0000).moveTo(A.x, A.y).lineTo(B.x, B.y);
+  if(isDebuggingVision) debug.lineStyle(1, 0xFF0000).moveTo(A.x, A.y).lineTo(B.x, B.y);
   if(ray.intersectSegment([A.x, A.y, B.x, B.y])) return true;
   
   // right
-  debug.lineStyle(1, 0xFF0000).moveTo(B.x, B.y).lineTo(C.x, C.y);
+  if(isDebuggingVision) debug.lineStyle(1, 0xFF0000).moveTo(B.x, B.y).lineTo(C.x, C.y);
   if(ray.intersectSegment([B.x, B.y, C.x, C.y])) return true;
   
   // bottom
-  debug.lineStyle(1, 0xFF0000).moveTo(C.x, C.y).lineTo(D.x, D.y);
+  if(isDebuggingVision) debug.lineStyle(1, 0xFF0000).moveTo(C.x, C.y).lineTo(D.x, D.y);
   if(ray.intersectSegment([C.x, C.y, D.x, D.y])) return true;
   
   // left
-  debug.lineStyle(1, 0xFF0000).moveTo(D.x, D.y).lineTo(A.x, A.y);
+  if(isDebuggingVision) debug.lineStyle(1, 0xFF0000).moveTo(D.x, D.y).lineTo(A.x, A.y);
   if(ray.intersectSegment([D.x, D.y, A.x, A.y])) return true;
   
   return false;
