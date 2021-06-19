@@ -34,6 +34,15 @@ Hooks.on('sightRefresh', (obj) => {
   // called on load (twice?)
 });
 
+Hooks.on('updateToken', (args) => {
+  log("updateToken", args);
+  if(args[1].elevation) {
+    log(`Token ${args[3]} elevation updated.`);
+    canvas.tokens.get(args[3]).updateSource();
+  }
+
+});
+
 // Need hook for updating elevation?
 // DEBUG | Calling updateToken hook with args: foundry.js:147:15
 // Array(4) [ {…}, {…}, {…}, "eXzk9tB2nubjuVL3" ]
