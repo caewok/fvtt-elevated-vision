@@ -66,30 +66,29 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   // t.data.points are the points of the polygon relative to x,y
   log("evTestVisiblity terrains", terrains);
   const obj_elevation = toGridDistance(object.data.elevation || 0);
-  
+  log(`evTestVisibility object with elevation ${obj_elevation}.`, object);
   // this.sources is a map of selected tokens (may be size 0)
   // all tokens contribute to the vision
   // so iterate through the tokens
   if(!this.sources || this.sources.size === 0) return res;
   const visible_to_sources = [...this.sources].map(s => {
      // get the token elevation
-     log("evTestVisibility source", s);
      const src_elevation = toGridDistance(s.object.data.elevation || 0);
      
      // find terrain walls that intersect the ray between the source and the test token
      // origin is the point to be tested
-     let ray = new Ray(point, { x: s.x, y: s.y });
-     debug.lineStyle(1, 0x00FF00).moveTo(ray.A.x, ray.A.y).lineTo(ray.B.x, ray.B.y);
+     let ray_VO = new Ray({ x: s.x, y: s.y }, point);
+     debug.lineStyle(1, 0x00FF00).moveTo(ray_VO.A.x, ray_VO.A.y).lineTo(ray_VO.B.x, ray_VO.B.y);
+     log(`evTestVisibility source at distance ${ray_VO.distance} and elevation ${src_elevation}.`, s);
      
      // TO DO: faster to check rectangles first? 
      // could do t.x, t.x + t.width, t.y, t.y + t.height
      
      const terrains_block = terrains.map(t => {
-//        ray.intersectSegment?
        
        // probably faster than checking everything in the polygon?
-       if(!testBounds(t, ray)) {
-         log("tested bounds returned false", t, ray);
+       if(!testBounds(t, ray_VO)) {
+         log("tested bounds returned false", t, ray_VO);
          return false;
        }
        
@@ -104,13 +103,13 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
                            B: { x: t.data.x + t.data.points[i + 1][0],
                                 y: t.data.y + t.data.points[i + 1][1] }};
          
-         const intersection = ray.intersectSegment([segment.A.x, segment.A.y,
+         const intersection = ray_VO.intersectSegment([segment.A.x, segment.A.y,
                                                     segment.B.x, segment.B.y]);
          if(intersection) {
            log(`Intersection found at i = ${i}!`, segment, intersection);
            debug.lineStyle(1, 0xFFA500).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
            
-           if(intersectionBlocks(intersection, ray, src_elevation, obj_elevation, terrain_elevation)) return true; // once we find a blocking segment we are done
+           if(intersectionBlocks(intersection, ray_VO, src_elevation, obj_elevation, terrain_elevation, object.data.name)) return true; // once we find a blocking segment we are done
            
          } else {
            debug.lineStyle(1, 0x00FF00).moveTo(segment.A.x, segment.A.y).lineTo(segment.B.x, segment.B.y);
@@ -141,7 +140,8 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
  * Helper function to convert absolute increments to grid distance
  */
 export function toGridDistance(increment) {
-  return Math.round(increment * canvas.scene.data.gridDistance * 100) / 100;
+  // TO-DO: What about hex or no grid maps? 
+  return Math.round(increment * canvas.grid.w / canvas.scene.data.gridDistance * 100) / 100;
 }
 
 /*
@@ -155,7 +155,7 @@ export function toGridDistance(increment) {
  * @param Te {Number} Terrain/wall segment elevation in the same units as intersection and ray_VO.
  * return {Boolean} true if the segment blocks vision of object from view at vision point. 
  */
-function intersectionBlocks(intersection, ray_VO, Ve, Oe, Te) {
+function intersectionBlocks(intersection, ray_VO, Ve, Oe, Te, obj_name="") {
   // terrain segment operates as the fulcrum of a see-saw, where the sight ray in 3-D moves
   //   depending on elevations: as src moves up, it can see an obj that is lower in elevation.  
   // the geometry is a rectangle with the 3-D sight line running from upper left corner to 
@@ -181,29 +181,35 @@ Ve|    \     |    |
   const min_elevation = Math.min(Ve, Oe, Te);
   if(min_elevation < 0) {
     const adder = abs(min_elevation);
-    Ve = Ve + min_elevation;
-    Oe = Oe + min_elevation;
-    Te = Te + min_elevation;
+    Ve = Ve + adder;
+    Oe = Oe + adder;
+    Te = Te + adder;
   }
 
   // if the vision elevation is less than the terrain elevation, 
   //   the wall blocks unless the object is higher than the wall 
-  if(Ve <= Te && Oe <= Ve) return true;
-  
+  log(`${obj_name} Ve: ${Ve}; Oe: ${Oe}; Te: ${Te}; VO: ${ray_VO.distance}`);
+
+  if(Ve <= Te && Oe <= Te) {
+   log(`Wall blocks because Ve <= Te (${Ve} <= ${Te}) and Oe <= Te (${Oe} <= ${Te})`);
+   return true;
+  }
  
   // looking up, over the wall or
   // looking down at the wall; the wall shades some parts near it.
   const ray_VT = new Ray(ray_VO.A, { x: intersection.x, y: intersection.y }); 
 
   // theta is the angle between the 3-D sight line and the sight line in 2-D
-  const theta = Math.atan((Ve - Te) / ray_VT.distance);
+  const theta = Math.atan((Ve - Te) / ray_VT.distance); // theta is in radians
   log(`theta = Math.atan((Ve - Te) / ray_VT.distance) = atan((${Ve} - ${Te}) / ${ray_VT.distance}) = ${theta}`);
 
-  // elevation of O needed to see O from vision point.
-  const Oe_needed = Math.tan(theta) * ray_VO.distance;
-  log(`Oe_needed = Math.tan(theta) * ray_VO.distance = tan(${theta}) * ${ray_VO.distance} = ${Oe_needed}; Oe = ${Oe}`);
+  // distance O needs to be from the wall before it can be seen, given elevations.
+  const TO_needed = (Te - Oe) / Math.tan(theta); // tan wants radians
+  const VO_needed = ray_VT.distance + TO_needed; // convert to distance from vision point
+  log(`TO_needed = (Te - Oe) / Math.tan(theta) = (${Te} - ${Oe}) / ${Math.tan(theta)} = ${TO_needed};`);
+  log(`VO_needed: ${VO_needed}; VO: ${ray_VO.distance}`);
 
-  return Oe_needed > Oe;  
+  return VO_needed > ray_VO.distance;  
 }
 
 /*
