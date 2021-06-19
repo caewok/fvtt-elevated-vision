@@ -1,4 +1,4 @@
-import { log, DEBUG_VISUALIZATION_ID } from "./module.js";
+import { log, MODULE_ID } from "./module.js";
 
 /*
 Clicking token:
@@ -122,7 +122,7 @@ export function evComputePolygon(wrapped, ...args) {
   const res = wrapped(...args)
   log("evComputePolygon", ...args, res);
   
-  const isDebuggingVision = window.DEV?.getPackageDebugValue(DEBUG_VISUALIZATION_ID);
+  const isDebuggingVision = window.DEV?.getPackageDebugValue(MODULE_ID, "level");
   if(isDebuggingVision) {
     const debug = canvas.controls.debug;
     debug.clear();

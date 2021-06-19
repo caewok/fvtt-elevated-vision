@@ -2,7 +2,6 @@ import { registerPatches } from "./patching.js";
 
 export const MODULE_ID = 'elevated-vision';
 const FORCE_DEBUG = false; // used for logging before dev mode is set up
-export const DEBUG_VISUALIZATION_ID = MODULE_ID + "." + "visualize";
 
 
 export function log(...args) {
@@ -27,7 +26,7 @@ Hooks.once('ready', async function() {
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
 Hooks.once('devModeReady', ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(MODULE_ID);
-  registerPackageDebugFlag(DEBUG_VISUALIZATION_ID);  
+  registerPackageDebugFlag(MODULE_ID, 'level', {default: 0})
 });
 
 Hooks.on('sightRefresh', (obj) => {
