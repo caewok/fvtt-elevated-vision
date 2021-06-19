@@ -34,11 +34,12 @@ Hooks.on('sightRefresh', (obj) => {
   // called on load (twice?)
 });
 
-Hooks.on('updateToken', (args) => {
-  log("updateToken", args);
-  if(args[1].elevation) {
-    log(`Token ${args[3]} elevation updated.`);
-    canvas.tokens.get(args[3]).updateSource();
+Hooks.on('updateToken', (scene, data, update, options) => {
+  log("updateToken", scene, data, update, options);
+  if(data.elevation) {
+    log(`Token ${options} elevation updated.`);
+    // canvas.tokens.get(options._id).updateSource(); // throws error
+    scene._object.updateSource();
   }
 
 });
