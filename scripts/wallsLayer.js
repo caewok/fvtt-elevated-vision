@@ -140,9 +140,7 @@ const COLORS = {
   yellow: 0xFFFF00,
   greenyellow: 0xADFF2F,
   blue: 0x0000FF,
-  red: 0xFF0000,
-  
-  
+  red: 0xFF0000
 }
 
 export function evComputePolygon(wrapped,
@@ -192,10 +190,23 @@ by terrain or non-infinite walls.
   // only need to do once per terrain
   // can we do this with forEach?
   // https://flaviocopes.com/javascript-async-await-array-map/
-  terrains = async() => {
+  // https://stackoverflow.com/questions/47227550/using-await-inside-non-async-function
+  (async () => {
+    return Promise.all(terrains.map(t => {
+
+    }
+    if(!t.document.getFlag(MODULE_ID, "segments")) {
+        t.document.setFlag(MODULE_ID, "segments", GetPolygonSegments(t.data));
+      }
+
+  })();
+
+  (async () => {
+    await 
+
     return Promise.all(terrains.map(t => {
       if(!t.document.getFlag(MODULE_ID, "segments")) {
-        await t.document.setFlag(MODULE_ID, "segments", GetPolygonSegments(t.data));
+        t.document.setFlag(MODULE_ID, "segments", GetPolygonSegments(t.data));
       }
       return t;
     }))
