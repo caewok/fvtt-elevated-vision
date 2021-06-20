@@ -162,7 +162,92 @@ export function evComputePolygon(wrapped,
     debug.lineStyle(1, 0xADFF2F).drawShape(res.los);
   }
   
+  /* Plan:
+Cannot easily cutout fov or los with shadows, because it will create holes
+that the PIXI system does not understand.   
+  
+Instead, build a shadows layer with polygons representing the shadows created
+by terrain or non-infinite walls. 
+  */
+  
+  let terrains = terrain_layer.placeables; // array of terrains
+  if(terrains.length === 0) return res;
+  
+  // check if the terrains are within the LOS
+  terrains = terrains.filter(t => {
+    for(let i = 0; i < (t.data.points.length - 1); i++) {         
+       const t_segment = new Ray({ x: t.data.x + t.data.points[i][0],
+                                   y: t.data.y + t.data.points[i][1] },
+                                 { x: t.data.x + t.data.points[i + 1][0],
+                                   y: t.data.y + t.data.points[i + 1][1] });
+                                                               
+       if(RayInsidePolygon(t_segment, res.los)) return true;
+       if(RayIntersectsPolygon(t_segment, res.los)) return true;
+       return false;                           
+  });
+  
+  if(isDebuggingVision) {
+    terrains.forEach(t => {
+      debug.lineStyle(1, 0xFF8C00).drawShape(t);
+    });
+  }
+  
+  
   return res;
+}
+
+/**
+ * Test if ray is partially or totally inside polygon
+ * @param {Ray} Segment ray to check
+ * @param {PIXI.Polygon} Polygon to check
+ * @return {boolean} true if ray is inside polygon
+ */
+function RayInsidePolygon(ray, poly) {
+   if(poly.contains(ray.A.x, ray.A.y)) return true;
+   if(poly.contains(ray.B.x, ray.B.y)) return true;
+   return false;
+}
+
+/**
+ * Test if a ray intersects a polygon
+ * @param {Ray} Segment ray to check
+ * @param {PIXI.Polygon} Polygon to check
+ * @return {boolean} true if ray intersects the polygon.
+ */
+function RayIntersectsPolygon(ray, poly) {
+  // TO-DO: Shortcuts? Sort by closest in some fashion?
+  for(let i = 0; i < (los.points.length - 1); i++) {
+    const los_segment = { A: { x: los.x + los.points[i][0],
+                               y: los.y + los.points[i][1] },
+                          B: { x: los.x + los.points[i + 1][0],
+                               y: los.y + los.points[i + 1][1] }};
+    
+    if(ray.intersects([los_segment.A.x, los_segment.A.y,
+                       los_segment.B.x, los_segment.B.y]) return true;
+  }
+  
+  return false;
+}
+
+
+
+/**
+ * An extension of the base PIXI.Polygon representing shadow cast by a wall.
+ * @param {Segment} wall            Segment of wall or terrain that casts the shadow.
+ * @param {Number} base_elevation   Elevation of the ground covered by the shadow.
+ * @param {Point} vision_point      Point from which the observer is viewing the wall.
+ * @param {Number} vision_elevation Elevation of the observer.
+ * @param {Array} ...points         Array of points of the polygon 
+ */
+class Shadow extends PIXI.Polygon {
+  constructor(origin_wall, base_elevation, vision_point, vision_elevation, ...points) {
+    super(...points);
+    this.origin_wall = origin_wall;
+    this.base_elevation = base_elevation
+    this.vision_point = vision_point;
+    this.vision_elevation = vision_elevation;
+  }
+
 }
 
  /**
