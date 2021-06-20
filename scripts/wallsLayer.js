@@ -213,6 +213,7 @@ by terrain or non-infinite walls.
   });
 
   log(`computePolygon found ${terrains.length} terrains.`, terrains);
+  log(`terrain segments for terrain 1`, getTerrainSegments(terrains[1]));
   
   // distance types are specific to the origin point and terrain, so keep separate; no flag
   const terrains_distance_types = terrains.map(t => {
@@ -290,8 +291,7 @@ function GetPolygonSegments(poly) {
  * @return [Array] Characterized segments, in order of the points
  */
 function CharacterizePolygonDistance(vision_point, segments) {
-
-  const segment_type = Array.from('close'.repeat(segments.length));
+  const segment_type = Array.fill(segments.length).fill("close");
   for(let i = 0; i < segments.length; i++) {
     const ray_A = new Ray(vision_point, segments[i].A);
     const ray_B = new Ray(vision_point, segments[i].B);
@@ -299,14 +299,14 @@ function CharacterizePolygonDistance(vision_point, segments) {
     // if either of the rays intersect any other poly segment, the segment is far
     for(let j = 0; j < segments.length; j++) {
       if(i === j) continue; // don't need to test against itself
-      if(ray_A.intersectSegment([segments[i].A.x, segments[i].A.y,
-                                 segments[i].B.x, segments[i].B.y])) {
+      if(ray_A.intersectSegment([segments[j].A.x, segments[j].A.y,
+                                 segments[j].B.x, segments[j].B.y])) {
         segment_type[i] = "far";
         break;
       }
       
-      if(ray_B.intersectSegment([segments[i].A.x, segments[i].A.y,
-                                 segments[i].B.x, segments[i].B.y])) {
+      if(ray_B.intersectSegment([segments[j].A.x, segments[j].A.y,
+                                 segments[j].B.x, segments[j].B.y])) {
         segment_type[i] = "far";
         break;
       }
