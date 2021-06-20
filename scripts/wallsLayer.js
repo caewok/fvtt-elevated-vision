@@ -169,7 +169,8 @@ that the PIXI system does not understand.
 Instead, build a shadows layer with polygons representing the shadows created
 by terrain or non-infinite walls. 
   */
-  
+  const terrain_layer = canvas.layers.filter(l => l?.options?.objectClass?.name === "Terrain")[0];
+  if(!terrain_layer) return res;
   let terrains = terrain_layer.placeables; // array of terrains
   if(terrains.length === 0) return res;
   
