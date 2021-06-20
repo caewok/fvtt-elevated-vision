@@ -190,15 +190,50 @@ by terrain or non-infinite walls.
   
   log(`computePolygon found ${terrains.length} terrains.`, terrains);
   
-//   if(isDebuggingVision) {
-//     terrains.forEach(t => {
-//       debug.lineStyle(1, 0xFF8C00).drawShape(t);
-//     });
-//   }
+  if(isDebuggingVision) {
+    terrains.forEach(t => {
+      const translated_shape_points = t.shape.points.map((p, idx) => {
+        if(idx % 2 === 0) return p + t.data.x; // even, so x
+        return p + t.data.y;
+      });
+      
+//       const translated_poly = new PIXI.Polygon(translated_shape_points);
+    
+      debug.lineStyle(1, 0xFF8C00).drawShape(translated_shape_points);
+    });
+  }
   
   
   return res;
 }
+
+/*
+// test drawing polygon
+let debug = canvas.controls.debug;
+const terrain_layer = canvas.layers.filter(l => l?.options?.objectClass?.name === "Terrain")[0];
+let t = terrain_layer.placeables[0];
+debug.lineStyle(1, 0xFF8C00).drawPolygon(t.data.points);
+
+// works but wrong spot
+debug.lineStyle(1, 0xFF8C00).drawShape(t.shape)
+// t.shape is array of numbers [x0, y0, x1, y1, ...]
+// t.data.points is array of arrays: [[x0, y0], [x1, y1], ...]
+
+// does not work
+debug.lineStyle(1, 0xFF8C00).moveTo(t.data.x, t.data.y).drawShape(t.shape)
+
+// map the x, y shape array
+let translated_shape_points = t.shape.points.map((p, idx) => {
+  if(idx % 2 === 0) return p + t.data.x; // even, so x
+  return p + t.data.y;
+});
+let translated_p = new PIXI.Polygon(translated_shape_points);
+debug.lineStyle(1, 0xFF8C00).drawShape(translated_p);
+
+// or
+debug.lineStyle(1, 0xFF8C00).drawPolygon(translated_shape_points);
+*/
+
 
 /**
  * Test if ray is partially or totally inside polygon
