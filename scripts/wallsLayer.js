@@ -274,10 +274,10 @@ by terrain or non-infinite walls.
 function GetPolygonSegments(poly) {
   const poly_segments = [];
   for(let i = 0; i < (poly.points.length - 1); i++) {
-    const poly_segment = { A: { x: poly.x + poly.points[i][0],
-                                y: poly.y + poly.points[i][1] },
-                           B: { x: poly.x + poly.points[i + 1][0],
-                                y: poly.y + poly.points[i + 1][1] }};
+    const poly_segment = new Ray({ x: poly.x + poly.points[i][0],
+                                   y: poly.y + poly.points[i][1] },
+                                 { x: poly.x + poly.points[i + 1][0],
+                                   y: poly.y + poly.points[i + 1][1] });
    poly_segments.push(poly_segment);
   }
   
@@ -291,7 +291,7 @@ function GetPolygonSegments(poly) {
  * @return [Array] Characterized segments, in order of the points
  */
 function CharacterizePolygonDistance(vision_point, segments) {
-  const segment_type = Array(segments.length).fill("close");
+  const segment_types = Array(segments.length).fill("close");
   for(let i = 0; i < segments.length; i++) {
     const ray_A = new Ray(vision_point, segments[i].A);
     const ray_B = new Ray(vision_point, segments[i].B);
@@ -299,21 +299,40 @@ function CharacterizePolygonDistance(vision_point, segments) {
     // if either of the rays intersect any other poly segment, the segment is far
     for(let j = 0; j < segments.length; j++) {
       if(i === j) continue; // don't need to test against itself
-      if(ray_A.intersectSegment([segments[j].A.x, segments[j].A.y,
-                                 segments[j].B.x, segments[j].B.y])) {
-        segment_type[i] = "far";
-        break;
+
+      // don't test adjacent segments 
+      // so if the segment tested shares an endpoint with ray_A.B, don't test ray_A for that segment
+      if(!PointEndsSegment(ray_A.B, segments[j])) {
+        if(ray_A.intersectSegment([segments[j].A.x, segments[j].A.y,
+                                   segments[j].B.x, segments[j].B.y])) {
+          segment_types[i] = "far";
+          break;
+        }
       }
-      
-      if(ray_B.intersectSegment([segments[j].A.x, segments[j].A.y,
-                                 segments[j].B.x, segments[j].B.y])) {
-        segment_type[i] = "far";
-        break;
+
+      if(!PointEndsSegment(ray_B.B, segments[j])) {
+        if(ray_B.intersectSegment([segments[j].A.x, segments[j].A.y,
+                                   segments[j].B.x, segments[j].B.y])) {
+          segment_types[i] = "far";
+          break;
+        }
       }
     }
   }
-  
-  return segment_type;
+
+  return segment_types;
+}
+
+
+/*  
+ * Helper function to check if point is at either end of segment
+ * @param {Point} p Point as {x, y}
+ * @param {Ray} segment Segment ray as {A: {x, y}, B: {x, y}}
+ * @return true if the point matches an endpoint of the segment
+ */
+function PointEndsSegment(p, segment) {
+  return (p.x === segment.A.x && p.y === segment.A.y) ||
+         (p.x === segment.B.x && p.y === segment.B.y);
 }
 
 /**
@@ -322,20 +341,20 @@ function CharacterizePolygonDistance(vision_point, segments) {
  */
 function getTerrainSegments(t) {
   // for debugging, clear the segments
-  (async () => { await t.document.unsetFlag(MODULE_ID, "segments"); }) ();
+  //(async () => { await t.document.unsetFlag(MODULE_ID, "segments"); }) ();
 
-  let segments = t.document.getFlag(MODULE_ID, "segments");
+  //let segments = t.document.getFlag(MODULE_ID, "segments");
   
-  if(!segments) {
-    segments = GetPolygonSegments(t.data);
-    (async () => { await t.document.setFlag(MODULE_ID, "segments", segments); }) ();
+  //if(!segments) {
+    let segments = GetPolygonSegments(t.data);
+    //(async () => { await t.document.setFlag(MODULE_ID, "segments", segments); }) ();
     
-  } else {
+  //} else {
     // convert to Ray class
-    segments = segments.map(s => {
-      return new Ray(s.A, s.B);
-    });
-  }
+    //segments = segments.map(s => {
+    //  return new Ray(s.A, s.B);
+    //});
+  //}
   return segments;
 }
 
