@@ -26,7 +26,6 @@ Hooks.once('ready', async function() {
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
 Hooks.once('devModeReady', ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(MODULE_ID);
-  registerPackageDebugFlag(MODULE_ID, 'level', {default: 0})
 });
 
 Hooks.on('sightRefresh', (obj) => {
