@@ -192,17 +192,17 @@ by terrain or non-infinite walls.
   // https://flaviocopes.com/javascript-async-await-array-map/
   // https://stackoverflow.com/questions/47227550/using-await-inside-non-async-function
   // https://stackoverflow.com/questions/37576685/using-async-await-with-a-foreach-loop
-  (async () => {
-    await Promise.all(terrains.map(async (t) => {
-      if(!t.document.getFlag(MODULE_ID, "segments")) {
-        await t.document.setFlag(MODULE_ID, "segments", GetPolygonSegments(t.data));
-      }
-    }));
-  }) ();
+  // (async () => {
+//     await Promise.all(terrains.map(async (t) => {
+//       if(!t.document.getFlag(MODULE_ID, "segments")) {
+//         await t.document.setFlag(MODULE_ID, "segments", GetPolygonSegments(t.data));
+//       }
+//     }));
+//   }) ();
 
   // check if the terrains are within the LOS
   terrains = terrains.filter(t => {
-    const segments = t.document.getFlag(MODULE_ID, "segments");
+    const segments = getTerrainSegments(t);
   
     for(let i = 0; i < segments.length; i++) {
       const segment = segments[i];
@@ -216,7 +216,7 @@ by terrain or non-infinite walls.
   
   // distance types are specific to the origin point and terrain, so keep separate; no flag
   const terrains_distance_types = terrains.map(t => {
-    const segments = t.document.getFlag(MODULE_ID, "segments");
+    const segments = getTerrainSegments(t);
     const dist_types = CharacterizePolygonDistance(origin, segments);
     return dist_types;
   });
@@ -240,7 +240,7 @@ by terrain or non-infinite walls.
       debug.lineStyle(1, 0xFF8C00).drawShape(translated_poly);
 */
     // version that draws different-colored sides:
-      const segments = t.document.getFlag(MODULE_ID, "segments");
+      const segments = getTerrainSegments(t);
       const dist_types = terrains_distance_types[t_idx];
       segments.forEach((s, s_idx) => {
         const color = dist_types[s_idx] === "far" ? COLORS.orange : COLORS.oranget2;
@@ -312,6 +312,26 @@ function CharacterizePolygonDistance(vision_point, segments) {
   }
   
   return segment_type;
+}
+
+/**
+ * Get the segments of the terrain as an array of Rays
+ * Cache the segments in the terrain flag
+ */
+function getTerrainSegments(t) {
+  let segments = t.document.getFlag(MODULE_ID, "segments");
+  
+  if(!segments) {
+    segments = GetPolygonSegments(t.data);
+    (async () => { await t.document.setFlag(MODULE_ID, "segments", segments); }) ();
+    
+  } else {
+    // convert to Ray class
+    segments = segments.map(s => {
+      return new Ray(s.A, s.B);
+    });
+  }
+  return segments;
 }
 
 /*
