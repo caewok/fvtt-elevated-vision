@@ -191,28 +191,15 @@ by terrain or non-infinite walls.
   // can we do this with forEach?
   // https://flaviocopes.com/javascript-async-await-array-map/
   // https://stackoverflow.com/questions/47227550/using-await-inside-non-async-function
+  // https://stackoverflow.com/questions/37576685/using-async-await-with-a-foreach-loop
   (async () => {
-    return Promise.all(terrains.map(t => {
-
-    }
-    if(!t.document.getFlag(MODULE_ID, "segments")) {
-        t.document.setFlag(MODULE_ID, "segments", GetPolygonSegments(t.data));
-      }
-
-  })();
-
-  (async () => {
-    await 
-
-    return Promise.all(terrains.map(t => {
+    await Promise.all(terrains.map(async (t) => {
       if(!t.document.getFlag(MODULE_ID, "segments")) {
-        t.document.setFlag(MODULE_ID, "segments", GetPolygonSegments(t.data));
+        await t.document.setFlag(MODULE_ID, "segments", GetPolygonSegments(t.data));
       }
-      return t;
-    }))
-  }
+    }));
+  }) ();
 
-  
   // check if the terrains are within the LOS
   terrains = terrains.filter(t => {
     const segments = t.document.getFlag(MODULE_ID, segments);
