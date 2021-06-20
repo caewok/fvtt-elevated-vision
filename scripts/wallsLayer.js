@@ -218,14 +218,14 @@ function RayInsidePolygon(ray, poly) {
  */
 function RayIntersectsPolygon(ray, poly) {
   // TO-DO: Shortcuts? Sort by closest in some fashion?
-  for(let i = 0; i < (los.points.length - 1); i++) {
-    const los_segment = { A: { x: los.x + los.points[i][0],
-                               y: los.y + los.points[i][1] },
-                          B: { x: los.x + los.points[i + 1][0],
-                               y: los.y + los.points[i + 1][1] }};
+  for(let i = 0; i < (poly.points.length - 1); i++) {
+    const poly_segment = { A: { x: poly.x + poly.points[i][0],
+                                y: poly.y + poly.points[i][1] },
+                           B: { x: poly.x + poly.points[i + 1][0],
+                                y: poly.y + poly.points[i + 1][1] }};
     
-    if(ray.intersects([los_segment.A.x, los_segment.A.y,
-                       los_segment.B.x, los_segment.B.y])) return true;
+    if(ray.intersects([poly_segment.A.x, poly_segment.A.y,
+                       poly_segment.B.x, poly_segment.B.y])) return true;
   }
   
   return false;
