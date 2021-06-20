@@ -202,7 +202,7 @@ by terrain or non-infinite walls.
 
   // check if the terrains are within the LOS
   terrains = terrains.filter(t => {
-    const segments = t.document.getFlag(MODULE_ID, segments);
+    const segments = t.document.getFlag(MODULE_ID, "segments");
   
     for(let i = 0; i < segments.length; i++) {
       const segment = segments[i];
@@ -216,7 +216,7 @@ by terrain or non-infinite walls.
   
   // distance types are specific to the origin point and terrain, so keep separate; no flag
   const terrains_distance_types = terrains.map(t => {
-    const segments = t.document.getFlag(MODULE_ID, segments);
+    const segments = t.document.getFlag(MODULE_ID, "segments");
     const dist_types = CharacterizePolygonDistance(origin, segments);
     return dist_types;
   });
@@ -240,7 +240,7 @@ by terrain or non-infinite walls.
       debug.lineStyle(1, 0xFF8C00).drawShape(translated_poly);
 */
     // version that draws different-colored sides:
-      const segments = t.document.getFlag(MODULE_ID, segments);
+      const segments = t.document.getFlag(MODULE_ID, "segments");
       const dist_types = terrains_distance_types[t_idx];
       segments.forEach((s, s_idx) => {
         const color = dist_types[s_idx] === "far" ? COLORS.orange : COLORS.oranget2;
