@@ -221,6 +221,8 @@ by terrain or non-infinite walls.
     return dist_types;
   });
   
+  log(`${terrains_distance_types.length} terrains_distance_types`, terrains_distance_types);
+  
   if(isDebuggingVision) {
     terrains.forEach((t, t_idx) => {
 /*
@@ -243,7 +245,7 @@ by terrain or non-infinite walls.
       const segments = getTerrainSegments(t);
       const dist_types = terrains_distance_types[t_idx];
       segments.forEach((s, s_idx) => {
-        const color = dist_types[s_idx] === "far" ? COLORS.orange : COLORS.oranget2;
+        const color = dist_types[s_idx] === "far" ? COLORS.orange : COLORS.red;
         debug.lineStyle(1, color).moveTo(s.A.x, s.A.y).lineTo(s.B.x, s.B.y);
 
       });
@@ -270,7 +272,7 @@ by terrain or non-infinite walls.
  */
 function GetPolygonSegments(poly) {
   const poly_segments = [];
-  for(let i = 0; i < (poly.points.length - 2); i++) {
+  for(let i = 0; i < (poly.points.length - 1); i++) {
     const poly_segment = { A: { x: poly.x + poly.points[i][0],
                                 y: poly.y + poly.points[i][1] },
                            B: { x: poly.x + poly.points[i + 1][0],
