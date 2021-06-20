@@ -1,4 +1,4 @@
-import { log, MODULE_ID, FORCE_VISION_DEBUG } from "./module.js";
+import { log, MODULE_ID, FORCE_TOKEN_VISION_DEBUG, FORCE_FOV_DEBUG } from "./module.js";
 
 /*
 Clicking token:
@@ -152,10 +152,10 @@ export function evComputePolygon(wrapped,
   
   if(type !== "sight") return res;
   
-  const isDebuggingVision = FORCE_VISION_DEBUG;
+  const isDebuggingVision = FORCE_FOV_DEBUG;
   const debug = isDebuggingVision ? canvas.controls.debug : undefined;
   //const isDebuggingVision = CONFIG.debug.sightRays;
-  if(isDebuggingVision) debug.clear();
+  if(FORCE_FOV_DEBUG || FORCE_TOKEN_VISION_DEBUG) debug.clear();
   
   if(isDebuggingVision) {
     debug.lineStyle(1, 0xFFFF00).drawShape(res.fov);

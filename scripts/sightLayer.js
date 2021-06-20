@@ -1,4 +1,4 @@
-import { log, MODULE_ID, FORCE_VISION_DEBUG } from "./module.js";
+import { log, MODULE_ID, FORCE_TOKEN_VISION_DEBUG } from "./module.js";
 
  /**
    * Restrict the visibility of certain canvas assets (like Tokens or DoorControls) based on the visibility polygon
@@ -43,7 +43,7 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   log("evTestVisibility this", this);
   log(`evTestVisibility wrapped returned ${res}`);
   
-  const isDebuggingVision = FORCE_VISION_DEBUG;
+  const isDebuggingVision = FORCE_TOKEN_VISION_DEBUG;
   // const isDebuggingVision = CONFIG.debug.sightRays;
   const debug = isDebuggingVision ? canvas.controls.debug : undefined;
   
@@ -221,7 +221,7 @@ Ve|    \     |    |
 function testBounds(terrain, ray) {
   //  An array of coordinates [x0, y0, x1, y1] which defines a line segment
   // rect points are A, B, C, D clockwise from upper left
-  const isDebuggingVision = FORCE_VISION_DEBUG;
+  const isDebuggingVision = FORCE_TOKEN_VISION_DEBUG;
   //const isDebuggingVision = CONFIG.debug.sightRays;
   const debug = isDebuggingVision ? canvas.controls.debug : undefined;
 
