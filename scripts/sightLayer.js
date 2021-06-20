@@ -1,4 +1,5 @@
 import { log, MODULE_ID, FORCE_TOKEN_VISION_DEBUG } from "./module.js";
+import { toGridDistance } from "./utility.js";
 
  /**
    * Restrict the visibility of certain canvas assets (like Tokens or DoorControls) based on the visibility polygon
@@ -138,13 +139,7 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   return is_visible;
 }
 
-/* 
- * Helper function to convert absolute increments to grid distance
- */
-export function toGridDistance(increment) {
-  // TO-DO: What about hex or no grid maps? 
-  return Math.round(increment * canvas.grid.w / canvas.scene.data.gridDistance * 100) / 100;
-}
+
 
 /*
  * Calculate whether a terrain or wall segment blocks vision of an object.

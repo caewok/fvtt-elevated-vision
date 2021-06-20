@@ -1,4 +1,5 @@
 import { log, MODULE_ID, FORCE_TOKEN_VISION_DEBUG, FORCE_FOV_DEBUG } from "./module.js";
+import { toGridDistance, TerrainElevationAtPoint } from "./utility.js";
 
 /*
 Clicking token:
@@ -161,6 +162,7 @@ export function evComputePolygon(wrapped,
                                         density: density,
                                         rotation: rotation,
                                         unrestricted: unrestricted }, res);
+  log("evComputePolygon this", this);                                       
 
   if(type !== "sight") return res;
 
@@ -254,11 +256,20 @@ by terrain or non-infinite walls.
   }
 
   // for each terrain, draw rays from the vision point to terrain points
+  // Ve = elevation at the vision point
+  // Te = elevation of the terrain
   // if Ve < Te, use the closest segments; segment acts as wall to vision
   // if Ve > Te, use the farthest segments; segment shadows lower elevation beyond
   // if Ve === Te, can see the terrain at that elevation but nothing lower
   // closest = ray VT0 and VT1 do not intersect other segments in T
   // farthest = ray VT0 or VT1 do intersect other segments in T
+  // return polygons representing shaded (non-visible) areas
+  const Ve = 0; 
+  let shaded_polygons = terrains.map(t => {
+    log(`terrain elevation is ${t.data.max_height}`)
+  
+  });
+  
 
 
   return res;
