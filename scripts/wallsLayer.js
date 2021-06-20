@@ -153,11 +153,9 @@ export function evComputePolygon(wrapped,
   if(type !== "sight") return res;
   
   const isDebuggingVision = FORCE_VISION_DEBUG;
+  const debug = isDebuggingVision ? canvas.controls.debug : undefined;
   //const isDebuggingVision = CONFIG.debug.sightRays;
-  if(isDebuggingVision) {
-    const debug = canvas.controls.debug;
-    debug.clear();
-  }
+  if(isDebuggingVision) debug.clear();
   
   if(isDebuggingVision) {
     debug.lineStyle(1, 0xFFFF00).drawShape(res.fov);
