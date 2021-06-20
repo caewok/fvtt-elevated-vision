@@ -188,11 +188,13 @@ by terrain or non-infinite walls.
     return false;                           
   });
   
-  if(isDebuggingVision) {
-    terrains.forEach(t => {
-      debug.lineStyle(1, 0xFF8C00).drawShape(t);
-    });
-  }
+  log(`computePolygon found ${terrains.length} terrains.`, terrains);
+  
+//   if(isDebuggingVision) {
+//     terrains.forEach(t => {
+//       debug.lineStyle(1, 0xFF8C00).drawShape(t);
+//     });
+//   }
   
   
   return res;
