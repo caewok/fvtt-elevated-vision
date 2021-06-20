@@ -196,10 +196,10 @@ by terrain or non-infinite walls.
         if(idx % 2 === 0) return p + t.data.x; // even, so x
         return p + t.data.y;
       });
-      
-//       const translated_poly = new PIXI.Polygon(translated_shape_points);
-    
-      debug.lineStyle(1, 0xFF8C00).drawShape(translated_shape_points);
+      debug.lineStyle(1, 0xFF8C00).drawPolygon(translated_shape_points);
+
+      //const translated_poly = new PIXI.Polygon(translated_shape_points);
+      //debug.lineStyle(1, 0xFF8C00).drawShape(translated_poly);
     });
   }
   
