@@ -183,7 +183,8 @@ by terrain or non-infinite walls.
                                                                
        if(RayInsidePolygon(t_segment, res.los)) return true;
        if(RayIntersectsPolygon(t_segment, res.los)) return true;
-       return false;                           
+    }
+    return false;                           
   });
   
   if(isDebuggingVision) {
