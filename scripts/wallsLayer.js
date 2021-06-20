@@ -224,7 +224,7 @@ function RayIntersectsPolygon(ray, poly) {
                                y: los.y + los.points[i + 1][1] }};
     
     if(ray.intersects([los_segment.A.x, los_segment.A.y,
-                       los_segment.B.x, los_segment.B.y]) return true;
+                       los_segment.B.x, los_segment.B.y])) return true;
   }
   
   return false;
