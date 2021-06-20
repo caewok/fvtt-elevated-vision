@@ -244,7 +244,7 @@ by terrain or non-infinite walls.
       const dist_types = terrains_distance_types[t_idx];
       segments.forEach((s, s_idx) => {
         const color = dist_types[s_idx] === "far" ? COLORS.orange : COLORS.oranget2;
-        debug.lineStyle(1, color).drawLine(moveTo(s.A.x, s.A.y).lineTo(s.B.x, s.B.y))
+        debug.lineStyle(1, color).moveTo(s.A.x, s.A.y).lineTo(s.B.x, s.B.y);
 
       });
     });
