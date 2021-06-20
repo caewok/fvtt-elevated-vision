@@ -291,7 +291,7 @@ function GetPolygonSegments(poly) {
  * @return [Array] Characterized segments, in order of the points
  */
 function CharacterizePolygonDistance(vision_point, segments) {
-  const segment_type = Array.fill(segments.length).fill("close");
+  const segment_type = Array(segments.length).fill("close");
   for(let i = 0; i < segments.length; i++) {
     const ray_A = new Ray(vision_point, segments[i].A);
     const ray_B = new Ray(vision_point, segments[i].B);
