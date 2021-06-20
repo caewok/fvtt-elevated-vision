@@ -1,4 +1,4 @@
-import { log } from "./module.js";
+import { log, MODULE_ID, FORCE_VISION_DEBUG } from "./module.js";
 
 /*
 Clicking token:
@@ -121,6 +121,13 @@ y0: 1705.6773472099756
 export function evComputePolygon(wrapped, ...args) {
   const res = wrapped(...args)
   log("evComputePolygon", ...args, res);
+  
+  const isDebuggingVision = FORCE_VISION_DEBUG;
+  //const isDebuggingVision = CONFIG.debug.sightRays;
+  if(isDebuggingVision) {
+    const debug = canvas.controls.debug;
+    debug.clear();
+  }
   return res;
 }
 
