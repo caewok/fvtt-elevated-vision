@@ -118,9 +118,39 @@ y0: 1705.6773472099756
 
 
 */
-export function evComputePolygon(wrapped, ...args) {
-  const res = wrapped(...args)
-  log("evComputePolygon", ...args, res);
+
+/*
+   * @param {Point} origin            An point with coordinates x and y representing the origin of the test
+   * @param {number} radius           A distance in canvas pixels which reflects the visible range
+   * @param {object} [options={}]     Additional options which modify the sight computation
+   * @param {string} [options.type=sight]     The type of polygon being computed: "movement", "sight", or "sound"
+   * @param {number} [options.angle=360]      An optional limited angle of emission with which to restrict polygons
+   * @param {number} [options.density=6]      The desired radial density of emission for rays, in degrees
+   * @param {number} [options.rotation=0]     The current angle of rotation, used when the angle is limited
+   * @param {boolean} [options.unrestricted=false]  Compute sight that is fully unrestricted by walls
+*/
+// fov is restricted by radius; lov is not 
+
+export function evComputePolygon(wrapped, 
+                                 origin, 
+                                 radius, 
+                                 { type="sight", 
+                                   angle=360, 
+                                   density=6, 
+                                   rotation=0, 
+                                   unrestricted=false }={}) {
+  const res = wrapped(origin, radius, { type: type,
+                                        angle: angle,
+                                        density: density,
+                                        rotation: rotation,
+                                        unrestricted: unrestricted })
+  log("evComputePolygon", origin, radius, { type: type,
+                                        angle: angle,
+                                        density: density,
+                                        rotation: rotation,
+                                        unrestricted: unrestricted }, res);
+  
+  if(type !== "sight") return res;
   
   const isDebuggingVision = FORCE_VISION_DEBUG;
   //const isDebuggingVision = CONFIG.debug.sightRays;
@@ -128,6 +158,12 @@ export function evComputePolygon(wrapped, ...args) {
     const debug = canvas.controls.debug;
     debug.clear();
   }
+  
+  if(isDebuggingVision) {
+    debug.lineStyle(1, 0xFFFF00).drawShape(res.fov);
+    debug.lineStyle(1, 0xADFF2F).drawShape(res.los);
+  }
+  
   return res;
 }
 
