@@ -321,6 +321,9 @@ function CharacterizePolygonDistance(vision_point, segments) {
  * Cache the segments in the terrain flag
  */
 function getTerrainSegments(t) {
+  // for debugging, clear the segments
+  (async () => { await t.document.unsetFlag(MODULE_ID, "segments"); }) ();
+
   let segments = t.document.getFlag(MODULE_ID, "segments");
   
   if(!segments) {
