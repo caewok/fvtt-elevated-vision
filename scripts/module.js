@@ -2,7 +2,7 @@ import { registerPatches } from "./patching.js";
 
 export const MODULE_ID = 'elevated-vision';
 const FORCE_DEBUG = false; // used for logging before dev mode is set up
-const FORCE_VISION_DEBUG = true;
+export const FORCE_VISION_DEBUG = true;
 
 export function log(...args) {
   try {
