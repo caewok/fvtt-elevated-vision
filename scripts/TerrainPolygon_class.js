@@ -371,13 +371,13 @@ export class TerrainPolygon extends PIXI.Polygon {
           const dist_A = this.calculateShadowDistance(s.A, Oe);
           const dist_B = this.calculateShadowDistance(s.B, Oe);
           log(`_calculateFarShadows dist_A ${dist_A} dist_B ${dist_B} with Oe ${Oe}`, s); 
-          const e0_shadow = Shadow.BuildShadeTrapezoid(this.vision_origin, s, dist_A, dist_B);
+          const e0_shadow = Shadow.buildShadowTrapezoid(this.vision_origin, s, dist_A, dist_B);
           
           // now we really need to check any terrain within the full shaded version
           // only care about near terrain segments.
           // A near terrain segment that has an endpoint within the full shade counts.
           // either fully in or one or more intersection points. 
-          const infinite_shade_trapezoid = Shadow.BuildShadeTrapezoid(this.vision_origin, s, this.max_distance);
+          const infinite_shade_trapezoid = Shadow.buildShadowTrapezoid(this.vision_origin, s, this.max_distance);
           
           // note: other_terrains should have already removed this polygon if it has id  
           const terrains_to_check = this.other_terrains.filter(t => {
@@ -456,7 +456,7 @@ export class TerrainPolygon extends PIXI.Polygon {
                 //   distance extending out from the terrain segment
                 // Should only be that portion of the terrain segment that is intersected
                 const ray_T_partial = new Ray(t_intersections[0], t_intersections[1]);
-                const t_shadow = Shadow.BuildShadeTrapezoid(this.vision_origin, ray_T_partial, t_dist_A, t_dist_B);
+                const t_shadow = Shadow.buildShadowTrapezoid(this.vision_origin, ray_T_partial, t_dist_A, t_dist_B);
                 return t_shadow;
               }
             
