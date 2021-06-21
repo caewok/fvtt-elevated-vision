@@ -1,5 +1,6 @@
 import { COLORS, toGridDistance } from "./utility.js";
 import { Shadow } from "./Shadow_class.js";
+import { log } from "./module.js";
 
 // TO-DO: Should segments use an extended Ray class with advanced calculation methods? 
 
@@ -182,6 +183,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     */
    get segment_distance_types() {
      if(this._segment_distance_types === undefined) this._segment_distance_types = this._characterizeSegmentDistances();
+     return this._segment_distance_types;
    }
    
    /*
@@ -229,6 +231,7 @@ export class TerrainPolygon extends PIXI.Polygon {
           }
         }
       }
+      log(`_characterizeSegmentDistances`, distance_types);
 
       return distance_types;
    } 
