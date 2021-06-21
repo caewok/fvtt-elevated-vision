@@ -1,3 +1,15 @@
+// https://htmlcolorcodes.com/
+export const COLORS = {
+  orange: 0xFFA500,
+  yellow: 0xFFFF00,
+  greenyellow: 0xADFF2F,
+  blue: 0x0000FF,
+  red: 0xFF0000,
+  gray: 0x808080,
+  black: 0x000000
+}
+
+
 /* 
  * Helper function to convert absolute increments to grid distance
  */
@@ -42,3 +54,44 @@ export function TerrainElevationAtPoint(p) {
    
    return terrain_max_elevation;
 }
+
+/**
+ * For a given point, cycle through controlled tokens and find the highest;
+ *   use for elevation.
+ */
+export function TokenElevationAtPoint(p) {
+  const tokens = retrieveVisibleTokens();
+  
+  const max_token_elevation = tokens.reduce((total, t) => {
+    // is the point within the token control area? 
+    if(!pointWithinToken(p, t)) return total;
+    return Math.max(t.data.elevation, total);
+  }, Number.NEGATIVE_INFINITY) || Number.NEGATIVE_INFINITY;
+  
+  if(max_token_elevation === Number.NEGATIVE_INFINITY) return undefined;
+  
+  return max_token_elevation;
+}
+
+
+/**
+ * Check if point is within the controlled area of the token
+ * (Recall that tokens may be wider than 1 square)
+ */
+function pointWithinToken(point, token) {
+  return point.x >= token.x && 
+         point.y >= token.y &&
+         point.x <= (token.x + token.w) &&
+         point.y <= (token.y + token.h); 
+}
+
+/**
+ * Retrieve visible tokens
+ * For GM, all will be visible unless 1 or more tokens are selected.
+ * Combined vision for all tokens selected.
+ */
+function retrieveVisibleTokens() {
+  return canvas.tokens.children[0].children.filter(c => c.visible);
+}
+
+
