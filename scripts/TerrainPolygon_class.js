@@ -379,7 +379,8 @@ export class TerrainPolygon extends PIXI.Polygon {
           // either fully in or one or more intersection points. 
           const infinite_shade_trapezoid = Shadow.buildShadowTrapezoid(this.vision_origin, s, this.max_distance);
           
-          // note: other_terrains should have already removed this polygon if it has id  
+          // note: other_terrains should have already removed this polygon if it has id 
+          log(`other terrains`, this.other_terrains); 
           const terrains_to_check = this.other_terrains.filter(t => {
             return t.intersectsPolygon(infinite_shade_trapezoid);
           });
