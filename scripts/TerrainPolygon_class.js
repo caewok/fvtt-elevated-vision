@@ -325,6 +325,7 @@ export class TerrainPolygon extends PIXI.Polygon {
      
      _calculateNearShadows() {
        return this.near_segments.map(s => {
+         log(`_calculateNearShadows max distance ${this.max_distance}`);
          return { near: Shadow.buildShadowTrapezoid(this.vision_origin, s, this.max_distance) }; 
        });
      }
@@ -342,6 +343,7 @@ export class TerrainPolygon extends PIXI.Polygon {
           const Oe = 0;
           const dist_A = this.calculateShadowDistance(s.A, Oe);
           const dist_B = this.calculateShadowDistance(s.B, Oe);
+          log(`_calculateFarShadows dist_A ${dist_A} dist_B ${dist_B} with Oe ${Oe}`, s); 
           const e0_shadow = Shadow.BuildShadeTrapezoid(this.vision_origin, s, dist_A, dist_B);
           
           // now we really need to check any terrain within the full shaded version
@@ -469,7 +471,7 @@ export class TerrainPolygon extends PIXI.Polygon {
      }
      
      get max_distance() {
-       if(this._max_distance === undefined) this._max_distance = (new Ray({x: 0, y: 0}, {x: canvas.sceneWidth, y: canvas.sceneHeight})).distance;
+       if(this._max_distance === undefined) this._max_distance = (new Ray({x: 0, y: 0}, {x: canvas.dimensions.sceneWidth, y: canvas.dimensions.sceneHeight})).distance;
        return this._max_distance;
      }
      

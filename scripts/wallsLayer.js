@@ -147,12 +147,13 @@ by terrain or non-infinite walls.
   
   // for each polygon, draw the shadow as a filled gray area
   terrain_polygons.forEach(t => {
-    const shadows = t.shadows();
+    const shadows = t.shadows;
     log("Terrain shadows", shadows);
     
     shadows.forEach(s => {
       if(s.near) s.near.draw();
-      if(s.e0_shadow) s.e0_shadow.draw()
+      //if(s.e0_shadow) s.e0_shadow.draw()
+      /*
       if(s.terrain_shadows) {
         // terrain_shadows are a Map
         s.terrain_shadows.forEach(s_t => {
@@ -161,7 +162,7 @@ by terrain or non-infinite walls.
             shadow.draw();
           });
         });
-      }
+      }*/
     });
   
   });

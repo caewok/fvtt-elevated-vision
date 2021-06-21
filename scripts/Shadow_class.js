@@ -1,4 +1,5 @@
 import { COLORS } from "./utility.js";
+import { log } from "./module.js";
 
 /**
  * An extension of the base PIXI.Polygon representing shadow cast by a wall with defined height.
@@ -11,27 +12,33 @@ import { COLORS } from "./utility.js";
  */
 export class Shadow extends PIXI.Polygon {
   constructor(vision_point, ...points) {
+    log(`Shadow for vision point`, vision_point, points);
     super(...points);
+    log(`Finished building Shadow Polygon.`);
     this.vision_point = vision_point;
     this.elevation = 0;
   }
 
   static buildShadowTrapezoid(vision_point, wall_segment, distanceA, distanceB = distanceA) {
+    log(`distA ${distanceA}, distB ${distanceB} for vision, wall`, vision_point, wall_segment);
+
     // one end of the segment
     const ray_VA = new Ray(vision_point, wall_segment.A);        
     const ray_A_edge = Ray.fromAngle(wall_segment.A.x, wall_segment.A.y, ray_VA.angle, distanceA);
+    log(`ray_VA`, ray_VA, ray_A_edge);
 
     // other end of the segment
     const ray_VB = new Ray(vision_point, wall_segment.B);
     const ray_B_edge = Ray.fromAngle(wall_segment.B.x, wall_segment.B.y, ray_VB.angle, distanceB);
-    
-    const points = [ray_A_edge.A.x, ray_A_edge.A.y,
-                    ray_A_edge.B.x, ray_A_edge.B.y,
-                    ray_B_edge.B.x, ray_B_edge.B.y,
-                    ray_B_edge.A.x, ray_B_edge.A.y,
-                    ray_A_edge.A.x, ray_A_edge.A.y];
-    
-    return new this.constructor(vision_point, points);
+    log(`ray_VB`, ray_VB, ray_B_edge);
+
+    //const points = [...ray_A_edge.A, ...ray_A_edge.B, ...ray_B_edge.B, ...ray_B_edge.A, ...ray_A_edge.A];
+    const points = [ray_A_edge.A.x, ray_A_edge.A.y, ray_A_edge.B.x, ray_A_edge.B.y, ray_B_edge.B.x, ray_B_edge.B.y, ray_B_edge.A.x, ray_B_edge.A.y, ray_A_edge.A.x, ray_A_edge.A.y];
+    log(`buildShadowTrapezoid for vision point`, vision_point, points);
+
+    const new_obj = new Shadow(vision_point, ...points);    
+    log(`new_obj:`, new_obj);
+    return new_obj;
   }
   
   /**
