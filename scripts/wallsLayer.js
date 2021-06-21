@@ -64,8 +64,8 @@ export function evComputePolygon(wrapped,
   if(FORCE_FOV_DEBUG || FORCE_TOKEN_VISION_DEBUG) debug.clear();
 
   // Transform los and fov
-  const los_polygon = ElevatedPolygon.fromObject(res.los);
-  const fov_polygon = ElevatedPolygon.fromObject(res.fov);
+  const los_polygon = TerrainPolygon.fromObject(res.los);
+  const fov_polygon = TerrainPolygon.fromObject(res.fov);
   
   if(isDebuggingVision) {
     los_polygon.draw(COLORS.greenyellow);
@@ -87,7 +87,7 @@ by terrain or non-infinite walls.
   if(terrains.length === 0) return res;
 
   let terrain_polygons = terrains.map(t => {
-    return ElevatedPolygon.fromObject(t.data);
+    return TerrainPolygon.fromObject(t.data);
   });
   log(`Transformed ${terrain_polygons.length} terrains`, terrain_polygons);
   
@@ -98,7 +98,7 @@ by terrain or non-infinite walls.
   });
 
   log(`computePolygon found ${terrains.length} terrains.`, terrains);
-  log(`terrain segments for terrain 1`, getTerrainSegments(terrains[1]));
+  log(`terrain segments for terrain 1`, terrains[1].segments);
   
   // distance types are specific to the origin point and terrain, so keep separate; no flag
   // for each terrain, draw rays from the vision point to terrain points

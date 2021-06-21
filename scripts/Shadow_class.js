@@ -72,11 +72,12 @@ export class Shadow extends PIXI.Polygon {
   _constructSegments() {
     const poly_segments = [];
     for(let i = 0; i < this.points.length; i += 4) {
-    const poly_segment = new Ray({ x: this.points[i],
-                                   y: this.points[i + 1] },
-                                 { x: this.points[i + 2],
-                                   y: this.points[i + 3] });
-    poly_segments.push(poly_segment);
+      const poly_segment = new Ray({ x: this.points[i],
+                                     y: this.points[i + 1] },
+                                   { x: this.points[i + 2],
+                                     y: this.points[i + 3] });
+      poly_segments.push(poly_segment);
+    }
     return poly_segments;
   }
   

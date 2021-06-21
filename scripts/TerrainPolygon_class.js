@@ -27,19 +27,23 @@ export class TerrainPolygon extends PIXI.Polygon {
   }
   
   /**
-   * A factory method to construct an ElevatedPolygon from an object.
+   * A factory method to construct an TerrainPolygon from an object.
    * Object can be:
    * - inherit from PIXI.Polygon.
    * - inherit from TerrainData
    * - default: any object with points
-   * @param {Object} obj          Object to use to construct the ElevatedPolygon.
-   * @return {ElevatedPolygon}    The constructed ElevatedPolygon.
+   * @param {Object} obj          Object to use to construct the TerrainPolygon.
+   * @return {TerrainPolygon}    The constructed TerrainPolygon.
    */
   static fromObject(obj) {
-    if(obj instanceOf TerrainData) {
+    // TerrainData does not appear to be exported to this scope
+    // simplest answer is to just check the constructor name
+    // will not work for inheritance, but should give what we need here.
+    //if(obj instanceof TerrainData) {
+    if(obj.constructor.name === "TerrainData") {
       // transform the points based on x,y
       const transformed_points = [];
-      points.forEach(p => {
+      obj.points.forEach(p => {
         transformed_points.push(p[0] + obj.x);
         transformed_points.push(p[1] + obj.y);
       });
@@ -52,7 +56,7 @@ export class TerrainPolygon extends PIXI.Polygon {
       poly.originating_id = obj._id;
       return poly;
       
-    } else 
+    } else {
       return new this(obj.points);
     }
   }
@@ -71,11 +75,12 @@ export class TerrainPolygon extends PIXI.Polygon {
   _constructSegments() {
     const poly_segments = [];
     for(let i = 0; i < this.points.length; i += 4) {
-    const poly_segment = new Ray({ x: this.points[i],
-                                   y: this.points[i + 1] },
-                                 { x: this.points[i + 2],
-                                   y: this.points[i + 3] });
-    poly_segments.push(poly_segment);
+      const poly_segment = new Ray({ x: this.points[i],
+                                     y: this.points[i + 1] },
+                                   { x: this.points[i + 2],
+                                     y: this.points[i + 3] });
+      poly_segments.push(poly_segment);
+    }
     return poly_segments;
   }
   
@@ -106,7 +111,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   
   /**
    * Test if another polygon intersects or is contained in another.
-   * @param {ElevatedPolygon} poly    An ElevatedPolygon to test.
+   * @param {TerrainPolygon} poly    An TerrainPolygon to test.
    * @param {boolean} contained_only  If true, will test only for fully contained.
    * @return {boolean} true if intersects or is contained in
    */
@@ -176,7 +181,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     * @type {Array}
     */
    get segment_distance_types() {
-     if(this._segment_distance_types === undefined) this._segment_distance_types = this._characterizeSegmentDistances());
+     if(this._segment_distance_types === undefined) this._segment_distance_types = this._characterizeSegmentDistances();
    }
    
    /*
@@ -207,7 +212,7 @@ export class TerrainPolygon extends PIXI.Polygon {
 
           // don't test adjacent segments 
           // so if the segment tested shares an endpoint with ray_A.B, don't test ray_A for that segment
-          if(!ElevatedPolygon.PointEndsSegment(ray_A.B, this.segments[j])) {
+          if(!TerrainPolygon.PointEndsSegment(ray_A.B, this.segments[j])) {
             if(ray_A.intersectSegment([this.segments[j].A.x, this.segments[j].A.y,
                                        this.segments[j].B.x, this.segments[j].B.y])) {
               distance_types[i] = "far";
@@ -215,7 +220,7 @@ export class TerrainPolygon extends PIXI.Polygon {
             }
           }
 
-          if(!ElevatedPolygon.PointEndsSegment(ray_B.B, this.segments[j])) {
+          if(!TerrainPolygon.PointEndsSegment(ray_B.B, this.segments[j])) {
             if(ray_B.intersectSegment([this.segments[j].A.x, this.segments[j].A.y,
                                        this.segments[j].B.x, this.segments[j].B.y])) {
               distance_types[i] = "far";
@@ -423,7 +428,7 @@ export class TerrainPolygon extends PIXI.Polygon {
         if(terrains.length === 0) return res;
 
         let terrain_polygons = terrains.map(t => {
-          return ElevatedPolygon.fromObject(t.data);
+          return TerrainPolygon.fromObject(t.data);
         });
         
         // do not keep this terrain
