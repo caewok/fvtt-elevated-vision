@@ -136,7 +136,7 @@ by terrain or non-infinite walls.
   
   // create a Map of terrain polygons to use for constructing shadows
   // avoids using terrains that were previously filtered out
-  terrain_polygons_map = new Map();
+  const terrain_polygons_map = new Map();
   terrain_polygons.forEach(t => {
     terrain_polygons_map.set(t.originating_id, t);
   });

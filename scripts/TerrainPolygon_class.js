@@ -75,7 +75,7 @@ export class TerrainPolygon extends PIXI.Polygon {
 
   _constructSegments() {
     const poly_segments = [];
-    for(let i = 0; i < this.points.length; i += 4) {
+    for(let i = 0; i < (this.points.length - 2); i += 2) {
       const poly_segment = new Ray({ x: this.points[i],
                                      y: this.points[i + 1] },
                                    { x: this.points[i + 2],
@@ -261,10 +261,8 @@ export class TerrainPolygon extends PIXI.Polygon {
      * @param {Hex} near_color  Color to use for near segments (default: red)
      */
      drawFarNearSegments(far_color = COLORS.orange, near_color = COLORS.red) {
-       segments = this.segments;
-       dist_types = this.segment_distance_types;
-       segments.forEach((s, s_idx) => {
-        const color = dist_types[s_idx] === "far" ? far_color : near_color;
+       this.segments.forEach((s, s_idx) => {
+        const color = this.segment_distance_types[s_idx] === "far" ? far_color : near_color;
         canvas.controls.debug.lineStyle(1, color).moveTo(s.A.x, s.A.y).lineTo(s.B.x, s.B.y);
       });
      }
@@ -446,12 +444,12 @@ export class TerrainPolygon extends PIXI.Polygon {
      }
      
      get near_segments() {
-       if(this._near_segments === undefined) this._near_segments = _filterSegmentsByType("near");
+       if(this._near_segments === undefined) this._near_segments = this._filterSegmentsByType("near");
        return this._near_segments;
      }
      
      get far_segments() {
-       if(this._far_segments === undefined) this._far_segments = _filterSegmentsByType("far");
+       if(this._far_segments === undefined) this._far_segments = this._filterSegmentsByType("far");
        return this._far_segments;
      }
      
