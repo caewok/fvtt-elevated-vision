@@ -381,7 +381,7 @@ export class TerrainPolygon extends PIXI.Polygon {
           
           // note: other_terrains should have already removed this polygon if it has id 
           log(`other terrains`, this.other_terrains); 
-          const terrains_to_check = this.other_terrains.filter(t => {
+          const terrains_to_check = [...this.other_terrains].filter(t => {
             return t.intersectsPolygon(infinite_shade_trapezoid);
           });
           
@@ -487,15 +487,17 @@ export class TerrainPolygon extends PIXI.Polygon {
         if(!terrain_layer) return res;
         let terrains = terrain_layer.placeables; // array of terrains
         if(terrains.length === 0) return res;
-
-        let terrain_polygons = terrains.map(t => {
-          return TerrainPolygon.fromObject(t.data);
+        
+        const terrain_polygons_map = new Map();
+        terrains.forEach(t => {
+          const t_classed = TerrainPolygon.fromObject(t.data);
+          terrain_polygons_map.set(t_classed.originating_id, t_classed);
         });
         
         // do not keep this terrain
-        if(this.originating_id !== "") terrain_polygon.delete(this.originating_id);
+        if(this.originating_id !== "") terrain_polygons_map.delete(this.originating_id);
         
-        return terrain_polygons;
+        return terrain_polygons_map;
      }
      
      get max_distance() {
