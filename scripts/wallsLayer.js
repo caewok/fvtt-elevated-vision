@@ -129,6 +129,7 @@ by terrain or non-infinite walls.
   // TO-DO: may move this whole process into sightLayer to more easily get at the correct vision object
   let Ve = TokenElevationAtPoint(origin); 
   if(!Ve) Ve = TerrainElevationAtPoint(origin);
+  log(`TokenElevation: ${TokenElevationAtPoint(origin)}; TerrainElevation: ${TerrainElevationAtPoint(origin)}`);
     
   terrain_polygons.forEach(t => {
     t.vision_elevation = Ve;

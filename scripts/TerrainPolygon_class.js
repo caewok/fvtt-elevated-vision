@@ -308,6 +308,7 @@ export class TerrainPolygon extends PIXI.Polygon {
      }
      
      _calculateShadows() {
+       log(`vision elevation: ${vision_elevation}; terrain elevation: ${this.elevation}; id: ${this.originating_id}`);
        if(this.vision_elevation < this.elevation) {
          // Vision point is lower than the terrain
          // Use near segments.
