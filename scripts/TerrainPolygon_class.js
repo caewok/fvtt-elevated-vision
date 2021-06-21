@@ -85,6 +85,36 @@ export class TerrainPolygon extends PIXI.Polygon {
     return poly_segments;
   }
   
+  /* 
+   * Getter for filtering segments by near/far. Cached.
+   * @type {Array} Array of Ray segments.
+   */ 
+  get near_segments() {
+    if(this._near_segments === undefined) this._near_segments = this._filterSegmentsByType("near");
+    return this._near_segments;
+  }
+
+  /* 
+   * Getter for filtering segments by near/far. Cached.
+   * @type {Array} Array of Ray segments.
+   */ 
+  get far_segments() {
+    if(this._far_segments === undefined) this._far_segments = this._filterSegmentsByType("far");
+    return this._far_segments;
+  }
+
+  /* 
+   * Internal method for filtering segments by near/far.
+   * @param {String} type Either "near" or "far" (see segment_distance)
+   * @type {Array} Array of Ray segments.
+   */ 
+  _filterSegmentsByType(type = "near") {
+    return this.segments.filter((s, idx) => {
+      if(this.segment_distance_types[idx] === type) return true;
+      return false;
+    });
+  }
+  
   /**
    * Test if ray is totally inside polygon
    * @param {Ray} Segment ray to check
@@ -443,22 +473,7 @@ export class TerrainPolygon extends PIXI.Polygon {
        return this._max_distance;
      }
      
-     get near_segments() {
-       if(this._near_segments === undefined) this._near_segments = this._filterSegmentsByType("near");
-       return this._near_segments;
-     }
-     
-     get far_segments() {
-       if(this._far_segments === undefined) this._far_segments = this._filterSegmentsByType("far");
-       return this._far_segments;
-     }
-     
-     _filterSegmentsByType(type = "near") {
-       this.segments.filter((s, idx) => {
-         if(this.segment_distance_types[idx] === type) return true;
-         return false;
-       });
-     }
+
      
      /**
       * Calculate distance from vision point for which an elevated wall blocks vision.
