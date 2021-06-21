@@ -1,3 +1,5 @@
+import { MODULE_ID, log } from "./module.js";
+
 // https://htmlcolorcodes.com/
 export const COLORS = {
   orange: 0xFFA500,
@@ -20,7 +22,7 @@ export function toGridDistance(increment) {
 
 // ----- TERRAIN LAYER ELEVATION ----- //
 export function TerrainElevationAtPoint(p) {
-  if(!game.settings.get(MODULE_ID, "enable-terrain-elevation") || !game.modules.get("enhanced-terrain-layer")?.active) {
+  if(!game.modules.get("enhanced-terrain-layer")?.active) {
     return(0);
   }
   

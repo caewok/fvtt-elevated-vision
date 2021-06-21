@@ -49,7 +49,7 @@ export class TerrainPolygon extends PIXI.Polygon {
         transformed_points.push(p[1] + obj.y);
       });
       
-      const e = toGridDistance(obj.max || 0);
+      const e = obj.max || 0;
       
       // do we need obj.width and obj.height?   
       let poly = new this(transformed_points);
@@ -198,13 +198,39 @@ export class TerrainPolygon extends PIXI.Polygon {
    /*
     * Set vision elevation
     * Causes deletion of certain cached calculations.
+    * @param {Number} value    Elevation in game units (e.g., 5 foot grid, 40 foot of elevation)
     * @type {Point}
     */
     set vision_elevation(value) {
+      value = toGridDistance(value);
       if(this._vision_elevation != value) {
         // delete cached calculations
       }
       this._vision_elevation = value;
+    }
+
+   /*
+    * Associate an elevation with the polygon.
+    * Once set, this permits calculating various things.
+    * Not needed for everything; default to 0.
+    * @type {Number}
+    */
+    get elevation() {
+       return this._elevation;
+    }
+    
+   /*
+    * Set elevation for the polygon
+    * Causes deletion of certain cached calculations.
+    * @param {Number} value    Elevation in game units (e.g., 5 foot grid, 40 foot of elevation)
+    * @type {Point}
+    */
+    set elevation(value) {
+      value = toGridDistance(value);
+      if(this._elevation != value) {
+        // delete cached calculations
+      }
+      this._elevation = value;
     }
     
    /*
@@ -308,7 +334,7 @@ export class TerrainPolygon extends PIXI.Polygon {
      }
      
      _calculateShadows() {
-       log(`vision elevation: ${vision_elevation}; terrain elevation: ${this.elevation}; id: ${this.originating_id}`);
+       log(`vision elevation: ${this.vision_elevation}; terrain elevation: ${this.elevation}; id: ${this.originating_id}`);
        if(this.vision_elevation < this.elevation) {
          // Vision point is lower than the terrain
          // Use near segments.
