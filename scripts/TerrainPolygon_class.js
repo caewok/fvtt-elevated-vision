@@ -259,10 +259,14 @@ export class TerrainPolygon extends PIXI.Polygon {
     * @return {Array} Array of "near" or "far" corresponding to segments.
     */
    _characterizeSegmentDistances() {
+     log(`characterizing segments for terrain ${this.originating_id}`);
      const distance_types = [];
      for(let i = 0; i < this.segments.length; i++) {
         const ray_A = new Ray(this.vision_origin, this.segments[i].A);
         const ray_B = new Ray(this.vision_origin, this.segments[i].B);
+        
+        canvas.controls.debug.lineStyle(1, COLOR.blue, .75).moveTo(ray_A.A.x, ray_A.A.y).lineTo(ray_A.B.x, ray_A.B.y);
+        canvas.controls.debug.lineStyle(1, COLOR.blue, .75).moveTo(ray_B.A.x, ray_B.A.y).lineTo(ray_B.B.x, ray_B.B.y);
 
         // Options:
         // 1. both rays intersect some other segment: far
@@ -311,6 +315,9 @@ export class TerrainPolygon extends PIXI.Polygon {
             // run ray from V to the j segment and figure out where it intersects with the i segment
             const ray_Vj_A = new Ray(this.vision_origin, this.segments[j].A);
             const ray_Vj_B = new Ray(this.vision_origin, this.segments[j].B);
+            
+            canvas.controls.debug.lineStyle(1, COLOR.lightblue, .75).moveTo(ray_Vj_A.A.x, ray_Vj_A.A.y).lineTo(ray_Vj_A.B.x, ray_Vj_A.B.y);
+            canvas.controls.debug.lineStyle(1, COLOR.lightblue, .75).moveTo(ray_Vj_B.A.x, ray_Vj_B.A.y).lineTo(ray_Vj_B.B.x, ray_Vj_B.B.y);
             
             const intersection_A = ray_Vj_A.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
                                                         this.segments[i].B.x, this.segments[i].B.y]);
