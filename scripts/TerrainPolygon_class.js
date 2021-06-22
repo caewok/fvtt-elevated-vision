@@ -1,6 +1,6 @@
 import { COLORS, toGridDistance } from "./utility.js";
 import { Shadow } from "./Shadow_class.js";
-import { log } from "./module.js";
+import { log, MODULE_ID } from "./module.js";
 
 // TO-DO: Should segments use an extended Ray class with advanced calculation methods? 
 
@@ -295,6 +295,7 @@ export class TerrainPolygon extends PIXI.Polygon {
               // near, but need to test all the rest
               
             } else {
+              log(`found mixed segment ${i}, ${j}`, this.segments[i], this.segments[j]);
               d_type = "mixed";
             }
             
@@ -302,6 +303,7 @@ export class TerrainPolygon extends PIXI.Polygon {
             d_type = intersections[0] ? "far" : "near";  
           
           } else {
+            log(`segments i and j`, this.segments[i], this.segments[j]);
             console.error(`${MODULE_ID}|_characterizeSegmentDistances: incorrect number of intersections`, intersections);
           }
           
@@ -310,12 +312,13 @@ export class TerrainPolygon extends PIXI.Polygon {
             const ray_Vj_A = new Ray(this.vision_origin, this.segments[j].A);
             const ray_Vj_B = new Ray(this.vision_origin, this.segments[j].B);
             
-            intersection_A = ray_Vj_A.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
+            const intersection_A = ray_Vj_A.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
                                                         this.segments[i].B.x, this.segments[i].B.y]);
                                                         
-            intersection_B = ray_Vj_B.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
+            const intersection_B = ray_Vj_B.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
                                                         this.segments[i].B.x, this.segments[i].B.y]);                                            
             if(intersection_A && intersection_B) {
+              log(`segments i and j`, segments[i], segments[j]);
               console.error(`${MODULE_ID}|_characterizeSegmentDistances: two mixed intersections where there should be one`, intersection_A, intersection_B);
               
             } else if(intersection_A) {
@@ -334,6 +337,8 @@ export class TerrainPolygon extends PIXI.Polygon {
               break;
             
             } else {
+              log(`segments i and j`, this.segments[i], this.segments[j]);
+              log(`ray_Vj`, ray_Vj_A, ray_Vj_B);
               console.error(`${MODULE_ID}|_characterizeSegmentDistances: zero mixed intersections where there should be one`, intersection_A, intersection_B);
             }                                             
           
