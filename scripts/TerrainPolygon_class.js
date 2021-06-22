@@ -259,38 +259,126 @@ export class TerrainPolygon extends PIXI.Polygon {
     * @return {Array} Array of "near" or "far" corresponding to segments.
     */
    _characterizeSegmentDistances() {
-     const distance_types = Array(this.segments.length).fill("near");
+     const distance_types = [];
      for(let i = 0; i < this.segments.length; i++) {
         const ray_A = new Ray(this.vision_origin, this.segments[i].A);
         const ray_B = new Ray(this.vision_origin, this.segments[i].B);
 
-        // if either of the rays intersect any other poly segment, the segment is far
+        // Options:
+        // 1. both rays intersect some other segment: far
+        // 2. segment is adjacent; the non-shared point intersects: far
+        // 3. 1 of 2 rays intersect: mixed.
+        // Mixed means part of the segment is far and part is near
+        // Tricky, b/c at some point we need to treat the mixed segment differently.
+        // Here, split it into two segments and add to the queue. 
+        // Make sure to put it in the right place, as location in the points array matters.
+        let d_type = "near";
         for(let j = 0; j < this.segments.length; j++) {
           if(i === j) continue; // don't need to test against itself
-
-          // don't test adjacent segments 
-          // so if the segment tested shares an endpoint with ray_A.B, don't test ray_A for that segment
+          
+          const intersections = [];
           if(!TerrainPolygon.PointEndsSegment(ray_A.B, this.segments[j])) {
-            if(ray_A.intersectSegment([this.segments[j].A.x, this.segments[j].A.y,
-                                       this.segments[j].B.x, this.segments[j].B.y])) {
-              distance_types[i] = "far";
-              break;
-            }
+            intersections.push(ray_A.intersectSegment([this.segments[j].A.x, this.segments[j].A.y,
+                                                       this.segments[j].B.x, this.segments[j].B.y]));
           }
 
           if(!TerrainPolygon.PointEndsSegment(ray_B.B, this.segments[j])) {
-            if(ray_B.intersectSegment([this.segments[j].A.x, this.segments[j].A.y,
-                                       this.segments[j].B.x, this.segments[j].B.y])) {
-              distance_types[i] = "far";
-              break;
-            }
+            intersections.push(ray_B.intersectSegment([this.segments[j].A.x, this.segments[j].A.y,
+                                                       this.segments[j].B.x, this.segments[j].B.y]));
           }
-        }
-      }
+          
+          if(intersections.length === 2) {
+            if(intersections[0] && intersections[1]) {
+              d_type = "far";
+              break; // done once intersections found? TO-DO: could we have multiple intersections, with some mixed?
+            } else if(!intersections[0] && !intersections[1]) {
+              // near, but need to test all the rest
+              
+            } else {
+              d_type = "mixed";
+            }
+            
+          } else if(intersections.length === 1) {
+            d_type = intersections[0] ? "far" : "near";  
+          
+          } else {
+            console.error(`${MODULE_ID}|_characterizeSegmentDistances: incorrect number of intersections`, intersections);
+          }
+          
+          if(d_type === "mixed") {
+            // run ray from V to the j segment and figure out where it intersects with the i segment
+            const ray_Vj_A = new Ray(this.vision_origin, this.segments[j].A);
+            const ray_Vj_B = new Ray(this.vision_origin, this.segments[j].B);
+            
+            intersection_A = ray_Vj_A.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
+                                                        this.segments[i].B.x, this.segments[i].B.y]);
+                                                        
+            intersection_B = ray_Vj_B.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
+                                                        this.segments[i].B.x, this.segments[i].B.y]);                                            
+            if(intersection_A && intersection_B) {
+              console.error(`${MODULE_ID}|_characterizeSegmentDistances: two mixed intersections where there should be one`, intersection_A, intersection_B);
+              
+            } else if(intersection_A) {
+              // split the j segment along intersection A. 
+              // re-do the j loop. 
+              // re-do this i segment. 
+              // note: we have not yet set the distance type for this i segment.
+              this._splitSegment(i, intersection_A);
+              i -= 1;
+              break;
+            
+            } else if(intersection_B) {
+              // split the j segment along intersection B. 
+              this._splitSegment(i, intersection_B);
+              i -= 1;
+              break;
+            
+            } else {
+              console.error(`${MODULE_ID}|_characterizeSegmentDistances: zero mixed intersections where there should be one`, intersection_A, intersection_B);
+            }                                             
+          
+          } 
+          
+        } // for(let j = 0; j < this.segments.length; j++)
+        // done with the segment, so we can now label it.
+        distance_types.push(d_type);
+        
+      } // for(let i = 0; i < this.segments.length; i++)
       log(`_characterizeSegmentDistances`, distance_types);
 
       return distance_types;
    } 
+   
+   /*
+    * Split a segment into two along a split point.
+    * Change the underlying points accordingly.
+    * @param {Number} segment_idx  Index of the segment in this.segments Array to split. 
+    *   Starts at index 0.
+    * @param {Object} split_point  {x, y} of the point along the segment. 
+    *   Does not have to be on the segment per se. Cannot be an endpoint.
+    */ 
+   _splitSegment(segment_idx, split_point) {
+     if(TerrainPolygon.PointEndsSegment(split_point, this.segments[segment_idx])) {
+       console.error(`${MODULE_ID}|_splitSegment: cannot split on a segment endpoint.`);
+       return;
+     }
+   
+     // segments are constructed:
+     // { x: this.points[i],
+     //   y: this.points[i + 1] },
+     // { x: this.points[i + 2],
+     //   y: this.points[i + 3] });
+     // The first two correspond to A, the second two are B
+     // So for segment_idx x, the points start at x * 4.
+     // Need to insert after the starting segment point. 
+     // So if original points are ..., x0, y0, x1, y1, ...
+     //    new should be ..., x0, y0, new_x0, new_y0, new_x1, new_y1, x1, y1, ...
+     
+     // hopefully, inserting points does not screw up the underlying PIXI.Polygon, 
+     //   otherwise will need to re-construct it from scratch
+     this.points.splice(segment_idx * 4 + 2, split_point.A.x, split_point.A.y, split_point.B.x, split_point.B.y);
+     this._segments = undefined; // force segment recalculation
+   }
    
    /*  
     * Factory function to check if point is at either end of segment
