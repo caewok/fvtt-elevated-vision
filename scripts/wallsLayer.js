@@ -85,6 +85,7 @@ by terrain or non-infinite walls.
   if(!terrain_layer) return res;
   let terrains = terrain_layer.placeables; // array of terrains
   if(terrains.length === 0) return res;
+  log(`${terrains.length} terrains`, terrains);
 
   let terrain_polygons = terrains.map(t => {
     return TerrainPolygon.fromObject(t.data);
@@ -96,9 +97,6 @@ by terrain or non-infinite walls.
   terrain_polygons = terrain_polygons.filter(t => {
     return t.intersectsPolygon(los_polygon);
   });
-
-  log(`computePolygon found ${terrains.length} terrains.`, terrains);
-  log(`terrain segments for terrain 1`, terrains[1].segments);
   
   // distance types are specific to the origin point and terrain, so keep separate; no flag
   // for each terrain, draw rays from the vision point to terrain points

@@ -93,6 +93,7 @@ export class Shadow extends PIXI.Polygon {
     * @param {Hex} color    Color to use (default: gray)
     */
     draw(color = COLORS.gray, alpha = .5) {
-     canvas.controls.debug.lineStyle(1, color).beginFill(color, alpha).drawShape(this).endFill();
+     // no lineStyle(1, color)
+     canvas.controls.debug.beginFill(color, alpha).drawShape(this).endFill();
     }
 }

@@ -265,8 +265,8 @@ export class TerrainPolygon extends PIXI.Polygon {
         const ray_A = new Ray(this.vision_origin, this.segments[i].A);
         const ray_B = new Ray(this.vision_origin, this.segments[i].B);
         
-        canvas.controls.debug.lineStyle(1, COLOR.blue, .75).moveTo(ray_A.A.x, ray_A.A.y).lineTo(ray_A.B.x, ray_A.B.y);
-        canvas.controls.debug.lineStyle(1, COLOR.blue, .75).moveTo(ray_B.A.x, ray_B.A.y).lineTo(ray_B.B.x, ray_B.B.y);
+        canvas.controls.debug.lineStyle(1, COLORS.blue, .75).moveTo(ray_A.A.x, ray_A.A.y).lineTo(ray_A.B.x, ray_A.B.y);
+        canvas.controls.debug.lineStyle(1, COLORS.blue, .75).moveTo(ray_B.A.x, ray_B.A.y).lineTo(ray_B.B.x, ray_B.B.y);
 
         // Options:
         // 1. both rays intersect some other segment: far
@@ -299,15 +299,16 @@ export class TerrainPolygon extends PIXI.Polygon {
               // near, but need to test all the rest
               
             } else {
-              log(`found mixed segment ${i}, ${j}`, this.segments[i], this.segments[j]);
+              log(`found mixed segment ${i}, ${j}`, intersections, this.segments[i], this.segments[j]);
               d_type = "mixed";
             }
             
           } else if(intersections.length === 1) {
-            d_type = intersections[0] ? "far" : "near";  
+            if(intersections[0]) d_type = "far";
+            break;
           
           } else {
-            log(`segments i and j`, this.segments[i], this.segments[j]);
+            log(`segments ${i} and ${j}`, this.segments[i], this.segments[j]);
             console.error(`${MODULE_ID}|_characterizeSegmentDistances: incorrect number of intersections`, intersections);
           }
           
@@ -316,8 +317,8 @@ export class TerrainPolygon extends PIXI.Polygon {
             const ray_Vj_A = new Ray(this.vision_origin, this.segments[j].A);
             const ray_Vj_B = new Ray(this.vision_origin, this.segments[j].B);
             
-            canvas.controls.debug.lineStyle(1, COLOR.lightblue, .75).moveTo(ray_Vj_A.A.x, ray_Vj_A.A.y).lineTo(ray_Vj_A.B.x, ray_Vj_A.B.y);
-            canvas.controls.debug.lineStyle(1, COLOR.lightblue, .75).moveTo(ray_Vj_B.A.x, ray_Vj_B.A.y).lineTo(ray_Vj_B.B.x, ray_Vj_B.B.y);
+            canvas.controls.debug.lineStyle(1, COLORS.lightblue, .75).moveTo(ray_Vj_A.A.x, ray_Vj_A.A.y).lineTo(ray_Vj_A.B.x, ray_Vj_A.B.y);
+            canvas.controls.debug.lineStyle(1, COLORS.lightblue, .75).moveTo(ray_Vj_B.A.x, ray_Vj_B.A.y).lineTo(ray_Vj_B.B.x, ray_Vj_B.B.y);
             
             const intersection_A = ray_Vj_A.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
                                                         this.segments[i].B.x, this.segments[i].B.y]);
@@ -325,7 +326,7 @@ export class TerrainPolygon extends PIXI.Polygon {
             const intersection_B = ray_Vj_B.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
                                                         this.segments[i].B.x, this.segments[i].B.y]);                                            
             if(intersection_A && intersection_B) {
-              log(`segments i and j`, segments[i], segments[j]);
+              log(`Mixed test: segments i and j`, segments[i], segments[j]);
               console.error(`${MODULE_ID}|_characterizeSegmentDistances: two mixed intersections where there should be one`, intersection_A, intersection_B);
               
             } else if(intersection_A) {
@@ -344,9 +345,10 @@ export class TerrainPolygon extends PIXI.Polygon {
               break;
             
             } else {
-              log(`segments i and j`, this.segments[i], this.segments[j]);
-              log(`ray_Vj`, ray_Vj_A, ray_Vj_B);
-              console.error(`${MODULE_ID}|_characterizeSegmentDistances: zero mixed intersections where there should be one`, intersection_A, intersection_B);
+              // should mean some other segment provides the rest of the block; can treat as far
+              log(`zero mixed intersections`, intersection_A, intersection_B);
+              d_type = "far";
+              break;
             }                                             
           
           } 
