@@ -1,6 +1,6 @@
-import { COLORS, toGridDistance } from "./utility.js";
+import { COLORS, TINTS, toGridDistance } from "./utility.js";
 import { Shadow } from "./Shadow_class.js";
-import { log, MODULE_ID } from "./module.js";
+import { log, MODULE_ID, FORCE_SEGMENT_TYPE_DEBUG } from "./module.js";
 
 // TO-DO: Should segments use an extended Ray class with advanced calculation methods? 
 
@@ -252,6 +252,62 @@ export class TerrainPolygon extends PIXI.Polygon {
    }
   
    /*
+    * Return "near" if the ray does not intersect any other segment.
+    * @param {Ray} ray    Ray from vision origin to vertex
+    * @return { type: {String},                             "near" or "far"
+                intersections: {Array[{Point}]}             all intersection points
+                adjacent_intersections: {Array[{boolean}]}  for intersections, true if this is an adjacent segment
+                intersects_endpoint: {Array[{boolean}]}     for intersections, true if the intersection is at an endpoint
+               
+      "near" or "far" and result of intersection per segment
+    */
+   _characterizeVertex(ray) {
+     const intersections = [];
+     const adjacent_intersections = [];
+     const intersects_endpoint = [];
+     for(let i = 0; i < this.segments.length; i++) {
+       const intersection_point = ray.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
+                                                        this.segments[i].B.x, this.segments[i].B.y])
+       if(intersection_point) {
+         const adj_intersect = intersection_point && TerrainPolygon.PointEndsSegment(ray.B, this.segments[i]);
+         const endpoint_intersect = TerrainPolygon.PointEndsSegment(intersection_point, this.segments[i]);
+         
+         intersections.push(intersection_point);
+         adjacent_intersections.push(adj_intersect);    
+         intersects_endpoint.push(endpoint_intersect); 
+       }                 
+     }
+     
+     // if no intersections, then type is "near"
+     // if 1 or more intersections, then type is "far"
+     const type = (intersections.length > 0) : "far" ? "near"
+     
+     return { type: type,
+              intersections: intersections, 
+              adjacent_intersections: adjacent_intersections,
+              intersects_endpoint: intersects_endpoint
+              }
+   }
+   
+   /*
+    * Return a point slightly less than the endpoint along the segment
+    * @param segment {Ray}            Segment to use
+    * @param endpoint {Point}         One of the segment endpoints
+    * @param endpoint_label {String}  "A" or "B" if used in lieu of Point
+    */
+   static stepFromSegmentEndpoint(segment, endpoint, endpoint_label) {
+     if(endpoint_label === undefined) {
+       // TO-DO: Should this throw an error if endpoint is not an endpoint? 
+       endpoint_label = (endpoint.x === segment.A.x && endpoint.y === segment.A.y) ? "A" : "B";
+     }
+     
+     // project to ~95% of the segment distance. So we need endpoint to not be "A"
+     // TO-DO: is 95% a good choice? A bit arbitrary. Could do segment.distance - min(tol, dist - 1)
+     if(endpoint_label === "A") segment = segment.reverse();
+     return segment.project(segment.distance * .95);
+   }
+  
+   /*
     * Underlying function to determine if each polygon segment is "near" or "far" from the observer.
     * "Near": drawing a straight line from the segment endpoints to the observer does not 
     *  intersect the other segments of the polygon.
@@ -260,108 +316,93 @@ export class TerrainPolygon extends PIXI.Polygon {
     */
    _characterizeSegmentDistances() {
      log(`characterizing segments for terrain ${this.originating_id}`);
+     const vertex_distance_types = [];
      const distance_types = [];
+     
+     // characterize the first vertex to start.
+     let rayA = new Ray(this.vision_origin, this.segments[0].A);
+     let vA_characterized = this._characterizeVertex(rayA);
+     vertex_distance_types.push(vA_characterized.type);
+     
      for(let i = 0; i < this.segments.length; i++) {
-        const ray_A = new Ray(this.vision_origin, this.segments[i].A);
-        const ray_B = new Ray(this.vision_origin, this.segments[i].B);
+        const rayB = new Ray(this.vision_origin, this.segments[i].B);
+        const vB_characterized = this._characterizeVertex(rayB);
+        vertex_distance_types.push(vB_characterized.type);
         
-        canvas.controls.debug.lineStyle(1, COLORS.blue, .75).moveTo(ray_A.A.x, ray_A.A.y).lineTo(ray_A.B.x, ray_A.B.y);
-        canvas.controls.debug.lineStyle(1, COLORS.blue, .75).moveTo(ray_B.A.x, ray_B.A.y).lineTo(ray_B.B.x, ray_B.B.y);
-
-        // Options:
-        // 1. both rays intersect some other segment: far
-        // 2. segment is adjacent; the non-shared point intersects: far
-        // 3. 1 of 2 rays intersect: mixed.
-        // Mixed means part of the segment is far and part is near
-        // Tricky, b/c at some point we need to treat the mixed segment differently.
-        // Here, split it into two segments and add to the queue. 
-        // Make sure to put it in the right place, as location in the points array matters.
-        let d_type = "near";
-        for(let j = 0; j < this.segments.length; j++) {
-          if(i === j) continue; // don't need to test against itself
-          
-          const intersections = [];
-          if(!TerrainPolygon.PointEndsSegment(ray_A.B, this.segments[j])) {
-            intersections.push(ray_A.intersectSegment([this.segments[j].A.x, this.segments[j].A.y,
-                                                       this.segments[j].B.x, this.segments[j].B.y]));
-          }
-
-          if(!TerrainPolygon.PointEndsSegment(ray_B.B, this.segments[j])) {
-            intersections.push(ray_B.intersectSegment([this.segments[j].A.x, this.segments[j].A.y,
-                                                       this.segments[j].B.x, this.segments[j].B.y]));
-          }
-          
-          if(intersections.length === 2) {
-            if(intersections[0] && intersections[1]) {
-              d_type = "far";
-              break; // done once intersections found? TO-DO: could we have multiple intersections, with some mixed?
-            } else if(!intersections[0] && !intersections[1]) {
-              // near, but need to test all the rest
-              
-            } else {
-              log(`found mixed segment ${i}, ${j}`, intersections, this.segments[i], this.segments[j]);
-              d_type = "mixed";
-            }
-            
-          } else if(intersections.length === 1) {
-            if(intersections[0]) d_type = "far";
-            break;
-          
+        
+        // debugging
+        if(FORCE_SEGMENT_TYPE_DEBUG) {
+          const color_rayA = vA_characterized.type === "far" ? TINTS.blue[0] : TINTS.blue[5];
+          const color_rayB = vB_characterized.type === "far" ? TINTS.blue[0] : TINTS.blue[5];
+          canvas.controls.debug.lineStyle(1, color_rayA, .75).moveTo(rayA.A.x, rayA.A.y).lineTo(rayA.B.x, rayA.B.y);
+          canvas.controls.debug.lineStyle(1, color_rayB, .75).moveTo(rayB.A.x, rayB.A.y).lineTo(rayB.B.x, rayB.B.y);
+        }
+        
+        if(vA_characterized.type === "near" && vB_characterized.type === "near") {
+          // if both vertices are near, the segment is near
+          distance_types.push("near");
+        } else if(vA_characterized.type === "far" && vB_characterized.type === "far"){
+          // if both vertices are far, the segment is far
+          distance_types.push("far");
+        } else {
+          // mixed. 
+          // for the far intersection, if an intersected segment shares a point, it is far
+          const far_vertex_characterized = vA_characterized.type === "near" ? vA_characterized : vB_characterized;
+          const any_adjacent = far_vertex_characterized.adjacent_intersections.length > 0;
+          if(any_adjacent) {
+            distance_types.push("far");
           } else {
-            log(`segments ${i} and ${j}`, this.segments[i], this.segments[j]);
-            console.error(`${MODULE_ID}|_characterizeSegmentDistances: incorrect number of intersections`, intersections);
-          }
-          
-          if(d_type === "mixed") {
-            // run ray from V to the j segment and figure out where it intersects with the i segment
-            const ray_Vj_A = new Ray(this.vision_origin, this.segments[j].A);
-            const ray_Vj_B = new Ray(this.vision_origin, this.segments[j].B);
-            
-            canvas.controls.debug.lineStyle(1, COLORS.lightblue, .75).moveTo(ray_Vj_A.A.x, ray_Vj_A.A.y).lineTo(ray_Vj_A.B.x, ray_Vj_A.B.y);
-            canvas.controls.debug.lineStyle(1, COLORS.lightblue, .75).moveTo(ray_Vj_B.A.x, ray_Vj_B.A.y).lineTo(ray_Vj_B.B.x, ray_Vj_B.B.y);
-            
-            const intersection_A = ray_Vj_A.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
-                                                        this.segments[i].B.x, this.segments[i].B.y]);
-                                                        
-            const intersection_B = ray_Vj_B.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
-                                                        this.segments[i].B.x, this.segments[i].B.y]);                                            
-            if(intersection_A && intersection_B) {
-              log(`Mixed test: segments i and j`, segments[i], segments[j]);
-              console.error(`${MODULE_ID}|_characterizeSegmentDistances: two mixed intersections where there should be one`, intersection_A, intersection_B);
+            // if the intersection is a segment endpoint, move along segment and test for intersection
+            // if near, then segment is near; if far, segment is far
+            // TO-DO: what about multiple intersections?
+            if(far_vertex_characterized.intersects_endpoint[0]) {
+              const far_endpoint_label = (vA_characterized.type === "far") ? "A" : "B";
+              const step_point = stepFromSegmentEndpoint(segment[i], {}, far_endpoint_label);
+              const rayStep = new Ray(this.vision_origin, step_point);
               
-            } else if(intersection_A) {
-              // split the j segment along intersection A. 
-              // re-do the j loop. 
-              // re-do this i segment. 
-              // note: we have not yet set the distance type for this i segment.
-              this._splitSegment(i, intersection_A);
-              i -= 1;
-              break;
-            
-            } else if(intersection_B) {
-              // split the j segment along intersection B. 
-              this._splitSegment(i, intersection_B);
-              i -= 1;
-              break;
-            
+              if(FORCE_SEGMENT_TYPE_DEBUG) {
+                canvas.controls.debug.lineStyle(1, TINTS.blue[8], .75).moveTo(rayStep.A.x, rayStep.A.y).lineTo(rayStep.B.x, rayStep.B.y);
+              }
+              
+              const rayStep_characterized = this._characterizeVertex(rayStep);
+              distance_types.push(rayStep_characterized.type);
+              
             } else {
-              // should mean some other segment provides the rest of the block; can treat as far
-              log(`zero mixed intersections`, intersection_A, intersection_B);
-              d_type = "far";
+              // if still mixed, then split where the intersection meets this i segment
+              // re-do this i segment. 
+              // note: we have not yet set the distance type for this i segment, which is good
+              // run ray from V to the j segment and figure out where it intersects with the i segment
+              const ray_V_intersect = new Ray(this.vision_origin, far_vertex_characterized.intersections[0]);
+              
+              // extend the ray: vision --> intersecting segment point --> segment[i]
+              // simplest to just construct a really long ray
+              const ray_V_mixed = new Ray(this.vision_origin, ray_V_intersect.project(this.max_distance))
+              
+              const intersection_mixed = ray_V_mixed.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
+                                                                       this.segments[i].B.x, this.segments[i].B.y])
+               
+              if(FORCE_SEGMENT_TYPE_DEBUG) {
+                canvas.controls.debug.lineStyle(1, TINTS.blue[8], .75).moveTo(ray_V_mixed.A.x, ray_V_mixed.A.y).lineTo(ray_V_mixed.B.x, ray_V_mixed.B.y);
+              }
+             
+              this._splitSegment(i, intersection_mixed);
+              i -= 1; // re-do the i segment 
               break;
-            }                                             
-          
-          } 
-          
-        } // for(let j = 0; j < this.segments.length; j++)
-        // done with the segment, so we can now label it.
-        distance_types.push(d_type);
+            
+            } // if(far_vertex_characterized.intersects_endpoint[0])
+            
+          } // if(any_adjacent)
         
-      } // for(let i = 0; i < this.segments.length; i++)
-      log(`_characterizeSegmentDistances`, distance_types);
+        } // if(vA_characterized.type === "near" && vB_characterized.type === "near")
+        
+        // cycle to next vertex
+        rayA = rayB;
+        vA_characterized = vB_characterized;
+    } // for(let i = 1; i < this.segments.length; i++)
 
-      return distance_types;
-   } 
+   log(`_characterizeSegmentDistances`, distance_types);
+   return distance_types;
+} 
    
    /*
     * Split a segment into two along a split point.

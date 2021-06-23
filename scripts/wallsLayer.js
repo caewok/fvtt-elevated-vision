@@ -150,7 +150,7 @@ by terrain or non-infinite walls.
     log("Terrain shadows", shadows);
     
     shadows.forEach(s => {
-      if(s.near) s.near.draw();
+      //if(s.near) s.near.draw();
       //if(s.e0_shadow) s.e0_shadow.draw()
       /*
       if(s.terrain_shadows) {

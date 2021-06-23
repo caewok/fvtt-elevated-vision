@@ -9,7 +9,23 @@ export const COLORS = {
   lightblue: 0xADD8E6,
   red: 0xFF0000,
   gray: 0x808080,
-  black: 0x000000
+  black: 0x000000,
+  white: 0xFFFFFF
+}
+
+// tints from dark to light
+// 10 total; #11 would be white. 
+export const TINTS = {
+  blue: [ 0x0000FF,
+          0x1919FF,
+          0x3232FF,
+          0x4c4cFF,
+          0x6666FF,
+          0x7f7FFF,
+          0x9999FF,
+          0xB2B2FF,
+          0xCCCCFF,
+          0xE5E5FF]
 }
 
 
