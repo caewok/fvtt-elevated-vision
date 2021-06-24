@@ -327,6 +327,7 @@ export class TerrainPolygon extends PIXI.Polygon {
      // create set of segment points to be ordered clockwise
      // TO-DO: do we need to handle polygons that overlap on themselves, such that 
      //    many segments share a point?
+
      const segment_points = []; 
      for(let i = 0; i < this.segments.length; i++) {
        const sp = SegmentPoint.constructSegmentPoints(this.segments[i]);
@@ -348,19 +349,23 @@ export class TerrainPolygon extends PIXI.Polygon {
          segment_points.push(sp.B);
        }     
        
-       if(FORCE_SEGMENT_TYPE_DEBUG)  {
-         // draw line from vision to segment points
-         canvas.controls.debug.lineStyle(1, COLORS.gray).moveTo(this.vision_origin.x, this.vision_origin.y).lineTo(this.segments[i].A.x, this.segments[i].A.y);
-         canvas.controls.debug.lineStyle(1, COLORS.gray).moveTo(this.vision_origin.x, this.vision_origin.y).lineTo(this.segments[i].B.x, this.segments[i].B.y);
-       }      
      }
      
      // sort around the vision point
      segment_points.sort((a, b) => {
-       orient2d(this.vision_origin.x, this.vision_origin.y, 
+       return orient2d(this.vision_origin.x, this.vision_origin.y, 
                 a.x, a.y,
                 b.x, b.y);
      });
+
+     if(FORCE_SEGMENT_TYPE_DEBUG)  {
+       segment_points.forEach((s, i) => {
+         // draw line from vision to segment points
+         // increase contrast
+         canvas.controls.debug.lineStyle(1, TINTS.blue[(i*2) % 10]).moveTo(this.vision_origin.x, this.vision_origin.y).lineTo(s.x, s.y);
+       });
+     }
+
      
      log(`_characterizeSegmentDistances: sorted segment_points`, segment_points);
      
