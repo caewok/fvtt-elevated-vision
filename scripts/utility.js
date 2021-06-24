@@ -33,7 +33,7 @@ export const TINTS = {
  * From https://www.toptal.com/python/computational-geometry-in-python-from-theory-to-implementation
  */
 export function almostEqual(x, y, EPSILON = 1e-5) {
-  return abs(x - y) < EPSILON;
+  return Math.abs(x - y) < EPSILON;
 }
  
 

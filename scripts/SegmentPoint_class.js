@@ -13,7 +13,7 @@ import { MODULE_ID, log } from "./module.js";
  * - point tracks what segments contain it as an endpoint
  * - equality test using almost equal
  */
-export SegmentPoint extends PIXI.Point {
+export class SegmentPoint extends PIXI.Point {
   constructor(x, y) {
     super(x, y);
     this.segments = new Map;

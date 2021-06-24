@@ -327,7 +327,7 @@ export class TerrainPolygon extends PIXI.Polygon {
      // create set of segment points to be ordered clockwise
      // TO-DO: do we need to handle polygons that overlap on themselves, such that 
      //    many segments share a point?
-     segment_points = []; 
+     const segment_points = []; 
      for(let i = 0; i < this.segments.length; i++) {
        const sp = SegmentPoint.constructSegmentPoints(this.segments[0]);
        if(i === 0) {

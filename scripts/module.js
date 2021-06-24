@@ -1,4 +1,5 @@
 import { registerPatches } from "./patching.js";
+import { orient2d } from  "./lib/orient2d.js";
 
 export const MODULE_ID = 'elevated-vision';
 const FORCE_DEBUG = false; // used for logging before dev mode is set up
@@ -18,7 +19,7 @@ export function log(...args) {
 }
 
 Hooks.once('init', async function() {
-
+  window[MODULE_ID] = { orient2d: orient2d };
 });
 
 Hooks.once('ready', async function() {
