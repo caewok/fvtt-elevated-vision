@@ -1,7 +1,7 @@
 import { log, MODULE_ID, FORCE_TOKEN_VISION_DEBUG, FORCE_FOV_DEBUG } from "./module.js";
 import { COLORS, TerrainElevationAtPoint, TokenElevationAtPoint } from "./utility.js";
 import { TerrainPolygon } from "./TerrainPolygon_class.js";
-
+import { orient2d } from "./lib/orient2d.min.js";
 
 /*
 Clicking token:
@@ -57,6 +57,8 @@ export function evComputePolygon(wrapped,
   log("evComputePolygon this", this);                                       
 
   if(type !== "sight") return res;
+  
+  log("orient2d lib test:", orient2d.toString(), orient2d(10,10, 20,20, 25,20));
 
   const isDebuggingVision = FORCE_FOV_DEBUG;
   const debug = isDebuggingVision ? canvas.controls.debug : undefined;
