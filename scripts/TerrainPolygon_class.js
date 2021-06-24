@@ -1,7 +1,9 @@
 import { COLORS, TINTS, toGridDistance } from "./utility.js";
 import { Shadow } from "./Shadow_class.js";
 import { log, MODULE_ID, FORCE_SEGMENT_TYPE_DEBUG } from "./module.js";
-
+import { Segment, SegmentPoint } from "./SegmentPoint_class.js";
+import { orient2d } from "./lib/orient2d.js";
+ 
 // TO-DO: Should segments use an extended Ray class with advanced calculation methods? 
 
 // Two types of polygons:
@@ -76,10 +78,11 @@ export class TerrainPolygon extends PIXI.Polygon {
   _constructSegments() {
     const poly_segments = [];
     for(let i = 0; i < (this.points.length - 2); i += 2) {
-      const poly_segment = new Ray({ x: this.points[i],
-                                     y: this.points[i + 1] },
-                                   { x: this.points[i + 2],
-                                     y: this.points[i + 3] });
+      const poly_segment = new Segment({ x: this.points[i],
+                                         y: this.points[i + 1] },
+                                       { x: this.points[i + 2],
+                                         y: this.points[i + 3] });
+      poly_segment.originating_object = this;                                    
       poly_segments.push(poly_segment);
     }
     return poly_segments;
@@ -315,93 +318,48 @@ export class TerrainPolygon extends PIXI.Polygon {
     * @return {Array} Array of "near" or "far" corresponding to segments.
     */
    _characterizeSegmentDistances() {
+     // use a sweep method based in part on https://www.redblobgames.com/articles/visibility/
+     // need to hit the points in order moving clockwise. 
+     // so need an array of points sorted by CCW, where each point is linked to one or more segments
+     // for each point, keep a running tally of implicated walls and the closest wall.
      log(`characterizing segments for terrain ${this.originating_id}`);
-     const vertex_distance_types = [];
-     const distance_types = [];
      
-     // characterize the first vertex to start.
-     let rayA = new Ray(this.vision_origin, this.segments[0].A);
-     let vA_characterized = this._characterizeVertex(rayA);
-     vertex_distance_types.push(vA_characterized.type);
-     
+     // create set of segment points to be ordered clockwise
+     // TO-DO: do we need to handle polygons that overlap on themselves, such that 
+     //    many segments share a point?
+     segment_points = []; 
      for(let i = 0; i < this.segments.length; i++) {
-        const rayB = new Ray(this.vision_origin, this.segments[i].B);
-        const vB_characterized = this._characterizeVertex(rayB);
-        vertex_distance_types.push(vB_characterized.type);
-        
-        
-        // debugging
-        if(FORCE_SEGMENT_TYPE_DEBUG) {
-          const color_rayA = vA_characterized.type === "far" ? TINTS.blue[0] : TINTS.blue[5];
-          const color_rayB = vB_characterized.type === "far" ? TINTS.blue[0] : TINTS.blue[5];
-          canvas.controls.debug.lineStyle(1, color_rayA, .75).moveTo(rayA.A.x, rayA.A.y).lineTo(rayA.B.x, rayA.B.y);
-          canvas.controls.debug.lineStyle(1, color_rayB, .75).moveTo(rayB.A.x, rayB.A.y).lineTo(rayB.B.x, rayB.B.y);
-        }
-        
-        if(vA_characterized.type === "near" && vB_characterized.type === "near") {
-          // if both vertices are near, the segment is near
-          distance_types.push("near");
-        } else if(vA_characterized.type === "far" && vB_characterized.type === "far"){
-          // if both vertices are far, the segment is far
-          distance_types.push("far");
-        } else {
-          // mixed. 
-          // for the far intersection, if an intersected segment shares a point, it is far
-          const far_vertex_characterized = vA_characterized.type === "near" ? vA_characterized : vB_characterized;
-          const any_adjacent = far_vertex_characterized.adjacent_intersections.length > 0;
-          if(any_adjacent) {
-            distance_types.push("far");
-          } else {
-            // if the intersection is a segment endpoint, move along segment and test for intersection
-            // if near, then segment is near; if far, segment is far
-            // TO-DO: what about multiple intersections?
-            if(far_vertex_characterized.intersects_endpoint[0]) {
-              const far_endpoint_label = (vA_characterized.type === "far") ? "A" : "B";
-              const step_point = stepFromSegmentEndpoint(segment[i], {}, far_endpoint_label);
-              const rayStep = new Ray(this.vision_origin, step_point);
-              
-              if(FORCE_SEGMENT_TYPE_DEBUG) {
-                canvas.controls.debug.lineStyle(1, TINTS.blue[8], .75).moveTo(rayStep.A.x, rayStep.A.y).lineTo(rayStep.B.x, rayStep.B.y);
-              }
-              
-              const rayStep_characterized = this._characterizeVertex(rayStep);
-              distance_types.push(rayStep_characterized.type);
-              
-            } else {
-              // if still mixed, then split where the intersection meets this i segment
-              // re-do this i segment. 
-              // note: we have not yet set the distance type for this i segment, which is good
-              // run ray from V to the j segment and figure out where it intersects with the i segment
-              const ray_V_intersect = new Ray(this.vision_origin, far_vertex_characterized.intersections[0]);
-              
-              // extend the ray: vision --> intersecting segment point --> segment[i]
-              // simplest to just construct a really long ray
-              const ray_V_mixed = new Ray(this.vision_origin, ray_V_intersect.project(this.max_distance))
-              
-              const intersection_mixed = ray_V_mixed.intersectSegment([this.segments[i].A.x, this.segments[i].A.y,
-                                                                       this.segments[i].B.x, this.segments[i].B.y])
-               
-              if(FORCE_SEGMENT_TYPE_DEBUG) {
-                canvas.controls.debug.lineStyle(1, TINTS.blue[8], .75).moveTo(ray_V_mixed.A.x, ray_V_mixed.A.y).lineTo(ray_V_mixed.B.x, ray_V_mixed.B.y);
-              }
-             
-              this._splitSegment(i, intersection_mixed);
-              i -= 1; // re-do the i segment 
-              break;
-            
-            } // if(far_vertex_characterized.intersects_endpoint[0])
-            
-          } // if(any_adjacent)
-        
-        } // if(vA_characterized.type === "near" && vB_characterized.type === "near")
-        
-        // cycle to next vertex
-        rayA = rayB;
-        vA_characterized = vB_characterized;
-    } // for(let i = 1; i < this.segments.length; i++)
-
-   log(`_characterizeSegmentDistances`, distance_types);
-   return distance_types;
+       const sp = SegmentPoint.constructSegmentPoints(this.segments[0]);
+       if(i === 0) {
+         // add both
+         segment_points.push(sp.A);
+         segment_points.push(sp.B);
+       } else if(i === (this.segments.length - 1)) {
+         // A overlaps with prior B
+         segment_points[i - 1].includeSegment(this.segments[i])
+       
+         // last segment, so B is equivalent to the first A
+         segment_points[0].includeSegment(this.segments[i])
+         
+       } else {
+         // A overlaps with prior B
+         segment_points[i - 1].includeSegment(this.segments[i])
+         // add new B
+         segment_points.push(sp.B);
+       }            
+     }
+     
+     // sort around the vision point
+     segment_points.sort((a, b) => {
+       orient2d(this.vision_origin.x, this.vision_origin.y, 
+                a.x, a.y,
+                b.x, b.y);
+     });
+     
+     log(`_characterizeSegmentDistances: sorted segment_points`, segment_points);
+     
+     
+   return undefined;
 } 
    
    /*

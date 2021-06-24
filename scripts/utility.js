@@ -28,6 +28,15 @@ export const TINTS = {
           0xE5E5FF]
 }
 
+/*
+ * Test if two numbers are almost equal, given a small error window.
+ * From https://www.toptal.com/python/computational-geometry-in-python-from-theory-to-implementation
+ */
+export function almostEqual(x, y, EPSILON = 1e-5) {
+  return abs(x - y) < EPSILON;
+}
+ 
+
 
 /* 
  * Helper function to convert absolute increments to grid distance
