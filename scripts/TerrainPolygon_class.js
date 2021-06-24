@@ -346,7 +346,13 @@ export class TerrainPolygon extends PIXI.Polygon {
          segment_points[i - 1].includeSegment(this.segments[i])
          // add new B
          segment_points.push(sp.B);
-       }            
+       }     
+       
+       if(FORCE_SEGMENT_TYPE_DEBUG)  {
+         // draw line from vision to segment points
+         canvas.controls.debug.lineStyle(1, COLORS.gray).moveTo(this.vision_origin.x, this.vision_origin.y).lineTo(this.segments[i].A.x, this.segments[i].A.y);
+         canvas.controls.debug.lineStyle(1, COLORS.gray).moveTo(this.vision_origin.x, this.vision_origin.y).lineTo(this.segments[i].B.x, this.segments[i].B.y);
+       }      
      }
      
      // sort around the vision point
