@@ -280,7 +280,7 @@ export class TerrainPolygon extends PIXI.Polygon {
      
      // if no intersections, then type is "near"
      // if 1 or more intersections, then type is "far"
-     const type = (intersections.length > 0) : "far" ? "near"
+     const type = (intersections.length > 0) ? "far" : "near";
      
      return { type: type,
               intersections: intersections, 

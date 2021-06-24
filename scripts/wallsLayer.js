@@ -1,7 +1,7 @@
 import { log, MODULE_ID, FORCE_TOKEN_VISION_DEBUG, FORCE_FOV_DEBUG } from "./module.js";
 import { COLORS, TerrainElevationAtPoint, TokenElevationAtPoint } from "./utility.js";
 import { TerrainPolygon } from "./TerrainPolygon_class.js";
-import { orient2d } from "./lib/orient2d.min.js";
+import { orient2d } from "./lib/orient2d.js";
 
 /*
 Clicking token:
