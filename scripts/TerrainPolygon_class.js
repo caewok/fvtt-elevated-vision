@@ -322,14 +322,14 @@ export class TerrainPolygon extends PIXI.Polygon {
      // need to hit the points in order moving clockwise. 
      // so need an array of points sorted by CCW, where each point is linked to one or more segments
      // for each point, keep a running tally of implicated walls and the closest wall.
-     log(`characterizing segments for terrain ${this.originating_id}`);
+     log(`characterizing segments for terrain ${this.originating_id}`, this.segments);
      
      // create set of segment points to be ordered clockwise
      // TO-DO: do we need to handle polygons that overlap on themselves, such that 
      //    many segments share a point?
      const segment_points = []; 
      for(let i = 0; i < this.segments.length; i++) {
-       const sp = SegmentPoint.constructSegmentPoints(this.segments[0]);
+       const sp = SegmentPoint.constructSegmentPoints(this.segments[i]);
        if(i === 0) {
          // add both
          segment_points.push(sp.A);
