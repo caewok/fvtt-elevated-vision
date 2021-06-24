@@ -48,14 +48,6 @@ export class SegmentPoint extends PIXI.Point {
    }
      
   /*
-   * Add one or more indices to the set.
-   * @param {Number} ...indices One or more integer indices to add
-   */ 
-   addIndex(...segment_idx) {
-     [...segment_idx].forEach(i => this.segment_indices.add(i));
-   }
-   
-  /*
    * Test if segment should be included in the index set
    * @param {Ray} segment   Segment to test
    * @param {Number} idx    Index of the segment
