@@ -122,7 +122,7 @@ export class Segment extends Ray {
    }
    
    get B() {
-     return this._vertexB || this.B;
+     return this._vertexB || this.B; // needed for compatibility in initial construction
    }
    
    set A(value) {
@@ -139,9 +139,18 @@ export class Segment extends Ray {
      return this._vertexA;
    }
    
+   set vertexA(value) {
+     this._vertexA = value;
+   }
+  
    get vertexB() {
      return this._vertexB;
    }
+   
+   set vertexB(value) {
+     this._vertexB = value;
+   }
+   
 
   /*
    * Get the id for this Segment.
