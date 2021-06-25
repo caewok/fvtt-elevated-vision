@@ -113,3 +113,7 @@ export function estimate(elen, e) {
 export function vec(n) {
     return new Float64Array(n);
 }
+
+
+
+
