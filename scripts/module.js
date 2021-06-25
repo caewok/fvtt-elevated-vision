@@ -7,6 +7,7 @@ export const FORCE_TOKEN_VISION_DEBUG = false;
 export const FORCE_FOV_DEBUG = true
 export const FORCE_SEGMENT_TYPE_DEBUG = true;
 
+
 export function log(...args) {
   try {
     const isDebugging = window.DEV?.getPackageDebugValue(MODULE_ID);
