@@ -24,11 +24,19 @@ export class Vertex extends PIXI.Point {
   constructor(x, y) {
     super(x, y);
     this.segments = new Map;
-    this.id = foundry.utils.randomID();
     this.originating_object = undefined; // typically used to set the id of the object 
                                          // to which this vertex belongs
   }
-  
+ 
+  /*
+   * Get the id for this Vertex.
+   * @type {String}
+   */
+   get id() {
+     if(!this._id) this._id = foundry.utils.randomID();
+     return this._id;
+   }
+ 
   /*
    * Almost equal version that treats points as equal if within epsilon error
    * @param {PIXI.Point} p  Point in {x, y} format.
@@ -94,37 +102,46 @@ export class Vertex extends PIXI.Point {
  */ 
 export class Segment extends Ray {
   constructor(A, B) {
+
     super(A, B);
-    this.id = foundry.utils.randomID();
     this.originating_object = undefined; // typically used to set the id of the object 
                                          // to which this segment belongs
     this.properties = {}; // typically used to characterize the segments  
     this.splits = undefined;        
     
-    const vertices = Vertex.constructVertexFromSegment(this);  
-    this.vertexA = vertices.A;
-    this.vertexB = vertices.B;                        
+    //const vertices = Vertex.constructVertexFromSegment(this);  
+    //this.vertexA = vertices.A;
+    //this.vertexB = vertices.B;                        
   }
   
   /*
    * Use vertex instead of A and B
    */
    get A() {
-     return this.vertexA;
+     return this._vertexA || this.A; // needed for compatibility in initial construction
    }
    
    get B() {
-     return this.vertexB;
+     return this._vertexB || this.B;
    }
    
    set A(value) {
-     this.vertexA.x = value.x;
-     this.vertexA.y = value.y;
+     this._vertexA = new Vertex(value.x, value.y);
+     this._vertexA.includeSegment(this);
    }
    
    set B(value) {
-     this.vertexB.x = value.x;
-     this.vertexB.y = value.y;
+     this._vertexB = new Vertex(value.x, value.y);
+     this._vertexB.includeSegment(this);
+   }
+
+  /*
+   * Get the id for this Segment.
+   * @type {String}
+   */
+   get id() {
+     if(!this._id) this._id = foundry.utils.randomID();
+     return this._id;
    }
   
  /*

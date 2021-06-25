@@ -1,7 +1,7 @@
 import { COLORS, TINTS, toGridDistance, orient2drounded } from "./utility.js";
 import { Shadow } from "./Shadow_class.js";
 import { log, MODULE_ID, FORCE_SEGMENT_TYPE_DEBUG } from "./module.js";
-import { Segment, SegmentPoint } from "./SegmentPoint_class.js";
+import { Segment, Vertex } from "./SegmentVertex_class.js";
  
 // TO-DO: Should segments use an extended Ray class with advanced calculation methods? 
 
@@ -383,19 +383,22 @@ export class TerrainPolygon extends PIXI.Polygon {
            walls.delete(s.id);
          }
        });
-
+       
+       log(`_characterizeSegmentDistances: sp`, sp); 
        log(`_characterizeSegmentDistances: walls`, walls);
        
        // determine the closest segment to the viewer at this point
        let new_closest = [...walls].reduce((acc, current) => {
          // [...walls] will break the Map into [0] id and [1] object
          const obj = current[1];
-         log(`Reducing walls: acc, current`, acc, obj);
+         //log(`Reducing walls: acc, current`, acc, obj);
          if(acc === undefined) return obj;
          if(obj.inFrontOf(acc, this.vision_origin)) return obj;
          return acc;
        }, undefined);
        
+       log(`_characterizeSegmentDistances: closest, new_closest`, closest, new_closest);
+
        if(closest === undefined) {
          closest = new_closest;
        } else if(new_closest.id !== closest.id) {
@@ -405,11 +408,13 @@ export class TerrainPolygon extends PIXI.Polygon {
         
          if(closest.active_split.isEndpoint(sp)) {
            // if we are at the endpoint of the closest segment, we can simply mark it as near
+           log(`_characterizeSegmentDistances: marking ${closest.id} as near`);
            closest.active_split.properties = "near";
          } else {
             // otherwise, it is mixed and we need to split the segment at the intersection point
             // locate the intersection v --> sp --> closest
             // orient the segment so that A is to the left
+            log(`_characterizeSegmentDistances: splitting closest`, closest.active_split);
             closest = closest.active_split.orientToPoint(this.vision_origin);
             
             const rayVS = new Ray({ x: this.vision_origin.x, y: this.vision_origin.y },
@@ -429,6 +434,7 @@ export class TerrainPolygon extends PIXI.Polygon {
          
          if(!new_closest.isEndpoint(sp)) {
            // must split
+           log(`_characterizeSegmentDistances: splitting new_closest ${new_closest.id}`, new_closest.active_split);
            new_closest = new_closest.active_split.orientToPoint(this.vision_origin);
            const rayVS = new Ray({ x: this.vision_origin.x, y: this.vision_origin.y },
                                  { x: sp.x, y: sp.y });
@@ -442,7 +448,7 @@ export class TerrainPolygon extends PIXI.Polygon {
            
            
             new_closest.active_split.split(intersection);
-            new_closest.active_split = closest.active_split.splits.B;
+            new_closest.active_split = new_closest.active_split.splits.B;
          } // if(!new_closest.isEndpoint(sp)
          
          closest = new_closest;
@@ -451,7 +457,7 @@ export class TerrainPolygon extends PIXI.Polygon {
        
      }); // sp.forEach(sp =>
   
-   log(`_characterizeSegmentDistances: sp after characterizing`, sp);
+   log(`_characterizeSegmentDistances: segment_points after characterizing`, segment_points);
    log(`_characterizeSegmentDistances: segments after characterizing`, this.segments);
          
    return undefined;

@@ -21,7 +21,9 @@ export function log(...args) {
 }
 
 Hooks.once('init', async function() {
-  window[MODULE_ID] = { orient2d: orient2d };
+  window[MODULE_ID] = { orient2d: orient2d,
+                        Vertex: Vertex,
+                        Segment: Segment };
 });
 
 Hooks.once('ready', async function() {
