@@ -389,8 +389,11 @@ export class TerrainPolygon extends PIXI.Polygon {
        
        // determine the closest segment to the viewer at this point
        let new_closest = [...walls].reduce((acc, current) => {
-         if(acc === undefined) return current;
-         if(current.inFrontOf(acc, this.vision_origin)) return current;
+         // [...walls] will break the Map into [0] id and [1] object
+         const obj = current[1];
+         log(`Reducing walls: acc, current`, acc, obj);
+         if(acc === undefined) return obj;
+         if(obj.inFrontOf(acc, this.vision_origin)) return obj;
          return acc;
        }, undefined);
        

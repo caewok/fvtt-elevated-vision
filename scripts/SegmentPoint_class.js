@@ -97,7 +97,7 @@ export class Segment extends Ray {
   */
   reverse() {
     // cannot simply use super b/c it calls new Ray instead of new this.
-    s = new this(this.B, this.A);
+    const s = new this.constructor(this.B, this.A);
     s._distance = this._distance;
     s._angle = Math.PI - this._angle;
     return s;
@@ -203,13 +203,13 @@ export class Segment extends Ray {
   * @param {PIXI.Point} p   Point to use for the split
   */
   split(p) {
-    if(!contains(value)) {
-      console.error(`${MODULE_ID}|Segment class split method: Point is not within the segment.`);
+    if(!this.contains(p)) {
+      console.error(`${MODULE_ID}|Segment class split method: Point is not within the segment.`, p, this);
     }
     
     this.splits = { A: new Segment({ x: this.A.x, y: this.A.y }, 
-                                   { x: value.x, y: value.y }),
-                    B: new Segment({ x: value.x, y: value.y }, 
+                                   { x: p.x, y: p.y }),
+                    B: new Segment({ x: p.x, y: p.y }, 
                                    { x: this.B.x, y: this.B.y }) };
                    
     this.splits.A.originating_object = this;
@@ -279,9 +279,8 @@ export class Segment extends Ray {
     * @return {PIXI.Point} Interpolated point.
     */
    static interpolate(pointA, pointB, f) {
-     return Point(
-     pointA.x*(1-f) + pointB.x*f,
-     pointA.y*(1-f) + pointB.y*f);
+     return { x: pointA.x*(1-f) + pointB.x*f,
+              y: pointA.y*(1-f) + pointB.y*f };
    }
   
   /*
@@ -291,9 +290,9 @@ export class Segment extends Ray {
    * @return {boolean} true if this segment is in front of the other.
    */
   inFrontOf(segment, relativePoint) {
-    const A1 = leftOf(Segment.interpolate(segment.A, segment.B, 0.01));
-    const A2 = leftOf(Segment.interpolate(segment.B, segment.A, 0.01));
-    const A3 = leftOf(relativePoint);
+    const A1 = this.leftOf(Segment.interpolate(segment.A, segment.B, 0.01));
+    const A2 = this.leftOf(Segment.interpolate(segment.B, segment.A, 0.01));
+    const A3 = this.leftOf(relativePoint);
     
     const B1 = segment.leftOf(Segment.interpolate(this.A, this.B, 0.01));
     const B2 = segment.leftOf(Segment.interpolate(this.B, this.A, 0.01)); 
