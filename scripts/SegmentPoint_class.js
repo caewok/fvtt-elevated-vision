@@ -290,7 +290,7 @@ export class Segment extends Ray {
    * @param {PIXI.Point} relativePoint  Vision/observer point
    * @return {boolean} true if this segment is in front of the other.
    */
-  segmentInFrontOf(segment, relativePoint) {
+  inFrontOf(segment, relativePoint) {
     const A1 = leftOf(Segment.interpolate(segment.A, segment.B, 0.01));
     const A2 = leftOf(Segment.interpolate(segment.B, segment.A, 0.01));
     const A3 = leftOf(relativePoint);

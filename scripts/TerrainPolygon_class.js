@@ -390,7 +390,7 @@ export class TerrainPolygon extends PIXI.Polygon {
        // determine the closest segment to the viewer at this point
        let new_closest = [...walls].reduce((acc, current) => {
          if(acc === undefined) return current;
-         if(current.segment.InFrontOf(acc, this.vision_origin)) return current;
+         if(current.inFrontOf(acc, this.vision_origin)) return current;
          return acc;
        }, undefined);
        
