@@ -30,8 +30,6 @@ export class TerrainPolygon extends PIXI.Polygon {
   */
   get segments() {
     if(this._segments === undefined || this._segments.size === 0) {
-      // clear the vertices just in case
-      this._vertices = undefined;
       this._segments = this._constructSegments();
       }
     return this._segments; 
@@ -42,8 +40,31 @@ export class TerrainPolygon extends PIXI.Polygon {
   * @type {Map}
   */
   get vertices() {
-    if(this._vertices === undefined || this._vertices.size === 0) this._vertices = this._constructVertices();
+    if(this._vertices === undefined || this._vertices.size === 0) {
+      this._segments = undefined;
+      this._vertices = this._constructVertices();
+    }
     return this._vertices;
+  }
+  
+ /*
+  * Internal function to construct the map of vertices for the polygon
+  * Each vertex links to two segments, using the internal Segment and Vertex linking.
+  * @return {Map}
+  */
+  _constructVertices() {
+    const poly_vertices = new Map();  
+    let prior_vertex = new Vertex(this.points[0], this.points[1]);
+    prior_vertex.originating_object = this;
+    poly_vertices.set(prior_vertex.id, prior_vertex);
+    
+    for (let i = 2; i < (this.points.length - 2); i += 2) {
+      const new_vertex = prior_vertex.connectPoint(this.points[i], this.points[i + 1]);
+      poly_vertices.set(new_vertex.id, new_vertex);
+      prior_vertex = new_vertex;
+    }
+
+    return poly_vertices;
   }
   
  /*
@@ -54,39 +75,15 @@ export class TerrainPolygon extends PIXI.Polygon {
   */
   _constructSegments() {
     const poly_segments = new Map();
-    let previous_segment_id;
-    for(let i = 0; i < (this.points.length - 2); i += 2) {
-      const poly_segment = new Segment({ x: this.points[i],
-                                         y: this.points[i + 1] },
-                                       { x: this.points[i + 2],
-                                         y: this.points[i + 3] });
-      poly_segment.originating_object = this;    
-      
-      // link the vertices between segments
-      if(i > 0) {
-        poly_segment.vertexA = poly_segments.get(previous_segment_id).vertexB;
+    
+    for(const [key, vertex] of this.vertices) {
+      // for each segment in the vertex list, add (usually only one per vertex)
+      for(const [key, segment] of vertex.segments) {
+        poly_segments.set(segment.id, segment);
       }
-                                      
-      poly_segments.set(poly_segment.id, poly_segment);
-      previous_segment_id = poly_segment.id;
     }
+    
     return poly_segments;
-  }
-  
-  
- /*
-  * Internal function to construct the map of vertices for the polygon
-  * Each vertex links to two segments, using the internal Segment and Vertex linking.
-  * Here, segments are (arbitrarily) constructed first, then vertices are retrieved.
-  * @return {Map}
-  */
-  _constructVertices() {
-    const poly_vertices = new Map();    
-    for(const [key, segment] of this.segments) { // will build the segments if necessary
-      // need only the A vertex, b/c A & B are shared between segments
-      poly_vertices.set(segment.vertexA.id, segment.vertexA);
-    }
-    return poly_vertices;
   }
   
  /*

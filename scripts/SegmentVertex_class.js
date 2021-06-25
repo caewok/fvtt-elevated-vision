@@ -27,6 +27,26 @@ export class Vertex extends PIXI.Point {
     this.originating_object = undefined; // typically used to set the id of the object 
                                          // to which this vertex belongs
   }
+  
+  /* 
+   * Link this vertex to another vertex by constructing a segment
+   * @param {PIXI.Point} p    Point in {x, y} format to link
+   * @return The new Vertex
+   */
+   connectPoint(p)
+     const v = new Vertex(p);
+     const s = new Segment(this, p);
+     s.originating_object = this.originating_object;
+     v.originating_object = this.originating_object;
+     
+     s.vertexA = this;
+     s.vertexB = v;
+     
+     this.includeSegment(s);
+     v.includeSegment(s);
+     
+     return v;
+   }
  
   /*
    * Get the id for this Vertex.
