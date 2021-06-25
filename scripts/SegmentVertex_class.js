@@ -134,6 +134,14 @@ export class Segment extends Ray {
      this._vertexB = new Vertex(value.x, value.y);
      this._vertexB.includeSegment(this);
    }
+   
+   get vertexA() {
+     return this._vertexA;
+   }
+   
+   get vertexB() {
+     return this._vertexB;
+   }
 
   /*
    * Get the id for this Segment.
