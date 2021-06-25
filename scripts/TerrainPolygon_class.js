@@ -67,7 +67,7 @@ export class TerrainPolygon extends PIXI.Polygon {
         poly_segment.vertexA = poly_segments.get(previous_segment_id).vertexB;
       }
                                       
-      poly_segments.add(poly_segment);
+      poly_segments.set(poly_segment.id, poly_segment);
       previous_segment_id = poly_segment.id;
     }
     return poly_segments;
@@ -95,7 +95,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   */
   get elevation() { 
     if(this._elevation === undefined) this._elevation = 0;
-    return this._elevation.
+    return this._elevation;
   }
   
  /*
@@ -158,6 +158,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   */
   draw(color = COLORS.black) {
     for(let segment of this.segments) {
+      log(`segment`, segment);
       segment.draw(color);
     }
   }
