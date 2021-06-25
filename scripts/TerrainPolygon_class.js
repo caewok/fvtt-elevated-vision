@@ -374,7 +374,7 @@ export class TerrainPolygon extends PIXI.Polygon {
      
      // see https://www.redblobgames.com/articles/visibility/ 
      //   for the basic algorithm here.
-     sp.forEach(sp => {
+     segment_points.forEach(sp => {
        // add segments that have this point if not already added
        // remove segments that have this point that were added previously
        sp.segments.forEach(s => { 
@@ -384,11 +384,13 @@ export class TerrainPolygon extends PIXI.Polygon {
            walls.delete(s.id);
          }
        });
+
+       log(`_characterizeSegmentDistances: walls`, walls);
        
        // determine the closest segment to the viewer at this point
-       let new_closest = [...walls].reduce((acc, current) {
+       let new_closest = [...walls].reduce((acc, current) => {
          if(acc === undefined) return current;
-         if(current.segmentInFrontOf(acc, this.vision_origin)) return current;
+         if(current.segment.InFrontOf(acc, this.vision_origin)) return current;
          return acc;
        }, undefined);
        

@@ -73,6 +73,7 @@ export class SegmentPoint extends PIXI.Point {
      // perf test; not much difference here. See https://stackoverflow.com/questions/26593302/whats-the-fastest-way-to-square-a-number-in-javascript/53663890 
      return (Math.pow(p.x - this.x, 2) + Math.pow(p.y - this.y, 2));
    }
+}
 /*
  * Class extending Ray to represent a segment on the map, often in a polygon
  * - provides a unique id for the segment
@@ -99,7 +100,7 @@ export class Segment extends Ray {
     s = new this(this.B, this.A);
     s._distance = this._distance;
     s._angle = Math.PI - this._angle;
-    returns s;
+    return s;
   }
 
  /*
@@ -295,7 +296,7 @@ export class Segment extends Ray {
     const A3 = leftOf(relativePoint);
     
     const B1 = segment.leftOf(Segment.interpolate(this.A, this.B, 0.01));
-    const B2 = segment.leftOf(Segment.interpolate(this.B, this.A 0.01)) 
+    const B2 = segment.leftOf(Segment.interpolate(this.B, this.A, 0.01)); 
     const B3 = segment.leftOf(relativePoint);
     
     if (B1 === B2 && B2 !== B3) return true;
