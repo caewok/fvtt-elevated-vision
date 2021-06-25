@@ -84,7 +84,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     const poly_vertices = new Map();    
     for(const [key, segment] of this.segments) { // will build the segments if necessary
       // need only the A vertex, b/c A & B are shared between segments
-      poly_vertices.add(segment.vertexA.id, segment.vertexA);
+      poly_vertices.set(segment.vertexA.id, segment.vertexA);
     }
     return poly_vertices;
   }
