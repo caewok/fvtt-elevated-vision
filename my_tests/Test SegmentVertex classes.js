@@ -18,7 +18,16 @@ canvas.controls.debug.clear();
 let TerrainPolygon = window["elevated-vision"].TerrainPolygon;
 let p1 = new TerrainPolygon([100, 100, 100, 200, 200, 200, 200, 100, 100, 100]);
 p1.drawPolygon(0xFF0000);
+
+canvas.controls.debug.clear();
 p1.draw(0xFF0000);
+
+// create vertices
+let v_arr = [...p1.vertices];
+v_arr
+
+let s_arr = [...p1.segments];
+s_arr[0][1].draw();
 
 // from terrain
 let terrain_layer = canvas.layers.filter(l => l?.options?.objectClass?.name === "Terrain")[0];
