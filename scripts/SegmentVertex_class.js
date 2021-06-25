@@ -149,14 +149,19 @@ export class Segment extends Ray {
    * This will push the property to splits, if any
    * See Foundry VTT mergeProperty
    */
-   mergeProperty(obj, {insertKeys: true, insertValues: true, overwrite: true, recursive: true,  enforceTypes: false, applyToSplits: true} = {}) {
+   mergeProperty(obj, { insertKeys=true, 
+                        insertValues=true, 
+                        overwrite=true, 
+                        recursive=true,  
+                        enforceTypes=false, 
+                        applyToSplits=true } = {}) {
      const opts = { insertKeys: insertKeys,
-                                         insertValues: insertValues,
-                                         overwrite: overwrite,
-                                         recursive: recursive,
-                                         inplace: true,
-                                         enforceTypes: enforceTypes,
-                                         applyToSplits: applyToSplits };
+                    insertValues: insertValues,
+                    overwrite: overwrite,
+                    recursive: recursive,
+                    inplace: true,
+                    enforceTypes: enforceTypes,
+                    applyToSplits: applyToSplits };
    
      mergeObject(this.properties, obj, opts);
      
