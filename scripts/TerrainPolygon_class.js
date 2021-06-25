@@ -82,7 +82,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   */
   _constructVertices() {
     const poly_vertices = new Map();    
-    for(let segment of this.segments) { // will build the segments if necessary
+    for(const [key, segment] of this.segments) { // will build the segments if necessary
       // need only the A vertex, b/c A & B are shared between segments
       poly_vertices.add(segment.vertexA.id, segment.vertexA);
     }
@@ -111,7 +111,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     this._elevation = value;
     
     // set property for each segment
-    for(const segment of this.segments) {
+    for(const [key, segment] of this.segments) {
       segment.mergeProperty({ elevation: value });
     }
   }
@@ -157,8 +157,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   *   different segments or segment splits.
   */
   draw(color = COLORS.black) {
-    for(let segment of this.segments) {
-      log(`segment`, segment);
+    for(const [key, segment] this.segments) {
       segment.draw(color);
     }
   }
