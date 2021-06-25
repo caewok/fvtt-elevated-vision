@@ -11,4 +11,5 @@ canvas.controls.debug.lineStyle(1, 0xFF0000).moveTo(v1.x, v1.y).lineTo(v2.x, v2.
 canvas.controls.debug.clear();
 let Segment = window["elevated-vision"].Segment;
 let s1 = new Segment({x: 100, y: 100}, {x:200, y: 200});
-s1.draw();
+s1.draw(0xFF0000);
+

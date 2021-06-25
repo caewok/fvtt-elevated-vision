@@ -88,7 +88,7 @@ export class Vertex extends PIXI.Point {
      if(this.equals(p)) return 0;
      
      // perf test; not much difference here. See https://stackoverflow.com/questions/26593302/whats-the-fastest-way-to-square-a-number-in-javascript/53663890 
-     return (Math.pow(p.x - this.x, 2) + Math.pow(p.y - this.y, 2));
+     return round(Math.pow(p.x - this.x, 2) + Math.pow(p.y - this.y, 2), 8);
    }
 }
 
@@ -107,7 +107,7 @@ export class Segment extends Ray {
     this.originating_object = undefined; // typically used to set the id of the object 
                                          // to which this segment belongs
     this.properties = {}; // typically used to characterize the segments  
-    this.splits = undefined;        
+    this.splits = new Map(); // may contain 2 or more segments        
     
     //const vertices = Vertex.constructVertexFromSegment(this);  
     //this.vertexA = vertices.A;
@@ -142,6 +142,28 @@ export class Segment extends Ray {
    get id() {
      if(!this._id) this._id = foundry.utils.randomID();
      return this._id;
+   }
+   
+  /*
+   * Merge a property into the segment properties.
+   * This will push the property to splits, if any
+   * See Foundry VTT mergeProperty
+   */
+   mergeProperty(obj, {insertKeys: true, insertValues: true, overwrite: true, recursive: true,  enforceTypes: false, applyToSplits: true} = {}) {
+     const opts = { insertKeys: insertKeys,
+                                         insertValues: insertValues,
+                                         overwrite: overwrite,
+                                         recursive: recursive,
+                                         inplace: true,
+                                         enforceTypes: enforceTypes,
+                                         applyToSplits: applyToSplits };
+   
+     mergeObject(this.properties, obj, opts);
+     
+     if(this.splits.size > 0) {
+       this.splits.get("A").mergeProperty(obj, opts);
+       this.splits.get("B").mergeProperty(obj, opts);
+     }
    }
   
  /*
@@ -245,9 +267,9 @@ export class Segment extends Ray {
   * Splits are recursive, so this follows down the recursion
   * @return [Array{Segment}] Array of Segments representing a copy of the split segments
   */
-  getSplits() {
-    if(!this.splits) return [this];
-    return this.splits.A.getSplits().concat(this.splits.B.getSplits);
+  getSplits() {  
+    if(this.splits.size === 0) return [this];
+    return this.splits.get("A").getSplits().concat(this.splits.get("B").getSplits());
   }
   
  /*
@@ -260,56 +282,74 @@ export class Segment extends Ray {
       console.error(`${MODULE_ID}|Segment class split method: Point is not within the segment.`, p, this);
     }
     
-    this.splits = { A: new Segment({ x: this.A.x, y: this.A.y }, 
-                                   { x: p.x, y: p.y }),
-                    B: new Segment({ x: p.x, y: p.y }, 
-                                   { x: this.B.x, y: this.B.y }) };
-                   
-    this.splits.A.originating_object = this;
-    this.splits.B.originating_object = this;
-    this.splits.A.properties = this.properties;
-    this.splits.B.properties = this.properties;    
-    this.splits.A.split_id = "A";
-    this.splits.B.split_id = "B";  
+    const p_dist = this.vertexA.squaredDist(p);
+    
+    if(this.split_dist) {
+      if(p_dist === this.split_dist) return; // already split at this distance
+      // already split, call split on child for correct side
+      const child_node = (this.split_dist > p_dist) ? "A" : "B";    
+      this.splits.get("A").split(p);
+      return;      
+    }
+    
+    this.split_dist = p_dist;
+    this.splits = new Map();
+    
+    const segA = new Segment({ x: this.A.x, y: this.A.y }, 
+                             { x: p.x, y: p.y });
+    const segB = new Segment({ x: p.x, y: p.y }, 
+                             { x: this.B.x, y: this.B.y });                      
+    
+    
+    segA.originating_object = this.originating_object;
+    segA.properties = this.properties;
+    segA.parent = this;
+        
+    segB.originating_object = this.originating_object;
+    segB.properties = this.properties;
+    segB.parent = this;
+    
+    this.splits.add("A", segA);
+    this.splits.add("B", segB);
   }
 
   
   firstSplit() {
-    if(!this.splits) return this;
-    return splits.A.firstSplit();
+    if(this.splits.size === 0) return this;
+    return splits.get("A").firstSplit();
   }
   
-  nextSplit() {
-//     root
-//     - A 
-//       - A  
-//       - B  
-//     - B 
-//       - A
-//         - A <-- 
-//         - B 
-//       - B 
-    
-    if(!this.split_id) return undefined; // should be root or otherwise done.
-    if(this.split_id === "A") return this.originating_object.splits.B.firstSplit();   
-    if(this.split_id === "B") return this.originating_object.nextSplit();
-    return undefined; // shouldn't happen
-  }
-  
-  get next_split() {
-    let n = !this._active_split ? this.firstSplit() : this._active_split.nextSplit();
-    this._active_split = n;
-    return this._active_split;
-  }
-  
-  get active_split() {
-    return this._active_split || this;
-  }
-  
-  set active_split(value) {
-    this._active_split = value;
-  }
-  
+//   nextSplit() {
+// //     root
+// //     - A 
+// //       - A  
+// //       - B  
+// //     - B 
+// //       - A
+// //         - A <-- 
+// //         - B 
+// //       - B 
+//     
+//     if(!this.split_id) return undefined; // should be root or otherwise done.
+//     if(this.split_id === "A") return this.originating_object.splits.B.firstSplit();   
+//     if(this.split_id === "B") return this.originating_object.nextSplit();
+//     return undefined; // shouldn't happen
+//   }
+//   
+//   get next_split() {
+//     let n = !this._active_split ? this.firstSplit() : this._active_split.nextSplit();
+//     this._active_split = n;
+//     return this._active_split;
+//   }
+//   
+//   get active_split() {
+//     return this._active_split || this;
+//   }
+//   
+//   set active_split(value) {
+//     this._active_split = value;
+//   }
+//   
   
   /*
    * Is the segment to the left of the point?
