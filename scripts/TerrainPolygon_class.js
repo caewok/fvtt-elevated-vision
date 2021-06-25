@@ -1,8 +1,7 @@
-import { COLORS, TINTS, toGridDistance } from "./utility.js";
+import { COLORS, TINTS, toGridDistance, orient2drounded } from "./utility.js";
 import { Shadow } from "./Shadow_class.js";
 import { log, MODULE_ID, FORCE_SEGMENT_TYPE_DEBUG } from "./module.js";
 import { Segment, SegmentPoint } from "./SegmentPoint_class.js";
-import { orient2d } from "./lib/orient2d.min.js";
  
 // TO-DO: Should segments use an extended Ray class with advanced calculation methods? 
 
@@ -354,7 +353,7 @@ export class TerrainPolygon extends PIXI.Polygon {
      
      // sort around the vision point
      segment_points.sort((a, b) => {
-       return orient2d(this.vision_origin.x, this.vision_origin.y, 
+       return orient2drounded(this.vision_origin.x, this.vision_origin.y, 
                 a.x, a.y,
                 b.x, b.y);
      });

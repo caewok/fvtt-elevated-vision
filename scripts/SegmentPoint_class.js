@@ -4,8 +4,7 @@
 // Need to:
 // - sort points clockwise around a vision point
 // - track which segments are associated with each point
-import { almostEqual } from "./utility.js";
-import { orient2d } from "./lib/orient2d.min.js";
+import { almostEqual, round, orient2drounded } from "./utility.js";
 import { MODULE_ID, log } from "./module.js";
 
 /*
@@ -142,7 +141,7 @@ export class Segment extends Ray {
   *   0 if collinear, negative value if clockwise
   */
   orient2d(p) {
-    return orient2d(p.x, p.y, this.A.x, this.A.y, this.B.x, this.B.y);
+    return orient2drounded(p.x, p.y, this.A.x, this.A.y, this.B.x, this.B.y);
   }
   
  /*
@@ -174,7 +173,7 @@ export class Segment extends Ray {
   */
   contains(p, EPSILON = 1e-5) {
     // test if collinear
-    if(orient2d(this.A.x, this.A.y, p.x, p.y, this.B.x, this.B.y)) return false;
+    if(orient2drounded(this.A.x, this.A.y, p.x, p.y, this.B.x, this.B.y)) return false;
     
     // test if endpoint
     if(this.isEndpoint(p, EPSILON)) return true;

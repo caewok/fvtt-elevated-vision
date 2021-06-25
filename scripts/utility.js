@@ -1,4 +1,5 @@
 import { MODULE_ID, log } from "./module.js";
+import { orient2d } from "./lib/orient2d.min.js";
 
 // https://htmlcolorcodes.com/
 export const COLORS = {
@@ -35,7 +36,34 @@ export const TINTS = {
 export function almostEqual(x, y, EPSILON = 1e-5) {
   return Math.abs(x - y) < EPSILON;
 }
+
+/*
+ * Round a number to specified number of decimal places.
+ * from: https://stackoverflow.com/questions/7342957/how-do-you-round-to-1-decimal-place-in-javascript
+ * @param {Number} value      Number to round
+ * @param {Number} precision  Number of decimal places to use.
+ * @return {Number} The rounded number
+ */
+export function round(value, precision) {
+    const multiplier = Math.pow(10, precision || 0);
+    return Math.round(value * multiplier) / multiplier;
+}
  
+/*
+ * Round points before getting orientation
+ * orient2d is robust, but it cannot fix problems with points that crop up prior
+ *   to getting to orient2d.
+ * Simple solution here is to round the points, despite the slight performance penalty.
+ * @param 
+ */
+export function orient2drounded(ax, ay, bx, by, cx, cy, PRECISION = 8) {
+  return orient2d(round(ax, PRECISION), 
+                  round(ay, PRECISION),
+                  round(bx, PRECISION),
+                  round(by, PRECISION),
+                  round(cx, PRECISION),
+                  round(cy, PRECISION));
+}
 
 
 /* 
