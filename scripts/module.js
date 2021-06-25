@@ -1,5 +1,6 @@
 import { registerPatches } from "./patching.js";
 import { orient2d } from "./lib/orient2d.min.js";
+import { Vertex, Segment } from "./SegmentVertex_class.js"; // for testing
 
 export const MODULE_ID = 'elevated-vision';
 const FORCE_DEBUG = false; // used for logging before dev mode is set up

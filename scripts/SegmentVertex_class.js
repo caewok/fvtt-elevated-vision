@@ -1,21 +1,32 @@
-// Need to track points along segments.
+// Need to track vertices along segments.
 // the polygon has points ordered as one would draw them, in an array [x0, y0, x1, y1,...]
 // Segments can be easily constructed for each set [x0, y0, x1, y1], [x1, y1, x2, y2], ...
 // Need to:
-// - sort points clockwise around a vision point
-// - track which segments are associated with each point
-import { almostEqual, round, orient2drounded } from "./utility.js";
+// - sort vertices clockwise around a vision point
+// - track which segments are associated with each vertex
+// Solution here uses two linked classes:
+// class Segment
+//   -- links to VertexA and VertexB
+//   -- permits "splitting" a segment into multiple parts 
+// class Vertex
+//   -- links to one or more Segments (typically two, for a polygon, or one, for a wall segment)
+
+import { almostEqual, round, orient2drounded, COLORS } from "./utility.js";
 import { MODULE_ID, log } from "./module.js";
 
 /*
- * Class to represent a point with certain features.
- * - point tracks what segments contain it as an endpoint
+ * Class to represent a vertex 
+ * - all tracking of what segments contain it as an endpoitn
  * - equality test using almost equal
+ * - unique id for vertex
  */
-export class SegmentPoint extends PIXI.Point {
+export class Vertex extends PIXI.Point {
   constructor(x, y) {
     super(x, y);
     this.segments = new Map;
+    this.id = foundry.utils.randomID();
+    this.originating_object = undefined; // typically used to set the id of the object 
+                                         // to which this vertex belongs
   }
   
   /*
@@ -30,15 +41,14 @@ export class SegmentPoint extends PIXI.Point {
   /*
    * Factory function to construct segment points from a segment
    * @param {Ray} segment         Ray representing a segment with points A and B.
-   * @param {Number} segment_idx  Index for the segment, for tracking.
    * @return {s1: SegmentPoint, s2: SegmentPoint} Object containing the two segment 
    *   points for Ray.A and Ray.B, respectively.
    */ 
-   static constructSegmentPoints(segment) {
-     const s1 = new SegmentPoint(segment.A.x, segment.A.y);
-     const s2 = new SegmentPoint(segment.B.x, segment.B.y);
+   static constructVertexFromSegment(segment) {
+     const s1 = new Vertex(segment.A.x, segment.A.y);
+     const s2 = new Vertex(segment.B.x, segment.B.y);
      
-     // can set directly b/c we know the segment has those endpoints
+     // can set directly b/c we know the segment has these endpoints
      s1.segments.set(segment.id || foundry.utils.randomID(), segment);
      s2.segments.set(segment.id || foundry.utils.randomID(), segment);
    
@@ -73,8 +83,10 @@ export class SegmentPoint extends PIXI.Point {
      return (Math.pow(p.x - this.x, 2) + Math.pow(p.y - this.y, 2));
    }
 }
+
+
 /*
- * Class extending Ray to represent a segment on the map, often in a polygon
+ * Class extending Ray to represent a segment, such as part of a polygon or wall
  * - provides a unique id for the segment
  * - adds almost equal test
  * - measures ccr against a vision point
@@ -87,8 +99,33 @@ export class Segment extends Ray {
     this.originating_object = undefined; // typically used to set the id of the object 
                                          // to which this segment belongs
     this.properties = {}; // typically used to characterize the segments  
-    this.splits = undefined;                                    
+    this.splits = undefined;        
+    
+    const vertices = Vertex.constructVertexFromSegment(this);  
+    this.vertexA = vertices.A;
+    this.vertexB = vertices.B;                        
   }
+  
+  /*
+   * Use vertex instead of A and B
+   */
+   get A() {
+     return this.vertexA;
+   }
+   
+   get B() {
+     return this.vertexB;
+   }
+   
+   set A(value) {
+     this.vertexA.x = value.x;
+     this.vertexA.y = value.y;
+   }
+   
+   set B(value) {
+     this.vertexB.x = value.x;
+     this.vertexB.y = value.y;
+   }
   
  /*
   * Reverse the direction of the Segment
@@ -303,6 +340,10 @@ export class Segment extends Ray {
     if (B1 === B2 && B2 === B3) return false;
 
     return false;
+  }
+  
+  draw(color = COLORS.black, alpha = 1, width = 1) {
+    canvas.controls.debug.lineStyle(width, color, alpha).moveTo(this.A.x, this.A.y).lineTo(this.B.x, this.B.y);
   }
   
   
