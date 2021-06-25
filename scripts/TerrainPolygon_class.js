@@ -157,7 +157,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   *   different segments or segment splits.
   */
   draw(color = COLORS.black) {
-    for(const [key, segment] this.segments) {
+    for(const [key, segment] of this.segments) {
       segment.draw(color);
     }
   }
