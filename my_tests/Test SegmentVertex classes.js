@@ -13,3 +13,8 @@ let Segment = window["elevated-vision"].Segment;
 let s1 = new Segment({x: 100, y: 100}, {x:200, y: 200});
 s1.draw(0xFF0000);
 
+// Polygon creation
+canvas.controls.debug.clear();
+let TerrainPolygon = window["elevated-vision"].TerrainPolygon;
+let p1 = new TerrainPolygon([100, 100, 100, 200, 200, 200, 200, 100, 100, 100]);
+p1.draw(0xFF0000);

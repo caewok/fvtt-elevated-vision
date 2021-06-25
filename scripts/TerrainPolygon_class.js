@@ -82,7 +82,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   */
   _constructVertices() {
     const poly_vertices = new Map();    
-    for(segment of this.segments) { // will build the segments if necessary
+    for(let segment of this.segments) { // will build the segments if necessary
       // need only the A vertex, b/c A & B are shared between segments
       poly_vertices.add(segment.vertexA.id, segment.vertexA);
     }
@@ -151,7 +151,23 @@ export class TerrainPolygon extends PIXI.Polygon {
     }
   }
  
-    
+ /*
+  * Draw the polygon
+  * This version draws individual segments, allowing for color choices for 
+  *   different segments or segment splits.
+  */
+  draw(color = COLORS.black) {
+    for(let segment of this.segments) {
+      segment.draw(color);
+    }
+  }
 
+  /*
+   * Draw the polygon on the canvas
+   * @param {Hex} color    Color to use (default: black)
+   */
+   drawPolygon(color = COLORS.black) {
+     canvas.controls.debug.lineStyle(1, color).drawShape(this);
+   }
  
 }
