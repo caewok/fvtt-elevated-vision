@@ -347,9 +347,10 @@ export class TerrainPolygon extends PIXI.Polygon {
          segment_points[i - 1].includeSegment(this.segments[i])
          // add new B
          segment_points.push(sp.B);
-       }     
-       
+       }      
      }
+     
+     
      
      // sort around the vision point
      segment_points.sort((a, b) => {
@@ -365,11 +366,90 @@ export class TerrainPolygon extends PIXI.Polygon {
          canvas.controls.debug.lineStyle(1, TINTS.blue[(i*2) % 10]).moveTo(this.vision_origin.x, this.vision_origin.y).lineTo(s.x, s.y);
        });
      }
-
      
      log(`_characterizeSegmentDistances: sorted segment_points`, segment_points);
      
+     const walls = new Map();
+     let closest = undefined;
      
+     // see https://www.redblobgames.com/articles/visibility/ 
+     //   for the basic algorithm here.
+     sp.forEach(sp => {
+       // add segments that have this point if not already added
+       // remove segments that have this point that were added previously
+       sp.segments.forEach(s => { 
+         if(!walls.has(s.id)) {
+           walls.set(s.id, s);
+         } else {
+           walls.delete(s.id);
+         }
+       });
+       
+       // determine the closest segment to the viewer at this point
+       let new_closest = [...walls].reduce((acc, current) {
+         if(acc === undefined) return current;
+         if(current.segmentInFrontOf(acc, this.vision_origin)) return current;
+         return acc;
+       }, undefined);
+       
+       if(closest === undefined) {
+         closest = new_closest;
+       } else if(new_closest.id !== closest.id) {
+         // we have switched the closest wall segment
+         // mark prior segment
+         
+        
+         if(closest.active_split.isEndpoint(sp)) {
+           // if we are at the endpoint of the closest segment, we can simply mark it as near
+           closest.active_split.properties = "near";
+         } else {
+            // otherwise, it is mixed and we need to split the segment at the intersection point
+            // locate the intersection v --> sp --> closest
+            // orient the segment so that A is to the left
+            closest = closest.active_split.orientToPoint(this.vision_origin);
+            
+            const rayVS = new Ray({ x: this.vision_origin.x, y: this.vision_origin.y },
+                                  { x: sp.x, y: sp.y });
+                                  
+            const rayV_extended = new Ray({ x: this.vision_origin.x, y: this.vision_origin.y },
+                                           rayVS.project(this.max_distance));
+            const intersection = rayV_extended.intersectSegment([closest.active_split.A.x, 
+                                                                 closest.active_split.A.y,
+                                                                 closest.active_split.B.x,
+                                                                 closest.active_split.B.y]);                               
+            
+            closest.active_split.split(intersection);
+            closest.active_split.splits.A.properties = "near";
+            closest.active_split = closest.active_split.splits.B;
+         } // if(closest.active_split.isEndpoint(sp))
+         
+         if(!new_closest.isEndpoint(sp)) {
+           // must split
+           new_closest = new_closest.active_split.orientToPoint(this.vision_origin);
+           const rayVS = new Ray({ x: this.vision_origin.x, y: this.vision_origin.y },
+                                 { x: sp.x, y: sp.y });
+                                  
+           const rayV_extended = new Ray({ x: this.vision_origin.x, y: this.vision_origin.y },
+                                          rayVS.project(this.max_distance));
+           const intersection = rayV_extended.intersectSegment([new_closest.active_split.A.x, 
+                                                               new_closest.active_split.A.y,
+                                                               new_closest.active_split.B.x,
+                                                               new_closest.active_split.B.y]); 
+           
+           
+            new_closest.active_split.split(intersection);
+            new_closest.active_split = closest.active_split.splits.B;
+         } // if(!new_closest.isEndpoint(sp)
+         
+         closest = new_closest;
+                  
+       } // if(closest === undefined)
+       
+     }); // sp.forEach(sp =>
+  
+   log(`_characterizeSegmentDistances: sp after characterizing`, sp);
+   log(`_characterizeSegmentDistances: segments after characterizing`, this.segments);
+         
    return undefined;
 } 
    

@@ -60,8 +60,19 @@ export class SegmentPoint extends PIXI.Point {
      }
      return false;
    }
-}
-
+   
+  /*
+   * Get squared distance from this point to another point.
+   * Squared for comparison purposes, avoiding the sqrt
+   * @param {PIXI.Point} p    Point to measure
+   * @return {Number}  Squared distance.
+   */
+   squaredDistance(p) {
+     if(this.equals(p)) return 0;
+     
+     // perf test; not much difference here. See https://stackoverflow.com/questions/26593302/whats-the-fastest-way-to-square-a-number-in-javascript/53663890 
+     return (Math.pow(p.x - this.x, 2) + Math.pow(p.y - this.y, 2));
+   }
 /*
  * Class extending Ray to represent a segment on the map, often in a polygon
  * - provides a unique id for the segment
@@ -73,11 +84,32 @@ export class Segment extends Ray {
   constructor(A, B) {
     super(A, B);
     this.id = foundry.utils.randomID();
-    this.next = undefined; // typically used to set the next segment in a chain
-    this.previous = undefined; // typically used to set the previous segment in a chain
     this.originating_object = undefined; // typically used to set the id of the object 
                                          // to which this segment belongs
-    this.properties = {}; // typically used to characterize the segments                                      
+    this.properties = {}; // typically used to characterize the segments  
+    this.splits = undefined;                                    
+  }
+  
+ /*
+  * Reverse the direction of the Segment
+  * @return {Segment}
+  */
+  reverse() {
+    // cannot simply use super b/c it calls new Ray instead of new this.
+    s = new this(this.B, this.A);
+    s._distance = this._distance;
+    s._angle = Math.PI - this._angle;
+    returns s;
+  }
+
+ /*
+  * Orient ccw based on vision point
+  * Either return this segment or reverse it
+  * @return {Segment}
+  */
+  orientToPoint(p) {
+    if(this.ccw(p)) return this;
+    return this.reverse();
   }
   
  /*
@@ -154,35 +186,124 @@ export class Segment extends Ray {
             p.y > min(this.A.y, this.B.y));
   }
   
-  
- /* 
-  * Get a segment split, if any
+ /*
+  * Get array of all splits
+  * Splits are recursive, so this follows down the recursion
+  * @return [Array{Segment}] Array of Segments representing a copy of the split segments
   */
-  get split() {
-    return this._split;
-  } 
+  getSplits() {
+    if(!this.splits) return [this];
+    return this.splits.A.getSplits().concat(this.splits.B.getSplits);
+  }
   
  /*
   * Split a segment along a point.
   * store the segment splits
   * @param {PIXI.Point} p   Point to use for the split
   */
-  set split(value) {
+  split(p) {
     if(!contains(value)) {
       console.error(`${MODULE_ID}|Segment class split method: Point is not within the segment.`);
     }
     
-    this._split = [new Segment({ x: this.A.x, y: this.A.y }, { x: value.x, y: value.y }),
-                   new Segment({ x: value.x, y: value.y }, { x: this.B.x, y: this.B.y })];
+    this.splits = { A: new Segment({ x: this.A.x, y: this.A.y }, 
+                                   { x: value.x, y: value.y }),
+                    B: new Segment({ x: value.x, y: value.y }, 
+                                   { x: this.B.x, y: this.B.y }) };
                    
-    this._split[0].originating_object = this;
-    this._split[1].originating_object = this;
-    this._split[0].properties = this.properties;
-    this._split[1].properties = this.properties;  
-    this._split[0].next = this._split[1];
-    this._split[1].next = this._split[0];    
-    this._split[0].previous = this._split[1];
-    this._split[1].previous = this._split[0];          
+    this.splits.A.originating_object = this;
+    this.splits.B.originating_object = this;
+    this.splits.A.properties = this.properties;
+    this.splits.B.properties = this.properties;    
+    this.splits.A.split_id = "A";
+    this.splits.B.split_id = "B";  
+  }
+
+  
+  firstSplit() {
+    if(!this.splits) return this;
+    return splits.A.firstSplit();
+  }
+  
+  nextSplit() {
+//     root
+//     - A 
+//       - A  
+//       - B  
+//     - B 
+//       - A
+//         - A <-- 
+//         - B 
+//       - B 
+    
+    if(!this.split_id) return undefined; // should be root or otherwise done.
+    if(this.split_id === "A") return this.originating_object.splits.B.firstSplit();   
+    if(this.split_id === "B") return this.originating_object.nextSplit();
+    return undefined; // shouldn't happen
+  }
+  
+  get next_split() {
+    let n = !this._active_split ? this.firstSplit() : this._active_split.nextSplit();
+    this._active_split = n;
+    return this._active_split;
+  }
+  
+  get active_split() {
+    return this._active_split || this;
+  }
+  
+  set active_split(value) {
+    this._active_split = value;
+  }
+  
+  
+  /*
+   * Is the segment to the left of the point?
+   * TO-DO: Is this exactly equivalent to ccw? Not totally certain as to the point ordering here.
+   * @param {PIXI.Point} p  Point to test
+   * @return {boolean} true if the segment is to the left
+   */
+   // From: https://github.com/Silverwolf90/2d-visibility/blob/a5508bdee8d0a816a2f7457f00a221060a03fe5f/src/segmentInFrontOf.js
+   leftOf(p) {
+     const cross = (this.B.x - this.A.x) * (p.y - this.A.y)
+              - (this.B.y - this.A.y) * (p.x - this.A.x);
+     return cross < 0;
+   }
+  
+   /*
+    * Factory function to get point between two points
+    * @param {PIXI.Point} pointA  Point in {x, y} format.
+    * @param {PIXI.Point} pointB  Point in {x, y} format.
+    * @param {Number} f           Percent distance for the interpolation
+    * @return {PIXI.Point} Interpolated point.
+    */
+   static interpolate(pointA, pointB, f) {
+     return Point(
+     pointA.x*(1-f) + pointB.x*f,
+     pointA.y*(1-f) + pointB.y*f);
+   }
+  
+  /*
+   * Return true if this segment is in front of another segment
+   * @param {Segment} segment               Segment to test
+   * @param {PIXI.Point} relativePoint  Vision/observer point
+   * @return {boolean} true if this segment is in front of the other.
+   */
+  segmentInFrontOf(segment, relativePoint) {
+    const A1 = leftOf(Segment.interpolate(segment.A, segment.B, 0.01));
+    const A2 = leftOf(Segment.interpolate(segment.B, segment.A, 0.01));
+    const A3 = leftOf(relativePoint);
+    
+    const B1 = segment.leftOf(Segment.interpolate(this.A, this.B, 0.01));
+    const B2 = segment.leftOf(Segment.interpolate(this.B, this.A 0.01)) 
+    const B3 = segment.leftOf(relativePoint);
+    
+    if (B1 === B2 && B2 !== B3) return true;
+    if (A1 === A2 && A2 === A3) return true;
+    if (A1 === A2 && A2 !== A3) return false;
+    if (B1 === B2 && B2 === B3) return false;
+
+    return false;
   }
   
   
