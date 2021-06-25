@@ -5,7 +5,7 @@
 // - sort points clockwise around a vision point
 // - track which segments are associated with each point
 import { almostEqual } from "./utility.js";
-import { orient2d } from "./lib/orient2d.js";
+import { orient2d } from "./lib/orient2d.min.js";
 import { MODULE_ID, log } from "./module.js";
 
 /*
