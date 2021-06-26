@@ -53,7 +53,9 @@ export function evComputePolygon(wrapped,
                                         density: density,
                                         rotation: rotation,
                                         unrestricted: unrestricted }, res);
-  log("evComputePolygon this", this);        
+  log("evComputePolygon this", this);      
+
+  const isDebuggingVision = FORCE_TOKEN_VISION_DEBUG;  
   
   // -------------- TESTING: DRAW LOS & FOV --------------------------------------------//
   // Transform los and fov. Just for testing for now.
@@ -179,7 +181,7 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
     
     if(!closest_blocking) closest_blocking = new_closest_blocking; // 
     if(!new_closest_blocking) return; // nothing blocks; go to next vertex
-    if(new_closest.id === closest.id) return; // nothing changed; go to next vertex
+    if(new_closest_blocking.id === closest_blocking.id) return; // nothing changed; go to next vertex
        
     // we have switched the closest wall segment
     // mark prior segment, which was blocking up until now
@@ -193,10 +195,10 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
       // Locate the intersection: vision --> vertex (new_closest) --> closest
       const rayVS = new Ray(origin, vertex);
       const rayVS_extended = new Ray(origin, rayVS.project(MAX_DISTANCE));
-      const intersection = rayV_extended.intersectSegment([ closest_blocking.A.x, 
-                                                            closest_blocking.A.y,
-                                                            closest_blocking.B.x,
-                                                            closest_blocking.B.y ]);                               
+      const intersection = rayVS_extended.intersectSegment([ closest_blocking.A.x, 
+                                                             closest_blocking.A.y,
+                                                             closest_blocking.B.x,
+                                                             closest_blocking.B.y ]);                               
       
       closest_blocking.splitAt(intersection);
       closest_blocking.mergePropertyBeforeSplitPoint(intersection, { vision_type: "block" });
@@ -207,10 +209,10 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
       // Locate the intersection: vision --> vertex --> new_closest 
       const rayVS = new Ray(origin, vertex);
       const rayVS_extended = new Ray(origin, rayVS.project(MAX_DISTANCE));
-      const intersection = rayV_extended.intersectSegment([ new_closest_blocking.A.x, 
-                                                            new_closest_blocking.A.y,
-                                                            new_closest_blocking.B.x,
-                                                            new_closest_blocking.B.y ]); 
+      const intersection = rayVS_extended.intersectSegment([ new_closest_blocking.A.x, 
+                                                             new_closest_blocking.A.y,
+                                                             new_closest_blocking.B.x,
+                                                             new_closest_blocking.B.y ]); 
     
       new_closest_blocking.splitAt(intersection);
     }

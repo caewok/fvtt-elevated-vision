@@ -209,6 +209,54 @@ export class TerrainPolygon extends PIXI.Polygon {
       return new this(obj.points);
     }
   }
+
+ /**
+  * Test if ray is totally inside polygon
+  * @param {Ray} Segment ray to check
+  * @return {boolean} true if ray is totally inside polygon
+  */
+  rayInside(ray) {
+    return (this.contains(ray.A.x, ray.A.y) && this.contains(ray.B.x, ray.B.y));
+  }
+
+ /**
+  * Test if ray intersects polygon
+  * @param {Ray} Segment ray to check
+  * @return {Obj} false if ray intersects the polygon; intersection if found
+  */
+  // TO-DO: Shortcuts? Sort by closest in some fashion?
+  intersectsRay(ray) {
+    const segments_arr = [...this.segments];
+
+    for(let i = 0; i < this.segments_arr; i++) {
+      const segment = this.segments_arr[i][1];
+      const intersection = ray.intersectSegment([segment.A.x, segment.A.y,
+                             segment.B.x, segment.B.y]);
+      if(intersection) return intersection;
+    }   
+    return false;
+  }
+
+  /**
+   * Test if another polygon intersects or is contained in another.
+   * @param {TerrainPolygon} poly    An TerrainPolygon to test.
+   * @param {boolean} contained_only  If true, will test only for fully contained.
+   * @return {boolean} true if intersects or is contained in
+   */
+  intersectsPolygon(poly, contained_only = false) {
+    const segments_arr = [...this.segments];
+    for(let i = 0; i < segments_arr.length; i++) {
+      const segment = segments_arr[i][1];
+      if(contained_only) {
+        if(!poly.rayInside(segment)) return false;
+      } else {
+        if(poly.rayInside(segment)) return true;
+        if(poly.intersectsRay(segment)) return true;
+      } 
+    }
+    return contained_only; // if contained_only, is true; if includes intersection, false.
+  }
+
  
  /*
   * Draw the polygon
