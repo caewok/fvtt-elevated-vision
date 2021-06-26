@@ -69,7 +69,13 @@ export function orient2drounded(ax, ay, bx, by, cx, cy, PRECISION = 8) {
  * Get first or second value from a Map
  */
 export function FirstMapValue(m) { return m.values().next().value }
-export function SecondMapValue(m) { return m.values().next().next().value }
+export function SecondMapValue(m) { 
+  const iter = m.values();
+  iter.next();
+  return iter.next().value;
+}
+
+return m.values().next().next().value }
 
 /* 
  * Helper function to convert absolute increments to grid distance
