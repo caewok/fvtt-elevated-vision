@@ -59,10 +59,18 @@ export class TerrainPolygon extends PIXI.Polygon {
     prior_vertex.originating_object = this;
     poly_vertices.set(prior_vertex.id, prior_vertex);
     
-    log(`_constructVertices 0:`, prior_vertex, new_vertex)
+    log(`_constructVertices 0:`, prior_vertex, new_vertex);
     
+    // save the first id to link at the end
+    const l = this.points.length;
+    if(this.points[0] !== this.points[l - 2] ||
+       this.points[1] !== this.points[l - 1]) {
+       console.error(`${MODULE_ID}|_constructVertices expects a closed set of points.`, this);
+       }
+    
+    const first_vertex_id = prior_vertex.id;
 
-    // assuming closed stroke for now.
+    // TO-DO: assuming closed stroke for now.
     for (let i = 2; i < (this.points.length - 2); i += 2) {
       new_vertex = prior_vertex.connectPoint(this.points[i], this.points[i + 1]);
       log(`_constructVertices ${i} new_vertex`, new_vertex);
@@ -75,7 +83,13 @@ export class TerrainPolygon extends PIXI.Polygon {
     log(`_constructVertices ended loop`);
     
     // link to beginning
-    poly_vertices.values().next().value.includeSegment(new_vertex.segments.values().next().value);
+    const last_vertex_id = new_vertex.id;
+    
+    let s_first_last = Segment.fromVertices(poly_vertices.get(first_vertex_id),
+                                            poly_vertices.get(last_vertex_id));
+                                                                         
+    poly_vertices.get(first_vertex_id).includeSegment(s_first_last)
+    poly_vertices.get(last_vertex_id).includeSegment(s_first_last)
     
     log(`_constructVertices return`, poly_vertices);
 

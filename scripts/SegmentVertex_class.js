@@ -155,39 +155,82 @@ export class Segment extends Ray {
   
   /*
    * Use vertex instead of A and B
+   * @type {Vertex|PIXI.Point}
    */
    get A() {
      return this._vertexA || this.A; // needed for compatibility in initial construction
    }
    
+  /*
+   * Use vertex instead of A and B
+   * @type {Vertex|PIXI.Point}
+   */
    get B() {
      return this._vertexB || this.B; // needed for compatibility in initial construction
    }
    
+  /*
+   * Use vertex instead of A and B
+   * @type {Vertex|PIXI.Point}
+   */
    set A(value) {
      this._vertexA = new Vertex(value.x, value.y);
      this._vertexA.includeSegment(this);
    }
-   
+    
+  /*
+   * Use vertex instead of A and B
+   * @type {Vertex|PIXI.Point}
+   */ 
    set B(value) {
      this._vertexB = new Vertex(value.x, value.y);
      this._vertexB.includeSegment(this);
    }
    
+ /*
+   * Use vertex instead of A and B
+   * @type {Vertex}
+   */ 
    get vertexA() {
      return this._vertexA;
    }
    
+  /*
+   * Use vertex instead of A and B
+   * @type {Vertex}
+   */   
    set vertexA(value) {
      this._vertexA = value;
    }
-  
+   
+  /*
+   * Use vertex instead of A and B
+   * @type {Vertex}
+   */ 
    get vertexB() {
      return this._vertexB;
    }
    
+  /*
+   * Use vertex instead of A and B
+   * @type {Vertex}
+   */   
    set vertexB(value) {
      this._vertexB = value;
+   }
+   
+  /*
+   * Factory function to construct a linked segment from two vertices.
+   * @param {Vertex} vA
+   * @param {Vertex} vB
+   * @return {Segment}
+   */
+   static fromVertices(vA, vB) {
+     const s = new Segment(vA, vB);
+     s.vertexA = vA;
+     s.vertexB = vB;
+     s.originating_object = vA.originating_object;
+     return s;
    }
    
 
