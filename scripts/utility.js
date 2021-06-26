@@ -66,10 +66,10 @@ export function orient2drounded(ax, ay, bx, by, cx, cy, PRECISION = 8) {
 }
 
 /*
- * Get first value from a Map
+ * Get first or second value from a Map
  */
 export function FirstMapValue(m) { return m.values().next().value }
-
+export function SecondMapValue(m) { return m.values().next().next().value }
 
 /* 
  * Helper function to convert absolute increments to grid distance

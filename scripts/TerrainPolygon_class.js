@@ -1,4 +1,4 @@
-import { COLORS, TINTS, toGridDistance, orient2drounded, FirstMapValue } from "./utility.js";
+import { COLORS, TINTS, toGridDistance, orient2drounded, FirstMapValue, SecondMapValue } from "./utility.js";
 import { Shadow } from "./Shadow_class.js";
 import { log, MODULE_ID, FORCE_SEGMENT_TYPE_DEBUG } from "./module.js";
 import { Segment, Vertex } from "./SegmentVertex_class.js";
@@ -139,12 +139,14 @@ export class TerrainPolygon extends PIXI.Polygon {
   _constructSegments() {
     const poly_segments = new Map();
     
-    for(const [key, vertex] of this.vertices) {
-      // for each segment in the vertex list, add (usually only one per vertex)
-      for(const [key, segment] of vertex.segments) {
-        poly_segments.set(segment.id, segment);
+    [...this.vertices].forEach((v, idx) => {
+      // skip every other vertex
+      // only add the second segment, so that first<-->last segment is last
+      if((idx + 1) % 2 === 0) {
+        const s_second = SecondMapValue(v.segments);
+        poly_segments.set(s_second.id, s_second);
       }
-    }
+    });
     
     return poly_segments;
   }
