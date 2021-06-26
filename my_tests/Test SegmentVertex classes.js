@@ -49,4 +49,15 @@ terrain_polygons.forEach(p => {
   p.draw(0xFF0000);
 })
 
+let Segment = window["elevated-vision"].Segment;
+let s1 = new Segment({x: 100, y: 100}, {x: 200, y: 200});
+s1.splitAt({x: 150, y: 150});
+s1.mergeProperty({propertyA: "123"});
+
+let splitA = s1.getSplitAt({x: 125, y: 125});
+splitA.mergeProperty({propertyB: "yellow"})
+
+s1.mergePropertyAtSplit({x: 125, y: 125}, {propertyB: "blue", propertyA: "456"});
+
+
 

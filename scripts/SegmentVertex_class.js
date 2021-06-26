@@ -423,11 +423,12 @@ export class Segment extends Ray {
     
     
     segA.originating_object = this.originating_object;
-    segA.properties = this.properties;
+    segA.properties = duplicate(this.properties); // otherwise, the splits all share 
+                                                  // the same properties. 
     segA.parent = this;
         
     segB.originating_object = this.originating_object;
-    segB.properties = this.properties;
+    segB.properties = duplicate(this.properties); 
     segB.parent = this;
     
     this.splits.set("A", segA);
