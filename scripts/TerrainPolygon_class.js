@@ -59,19 +59,56 @@ export class TerrainPolygon extends PIXI.Polygon {
     prior_vertex.originating_object = this;
     poly_vertices.set(prior_vertex.id, prior_vertex);
     
+    log(`_constructVertices 0:`, prior_vertex, new_vertex)
+    
 
     // assuming closed stroke for now.
     for (let i = 2; i < (this.points.length - 2); i += 2) {
       new_vertex = prior_vertex.connectPoint({x: this.points[i], y: this.points[i + 1] });
+      log(`_constructVertices ${i} new_vertex`, new_vertex);
+      
       poly_vertices.set(new_vertex.id, new_vertex);
       prior_vertex = new_vertex;
+      log(`_constructVertices ${i} end:`, prior_vertex, new_vertex)
     }
+    
+    log(`_constructVertices ended loop`);
     
     // link to beginning
     poly_vertices.values().next().value.includeSegment(new_vertex.segments.values().next().value);
+    
+    log(`_constructVertices return`, poly_vertices);
 
     return poly_vertices;
   }
+  
+//   points: [100, 100, 0
+//            100, 200, 2
+//            200, 200, 4
+//            200, 100, 6
+//            100, 100] 8
+//   
+//   // i == 0
+//   prior_vertex = Vertex(100, 100); 
+//   - x: 100
+//   - y: 100
+//   - segments: Map()
+//   
+//   // i == 2
+//   new_vertex = prior_vertex.connectPoint({x: 100, y: 200})
+//   prior_vertex:
+//   - segments: 0 -> 2
+//     - vertexA: prior_vertex (100, 100)
+//     - vertexB: new_vertex (100, 200)
+//   new_vertex:
+//   - segments: 0 -> 2
+//     - vertexA: prior_vertex (100, 100)
+//     - vertexB: new_vertex (100, 200)
+//     
+  
+  
+  
+  
   
  /*
   * Internal function to build the Map of polygon segments.
