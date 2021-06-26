@@ -139,7 +139,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   _constructSegments() {
     const poly_segments = new Map();
     
-    [...this.vertices].forEach((v, idx) => {
+    [...this.vertices].forEach(([key, v], idx) => {
       // skip every other vertex
       // only add the second segment, so that first<-->last segment is last
       if((idx + 1) % 2 === 0) {
