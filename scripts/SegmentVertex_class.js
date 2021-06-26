@@ -272,12 +272,24 @@ export class Segment extends Ray {
    
   /*
    * Set a property on the split that has the given point.
-   * If the point is on a split point, split "A" will be used.
    * @param {PIXI.Point} p    Point in {x,y} format, used to locate the split.
    * @param {...} ...args     Arguments passed to mergeProperty method.
    */
    mergePropertyAtSplit(p, ...args) {
      const the_split = this.getSplitAt(p);
+     log(`mergePropertyAtSplit`, the_split);
+     the_split.mergeProperty(...args);
+   }
+  
+  /*
+   * Set a property on the split that has the given point.
+   * If the point is on a split point, use the left split point relative to vision.
+   * @param {PIXI.Point} p    Point in {x,y} format, used to locate the split.
+   * @param {PIXI.Point} vision_origin Point in {x,y} format.
+   * @param {...} ...args     Arguments passed to mergeProperty method.
+   */ 
+   mergePropertyAtSplitWithVision(p, vision_origin, ...args) {
+     const the_split = this.getSplitAt(p, vision_origin);
      log(`mergePropertyAtSplit`, the_split);
      the_split.mergeProperty(...args);
    }
@@ -446,15 +458,21 @@ export class Segment extends Ray {
   
  /*
   * Return the split that is before a given point. 
-  * If the point is on the boundary, this will return the "A" split.
+  * If the point is on the boundary between splits, use the left split point.
   * @param {PIXI.Point} p   Point in {x, y} format
   * @return {Segment}
   */ 
-  getSplitAt(p) {
+  getSplitAt(p, vision_origin) {
     if(this.splits.size === 0) return this;
     
     const p_dist = this.vertexA.squaredDistance(p);
-    const child_node = (p_dist > this.split_dist) ? "B" : "A"; // should mirror splitAt 
+    let child_node = (p_dist > this.split_dist) ? "B" : "A"; // should mirror splitAt
+    
+    if(vision_origin && p_dist === this.split_dist) {
+      // determine which vertex is left of the vision point; use that in case of tie
+      child_node = this.ccw(vision_origin) ? "B" : "A"; 
+    }
+    
     return this.splits.get(child_node).getSplitAt(p);
   }
   

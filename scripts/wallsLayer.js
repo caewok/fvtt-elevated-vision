@@ -106,11 +106,11 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   });
   
   // draw the polygons if debugging 
-  if(isDebuggingVision) {
-     terrain_polygons.forEach(t => {
-      t.draw();
-    });
-  }
+//   if(isDebuggingVision) {
+//      terrain_polygons.forEach(t => {
+//       t.draw();
+//     });
+//   }
   
   //--------------- INFER ELEVATION FOR ORIGIN -----------------------------------------//
    // for the moment, infer Ve based on controlled tokens
@@ -186,7 +186,8 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
     
     // If the current vertex is at the end of the closest, then simply mark the closest as blocking.
     if(closest_blocking.hasEndpoint(vertex)) {
-      closest_blocking.mergeProperty({ vision_type: "block" });
+      // may or may not have been split earlier
+      closest_blocking.mergePropertyAtSplit(vertex, { vision_type: "block" });
     } else {
       // If the current vertex is not at the end of the closest, then need to split.
       // Mark the prior portion as blocking
@@ -199,7 +200,9 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
                                                             closest_blocking.B.y ]);                               
       
       closest_blocking.splitAt(intersection);
-      closest_blocking.mergePropertyBeforeSplitPoint(intersection, { vision_type: "block" });
+      
+      // move the 
+      closest_blocking.mergePropertyAtSplit(intersection, { vision_type: "block" });
     }
     
     // If we have moved to the middle of the new closest segment, then need to split
@@ -221,6 +224,13 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   }); // sorted_vertices.forEach
   
   log(`evComputePolygon sweep test: after test`, sorted_vertices);
+  
+  if(isDebuggingVision) {
+    terrain_polygons.forEach(t => {
+      t.draw();
+    });
+  }
+  
   
   
   /*
