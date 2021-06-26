@@ -88,13 +88,13 @@ export class TerrainPolygon extends PIXI.Polygon {
     const s_last_first = Segment.fromVertices(poly_vertices.get(last_vertex_id),
                                               poly_vertices.get(first_vertex_id),);
                                                                          
-    poly_vertices.get(last_vertex_id).includeSegment(s_first_last)
+    poly_vertices.get(last_vertex_id).includeSegment(s_last_first)
     
     // to ensure segments are A, B for the vertex, as in prior(A) --> vertex --> next (B)
     // need to insert this s_first_last as A in the first vertex
     const s_first_second =  FirstMapValue(poly_vertices.get(first_vertex_id).segments);
     poly_vertices.get(first_vertex_id).segments.clear();
-    poly_vertices.get(first_vertex_id).includeSegment(s_first_last);
+    poly_vertices.get(first_vertex_id).includeSegment(s_last_first);
     poly_vertices.get(first_vertex_id).includeSegment(s_first_second);
     
     log(`_constructVertices return`, poly_vertices);
