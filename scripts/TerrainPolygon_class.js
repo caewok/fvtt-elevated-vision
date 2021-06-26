@@ -64,7 +64,7 @@ export class TerrainPolygon extends PIXI.Polygon {
 
     // assuming closed stroke for now.
     for (let i = 2; i < (this.points.length - 2); i += 2) {
-      new_vertex = prior_vertex.connectPoint({x: this.points[i], y: this.points[i + 1] });
+      new_vertex = prior_vertex.connectPoint(this.points[i], this.points[i + 1]);
       log(`_constructVertices ${i} new_vertex`, new_vertex);
       
       poly_vertices.set(new_vertex.id, new_vertex);

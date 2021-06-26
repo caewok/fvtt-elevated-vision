@@ -19,6 +19,9 @@ import { MODULE_ID, log } from "./module.js";
  * - all tracking of what segments contain it as an endpoitn
  * - equality test using almost equal
  * - unique id for vertex
+ * @param {Number} x  position of the point on the x axis
+ * @param {Number} y  position of the point on the y axis
+ * @return {Vertex}
  */
 export class Vertex extends PIXI.Point {
   constructor(x, y) {
@@ -30,11 +33,12 @@ export class Vertex extends PIXI.Point {
   
   /* 
    * Link this vertex to another vertex by constructing a segment
-   * @param {PIXI.Point} p    Point in {x, y} format to link
+   * @param {Number} x  position of the point on the x axis
+   * @param {Number} y  position of the point on the y axis
    * @return The new Vertex
    */
-   connectPoint(p) {
-     const v = new Vertex(p);
+   connectPoint(x, y) {
+     const v = new Vertex(x, y);
      v.originating_object = this.originating_object;
      
      return this.connectVertex(v);
@@ -42,10 +46,14 @@ export class Vertex extends PIXI.Point {
    
   /*
    * Link this vertex to another vertex by constructing a segment
-   * @param {Vertex} v    Vertex to link
+   * @param {Vertex} v    Vertex to link or point in {x, y} format
    * @return the linked vertex
    */
    connectVertex(v) {
+     if(!(v instanceof Vertex)) {
+       v = new Vertex(v.x, v.y);
+       v.originating_object = this.originating_object;
+     }
      const s = new Segment(this, v);
      s.originating_object = this.originating_object;
      

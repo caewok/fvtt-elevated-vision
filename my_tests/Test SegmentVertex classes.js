@@ -10,6 +10,9 @@ let v1 = new Vertex(100, 100);
 let v2 = new Vertex(200, 200);
 canvas.controls.debug.lineStyle(1, 0xFF0000).moveTo(v1.x, v1.y).lineTo(v2.x, v2.y);
 
+// Vertex connection
+let v3 = v1.connectPoint(200, 200);
+
 
 // Segment creation
 canvas.controls.debug.clear();
