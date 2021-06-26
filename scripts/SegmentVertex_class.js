@@ -269,6 +269,16 @@ export class Segment extends Ray {
        this.splits.get("B").mergeProperty(obj, opts);
      }
    }
+   
+  /*
+   * Set a property on the split that has the given point.
+   * If the point is on a split point, split "A" will be used.
+   * @param {PIXI.Point} p    Point in {x,y} format, used to locate the split.
+   * @param {...} ...args     Arguments passed to mergeProperty method.
+   */
+   mergePropertyBeforeSplitPoint(p, ...args) {
+     this.getSplitBeforePoint(p).mergeProperty(...args);
+   }
   
  /*
   * Reverse the direction of the Segment
@@ -339,7 +349,7 @@ export class Segment extends Ray {
   * @param {PIXI.Point} p   Point to test
   * @return {boolean} true if the point is almost equal to an endpoint
   */
-  isEndpoint(p, EPSILON = 1e-5) {
+  hasEndpoint(p, EPSILON = 1e-5) {
     return ((almostEqual(p.x, this.A.x, EPSILON) && 
              almostEqual(p.y, this.A.y, EPSILON)) || 
             (almostEqual(p.x, this.A.x, EPSILON) && 
@@ -356,7 +366,7 @@ export class Segment extends Ray {
     if(orient2drounded(this.A.x, this.A.y, p.x, p.y, this.B.x, this.B.y)) return false;
     
     // test if endpoint
-    if(this.isEndpoint(p, EPSILON)) return true;
+    if(this.hasEndpoint(p, EPSILON)) return true;
     
     // test if between the endpoints
     // recall that we already established the point is collinear above.
@@ -381,7 +391,7 @@ export class Segment extends Ray {
   * store the segment splits
   * @param {PIXI.Point} p   Point to use for the split
   */
-  split(p) {
+  splitAt(p) {
     if(!this.contains(p)) {
       console.error(`${MODULE_ID}|Segment class split method: Point is not within the segment.`, p, this);
     }
@@ -391,8 +401,13 @@ export class Segment extends Ray {
     if(this.split_dist) {
       if(p_dist === this.split_dist) return; // already split at this distance
       // already split, call split on child for correct side
-      const child_node = (this.split_dist > p_dist) ? "A" : "B";    
-      this.splits.get("A").split(p);
+      // begin ...s... p ... end
+      // |-- sd --|
+      // |-- p_dist ---|
+      // p_dist > sd, so the new split is in B
+      
+      const child_node = (p_dist > this.split_dist) ? "B" : "A";
+      this.splits.get(child_node).split(p);
       return;      
     }
     
@@ -417,10 +432,27 @@ export class Segment extends Ray {
     this.splits.add("B", segB);
   }
 
-  
+ /*
+  * Return the very first split in the segment.
+  * @return {Segment}
+  */ 
   firstSplit() {
     if(this.splits.size === 0) return this;
     return splits.get("A").firstSplit();
+  }
+  
+ /*
+  * Return the split that is before a given point. 
+  * If the point is on the boundary, this will return the "A" split.
+  * @param {PIXI.Point} p   Point in {x, y} format
+  * @return {Segment}
+  */ 
+  getSplitBeforePoint(p) {
+    if(this.splits.size === 0) return this;
+    
+    const p_dist = this.vertexA.squaredDist(p);
+    const child_node = (p_dist > this.split_dist) ? "B" : "A"; // should mirror splitAt 
+    return splits.get(child_node).getSplitBeforePoint(p);
   }
   
 //   nextSplit() {
@@ -506,6 +538,8 @@ export class Segment extends Ray {
   draw(color = COLORS.black, alpha = 1, width = 1) {
     canvas.controls.debug.lineStyle(width, color, alpha).moveTo(this.A.x, this.A.y).lineTo(this.B.x, this.B.y);
   }
+  
+  
   
   
 }

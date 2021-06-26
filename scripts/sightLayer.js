@@ -48,10 +48,14 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   // const isDebuggingVision = CONFIG.debug.sightRays;
   const debug = isDebuggingVision ? canvas.controls.debug : undefined;
   
+  // -------------- CHECKS TO RETURN THE DEFAULT VISIBILITY DETERMINATION --------------//
+  
   // need a token object
   if(!object) return res;
   
-  // Assume for the moment that the base function tests only infinite walls based on fov / los. If so, then if a token is not seen, elevation will not change that. 
+  // Assume for the moment that the base function tests only infinite walls 
+  //   based on fov / los. If so, then if a token is not seen, elevation 
+  //   will not change that. 
   if(!res) return res;
   
   // temporary; will eventually check for wall height as well
@@ -62,6 +66,15 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   
   let terrains = terrain_layer.placeables; // array of terrains
   if(terrains.length === 0) return res;
+  
+  if(type !== "sight") return res;
+  
+  
+  return res;
+
+  
+  
+  /*
   
   // convert points array to actual, not relative, points
   // do here to avoid repeating this later
@@ -137,6 +150,8 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   log(`object ${is_visible ? "is visible" : "is not visible"} to sources`, visible_to_sources);
   
   return is_visible;
+  
+  */
 }
 
 

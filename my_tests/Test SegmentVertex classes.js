@@ -34,6 +34,7 @@ let v_arr = [...p1.vertices];
 v_arr
 
 let s_arr = [...p1.segments];
+s_arr;
 s_arr[0][1].draw();
 
 // from terrain
