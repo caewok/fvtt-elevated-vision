@@ -85,8 +85,8 @@ export class TerrainPolygon extends PIXI.Polygon {
     // link to beginning
     const last_vertex_id = new_vertex.id;
     
-    const s_first_last = Segment.fromVertices(poly_vertices.get(first_vertex_id),
-                                            poly_vertices.get(last_vertex_id));
+    const s_last_first = Segment.fromVertices(poly_vertices.get(last_vertex_id),
+                                              poly_vertices.get(first_vertex_id),);
                                                                          
     poly_vertices.get(last_vertex_id).includeSegment(s_first_last)
     
