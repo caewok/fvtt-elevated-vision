@@ -254,8 +254,6 @@ export class Segment extends Ray {
                         recursive=true,  
                         enforceTypes=false, 
                         applyToSplits=true } = {}) {
-     const me = this;                   
-                        
      const opts = { insertKeys: insertKeys,
                     insertValues: insertValues,
                     overwrite: overwrite,
@@ -264,11 +262,11 @@ export class Segment extends Ray {
                     enforceTypes: enforceTypes,
                     applyToSplits: applyToSplits };
    
-     mergeObject(me.properties, obj, opts);
+     mergeObject(this.properties, obj, opts);
      
-     if(me.splits.size > 0) {
-       me.splits.get("A").mergeProperty(obj, opts);
-       me.splits.get("B").mergeProperty(obj, opts);
+     if(this.splits.size > 0) {
+       this.splits.get("A").mergeProperty(obj, opts);
+       this.splits.get("B").mergeProperty(obj, opts);
      }
    }
    
@@ -279,8 +277,7 @@ export class Segment extends Ray {
    * @param {...} ...args     Arguments passed to mergeProperty method.
    */
    mergePropertyAtSplit(p, ...args) {
-     const me = this;
-     const the_split = me.getSplitAt(p);
+     const the_split = this.getSplitAt(p);
      log(`mergePropertyAtSplit`, the_split);
      the_split.mergeProperty(...args);
    }
@@ -387,10 +384,8 @@ export class Segment extends Ray {
   * @return [Array{Segment}] Array of Segments representing a copy of the split segments
   */
   getSplits() {  
-    const me = this;
-  
-    if(me.splits.size === 0) return [me];
-    return me.splits.get("A").getSplits().concat(me.splits.get("B").getSplits());
+    if(this.splits.size === 0) return [this];
+    return this.splits.get("A").getSplits().concat(this.splits.get("B").getSplits());
   }
   
  /*
@@ -399,15 +394,13 @@ export class Segment extends Ray {
   * @param {PIXI.Point} p   Point to use for the split
   */
   splitAt(p) {
-    const me = this;
-  
-    if(!me.contains(p)) {
+    if(!this.contains(p)) {
       console.error(`${MODULE_ID}|Segment class split method: Point is not within the segment.`, p, this);
     }
     
-    const p_dist = me.vertexA.squaredDistance(p);
+    const p_dist = this.vertexA.squaredDistance(p);
     
-    if(me.split_dist) {
+    if(this.split_dist) {
       if(p_dist === this.split_dist) return; // already split at this distance
       // already split, call split on child for correct side
       // begin ...s... p ... end
@@ -415,30 +408,30 @@ export class Segment extends Ray {
       // |-- p_dist ---|
       // p_dist > sd, so the new split is in B
       
-      const child_node = (p_dist > me.split_dist) ? "B" : "A";
-      me.splits.get(child_node).split(p);
+      const child_node = (p_dist > this.split_dist) ? "B" : "A";
+      this.splits.get(child_node).split(p);
       return;      
     }
     
-    me.split_dist = p_dist;
-    me.splits = new Map();
+    this.split_dist = p_dist;
+    this.splits = new Map();
     
-    const segA = new Segment({ x: me.A.x, y: me.A.y }, 
+    const segA = new Segment({ x: this.A.x, y: this.A.y }, 
                              { x: p.x, y: p.y });
     const segB = new Segment({ x: p.x, y: p.y }, 
-                             { x: me.B.x, y: me.B.y });                      
+                             { x: this.B.x, y: this.B.y });                      
     
     
-    segA.originating_object = me.originating_object;
-    segA.properties = me.properties;
-    segA.parent = me;
+    segA.originating_object = this.originating_object;
+    segA.properties = this.properties;
+    segA.parent = this;
         
-    segB.originating_object = me.originating_object;
-    segB.properties = me.properties;
-    segB.parent = me;
+    segB.originating_object = this.originating_object;
+    segB.properties = this.properties;
+    segB.parent = this;
     
-    me.splits.set("A", segA);
-    me.splits.set("B", segB);
+    this.splits.set("A", segA);
+    this.splits.set("B", segB);
   }
 
  /*
@@ -457,13 +450,11 @@ export class Segment extends Ray {
   * @return {Segment}
   */ 
   getSplitAt(p) {
-    const me = this;
+    if(this.splits.size === 0) return this;
     
-    if(me.splits.size === 0) return me;
-    
-    const p_dist = me.vertexA.squaredDistance(p);
-    const child_node = (p_dist > me.split_dist) ? "B" : "A"; // should mirror splitAt 
-    return me.splits.get(child_node).getSplitAt(p);
+    const p_dist = this.vertexA.squaredDistance(p);
+    const child_node = (p_dist > this.split_dist) ? "B" : "A"; // should mirror splitAt 
+    return this.splits.get(child_node).getSplitAt(p);
   }
   
 //   nextSplit() {

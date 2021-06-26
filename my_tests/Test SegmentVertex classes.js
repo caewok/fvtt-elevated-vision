@@ -50,14 +50,3 @@ terrain_polygons.forEach(p => {
 })
 
 
-// Test splitting
-let Segment = window["elevated-vision"].Segment;
-let s1 = new Segment({x: 100, y: 100}, {x: 200, y: 200});
-s1.splitAt({x: 150, y: 150});
-s1.mergeProperty({propertyA: "123"});
-
-splitA = s1.getSplitAt({x: 125, y: 125});
-
-s1.mergePropertyAtSplit({x: 125, y: 125}, {propertyB: "blue", propertyA: "456"});
-
-
