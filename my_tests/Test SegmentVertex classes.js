@@ -47,3 +47,5 @@ log(`Transformed ${terrain_polygons.length} terrains`, terrain_polygons);
 terrain_polygons.forEach(p => {
   p.draw(0xFF0000);
 })
+
+

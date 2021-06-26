@@ -1,4 +1,4 @@
-import { COLORS, TINTS, toGridDistance, orient2drounded } from "./utility.js";
+import { COLORS, TINTS, toGridDistance, orient2drounded, FirstMapValue } from "./utility.js";
 import { Shadow } from "./Shadow_class.js";
 import { log, MODULE_ID, FORCE_SEGMENT_TYPE_DEBUG } from "./module.js";
 import { Segment, Vertex } from "./SegmentVertex_class.js";
@@ -85,11 +85,17 @@ export class TerrainPolygon extends PIXI.Polygon {
     // link to beginning
     const last_vertex_id = new_vertex.id;
     
-    let s_first_last = Segment.fromVertices(poly_vertices.get(first_vertex_id),
+    const s_first_last = Segment.fromVertices(poly_vertices.get(first_vertex_id),
                                             poly_vertices.get(last_vertex_id));
                                                                          
-    poly_vertices.get(first_vertex_id).includeSegment(s_first_last)
     poly_vertices.get(last_vertex_id).includeSegment(s_first_last)
+    
+    // to ensure segments are A, B for the vertex, as in prior(A) --> vertex --> next (B)
+    // need to insert this s_first_last as A in the first vertex
+    const s_first_second =  FirstMapValue(poly_vertices.get(first_vertex_id).segments);
+    poly_vertices.get(first_vertex_id).segments.clear();
+    poly_vertices.get(first_vertex_id).includeSegment(s_first_last);
+    poly_vertices.get(first_vertex_id).includeSegment(s_first_second);
     
     log(`_constructVertices return`, poly_vertices);
 

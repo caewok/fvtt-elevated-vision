@@ -65,6 +65,11 @@ export function orient2drounded(ax, ay, bx, by, cx, cy, PRECISION = 8) {
                   round(cy, PRECISION));
 }
 
+/*
+ * Get first value from a Map
+ */
+export function FirstMapValue(m) { return m.values().next().value }
+
 
 /* 
  * Helper function to convert absolute increments to grid distance
