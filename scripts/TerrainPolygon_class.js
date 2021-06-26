@@ -55,11 +55,14 @@ export class TerrainPolygon extends PIXI.Polygon {
   _constructVertices() {
     const poly_vertices = new Map();  
     let prior_vertex = new Vertex(this.points[0], this.points[1]);
+    let new_vertex;
     prior_vertex.originating_object = this;
     poly_vertices.set(prior_vertex.id, prior_vertex);
     
+
+    // assuming closed stroke for now.
     for (let i = 2; i < (this.points.length - 2); i += 2) {
-      const new_vertex = prior_vertex.connectPoint(this.points[i], this.points[i + 1]);
+      new_vertex = prior_vertex.connectPoint({x: this.points[i], y: this.points[i + 1] });
       poly_vertices.set(new_vertex.id, new_vertex);
       prior_vertex = new_vertex;
     }

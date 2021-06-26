@@ -33,7 +33,7 @@ export class Vertex extends PIXI.Point {
    * @param {PIXI.Point} p    Point in {x, y} format to link
    * @return The new Vertex
    */
-   connectPoint(p)
+   connectPoint(p) {
      const v = new Vertex(p);
      const s = new Segment(this, p);
      s.originating_object = this.originating_object;
