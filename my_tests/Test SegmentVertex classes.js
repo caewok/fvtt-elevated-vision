@@ -1,4 +1,8 @@
 // for now, just use the console or an external source to run these
+window["elevated-vision"].orient2d(0, 0, 1, 1, 0, 1) < 0 // clockwise
+window["elevated-vision"].orient2d(0, 0, 0, 1, 1, 1) > 0 // 'counterclockwise'
+window["elevated-vision"].orient2d(0, 0, 0.5, 0.5, 1, 1) === 0 //'collinear'
+
 
 // Vertex creation
 let Vertex = window["elevated-vision"].Vertex;

@@ -63,6 +63,9 @@ export class TerrainPolygon extends PIXI.Polygon {
       poly_vertices.set(new_vertex.id, new_vertex);
       prior_vertex = new_vertex;
     }
+    
+    // link to beginning
+    poly_vertices.values().next().value.includeSegment(new_vertex.segments.values().next().value);
 
     return poly_vertices;
   }
