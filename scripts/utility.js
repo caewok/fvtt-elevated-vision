@@ -75,8 +75,6 @@ export function SecondMapValue(m) {
   return iter.next().value;
 }
 
-return m.values().next().next().value }
-
 /* 
  * Helper function to convert absolute increments to grid distance
  */
