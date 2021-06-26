@@ -276,8 +276,10 @@ export class Segment extends Ray {
    * @param {PIXI.Point} p    Point in {x,y} format, used to locate the split.
    * @param {...} ...args     Arguments passed to mergeProperty method.
    */
-   mergePropertyBeforeSplitPoint(p, ...args) {
-     this.getSplitBeforePoint(p).mergeProperty(...args);
+   mergePropertyAtSplit(p, ...args) {
+     const the_split = this.getSplitAt(p);
+     log(`mergePropertyAtSplit`, the_split);
+     the_split.mergeProperty(...args);
    }
   
  /*
@@ -370,10 +372,10 @@ export class Segment extends Ray {
     
     // test if between the endpoints
     // recall that we already established the point is collinear above.
-    return (p.x < max(this.A.x, this.B.x) &&
-            p.x > min(this.A.x, this.B.x) &&
-            p.y < max(this.A.y, this.B.y) &&
-            p.y > min(this.A.y, this.B.y));
+    return (p.x < Math.max(this.A.x, this.B.x) &&
+            p.x > Math.min(this.A.x, this.B.x) &&
+            p.y < Math.max(this.A.y, this.B.y) &&
+            p.y > Math.min(this.A.y, this.B.y));
   }
   
  /*
@@ -396,7 +398,7 @@ export class Segment extends Ray {
       console.error(`${MODULE_ID}|Segment class split method: Point is not within the segment.`, p, this);
     }
     
-    const p_dist = this.vertexA.squaredDist(p);
+    const p_dist = this.vertexA.squaredDistance(p);
     
     if(this.split_dist) {
       if(p_dist === this.split_dist) return; // already split at this distance
@@ -428,8 +430,8 @@ export class Segment extends Ray {
     segB.properties = this.properties;
     segB.parent = this;
     
-    this.splits.add("A", segA);
-    this.splits.add("B", segB);
+    this.splits.set("A", segA);
+    this.splits.set("B", segB);
   }
 
  /*
@@ -447,12 +449,12 @@ export class Segment extends Ray {
   * @param {PIXI.Point} p   Point in {x, y} format
   * @return {Segment}
   */ 
-  getSplitBeforePoint(p) {
+  getSplitAt(p) {
     if(this.splits.size === 0) return this;
     
-    const p_dist = this.vertexA.squaredDist(p);
+    const p_dist = this.vertexA.squaredDistance(p);
     const child_node = (p_dist > this.split_dist) ? "B" : "A"; // should mirror splitAt 
-    return splits.get(child_node).getSplitBeforePoint(p);
+    return this.splits.get(child_node).getSplitAt(p);
   }
   
 //   nextSplit() {

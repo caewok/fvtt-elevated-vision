@@ -161,7 +161,7 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   // maximum distance we might need to extend a Ray
   const MAX_DISTANCE = new Ray({ x: 0, y: 0 }, 
                                { x: canvas.dimensions.sceneWidth, 
-                                 y: canvas.dimensions.sceneHeight })).distance;
+                                 y: canvas.dimensions.sceneHeight }).distance;
   
   sorted_vertices.forEach(vertex => {
     // add segments that have this point if not already added
