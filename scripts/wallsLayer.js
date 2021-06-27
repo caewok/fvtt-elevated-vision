@@ -354,6 +354,7 @@ function closestBlockingSegmentToPoint(segments, p, Ve) {
   return [...segments].reduce((acc, [key, current]) => {
     // [...walls] will break the Map into [0] id and [1] object
     //log(`Reducing walls: acc, current`, acc, current);
+    log(`closestBlockingSegmentToPoint: Segment ${current.id} has elevation ${current.properties.elevation} compared to ${Ve}`, current);
     if(Ve && current.properties.elevation <= Ve) return acc; // current doesn't block
     if(acc === undefined) return current;
     if(current.inFrontOf(acc, p)) return current;
