@@ -211,7 +211,7 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
       log(`evComputePolygon sweep test: setting ${closest_blocking.id} to block`, vertex, closest_blocking);
       closest_blocking.mergePropertyAtSplit(vertex, { vision_type: "block" });
     } else {
-      // If the current vertex is not at the end of the closest, then need to split.
+      // If the current vertex is not at the end of the closest, then may need to split.
       // Mark the prior portion as blocking
       // Locate the intersection: vision --> vertex (new_closest) --> closest
       const rayVS = new Ray(origin, vertex);
@@ -222,10 +222,20 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
                                                              closest_blocking.B.y ]);                               
       log(`evComputePolygon sweep test: splitting ${closest_blocking.id} at ${intersection.x}, ${intersection.y}`, closest_blocking); 
       
-      closest_blocking.splitAt(intersection);
-      
-      // move the 
-      closest_blocking.mergePropertyAtSplit(intersection, { vision_type: "block" });
+      if(intersection) {
+        closest_blocking.splitAt(intersection);
+        closest_blocking.mergePropertyAtSplit(intersection, { vision_type: "block" });
+      } else {
+        // likely situation where we have jumped to another segment
+        // intersection point would be the edge of the canvas or the edge of the los
+        // TO-DO: can we simply mark prior segment without splitting? 
+        log(`evComputePolygon sweep test: intersection is false when testing vertex ${vertex.id} and closest_blocking ${closest_blocking.id}`, origin, vertex, closest_blocking);
+        
+        // need the correct vertex -- the one to the right
+        // if ccw, then B is to the left; otherwise B is to the right
+        const v_label = closest_blocking.ccw(origin) ? "B" : "A";
+        closest_blocking.mergePropertyAtSplit(closest_blocking[v_label], { vision_type: "block" });
+      }
     }
     
     // If we have moved to the middle of the new closest segment, then need to split
@@ -237,8 +247,14 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
                                                              new_closest_blocking.A.y,
                                                              new_closest_blocking.B.x,
                                                              new_closest_blocking.B.y ]); 
-      log(`evComputePolygon sweep test: splitting new ${closest_blocking.id} at ${intersection.x}, ${intersection.y}`, new_closest_blocking); 
-      new_closest_blocking.splitAt(intersection);
+      log(`evComputePolygon sweep test: splitting new ${new_closest_blocking.id} at ${intersection.x}, ${intersection.y}`, new_closest_blocking); 
+     
+      if(intersection) {
+        new_closest_blocking.splitAt(intersection);
+      } else {
+        log(`evComputePolygon sweep test: intersection is false when testing vertex ${vertex.id} and new_closest_blocking ${new_closest_blocking.id}`, origin, vertex, new_closest_blocking);
+        // unclear how this could happen...
+      }
     }
     
     
