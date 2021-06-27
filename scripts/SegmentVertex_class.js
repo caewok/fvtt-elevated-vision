@@ -421,7 +421,7 @@ export class Segment extends Ray {
       // p_dist > sd, so the new split is in B
       
       const child_node = (p_dist > this.split_dist) ? "B" : "A";
-      this.splits.get(child_node).split(p);
+      this.splits.get(child_node).splitAt(p);
       return;      
     }
     
