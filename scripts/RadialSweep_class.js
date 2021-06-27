@@ -35,6 +35,8 @@ export class RadialSweep {
   * @param {Vertex} vertex  Point to test for the sweep.
   */ 
   nextVertex(vertex) {
+    log(`RadialSweep: vertex ${vertex.id}`);
+  
     this.updateWallTracking(vertex);
     const new_closest = RadialSweep.closestBlockingSegmentToPoint(this.walls, this.origin, this.origin_elevation) || this.closest;
     log(`RadialSweep: new closest is ${new_closest?.id}; prior closest is ${this.closests?.id}`);
@@ -91,7 +93,7 @@ export class RadialSweep {
     } else {
       // If the current vertex is not at the end of the closest, then may need to split.
       // Mark the prior portion as blocking
-      // Locate the intersection: origin (vision) --> vertex (current) --> prior
+      // Locate the intersection: origin (vision) --> vertex (on current) --> prior
       const rayOV = new Ray(origin, vertex);
       const rayOV_extended = new Ray(origin, rayOV.project(this.max_distance));
       const intersection = rayOV_extended.intersectSegment([ prior.A.x, 
@@ -101,8 +103,8 @@ export class RadialSweep {
     
       if(intersection) {
         log(`markClosest: splitting and marking ${prior.id} at ${intersection.x}, ${intersection.y}`); 
-        closest_blocking.splitAt(intersection);
-        closest_blocking.mergePropertyAtSplit(intersection, this.marker);
+        prior.splitAt(intersection);
+        prior.mergePropertyAtSplit(intersection, this.marker);
       } else {
         // likely situation where we have jumped to another segment
         // intersection point would be the edge of the canvas or the edge of the los
