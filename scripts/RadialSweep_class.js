@@ -42,8 +42,8 @@ export class RadialSweep {
   */
   start(segments) {
     // starting point is straight down from vision point
-    const coords = [vision_point.x, vision_point.y, 
-                    vision_point.x, canvas.dimensions.sceneHeight);
+    const coords = [this.vision_point.x, this.vision_point.y, 
+                    this.vision_point.x, canvas.dimensions.sceneHeight];
     
     const intersecting_segments = [];
     segments.forEach(s => {
@@ -51,9 +51,16 @@ export class RadialSweep {
     });
     
     if(intersecting_segments.length === 0) return;
+    log(`radialSweep: Checking ${intersecting_segments.length} intersecting segments from point ${this.vision_point.x}, ${this.vision_point.y} with elevation ${this.vision_elevation}`, intersecting_segments);
+
     this.closest = RadialSweep.closestBlockingSegmentToPoint(intersecting_segments,
-    this.vision_point, this.vision_elevation);
-    this.walls.set(this.closest.id, this.closest);
+                     this.vision_point, this.vision_elevation);
+
+    if(this.closest) {
+      this.walls.set(this.closest.id, this.closest);
+      log(`radialSweep: Adding segment ${this.closest.id} as closest`, this.closest);
+    }
+
   }
     
  /*
@@ -64,8 +71,8 @@ export class RadialSweep {
     log(`RadialSweep: vertex ${vertex.id}`);
   
     this.updateWallTracking(vertex);
-    const new_closest = RadialSweep.closestBlockingSegmentToPoint(this.walls, this.vision_point, this.vision_elevation) || this.closest;
-    log(`RadialSweep: new closest is ${new_closest?.id}; prior closest is ${this.closest?.id}`, new_closest, prior_closest);
+    const new_closest = RadialSweep.closestBlockingSegmentToPoint([...this.walls.values()], this.vision_point, this.vision_elevation) || this.closest;
+    log(`RadialSweep: new closest is ${new_closest?.id}; prior closest is ${this.closest?.id}`, new_closest, this.closest);
     if(!this.closest) this.closest = new_closest;
     
     this.markClosest(new_closest, vertex);
@@ -213,10 +220,11 @@ export class RadialSweep {
   * @return {Segment} Closest blocking segment or undefined if none
   */
   static closestBlockingSegmentToPoint(segments, p, Ve) {
-    return [...segments].reduce((acc, [key, current]) => {
+    //log(`closestBlocking: segments`, segments);
+    return segments.reduce((acc, current) => {
       // [...walls] will break the Map into [0] id and [1] object
       //log(`Reducing walls: acc, current`, acc, current);
-      //log(`closestBlockingSegmentToPoint: Segment ${current.id} has elevation ${current.properties.elevation} compared to ${Ve}`, current);
+      //log(`closestBlockingSegmentToPoint: Segment ${current.id} has elevation ${current.properties.elevation} compared to ${Ve}`, current, acc);
       if(Ve && current.properties.elevation <= Ve) return acc; // current doesn't block
       if(acc === undefined) return current;
       if(current.inFrontOf(acc, p)) return current;

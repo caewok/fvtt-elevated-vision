@@ -123,9 +123,10 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
    // for the moment, infer Ve based on controlled tokens
   // TO-DO: may move this whole process into sightLayer to more easily get at the correct vision object
   let Ve = TokenElevationAtPoint(origin); 
-  if(!Ve) Ve = TerrainElevationAtPoint(origin);
-  log(`TokenElevation: ${TokenElevationAtPoint(origin)}; TerrainElevation: ${TerrainElevationAtPoint(origin)}`);
+  if(Ve === undefined) Ve = TerrainElevationAtPoint(origin);
   Ve = toGridDistance(Ve);
+
+  log(`TokenElevation: ${TokenElevationAtPoint(origin)}; TerrainElevation: ${TerrainElevationAtPoint(origin)}; Ve: ${Ve}`);
   // do we need this?  
   // terrain_polygons.forEach(t => {
 //     t.vision_elevation = Ve;
@@ -146,7 +147,8 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   
   const sorted_vertices = RadialSweep.sortVertices(origin, vertices);
   log(`evComputePolygon: ${sorted_vertices.length} sorted vertices`, sorted_vertices);
-  
+  log(`evComputePolygon: ${segments.length} segments`, segments);  
+
   //--------------- SWEEP LEFT-TO-RIGHT VISION TEST ------------------------------------//
   // See https://www.redblobgames.com/articles/visibility/ for basic algorithm
   // Trickier than a normal vision sweep

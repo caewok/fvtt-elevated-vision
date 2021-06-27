@@ -115,7 +115,7 @@ export function TerrainElevationAtPoint(p) {
    // in case all the terrain maximums are infinite.
    terrain_max_elevation = isFinite(terrain_max_elevation) ? terrain_max_elevation : 0;
    
-   log(`TerrainElevationAtPoint: Returning elevation ${terrain_max_elevation} for point ${p}`, terrains);
+   //log(`TerrainElevationAtPoint: Returning elevation ${terrain_max_elevation} for point ${p}`, terrains);
    
    return terrain_max_elevation;
 }
@@ -131,7 +131,7 @@ export function TokenElevationAtPoint(p) {
     // is the point within the token control area? 
     if(!pointWithinToken(p, t)) return total;
     return Math.max(t.data.elevation, total);
-  }, Number.NEGATIVE_INFINITY) || Number.NEGATIVE_INFINITY;
+  }, Number.NEGATIVE_INFINITY);
   
   if(max_token_elevation === Number.NEGATIVE_INFINITY) return undefined;
   
