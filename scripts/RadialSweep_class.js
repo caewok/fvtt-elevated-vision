@@ -39,7 +39,7 @@ export class RadialSweep {
   
     this.updateWallTracking(vertex);
     const new_closest = RadialSweep.closestBlockingSegmentToPoint(this.walls, this.origin, this.origin_elevation) || this.closest;
-    log(`RadialSweep: new closest is ${new_closest?.id}; prior closest is ${this.closests?.id}`);
+    log(`RadialSweep: new closest is ${new_closest?.id}; prior closest is ${this.closest?.id}`);
     if(!this.closest) this.closest = new_closest;
     
     this.markClosest(new_closest, vertex);
@@ -109,7 +109,7 @@ export class RadialSweep {
         // likely situation where we have jumped to another segment
         // intersection point would be the edge of the canvas or the edge of the los
         // TO-DO: is it sufficient to simply mark prior segment without splitting? 
-        log(`markClosest: intersection is false when testing vertex ${vertex.id} and prior ${prior.id}`);
+        log(`markClosest: intersection is false when testing vertex ${vertex.id} and prior ${prior.id}`, rayOV, rayOV_extended, prior);
       
         // need the correct vertex -- the one to the right
         // if ccw, then B is to the left; otherwise B is to the right
@@ -127,9 +127,9 @@ export class RadialSweep {
                                                              current.A.y,
                                                              current.B.x,
                                                              current.B.y ]); 
-      log(`markClosest: splitting current ${current.id} at ${intersection.x}, ${intersection.y}`); 
-   
+     
       if(intersection) {
+        log(`markClosest: splitting current ${current.id} at ${intersection.x}, ${intersection.y}`); 
         current.splitAt(intersection);
       } else {
         console.error(`${MODULE_ID}|markClosest: intersection is false when testing vertex ${vertex.id} and current ${current.id}`, rayOV);
