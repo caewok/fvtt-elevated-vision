@@ -180,12 +180,11 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
     const wall_ids_to_remove = [];
     const wall_ids_to_add = [];
     vertex.segments.forEach(s => {
-      if(!walls.has(s.id)) wall_ids_to_add.push(s.id);
-      if(walls.has(s.id)) wall_ids_to_remove.push(s.id);
+      walls.has(s.id) ? wall_ids_to_remove.push(s.id) : wall_ids_to_add.push(s.id);
     });
 
-    wall_ids_to_remove.forEach(id => { walls.delete(id) });
-    wall_ids_to_add.forEach(id => { walls.set(id, vertex.segments.get(id)) });
+    wall_ids_to_remove.forEach(id => { walls.delete(id); });
+    wall_ids_to_add.forEach(id => { walls.set(id, vertex.segments.get(id)); });
 
     log(`evComputePolygon sweep test: tracking ${walls.size} walls`, [...walls.keys()]);
     if(isDebuggingVision) {
