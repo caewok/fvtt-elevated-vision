@@ -1,5 +1,5 @@
 import { log, MODULE_ID } from "./module.js";
-import { orient2drounded } from "./utility.js";
+import { COLORS, orient2drounded } from "./utility.js";
 
 // Class to track a radial sweep from vision point clockwise 360 degrees.
 export class RadialSweep {
@@ -73,9 +73,9 @@ export class RadialSweep {
   * @param {PIXI.Point} origin   Vision origin point in {x, y} format.
   * @param {Object} property     Property object to merge when marking the closest.
   */
-  function markClosest(current, vertex) {
+  markClosest(current, vertex) {
     const prior = this.closest;
-    log(`markClosest: current is ${current?.id}; prior is ${prior?.id}`, current, prior, vertex, property);   
+    log(`markClosest: current is ${current?.id}; prior is ${prior?.id}`, current, prior, vertex, this.marker);   
     if(!current) return; // nothing found
     if(current.id === prior.id) return; // nothing changed
   
@@ -93,7 +93,7 @@ export class RadialSweep {
       // Mark the prior portion as blocking
       // Locate the intersection: origin (vision) --> vertex (current) --> prior
       const rayOV = new Ray(origin, vertex);
-      const rayOV_extended = new Ray(origin, rayOV.project(MAX_DISTANCE));
+      const rayOV_extended = new Ray(origin, rayOV.project(this.max_distance));
       const intersection = rayOV_extended.intersectSegment([ prior.A.x, 
                                                              prior.A.y,
                                                              prior.B.x,
@@ -120,7 +120,7 @@ export class RadialSweep {
     if(!current.hasEndpoint(vertex)) {
       // Locate the intersection: origin (vision) --> vertex --> current 
       const rayOV = new Ray(origin, vertex);
-      const rayOV_extended = new Ray(origin, rayOV.project(MAX_DISTANCE));
+      const rayOV_extended = new Ray(origin, rayOV.project(this.max_distance));
       const intersection = rayOV_extended.intersectSegment([ current.A.x, 
                                                              current.A.y,
                                                              current.B.x,
@@ -169,11 +169,11 @@ export class RadialSweep {
   * @return {Array[Vertex]} Array of sorted vertices, where element 0 is leftmost.
   */
   static sortVertices(origin, vertices) { 
-    return sorted_vertices = vertices.sort((a, b) => {
+    return vertices.sort((a, b) => {
       return orient2drounded(origin.x, origin.y, 
                   a.x, a.y,
                   b.x, b.y);
-      });
+    });
   }
   
  /*
@@ -184,7 +184,7 @@ export class RadialSweep {
   * @param {Number} Ve                 Elevation of p.
   * @return {Segment} Closest blocking segment or undefined if none
   */
-  static function closestBlockingSegmentToPoint(segments, p, Ve) {
+  static closestBlockingSegmentToPoint(segments, p, Ve) {
     return [...segments].reduce((acc, [key, current]) => {
       // [...walls] will break the Map into [0] id and [1] object
       //log(`Reducing walls: acc, current`, acc, current);

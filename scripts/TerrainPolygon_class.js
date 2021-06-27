@@ -142,12 +142,14 @@ export class TerrainPolygon extends PIXI.Polygon {
     for(const [key, vertex] of this.vertices) {
       // only add the second segment, so that first<-->last segment is last
       const s_second = SecondMapValue(vertex.segments);
+
+      // Default every segment: 
+      //   - "far" until calculateNearFarSegments is run
+      //   - "ignore" for vision type (block, shadow, ignore)
+      s_second.mergeProperty({ vision_distance: "far", 
+                               vision_type: "ignore" });      
       poly_segments.set(s_second.id, s_second);
     }
-    
-    // Treat every segment as far until calculateNearFarSegments is run.
-    poly_segments.mergeProperty({ vision_distance: "far" });
-
     return poly_segments;
   }
   
@@ -285,7 +287,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     const sorted_vertices = RadialSweep.sortVertices(origin, [...this.vertices]);
     sorted_vertices.forEach(vertex => {
       radial_sweep.nextVertex(vertex);
-    }
+    });
     radial_sweep.complete();
   } 
  
@@ -299,8 +301,8 @@ export class TerrainPolygon extends PIXI.Polygon {
       const splits = segment.getSplits();
       splits.forEach(s => {
         const seg_color = (s.properties.vision_type === "block") ? COLORS.red : color;
-        s.draw(seg_color)
-      })      
+        s.draw(seg_color);
+      });      
     }
   }
 

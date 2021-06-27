@@ -159,10 +159,10 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   //   shadow-causing segment elevation
   
  
-  const radial_sweep = new RadialSweep(origin, Ve, marker = { vision_type: "block" }, true);
+  const radial_sweep = new RadialSweep(origin, Ve, { vision_type: "block" }, true);
   sorted_vertices.forEach(vertex => {
     radial_sweep.nextVertex(vertex);
-  }
+  });
   radial_sweep.complete();
   
   // For each Terrain Polygon, do a radial sweep to mark near / far segments relative
