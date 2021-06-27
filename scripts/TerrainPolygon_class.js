@@ -144,6 +144,9 @@ export class TerrainPolygon extends PIXI.Polygon {
       const s_second = SecondMapValue(vertex.segments);
       poly_segments.set(s_second.id, s_second);
     }
+    
+    // Treat every segment as far until calculateNearFarSegments is run.
+    poly_segments.mergeProperty({ vision_distance: "far" });
 
     return poly_segments;
   }
@@ -267,7 +270,24 @@ export class TerrainPolygon extends PIXI.Polygon {
     }
     return contained_only; // if contained_only, is true; if includes intersection, false.
   }
-
+  
+ /*
+  * Calculate near vs far segments based on vision origin.
+  * @param {PIXI.Point} origin    Near or far based on this relative point in {x,y} format 
+  */
+  calculateNearFarSegments(origin) {
+    const radial_sweep = new RadialSweep(origin, 
+                                         undefined, // slightly faster than Number.NEGATIVE_INFINITY
+                                         { vision_distance: "near" });
+    
+    // all segments are "far" until proven otherwise
+    // Note: already set by _constructSegments as default
+    const sorted_vertices = RadialSweep.sortVertices(origin, [...this.vertices]);
+    sorted_vertices.forEach(vertex => {
+      radial_sweep.nextVertex(vertex);
+    }
+    radial_sweep.complete();
+  } 
  
  /*
   * Draw the polygon

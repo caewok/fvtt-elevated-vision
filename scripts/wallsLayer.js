@@ -1,6 +1,7 @@
 import { log, MODULE_ID, FORCE_TOKEN_VISION_DEBUG, FORCE_FOV_DEBUG } from "./module.js";
-import { COLORS, TerrainElevationAtPoint, TokenElevationAtPoint, orient2drounded, toGridDistance } from "./utility.js";
+import { COLORS, TerrainElevationAtPoint, TokenElevationAtPoint, toGridDistance } from "./utility.js";
 import { TerrainPolygon } from "./TerrainPolygon_class.js";
+import { RadialSweep } from "./RadialSweep_class.js";
 
 /*
 Clicking token:
@@ -138,12 +139,7 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
     });
   });
   
-  const sorted_vertices = vertices.sort((a, b) => {
-    return orient2drounded(origin.x, origin.y, 
-                a.x, a.y,
-                b.x, b.y);
-  });
-  
+  const sorted_vertices = RadialSweep.sortVertices(origin, vertices);
   log(`evComputePolygon: ${sorted_vertices.length} sorted vertices`, sorted_vertices);
   
   //--------------- SWEEP LEFT-TO-RIGHT VISION TEST ------------------------------------//
@@ -151,129 +147,28 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   // Trickier than a normal vision sweep
   // Ve = elevation at the vision point
   // Te = elevation of the terrain
-  // if Ve < Te, use the nearest segments; segment acts as wall to vision
-  // if Ve >= Te, use the farthest segments; segment shadows lower elevation beyond
+  // if Ve < Te, nearest segments block vision (looking up at terrain segment)
+  // if Ve >= Te, nearest segments do not block. (looking down at terrain segment)
   //   (Note: default Foundry setup is that if Ve === Te, vision unblocked)
-  // If V is within a T polygon & V >= Te, then the nearest segments shadow
-  // So choices for segments are: "block", "shadow", "ignore"
-  // Segments are also "near" or "far" depending on whether they are blocked by another
-  //   within the same polygon. Near segments either "block" or "ignore" depending on Ve
+  // If V is outside a T polygon, far segments shadow
+  // Plus, if V is within a T polygon, then the nearest segments shadow (if not blocking)
+  // Segment property labels:
+  // - vision_type: "block", "shadow", "ignore"
+  // - vision_distance: "near", "far"
   // TO-DO: Shadows should only cover terrain/map with elevation <= 
   //   shadow-causing segment elevation
   
-  const walls = new Map();
-  let closest_blocking = undefined;
-  
-  // maximum distance we might need to extend a Ray
-  const MAX_DISTANCE = new Ray({ x: 0, y: 0 }, 
-                               { x: canvas.dimensions.sceneWidth, 
-                                 y: canvas.dimensions.sceneHeight }).distance;
-  
-  sorted_vertices.forEach(vertex => {
-    log(`evComputePolygon checking vertex ${vertex.id}`, vertex);
-    if(isDebuggingVision) {
-      canvas.controls.debug.lineStyle(1, COLORS.lightblue, 1).moveTo(origin.x, origin.y).lineTo(vertex.x, vertex.y);
-    }
-
-    // remove segments that have this point that were added previously
-    // use Set or intersect?
-    const wall_ids_to_remove = [];
-    const wall_ids_to_add = [];
-    vertex.segments.forEach(s => {
-      walls.has(s.id) ? wall_ids_to_remove.push(s.id) : wall_ids_to_add.push(s.id);
-    });
-
-    wall_ids_to_remove.forEach(id => { walls.delete(id); });
-    wall_ids_to_add.forEach(id => { walls.set(id, vertex.segments.get(id)); });
-
-    log(`evComputePolygon sweep test: tracking ${walls.size} walls`, [...walls.keys()]);
-    if(isDebuggingVision) {
-      walls.forEach(s => {
-        s.draw(COLORS.gray);
-      });
-    }
-
-    const new_closest_blocking = closestBlockingSegmentToPoint(walls, origin, Ve) || closest_blocking;
-    
-    log(`evComputePolygon sweep test: (1) new closest blocking is ${new_closest_blocking?.id}; old closest blocking is ${closest_blocking?.id}`);
  
-    if(!closest_blocking) closest_blocking = new_closest_blocking; // 
-    if(!new_closest_blocking) return; // nothing blocks; go to next vertex
-    if(new_closest_blocking.id === closest_blocking.id) return; // nothing changed; go to next vertex
-    
-   log(`evComputePolygon sweep test: (2) new closest blocking is ${new_closest_blocking?.id}; old closest blocking is ${closest_blocking?.id}`);   
-    // we have switched the closest wall segment
-    // mark prior segment, which was blocking up until now
-    
-    // If the current vertex is at the end of the closest, then simply mark the closest as blocking.
-    if(closest_blocking.hasEndpoint(vertex)) {
-      // may or may not have been split earlier
-      log(`evComputePolygon sweep test: setting ${closest_blocking.id} to block`, vertex, closest_blocking);
-      closest_blocking.mergePropertyAtSplit(vertex, { vision_type: "block" });
-    } else {
-      // If the current vertex is not at the end of the closest, then may need to split.
-      // Mark the prior portion as blocking
-      // Locate the intersection: vision --> vertex (new_closest) --> closest
-      const rayVS = new Ray(origin, vertex);
-      const rayVS_extended = new Ray(origin, rayVS.project(MAX_DISTANCE));
-      const intersection = rayVS_extended.intersectSegment([ closest_blocking.A.x, 
-                                                             closest_blocking.A.y,
-                                                             closest_blocking.B.x,
-                                                             closest_blocking.B.y ]);                               
-      log(`evComputePolygon sweep test: splitting ${closest_blocking.id} at ${intersection.x}, ${intersection.y}`, closest_blocking); 
-      
-      if(intersection) {
-        closest_blocking.splitAt(intersection);
-        closest_blocking.mergePropertyAtSplit(intersection, { vision_type: "block" });
-      } else {
-        // likely situation where we have jumped to another segment
-        // intersection point would be the edge of the canvas or the edge of the los
-        // TO-DO: can we simply mark prior segment without splitting? 
-        log(`evComputePolygon sweep test: intersection is false when testing vertex ${vertex.id} and closest_blocking ${closest_blocking.id}`, origin, vertex, closest_blocking);
-        
-        // need the correct vertex -- the one to the right
-        // if ccw, then B is to the left; otherwise B is to the right
-        const v_label = closest_blocking.ccw(origin) ? "B" : "A";
-        closest_blocking.mergePropertyAtSplit(closest_blocking[v_label], { vision_type: "block" });
-      }
-    }
-    
-    // If we have moved to the middle of the new closest segment, then need to split
-    if(!new_closest_blocking.hasEndpoint(vertex)) {
-      // Locate the intersection: vision --> vertex --> new_closest 
-      const rayVS = new Ray(origin, vertex);
-      const rayVS_extended = new Ray(origin, rayVS.project(MAX_DISTANCE));
-      const intersection = rayVS_extended.intersectSegment([ new_closest_blocking.A.x, 
-                                                             new_closest_blocking.A.y,
-                                                             new_closest_blocking.B.x,
-                                                             new_closest_blocking.B.y ]); 
-      log(`evComputePolygon sweep test: splitting new ${new_closest_blocking.id} at ${intersection.x}, ${intersection.y}`, new_closest_blocking); 
-     
-      if(intersection) {
-        new_closest_blocking.splitAt(intersection);
-      } else {
-        log(`evComputePolygon sweep test: intersection is false when testing vertex ${vertex.id} and new_closest_blocking ${new_closest_blocking.id}`, origin, vertex, new_closest_blocking);
-        // unclear how this could happen...
-      }
-    }
-    
-    
-    
-    closest_blocking = new_closest_blocking;
-
-    if(isDebuggingVision) {
-      // make lighter to signify complete
-      canvas.controls.debug.lineStyle(1, COLORS.lightblue, .25).moveTo(origin.x, origin.y).lineTo(vertex.x, vertex.y);
-    }
-
-  }); // sorted_vertices.forEach
-  
-  // after moving from the last vertex, set the last closest if blocking
-  if(closest_blocking) {
-    const v_label = closest_blocking.ccw(origin) ? "B" : "A";
-    closest_blocking.mergePropertyAtSplit(closest_blocking[v_label], { vision_type: "block" });
+  const radial_sweep = new RadialSweep(origin, Ve, marker = { vision_type: "block" }, true);
+  sorted_vertices.forEach(vertex => {
+    radial_sweep.nextVertex(vertex);
   }
-
+  radial_sweep.complete();
+  
+  // For each Terrain Polygon, do a radial sweep to mark near / far segments relative
+  //   to vision point. 
+  // Is this sweep better done within the polygon class?   
+  
   log(`evComputePolygon sweep test: after test`, sorted_vertices);
   
   if(isDebuggingVision) {
@@ -354,12 +249,86 @@ function closestBlockingSegmentToPoint(segments, p, Ve) {
   return [...segments].reduce((acc, [key, current]) => {
     // [...walls] will break the Map into [0] id and [1] object
     //log(`Reducing walls: acc, current`, acc, current);
-    log(`closestBlockingSegmentToPoint: Segment ${current.id} has elevation ${current.properties.elevation} compared to ${Ve}`, current);
+    //log(`closestBlockingSegmentToPoint: Segment ${current.id} has elevation ${current.properties.elevation} compared to ${Ve}`, current);
     if(Ve && current.properties.elevation <= Ve) return acc; // current doesn't block
     if(acc === undefined) return current;
     if(current.inFrontOf(acc, p)) return current;
     return acc;
   }, undefined);
+}
+
+
+/*
+ * Compare the new closest segment with the previous closest segment.
+ * Mark the frontmost segment or segment portion with the property.
+ * @param {Segmnent} current    The new closest segment.
+ * @param {Segment} prior       The previous closest segment.
+ * @param {Vertex} vertex       Vertex or {x, y} point we are testing.
+ * @param {PIXI.Point} origin   Vision origin point in {x, y} format.
+ * @param {Object} property     Property object to merge when marking the closest.
+ */
+function markClosest(current, prior, vertex, origin, property = {}) {
+  log(`markClosest: current is ${current?.id}; prior is ${prior?.id}`, current, prior, vertex, property);   
+  if(!current) return; // nothing found
+  if(current.id === prior.id) return; // nothing changed
+  
+  
+  // we have switched the closest wall segment
+  // mark prior segment, which was blocking up until now
+  
+  // If the current vertex is at the end of the prior, then simply mark the prior.
+  if(prior.hasEndpoint(vertex)) {
+    // may or may not have been split earlier
+    log(`markClosest: marking ${prior.id}`);
+    prior.mergePropertyAtSplit(vertex, property);
+  } else {
+    // If the current vertex is not at the end of the closest, then may need to split.
+    // Mark the prior portion as blocking
+    // Locate the intersection: origin (vision) --> vertex (current) --> prior
+    const rayOV = new Ray(origin, vertex);
+    const rayOV_extended = new Ray(origin, rayOV.project(MAX_DISTANCE));
+    const intersection = rayOV_extended.intersectSegment([ prior.A.x, 
+                                                           prior.A.y,
+                                                           prior.B.x,
+                                                           prior.B.y ]);                               
+    
+    if(intersection) {
+      log(`markClosest: splitting and marking ${prior.id} at ${intersection.x}, ${intersection.y}`); 
+      closest_blocking.splitAt(intersection);
+      closest_blocking.mergePropertyAtSplit(intersection, property);
+    } else {
+      // likely situation where we have jumped to another segment
+      // intersection point would be the edge of the canvas or the edge of the los
+      // TO-DO: is it sufficient to simply mark prior segment without splitting? 
+      log(`markClosest: intersection is false when testing vertex ${vertex.id} and prior ${prior.id}`);
+      
+      // need the correct vertex -- the one to the right
+      // if ccw, then B is to the left; otherwise B is to the right
+      const v_label = prior.ccw(origin) ? "B" : "A";
+      prior.mergePropertyAtSplit(prior[v_label], property);
+    }
+  }
+  
+  // If we have moved to the middle of the current segment, then need to split
+  if(!current.hasEndpoint(vertex)) {
+    // Locate the intersection: origin (vision) --> vertex --> current 
+    const rayOV = new Ray(origin, vertex);
+    const rayOV_extended = new Ray(origin, rayOV.project(MAX_DISTANCE));
+    const intersection = rayOV_extended.intersectSegment([ current.A.x, 
+                                                           current.A.y,
+                                                           current.B.x,
+                                                           current.B.y ]); 
+    log(`markClosest: splitting current ${current.id} at ${intersection.x}, ${intersection.y}`); 
+   
+    if(intersection) {
+      current.splitAt(intersection);
+    } else {
+      console.error(`${MODULE_ID}|markClosest: intersection is false when testing vertex ${vertex.id} and current ${current.id}`, rayOV);
+      // unclear how this could happen...
+    }
+  }
+  
+  return;
 }
 
 

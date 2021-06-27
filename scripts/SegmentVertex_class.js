@@ -264,7 +264,7 @@ export class Segment extends Ray {
    
      mergeObject(this.properties, obj, opts);
      
-     if(this.splits.size > 0) {
+     if(applyToSplits && this.splits.size > 0) {
        this.splits.get("A").mergeProperty(obj, opts);
        this.splits.get("B").mergeProperty(obj, opts);
      }
