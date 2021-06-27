@@ -3,12 +3,12 @@ import { COLORS, orient2drounded } from "./utility.js";
 
 // Class to track a radial sweep from vision point clockwise 360 degrees.
 export class RadialSweep {
-  constructor(origin, origin_elevation, marker = {}, debug = false) {
+  constructor(vision_point, vision_elevation, marker = {}, debug = false) {
     this.clear();
     this.debug = debug;
-    this.origin = origin;
+    this.vision_point = vision_point;
     this.marker = marker;
-    this.origin_elevation = origin_elevation;
+    this.vision_elevation = vision_elevation;
   }
   
  /*
@@ -38,7 +38,7 @@ export class RadialSweep {
     log(`RadialSweep: vertex ${vertex.id}`);
   
     this.updateWallTracking(vertex);
-    const new_closest = RadialSweep.closestBlockingSegmentToPoint(this.walls, this.origin, this.origin_elevation) || this.closest;
+    const new_closest = RadialSweep.closestBlockingSegmentToPoint(this.walls, this.vision_point, this.vision_elevation) || this.closest;
     log(`RadialSweep: new closest is ${new_closest?.id}; prior closest is ${this.closest?.id}`);
     if(!this.closest) this.closest = new_closest;
     
@@ -48,7 +48,7 @@ export class RadialSweep {
     
     if(this.debug) {
       // make lighter to signify complete
-      canvas.controls.debug.lineStyle(1, COLORS.lightblue, .25).moveTo(this.origin.x, this.origin.y).lineTo(vertex.x, vertex.y);
+      canvas.controls.debug.lineStyle(1, COLORS.lightblue, .25).moveTo(this.vision_point.x, this.vision_point.y).lineTo(vertex.x, vertex.y);
     }
   }
   
@@ -58,7 +58,7 @@ export class RadialSweep {
   */
   complete() {
     if(this.closest) {
-      const v_label = this.closest.ccw(this.origin) ? "B" : "A";
+      const v_label = this.closest.ccw(this.vision_point) ? "B" : "A";
       this.closest.mergePropertyAtSplit(this.closest[v_label], this.marker);
     }
     this.clear();
@@ -72,7 +72,7 @@ export class RadialSweep {
   *
   * Internal params:
   * @param {Segment} prior       The previous closest segment.
-  * @param {PIXI.Point} origin   Vision origin point in {x, y} format.
+  * @param {PIXI.Point} vision_point   Vision point in {x, y} format.
   * @param {Object} property     Property object to merge when marking the closest.
   */
   markClosest(current, vertex) {
@@ -93,9 +93,9 @@ export class RadialSweep {
     } else {
       // If the current vertex is not at the end of the closest, then may need to split.
       // Mark the prior portion as blocking
-      // Locate the intersection: origin (vision) --> vertex (on current) --> prior
-      const rayOV = new Ray(origin, vertex);
-      const rayOV_extended = new Ray(origin, rayOV.project(this.max_distance));
+      // Locate the intersection: origin (vision_point) --> vertex (on current) --> prior
+      const rayOV = new Ray(this.vision_point, vertex);
+      const rayOV_extended = new Ray(this.vision_point, rayOV.project(this.max_distance));
       const intersection = rayOV_extended.intersectSegment([ prior.A.x, 
                                                              prior.A.y,
                                                              prior.B.x,
@@ -113,16 +113,16 @@ export class RadialSweep {
       
         // need the correct vertex -- the one to the right
         // if ccw, then B is to the left; otherwise B is to the right
-        const v_label = prior.ccw(origin) ? "B" : "A";
+        const v_label = prior.ccw(this.vision_point) ? "B" : "A";
         prior.mergePropertyAtSplit(prior[v_label], this.marker);
       }
     }
   
     // If we have moved to the middle of the current segment, then need to split
     if(!current.hasEndpoint(vertex)) {
-      // Locate the intersection: origin (vision) --> vertex --> current 
-      const rayOV = new Ray(origin, vertex);
-      const rayOV_extended = new Ray(origin, rayOV.project(this.max_distance));
+      // Locate the intersection: origin (vision_point) --> vertex --> current 
+      const rayOV = new Ray(this.vision_point, vertex);
+      const rayOV_extended = new Ray(this.vision_point, rayOV.project(this.max_distance));
       const intersection = rayOV_extended.intersectSegment([ current.A.x, 
                                                              current.A.y,
                                                              current.B.x,
@@ -165,14 +165,14 @@ export class RadialSweep {
   
   
  /*  
-  * Helper function to sort vertices by left-to-right by relative orientation to origin.
-  * @param {PIXI.Point} origin  Point by which to order vertices, in {x, y} format
+  * Helper function to sort vertices by left-to-right by relative orientation to a point.
+  * @param {PIXI.Point} vision_point  Point by which to order vertices, in {x, y} format
   * @param {Array[Vertex]} vertices Array of vertices to sort.
   * @return {Array[Vertex]} Array of sorted vertices, where element 0 is leftmost.
   */
-  static sortVertices(origin, vertices) { 
+  static sortVertices(vision_point, vertices) { 
     return vertices.sort((a, b) => {
-      return orient2drounded(origin.x, origin.y, 
+      return orient2drounded(vision_point.x, vision_point.y, 
                   a.x, a.y,
                   b.x, b.y);
     });

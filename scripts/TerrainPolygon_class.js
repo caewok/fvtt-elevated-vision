@@ -275,16 +275,16 @@ export class TerrainPolygon extends PIXI.Polygon {
   
  /*
   * Calculate near vs far segments based on vision origin.
-  * @param {PIXI.Point} origin    Near or far based on this relative point in {x,y} format 
+  * @param {PIXI.Point} vision_point    Near or far based on this relative point in {x,y} format 
   */
-  calculateNearFarSegments(origin) {
-    const radial_sweep = new RadialSweep(origin, 
+  calculateNearFarSegments(vision_point) {
+    const radial_sweep = new RadialSweep(vision_point, 
                                          undefined, // slightly faster than Number.NEGATIVE_INFINITY
                                          { vision_distance: "near" });
     
     // all segments are "far" until proven otherwise
     // Note: already set by _constructSegments as default
-    const sorted_vertices = RadialSweep.sortVertices(origin, [...this.vertices]);
+    const sorted_vertices = RadialSweep.sortVertices(vision_point, [...this.vertices]);
     sorted_vertices.forEach(vertex => {
       radial_sweep.nextVertex(vertex);
     });
