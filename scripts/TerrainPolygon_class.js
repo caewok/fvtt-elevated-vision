@@ -285,6 +285,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     // all segments are "far" until proven otherwise
     // Note: already set by _constructSegments as default
     const sorted_vertices = RadialSweep.sortVertices(vision_point, [...this.vertices]);
+    radial_sweep.start(this.segments);
     sorted_vertices.forEach(vertex => {
       radial_sweep.nextVertex(vertex);
     });

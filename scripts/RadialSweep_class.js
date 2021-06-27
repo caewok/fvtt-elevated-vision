@@ -29,6 +29,32 @@ export class RadialSweep {
     this.walls = new Map();
     this.closest = undefined;
   } 
+  
+ /*
+  * Starts the sweep.
+  * Must locate any segments that intersect the starting sweep and add them
+  * to walls. My strong hypothesis is that if a shape does not intersect the 
+  * starting point, the only way it could be closest is if it has a left-most
+  * vertex later in the sweep. 
+  * TO-DO: Does the closest segment need to be split along the intersect?
+  * TO-DO: It seems wasteful to check every segment, but how to limit?
+  * @param {Array|Map[Segments]} segments Segments to check.
+  */
+  start(segments) {
+    // starting point is straight down from vision point
+    const coords = [vision_point.x, vision_point.y, 
+                    vision_point.x, canvas.dimensions.sceneHeight);
+    
+    const intersecting_segments = [];
+    segments.forEach(s => {
+      if(s.intersectSegment(coords)) intersecting_segments.push(s);
+    });
+    
+    if(intersecting_segments.length === 0) return;
+    this.closest = RadialSweep.closestBlockingSegmentToPoint(intersecting_segments,
+    this.vision_point, this.vision_elevation);
+    this.walls.set(this.closest.id, this.closest);
+  }
     
  /*
   * Primary method to increment the sweep
@@ -39,7 +65,7 @@ export class RadialSweep {
   
     this.updateWallTracking(vertex);
     const new_closest = RadialSweep.closestBlockingSegmentToPoint(this.walls, this.vision_point, this.vision_elevation) || this.closest;
-    log(`RadialSweep: new closest is ${new_closest?.id}; prior closest is ${this.closest?.id}`);
+    log(`RadialSweep: new closest is ${new_closest?.id}; prior closest is ${this.closest?.id}`, new_closest, prior_closest);
     if(!this.closest) this.closest = new_closest;
     
     this.markClosest(new_closest, vertex);

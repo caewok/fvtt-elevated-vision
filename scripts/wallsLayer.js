@@ -133,9 +133,14 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   
   //--------------- ORDER VERTICES LEFT-TO-RIGHT ---------------------------------------//
   const vertices = [];
+  const segments = [];
   terrain_polygons.forEach(t => {
     t.vertices.forEach(v => {
       vertices.push(v);
+    });
+    
+    t.segments.forEach(s => {
+      segments.push(s);
     });
   });
   
@@ -160,6 +165,7 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   
  
   const radial_sweep = new RadialSweep(origin, Ve, { vision_type: "block" }, true);
+  radial_sweep.start(segments);
   sorted_vertices.forEach(vertex => {
     radial_sweep.nextVertex(vertex);
   });
