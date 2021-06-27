@@ -366,8 +366,8 @@ export class Segment extends Ray {
   hasEndpoint(p, EPSILON = 1e-5) {
     return ((almostEqual(p.x, this.A.x, EPSILON) && 
              almostEqual(p.y, this.A.y, EPSILON)) || 
-            (almostEqual(p.x, this.A.x, EPSILON) && 
-             almostEqual(p.y, this.A.y, EPSILON))); 
+            (almostEqual(p.x, this.B.x, EPSILON) && 
+             almostEqual(p.y, this.B.y, EPSILON))); 
   }
   
  /*
@@ -377,7 +377,7 @@ export class Segment extends Ray {
   */
   contains(p, EPSILON = 1e-5) {
     // test if collinear
-    if(orient2drounded(this.A.x, this.A.y, p.x, p.y, this.B.x, this.B.y)) return false;
+    if(!orient2drounded(this.A.x, this.A.y, p.x, p.y, this.B.x, this.B.y)) return false;
     
     // test if endpoint
     if(this.hasEndpoint(p, EPSILON)) return true;
@@ -509,7 +509,7 @@ export class Segment extends Ray {
 //   
   
   /*
-   * Is the segment to the left of the point?
+   * Is the segment to the left of the point? (Looks like only if entire segment is to the left
    * TO-DO: Is this exactly equivalent to ccw? Not totally certain as to the point ordering here.
    * @param {PIXI.Point} p  Point to test
    * @return {boolean} true if the segment is to the left
@@ -540,13 +540,13 @@ export class Segment extends Ray {
    * @return {boolean} true if this segment is in front of the other.
    */
   inFrontOf(segment, relativePoint) {
-    const A1 = this.leftOf(Segment.interpolate(segment.A, segment.B, 0.01));
-    const A2 = this.leftOf(Segment.interpolate(segment.B, segment.A, 0.01));
-    const A3 = this.leftOf(relativePoint);
+    const B1 = this.leftOf(Segment.interpolate(segment.A, segment.B, 0.01));
+    const B2 = this.leftOf(Segment.interpolate(segment.B, segment.A, 0.01));
+    const B3 = this.leftOf(relativePoint);
     
-    const B1 = segment.leftOf(Segment.interpolate(this.A, this.B, 0.01));
-    const B2 = segment.leftOf(Segment.interpolate(this.B, this.A, 0.01)); 
-    const B3 = segment.leftOf(relativePoint);
+    const A1 = segment.leftOf(Segment.interpolate(this.A, this.B, 0.01));
+    const A2 = segment.leftOf(Segment.interpolate(this.B, this.A, 0.01)); 
+    const A3 = segment.leftOf(relativePoint);
     
     if (B1 === B2 && B2 !== B3) return true;
     if (A1 === A2 && A2 === A3) return true;

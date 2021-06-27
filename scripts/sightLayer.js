@@ -40,8 +40,8 @@ return: false
 */   
 export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) {
   const res = wrapped(point, {tolerance: tolerance, object: object});
-  log("evTestVisibility object", object);
-  log("evTestVisibility this", this);
+  log("evTestVisibility object", object); // has this.vision; this.vision.sourceType, this.vision.illumination.fov
+  log("evTestVisibility this", this); // has this.los, this.sources
   log(`evTestVisibility wrapped returned ${res}`);
   
   const isDebuggingVision = FORCE_TOKEN_VISION_DEBUG;
@@ -67,7 +67,7 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   let terrains = terrain_layer.placeables; // array of terrains
   if(terrains.length === 0) return res;
   
-  if(type !== "sight") return res;
+  // if(type !== "sight") return res;
   
   
   return res;

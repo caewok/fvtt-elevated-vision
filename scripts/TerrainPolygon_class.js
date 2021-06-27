@@ -1,4 +1,4 @@
-import { COLORS, TINTS, toGridDistance, orient2drounded, FirstMapValue, SecondMapValue } from "./utility.js";
+import { COLORS, TINTS, toGridDistance, orient2drounded, FirstMapValue, SecondMapValue, almostEqual } from "./utility.js";
 import { Shadow } from "./Shadow_class.js";
 import { log, MODULE_ID, FORCE_SEGMENT_TYPE_DEBUG } from "./module.js";
 import { Segment, Vertex } from "./SegmentVertex_class.js";
@@ -59,7 +59,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     prior_vertex.originating_object = this;
     poly_vertices.set(prior_vertex.id, prior_vertex);
     
-    log(`_constructVertices 0:`, prior_vertex, new_vertex);
+    //log(`_constructVertices 0:`, prior_vertex, new_vertex);
     
     // save the first id to link at the end
     const l = this.points.length;
@@ -73,14 +73,14 @@ export class TerrainPolygon extends PIXI.Polygon {
     // TO-DO: assuming closed stroke for now.
     for (let i = 2; i < (this.points.length - 2); i += 2) {
       new_vertex = prior_vertex.connectPoint(this.points[i], this.points[i + 1]);
-      log(`_constructVertices ${i} new_vertex`, new_vertex);
+      //log(`_constructVertices ${i} new_vertex`, new_vertex);
       
       poly_vertices.set(new_vertex.id, new_vertex);
       prior_vertex = new_vertex;
-      log(`_constructVertices ${i} end:`, prior_vertex, new_vertex)
+      //log(`_constructVertices ${i} end:`, prior_vertex, new_vertex)
     }
     
-    log(`_constructVertices ended loop`);
+    //log(`_constructVertices ended loop`);
     
     // link to beginning
     const last_vertex_id = new_vertex.id;
@@ -97,7 +97,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     poly_vertices.get(first_vertex_id).includeSegment(s_last_first);
     poly_vertices.get(first_vertex_id).includeSegment(s_first_second);
     
-    log(`_constructVertices return`, poly_vertices);
+    //log(`_constructVertices return`, poly_vertices);
 
     return poly_vertices;
   }
@@ -189,6 +189,17 @@ export class TerrainPolygon extends PIXI.Polygon {
     // simplest answer is to just check the constructor name
     // will not work for inheritance, but should give what we need here.
     //if(obj instanceof TerrainData) {
+    if(obj.closeStroke) {
+      const l = obj.points.length;
+
+      if(!almostEqual(obj.points[0], obj.points[l - 2]) ||
+         !almostEqual(obj.points[1], obj.points[l - 1])) {
+
+         obj.points.push(obj.points[0]);
+         obj.points.push(obj.points[1]);
+      }
+    }
+
     if(obj.constructor.name === "TerrainData") {
       // transform the points based on x,y
       const transformed_points = [];
@@ -267,7 +278,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     for(const [key, segment] of this.segments) {    
       const splits = segment.getSplits();
       splits.forEach(s => {
-        const seg_color = s.properties.vision_type === "block") ? COLORS.red : color;
+        const seg_color = (s.properties.vision_type === "block") ? COLORS.red : color;
         s.draw(seg_color)
       })      
     }

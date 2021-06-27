@@ -1,5 +1,5 @@
 import { log, MODULE_ID, FORCE_TOKEN_VISION_DEBUG, FORCE_FOV_DEBUG } from "./module.js";
-import { COLORS, TerrainElevationAtPoint, TokenElevationAtPoint, orient2drounded } from "./utility.js";
+import { COLORS, TerrainElevationAtPoint, TokenElevationAtPoint, orient2drounded, toGridDistance } from "./utility.js";
 import { TerrainPolygon } from "./TerrainPolygon_class.js";
 
 /*
@@ -63,9 +63,13 @@ export function evComputePolygon(wrapped,
   const fov_polygon = TerrainPolygon.fromObject(res.fov);
   
   if(isDebuggingVision) {
+    canvas.controls.debug.clear();
+    log(`evComputePolygon drawing los, fov`, los_polygon, fov_polygon);
     los_polygon.draw(COLORS.greenyellow);
     fov_polygon.draw(COLORS.yellow);
   }
+
+  // return res;
   
  /* Plan:
 Cannot easily cutout fov or los with shadows, because it will create holes
@@ -120,7 +124,7 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   let Ve = TokenElevationAtPoint(origin); 
   if(!Ve) Ve = TerrainElevationAtPoint(origin);
   log(`TokenElevation: ${TokenElevationAtPoint(origin)}; TerrainElevation: ${TerrainElevationAtPoint(origin)}`);
-  
+  Ve = toGridDistance(Ve);
   // do we need this?  
   // terrain_polygons.forEach(t => {
 //     t.vision_elevation = Ve;
@@ -166,29 +170,46 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
                                  y: canvas.dimensions.sceneHeight }).distance;
   
   sorted_vertices.forEach(vertex => {
-    // add segments that have this point if not already added
+    log(`evComputePolygon checking vertex ${vertex.id}`, vertex);
+    if(isDebuggingVision) {
+      canvas.controls.debug.lineStyle(1, COLORS.lightblue, 1).moveTo(origin.x, origin.y).lineTo(vertex.x, vertex.y);
+    }
+
     // remove segments that have this point that were added previously
+    // use Set or intersect?
+    const wall_ids_to_remove = [];
+    const wall_ids_to_add = [];
     vertex.segments.forEach(s => {
-      if(!walls.has(s.id)) {
-        walls.set(s.id, s);
-      } else {
-        walls.delete(s.id);
-      }
+      if(!walls.has(s.id)) wall_ids_to_add.push(s.id);
+      if(walls.has(s.id)) wall_ids_to_remove.push(s.id);
     });
-    
-    log(`evComputePolygon sweep test: walls`, walls);
+
+    wall_ids_to_remove.forEach(id => { walls.delete(id) });
+    wall_ids_to_add.forEach(id => { walls.set(id, vertex.segments.get(id)) });
+
+    log(`evComputePolygon sweep test: tracking ${walls.size} walls`, [...walls.keys()]);
+    if(isDebuggingVision) {
+      walls.forEach(s => {
+        s.draw(COLORS.gray);
+      });
+    }
+
     const new_closest_blocking = closestBlockingSegmentToPoint(walls, origin, Ve) || closest_blocking;
     
+    log(`evComputePolygon sweep test: (1) new closest blocking is ${new_closest_blocking?.id}; old closest blocking is ${closest_blocking?.id}`);
+ 
     if(!closest_blocking) closest_blocking = new_closest_blocking; // 
     if(!new_closest_blocking) return; // nothing blocks; go to next vertex
     if(new_closest_blocking.id === closest_blocking.id) return; // nothing changed; go to next vertex
-       
+    
+   log(`evComputePolygon sweep test: (2) new closest blocking is ${new_closest_blocking?.id}; old closest blocking is ${closest_blocking?.id}`);   
     // we have switched the closest wall segment
     // mark prior segment, which was blocking up until now
     
     // If the current vertex is at the end of the closest, then simply mark the closest as blocking.
     if(closest_blocking.hasEndpoint(vertex)) {
       // may or may not have been split earlier
+      log(`evComputePolygon sweep test: setting ${closest_blocking.id} to block`, vertex, closest_blocking);
       closest_blocking.mergePropertyAtSplit(vertex, { vision_type: "block" });
     } else {
       // If the current vertex is not at the end of the closest, then need to split.
@@ -200,6 +221,7 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
                                                              closest_blocking.A.y,
                                                              closest_blocking.B.x,
                                                              closest_blocking.B.y ]);                               
+      log(`evComputePolygon sweep test: splitting ${closest_blocking.id} at ${intersection.x}, ${intersection.y}`, closest_blocking); 
       
       closest_blocking.splitAt(intersection);
       
@@ -216,15 +238,23 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
                                                              new_closest_blocking.A.y,
                                                              new_closest_blocking.B.x,
                                                              new_closest_blocking.B.y ]); 
-    
+      log(`evComputePolygon sweep test: splitting new ${closest_blocking.id} at ${intersection.x}, ${intersection.y}`, new_closest_blocking); 
       new_closest_blocking.splitAt(intersection);
     }
     
     
     
     closest_blocking = new_closest_blocking;
+
+    if(isDebuggingVision) {
+      // make lighter to signify complete
+      canvas.controls.debug.lineStyle(1, COLORS.lightblue, .25).moveTo(origin.x, origin.y).lineTo(vertex.x, vertex.y);
+    }
+
   }); // sorted_vertices.forEach
   
+
+
   log(`evComputePolygon sweep test: after test`, sorted_vertices);
   
   if(isDebuggingVision) {
@@ -304,8 +334,8 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
 function closestBlockingSegmentToPoint(segments, p, Ve) {
   return [...segments].reduce((acc, [key, current]) => {
     // [...walls] will break the Map into [0] id and [1] object
-    log(`Reducing walls: acc, current`, acc, current);
-    if(Ve && current.elevation <= Ve) return acc; // current doesn't block
+    //log(`Reducing walls: acc, current`, acc, current);
+    if(Ve && current.properties.elevation <= Ve) return acc; // current doesn't block
     if(acc === undefined) return current;
     if(current.inFrontOf(acc, p)) return current;
     return acc;
