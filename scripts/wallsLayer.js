@@ -268,7 +268,11 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
 
   }); // sorted_vertices.forEach
   
-
+  // after moving from the last vertex, set the last closest if blocking
+  if(closest_blocking) {
+    const v_label = closest_blocking.ccw(origin) ? "B" : "A";
+    closest_blocking.mergePropertyAtSplit(closest_blocking[v_label], { vision_type: "block" });
+  }
 
   log(`evComputePolygon sweep test: after test`, sorted_vertices);
   
