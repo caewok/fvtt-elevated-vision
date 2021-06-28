@@ -138,6 +138,15 @@ export class Vertex extends PIXI.Point {
      // perf test; not much difference here. See https://stackoverflow.com/questions/26593302/whats-the-fastest-way-to-square-a-number-in-javascript/53663890 
      return round(Math.pow(p.x - this.x, 2) + Math.pow(p.y - this.y, 2), 8);
    }
+   
+  /*
+   * Draw a point representation of the vertex.
+   * @param {Hex} color   Color of the filled circle
+   * @param {Number} radius   Radius of the circle
+   */
+   draw(color = COLORS.black, radius = 10) {
+     canvas.controls.debug.beginFill(color).drawCircle(this.x, this.y, radius).endFill();
+   }
 }
 
 
