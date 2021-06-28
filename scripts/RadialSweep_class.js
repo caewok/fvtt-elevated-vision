@@ -138,7 +138,7 @@ export class RadialSweep {
       if(intersection) {
         log(`markClosest: splitting and marking ${prior.id} at ${intersection.x}, ${intersection.y}`); 
         prior.splitAt(intersection);
-        prior.mergePropertyAtSplit(intersection, this.marker);
+        prior.mergePropertyAtSplitWithVision(intersection, this.vision_point, this.marker);
       } else {
         // likely situation where we have jumped to another segment
         // intersection point would be the edge of the canvas or the edge of the los
