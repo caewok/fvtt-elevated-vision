@@ -210,8 +210,8 @@ export class RadialSweep {
       // so x < vision_point (above) is before x > vision_point (below)
       // walk quadrants, so Q1 is upper left, Q3 is lower right
       // return > 0 to sort b before a
-      if(a.x >= vision_point.x && b.x < vision_point.x) return 1;
-      if(a.x < vision_point.x && b.x >= vision_point.x) return -1;
+      if(a.y >= vision_point.y && b.y < vision_point.y) return 1;
+      if(a.y < vision_point.y && b.y >= vision_point.y) return -1;
       
       // in same hemisphere      
       return orient2d(vision_point.x, vision_point.y, 
