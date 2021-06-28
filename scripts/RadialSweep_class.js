@@ -42,9 +42,9 @@ export class RadialSweep {
   * @param {Array|Map[Segments]} segments Segments to check.
   */
   start(segments) {
-    // starting point is straight down from vision point
+    // starting ray is straight left from vision point
     const coords = [this.vision_point.x, this.vision_point.y, 
-                    this.vision_point.x, canvas.dimensions.sceneHeight];
+                    0, this.vision_point.y];
     
     const intersecting_segments = [];
     segments.forEach(s => {
