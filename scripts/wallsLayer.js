@@ -185,18 +185,25 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
     radial_sweep.nextVertex(vertex);
   });
   radial_sweep.complete();
+  log(`evComputePolygon sweep test: after test`, sorted_vertices);
   
   // For each Terrain Polygon, do a radial sweep to mark near / far segments relative
   //   to vision point. 
   // Is this sweep better done within the polygon class?   
   
-  log(`evComputePolygon sweep test: after test`, sorted_vertices);
+  // determine near/far for each polygon
+  terrain_polygons.forEach(t => {
+    t.calculateNearFarSegments(origin);
+  });
+  
   
   if(isDebuggingVision) {
     terrain_polygons.forEach(t => {
       t.draw();
     });
   }
+  
+  
   
   
   

@@ -290,18 +290,27 @@ export class TerrainPolygon extends PIXI.Polygon {
       radial_sweep.nextVertex(vertex);
     });
     radial_sweep.complete();
+    
+    // if the vision point is within the polygon, then near points might be considered 
+    //   "far" for purposes of shadow. (Stand on a plateau and look out; 
+    //   shadows below cliff)
   } 
  
  /*
   * Draw the polygon
   * This version draws individual segments, allowing for color choices for 
   *   different segments or segment splits.
+  * Segment blocks vision: red
+  * Segment is far from vision point, suggesting it will make a shadow: gray
+  * Segment is near: orange
   */
-  draw(color = COLORS.black) {
+  draw() {
     for(const [key, segment] of this.segments) {    
       const splits = segment.getSplits();
       splits.forEach(s => {
-        const seg_color = (s.properties.vision_type === "block") ? COLORS.red : color;
+        const seg_color = (s.properties.vision_type === "block") ? COLORS.red : 
+                          (s.properties.vision_distance === "near") ? COLORS.orange : 
+                          COLORS.gray;
         s.draw(seg_color);
       });      
     }
