@@ -364,7 +364,7 @@ export class Segment extends Ray {
   * @return {boolean} true if counter-clockwise
   */
   ccw(p) {
-    this.orient2d(p) > 0;
+    return this.orient2d(p) > 0;
   }
   
  /*
