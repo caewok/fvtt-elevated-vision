@@ -1,5 +1,6 @@
 import { log, MODULE_ID } from "./module.js";
 import { COLORS, orient2drounded } from "./utility.js";
+import { orient2d } from "./lib/orient2d.min.js";
 
 // Class to track a radial sweep from vision point clockwise 360 degrees.
 export class RadialSweep {
