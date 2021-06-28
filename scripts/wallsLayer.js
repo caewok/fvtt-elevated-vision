@@ -1,5 +1,5 @@
 import { log, MODULE_ID, FORCE_TOKEN_VISION_DEBUG, FORCE_FOV_DEBUG } from "./module.js";
-import { COLORS, TerrainElevationAtPoint, TokenElevationAtPoint, toGridDistance } from "./utility.js";
+import { COLORS, TerrainElevationAtPoint, TokenElevationAtPoint, toGridDistance, FirstMapValue, SecondMapValue } from "./utility.js";
 import { TerrainPolygon } from "./TerrainPolygon_class.js";
 import { RadialSweep } from "./RadialSweep_class.js";
 
@@ -152,13 +152,15 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   // for testing
   const json_obj = [];
   sorted_vertices.forEach((v, idx) => {
-    json_obj.push({v: {x: v.x, y: v.y},
-     s1: { A: { x: v.segments[0].A.x, v.segments[0].A.y }},
-     s2: { A: { x: v.segments[1].A.x, v.segments[1].A.y }}});
+    const s0 = FirstMapValue(v.segments);
+    const s1 = SecondMapValue(v.segments);
+    json_obj.push({ v: { x: v.x, y: v.y },
+                   s1: { A: { x: s0.A.x, y: s0.A.y }, B: { x: s0.B.x, y: s0.B.y }},
+                   s2: { A: { x: s1.A.x, y: s1.A.y }, B: { x: s1.B.x, y: s1.B.y }}});
   });
   
-  log(`evComputePolygon: json`, JSON.stringify(json_obj));
-  
+  log(`evComputePolygon: json {JSON.stringify(json_obj).toString()}`, JSON.stringify(json_obj).toString());
+ 
 
   //--------------- SWEEP LEFT-TO-RIGHT VISION TEST ------------------------------------//
   // See https://www.redblobgames.com/articles/visibility/ for basic algorithm
