@@ -36,7 +36,7 @@ export class Vertex extends PIXI.Point {
   * @param {PIXI.Point} p   Point in {x, y} format
   * @return Vertex
   */
-  fromPoint(p) {
+  static fromPoint(p) {
     return new Vertex(p.x, p.y);
   }
   
