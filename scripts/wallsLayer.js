@@ -148,6 +148,17 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   const sorted_vertices = RadialSweep.sortVertices(origin, vertices);
   log(`evComputePolygon: ${sorted_vertices.length} sorted vertices`, sorted_vertices);
   log(`evComputePolygon: ${segments.length} segments`, segments);  
+  
+  // for testing
+  const json_obj = [];
+  sorted_vertices.forEach((v, idx) => {
+    json_obj.push({v: {x: v.x, y: v.y},
+     s1: { A: { x: v.segments[0].A.x, v.segments[0].A.y }},
+     s2: { A: { x: v.segments[1].A.x, v.segments[1].A.y }}});
+  });
+  
+  log(`evComputePolygon: json`, JSON.stringify(json_obj));
+  
 
   //--------------- SWEEP LEFT-TO-RIGHT VISION TEST ------------------------------------//
   // See https://www.redblobgames.com/articles/visibility/ for basic algorithm

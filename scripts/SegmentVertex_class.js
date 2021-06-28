@@ -31,6 +31,15 @@ export class Vertex extends PIXI.Point {
                                          // to which this vertex belongs
   }
   
+ /*
+  * Factory function to construct Vertex from point {x, y}
+  * @param {PIXI.Point} p   Point in {x, y} format
+  * @return Vertex
+  */
+  fromPoint(p) {
+    return new Vertex(p.x, p.y);
+  }
+  
   /* 
    * Link this vertex to another vertex by constructing a segment
    * @param {Number} x  position of the point on the x axis
