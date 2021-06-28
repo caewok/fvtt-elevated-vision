@@ -1,8 +1,15 @@
 import { registerPatches } from "./patching.js";
+import { orient2d } from "./lib/orient2d.min.js";
+import { Vertex, Segment } from "./SegmentVertex_class.js"; // for testing
+import { TerrainPolygon } from "./TerrainPolygon_class.js"; // for testing
+import { orient2drounded } from "./utility.js"; // for testing
 
 export const MODULE_ID = 'elevated-vision';
 const FORCE_DEBUG = false; // used for logging before dev mode is set up
-export const FORCE_VISION_DEBUG = true;
+export const FORCE_TOKEN_VISION_DEBUG = true;
+export const FORCE_FOV_DEBUG = true
+export const FORCE_SEGMENT_TYPE_DEBUG = true;
+
 
 export function log(...args) {
   try {
@@ -16,7 +23,11 @@ export function log(...args) {
 }
 
 Hooks.once('init', async function() {
-
+  window[MODULE_ID] = { orient2d: orient2d,
+                        orient2drounded: orient2drounded,
+                        Vertex: Vertex,
+                        Segment: Segment,
+                        TerrainPolygon: TerrainPolygon};
 });
 
 Hooks.once('ready', async function() {

@@ -1,4 +1,5 @@
-import { log, MODULE_ID, FORCE_VISION_DEBUG } from "./module.js";
+import { log, MODULE_ID, FORCE_TOKEN_VISION_DEBUG } from "./module.js";
+import { toGridDistance } from "./utility.js";
 
  /**
    * Restrict the visibility of certain canvas assets (like Tokens or DoorControls) based on the visibility polygon
@@ -39,18 +40,22 @@ return: false
 */   
 export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) {
   const res = wrapped(point, {tolerance: tolerance, object: object});
-  log("evTestVisibility object", object);
-  log("evTestVisibility this", this);
+  log("evTestVisibility object", object); // has this.vision; this.vision.sourceType, this.vision.illumination.fov
+  log("evTestVisibility this", this); // has this.los, this.sources
   log(`evTestVisibility wrapped returned ${res}`);
   
-  const isDebuggingVision = FORCE_VISION_DEBUG;
+  const isDebuggingVision = FORCE_TOKEN_VISION_DEBUG;
   // const isDebuggingVision = CONFIG.debug.sightRays;
   const debug = isDebuggingVision ? canvas.controls.debug : undefined;
+  
+  // -------------- CHECKS TO RETURN THE DEFAULT VISIBILITY DETERMINATION --------------//
   
   // need a token object
   if(!object) return res;
   
-  // Assume for the moment that the base function tests only infinite walls based on fov / los. If so, then if a token is not seen, elevation will not change that. 
+  // Assume for the moment that the base function tests only infinite walls 
+  //   based on fov / los. If so, then if a token is not seen, elevation 
+  //   will not change that. 
   if(!res) return res;
   
   // temporary; will eventually check for wall height as well
@@ -61,6 +66,15 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   
   let terrains = terrain_layer.placeables; // array of terrains
   if(terrains.length === 0) return res;
+  
+  // if(type !== "sight") return res;
+  
+  
+  return res;
+
+  
+  
+  /*
   
   // convert points array to actual, not relative, points
   // do here to avoid repeating this later
@@ -136,15 +150,11 @@ export function evTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   log(`object ${is_visible ? "is visible" : "is not visible"} to sources`, visible_to_sources);
   
   return is_visible;
+  
+  */
 }
 
-/* 
- * Helper function to convert absolute increments to grid distance
- */
-export function toGridDistance(increment) {
-  // TO-DO: What about hex or no grid maps? 
-  return Math.round(increment * canvas.grid.w / canvas.scene.data.gridDistance * 100) / 100;
-}
+
 
 /*
  * Calculate whether a terrain or wall segment blocks vision of an object.
@@ -221,7 +231,7 @@ Ve|    \     |    |
 function testBounds(terrain, ray) {
   //  An array of coordinates [x0, y0, x1, y1] which defines a line segment
   // rect points are A, B, C, D clockwise from upper left
-  const isDebuggingVision = FORCE_VISION_DEBUG;
+  const isDebuggingVision = FORCE_TOKEN_VISION_DEBUG;
   //const isDebuggingVision = CONFIG.debug.sightRays;
   const debug = isDebuggingVision ? canvas.controls.debug : undefined;
 

@@ -1,0 +1,6 @@
+Library Code Attributions
+
+orient2d.min.js & utils.js: 
+- https://github.com/mourner/robust-predicates
+- License: MIT
+
