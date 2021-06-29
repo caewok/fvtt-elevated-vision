@@ -38,7 +38,7 @@ export class ShadowSegment extends Segment {
     if(this._elevation !== value) {
       // remove cached shadow information calculations.
     }
-    return this._elevation;
+    this._elevation = value;
   }
   
  /*
@@ -81,7 +81,7 @@ export class ShadowSegment extends Segment {
     if(this._origin_elevation !== value) {
       // remove cached shadow information calculations.
     }
-    return this._origin_elevation;
+    this._origin_elevation = value;
   }
   
  /*
