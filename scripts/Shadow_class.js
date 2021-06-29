@@ -55,7 +55,7 @@ export class Shadow extends PIXI.Polygon {
 // TO-DO: Use this formula in sightLayer to test tokens.
 // Can first calculate the intersection with the wall, and then pass 
 // the intersection point as T.
-  calculateShadowDistance(T, Oe, V = this.vision_origin, Ve = this.vision_elevation, Te = this.elevation) {        
+  static calculateShadowDistance(T, Oe, V, Ve, Te) {        
     // if any elevation is negative, normalize so that the lowest elevation is 0
     const min_elevation = Math.min(Ve, Oe, Te);
     if(min_elevation < 0) {

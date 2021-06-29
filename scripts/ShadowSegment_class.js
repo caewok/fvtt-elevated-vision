@@ -135,8 +135,16 @@ export class ShadowSegment extends Segment {
   * @param {Number} Oe  Terrain elevation to be covered.
   */
   _constructShadow(Oe = 0) {
-    const dist_A = this.calculateShadowDistance(this.A, Oe);
-    const dist_B = this.calculateShadowDistance(this.B, Oe);
+    const dist_A = Shadow.calculateShadowDistance(this.A, 
+                                                  Oe, 
+                                                  this.origin_point, 
+                                                  this.origin_elevation, 
+                                                  this.elevation);
+    const dist_B = Shadow.calculateShadowDistance(this.B, 
+                                                  Oe, 
+                                                  this.origin_point, 
+                                                  this.origin_elevation, 
+                                                  this.elevation);
     //log(`_calculateFarShadows dist_A ${dist_A} dist_B ${dist_B} with Oe ${Oe}`, s); 
     return Shadow.buildShadowTrapezoid(this.origin_point, this, dist_A, dist_B);
   }
