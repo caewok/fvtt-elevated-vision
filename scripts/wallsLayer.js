@@ -203,11 +203,11 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
     });
   }
   
-/*  
+
   terrain_polygons.forEach(t => {
     t.drawShadows();
   });
-*/  
+  
   
   // shadows should be:
   // Ve >= Te, shadow on the far segments.

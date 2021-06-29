@@ -332,10 +332,12 @@ export class TerrainPolygon extends PIXI.Polygon {
    * @param {Number} origin_elevation   Elevation in grid units of vision point
    */
    drawShadows(origin_point, origin_elevation) {
+     log(`Drawing shadows for origin at elevation ${origin_elevation}`, origin_point);
      this.segments.forEach(s => {
        s.setOrigin(origin_point, origin_elevation);
        s.elevation = this.elevation;
-       s.draw();
+       s.has_shadow = s.properties.vision_type === "block" || s.properties.vision_distance === "far";
+       s.drawShadows();
      })
    }
  
