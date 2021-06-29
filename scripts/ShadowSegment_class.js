@@ -12,7 +12,7 @@ When set to create a shadow, the segment determines the vision location and rela
 import { COLORS, almostEqual } from "./utility.js";
 import { log } from "./module.js";
 import { Shadow } from "./Shadow_class.js";
-import { Segment } from "./SegmentVertex_class.js";
+import { Segment } from "./Segment_class.js";
 
 export class ShadowSegment extends Segment {
   constructor(A, B) {
