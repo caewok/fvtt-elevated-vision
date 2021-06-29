@@ -2,7 +2,7 @@ import { COLORS, TINTS, toGridDistance, orient2drounded, FirstMapValue, SecondMa
 import { Shadow } from "./Shadow_class.js";
 import { log, MODULE_ID, FORCE_SEGMENT_TYPE_DEBUG } from "./module.js";
 import { Segment, Vertex } from "./SegmentVertex_class.js";
- 
+import { Shadow } from "./ShadowSegment_class.js";
 
 // Two types of polygons:
 // 1. TerrainData: t.data, containing t.data.x, t.data.y, t.data.points, t.data.max (elevation)
@@ -72,7 +72,7 @@ export class TerrainPolygon extends PIXI.Polygon {
 
     // TO-DO: assuming closed stroke for now.
     for (let i = 2; i < (this.points.length - 2); i += 2) {
-      new_vertex = prior_vertex.connectPoint(this.points[i], this.points[i + 1]);
+      new_vertex = prior_vertex.connectPoint(this.points[i], this.points[i + 1], "ShadowSegment");
       //log(`_constructVertices ${i} new_vertex`, new_vertex);
       
       poly_vertices.set(new_vertex.id, new_vertex);
@@ -85,7 +85,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     // link to beginning
     const last_vertex_id = new_vertex.id;
     
-    const s_last_first = Segment.fromVertices(poly_vertices.get(last_vertex_id),
+    const s_last_first = ShadowSegment.fromVertices(poly_vertices.get(last_vertex_id),
                                               poly_vertices.get(first_vertex_id),);
                                                                          
     poly_vertices.get(last_vertex_id).includeSegment(s_last_first)
@@ -322,6 +322,19 @@ export class TerrainPolygon extends PIXI.Polygon {
    */
    drawPolygon(color = COLORS.black) {
      canvas.controls.debug.lineStyle(1, color).drawShape(this);
+   }
+   
+  /*
+   * Draw shadows for all segments
+   * @param {PIXI.Point} origin_point   {x,y} location of vision point
+   * @param {Number} origin_elevation   Elevation in grid units of vision point
+   */
+   drawShadows(origin_point, origin_elevation) {
+     this.segments.forEach(s => {
+       s.setOrigin(origin_point, origin_elevation);
+       s.elevation = this.elevation;
+       s.draw();
+     })
    }
  
 }

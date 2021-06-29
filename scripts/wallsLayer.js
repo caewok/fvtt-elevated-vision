@@ -204,6 +204,18 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   }
   
   
+  terrain_polygons.forEach(t => {
+    t.drawShadows();
+  });
+  
+  
+  // shadows should be:
+  // Ve >= Te, shadow on the far segments.
+  // Ve w/in T & Ve >= Te, shadow the near segments.
+  
+  // Each shadow makes a cutout of overlapping terrain
+  // shadow that overlaps terrain is calculated for the 
+  //   terrain height. 
   
   
   

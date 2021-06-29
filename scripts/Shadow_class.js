@@ -12,9 +12,7 @@ import { log } from "./module.js";
  */
 export class Shadow extends PIXI.Polygon {
   constructor(vision_point, ...points) {
-    log(`Shadow for vision point`, vision_point, points);
     super(...points);
-    log(`Finished building Shadow Polygon.`);
     this.vision_point = vision_point;
     this.elevation = 0;
   }
@@ -66,11 +64,11 @@ export class Shadow extends PIXI.Polygon {
     return false;
   }
   
-    /**
-   * The segments of the polygon as an array of Rays.
-   * Computed lazily as required.
-   * @type {Array}
-   */
+ /**
+  * The segments of the polygon as an array of Rays.
+  * Computed lazily as required.
+  * @type {Array}
+  */
   get segments() {
     if(this._segments === undefined) this._segments = this._constructSegments();
     return this._segments; 
@@ -88,12 +86,12 @@ export class Shadow extends PIXI.Polygon {
     return poly_segments;
   }
   
-   /*
-    * Draw the polygon on the canvas
-    * @param {Hex} color    Color to use (default: gray)
-    */
-    draw(color = COLORS.gray, alpha = .5) {
-     // no lineStyle(1, color)
-     canvas.controls.debug.beginFill(color, alpha).drawShape(this).endFill();
-    }
+ /*
+  * Draw the polygon on the canvas
+  * @param {Hex} color    Color to use (default: gray)
+  */
+  draw(color = COLORS.gray, alpha = .5) {
+    // no lineStyle(1, color)
+    canvas.controls.debug.beginFill(color, alpha).drawShape(this).endFill();
+  }
 }

@@ -14,6 +14,14 @@
 import { almostEqual, round, orient2drounded, COLORS } from "./utility.js";
 import { MODULE_ID, log } from "./module.js";
 
+
+// So Vertex and Segment can create the right segment class
+// See connectVertex
+const SEGMENT_CLASSES = {
+  Segment,
+  ShadowSegment
+}
+
 /*
  * Class to represent a vertex 
  * - all tracking of what segments contain it as an endpoitn
@@ -46,11 +54,11 @@ export class Vertex extends PIXI.Point {
    * @param {Number} y  position of the point on the y axis
    * @return The new Vertex
    */
-   connectPoint(x, y) {
+   connectPoint(x, y, segment_class = "Segment") {
      const v = new Vertex(x, y);
      v.originating_object = this.originating_object;
      
-     return this.connectVertex(v);
+     return this.connectVertex(v, segment_class);
    }
    
   /*
@@ -58,12 +66,12 @@ export class Vertex extends PIXI.Point {
    * @param {Vertex} v    Vertex to link or point in {x, y} format
    * @return the linked vertex
    */
-   connectVertex(v) {
+   connectVertex(v, segment_class = "Segment") {
      if(!(v instanceof Vertex)) {
        v = new Vertex(v.x, v.y);
        v.originating_object = this.originating_object;
      }
-     const s = new Segment(this, v);
+     const s = new SEGMENT_CLASSES[segment_class](this, v);
      s.originating_object = this.originating_object;
      
      s.vertexA = this;
@@ -244,7 +252,7 @@ export class Segment extends Ray {
    * @return {Segment}
    */
    static fromVertices(vA, vB) {
-     const s = new Segment(vA, vB);
+     const s = new this(vA, vB); // use "new this" to instantiate a child class, if any.https://stackoverflow.com/questions/50964683/how-to-create-an-instance-of-a-subclass-from-the-super-class
      s.vertexA = vA;
      s.vertexB = vB;
      s.originating_object = vA.originating_object;
@@ -446,9 +454,9 @@ export class Segment extends Ray {
     this.split_dist = p_dist;
     this.splits = new Map();
     
-    const segA = new Segment({ x: this.A.x, y: this.A.y }, 
+    const segA = new this({ x: this.A.x, y: this.A.y }, 
                              { x: p.x, y: p.y });
-    const segB = new Segment({ x: p.x, y: p.y }, 
+    const segB = new this({ x: p.x, y: p.y }, 
                              { x: this.B.x, y: this.B.y });                      
     
     
