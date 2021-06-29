@@ -3,6 +3,7 @@ import { Shadow } from "./Shadow_class.js";
 import { log, MODULE_ID, FORCE_SEGMENT_TYPE_DEBUG } from "./module.js";
 import { Segment, Vertex } from "./SegmentVertex_class.js";
 import { Shadow } from "./ShadowSegment_class.js";
+import { RadialSweep } from "./RadialSweep_class.js"; 
 
 // Two types of polygons:
 // 1. TerrainData: t.data, containing t.data.x, t.data.y, t.data.points, t.data.max (elevation)
@@ -284,7 +285,8 @@ export class TerrainPolygon extends PIXI.Polygon {
     
     // all segments are "far" until proven otherwise
     // Note: already set by _constructSegments as default
-    const sorted_vertices = RadialSweep.sortVertices(vision_point, [...this.vertices]);
+    const sorted_vertices = RadialSweep.sortVertices(vision_point, [...this.vertices.values()]);
+    log(`calculateNearFarSegments ${sorted_vertices.length} sorted vertices`, sorted_vertices);
     radial_sweep.start(this.segments);
     sorted_vertices.forEach(vertex => {
       radial_sweep.nextVertex(vertex);
