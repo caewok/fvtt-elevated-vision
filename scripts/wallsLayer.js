@@ -205,7 +205,7 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   
 
   terrain_polygons.forEach(t => {
-    t.drawShadows();
+    t.drawShadows(origin, Ve);
   });
   
   
