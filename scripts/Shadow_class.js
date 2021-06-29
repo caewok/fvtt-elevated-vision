@@ -56,6 +56,8 @@ export class Shadow extends PIXI.Polygon {
 // Can first calculate the intersection with the wall, and then pass 
 // the intersection point as T.
   static calculateShadowDistance(T, Oe, V, Ve, Te) {        
+    log(`calculateShadowDistance: T: ${T.x}, ${T.y}; Oe: ${Oe}; V: ${V.x}, ${V.y}; Ve: ${Ve}; Te: ${Te}`);
+  
     // if any elevation is negative, normalize so that the lowest elevation is 0
     const min_elevation = Math.min(Ve, Oe, Te);
     if(min_elevation < 0) {
@@ -70,6 +72,7 @@ export class Shadow extends PIXI.Polygon {
     if(Ve <= Te && Oe <= Te) return Number.POSITIVE_INFINITY;
 
     const ray_VT = new Ray(V, T);
+    log(`calculateShadowDistance: ray_VT`, ray_VT);
 
     // theta is the angle between the 3-D sight line and the sight line in 2-D
     const theta = Math.atan((Ve - Te) / ray_VT.distance); // theta is in radians

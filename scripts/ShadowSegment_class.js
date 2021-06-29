@@ -145,7 +145,7 @@ export class ShadowSegment extends Segment {
                                                   this.origin_point, 
                                                   this.origin_elevation, 
                                                   this.elevation);
-    //log(`_calculateFarShadows dist_A ${dist_A} dist_B ${dist_B} with Oe ${Oe}`, s); 
+    log(`_constructShadow dist_A ${dist_A} dist_B ${dist_B} with Oe ${Oe}`); 
     return Shadow.buildShadowTrapezoid(this.origin_point, this, dist_A, dist_B);
   }
    
