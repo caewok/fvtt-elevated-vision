@@ -169,7 +169,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   * @param {Number} value   Elevation, in game units (e.g., 5 foot grid, 40 foot of elevation)
   */
   set elevation(value) {
-    value = toGridDistance(value);
+    value = value;
     if(this._elevation != value) {
       // delete cached calculations
     }
@@ -218,7 +218,7 @@ export class TerrainPolygon extends PIXI.Polygon {
       
       // do we need obj.width and obj.height?   
       let poly = new this(transformed_points);
-      poly.elevation = e;
+      poly.elevation = toGridDistance(e);
       poly.originating_id = obj._id;
       return poly;
       
@@ -296,6 +296,21 @@ export class TerrainPolygon extends PIXI.Polygon {
     // if the vision point is within the polygon, then near points might be considered 
     //   "far" for purposes of shadow. (Stand on a plateau and look out; 
     //   shadows below cliff)
+    // "far" are probably "ignore" b/c those are not line of sight
+    if(this.contains(vision_point)) {
+      this.segments.forEach(s => {
+        s.getSplits.forEach(split => {
+          if(split.properties.vision_distance === "far") {
+            split.properties.vision_distance === "ignore"
+          } else if(split.properties.vision_distance === "near") {
+            split.properties.vision_distance = "far"
+          }
+          
+        });
+      });
+    
+    }
+    
   } 
  
  /*
@@ -329,7 +344,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   /*
    * Draw shadows for all segments
    * @param {PIXI.Point} origin_point   {x,y} location of vision point
-   * @param {Number} origin_elevation   Elevation in grid units of vision point
+   * @param {Number} origin_elevation   Elevation of vision point in game units
    */
    drawShadows(origin_point, origin_elevation) {
      log(`Drawing shadows for origin at elevation ${origin_elevation}`, origin_point);
