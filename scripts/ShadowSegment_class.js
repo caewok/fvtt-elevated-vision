@@ -153,7 +153,7 @@ export class ShadowSegment extends Segment {
   * Draw the shadows for this Segment.
   * TO-DO: More complicated versions with cutouts and shadows for overlapping terrains.
   */
-  drawShadows(color = COLORS.gray, alpha = 0.25) {
+  drawShadows(color = COLORS.gray, alpha = 0.25, blocking_alpha = .95) {
     if(this.splits.size > 0) {
       const splits = this.getSplits();
       splits.forEach(s => s.drawShadows(color, alpha));
@@ -162,7 +162,7 @@ export class ShadowSegment extends Segment {
   
     if(!this.has_shadow) return;
     if(this.blocks_vision) {
-      this.blocking_shadow.draw(color, alpha);
+      this.blocking_shadow.draw(color, blocking_alpha);
     } else {
       const zero_shadow = this._constructShadow(0);
       zero_shadow.draw(color, alpha);
