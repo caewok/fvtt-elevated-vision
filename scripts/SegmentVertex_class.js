@@ -15,13 +15,6 @@ import { almostEqual, round, orient2drounded, COLORS } from "./utility.js";
 import { MODULE_ID, log } from "./module.js";
 
 
-// So Vertex and Segment can create the right segment class
-// See connectVertex
-const SEGMENT_CLASSES = {
-  Segment,
-  ShadowSegment
-}
-
 /*
  * Class to represent a vertex 
  * - all tracking of what segments contain it as an endpoitn
@@ -67,6 +60,11 @@ export class Vertex extends PIXI.Point {
    * @return the linked vertex
    */
    connectVertex(v, segment_class = "Segment") {
+     const SEGMENT_CLASSES = {
+       Segment,
+       ShadowSegment
+     }
+
      if(!(v instanceof Vertex)) {
        v = new Vertex(v.x, v.y);
        v.originating_object = this.originating_object;
@@ -590,3 +588,4 @@ export class Segment extends Ray {
   
   
 }
+

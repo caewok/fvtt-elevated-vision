@@ -2,7 +2,7 @@ import { COLORS, TINTS, toGridDistance, orient2drounded, FirstMapValue, SecondMa
 import { Shadow } from "./Shadow_class.js";
 import { log, MODULE_ID, FORCE_SEGMENT_TYPE_DEBUG } from "./module.js";
 import { Segment, Vertex } from "./SegmentVertex_class.js";
-import { Shadow } from "./ShadowSegment_class.js";
+import { ShadowSegment } from "./ShadowSegment_class.js";
 import { RadialSweep } from "./RadialSweep_class.js"; 
 
 // Two types of polygons:
