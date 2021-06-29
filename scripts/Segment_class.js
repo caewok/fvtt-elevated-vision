@@ -311,9 +311,9 @@ export class Segment extends Ray {
     this.split_dist = p_dist;
     this.splits = new Map();
     
-    const segA = new this({ x: this.A.x, y: this.A.y }, 
+    const segA = new this.constructor({ x: this.A.x, y: this.A.y }, 
                              { x: p.x, y: p.y });
-    const segB = new this({ x: p.x, y: p.y }, 
+    const segB = new this.constructor({ x: p.x, y: p.y }, 
                              { x: this.B.x, y: this.B.y });                      
     
     

@@ -56,8 +56,8 @@ export class ShadowSegment extends Segment {
   */ 
   set origin_point(value) {
     const EPSILON = 1e-5
-    if(!almostEqual(this._origin_point.x, value.x, EPSILON) || 
-       !almostEqual(this._origin_point.y, value.y, EPSILON)) {
+    if(this._origin_point && (!almostEqual(this._origin_point.x, value.x, EPSILON) || 
+       !almostEqual(this._origin_point.y, value.y, EPSILON))) {
       // remove cached shadow information calculations   
        
     }  
