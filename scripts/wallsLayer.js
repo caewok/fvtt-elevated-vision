@@ -195,20 +195,18 @@ Long-Term Solution: Possibly move this code elsewhere. Likely candidates?
   terrain_polygons.forEach(t => {
     t.calculateNearFarSegments(origin);
   });
-  
-  
+  log(`terrain polygons after near/far calculation`, terrain_polygons);
+
   if(isDebuggingVision) {
     terrain_polygons.forEach(t => {
       t.draw();
     });
   }
-  
-/*
+
   terrain_polygons.forEach(t => {
     t.drawShadows(origin, Ve);
   });
-*/  
-  
+
   // shadows should be:
   // Ve >= Te, shadow on the far segments.
   // Ve w/in T & Ve >= Te, shadow the near segments.

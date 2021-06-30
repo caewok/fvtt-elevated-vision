@@ -286,7 +286,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     // all segments are "far" until proven otherwise
     // Note: already set by _constructSegments as default
     const sorted_vertices = RadialSweep.sortVertices(vision_point, [...this.vertices.values()]);
-    log(`calculateNearFarSegments ${sorted_vertices.length} sorted vertices`, sorted_vertices);
+    log(`calculateNearFarSegments ${sorted_vertices.length} sorted vertices`, sorted_vertices, vision_point);
     radial_sweep.start(this.segments);
     sorted_vertices.forEach(vertex => {
       radial_sweep.nextVertex(vertex);
@@ -297,18 +297,19 @@ export class TerrainPolygon extends PIXI.Polygon {
     //   "far" for purposes of shadow. (Stand on a plateau and look out; 
     //   shadows below cliff)
     // "far" are probably "ignore" b/c those are not line of sight
-    if(this.contains(vision_point)) {
-      this.segments.forEach(s => {
-        s.getSplits.forEach(split => {
+    if(this.contains(vision_point.x, vision_point.y)) {
+      log(`calculateNearFarSegments within vision point ${vision_point.x}, ${vision_point.y}`);
+      for(const [key, segment] of this.segments) {    
+        const splits = segment.getSplits();
+        splits.forEach(split => {
+          //log(`split properties`, split.properties);
           if(split.properties.vision_distance === "far") {
-            split.properties.vision_distance === "ignore"
+            split.properties.vision_distance = "ignore"
           } else if(split.properties.vision_distance === "near") {
             split.properties.vision_distance = "far"
           }
-          
-        });
-      });
-    
+        });      
+      }    
     }
     
   } 
@@ -348,12 +349,15 @@ export class TerrainPolygon extends PIXI.Polygon {
    */
    drawShadows(origin_point, origin_elevation) {
      log(`Drawing shadows for origin at elevation ${origin_elevation}`, origin_point);
-     this.segments.forEach(s => {
-       s.setOrigin(origin_point, origin_elevation);
-       s.elevation = this.elevation;
-       s.has_shadow = s.properties.vision_type === "block" || s.properties.vision_distance === "far";
-       s.drawShadows();
-     })
+     for(const [key, segment] of this.segments) { 
+       const splits = segment.getSplits();
+       splits.forEach(s => {
+         s.setOrigin(origin_point, origin_elevation);
+         s.elevation = this.elevation;
+         s.has_shadow = s.properties.vision_type === "block" || s.properties.vision_distance === "far";
+         s.drawShadows();
+       });
+     }
    }
  
 }
