@@ -1,8 +1,9 @@
 import { COLORS, TINTS, toGridDistance, orient2drounded, FirstMapValue, SecondMapValue, almostEqual } from "./utility.js";
 import { Shadow } from "./Shadow_class.js";
 import { log, MODULE_ID, FORCE_SEGMENT_TYPE_DEBUG } from "./module.js";
-import { Segment, Vertex } from "./SegmentVertex_class.js";
- 
+import { Vertex } from "./Vertex_class.js";
+import { ShadowSegment } from "./ShadowSegment_class.js";
+import { RadialSweep } from "./RadialSweep_class.js"; 
 
 // Two types of polygons:
 // 1. TerrainData: t.data, containing t.data.x, t.data.y, t.data.points, t.data.max (elevation)
@@ -72,7 +73,7 @@ export class TerrainPolygon extends PIXI.Polygon {
 
     // TO-DO: assuming closed stroke for now.
     for (let i = 2; i < (this.points.length - 2); i += 2) {
-      new_vertex = prior_vertex.connectPoint(this.points[i], this.points[i + 1]);
+      new_vertex = prior_vertex.connectPoint(this.points[i], this.points[i + 1], "ShadowSegment");
       //log(`_constructVertices ${i} new_vertex`, new_vertex);
       
       poly_vertices.set(new_vertex.id, new_vertex);
@@ -85,7 +86,7 @@ export class TerrainPolygon extends PIXI.Polygon {
     // link to beginning
     const last_vertex_id = new_vertex.id;
     
-    const s_last_first = Segment.fromVertices(poly_vertices.get(last_vertex_id),
+    const s_last_first = ShadowSegment.fromVertices(poly_vertices.get(last_vertex_id),
                                               poly_vertices.get(first_vertex_id),);
                                                                          
     poly_vertices.get(last_vertex_id).includeSegment(s_last_first)
@@ -168,7 +169,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   * @param {Number} value   Elevation, in game units (e.g., 5 foot grid, 40 foot of elevation)
   */
   set elevation(value) {
-    value = toGridDistance(value);
+    value = value;
     if(this._elevation != value) {
       // delete cached calculations
     }
@@ -217,7 +218,7 @@ export class TerrainPolygon extends PIXI.Polygon {
       
       // do we need obj.width and obj.height?   
       let poly = new this(transformed_points);
-      poly.elevation = e;
+      poly.elevation = toGridDistance(e);
       poly.originating_id = obj._id;
       return poly;
       
@@ -284,24 +285,50 @@ export class TerrainPolygon extends PIXI.Polygon {
     
     // all segments are "far" until proven otherwise
     // Note: already set by _constructSegments as default
-    const sorted_vertices = RadialSweep.sortVertices(vision_point, [...this.vertices]);
+    const sorted_vertices = RadialSweep.sortVertices(vision_point, [...this.vertices.values()]);
+    log(`calculateNearFarSegments ${sorted_vertices.length} sorted vertices`, sorted_vertices, vision_point);
     radial_sweep.start(this.segments);
     sorted_vertices.forEach(vertex => {
       radial_sweep.nextVertex(vertex);
     });
     radial_sweep.complete();
+    
+    // if the vision point is within the polygon, then near points might be considered 
+    //   "far" for purposes of shadow. (Stand on a plateau and look out; 
+    //   shadows below cliff)
+    // "far" are probably "ignore" b/c those are not line of sight
+    if(this.contains(vision_point.x, vision_point.y)) {
+      log(`calculateNearFarSegments within vision point ${vision_point.x}, ${vision_point.y}`);
+      for(const [key, segment] of this.segments) {    
+        const splits = segment.getSplits();
+        splits.forEach(split => {
+          //log(`split properties`, split.properties);
+          if(split.properties.vision_distance === "far") {
+            split.properties.vision_distance = "ignore"
+          } else if(split.properties.vision_distance === "near") {
+            split.properties.vision_distance = "far"
+          }
+        });      
+      }    
+    }
+    
   } 
  
  /*
   * Draw the polygon
   * This version draws individual segments, allowing for color choices for 
   *   different segments or segment splits.
+  * Segment blocks vision: red
+  * Segment is far from vision point, suggesting it will make a shadow: gray
+  * Segment is near: orange
   */
-  draw(color = COLORS.black) {
+  draw() {
     for(const [key, segment] of this.segments) {    
       const splits = segment.getSplits();
       splits.forEach(s => {
-        const seg_color = (s.properties.vision_type === "block") ? COLORS.red : color;
+        const seg_color = (s.properties.vision_type === "block") ? COLORS.red : 
+                          (s.properties.vision_distance === "near") ? COLORS.orange : 
+                          COLORS.gray;
         s.draw(seg_color);
       });      
     }
@@ -313,6 +340,24 @@ export class TerrainPolygon extends PIXI.Polygon {
    */
    drawPolygon(color = COLORS.black) {
      canvas.controls.debug.lineStyle(1, color).drawShape(this);
+   }
+   
+  /*
+   * Draw shadows for all segments
+   * @param {PIXI.Point} origin_point   {x,y} location of vision point
+   * @param {Number} origin_elevation   Elevation of vision point in game units
+   */
+   drawShadows(origin_point, origin_elevation) {
+     log(`Drawing shadows for origin at elevation ${origin_elevation}`, origin_point);
+     for(const [key, segment] of this.segments) { 
+       const splits = segment.getSplits();
+       splits.forEach(s => {
+         s.setOrigin(origin_point, origin_elevation);
+         s.elevation = this.elevation;
+         s.has_shadow = s.properties.vision_type === "block" || s.properties.vision_distance === "far";
+         s.drawShadows();
+       });
+     }
    }
  
 }

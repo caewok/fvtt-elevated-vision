@@ -1,7 +1,9 @@
 import { registerPatches } from "./patching.js";
 import { orient2d } from "./lib/orient2d.min.js";
-import { Vertex, Segment } from "./SegmentVertex_class.js"; // for testing
-import { TerrainPolygon } from "./TerrainPolygon_class.js"; // for testing
+import { Vertex } from "./Vertex_class.js"; // for testing
+import { Segment } from "./Segment_class.js" // for testing
+import { ShadowSegment } from "./ShadowSegment_class.js" // for testing
+import { TerrainPolygon } from "./TerrainPolygon_class.js";
 import { orient2drounded } from "./utility.js"; // for testing
 
 export const MODULE_ID = 'elevated-vision';
@@ -27,6 +29,7 @@ Hooks.once('init', async function() {
                         orient2drounded: orient2drounded,
                         Vertex: Vertex,
                         Segment: Segment,
+                        ShadowSegment: ShadowSegment,
                         TerrainPolygon: TerrainPolygon};
 });
 

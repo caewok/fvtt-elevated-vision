@@ -1,5 +1,6 @@
 import { COLORS } from "./utility.js";
 import { log } from "./module.js";
+import { Vertex } from "./Vertex_class.js";
 
 /**
  * An extension of the base PIXI.Polygon representing shadow cast by a wall with defined height.
@@ -12,9 +13,7 @@ import { log } from "./module.js";
  */
 export class Shadow extends PIXI.Polygon {
   constructor(vision_point, ...points) {
-    log(`Shadow for vision point`, vision_point, points);
     super(...points);
-    log(`Finished building Shadow Polygon.`);
     this.vision_point = vision_point;
     this.elevation = 0;
   }
@@ -41,6 +40,50 @@ export class Shadow extends PIXI.Polygon {
     return new_obj;
   }
   
+ /**
+  * Calculate distance from vision point for which an elevated wall blocks vision.
+  * @param {Point} T Terrain wall end point
+  * @param {Number} Ve Vision elevation
+  * @param {Number} Te Terrain wall elevation
+  * @param {Number} Oe Elevation of the space beyond the terrain wall
+  * @param {Point} V Vision origin point
+  * @param {Number} Ve Vision elevation
+  * @param {Number} Te Terrain wall elevation
+  * @return {Number} distance from V to O at which O would first be seen, assuming 
+  *   O lies on the line extended from V to T.
+  */
+// TO-DO: Use this formula in sightLayer to test tokens.
+// Can first calculate the intersection with the wall, and then pass 
+// the intersection point as T.
+  static calculateShadowDistance(T, Oe, V, Ve, Te) {        
+    log(`calculateShadowDistance: T: ${T.x}, ${T.y}; Oe: ${Oe}; V: ${V.x}, ${V.y}; Ve: ${Ve}; Te: ${Te}`);
+  
+    // if any elevation is negative, normalize so that the lowest elevation is 0
+    const min_elevation = Math.min(Ve, Oe, Te);
+    if(min_elevation < 0) {
+      const adder = abs(min_elevation);
+      Ve = Ve + adder;
+      Oe = Oe + adder;
+      Te = Te + adder;
+    }
+
+    // If the vision elevation is less than or equal to the terrain, 
+    //   the wall blocks infinitely unless the object is higher than the wall
+    if(Ve <= Te && Oe <= Te) return Number.POSITIVE_INFINITY;
+
+    const ray_VT = new Ray(V, T);
+    log(`calculateShadowDistance: ray_VT`, ray_VT);
+
+    // theta is the angle between the 3-D sight line and the sight line in 2-D
+    const theta = Math.atan((Ve - Te) / ray_VT.distance); // theta is in radians
+
+    // distance at which O would be seen
+    // assuming O lies on the line extended from V to T
+    const TO_needed = (Te - Oe) / Math.tan(theta); // tan needs radians
+
+    return TO_needed;
+ }    
+  
   /**
    * Test if ray is totally inside polygon
    * @param {Ray} Segment ray to check
@@ -66,11 +109,11 @@ export class Shadow extends PIXI.Polygon {
     return false;
   }
   
-    /**
-   * The segments of the polygon as an array of Rays.
-   * Computed lazily as required.
-   * @type {Array}
-   */
+ /**
+  * The segments of the polygon as an array of Rays.
+  * Computed lazily as required.
+  * @type {Array}
+  */
   get segments() {
     if(this._segments === undefined) this._segments = this._constructSegments();
     return this._segments; 
@@ -88,12 +131,12 @@ export class Shadow extends PIXI.Polygon {
     return poly_segments;
   }
   
-   /*
-    * Draw the polygon on the canvas
-    * @param {Hex} color    Color to use (default: gray)
-    */
-    draw(color = COLORS.gray, alpha = .5) {
-     // no lineStyle(1, color)
-     canvas.controls.debug.beginFill(color, alpha).drawShape(this).endFill();
-    }
+ /*
+  * Draw the polygon on the canvas
+  * @param {Hex} color    Color to use (default: gray)
+  */
+  draw(color = COLORS.gray, alpha = .5) {
+    // no lineStyle(1, color)
+    canvas.controls.debug.beginFill(color, alpha).drawShape(this).endFill();
+  }
 }
