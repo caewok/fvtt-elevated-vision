@@ -160,3 +160,32 @@ function retrieveVisibleTokens() {
 }
 
 
+/*
+ * Get location of element in a sorted array.
+ * Used in sweep algorithm.
+ * Note: comparer should return -1, 0 or 1
+ * @param {Object} element    Element whose (proposed insert) location should be found
+ * @param {Array} array       Array to index
+ * @param {Function} comparer Function to use to compare the element to Array elements
+ * @param {Number} start      Starting point to subset the array (optional)
+ * @param {Number} end        Ending point to subset the array (optional)
+ */
+// From: https://stackoverflow.com/questions/1344500/efficient-way-to-insert-a-number-into-a-sorted-array-of-numbers
+function locationOf(element, array, comparer, start, end) {
+  if (array.length === 0)
+    return -1;
+
+  start = start || 0;
+  end = end || array.length;
+  const pivot = (start + end) >> 1;  // should be faster than dividing by 2
+
+  const c = comparer(element, array[pivot]);  
+  if (end - start <= 1) return c === -1 ? pivot - 1 : pivot;
+
+  switch (c) {
+    case -1: return locationOf(element, array, comparer, start, pivot);
+    case 0: return pivot;
+    case 1: return locationOf(element, array, comparer, pivot, end);
+  };
+}
+ 

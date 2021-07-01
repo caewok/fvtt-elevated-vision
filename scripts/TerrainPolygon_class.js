@@ -21,139 +21,7 @@ import { RadialSweep } from "./RadialSweep_class.js";
  * @param {Array} points          Array of points [x0, y0, x1, y1, ...]
  */
 export class TerrainPolygon extends PIXI.Polygon {
-  constructor(...points) {
-    super(...points); 
-  }
-  
- /*
-  * Construct the map of segments for the polygon.
-  * @type {Map}
-  */
-  get segments() {
-    if(this._segments === undefined || this._segments.size === 0) {
-      this._segments = this._constructSegments();
-      }
-    return this._segments; 
-  }
-  
- /*
-  * Construct the map of vertices for the polygon.
-  * @type {Map}
-  */
-  get vertices() {
-    if(this._vertices === undefined || this._vertices.size === 0) {
-      this._segments = undefined;
-      this._vertices = this._constructVertices();
-    }
-    return this._vertices;
-  }
-  
- /*
-  * Internal function to construct the map of vertices for the polygon
-  * Each vertex links to two segments, using the internal Segment and Vertex linking.
-  * @return {Map}
-  */
-  _constructVertices() {
-    const poly_vertices = new Map();  
-    let prior_vertex = new Vertex(this.points[0], this.points[1]);
-    let new_vertex;
-    prior_vertex.originating_object = this;
-    poly_vertices.set(prior_vertex.id, prior_vertex);
-    
-    //log(`_constructVertices 0:`, prior_vertex, new_vertex);
-    
-    // save the first id to link at the end
-    const l = this.points.length;
-    if(this.points[0] !== this.points[l - 2] ||
-       this.points[1] !== this.points[l - 1]) {
-       console.error(`${MODULE_ID}|_constructVertices expects a closed set of points.`, this);
-       }
-    
-    const first_vertex_id = prior_vertex.id;
-
-    // TO-DO: assuming closed stroke for now.
-    for (let i = 2; i < (this.points.length - 2); i += 2) {
-      new_vertex = prior_vertex.connectPoint(this.points[i], this.points[i + 1], "ShadowSegment");
-      //log(`_constructVertices ${i} new_vertex`, new_vertex);
       
-      poly_vertices.set(new_vertex.id, new_vertex);
-      prior_vertex = new_vertex;
-      //log(`_constructVertices ${i} end:`, prior_vertex, new_vertex)
-    }
-    
-    //log(`_constructVertices ended loop`);
-    
-    // link to beginning
-    const last_vertex_id = new_vertex.id;
-    
-    const s_last_first = ShadowSegment.fromVertices(poly_vertices.get(last_vertex_id),
-                                              poly_vertices.get(first_vertex_id),);
-                                                                         
-    poly_vertices.get(last_vertex_id).includeSegment(s_last_first)
-    
-    // to ensure segments are A, B for the vertex, as in prior(A) --> vertex --> next (B)
-    // need to insert this s_first_last as A in the first vertex
-    const s_first_second =  FirstMapValue(poly_vertices.get(first_vertex_id).segments);
-    poly_vertices.get(first_vertex_id).segments.clear();
-    poly_vertices.get(first_vertex_id).includeSegment(s_last_first);
-    poly_vertices.get(first_vertex_id).includeSegment(s_first_second);
-    
-    //log(`_constructVertices return`, poly_vertices);
-
-    return poly_vertices;
-  }
-  
-//   points: [100, 100, 0
-//            100, 200, 2
-//            200, 200, 4
-//            200, 100, 6
-//            100, 100] 8
-//   
-//   // i == 0
-//   prior_vertex = Vertex(100, 100); 
-//   - x: 100
-//   - y: 100
-//   - segments: Map()
-//   
-//   // i == 2
-//   new_vertex = prior_vertex.connectPoint({x: 100, y: 200})
-//   prior_vertex:
-//   - segments: 0 -> 2
-//     - vertexA: prior_vertex (100, 100)
-//     - vertexB: new_vertex (100, 200)
-//   new_vertex:
-//   - segments: 0 -> 2
-//     - vertexA: prior_vertex (100, 100)
-//     - vertexB: new_vertex (100, 200)
-//     
-  
-  
-  
-  
-  
- /*
-  * Internal function to build the Map of polygon segments.
-  * Each segment shares two vertices with two other segments, linked here
-  *   using the internal Segment and Vertex linking.
-  * @return {Map}
-  */
-  _constructSegments() {
-    const poly_segments = new Map();
-
-    for(const [key, vertex] of this.vertices) {
-      // only add the second segment, so that first<-->last segment is last
-      const s_second = SecondMapValue(vertex.segments);
-
-      // Default every segment: 
-      //   - "far" until calculateNearFarSegments is run
-      //   - "ignore" for vision type (block, shadow, ignore)
-      s_second.mergeProperty({ vision_distance: "far", 
-                               vision_type: "ignore" });      
-      poly_segments.set(s_second.id, s_second);
-    }
-    return poly_segments;
-  }
-  
  /*
   * Elevation for the polygon. Default: 0.
   * @type {Number}
@@ -226,53 +94,6 @@ export class TerrainPolygon extends PIXI.Polygon {
       return new this(obj.points);
     }
   }
-
- /**
-  * Test if ray is totally inside polygon
-  * @param {Ray} Segment ray to check
-  * @return {boolean} true if ray is totally inside polygon
-  */
-  rayInside(ray) {
-    return (this.contains(ray.A.x, ray.A.y) && this.contains(ray.B.x, ray.B.y));
-  }
-
- /**
-  * Test if ray intersects polygon
-  * @param {Ray} Segment ray to check
-  * @return {Obj} false if ray intersects the polygon; intersection if found
-  */
-  // TO-DO: Shortcuts? Sort by closest in some fashion?
-  intersectsRay(ray) {
-    const segments_arr = [...this.segments];
-
-    for(let i = 0; i < this.segments_arr; i++) {
-      const segment = this.segments_arr[i][1];
-      const intersection = ray.intersectSegment([segment.A.x, segment.A.y,
-                             segment.B.x, segment.B.y]);
-      if(intersection) return intersection;
-    }   
-    return false;
-  }
-
-  /**
-   * Test if another polygon intersects or is contained in another.
-   * @param {TerrainPolygon} poly    An TerrainPolygon to test.
-   * @param {boolean} contained_only  If true, will test only for fully contained.
-   * @return {boolean} true if intersects or is contained in
-   */
-  intersectsPolygon(poly, contained_only = false) {
-    const segments_arr = [...this.segments];
-    for(let i = 0; i < segments_arr.length; i++) {
-      const segment = segments_arr[i][1];
-      if(contained_only) {
-        if(!poly.rayInside(segment)) return false;
-      } else {
-        if(poly.rayInside(segment)) return true;
-        if(poly.intersectsRay(segment)) return true;
-      } 
-    }
-    return contained_only; // if contained_only, is true; if includes intersection, false.
-  }
   
  /*
   * Calculate near vs far segments based on vision origin.
@@ -322,7 +143,7 @@ export class TerrainPolygon extends PIXI.Polygon {
   * Segment is far from vision point, suggesting it will make a shadow: gray
   * Segment is near: orange
   */
-  draw() {
+  draw(color = COLORS.black) {
     for(const [key, segment] of this.segments) {    
       const splits = segment.getSplits();
       splits.forEach(s => {
@@ -333,14 +154,6 @@ export class TerrainPolygon extends PIXI.Polygon {
       });      
     }
   }
-
-  /*
-   * Draw the polygon on the canvas
-   * @param {Hex} color    Color to use (default: black)
-   */
-   drawPolygon(color = COLORS.black) {
-     canvas.controls.debug.lineStyle(1, color).drawShape(this);
-   }
    
   /*
    * Draw shadows for all segments
