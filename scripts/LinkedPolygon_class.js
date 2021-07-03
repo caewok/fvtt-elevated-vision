@@ -391,6 +391,7 @@ export class LinkedPolygon extends PIXI.Polygon {
               S.splice(i, 1);
               log(`S (length ${S.length})`, [...S]);
               this._checkIntersection(i - 1, i, P, S, p.y, intersection_points)
+            }
           });// p.segments.forEach
         
         } // if(p_type.some(t => t === "interior"))
