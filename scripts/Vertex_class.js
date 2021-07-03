@@ -91,6 +91,14 @@ export class Vertex extends PIXI.Point {
      if(!this._id) this._id = foundry.utils.randomID();
      return this._id;
    }
+
+  /*
+   * Set the id for this Vertex.
+   * @type {String}
+   */
+   set id(value) {
+     this._id = value;
+   }
  
   /*
    * Almost equal version that treats points as equal if within epsilon error

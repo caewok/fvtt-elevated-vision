@@ -6,6 +6,7 @@ import { ShadowSegment } from "./ShadowSegment_class.js" // for testing
 import { TerrainPolygon } from "./TerrainPolygon_class.js";
 import { orient2drounded } from "./utility.js"; // for testing
 import { LinkedPolygon } from "./LinkedPolygon_class.js"; // for testing
+import { locationOf } from "./utility.js"; // for testing
 
 export const MODULE_ID = 'elevated-vision';
 const FORCE_DEBUG = false; // used for logging before dev mode is set up
@@ -32,7 +33,8 @@ Hooks.once('init', async function() {
                         Segment: Segment,
                         ShadowSegment: ShadowSegment,
                         TerrainPolygon: TerrainPolygon,
-                        LinkedPolygon: LinkedPolygon};
+                        LinkedPolygon: LinkedPolygon,
+                        locationOf: locationOf };
 });
 
 Hooks.once('ready', async function() {

@@ -171,7 +171,7 @@ function retrieveVisibleTokens() {
  * @param {Number} end        Ending point to subset the array (optional)
  */
 // From: https://stackoverflow.com/questions/1344500/efficient-way-to-insert-a-number-into-a-sorted-array-of-numbers
-function locationOf(element, array, comparer, start, end) {
+export function locationOf(element, array, comparer, start, end) {
   if (array.length === 0)
     return -1;
 

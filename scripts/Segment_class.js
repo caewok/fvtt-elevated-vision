@@ -125,6 +125,14 @@ export class Segment extends Ray {
      if(!this._id) this._id = foundry.utils.randomID();
      return this._id;
    }
+
+  /*
+   * Set the id for this Segment.
+   * @type {String}
+   */
+   set id(value) {
+     this._id = value;
+   }
    
   /*
    * Merge a property into the segment properties.

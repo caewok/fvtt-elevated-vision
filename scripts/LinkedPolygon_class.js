@@ -9,7 +9,9 @@
 import { Vertex } from "./Vertex_class.js";
 import { Segment } from "./Segment_class.js";
 import { ShadowSegment } from "./ShadowSegment_class.js";
-import { locationOf } from "./utility.js";
+import { locationOf, COLORS, FirstMapValue, SecondMapValue, almostEqual } from "./utility.js";
+import { log } from "./module.js";
+
 
 export class LinkedPolygon extends PIXI.Polygon {  
  /*
@@ -222,99 +224,165 @@ export class LinkedPolygon extends PIXI.Polygon {
     * TO-DO: advanced version with bounding rectangles
     */
     intersectionPoints(...polygons) {      
-      let P = []; // top point of each line segment
-      let S = []; // sweep line state: 
+      const MAX_ITERATIONS = 10; // breaker for the while loop 
+      let P = []; // top point of each line segment {id, score, object}
+      let S = []; // sweep line state: {id, score, object}
                   // {id, score, segment} 
       let intersection_points = [];
       
-      // y increases top --> bottom
-      // x increases left --> right
       
-      // compare "scores", meaning x or y coordinates
-      const compareFn = function(a, b) { 
-        return almostEqual(a.score, b.score, 1e-5) ? 0 : 
-               a.score < b.score ? 1 : -1;
+      const compareP = function(a, b) {
+        // a and b are Vertex points
+        // y increases top --> bottom
+        // if a.y == b.y, tiebreaker goes to leftmost x
+        if(almostEqual(a.y, b.y, 1e-5)) {
+          return almostEqual(a.x, b.x, 1e-5) ? 0 :
+                 a.x < b.x ? 1 : -1;
+        }        
+
+        return a.y < b.y ? 1 : -1;
       }
-      
+
       // find the top and bottom points of a segment by y 
-      getTopPoint = function(A, B) return (compareFn(A.y, B.y) === 1 ? B : A);
-      getBottomPoint = function(A, B) return (compareFn(A.y, B.y)) === 1 ? A : B);
-      
-      [...polygons].concat(this).forEach(p => {
+      const getVertex = function(s, top = true) { 
+        const a = s.A;
+        const b = s.B;
+        const compare_res = compareP(a, b) === 1;
+        //log(`getVertex: ${compare_res}`, a, b);
+        if(!top) return compare_res ? b : a;
+        return compare_res ? a : b;
+      }
+
+      const getTopVertex = function(s) { return getVertex(s, true); }
+      const getBottomVertex = function(s) { return getVertex(s, false); }
+
+
+      const compareS = function(a, b) {
+        // a and b are Segments
+        // x increases left --> right
+        // sort by the x value of the top Vertex
+        // tiebreakers go to top y value
+        const top_a = getTopVertex(a);
+        const top_b = getTopVertex(b);
+
+        if(almostEqual(top_a.x, top_b.x, 1e-5)) {
+          return almostEqual(top_a.y, top_b.y, 1e-5) ? 0 :
+                 a.y < b.y ? 1 : -1;
+        }
+
+        return a.x < b.x ? 1 : -1;
+      }
+     
+     //log(`intersectionPoints topVertex example`, 
+     //  getTopVertex(FirstMapValue(this.segments)), 
+     //  FirstMapValue(this.segments));
+
+     log(`intersectionPoints polygons, this`, polygons, this);
+ 
+     polygons.concat(this).forEach(p => {
         p.segments.forEach(s => {
-          // find the top segment; add to P
-          P.push(getTopPoint(s));
+          // find the top segment vertex; add to P
+          const top_v = getTopVertex(s); 
+          if(!P.includes(top_v)) { P.push(getTopVertex(s)); }
         });
       });
       
-      
+      log(`intersectionPoints length ${P.length}`, [...P]);      
       // sort such that top of the list is at end of array, 
       //   so we can pop the top point
-      P.sort(P_compare);
-      log(`intersectionPoints sorted`, P);
-      
-      while(P.length > 0) {
+      P.sort(compareP);
+      log(`intersectionPoints sorted length ${P.length}`, [...P]);
+      let num_iterations = 0;
+
+      while(P.length > 0 && num_iterations < MAX_ITERATIONS) {
+        num_iterations += 1;
         const p = P.pop();
+        console.log(`\n-------------------------\n`);
+        log(`p is ${p.id}`, p);
         
         // TO-DO: use splice or some other method to insert into the sorted arrays?
         // https://stackoverflow.com/questions/1344500/efficient-way-to-insert-a-number-into-a-sorted-array-of-numbers
         
         p.segments.forEach(s => {
-          const top_p = getTopPoint(s);
-          const bottom_p = getBottomPoint(s);
+          log(`P (length ${P.length})`, [...P]);
+          log(`S (length ${S.length})`, [...S]);
+          log(`s is ${s.id}`, s);
+          const top_p = getTopVertex(s);
+          const bottom_p = getBottomVertex(s);
+
+          log(`For segment ${s.id}, top vertex is ${top_p.id}; bottom is ${bottom_p.id}`);
         
-          if(p.equal(top_p)) {
+          if(p.equals(top_p)) {
+            log(`${p.id} is top`);
             // p is the top point for the segment
-            const i = locationOf(top_p.x, S, compareFn);
-            S.push({ id: s.id, score: top_p.x, segment: s })
-            S.sort(compareFn);
+            S.push(s)
+            S.sort(compareS);
+            log(`S (length ${S.length})`, [...S]); 
+            const i = S.findIndex(elem => elem.id === s.id);
+            log(`i is ${i}`);
             
-            this._checkIntersection(i - 1, i, P, S, p.y)             
-            this._checkIntersection(i, i + 1, P, S, p.y)
+            this._checkIntersection(i - 1, i, P, S, p.y, intersection_points)             
+            this._checkIntersection(i, i + 1, P, S, p.y, intersection_points)
             
             // add end point to P
-            P.push(getBottomPoint(s));
-            P.sort(P_compare); 
-          } else if(p.equal(bottom_p)) {
+            if(!P.includes(bottom_p)) { P.push(bottom_p); }
+            P.sort(compareP); 
+          } else if(p.equals(bottom_p)) {
+            log(`${p.id} is bottom`);
             // p is the bottom point for the segment
             // Remove the segment from S
-            S.delete(s.id);
-            const i = locationOf(top_p.x, S, compareFn);
-            S_queue.splice(i, 1)
-            
-            this._checkIntersection(i - 1, i, P, S, p.y)
-          
+            const i = S.findIndex(elem => elem.id === s.id);
+            log(`i is ${i}`);
+            S.slice(i, 1);
+            log(`S (length ${S.length})`, [...S]);
+            this._checkIntersection(i - 1, i, P, S, p.y, intersection_points)
+
           } else {
+            log(`${p.id} is interior`);
             // p is interior point
             // report as intersection
-            intersection_points.push(p);
-            const i = locationOf(top_p.x, S, compareFn);
+            //intersection_points.push(p);
+            const i = S.findIndex(elem => elem.id === s.id);
+            log(`i is ${i}`);
             if(S.length > (i + 1)) {
               // swap Si, Si+1
               S.slice(i, 2, S[i + 1], S[i])
             }
-            this._checkIntersection(i - 1, i, P, S, p.y)             
-            this._checkIntersection(i + 1, i + 2, P, S, p.y) 
+            log(`S (length ${S.length})`, [...S]);
+            this._checkIntersection(i - 1, i + 1, P, S, p.y, intersection_points)             
+            this._checkIntersection(i, i + 2, P, S, p.y, intersection_points) 
           }
         
         }); // p.segments.forEach
       } // while(P.length > 0)
-      
-      return intersections;
+
+      return intersection_points;
     }
     
-    _checkIntersection(idx1, idx2, P, S, sweep_y) {
-      if(S.length <= idx1 || S.length <= idx2) { return };
+    _checkIntersection(idx1, idx2, P, S, sweep_y, intersection_points) {
+      log(`idx1: ${idx1}; idx2: ${idx2}; S is length ${S.length}; sweep_y: ${sweep_y}`);
+      if(idx1 < 0 || idx2 < 0 || idx1 >= S.length || idx2 >= S.length) { return; }
     
-      const s1 = S[idx1].segment;
-      const s2 = S[idx2].segment;
+      const s1 = S[idx1];
+      const s2 = S[idx2];
       
-      const intersect_p = this._checkIntersection(s1, s2, P, sweep_y);
-      if(intersect_p) { P.push({ intersection: intersect_p, s1: s1, s2: s2 }); } 
+      // if the segments share a vertex they do not intersect
+      if(s1.A.equals(s2.A) || s1.A.equals(s2.B) || s1.B.equals(s2.A) || s1.B.equals(s2.B)) { return; }
+      
+      const intersect_p = this._getIntersectionPoint(s1, s2, P, sweep_y);
+      log(`testing intersection ${s1.id}, ${s2.id}`);
+      log(`intersect_p is ${intersect_p?.x}, ${intersect_p?.y}`);
+      if(intersect_p) {
+        // add the segments for later reference
+        intersect_p.segments.set(s1.id, s1);
+        intersect_p.segments.set(s2.id, s2); 
+        P.push(intersect_p);
+        intersection_points.push(intersect_p);
+      } 
     }
     
     _getIntersectionPoint(s1, s2, P, sweep_y) {
-      const intersect_p = s1.intersectSegment(s2);
+      const intersect_p = s1.intersectSegment([s2.A.x, s2.A.y, s2.B.x, s2.B.y]);
       if(!intersect_p) return undefined;
       if(intersect_p.y < sweep_y) return undefined; // above the sweep line
       if(P.some(elem => { elem.equals(intersect_p )})) return undefined; // already in P      
