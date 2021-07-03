@@ -322,23 +322,25 @@ export class LinkedPolygon extends PIXI.Polygon {
         // TO-DO: use splice or some other method to insert into the sorted arrays?
         // https://stackoverflow.com/questions/1344500/efficient-way-to-insert-a-number-into-a-sorted-array-of-numbers
         
-        // If intersection, then handle separately
-        const p_type = [...p.segments.values()].map(s => {
-          if(p.equals(getTopVertex(s))) return "top";
-          if(p.equals(getBottomVertex(s))) return "bottom";
-          return "interior";
+        // Given vertex can have 2+ segments.
+        // If any are interior, treat all as interior?
+        // Otherwise, run top before bottom
+        const p_type = [...p.segments.entries()].map([key, s] => {
+          if(p.equals(getTopVertex(s))) return { id: key, type: "top" };
+          if(p.equals(getBottomVertex(s))) return { id: key, type: "bottom" };
+          return { id: key, type: "interior"};
         });
         
-        log(`iteration ${num_iterations}: p ${p.id} has types ${[...p_type]}`, p);
         
-        if(p_type.some(t => t === "interior")) {
+        log(`iteration ${num_iterations}: p ${p.id} has types`, p_type);
+        
+        if(p_type.some(t => t.type === "interior")) {
           log(`${p.id} is interior`);
           // p is interior point
           // report as intersection
           //intersection_points.push(p); // reported in checkIntersection
           // get the segments for the intersection; find first
-          const ids = [...p.segments.values()].map(segment => { return segment.id });
-
+          const ids = p_type.map(t => t.id);
           const i0 = S.findIndex(elem => elem.id === ids[0]);
           const i1 = S.findIndex(elem => elem.id === ids[1]);
           const i = Math.min(i0, i1);
@@ -357,17 +359,16 @@ export class LinkedPolygon extends PIXI.Polygon {
           }
         
         } else {
-          p.segments.forEach(s => {
-            const top_p = getTopVertex(s);
-            const bottom_p = getBottomVertex(s);
-
+          p_type.sort((a, b) => a.type === "top" ? 1 : -1);
+          p_type.forEach((id, type) => {
             console.log(`\n`);
-            log(`s is ${s.id}`, s);
-            log(`For segment ${s.id}, top vertex is ${top_p.id}; bottom is ${bottom_p.id}`);
+            const s = p.segments.get(id);
+            
+            log(`Segment ${s.id} is ${value}`, s);
             log(`P (length ${P.length})`, [...P]);
             log(`S (length ${S.length})`, [...S]);
-
-            if(p.equals(top_p)) {
+          
+            if(type === "top") {
               log(`${p.id} is top`);
               // p is the top point for the segment
               S.push(s)
@@ -382,7 +383,8 @@ export class LinkedPolygon extends PIXI.Polygon {
               // add end point to P
               if(!P.includes(bottom_p)) { P.push(bottom_p); }
               P.sort(compareP); 
-            } else if(p.equals(bottom_p)) {
+            
+            } else if(type === "bottom") {
               log(`${p.id} is bottom`);
               // p is the bottom point for the segment
               // Remove the segment from S
@@ -391,11 +393,13 @@ export class LinkedPolygon extends PIXI.Polygon {
               S.splice(i, 1);
               log(`S (length ${S.length})`, [...S]);
               this._checkIntersection(i - 1, i, P, S, p.y, intersection_points)
-            }
-          });// p.segments.forEach
+            
+            } // if(type === "top")
+          
+          }); // p_type.forEach((id, type) 
+          
+        } //  if(p_type.some(t => t.type === "interior")
         
-        } // if(p_type.some(t => t === "interior"))
-
       } // while(P.length > 0)
 
       return intersection_points;
