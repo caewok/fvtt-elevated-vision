@@ -255,22 +255,32 @@ export class LinkedPolygon extends PIXI.Polygon {
 
       const getTopVertex = function(s) { return getVertex(s, true); }
       const getBottomVertex = function(s) { return getVertex(s, false); }
-
-
-      const compareS = function(a, b) {
-        // a and b are Segments
-        // x increases left --> right
-        // sort by the x value of the top Vertex
-        // tiebreakers go to top y value
-        const top_a = getTopVertex(a);
-        const top_b = getTopVertex(b);
-
-        if(almostEqual(top_a.x, top_b.x, 1e-5)) {
-          return almostEqual(top_a.y, top_b.y, 1e-5) ? 0 :
-                 a.y < b.y ? 1 : -1;
-        }
-
-        return a.x < b.x ? 1 : -1;
+      
+      // Calculate x intersection with sweep for a given segment
+      const sweepIntersect = function(segment, y_sweep) {
+        // http://www.cs.ucr.edu/~eldawy/19SCS133/slides/CS133-05-Intersection.pdf 
+        // See Sweep Line State
+        const delta_x = Math.abs(segment.A.x - segment.B.x);
+        const delta_y = Math.abs(segment.A.y - segment.B.y);
+        const bottom_V = getBottomVertex(segment);
+        return bottom_V.x + (delta_x / delta_y) * (y_sweep - bottom_V.y);
+      }
+      
+      // Sort S by x coordinate of intersections between segment and sweep
+      const sortS = function(S, y_sweep) {
+        // use a mapped sort to pre-calculate the x intersection with sweep
+        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort
+        const mapped_S = S.map((segment, idx) => {
+          return { i, value: sweepIntersect(segment, y_sweep) }
+        });
+        
+        mapped_S.sort((a, b) => {
+          return a.value < b.value ? 1 : 
+                 a.value > b.value ? -1 :
+                 0; 
+        });
+        
+        return mapped_S.map(v => S[v.i]);
       }
      
      //log(`intersectionPoints topVertex example`, 
@@ -316,7 +326,7 @@ export class LinkedPolygon extends PIXI.Polygon {
             log(`${p.id} is top`);
             // p is the top point for the segment
             S.push(s)
-            S.sort(compareS);
+            S = sortS(S, p.y);
             log(`S (length ${S.length})`, [...S]); 
             const i = S.findIndex(elem => elem.id === s.id);
             log(`i is ${i}`);
@@ -377,6 +387,7 @@ export class LinkedPolygon extends PIXI.Polygon {
         intersect_p.segments.set(s1.id, s1);
         intersect_p.segments.set(s2.id, s2); 
         P.push(intersect_p);
+        P.sort(compareP); 
         intersection_points.push(intersect_p);
       } 
     }
