@@ -225,7 +225,7 @@ export class LinkedPolygon extends PIXI.Polygon {
     * TO-DO: Use a tree? e.g. https://github.com/w8r/splay-tree
     */
     intersectionPoints(other_polygon) {      
-      const MAX_ITERATIONS = this.segments.size * other_polygon.segments.size + 1; // breaker for the while loop 
+      const MAX_ITERATIONS = this.segments.size * other_polygon.segments.size * 2; // breaker for the while loop 
       let P = []; // top point of each line segment {id, score, object}
       let S = []; // sweep line state: {id, score, object}
                   // {id, score, segment} 
@@ -263,7 +263,7 @@ export class LinkedPolygon extends PIXI.Polygon {
         // See Sweep Line State
         const delta_x = segment.A.x - segment.B.x;
         const delta_y = segment.A.y - segment.B.y;
-        if(delta_y === 0) return segment.A.x; // horizontal line; pick an x
+        if(delta_y === 0) return Math.min(segment.A.x, segment.B.x); // horizontal line; pick smallest x
         return segment.A.x + (delta_x / delta_y) * (y_sweep - segment.A.y);
       }
       
@@ -325,7 +325,7 @@ export class LinkedPolygon extends PIXI.Polygon {
         // Given vertex can have 2+ segments.
         // If any are interior, treat all as interior?
         // Otherwise, run top before bottom
-        const p_type = [...p.segments.entries()].map([key, s] => {
+        const p_type = [...p.segments.entries()].map(([key, s]) => {
           if(p.equals(getTopVertex(s))) return { id: key, type: "top" };
           if(p.equals(getBottomVertex(s))) return { id: key, type: "bottom" };
           return { id: key, type: "interior"};
@@ -359,17 +359,16 @@ export class LinkedPolygon extends PIXI.Polygon {
           }
         
         } else {
-          p_type.sort((a, b) => a.type === "top" ? 1 : -1);
-          p_type.forEach((id, type) => {
-            console.log(`\n`);
+          p_type.sort((a, b) => a.type === "bottom" ? 1 : -1);
+          p_type.forEach(({id, type}) => {
+            console.log(`id: ${id}, type: ${type} \n`);
             const s = p.segments.get(id);
             
-            log(`Segment ${s.id} is ${value}`, s);
+            log(`${p.id} of segment ${s.id} is ${type}`, s);
             log(`P (length ${P.length})`, [...P]);
             log(`S (length ${S.length})`, [...S]);
           
             if(type === "top") {
-              log(`${p.id} is top`);
               // p is the top point for the segment
               S.push(s)
               S = sortS(S, p.y);
@@ -381,11 +380,11 @@ export class LinkedPolygon extends PIXI.Polygon {
               this._checkIntersection(i, i + 1, P, S, p.y, intersection_points)
             
               // add end point to P
+              const bottom_p = getBottomVertex(s); 
               if(!P.includes(bottom_p)) { P.push(bottom_p); }
               P.sort(compareP); 
             
             } else if(type === "bottom") {
-              log(`${p.id} is bottom`);
               // p is the bottom point for the segment
               // Remove the segment from S
               const i = S.findIndex(elem => elem.id === s.id);
