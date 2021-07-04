@@ -199,31 +199,42 @@ export class LinkedPolygon extends PIXI.Polygon {
    // http://www.cs.ucr.edu/~eldawy/19SCS133/slides/CS133-05-Intersection.pdf
    // https://github.com/vrd/js-intersect
    _setOperation(other_polygon, set_type = "intersection") {
+     other_polygon_a = this.alignPolygon(other_polygon);
+     
+     // check polygons?
+     
+     const edges = edgify(other_polygon_a);
+   
      const polygons = this.polygonate(other_polygon);
      return this.filterPolygons(polygons, set_type);
    }
    
-   
    /*
-    * Where the other_polygon intersects with this one, make new points.
-    * (e.g., split the segment at the intersection points)
-    * @param {LinkedPolygon} other_polygon    The polygon to test.
+    * Construct a new polygon where if the points are sufficiently close
+    * to this polygon, make them equal
+    * @param {LinkedPolygon} other_polygon Polygon to compare
+    * @return {LinkedPolygon} new polygon with points comparable to other_polygon
     */
-   edgify(other_polygon) {
-     // if the poly
-     this.segments.forEach(s => {
-       // check every edge for intersection with every edge except itself
-       
+   alignPolygon(other_polygon) {
+     points = other_polygon.points;
+     this.vertices.forEach(v => {
+       for(let i = 0; i < (points.length - 2); i += 2) {
+         if(v.squaredDistance(points[i], points[i + 1]) < 0.00000001) {
+           points[i] = v.x;
+           points[j] = v.y;
+         }
+       }
      });
+     
+     return new LinkedPolygon(points);
    }
    
    /*
-    * Bentley-Ottmann sweep algorithm to sort vertices and return a list of
-    * intersecting points.
-    * http://www.cs.ucr.edu/~eldawy/19SCS133/slides/CS133-05-Intersection.pdf
-    * TO-DO: advanced version with bounding rectangles
-    * TO-DO: Use a tree? e.g. https://github.com/w8r/splay-tree
+    * Brute-force identification of intersection points between two polygons.
+    * @param {LinkedPolygon} other_polygon  Polygon to check for intersections.
+    * @return {Array[Vertex]} Intersection points with the intersecting segments. 
     */
+<<<<<<< Updated upstream
     intersectionPoints(other_polygon) {      
       const MAX_ITERATIONS = this.segments.size * other_polygon.segments.size * 2; // breaker for the while loop 
       let P = []; // top point of each line segment {id, score, object}
@@ -298,9 +309,25 @@ export class LinkedPolygon extends PIXI.Polygon {
           // find the top segment vertex; add to P
           const top_v = getTopVertex(s); 
           if(!P.includes(top_v)) { P.push(getTopVertex(s)); }
+=======
+    intersectionPoints(other_polygon) {
+      const intersection_points = [];
+      this.segments.forEach(s1 => {
+        other_polygon.segments.forEach(s2 => {
+          const intersection = s1.intersectSegment([s2.A.x, s2.A.y, s2.B.x, s2.B.y]);
+          if(intersection) {
+            const v = Vertex.fromPoint(intersection);
+            v.segments.push(s1);
+            v.segments.push(s2);
+          
+            intersection_points.push(v);
+          }
+>>>>>>> Stashed changes
         });
+      
       });
       
+<<<<<<< Updated upstream
       log(`intersectionPoints length ${P.length}`, [...P]);      
       // sort such that top of the list is at end of array, 
       //   so we can pop the top point
@@ -401,67 +428,30 @@ export class LinkedPolygon extends PIXI.Polygon {
         
       } // while(P.length > 0)
 
+=======
+>>>>>>> Stashed changes
       return intersection_points;
     }
     
-    _checkIntersection(idx1, idx2, P, S, sweep_y, intersection_points) {
-      log(`idx1: ${idx1}; idx2: ${idx2}; S is length ${S.length}; sweep_y: ${sweep_y}`);
-      if(idx1 < 0 || idx2 < 0 || idx1 >= S.length || idx2 >= S.length) { return; }
-    
-      const s1 = S[idx1];
-      const s2 = S[idx2];
+   /*
+    * Create array of edges of both polygons combined.
+    * Include edges created from intersection points.
+    * @param {LinkedPolygon} other_polygon  Other polygon to pull edges from.
+    * @return {Array[Segments]}
+    */
+    edgify(other_polygon) {
+      const primEdges = [...this.segments].concat([...other_polygon.segments]);
+      const intersection_points = this.intersectionPoints(other_polygon);
       
-      // if the segments share a vertex they do not intersect
-      // only if they share the same vertex id; vertices that overlap are an intersection
-      //if(s1.A.equals(s2.A) || s1.A.equals(s2.B) || s1.B.equals(s2.A) || s1.B.equals(s2.B)) { return; }
-      if(s1.A.id === s2.A.id || 
-         s1.A.id === s2.B.id ||
-         s1.B.id === s2.A.id || 
-         s1.B.id === s2.B.id) { return; }
-
-      const intersect_p = this._getIntersectionPoint(s1, s2, P, sweep_y);
-      log(`testing intersection ${s1.id}, ${s2.id}`);
-      log(`intersect_p is ${intersect_p?.x}, ${intersect_p?.y}`);
-
- 
-      if(intersect_p) {
-        const intersection_already_found = intersection_points.some(elem => { return elem.equals(intersect_p); });     
-        if(intersection_already_found) {
-          log(`intersection ${intersect_p?.x}, ${intersect_p?.y} already found.`);
-          return;
-        }   
-        // add the segments for later reference
-        const compareP = function(a, b) {
-          // a and b are Vertex points
-          // y increases top --> bottom
-          // if a.y == b.y, tiebreaker goes to leftmost x
-          if(almostEqual(a.y, b.y, 1e-5)) {
-            return almostEqual(a.x, b.x, 1e-5) ? 0 :
-                   a.x < b.x ? 1 : -1;
-          }        
-
-          return a.y < b.y ? 1 : -1;
-        }
-
-//      const intersect_in_P = P.some(elem => { return elem.equals(intersect_p); });
-//      if(intersect_in_P) return undefined; // already found
+      // add intersections to edges by splitting the edge
+      // can take advantage of the reference to split directly
+      intersection_points.forEach(i => {
+        i.s1.split(i.v);
+        i.s2.split(i.v);
+      });
       
+      return primEdges;     
+     }
 
-        intersect_p.segments.set(s1.id, s1);
-        intersect_p.segments.set(s2.id, s2); 
-        P.push(intersect_p);
-        P.sort(compareP); 
-        intersection_points.push(intersect_p);
-      } 
-    }
-    
-    _getIntersectionPoint(s1, s2, P, sweep_y) {
-      const intersect_p = s1.intersectSegment([s2.A.x, s2.A.y, s2.B.x, s2.B.y]);
-      if(!intersect_p) return undefined;
-      if(intersect_p.y < sweep_y) return undefined; // above the sweep line
-       
-      return Vertex.fromPoint(intersect_p);
-
-    }    
      
 } 
