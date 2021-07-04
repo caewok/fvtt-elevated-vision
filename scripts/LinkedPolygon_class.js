@@ -242,8 +242,8 @@ export class LinkedPolygon extends PIXI.Polygon {
           const intersection = s1.intersectSegment([s2.A.x, s2.A.y, s2.B.x, s2.B.y]);
           if(intersection) {
             const v = Vertex.fromPoint(intersection);
-            v.segments.push(s1);
-            v.segments.push(s2);
+            v.segments.set(s1.id, s1);
+            v.segments.set(s2.id, s2);
           
             intersection_points.push(v);
           }
@@ -260,14 +260,15 @@ export class LinkedPolygon extends PIXI.Polygon {
     * @return {Array[Segments]}
     */
     edgify(other_polygon) {
-      const primEdges = [...this.segments].concat([...other_polygon.segments]);
+      const primEdges = [...this.segments.values()].concat([...other_polygon.segments.values()]);
       const intersection_points = this.intersectionPoints(other_polygon);
       
       // add intersections to edges by splitting the edge
       // can take advantage of the reference to split directly
       intersection_points.forEach(i => {
-        i.s1.split(i.v);
-        i.s2.split(i.v);
+        i.segments.forEach(s => {
+          s.splitAt(i);
+        });
       });
       
       return primEdges;     

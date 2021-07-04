@@ -11,9 +11,10 @@
 // class Vertex
 //   -- links to one or more Segments (typically two, for a polygon, or one, for a wall segment)
 
-import { almostEqual, round, orient2drounded, COLORS } from "./utility.js";
+import { almostEqual, round, COLORS } from "./utility.js";
 import { MODULE_ID, log } from "./module.js";
 import { Vertex } from "./Vertex_class.js";
+import { orient2d } from "./lib/orient2d.min.js";
 
 /*
  * Class extending Ray to represent a segment, such as part of a polygon or wall
@@ -236,7 +237,7 @@ export class Segment extends Ray {
   *   0 if collinear, negative value if clockwise
   */
   orient2d(p) {
-    return orient2drounded(p.x, p.y, this.A.x, this.A.y, this.B.x, this.B.y);
+    return orient2d(p.x, p.y, this.A.x, this.A.y, this.B.x, this.B.y);
   }
   
  /*
@@ -246,9 +247,20 @@ export class Segment extends Ray {
   * @return {boolean} true if counter-clockwise
   */
   ccw(p) {
-    return this.orient2d(p) > 0;
+    const orientation = this.orient2d(p);
+    if(almostEqual(orientation, 0)) return false;
+    return orientation > 0;
   }
   
+ /*
+  * Test if a point is collinear to the segment
+  * @param {PIXI.Point} p	Point to test, in {x, y} format.
+  * @return {boolean} true if collinear
+  */
+  collinear(p) {
+    return almostEqual(this.orient2d(p), 0);
+  }
+
  /*
   * Test if a point is a segment endpoint.
   * @param {PIXI.Point} p   Point to test
@@ -267,18 +279,24 @@ export class Segment extends Ray {
   * @param {boolean} true if segment includes point
   */
   contains(p, EPSILON = 1e-5) {
-    // test if collinear
-    if(!orient2drounded(this.A.x, this.A.y, p.x, p.y, this.B.x, this.B.y)) return false;
+    if(!this.collinear(p)) return false;
     
     // test if endpoint
     if(this.hasEndpoint(p, EPSILON)) return true;
     
     // test if between the endpoints
     // recall that we already established the point is collinear above.
-    return (p.x < Math.max(this.A.x, this.B.x) &&
-            p.x > Math.min(this.A.x, this.B.x) &&
-            p.y < Math.max(this.A.y, this.B.y) &&
-            p.y > Math.min(this.A.y, this.B.y));
+    const within_x = (p.x < Math.max(this.A.x, this.B.x) &&
+                      p.x > Math.min(this.A.x, this.B.x)) ||
+                      almostEqual(p.x, this.A.x) ||
+                      almostEqual(p.x, this.B.x);
+
+   const within_y = (p.y < Math.max(this.A.y, this.B.y) &&
+                     p.y > Math.min(this.A.y, this.B.y)) ||
+                     almostEqual(p.y, this.A.y) ||
+                     almostEqual(p.y, this.B.y);
+ 
+   return within_x && within_y;
   }
   
  /*
