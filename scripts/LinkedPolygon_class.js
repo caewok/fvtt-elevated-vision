@@ -412,8 +412,13 @@ export class LinkedPolygon extends PIXI.Polygon {
       const s2 = S[idx2];
       
       // if the segments share a vertex they do not intersect
-      if(s1.A.equals(s2.A) || s1.A.equals(s2.B) || s1.B.equals(s2.A) || s1.B.equals(s2.B)) { return; }
-      
+      // only if they share the same vertex id; vertices that overlap are an intersection
+      //if(s1.A.equals(s2.A) || s1.A.equals(s2.B) || s1.B.equals(s2.A) || s1.B.equals(s2.B)) { return; }
+      if(s1.A.id === s2.A.id || 
+         s1.A.id === s2.B.id ||
+         s1.B.id === s2.A.id || 
+         s1.B.id === s2.B.id) { return; }
+
       const intersect_p = this._getIntersectionPoint(s1, s2, P, sweep_y);
       log(`testing intersection ${s1.id}, ${s2.id}`);
       log(`intersect_p is ${intersect_p?.x}, ${intersect_p?.y}`);
