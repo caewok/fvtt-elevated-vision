@@ -286,7 +286,7 @@ export class LinkedPolygon extends PIXI.Polygon {
     * @return {LinkedPolygon} new polygon with points comparable to other_polygon
     */
    alignPolygon(other_polygon) {
-     points = other_polygon.points;
+     const points = other_polygon.points;
      this.vertices.forEach(v => {
        for(let i = 0; i < (points.length - 2); i += 2) {
          if(v.squaredDistance(points[i], points[i + 1]) < 0.00000001) {
@@ -351,7 +351,7 @@ export class LinkedPolygon extends PIXI.Polygon {
     polygonate(edges, intersections) {
       // add intersections to edges by splitting the edge
       // can take advantage of the reference to split directly
-      intersection_points.forEach(i => {
+      intersections.forEach(i => {
         i.segments.forEach(s => {
           s.splitAt(i);
         });
@@ -367,8 +367,8 @@ export class LinkedPolygon extends PIXI.Polygon {
         
         // create a polygon using each edge from the intersection
         const s_ids = [...intersection.segments.keys()]
-        for(let s_id = 0; s_id < s_ids.length; s_id += 1) {
-          const polygon_found = tracePolygon(intersection, s_id, edges.length);
+        for(let j = 0; j < s_ids.length; j += 1) {
+          const polygon_found = this.tracePolygon(intersection, s_ids[j], edges.length);
           
           // check for unique polygon
           const already_found = polygons.some(p => {
@@ -383,7 +383,7 @@ export class LinkedPolygon extends PIXI.Polygon {
     tracePolygon(starting_vertex, starting_edge_id, max_iterations = 100) {
       let current_edge = starting_vertex.segments.get(starting_edge_id);
       let edges_found = [current_edge];
-      let current_vertex = undefined;
+      let current_vertex = starting_vertex;
       
       let iteration = 0; // for testing, to avoid infinite loops.
       while(iteration < max_iterations) {
