@@ -398,13 +398,13 @@ export class LinkedPolygon extends PIXI.Polygon {
           current_edge = sorted_segments[1];
         } else {
           // find the next edge by eliminating the one we just visited
-          current_edge = [...current_vertex.segments.values].filter(s => {
-            s.id !== current_edge.id;
+          current_edge = [...current_vertex.segments.values()].filter(s => {
+            return s.id !== current_edge.id;
           });
         }
         edges_found.push(current_edge);
       }
-    
+      return edges_found;
     }
     
     
