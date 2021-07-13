@@ -155,6 +155,76 @@ export class LinkedPolygon extends PIXI.Polygon {
      }
    }
    
+  /*
+   * Test for equality against another polygon.
+   * Equal if the two polygons contain nearly equal points.
+   * Points can start wherever but must be in the same order.
+   * @param {PIXI.Polygon} other_polygon  Polygon to test.
+   * @param {Number} EPSILON Error to tolerate when comparing points
+   * @return {Boolean} True if the two polygons share all points in order.
+   */
+   equals(other_polygon, EPSILON = 1e-5) {
+     // if equal, then point 0 should be found in other_polygon at least once
+     const matching_indices_x = [];
+     
+     const test_point_x = this.points[0];
+     other_polygon.points.forEach((p, idx) => {
+       if(idx % 2 === 1) return; // skip the y points 
+     
+       if(almostEqual(test_point_x, p)) {
+         matching_indices.push(idx);
+       }
+     });
+     
+     if(matching_indices_x.length === 0) return false;
+     
+     const matching_indices_y = [];
+     const test_point_y = this.points[1];
+     matching_indices_x.forEach(i => {
+       const y = this.points[i + 1];
+     
+       if(almostEqual(test_point_y, y)) {
+         matching_indices_y.push(i + 1);
+       }
+      
+     });
+     
+     if(matching_indices_y.length === 0) return false;
+     
+     const res = matching_indices_x.some(x => {
+       // each forward or backward, all the points should match
+       // forward
+       const forward = this._pointsMatch(this.points, other_polygon.points, 0, x);
+       
+       // backward
+       const reversed = other_polygon.points.reverse();
+       const backward = this._pointsMatch(this.points, reversed, 0, other_polygon.points.length - 1 - x);
+       
+       return forward || backward;
+     });
+     
+     return res;
+   }
+   
+  /*
+   * Compare arrays of numbers starting at given index.
+   * @param {Array[Number]} arr1   Array of numbers
+   * @param {Array[Number]} arr2   Array of numbers
+   * @param {Number} idx1          Index to start to compare arr1
+   * @param {Number} idx2          Index to start to compare arr2
+   * @return True if the arrays match, given the starting positions.
+   */
+   _pointsMatch(arr1, arr2, idx1 = 0, idx2 = 0) {
+     if(arr1.length !== arr2.length) return false;
+   
+     for(let i = 0; i < arr1.length; i++) {
+       arr1_idx = arr1.length % (idx1 + i);
+       arr2_idx = arr2.length % (idx2 + i);
+       if(!almostEqual(arr1[arr1_idx], arr2[arr2_idx])) return false;
+     }
+     return true;
+   }
+   
    
   /*
    * Return Set of polygons that represent the intersection
@@ -263,6 +333,22 @@ export class LinkedPolygon extends PIXI.Polygon {
       const primEdges = [...this.segments.values()].concat([...other_polygon.segments.values()]);
       const intersection_points = this.intersectionPoints(other_polygon);
       
+
+      
+
+      
+      return primEdges;     
+    }
+     
+   /*
+    * Create array of polygons from array of edges.
+    * Move CCW around the polygon.
+    */
+    // use intersections to identify smaller polygons
+    // from each intersection, move around the polygon
+    // if you come back to the intersection, store the polygon
+    // if you meet another intersection, take the CCW path
+    polygonate(edges, intersections) {
       // add intersections to edges by splitting the edge
       // can take advantage of the reference to split directly
       intersection_points.forEach(i => {
@@ -270,9 +356,95 @@ export class LinkedPolygon extends PIXI.Polygon {
           s.splitAt(i);
         });
       });
+    
+      // find a valid starting point and direction
+      // need to move clockwise along edges with the polygon to the inside
+      polygons = [];
+      vertices_visited = [];
       
-      return primEdges;     
-     }
+      for(let i = 0; i < intersections.length; i += 1) {
+        const intersection = intersections[i];
+        
+        // create a polygon using each edge from the intersection
+        const s_ids = [...intersection.segments.keys()]
+        for(let s_id = 0; s_id < s_ids.length; s_id += 1) {
+          const polygon_found = tracePolygon(intersection, s_id, edges.length);
+          
+          // check for unique polygon
+          const already_found = polygons.some(p => {
+            return p.equals(polygon_found);
+          })
+          
+          if(!already_found) polygons.push(polygon_found);
+        }
+      }
+    }
+    
+    tracePolygon(starting_vertex, starting_edge_id, max_iterations = 100) {
+      let current_edge = starting_vertex.segments.get(starting_edge_id);
+      let edges_found = [current_edge];
+      let current_vertex = undefined;
+      
+      let iteration = 0; // for testing, to avoid infinite loops.
+      while(iteration < max_iterations) {
+        iteration += 1;
+        
+        current_vertex = current_edge.getOppositeVertex(current_vertex.id);
+        if(current_vertex.id === starting_vertex.id) break;
+        
+        if(current_vertex.segments.size > 2) {
+          // 0 should be the current edge
+          const sorted_segments = sortCCW(current_vertex.segments, current_vertex.id);
+          current_edge = sorted_segments[1];
+        } else {
+          // find the next edge by eliminating the one we just visited
+          current_edge = [...current_vertex.segments.values].filter(s => {
+            s.id !== current_edge.id;
+          });
+        }
+        edges_found.push(current_edge);
+      }
+    
+    }
+    
+    
+    
+   
+    
+   /*
+    * For an edge, sort the segments for a vertex CCW
+    * @param {Segment} edge   Edge to use
+    * @param {String} direction Vertex to use ("A" or "B")
+    * @return {Array[Segment]} Segments sorted by CCW. 0 is the current edge.
+    */  
+    sortCCW(edge, anchor_id) {
+      const v = edge.getOppositeVertex(anchor_id);
+          
+      log(`edge ${edge.id} from anchor ${anchor_v_id}`, edge);
+      
+      const s_sorted = [...v.segments.values()].sort((a, b) => {
+        if(a.id === edge.id) return -1;
+        if(b.id === edge.id) return 1;
+        
+        const a_new_v = a.A.id === v.A.id || a.A.id === v.B.id ? a.B : a.A;
+        const b_new_v = b.A.id === v.A.id || b.A.id === v.B.id ? b.B : b.A; 
+        
+        const a_ccw = e1.orient2d(a_new_v);
+        const b_ccw = e1.orient2d(b_new_v);
+        
+        if(almostEqual(a_ccw, b_ccw)) return 0;
+        
+        // positive if ccw
+        return (a_ccw > b_ccw) ? 1 : -1;
+      });
+      
+      log(`sorted segments`, [...s_sorted]);
+      
+      return s_sorted;
+    }
+    
+    
+   
 
      
 } 
