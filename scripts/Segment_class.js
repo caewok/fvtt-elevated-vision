@@ -262,10 +262,13 @@ export class Segment extends Ray {
   }
   
  /*
-    * Get vertex of segment opposite the id
-    * @param {String} id  Id of the opposing vertex
-    * @return {Vertex} Opposite side vertex
-    */   
+  * Get vertex of segment opposite the id
+  * @param {String} id  Id of the opposing vertex
+  * @return {Vertex} Opposite side vertex
+  */  
+  getOppositeVertex(id) {
+    this.A.id === id ? this.B : this.A;
+  } 
 
  /*
   * Test if a point is a segment endpoint.
