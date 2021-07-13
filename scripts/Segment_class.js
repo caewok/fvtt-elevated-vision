@@ -260,6 +260,12 @@ export class Segment extends Ray {
   collinear(p) {
     return almostEqual(this.orient2d(p), 0);
   }
+  
+ /*
+    * Get vertex of segment opposite the id
+    * @param {String} id  Id of the opposing vertex
+    * @return {Vertex} Opposite side vertex
+    */   
 
  /*
   * Test if a point is a segment endpoint.
@@ -337,12 +343,12 @@ export class Segment extends Ray {
     this.split_dist = p_dist;
     this.splits = new Map();
     
-    const segA = new this.constructor({ x: this.A.x, y: this.A.y }, 
-                             { x: p.x, y: p.y });
-    const segB = new this.constructor({ x: p.x, y: p.y }, 
-                             { x: this.B.x, y: this.B.y });                      
+    // sub-segments should share the vertices of the parent, plus the p vertex, if any
+    if(!(p instanceof Vertex)) p = Vertex.fromPoint(p);
     
-    
+    const segA = Segment.fromVertices(this.A, p);
+    const segB = Segment.fromVertices(p, this.B);
+        
     segA.originating_object = this.originating_object;
     segA.properties = duplicate(this.properties); // otherwise, the splits all share 
                                                   // the same properties. 
