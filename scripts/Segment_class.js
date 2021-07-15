@@ -267,7 +267,7 @@ export class Segment extends Ray {
   * @return {Vertex} Opposite side vertex
   */  
   getOppositeVertex(id) {
-    this.A.id === id ? this.B : this.A;
+    return this.A.id === id ? this.B : this.A;
   } 
 
  /*
