@@ -368,7 +368,9 @@ export class LinkedPolygon extends PIXI.Polygon {
         // create a polygon using each edge from the intersection
         const s_ids = [...intersection.segments.keys()]
         for(let j = 0; j < s_ids.length; j += 1) {
-          const polygon_found = this.tracePolygon(intersection, s_ids[j], edges.length);
+          // intersections are vertices with 2+ segments
+        
+          const polygons_found = this.tracePolygon(intersection, starting_vertex.segments.get(s_ids[j]), edges.length);
           
           // check for unique polygon
           const already_found = polygons.some(p => {
@@ -380,71 +382,191 @@ export class LinkedPolygon extends PIXI.Polygon {
       }
     }
     
-    tracePolygon(starting_vertex, starting_edge_id, max_iterations = 100) {
-      let current_edge = starting_vertex.segments.get(starting_edge_id);
-      let edges_found = [current_edge];
-      let current_vertex = starting_vertex;
+    
+//     from upper right: 1,2,3,4,5,6,7,8 (middle)
+//     
+//     A poly
+//     i1: 1
+//     i2: 7
+//     i3: 3
+//     i4: 8
+//     i5: 8
+//     i6: 6
+//     i7: 8
+//     
+//     a poly
+//     i1: 8
+//     i2: 2
+//     i3: 8
+//     i4: 4
+//     i5: 5
+//     i6: 8
+//     i8: 7
+//     
+//     
+//     
+//     Segment: A|B with intersections AB1, AB2
+//     Segment: A|D with intersections AD1, AD2
+//     Segment: a|b with intersections ab1, ab2
+//     segment: b|c with intersections bc1, bc2
+//     
+//     Intersections: AB1, ab2 (1)
+//                    AB2, bc1 (2)
+//                    AD1, ab1 (3)
+//     
+//     Triangle: A - AB1 - AD1
+//     Triangle: AB1 - b - AB2
+//     
+//     start vertex: AB1 (1)
+//     start edge: A|B
+//     
+//     1: split start edge A|B. 2 segments share AB1
+//        a. segment A|AB1
+//           CW: A|AB1 -- AB1|AD1 (splits, choose CW) -- A
+//        
+//        b. segment AB1|AB2
+//           CW: AB1|AB2 -- (around long way)
+//           
+//     2.       
+    
+    
+  sorted AB1:
+  
+  initial: A|AB1
+  sorted:
+  0: AB1|AD1
+  1: AB1|AB2
+  2: AB1|b
+   
+  CW: 0 
+  A|AB1 (3): AB1|AD1 (0)
+  
+  other CW:
+  AB1|b (2): A|AB1 (3)
+  AB1|AB2 (1): AB1|b (2)
+  AB1|AD1 (0): AB1|AB2 (1)
+   
+   getAllEdgesFromVertex(vertex) {
+     // for each segment of the vertex, find all the splits and return any split with that vertex
+     const v_edges = [];
+     vertex.segments.forEach(s => {
+       // filter splits for only those that contain the vertex in question
+//        const matching_edges = s.getSplits().filter(split => {
+//          return split.contains(vertex);
+//        }); 
+       const matching_edges = s.getSplits().filter(split => {
+         return split.vertexA.id === vertex.id || split.vertexB.id === vertex.id;
+       });
+       
+       matching_edges.map(m => { v_edges.push(m); });       
+     });
+     return v_edges;
+   }
+   
+   
+/*
+segment --> vertex
+get next segment CW
+
+if more than 1 next segment, others recurse anew
+
+return next segment, new vertex 
+
+if edge already seen, then stop
+if back to starting vertex, report polygon
+*/
+     
+     
+    walkEdge(starting_vertex_id, starting_edge) {
+      // return the next edge(s), sorted CCW and move to the next vertex
+      const next_vertex_id = starting_edge.getOppositeVertex(starting_vertex_id);
       
-      let iteration = 0; // for testing, to avoid infinite loops.
+      const v_segments = this.getAllEdgesFromVertex(next_vertex_id);
+      
+      let new_segments = v_segments.filter(s => {
+        return s.id !== starting_edge.id;
+      });
+      
+      if(new_segments.length > 1) {
+        new_segments = this.sortCW(starting_edge, new_segments, starting_intersection.id);
+      } 
+      
+      return { new_segments: new_segments,
+               next_vertex_id: next_vertex_id } 
+    } 
+    
+    traceAllPolygons(starting_intersection, max_iterations = 100) {
+      const edges_found = [];
+      const polygons_found = [];
+      
+      const v_segments = this.getAllEdgesFromVertex(starting_intersection);
+      const other_segments = this.sortCW(v_segments[0], v_segments.slice[1], starting_intersection);
+      
+      
+      v_segments.forEach(s => {
+        const res = tracePolygon(starting_intersection, s, max_iterations = max_iterations, edges_found = edges_found);
+        polygons_found.concat(res);
+      });  
+    
+      return polygons_found;
+    }
+    
+    // walk CW around a polygon.
+    // where intersections found, look for new polygon(s) by walking CW using that start point
+    // return 0 or more polygons found
+    tracePolygon(starting_vertex_id, starting_edge, max_iterations = 100, edges_found = []) {
+      const polygon_found = [];
+      const polygons_found = [];
+      let current_vertex_id = starting_vertex_id;
+      let current_edge = starting_edge;
+      let iteration = 0;
       while(iteration < max_iterations) {
         iteration += 1;
         
-        current_vertex = current_edge.getOppositeVertex(current_vertex.id);
-        if(current_vertex.id === starting_vertex.id) break;
-        
-        if(current_vertex.segments.size > 2) {
-          // 0 should be the current edge
-          const sorted_segments = sortCCW(current_vertex.segments, current_vertex.id);
-          current_edge = sorted_segments[1];
-        } else {
-          // find the next edge by eliminating the one we just visited
-          current_edge = [...current_vertex.segments.values()].filter(s => {
-            return s.id !== current_edge.id;
-          });
-        }
         edges_found.push(current_edge);
+        const walk_result = walkEdge(current_vertex_id, current_edge);
+        if(walk_result.next_vertex_id === starting_vertex_id) { break; } // found polygon
+        
+        const edge_already_found = edges_found.some(e => {
+          return e.id === walk_result.new_segments[0].id;
+        });
+        if(edge_already_found) return polygons_found; // overlapped with existing; return 
+        
+        polygon_found.push(walk_result.new_segments[0]);
+        
+        if(walk_result.new_segments.length > 1) {
+          const other_polygons = walk_result.new_segments.map(s => {
+            const edge_already_found = edges_found.some(e => {
+              return e.id === s.id;
+            });
+            
+            if(!edge_already_found) {
+              return this.tracePolygon(walk_result.next_vertex_id, s, max_iterations = max_iterations);
+            } else {
+              return [];
+            }
+          });
+          polygons_found.concat(other_polygons);
+        }
       }
-      return edges_found;
+      
+      return polygons_found.concat(polygon_found);
+     
     }
     
+    sortCW(anchor_edge, other_edges, intersection_id) {
+      return other_edges.sort((a, b) => {
+        const a_new_v = a.getOppositeVertex(intersection_id);
+        const b_new_v = b.getOppositeVertex(intersection_id);
     
-    
-   
-    
-   /*
-    * For an edge, sort the segments for a vertex CCW
-    * @param {Segment} edge   Edge to use
-    * @param {String} direction Vertex to use ("A" or "B")
-    * @return {Array[Segment]} Segments sorted by CCW. 0 is the current edge.
-    */  
-    sortCCW(edge, anchor_id) {
-      const v = edge.getOppositeVertex(anchor_id);
-          
-      log(`edge ${edge.id} from anchor ${anchor_v_id}`, edge);
+        const a_ccw = anchor_edge.orient2d(a_new_v);
+        const b_ccw = anchor_edge.orient2d(b_new_v);
       
-      const s_sorted = [...v.segments.values()].sort((a, b) => {
-        if(a.id === edge.id) return -1;
-        if(b.id === edge.id) return 1;
-        
-        const a_new_v = a.A.id === v.A.id || a.A.id === v.B.id ? a.B : a.A;
-        const b_new_v = b.A.id === v.A.id || b.A.id === v.B.id ? b.B : b.A; 
-        
-        const a_ccw = e1.orient2d(a_new_v);
-        const b_ccw = e1.orient2d(b_new_v);
-        
         if(almostEqual(a_ccw, b_ccw)) return 0;
-        
+      
         // positive if ccw
         return (a_ccw > b_ccw) ? 1 : -1;
-      });
-      
-      log(`sorted segments`, [...s_sorted]);
-      
-      return s_sorted;
+      });      
     }
-    
-    
-   
-
      
 } 
