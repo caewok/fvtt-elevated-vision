@@ -430,21 +430,21 @@ export class LinkedPolygon extends PIXI.Polygon {
 //     2.       
     
     
-  sorted AB1:
-  
-  initial: A|AB1
-  sorted:
-  0: AB1|AD1
-  1: AB1|AB2
-  2: AB1|b
-   
-  CW: 0 
-  A|AB1 (3): AB1|AD1 (0)
-  
-  other CW:
-  AB1|b (2): A|AB1 (3)
-  AB1|AB2 (1): AB1|b (2)
-  AB1|AD1 (0): AB1|AB2 (1)
+//   sorted AB1:
+//   
+//   initial: A|AB1
+//   sorted:
+//   0: AB1|AD1
+//   1: AB1|AB2
+//   2: AB1|b
+//    
+//   CW: 0 
+//   A|AB1 (3): AB1|AD1 (0)
+//   
+//   other CW:
+//   AB1|b (2): A|AB1 (3)
+//   AB1|AB2 (1): AB1|b (2)
+//   AB1|AD1 (0): AB1|AB2 (1)
    
    getAllEdgesFromVertex(vertex) {
      // for each segment of the vertex, find all the splits and return any split with that vertex
