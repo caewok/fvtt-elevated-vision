@@ -500,11 +500,9 @@ if back to starting vertex, report polygon
       const polygons_found = [];
       
       const v_segments = this.getAllEdgesFromVertex(starting_intersection);
-      const other_segments = this.sortCW(v_segments[0], v_segments.slice[1], starting_intersection);
-      
-      
+            
       v_segments.forEach(s => {
-        const res = tracePolygon(starting_intersection, s, max_iterations = max_iterations, edges_found = edges_found);
+        const res = this.tracePolygon(starting_intersection, s, max_iterations = max_iterations, edges_found = edges_found);
         polygons_found.concat(res);
       });  
     
@@ -524,7 +522,7 @@ if back to starting vertex, report polygon
         iteration += 1;
         
         edges_found.push(current_edge);
-        const walk_result = walkEdge(current_vertex_id, current_edge);
+        const walk_result = this.walkEdge(current_vertex_id, current_edge);
         if(walk_result.next_vertex_id === starting_vertex_id) { break; } // found polygon
         
         const edge_already_found = edges_found.some(e => {
@@ -535,7 +533,7 @@ if back to starting vertex, report polygon
         polygon_found.push(walk_result.new_segments[0]);
         
         if(walk_result.new_segments.length > 1) {
-          const other_polygons = walk_result.new_segments.map(s => {
+          const other_polygons = walk_result.new_segments.slice(1).map(s => {
             const edge_already_found = edges_found.some(e => {
               return e.id === s.id;
             });
@@ -548,6 +546,8 @@ if back to starting vertex, report polygon
           });
           polygons_found.concat(other_polygons);
         }
+        current_edge = walk_result.new_segments[0];
+        current_vertex_id = walk_result.next_vertex_id;
       }
       
       return polygons_found.concat(polygon_found);
