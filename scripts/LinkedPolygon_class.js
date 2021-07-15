@@ -302,20 +302,34 @@ export class LinkedPolygon extends PIXI.Polygon {
    /*
     * Brute-force identification of intersection points between two polygons.
     * @param {LinkedPolygon} other_polygon  Polygon to check for intersections.
-    * @return {Array[Vertex]} Intersection points with the intersecting segments. 
+    * @return {Map[Vertex]} Intersection points with the intersecting segments. 
     */
 
     intersectionPoints(other_polygon) {
-      const intersection_points = [];
+      const intersection_points = new Map();
       this.segments.forEach(s1 => {
         other_polygon.segments.forEach(s2 => {
           const intersection = s1.intersectSegment([s2.A.x, s2.A.y, s2.B.x, s2.B.y]);
           if(intersection) {
-            const v = Vertex.fromPoint(intersection);
+            let v;
+            // check if intersection is on a vertex
+            if(s1.A.equals(intersection)) {
+              v = s1.A;
+            } else if(s1.B.equals(intersection)) {
+              v = s1.B;
+            } else if(s2.A.equals(intersection)) {
+              v = s2.A;
+            } else if(s2.B.equals(intersection)) {
+              v = s2.B;
+            } else {
+              // intersection is a new point in the middle of the two segments
+              v = Vertex.fromPoint(intersection);
+            }
+            
             v.segments.set(s1.id, s1);
             v.segments.set(s2.id, s2);
-          
-            intersection_points.push(v);
+            
+            intersection_points.set(v.id, v);
           }
         });
       
@@ -324,14 +338,21 @@ export class LinkedPolygon extends PIXI.Polygon {
     }
     
    /*
+    * Find vertices that are identical or nearly so in another polygon.
+    * Add segments from the other polygon to this one.
+     
+    
+   /*
     * Create array of edges of both polygons combined.
     * Include edges created from intersection points.
     * @param {LinkedPolygon} other_polygon  Other polygon to pull edges from.
     * @return {Array[Segments]}
     */
     edgify(other_polygon) {
+      
+      
       const primEdges = [...this.segments.values()].concat([...other_polygon.segments.values()]);
-      const intersection_points = this.intersectionPoints(other_polygon);
+      const intersections = [...this.intersectionPoints(other_polygon).values];
       
 
       
