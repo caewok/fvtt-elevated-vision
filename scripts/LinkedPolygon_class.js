@@ -532,20 +532,20 @@ if back to starting vertex, report polygon
         
         polygon_found.push(walk_result.new_segments[0]);
         
-        if(walk_result.new_segments.length > 1) {
-          const other_polygons = walk_result.new_segments.slice(1).map(s => {
-            const edge_already_found = edges_found.some(e => {
-              return e.id === s.id;
-            });
-            
-            if(!edge_already_found) {
-              return this.tracePolygon(walk_result.next_vertex_id, s, max_iterations = max_iterations);
-            } else {
-              return [];
-            }
-          });
-          polygons_found.concat(other_polygons);
-        }
+        // if(walk_result.new_segments.length > 1) {
+//           const other_polygons = walk_result.new_segments.slice(1).map(s => {
+//             const edge_already_found = edges_found.some(e => {
+//               return e.id === s.id;
+//             });
+//             
+//             if(!edge_already_found) {
+//               return this.tracePolygon(walk_result.next_vertex_id, s, max_iterations = max_iterations);
+//             } else {
+//               return [];
+//             }
+//           });
+//           polygons_found.concat(other_polygons);
+//         }
         current_edge = walk_result.new_segments[0];
         current_vertex_id = walk_result.next_vertex_id;
       }
