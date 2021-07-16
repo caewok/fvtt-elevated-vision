@@ -12,7 +12,13 @@ import { ShadowSegment } from "./ShadowSegment_class.js";
 import { locationOf, COLORS, FirstMapValue, SecondMapValue, almostEqual } from "./utility.js";
 import { log } from "./module.js";
 
-
+/*
+ * Polygon class with linked Segments and Vertices.
+ * For a regular polygon, where each vertex has 2 segments, 
+ * this is ordered such that segment.vertex.A <--> segment <--> segment.vertex.B / segment2.vertex.A <--> segment2.vertex.B
+ * the last segment.vertex.B <--> first segment.vertex.A
+ * Irregular polygons may have more than one segment per vertex (such as creating overlapping polygons)
+ */
 export class LinkedPolygon extends PIXI.Polygon {  
  /*
   * Construct the map of segments for the polygon.
@@ -236,8 +242,66 @@ export class LinkedPolygon extends PIXI.Polygon {
      return this._setOperation(other_polygon, "intersection");
    }
    
-  /*
-   * 
+  /* 
+   * Helper function to walk the polygon and do something at each vertex or segment.
+   * If the polygon is irregular in that it has more than two segments at a vertex, 
+   * walk the CW segment
+   */
+   walkPolygon(vertex_fn, segment_fn, use_splits = false) {
+     // start at a segment.
+     // Point A is starting; Point B is current
+     const current_segment_id = [...this.segments.keys()][0];
+     const starting_segment = this.segments.get(current_segment_id);
+     const starting_vertex_id = starting_segment.vertexA.id;
+     const current_vertex_id = starting_segment.vertexB.id;
+     
+     current_vertex = this.ver
+     
+     while(current_vertex.id !== starting_vertex_id) {
+       if(starting_vertex_id === "") {
+         current_
+       }
+     
+       // apply to segment
+       current_segments = [...current_vertex.segments.values()];
+
+       if(current_segments.length > 2) {
+         log("walkPolygon: more than 2 current segments.");
+       }
+       if(segment_fn) { segment_fn(current_segments[1]); } 
+
+       // apply to segment vertexB 
+       current_vertex = current_segments[1].vertexB;
+       if(vertex_fn) { vertex_fn(current_vertex); }
+      
+    
+    
+    }
+ 
+ 
+     const starting_vertex_id = [...this.vertices.keys()][0];
+     const current_segment_id = [...this.segments.keys()][0];
+     let current_segment_id = "";
+     
+     while(current_segment_id !== starting_vertex_id) {
+       if(current_segment_id === "") current_segment_id = starting_segment_id;
+       
+       if(segment_fn) segment_fn(current_segment_id);
+       
+       vertex_id = this.segments.get(current_segment_id).
+       
+     
+     }
+     
+     if(vertex_fn) {
+     
+     }
+     
+     if(segment_fn) {
+     
+     }
+   
+   } 
    
    
   /*
@@ -496,6 +560,25 @@ return next segment, new vertex
 if edge already seen, then stop
 if back to starting vertex, report polygon
 */
+    // generator to walk along the polygon
+    // https://exploringjs.com/es6/ch_generators.html#ch_generators
+    * walkFromVertex(starting_vertex_id) {
+      let current_vertex_id = null;
+      let current_vertex = this.vertices.get(starting_vertex_id);
+      let current_segment = null;
+      const MAX_ITERATIONS = 100;
+      let iteration = 0;
+      
+      while(current_vertex_id !== starting_vertex_id) {
+        yield current_vertex;
+        current_segment = SecondMapValue(current_vertex.segments);
+        yield current_segment;
+        current_vertex_id = current_vertex.id;
+        iteration += 1;
+        if(iteration > MAX_ITERATIONS) break;
+      }
+    }
+    
      
      
     walkEdge(starting_vertex_id, starting_edge) {
