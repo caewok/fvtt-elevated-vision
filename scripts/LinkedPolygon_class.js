@@ -566,16 +566,17 @@ if back to starting vertex, report polygon
       let current_vertex_id = null;
       let current_vertex = this.vertices.get(starting_vertex_id);
       let current_segment = null;
-      const MAX_ITERATIONS = 100;
+      const MAX_ITERATIONS = this.vertices.size + this.segments.size + 1;
       let iteration = 0;
       
       while(current_vertex_id !== starting_vertex_id) {
         yield current_vertex;
         current_segment = SecondMapValue(current_vertex.segments);
         yield current_segment;
+        current_vertex = current_segment.vertexB;
         current_vertex_id = current_vertex.id;
-        iteration += 1;
         if(iteration > MAX_ITERATIONS) break;
+        iteration += 1;
       }
     }
     
