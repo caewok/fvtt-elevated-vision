@@ -562,17 +562,34 @@ if back to starting vertex, report polygon
 */
     // generator to walk along the polygon
     // https://exploringjs.com/es6/ch_generators.html#ch_generators
-    * walkFromVertex(starting_vertex_id) {
+    * walkFromVertex(starting_vertex_id, include_splits = false) {
       let current_vertex_id = null;
       let current_vertex = this.vertices.get(starting_vertex_id);
       let current_segment = null;
+      
       const MAX_ITERATIONS = this.vertices.size + this.segments.size + 1;
       let iteration = 0;
       
       while(current_vertex_id !== starting_vertex_id) {
         yield current_vertex;
         current_segment = SecondMapValue(current_vertex.segments);
-        yield current_segment;
+        
+        if(include_splits) {
+          const split_segments = current_segment.getSplits();
+          
+          for(const split in split_segments) {
+            yield split;
+            
+            if(split.vertexB.equals(current_segment.vertexB)) { break; }
+            
+            yield split.vertexB;
+          }
+        
+        } else {
+           yield current_segment;
+        }
+        
+       
         current_vertex = current_segment.vertexB;
         current_vertex_id = current_vertex.id;
         if(iteration > MAX_ITERATIONS) break;
@@ -580,6 +597,39 @@ if back to starting vertex, report polygon
       }
     }
     
+    * walkFromSegment(starting_segment_id, include_splits = false) {
+      let current_segment_id = null;
+      let current_segment = this.segments.get(starting_segment_id);
+      let current_vertex = null;
+      const MAX_ITERATIONS = this.vertices.size + this.segments.size + 1;
+      let iteration = 0;
+      
+      while(current_segment_id !== starting_segment_id) {
+        yield current_segment;
+        current_vertex = current_segment.vertexB;
+        yield current_vertex;
+        current_segment = SecondMapValue(current_vertex.segments);
+        if(include_splits) {
+          const split_segments = current_segment.getSplits();
+          
+          for(const split in split_segments) {
+            yield split;
+            
+            if(split.vertexB.equals(current_segment.vertexB)) { break; }
+            
+            yield split.vertexB;
+          }
+        
+        } else {
+           yield current_segment;
+        }
+        current_segment_id = current_segment.id;
+        if(iteration > MAX_ITERATIONS) break;
+        iteration += 1;
+      }
+    
+    
+    }
      
      
     walkEdge(starting_vertex_id, starting_edge) {
