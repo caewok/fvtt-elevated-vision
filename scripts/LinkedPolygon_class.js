@@ -605,10 +605,6 @@ if back to starting vertex, report polygon
       let iteration = 0;
       
       while(current_segment_id !== starting_segment_id) {
-        yield current_segment;
-        current_vertex = current_segment.vertexB;
-        yield current_vertex;
-        current_segment = SecondMapValue(current_vertex.segments);
         if(include_splits) {
           const split_segments = current_segment.getSplits();
           
@@ -623,6 +619,10 @@ if back to starting vertex, report polygon
         } else {
            yield current_segment;
         }
+        current_vertex = current_segment.vertexB;
+        yield current_vertex;
+        current_segment = SecondMapValue(current_vertex.segments);
+        
         current_segment_id = current_segment.id;
         if(iteration > MAX_ITERATIONS) break;
         iteration += 1;
