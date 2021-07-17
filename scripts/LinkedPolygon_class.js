@@ -577,7 +577,7 @@ if back to starting vertex, report polygon
         if(include_splits) {
           const split_segments = current_segment.getSplits();
           
-          for(const idx = 0; idx < split_segments.length; idx += 1) {
+          for(let idx = 0; idx < split_segments.length; idx += 1) {
             const split = split_segments[idx];
             log(`walkFromVertex idx ${idx}`, split);
             yield split;
