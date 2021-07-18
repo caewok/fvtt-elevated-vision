@@ -579,7 +579,6 @@ if back to starting vertex, report polygon
           
           for(let idx = 0; idx < split_segments.length; idx += 1) {
             const split = split_segments[idx];
-            log(`walkFromVertex idx ${idx}`, split);
             yield split;
             if(split.vertexB.equals(current_segment.vertexB)) { break; }
             yield split.vertexB;
@@ -608,11 +607,10 @@ if back to starting vertex, report polygon
         if(include_splits) {
           const split_segments = current_segment.getSplits();
           
-          for(const split in split_segments) {
+          for(let idx = 0; idx < split_segments.length; idx += 1) {
+            const split = split_segments[idx];
             yield split;
-            
             if(split.vertexB.equals(current_segment.vertexB)) { break; }
-            
             yield split.vertexB;
           }
         
