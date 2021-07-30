@@ -141,6 +141,7 @@ export class LinkedPolygon extends PIXI.Polygon {
     
     let prior_vertex = undefined;
     let first_vertex_id;
+    let last_vertex_id;
     for(let point of pointIter) {
       let current_vertex;
     
@@ -151,6 +152,7 @@ export class LinkedPolygon extends PIXI.Polygon {
       } else {
         // create a vertex connected by a segment of the specified class
         current_vertex = prior_vertex.connectPoint(point.x, point.y, segment_class);
+        last_vertex_id = prior_vertex.id;
       }
       
       current_vertex.originating_object = this;
@@ -159,9 +161,8 @@ export class LinkedPolygon extends PIXI.Polygon {
     }
     
     // link to beginning
-    const last_vertex_id = current_vertex.id;
     const s_last_first = SEGMENT_CLASSES[segment_class].fromVertices(poly_vertices.get(last_vertex_id),
-                                              poly_vertices.get(first_vertex_id),);
+                                                                     poly_vertices.get(first_vertex_id));
                                                                          
     poly_vertices.get(last_vertex_id).includeSegment(s_last_first)
     
