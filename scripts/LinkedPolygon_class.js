@@ -3,6 +3,16 @@
 // Methods provided to split a segment recursively.
 // Basic drawing methods using the segments.
 
+// Polygon must be closed but not necessarily convex.
+// Segments may contain Vertices to Segments outside the polygon (e.g. other intersecting polygons)
+// But the points will always represent a single polygon
+
+
+// Key functions
+// iteratePoints, iterateEdges: use the points to 
+
+
+
 // Intersection methods adapted from https://github.com/vrd/js-intersect/blob/gh-pages/solution.js
 // License: MIT
 
@@ -20,6 +30,20 @@ import { log } from "./module.js";
  * Irregular polygons may have more than one segment per vertex (such as creating overlapping polygons)
  */
 export class LinkedPolygon extends PIXI.Polygon {  
+
+  constructor(...points) {
+    super(...points);
+    
+    // make sure the points are linked
+    const l = this.points.length;
+    if(this.points[0] !== this.points[l - 2] ||
+      this.points[1] !== this.points[l - 1]) {
+      console.error(`${MODULE_ID}|_constructVertices expects a closed set of points.`, this);
+       
+      this.points.concat(this.points[0], this.points[1]);
+    }
+  }
+
  /*
   * Construct the map of segments for the polygon.
   * Cached.
@@ -55,6 +79,50 @@ export class LinkedPolygon extends PIXI.Polygon {
       segment.mergeProperty({ color: color });
     }
   }
+  
+  
+ /*
+  * Iterate over the polygon's {x, y} points in order.
+  * Note: last two this.points (n-1, n) equal the first (0, 1)
+  * @return {x, y} PIXI.Point
+  */ 
+  * iteratePoints() {
+    for(let i = 0; i < (this.points.length - 2); i += 2) {
+      yield new PIXI.Point(this.points[i], this.points[i + 1]);
+    }
+  }
+  
+ /*
+  * Iterate over the polygon's edges, using only the points.
+  * note: last point equals the first
+  * @return {Ray}
+  */
+  * iterateEdges() {
+    const pointIter = this.iteratePoints();
+    let prior_point = undefined;
+    for(let point of pointIter) {
+      if(prior_point) {
+        yield new Ray(prior_point, point);
+      } 
+      prior_point = point;
+    }
+  }
+  
+ /*
+  * Test if the points are in clockwise or counterclockwise order.
+  * https://stackoverflow.com/questions/1165647/how-to-determine-if-a-list-of-polygon-points-are-in-clockwise-order
+  */
+  is_clockwise() {
+    const edgeIter = this.iterateEdges();
+    const the_sum = [...edgeIter].reduce((acc, edge) => {
+      acc += (edge.B.x - edge.A.x) * (edge.B.y - edge.A.y);
+      return acc;
+    }, 0);
+    
+    // normally clockwise if positive
+    // but here, canvas uses inverted y-axis, so clockwise if negative
+    return the_sum <= 0;
+  }
 
  /*
   * Internal function to construct the map of vertices for the polygon
@@ -62,43 +130,35 @@ export class LinkedPolygon extends PIXI.Polygon {
   * @return {Map}
   */
   _constructVertices(segment_class = "Segment") {
-    const SEGMENT_CLASSES = {
-       Segment,
-       ShadowSegment
-     }
+    // const SEGMENT_CLASSES = {
+//        Segment,
+//        ShadowSegment
+//      }
   
     const poly_vertices = new Map();  
-    let prior_vertex = new Vertex(this.points[0], this.points[1]);
-    let new_vertex;
-    prior_vertex.originating_object = this;
-    poly_vertices.set(prior_vertex.id, prior_vertex);
+    const pointIter = this.iteratePoints();
     
-    //log(`_constructVertices 0:`, prior_vertex, new_vertex);
+    let prior_vertex = undefined;
+    let first_vertex_id;
+    for(let point of pointIter) {
+      let current_vertex;
     
-    // save the first id to link at the end
-    const l = this.points.length;
-    if(this.points[0] !== this.points[l - 2] ||
-       this.points[1] !== this.points[l - 1]) {
-       console.error(`${MODULE_ID}|_constructVertices expects a closed set of points.`, this);
-       }
-    
-    const first_vertex_id = prior_vertex.id;
-
-    // TO-DO: assuming closed stroke for now.
-    for (let i = 2; i < (this.points.length - 2); i += 2) {
-      new_vertex = prior_vertex.connectPoint(this.points[i], this.points[i + 1], segment_class);
-      //log(`_constructVertices ${i} new_vertex`, new_vertex);
+      if(!prior_vertex) {
+        // first one; just create a new vertex
+        current_vertex = Vertex.fromPoint(point);
+        first_vertex_id = current_vertex.id; 
+      } else {
+        // create a vertex connected by a segment of the specified class
+        current_vertex = prior_vertex.connectPoint(point.x, point.y, segment_class);
+      }
       
-      poly_vertices.set(new_vertex.id, new_vertex);
-      prior_vertex = new_vertex;
-      //log(`_constructVertices ${i} end:`, prior_vertex, new_vertex)
+      current_vertex.originating_object = this;
+      poly_vertices.set(current_vertex.id, current_vertex);
+      prior_vertex = current_vertex; 
     }
     
-    //log(`_constructVertices ended loop`);
-    
     // link to beginning
-    const last_vertex_id = new_vertex.id;
-    
+    const last_vertex_id = current_vertex.id;
     const s_last_first = SEGMENT_CLASSES[segment_class].fromVertices(poly_vertices.get(last_vertex_id),
                                               poly_vertices.get(first_vertex_id),);
                                                                          
@@ -111,10 +171,9 @@ export class LinkedPolygon extends PIXI.Polygon {
     poly_vertices.get(first_vertex_id).includeSegment(s_last_first);
     poly_vertices.get(first_vertex_id).includeSegment(s_first_second);
     
-    //log(`_constructVertices return`, poly_vertices);
-
     return poly_vertices;
   }
+  
   
  /*
   * Internal function to build the Map of polygon segments.
@@ -625,8 +684,6 @@ if back to starting vertex, report polygon
         if(iteration > MAX_ITERATIONS) break;
         iteration += 1;
       }
-    
-    
     }
      
      
