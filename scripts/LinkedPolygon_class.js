@@ -22,6 +22,38 @@ import { ShadowSegment } from "./ShadowSegment_class.js";
 import { locationOf, COLORS, FirstMapValue, SecondMapValue, almostEqual } from "./utility.js";
 import { log } from "./module.js";
 
+
+ /*
+  * Simplified version of generator that produces A through Z.
+  * After Z, it goes AA ... AZ, AAA ... AAZ, ...
+  * E.g.
+const alphaIter = iterateAlphabet();
+for(let i = 0; i < 40; i++) {
+  console.log(alphaIter.next().value);
+}
+console.log(alphaIter.next(true).value);
+*/
+
+const ALPHABET = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"];
+function * iterateAlphabet() {
+  let current = 0;
+  let prefix = [];
+  while (true) {
+    let reset = yield prefix.concat(ALPHABET[current]).join();
+    current += 1;
+    if(current > 25) {
+      current = 0;
+      prefix.push("A");
+    }
+    if(reset) {
+      current = 0;
+      prefix = [];
+    }
+  
+  }
+}
+
+
 /*
  * Polygon class with linked Segments and Vertices.
  * For a regular polygon, where each vertex has 2 segments, 
@@ -43,6 +75,23 @@ export class LinkedPolygon extends PIXI.Polygon {
       this.points.concat(this.points[0], this.points[1]);
     }
   }
+  
+ /*
+  * Get the id for this Segment.
+  * @type {String}
+  */
+  get id() {
+    if(!this._id) this._id = foundry.utils.randomID();
+    return this._id;
+  }
+
+ /*
+  * Set the id for this Segment.
+  * @type {String}
+  */
+  set id(value) {
+    this._id = value;
+  } 
 
  /*
   * Construct the map of segments for the polygon.
@@ -128,6 +177,8 @@ export class LinkedPolygon extends PIXI.Polygon {
  /*
   * Internal function to construct the map of vertices for the polygon
   * Each vertex links to two segments, using the internal Segment and Vertex linking.
+  * Each vertex has id: id_A, id_B, id_C, ... id_AA, id_AB ..., where id is polygon id
+  * Each segment has id id_A|B, id_B|C, ... id_AA|AB, etc., where id is polygon id
   * @return {Map}
   */
   _constructVertices(segment_class = "Segment") {
@@ -138,44 +189,48 @@ export class LinkedPolygon extends PIXI.Polygon {
   
     const poly_vertices = new Map();  
     const pointIter = this.iteratePoints(false); // don't circle back to beginning
+    const alphaIter = iterateAlphabet();
     
     let prior_vertex = undefined;
     let first_vertex_id;
     let last_vertex_id;
     for(let point of pointIter) {
-      let current_vertex;
-    
+      const current_vertex = Vertex.fromPoint(point);
+      current_vertex.id = this.id + "_" + alphaIter.next().value;
+      const last_vertex_id = current_vertex.id;
+      
       if(!prior_vertex) {
-        // first one; just create a new vertex
-        current_vertex = Vertex.fromPoint(point);
-        first_vertex_id = current_vertex.id; 
+        // first one
+        first_vertex_id = current_vertex.id;
+          
       } else {
-        // create a vertex connected by a segment of the specified class
-        current_vertex = prior_vertex.connectPoint(point.x, point.y, segment_class);
-        last_vertex_id = prior_vertex.id;
+        const s_prior_current = SEGMENT_CLASSES[segment_class].fromVertices(prior_vertex,
+                                                                      current_vertex);
+        const [id_prior label_prior] = prior_vertex.id.split("_");
+        const [id_current label_current] = currnet_vertex.id.split("_");
+        s_prior_current.id = this.id + "_" + label_prior + "|" + label_current;
+        
+        prior_vertex.segments.includeSegment(s_prior_current);
+        prior_vertex.segments.includeSegment(s_prior_current);             
       }
       
-      current_vertex.originating_object = this;
-      poly_vertices.set(current_vertex.id, current_vertex);
-      prior_vertex = current_vertex; 
+      poly_vertices.set(current_vertex.id, current_vertex)
+      prior_vertex = current_vertex;
     }
     
     // link to beginning
     const s_last_first = SEGMENT_CLASSES[segment_class].fromVertices(poly_vertices.get(last_vertex_id),
                                                                      poly_vertices.get(first_vertex_id));
+    // relabel last|first
+    const [id_first label_first] = first_vertex_id.split("_");
+    const [id_last label_last] = last_vertex_id.split("_");
+    s_last_first.id = this.id + "_" + label_last + "|" + label_first;
                                                                          
     poly_vertices.get(last_vertex_id).includeSegment(s_last_first)
     
-    // to ensure segments are A, B for the vertex, as in prior(A) --> vertex --> next (B)
-    // need to insert this s_first_last as A in the first vertex
-    const s_first_second =  FirstMapValue(poly_vertices.get(first_vertex_id).segments);
-    poly_vertices.get(first_vertex_id).segments.clear();
-    poly_vertices.get(first_vertex_id).includeSegment(s_last_first);
-    poly_vertices.get(first_vertex_id).includeSegment(s_first_second);
-    
     return poly_vertices;
   }
-  
+
   
  /*
   * Internal function to build the Map of polygon segments.
