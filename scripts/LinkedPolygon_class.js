@@ -131,10 +131,10 @@ export class LinkedPolygon extends PIXI.Polygon {
   * @return {Map}
   */
   _constructVertices(segment_class = "Segment") {
-    // const SEGMENT_CLASSES = {
-//        Segment,
-//        ShadowSegment
-//      }
+     const SEGMENT_CLASSES = {
+       Segment,
+       ShadowSegment
+      }
   
     const poly_vertices = new Map();  
     const pointIter = this.iteratePoints();
