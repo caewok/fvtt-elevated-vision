@@ -319,6 +319,16 @@ export class Segment extends Ray {
   }
   
  /*
+  * Generator to iterate over splits
+  */
+  * splitIterator() {
+    // To-DO: just make getSplits a generator. Probably yield this; return;.
+    for(the_split in this.getSplits()) {
+      yield the_split;
+    }
+  } 
+  
+ /*
   * Split a segment along a point.
   * store the segment splits
   * @param {PIXI.Point} p   Point to use for the split
