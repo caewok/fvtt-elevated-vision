@@ -86,8 +86,9 @@ export class LinkedPolygon extends PIXI.Polygon {
   * Note: last two this.points (n-1, n) equal the first (0, 1)
   * @return {x, y} PIXI.Point
   */ 
-  * iteratePoints() {
-    for(let i = 0; i < (this.points.length - 2); i += 2) {
+  * iteratePoints(close = true) {
+    const dropped = close ? 0 : 2;
+    for(let i = 0; i < (this.points.length - dropped); i += 2) {
       yield new PIXI.Point(this.points[i], this.points[i + 1]);
     }
   }
