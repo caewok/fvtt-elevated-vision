@@ -137,7 +137,7 @@ export class LinkedPolygon extends PIXI.Polygon {
       }
   
     const poly_vertices = new Map();  
-    const pointIter = this.iteratePoints();
+    const pointIter = this.iteratePoints(false); // don't circle back to beginning
     
     let prior_vertex = undefined;
     let first_vertex_id;
