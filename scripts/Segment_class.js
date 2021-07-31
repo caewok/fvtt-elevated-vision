@@ -323,9 +323,18 @@ export class Segment extends Ray {
   */
   * splitIterator() {
     // To-DO: just make getSplits a generator. Probably yield this; return;.
-    for(the_split in this.getSplits()) {
-      yield the_split;
+    if(this.splits.size === 0) {
+      yield this;
+      return;
     }
+    
+    this.splits.get('A');
+    this.splits.get('B');
+    return;
+    
+//     for(the_split in this.getSplits()) {
+//       yield the_split;
+//     }
   } 
   
  /*
