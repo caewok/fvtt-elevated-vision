@@ -321,21 +321,28 @@ export class Segment extends Ray {
  /*
   * Generator to iterate over splits
   */
-  * splitIterator() {
-    // To-DO: just make getSplits a generator. Probably yield this; return;.
-    if(this.splits.size === 0) {
-      yield this;
-      return;
+  * iterateSplits() {
+    for(the_split in this.getSplits()) {
+      yield the_split;
     }
-    
-    this.splits.get('A');
-    this.splits.get('B');
-    return;
-    
-//     for(the_split in this.getSplits()) {
-//       yield the_split;
-//     }
   } 
+  
+ /*
+  * Walk the splits, returning the split segments and any internal vertices, one at a time
+  */
+  * walkSplits() {
+    const splitIter = this.iterateSplits();
+    for(let the_split of splitIter) {
+      if(the_split.id === this.id) {
+        yield the_split;
+      } else {
+        // return vertex unless equal to the outside A Vertex.
+        // don't return B Vertex, b/c the next split will have it as A.
+        if(the_split.A.id !== this.A.id) yield the_split.A;
+        yield the_split;
+      }
+    }
+  }
   
  /*
   * Split a segment along a point.
