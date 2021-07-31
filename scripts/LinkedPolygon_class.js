@@ -39,7 +39,7 @@ function * iterateAlphabet() {
   let current = 0;
   let prefix = [];
   while (true) {
-    let reset = yield prefix.concat(ALPHABET[current]).join();
+    let reset = yield prefix.concat(ALPHABET[current]).join("");
     current += 1;
     if(current > 25) {
       current = 0;
@@ -197,7 +197,7 @@ export class LinkedPolygon extends PIXI.Polygon {
     for(let point of pointIter) {
       const current_vertex = Vertex.fromPoint(point);
       current_vertex.id = this.id + "_" + alphaIter.next().value;
-      const last_vertex_id = current_vertex.id;
+      last_vertex_id = current_vertex.id;
       
       if(!prior_vertex) {
         // first one
@@ -206,28 +206,34 @@ export class LinkedPolygon extends PIXI.Polygon {
       } else {
         const s_prior_current = SEGMENT_CLASSES[segment_class].fromVertices(prior_vertex,
                                                                       current_vertex);
-        const [id_prior label_prior] = prior_vertex.id.split("_");
-        const [id_current label_current] = currnet_vertex.id.split("_");
+        const [id_prior, label_prior] = prior_vertex.id.split("_");
+        const [id_current, label_current] = current_vertex.id.split("_");
         s_prior_current.id = this.id + "_" + label_prior + "|" + label_current;
         
-        prior_vertex.segments.includeSegment(s_prior_current);
-        prior_vertex.segments.includeSegment(s_prior_current);             
+        prior_vertex.segments.set(s_prior_current.id, s_prior_current);
+        current_vertex.segments.set(s_prior_current.id, s_prior_current);
       }
       
-      poly_vertices.set(current_vertex.id, current_vertex)
+      poly_vertices.set(current_vertex.id, current_vertex);
       prior_vertex = current_vertex;
     }
     
     // link to beginning
-    const s_last_first = SEGMENT_CLASSES[segment_class].fromVertices(poly_vertices.get(last_vertex_id),
-                                                                     poly_vertices.get(first_vertex_id));
+    const s_last_first = SEGMENT_CLASSES[segment_class].fromVertices(poly_vertices.get(last_vertex_id), poly_vertices.get(first_vertex_id));
     // relabel last|first
-    const [id_first label_first] = first_vertex_id.split("_");
-    const [id_last label_last] = last_vertex_id.split("_");
+    const [id_first, label_first] = first_vertex_id.split("_");
+    const [id_last, label_last] = last_vertex_id.split("_");
     s_last_first.id = this.id + "_" + label_last + "|" + label_first;
-                                                                         
-    poly_vertices.get(last_vertex_id).includeSegment(s_last_first)
+
+    // add the segment last|first to the first vertex as the first segment
+    poly_vertices.get(last_vertex_id).includeSegment(s_last_first);
+    const v_first = poly_vertices.get(first_vertex_id);
+    const v_first_segment = FirstMapValue(v_first.segments);
+    v_first.segments.clear();
+    v_first.includeSegment(s_last_first);
+    v_first.includeSegment(v_first_segment);
     
+
     return poly_vertices;
   }
 
