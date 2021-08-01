@@ -755,15 +755,18 @@ if back to starting vertex, report polygon
      let prior_objs = [];
      let split_object_found = false;
      for(const obj of walker) {
+       console.log(obj.id);
        if(!split_object_found) {
          prior_objs.push(obj);
+         if(obj.id === split_object_id) { split_object_found = true; }
        } else {
-         yield obj;
+         //yield obj;
        }
+       
      }
-     
+  
      for(let i = 0; i < prior_objs.length; i++) {
-       yield prior_objs.pop();
+       yield prior_objs[i];
      }
    } 
      
