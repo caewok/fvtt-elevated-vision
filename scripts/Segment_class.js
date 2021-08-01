@@ -322,7 +322,8 @@ export class Segment extends Ray {
   * Generator to iterate over splits
   */
   * iterateSplits() {
-    for(the_split in this.getSplits()) {
+    const the_splits = this.getSplits();
+    for(const the_split of the_splits) {
       yield the_split;
     }
   } 
