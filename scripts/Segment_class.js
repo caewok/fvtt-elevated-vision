@@ -313,16 +313,19 @@ export class Segment extends Ray {
   * Splits are recursive, so this follows down the recursion
   * @return [Array{Segment}] Array of Segments representing a copy of the split segments
   */
-  getSplits() {  
+  getSplits(reverse = false) {  
     if(this.splits.size === 0) return [this];
+    if(reverse) {
+      return this.splits.get("B").getSplits().concat(this.splits.get("A").getSplits());
+    }
     return this.splits.get("A").getSplits().concat(this.splits.get("B").getSplits());
   }
   
  /*
   * Generator to iterate over splits
   */
-  * iterateSplits() {
-    const the_splits = this.getSplits();
+  * iterateSplits(reverse = false) {
+    const the_splits = this.getSplits(reverse);
     for(const the_split of the_splits) {
       yield the_split;
     }
@@ -331,15 +334,20 @@ export class Segment extends Ray {
  /*
   * Walk the splits, returning the split segments and any internal vertices, one at a time
   */
-  * walkSplits() {
-    const splitIter = this.iterateSplits();
+  * walkSplits(reverse = false) {
+    const splitIter = this.iterateSplits(reverse);
     for(let the_split of splitIter) {
       if(the_split.id === this.id) {
         yield the_split;
       } else {
         // return vertex unless equal to the outside A Vertex.
         // don't return B Vertex, b/c the next split will have it as A.
-        if(the_split.A.id !== this.A.id) yield the_split.A;
+        if(reverse) {
+           if(the_split.B.id !== this.B.id) yield the_split.B;
+        } else {
+           if(the_split.A.id !== this.A.id) yield the_split.A;
+        }
+        
         yield the_split;
       }
     }
