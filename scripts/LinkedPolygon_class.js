@@ -685,6 +685,8 @@ if back to starting vertex, report polygon
     // generator to walk along the polygon
     // https://exploringjs.com/es6/ch_generators.html#ch_generators
     * walkFromVertex(starting_vertex_id, include_splits = false) {
+      if(!starting_vertex_id) starting_vertex_id = this.vertices.keys().next().value;
+
       let current_vertex_id = null;
       let current_vertex = this.vertices.get(starting_vertex_id);
       let current_segment = null;
@@ -713,7 +715,8 @@ if back to starting vertex, report polygon
       }
     }
     
-    * walkFromSegment(starting_segment_id, include_splits = false) {
+   * walkFromSegment(starting_segment_id, include_splits = false) {
+      if(!starting_segment_id) starting_segment_id = this.segments.keys().next().value;
       // just back up to the A vertex, walk from there and add the vertex at the end
       const starting_segment = this.segments.get(starting_segment_id);
       const starting_vertex_id = starting_segment.A.id;      
