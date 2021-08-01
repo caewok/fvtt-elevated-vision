@@ -560,9 +560,26 @@ export class LinkedPolygon extends PIXI.Polygon {
       // can take advantage of the reference to split directly
       intersections.forEach(i => {
         i.segments.forEach(s => {
-          s.splitAt(i);
+          s.splitAt(i, i.id);
         });
       });
+      
+      // each intersection has:
+      // 1. two segments where each segment has been split at the intersection.
+      // 2. three segments where the intersection is at an existing vertex for one poly.
+      //      in that case, the intersection will have the same id as the vertex
+      // 3. four segments where the intersection is at an existing vertex for both poly.
+      //       intersection will share same id as on vertex. 
+      
+      intersections.forEach(intersection => {
+        // start walk for each Polygon
+        
+      
+      });
+      
+      
+      
+      
     
       // find a valid starting point and direction
       // need to move clockwise along edges with the polygon to the inside

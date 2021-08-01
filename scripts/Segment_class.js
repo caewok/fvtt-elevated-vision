@@ -349,10 +349,12 @@ export class Segment extends Ray {
   * Split a segment along a point.
   * store the segment splits
   * @param {PIXI.Point} p   Point to use for the split
+  * @param {String} p_id    Optional id to name the split vertex
   */
-  splitAt(p) {
+  splitAt(p, p_id) {
     if(!this.contains(p)) {
       console.error(`${MODULE_ID}|Segment class split method: Point is not within the segment.`, p, this);
+      return;
     }
     
     const p_dist = this.vertexA.squaredDistance(p);
@@ -375,6 +377,7 @@ export class Segment extends Ray {
     
     // sub-segments should share the vertices of the parent, plus the p vertex, if any
     if(!(p instanceof Vertex)) p = Vertex.fromPoint(p);
+    if(p_id) p.id = p_id;
     
     const segA = Segment.fromVertices(this.A, p);
     const segB = Segment.fromVertices(p, this.B);
