@@ -357,6 +357,8 @@ export class Segment extends Ray {
       return;
     }
     
+    if(this.vertexA.equals(p) || this.vertexB.equals(p)) return; // point is a vertex
+    
     const p_dist = this.vertexA.squaredDistance(p);
     
     if(this.split_dist) {
