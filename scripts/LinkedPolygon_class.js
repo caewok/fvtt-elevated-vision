@@ -748,6 +748,24 @@ if back to starting vertex, report polygon
       }
       yield starting_vertex; 
     }
+    
+   * walkFromSplit(starting_segment_id, split_object_id) {
+     // walk from that segment but hold all until the matching object in the split
+     const walker = this.walkFromSegment(starting_segment_id, true);
+     let prior_objs = [];
+     let split_object_found = false;
+     for(const obj of walker) {
+       if(!split_object_found) {
+         prior_objs.push(obj);
+       } else {
+         yield obj;
+       }
+     }
+     
+     for(let i = 0; i < prior_objs.length; i++) {
+       yield prior_objs.pop();
+     }
+   } 
      
      
     walkEdge(starting_vertex_id, starting_edge) {
