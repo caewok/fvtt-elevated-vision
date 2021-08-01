@@ -697,20 +697,15 @@ if back to starting vertex, report polygon
         current_segment = SecondMapValue(current_vertex.segments);
         
         if(include_splits) {
-          const split_segments = current_segment.getSplits();
-          
-          for(let idx = 0; idx < split_segments.length; idx += 1) {
-            const split = split_segments[idx];
-            yield split;
-            if(split.vertexB.equals(current_segment.vertexB)) { break; }
-            yield split.vertexB;
+          const splitIter = current_segment.walkSplits();
+          for(const splitObj of splitIter) {
+           // will return each segment then vertex
+           yield splitObj;
           }
-        
         } else {
-           yield current_segment;
-        }
-        
-       
+          yield current_segment;
+        }  
+  
         current_vertex = current_segment.vertexB;
         current_vertex_id = current_vertex.id;
         if(iteration > MAX_ITERATIONS) break;
@@ -719,34 +714,19 @@ if back to starting vertex, report polygon
     }
     
     * walkFromSegment(starting_segment_id, include_splits = false) {
-      let current_segment_id = null;
-      let current_segment = this.segments.get(starting_segment_id);
-      let current_vertex = null;
-      const MAX_ITERATIONS = this.vertices.size + this.segments.size + 1;
-      let iteration = 0;
-      
-      while(current_segment_id !== starting_segment_id) {
-        if(include_splits) {
-          const split_segments = current_segment.getSplits();
-          
-          for(let idx = 0; idx < split_segments.length; idx += 1) {
-            const split = split_segments[idx];
-            yield split;
-            if(split.vertexB.equals(current_segment.vertexB)) { break; }
-            yield split.vertexB;
-          }
-        
+      // just back up to the A vertex, walk from there and add the vertex at the end
+      const starting_segment = this.segments.get(starting_segment_id);
+      const starting_vertex_id = starting_segment.A.id;      
+      const walker = this.walkFromVertex(starting_vertex_id, include_splits);
+      let starting_vertex;
+      for(const obj of walker) {
+        if(starting_vertex === undefined) {
+          starting_vertex = obj;
         } else {
-           yield current_segment;
+          yield obj;
         }
-        current_vertex = current_segment.vertexB;
-        yield current_vertex;
-        current_segment = SecondMapValue(current_vertex.segments);
-        
-        current_segment_id = current_segment.id;
-        if(iteration > MAX_ITERATIONS) break;
-        iteration += 1;
       }
+      yield starting_vertex; 
     }
      
      
