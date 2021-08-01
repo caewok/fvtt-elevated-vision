@@ -313,11 +313,8 @@ export class Segment extends Ray {
   * Splits are recursive, so this follows down the recursion
   * @return [Array{Segment}] Array of Segments representing a copy of the split segments
   */
-  getSplits(reverse = false) {  
+  getSplits() {  
     if(this.splits.size === 0) return [this];
-    if(reverse) {
-      return this.splits.get("B").getSplits().concat(this.splits.get("A").getSplits());
-    }
     return this.splits.get("A").getSplits().concat(this.splits.get("B").getSplits());
   }
   
@@ -325,7 +322,9 @@ export class Segment extends Ray {
   * Generator to iterate over splits
   */
   * iterateSplits(reverse = false) {
-    const the_splits = this.getSplits(reverse);
+    const the_splits = this.getSplits();
+    if(reverse) { the_splits.reverse(); }
+    
     for(const the_split of the_splits) {
       yield the_split;
     }
