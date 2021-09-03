@@ -855,19 +855,6 @@ if back to starting vertex, report polygon
      
     }
     
-    sortCW(anchor_edge, other_edges, intersection_id) {
-      return other_edges.sort((a, b) => {
-        const a_new_v = a.getOppositeVertex(intersection_id);
-        const b_new_v = b.getOppositeVertex(intersection_id);
-    
-        const a_ccw = anchor_edge.orient2d(a_new_v);
-        const b_ccw = anchor_edge.orient2d(b_new_v);
-      
-        if(almostEqual(a_ccw, b_ccw)) return 0;
-      
-        // positive if ccw
-        return (a_ccw > b_ccw) ? 1 : -1;
-      });      
-    }
+
      
 } 

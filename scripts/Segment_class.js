@@ -253,6 +253,29 @@ export class Segment extends Ray {
   }
   
  /*
+  * Sort other edges against this segment. 
+  * @param {Array[Segment]} other_edges   Segments to sort against this one
+  * @param {Vertex} intersection_id       Intersection shared among the segments 
+  *     (and presumably this segment, although not strictly required)
+  * @return Sorted other_edges
+  */
+  sortCW(other_edges, intersection_id) {
+      return other_edges.sort((a, b) => {
+        const a_new_v = a.getOppositeVertex(intersection_id);
+        const b_new_v = b.getOppositeVertex(intersection_id);
+        if(!a_new_v || !b_new_v) return 0;
+    
+        const a_ccw = this.orient2d(a_new_v);
+        const b_ccw = this.orient2d(b_new_v);
+      
+        if(almostEqual(a_ccw, b_ccw)) return 0;
+      
+        // positive if ccw
+        return (a_ccw > b_ccw) ? 1 : -1;
+      });      
+    }
+  
+ /*
   * Test if a point is collinear to the segment
   * @param {PIXI.Point} p	Point to test, in {x, y} format.
   * @return {boolean} true if collinear
@@ -267,7 +290,9 @@ export class Segment extends Ray {
   * @return {Vertex} Opposite side vertex
   */  
   getOppositeVertex(id) {
-    return this.A.id === id ? this.B : this.A;
+    return this.A.id === id ? this.B : 
+           this.B.id === id ? this.A :
+           undefined;
   } 
 
  /*
