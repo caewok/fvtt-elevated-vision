@@ -510,6 +510,14 @@ export class LinkedPolygon extends PIXI.Polygon {
             } else {
               // intersection is a new point in the middle of the two segments
               v = Vertex.fromPoint(intersection);
+              
+              // Combine the id labels for the segments.
+              // Each segment is, e.g., "zg5j790j2ndg3wn3_A|B"
+              // New vertex will be "zg5j790j2ndg3wn3_A|B,C|D"
+              const [id_s1, label_s1] = s1.id.split("_"); 
+              const [id_s2, label_s2] = s2.id.split("_");
+              
+              v.id = v.id + "_" + `${label_s1},${label_s2}`;
             }
             
             v.segments.set(s1.id, s1);
@@ -755,7 +763,6 @@ if back to starting vertex, report polygon
      let prior_objs = [];
      let split_object_found = false;
      for(const obj of walker) {
-       console.log(obj.id);
        if(!split_object_found) {
          prior_objs.push(obj);
          if(obj.id === split_object_id) { split_object_found = true; }
