@@ -294,68 +294,38 @@ export class LinkedPolygon extends PIXI.Polygon {
    * @return {Boolean} True if the two polygons share all points in order.
    */
    equals(other_polygon, EPSILON = 1e-5) {
+     if(this.points.length !== other_polygon.length) return false;
+     
+     // drop the end points b/c they should be repeated at the beginning
+     const p1 = this.points.slice(0, -2);
+     const p2 = other_polygon.points.slice(0, -2);
+     
      // if equal, then point 0 should be found in other_polygon at least once
-     const matching_indices_x = [];
-     
-     const test_point_x = this.points[0];
-     other_polygon.points.forEach((p, idx) => {
+     const matching_indices = [];
+     const test_point_x = p1[0];
+     const test_point_y = p1[1];
+     p2.forEach((p, idx, arr) => {
        if(idx % 2 === 1) return; // skip the y points 
-     
-       if(almostEqual(test_point_x, p)) {
-         matching_indices_x.push(idx);
+       if(almostEqual(test_point_x, p) && almostEqual(test_point_y, arr[idx + 1])) {
+         matching_indices.push(idx);
        }
      });
+
+     if(matching_indices.length === 0) return false;
+         
+     return matching_indices.some((x, idx) => {
+       // make the other points array match by shifting the elements
+       const len = p2.length;
+       let shifted_arr = p2.slice(x - len);
      
-     if(matching_indices_x.length === 0) return false;
+       shifted_arr = shifted_arr.concat(p2.slice(0, x)); 
      
-     const matching_indices_y = [];
-     const test_point_y = this.points[1];
-     matching_indices_x.forEach(i => {
-       const y = this.points[i + 1];
-     
-       if(almostEqual(test_point_y, y)) {
-         matching_indices_y.push(i + 1);
-       }
-      
+       return p1.every((p, idx) => {
+         return almostEqual(p, shifted_arr[idx]);
+       });
      });
-     
-     if(matching_indices_y.length === 0) return false;
-     
-     const res = matching_indices_x.some(x => {
-       // each forward or backward, all the points should match
-       // forward
-       const forward = this._pointsMatch(this.points, other_polygon.points, 0, x);
-       
-       // backward
-       const reversed = other_polygon.points.reverse();
-       const backward = this._pointsMatch(this.points, reversed, 0, other_polygon.points.length - 1 - x);
-       
-       return forward || backward;
-     });
-     
-     return res;
    }
-   
-  /*
-   * Compare arrays of numbers starting at given index.
-   * @param {Array[Number]} arr1   Array of numbers
-   * @param {Array[Number]} arr2   Array of numbers
-   * @param {Number} idx1          Index to start to compare arr1
-   * @param {Number} idx2          Index to start to compare arr2
-   * @return True if the arrays match, given the starting positions.
-   */
-   _pointsMatch(arr1, arr2, idx1 = 0, idx2 = 0) {
-     if(arr1.length !== arr2.length) return false;
-   
-     for(let i = 0; i < arr1.length; i++) {
-       const arr1_idx = arr1.length % (idx1 + i);
-       const arr2_idx = arr2.length % (idx2 + i);
-       if(!almostEqual(arr1[arr1_idx], arr2[arr2_idx])) return false;
-     }
-     return true;
-   }
-   
-   
+    
   /*
    * Return Set of polygons that represent the intersection
    *   of two polygons.
