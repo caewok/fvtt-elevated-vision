@@ -428,6 +428,14 @@ export class Segment extends Ray {
     this.splits.set("A", segA);
     this.splits.set("B", segB);
   }
+  
+ /*
+  * Return the top-level parent segment for the split
+  */
+  getSplitParent() {
+    if(!this.parent) return this;
+    return this.parent.getSplitParent();
+  }
 
  /*
   * Return the very first split in the segment.
