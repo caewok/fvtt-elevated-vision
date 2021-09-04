@@ -348,8 +348,8 @@ export class LinkedPolygon extends PIXI.Polygon {
      if(arr1.length !== arr2.length) return false;
    
      for(let i = 0; i < arr1.length; i++) {
-       arr1_idx = arr1.length % (idx1 + i);
-       arr2_idx = arr2.length % (idx2 + i);
+       const arr1_idx = arr1.length % (idx1 + i);
+       const arr2_idx = arr2.length % (idx2 + i);
        if(!almostEqual(arr1[arr1_idx], arr2[arr2_idx])) return false;
      }
      return true;
