@@ -767,7 +767,7 @@ if back to starting vertex, report polygon
          prior_objs.push(obj);
          if(obj.id === split_object_id) { split_object_found = true; }
        } else {
-         //yield obj;
+         yield obj;
        }
        
      }
