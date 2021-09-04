@@ -302,7 +302,7 @@ export class LinkedPolygon extends PIXI.Polygon {
        if(idx % 2 === 1) return; // skip the y points 
      
        if(almostEqual(test_point_x, p)) {
-         matching_indices.push(idx);
+         matching_indices_x.push(idx);
        }
      });
      
