@@ -209,6 +209,7 @@ export class LinkedPolygon extends PIXI.Polygon {
         const [id_prior, label_prior] = prior_vertex.id.split("_");
         const [id_current, label_current] = current_vertex.id.split("_");
         s_prior_current.id = this.id + "_" + label_prior + "|" + label_current;
+        s_prior_current.originating_object = this.id;
         
         prior_vertex.segments.set(s_prior_current.id, s_prior_current);
         current_vertex.segments.set(s_prior_current.id, s_prior_current);
@@ -224,6 +225,7 @@ export class LinkedPolygon extends PIXI.Polygon {
     const [id_first, label_first] = first_vertex_id.split("_");
     const [id_last, label_last] = last_vertex_id.split("_");
     s_last_first.id = this.id + "_" + label_last + "|" + label_first;
+    s_last_first.originating_object = this.id;
 
     // add the segment last|first to the first vertex as the first segment
     poly_vertices.get(last_vertex_id).includeSegment(s_last_first);
