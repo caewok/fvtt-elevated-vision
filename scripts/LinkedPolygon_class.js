@@ -20,7 +20,7 @@ import { Vertex } from "./Vertex_class.js";
 import { Segment } from "./Segment_class.js";
 import { ShadowSegment } from "./ShadowSegment_class.js";
 import { locationOf, COLORS, FirstMapValue, SecondMapValue, almostEqual } from "./utility.js";
-import { log } from "./module.js";
+import { log, MODULE_ID } from "./module.js";
 
 
  /*
