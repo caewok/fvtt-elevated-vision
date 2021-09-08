@@ -11,7 +11,7 @@
 // Key functions
 // iteratePoints, iterateEdges: use the points to 
 
-
+// http://www.cs.ucr.edu/~eldawy/19SCS133/slides/CS133-05-Intersection.pdf
 
 // Intersection methods adapted from https://github.com/vrd/js-intersect/blob/gh-pages/solution.js
 // License: MIT
@@ -59,21 +59,26 @@ function * iterateAlphabet() {
  * For a regular polygon, where each vertex has 2 segments, 
  * this is ordered such that segment.vertex.A <--> segment <--> segment.vertex.B / segment2.vertex.A <--> segment2.vertex.B
  * the last segment.vertex.B <--> first segment.vertex.A
+ * Polygon points should be clockwise
  * Irregular polygons may have more than one segment per vertex (such as creating overlapping polygons)
  */
 export class LinkedPolygon extends PIXI.Polygon {  
 
-  constructor(...points) {
-    super(...points);
+  constructor(...points) {    
+    if(!LinkedPolygon.points_clockwise(...points)) {
+      points = points.reverse();
+    }
     
     // make sure the points are linked
-    const l = this.points.length;
-    if(this.points[0] !== this.points[l - 2] ||
-      this.points[1] !== this.points[l - 1]) {
+    const l = points.length;
+    if(points[0] !== points[l - 2] ||
+      points[1] !== points[l - 1]) {
       console.error(`${MODULE_ID}|_constructVertices expects a closed set of points.`, this);
        
-      this.points.concat(this.points[0], this.points[1]);
+      points.concat(points[0], points[1]);
     }
+  
+    super(...points);
   }
   
  /*
@@ -169,6 +174,28 @@ export class LinkedPolygon extends PIXI.Polygon {
       return acc;
     }, 0);
     
+    // normally clockwise if positive
+    // but here, canvas uses inverted y-axis, so clockwise if negative
+    return the_sum <= 0;
+  }
+  
+  
+ /*
+  * Test if an array of points are clockwise or counterclockwise order
+  * https://stackoverflow.com/questions/1165647/how-to-determine-if-a-list-of-polygon-points-are-in-clockwise-order
+  * @param {number} ...points   Points, representing vertices from v0.x, v0.y, v1.x, v1.y ... 
+  */
+  static points_clockwise(...points) {
+    let the_sum = 0;
+    let points_arr = [...points];
+    
+    for(let i = 3; i < points_arr.length; i += 4) {
+      const A = { x: points_arr[i - 3], y: points_arr[i - 2] };
+      const B = { x: points_arr[i - 1], y: points_arr[i] };
+      
+      the_sum += (B.x - A.x) * (B.y - A.y);
+    }
+      
     // normally clockwise if positive
     // but here, canvas uses inverted y-axis, so clockwise if negative
     return the_sum <= 0;
