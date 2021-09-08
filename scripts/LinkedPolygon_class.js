@@ -50,7 +50,7 @@ function * iterateAlphabet() {
       prefix = [];
     }
   
-  }
+	  }
 }
 
 
@@ -63,20 +63,35 @@ function * iterateAlphabet() {
  * Irregular polygons may have more than one segment per vertex (such as creating overlapping polygons)
  */
 export class LinkedPolygon extends PIXI.Polygon {  
-
   constructor(...points) {    
-    if(!LinkedPolygon.points_clockwise(...points)) {
-      points = points.reverse();
-    }
-    
     // make sure the points are linked
     const l = points.length;
     if(points[0] !== points[l - 2] ||
       points[1] !== points[l - 1]) {
-      console.error(`${MODULE_ID}|_constructVertices expects a closed set of points.`, this);
+      console.warn(`${MODULE_ID}|_constructVertices expects a closed set of points: ${points[0], points[1], points[l - 2], points[l - 1]}.`, points);
        
       points.concat(points[0], points[1]);
     }
+
+    if(!LinkedPolygon.points_clockwise(points)) {
+      log(`Reversing LinkedPolygon points`);
+      
+      // e.g. [0,1,2,3]; ln = 4  
+      // i = 2: [2, 3]
+      // i = 0: [2, 3, 0, 1]
+      
+      const old_points = duplicate(points);
+      points = [];
+      for(let i = (old_points.length - 2); i >= 0; i -= 2) {
+         points.push(old_points[i]);
+         points.push(old_points[i+1]);
+      } 
+
+      // reverse the x coordinates
+      // reverse the y coordinates
+    }
+    
+
   
     super(...points);
   }
@@ -162,7 +177,31 @@ export class LinkedPolygon extends PIXI.Polygon {
       prior_point = point;
     }
   }
-  
+
+ /*
+  * Determine the bounding box of the polygon.
+  * @return Upper left and lower right points
+  * Note: 0,0 is upper left, lower right is the max x and max y
+  */
+  bounds() {
+    const pointsIter = this.iteratePoints();
+    const upper_left_pt = { x: [], y: [] };
+    
+    [...pointsIter].forEach(pt => {
+      upper_left_pt.x.push(pt.x);
+      upper_left_pt.y.push(pt.y);  
+    });
+    
+    const lower_right_pt = duplicate(upper_left_pt);
+    upper_left_pt.x = Math.min(...upper_left_pt.x);
+    upper_left_pt.y = Math.min(...upper_left_pt.y);
+    
+    lower_right_pt.x = Math.max(...lower_right_pt.x);
+    lower_right_pt.y = Math.max(...lower_right_pt.y);
+    
+    return [upper_left_pt, lower_right_pt];
+  }   
+
  /*
   * Test if the points are in clockwise or counterclockwise order.
   * https://stackoverflow.com/questions/1165647/how-to-determine-if-a-list-of-polygon-points-are-in-clockwise-order
@@ -185,9 +224,8 @@ export class LinkedPolygon extends PIXI.Polygon {
   * https://stackoverflow.com/questions/1165647/how-to-determine-if-a-list-of-polygon-points-are-in-clockwise-order
   * @param {number} ...points   Points, representing vertices from v0.x, v0.y, v1.x, v1.y ... 
   */
-  static points_clockwise(...points) {
+  static points_clockwise(points_arr) {
     let the_sum = 0;
-    let points_arr = [...points];
     
     for(let i = 3; i < points_arr.length; i += 4) {
       const A = { x: points_arr[i - 3], y: points_arr[i - 2] };
@@ -321,7 +359,7 @@ export class LinkedPolygon extends PIXI.Polygon {
    * @return {Boolean} True if the two polygons share all points in order.
    */
    equals(other_polygon, EPSILON = 1e-5) {
-     if(this.points.length !== other_polygon.length) return false;
+     if(this.points.length !== other_polygon.points.length) return false;
      
      // drop the end points b/c they should be repeated at the beginning
      const p1 = this.points.slice(0, -2);
@@ -761,24 +799,23 @@ if back to starting vertex, report polygon
       
       // just back up to the A vertex, walk from there and add the vertex at the end
       starting_segment = this.segments.get(starting_segment_id);
-      const starting_vertex_id = reverse ? starting_segment.B.id : starting_segment.A.id;      
-      const walker = this.walkFromVertex(starting_vertex_id, include_splits, reverse);
-      let starting_vertex;
+      const starting_vertex = reverse ? starting_segment.B : starting_segment.A;      
+      const walker = this.walkFromVertex(starting_vertex, include_splits, reverse);
+      let first_obj;
       for(const obj of walker) {
-        if(starting_vertex === undefined) {
-          starting_vertex = obj;
+        if(first_obj === undefined) {
+          first_obj = obj;
         } else {
           yield obj;
         }
       }
-      yield starting_vertex; 
+      yield first_obj; 
     }
     
    * walkFromSplit(split_object, reverse = false) {
      // find the segment that contains the split object
      // if the split object is a vertex, will be more than one segment; take the first
-     is_segment = split_object instanceOf Segment || ('A' in split_object && 'B' in split_object);
-     
+     const is_segment = split_object instanceof Segment || ('A' in split_object && 'B' in split_object);
      const starting_segment = [...this.segments.values()].find(s => {
        if(is_segment) {
          return s.contains(split_object.A) && s.contains(split_object.B)
