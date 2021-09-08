@@ -214,7 +214,7 @@ export class Segment extends Ray {
   * @param {Number} EPSILON   Treat equal if within this error
   * @return 0 if not equivalent, -1 if equivalent when reversed, 1 if equivalent  
   */ 
-  equivalent(segment, EPSILON = 1e-5) {
+  equals(segment, EPSILON = 1e-5) {
     if(almostEqual(this.A.x, segment.A.x, EPSILON) && 
        almostEqual(this.A.y, segment.A.y, EPSILON) &&
        almostEqual(this.B.x, segment.B.x, EPSILON) &&

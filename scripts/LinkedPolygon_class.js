@@ -708,9 +708,17 @@ if back to starting vertex, report polygon
 */
     // generator to walk along the polygon
     // https://exploringjs.com/es6/ch_generators.html#ch_generators
-    * walkFromVertex(starting_vertex_id, include_splits = false, reverse = false) {
-      if(!starting_vertex_id) starting_vertex_id = this.vertices.keys().next().value;
-
+    * walkFromVertex(starting_vertex, include_splits = false, reverse = false) {
+      // confirm the vertex is in this polygon
+      if(starting_vertex === undefined) starting_vertex = this.vertices.values().next().value;
+      let starting_vertex_id = starting_vertex.id;
+      
+      if(!starting_vertex_id || !this.vertices.has(starting_vertex_id)) {
+        starting_vertex_id = [...this.vertices.values)].find(v => {
+          return v.equals(starting_vertex);
+        })
+      }
+    
       let current_vertex_id = null;
       let current_vertex = this.vertices.get(starting_vertex_id);
       let current_segment = null;
@@ -739,10 +747,20 @@ if back to starting vertex, report polygon
       }
     }
     
-   * walkFromSegment(starting_segment_id, include_splits = false, reverse = false) {
-      if(!starting_segment_id) starting_segment_id = this.segments.keys().next().value;
+   * walkFromSegment(starting_segment, include_splits = false, reverse = false) {
+      // confirm the segment is in this polygon
+      if(starting_segment === undefined) starting_segment = this.segments.values().next().value;
+      let starting_segment_id = starting_segment.id;
+      
+      if(!starting_segment_id || !this.segments.has(starting_segment_id)) {
+         // find matching segment
+        starting_segment_id = [...this.segments.values()].find(s => {
+          return s.contains(starting_segment.A) && s.contains(starting_segment.B); // use A and B for compatibility with Rays
+        });
+      }
+      
       // just back up to the A vertex, walk from there and add the vertex at the end
-      const starting_segment = this.segments.get(starting_segment_id);
+      starting_segment = this.segments.get(starting_segment_id);
       const starting_vertex_id = reverse ? starting_segment.B.id : starting_segment.A.id;      
       const walker = this.walkFromVertex(starting_vertex_id, include_splits, reverse);
       let starting_vertex;
@@ -756,15 +774,21 @@ if back to starting vertex, report polygon
       yield starting_vertex; 
     }
     
-   * walkFromSplit(starting_segment_id, split_object_id, reverse = false) {
+   * walkFromSplit(starting_segment, split_object, reverse = false) {
      // walk from that segment but hold all until the matching object in the split
-     const walker = this.walkFromSegment(starting_segment_id, true, reverse);
+     const walker = this.walkFromSegment(starting_segment, true, reverse);
      let prior_objs = [];
      let split_object_found = false;
      for(const obj of walker) {
+       // obj = walker.next().value
        if(!split_object_found) {
          prior_objs.push(obj);
-         if(obj.id === split_object_id) { split_object_found = true; }
+         if(obj.id === split_object.id) { 
+           split_object_found = true; 
+         } else if(obj instanceOf Segment && split_object instanceOf Segment || 
+                   obj instanceOf Vertex  && split_object instanceOf Vertex) {
+           split_object_found = obj.equals(split_object);
+         }
        } else {
          yield obj;
        }
