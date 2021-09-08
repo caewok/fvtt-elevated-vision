@@ -714,9 +714,9 @@ if back to starting vertex, report polygon
       let starting_vertex_id = starting_vertex.id;
       
       if(!starting_vertex_id || !this.vertices.has(starting_vertex_id)) {
-        starting_vertex_id = [...this.vertices.values)].find(v => {
+        starting_vertex_id = [...this.vertices.values()].find(v => {
           return v.equals(starting_vertex);
-        })
+        });
       }
     
       let current_vertex_id = null;
@@ -785,8 +785,8 @@ if back to starting vertex, report polygon
          prior_objs.push(obj);
          if(obj.id === split_object.id) { 
            split_object_found = true; 
-         } else if(obj instanceOf Segment && split_object instanceOf Segment || 
-                   obj instanceOf Vertex  && split_object instanceOf Vertex) {
+         } else if(obj instanceof Segment && split_object instanceof Segment || 
+                   obj instanceof Vertex  && split_object instanceof Vertex) {
            split_object_found = obj.equals(split_object);
          }
        } else {
