@@ -774,7 +774,19 @@ if back to starting vertex, report polygon
       yield starting_vertex; 
     }
     
-   * walkFromSplit(starting_segment, split_object, reverse = false) {
+   * walkFromSplit(split_object, reverse = false) {
+     // find the segment that contains the split object
+     // if the split object is a vertex, will be more than one segment; take the first
+     is_segment = split_object instanceOf Segment || ('A' in split_object && 'B' in split_object);
+     
+     const starting_segment = [...this.segments.values()].find(s => {
+       if(is_segment) {
+         return s.contains(split_object.A) && s.contains(split_object.B)
+       } else {
+         return s.contains(split_object);
+       } 
+     });
+   
      // walk from that segment but hold all until the matching object in the split
      const walker = this.walkFromSegment(starting_segment, true, reverse);
      let prior_objs = [];
@@ -785,8 +797,8 @@ if back to starting vertex, report polygon
          prior_objs.push(obj);
          if(obj.id === split_object.id) { 
            split_object_found = true; 
-         } else if(obj instanceof Segment && split_object instanceof Segment || 
-                   obj instanceof Vertex  && split_object instanceof Vertex) {
+         } else if(obj instanceof Segment && is_segment || 
+                   obj instanceof Vertex  && !is_segment) {
            split_object_found = obj.equals(split_object);
          }
        } else {
