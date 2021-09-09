@@ -207,36 +207,34 @@ export class LinkedPolygon extends PIXI.Polygon {
   * https://stackoverflow.com/questions/1165647/how-to-determine-if-a-list-of-polygon-points-are-in-clockwise-order
   */
   is_clockwise() {
-    const edgeIter = this.iterateEdges();
-    const the_sum = [...edgeIter].reduce((acc, edge) => {
-      acc += (edge.B.x - edge.A.x) * (edge.B.y - edge.A.y);
-      return acc;
-    }, 0);
-    
-    // normally clockwise if positive
-    // but here, canvas uses inverted y-axis, so clockwise if negative
-    return the_sum <= 0;
+    return LinkedPolygon.points_clockwise(this.points);
   }
-  
-  
+
+
  /*
   * Test if an array of points are clockwise or counterclockwise order
   * https://stackoverflow.com/questions/1165647/how-to-determine-if-a-list-of-polygon-points-are-in-clockwise-order
-  * @param {number} ...points   Points, representing vertices from v0.x, v0.y, v1.x, v1.y ... 
+  * @param [{number}] points   Points array, representing vertices from v0.x, v0.y, v1.x, v1.y ... 
   */
-  static points_clockwise(points_arr) {
-    let the_sum = 0;
-    
-    for(let i = 3; i < points_arr.length; i += 4) {
-      const A = { x: points_arr[i - 3], y: points_arr[i - 2] };
-      const B = { x: points_arr[i - 1], y: points_arr[i] };
-      
-      the_sum += (B.x - A.x) * (B.y - A.y);
+  static points_clockwise(points) {
+    // make sure points are closed (beginning repeats at end; close if not.
+    const ln = points.length;
+    if(points[0] !== points[ln - 2] ||
+      points[1] !== points[ln - 1]) {        
+      points.concat(points[0], points[1]);
     }
-      
+
+    let winding = 0;
+    for(let i = 0; i < points.length - 2; i += 2) {
+      const pt0 = { x: points[i], y: points[i + 1] };
+      const pt1 = { x: points[i + 2], y: points[i + 3] };
+
+      winding += (pt1.x - pt0.x) * (pt1.y + pt0.y);
+    } 
+
     // normally clockwise if positive
     // but here, canvas uses inverted y-axis, so clockwise if negative
-    return the_sum <= 0;
+    return winding <= 0;
   }
 
  /*
