@@ -1,5 +1,5 @@
 {
-  "name": "elevated-vision",
+  "name": "elevatedvision",
   "title": "Elevated Vision",
   "description": "Modify Foundry VTT vision and lighting based on terrain, token, or wall elevations",
   "version": "This is auto replaced",
@@ -21,7 +21,7 @@
     }
   ],
   "conflicts": [
-    
+
   ],
   "esmodules": [
     "/scripts/module.js"
