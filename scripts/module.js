@@ -1,7 +1,11 @@
 import * as drawing from "./drawing.js";
 import { ClipperLib } from "./ClockwiseSweep/clipper_unminified.js";
-import { EVClockwisePolygonSweep } from "./ClockwiseSweep/ClockwisePolygonSweep.js";
+import { EVClockwiseSweepPolygon } from "./ClockwiseSweep/ClockwiseSweepPolygon.js";
 
+import { registerPIXIPolygonMethods } from "./ClockwiseSweep/PIXIPolygon.js";
+import { registerPIXIRectangleMethods } from "./ClockwiseSweep/PIXIRectangle.js";
+import { registerPIXICircleMethods } from "./ClockwiseSweep/PIXICircle.js";
+import { registerPolygonVertexMethods } from "./ClockwiseSweep/SimplePolygonEdge.js";
 
 export const MODULE_ID = 'elevatedvision';
 /**
@@ -25,10 +29,15 @@ Hooks.once('init', async function() {
     ClipperLib,
     drawing
   };
+
+  registerPIXIPolygonMethods();
+  registerPIXIRectangleMethods();
+  registerPIXICircleMethods();
+  registerPolygonVertexMethods();
 });
 
 Hooks.once('ready', async function() {
-  registerPatches();
+//   registerPatches();
 });
 
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode

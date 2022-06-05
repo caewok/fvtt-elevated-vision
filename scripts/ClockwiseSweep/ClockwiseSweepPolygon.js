@@ -59,7 +59,7 @@ vertexOutsideBoundary: True if the vertex does not cross and is not contained by
 */
 
 
-export class EVClockwisePolygonSweep extends ClockwiseSweepPolygon {
+export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
   // Constructor same as ClockwiseSweep
 
   /* -------------------------------------------- */
