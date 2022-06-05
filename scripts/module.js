@@ -3,7 +3,7 @@ import { ClipperLib } from "./ClockwiseSweep/clipper_unminified.js";
 import { EVClockwisePolygonSweep } from "./ClockwiseSweep/ClockwisePolygonSweep.js";
 
 
-export const MODULE_ID = 'elevated-vision';
+export const MODULE_ID = 'elevatedvision';
 /**
  * Log message only when debug flag is enabled from DevMode module.
  * @param {Object[]} args  Arguments passed to console.log.
