@@ -5,8 +5,8 @@
   "version": "This is auto replaced",
   "library": false,
   "manifestPlusVersion": "1.0.0",
-  "minimumCoreVersion": "0.8.6",
-  "compatibleCoreVersion": "0.8.7",
+  "minimumCoreVersion": "9",
+  "compatibleCoreVersion": "9",
   "authors": [
     {
       "name": "caewok",
@@ -17,8 +17,14 @@
   "dependencies": [
     {
       "name": "lib-wrapper",
-        "manifest": "https://raw.githubusercontent.com/ruipin/fvtt-lib-wrapper/master/module.json"
-    }
+      "manifest": "https://raw.githubusercontent.com/ruipin/fvtt-lib-wrapper/master/module.json"
+    },
+
+    {
+      "name": "wall-height",
+      "manifest": "https://github.com/theripper93/wall-height/blob/main/module.json"
+    },
+
   ],
   "conflicts": [
 

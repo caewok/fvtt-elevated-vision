@@ -1,59 +1,40 @@
-import { registerPatches } from "./patching.js";
+import * as drawing from "./drawing.js";
+import { ClipperLib } from "./ClockwiseSweep/clipper_unminified.js";
+import { EVClockwiseSweepPolygon } from "./ClockwiseSweep/ClockwiseSweepPolygon.js";
 
-export const MODULE_ID = 'elevatedvision';
-const FORCE_DEBUG = false; // used for logging before dev mode is set up
-export const FORCE_VISION_DEBUG = true;
+import { registerPIXIPolygonMethods } from "./ClockwiseSweep/PIXIPolygon.js";
+import { registerPIXIRectangleMethods } from "./ClockwiseSweep/PIXIRectangle.js";
+import { registerPIXICircleMethods } from "./ClockwiseSweep/PIXICircle.js";
+import { registerPolygonVertexMethods } from "./ClockwiseSweep/SimplePolygonEdge.js";
 
-export function log(...args) {
-  try {
-    const isDebugging = window.DEV?.getPackageDebugValue(MODULE_ID);
-    //console.log(MODULE_ID, '|', `isDebugging: ${isDebugging}.`);
+import { MODULE_ID } from "./const.js";
 
-    if (FORCE_DEBUG || isDebugging) {
-      console.log(MODULE_ID, '|', ...args);
-    }
-  } catch (e) {}
-}
+import { registerAdditions, registerPatches } from "./patching.js";
 
 Hooks.once('init', async function() {
+  game.modules.get(MODULE_ID).api = {
+    EVClockwiseSweepPolygon,
+    ClipperLib,
+    drawing
+  };
+
+  registerPIXIPolygonMethods();
+  registerPIXIRectangleMethods();
+  registerPIXICircleMethods();
+  registerPolygonVertexMethods();
+  registerAdditions();
 
 });
 
-Hooks.once('ready', async function() {
+Hooks.once('ready', async function () {
   registerPatches();
+
+  CONFIG.Canvas.losBackend = EVClockwiseSweepPolygon;
 });
+
 
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
 Hooks.once('devModeReady', ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(MODULE_ID);
 });
 
-Hooks.on('sightRefresh', (obj) => {
-  log("sightRefresh", obj);
-
-  // called on load (twice?)
-});
-
-Hooks.on('updateToken', (scene, data, update, options) => {
-  log("updateToken", scene, data, update, options);
-  if(data.elevation) {
-    log(`Token ${options} elevation updated.`);
-    // canvas.tokens.get(options._id).updateSource(); // throws error
-    scene._object.updateSource();
-  }
-
-});
-
-// Need hook for updating elevation?
-// DEBUG | Calling updateToken hook with args: foundry.js:147:15
-// Array(4) [ {…}, {…}, {…}, "eXzk9tB2nubjuVL3" ]
-//
-// 0: Object { apps: {}, _sheet: null, _object: {…}, … }
-//
-// 1: Object { elevation: 20, _id: "RiuUZYvERLIZ17ex" }
-//
-// 2: Object { diff: true, render: true }
-//
-// 3: "eXzk9tB2nubjuVL3"
-//
-// length: 4
