@@ -46,6 +46,7 @@ export function registerAdditions() {
 }
 
 export function registerPatches() {
+  libWrapper.register(MODULE_ID, "LightSource.prototype.drawMeshes", drawMeshes, "OVERRIDE");
 }
 
 /**
