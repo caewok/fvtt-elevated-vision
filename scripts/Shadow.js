@@ -7,6 +7,7 @@ canvas
 
 import { perpendicularPoint, distanceBetweenPoints } from "./util.js";
 import { COLORS, drawShape } from "./drawing.js";
+import { ClipperLib } from "./ClockwiseSweep/clipper_unminified.js";
 
 export class Shadow extends PIXI.Polygon {
 
@@ -130,20 +131,25 @@ export class Shadow extends PIXI.Polygon {
   /**
    * Intersect this shadow against a polygon and return a new shadow.
    * Copy relevant data from this shadow.
-   * Used primarily to intersect against the sweep
+   * Used primarily to intersect against the sweep.
    */
   intersectPolygon(poly) {
-    const polyIx = super.intersectPolygon(poly);
-    const out = new this.constructor();
-    Object.assign(out, polyIx);
+    // Cannot rely on the super.intersectPolygon because we need to retrieve all the holes.
+    const solution = this.clipperClip(poly, { cliptype: ClipperLib.ClipType.ctIntersection });
 
-    out.wall = this.wall;
-    out.source = this.source;
-    out.VT = this.VT;
-    out.theta = this.theta
-    out.alpha = this.alpha;
+    return solution.map(pts => {
+      const polyIx = PIXI.Polygon.fromClipperPoints(pts);
+      const model = new this.constructor();
+      Object.assign(model, polyIx);
 
-    return out;
+      model.wall = this.wall;
+      model.source = this.source;
+      model.VT = this.VT;
+      model.theta = this.theta
+      model.alpha = this.alpha;
+
+      return model;
+    });
   }
 
   /**

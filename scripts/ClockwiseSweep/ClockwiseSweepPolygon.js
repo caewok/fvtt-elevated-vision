@@ -231,9 +231,11 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
   }
 
   _drawShadows() {
-    this.shadows.forEach(s => {
-      s.draw();
-      drawSegment(s.wall, { color: COLORS.gray, alpha: .7 });
+    this.shadows.forEach(s_arr => {
+      s_arr.forEach(s => {
+        s.draw();
+        drawSegment(s.wall, { color: COLORS.gray, alpha: .7 });
+      });
     });
   }
 
@@ -255,8 +257,8 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
       e.wall.shadows.set(this.config.source.object.id, shadow);
 
       // Intersect the sweep polygon with the shadow
-      const sweep_shadow = shadow.intersectPolygon(this);
-      this.shadows.set(e.wall.id, sweep_shadow);
+      // Note this may result in multiple shadow polygons
+      this.shadows.set(e.wall.id, shadow.intersectPolygon(this));
     });
   }
 

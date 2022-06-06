@@ -9,7 +9,7 @@ import { registerPolygonVertexMethods } from "./ClockwiseSweep/SimplePolygonEdge
 
 import { MODULE_ID } from "./const.js";
 
-import { registerPatches } from "./patching.js";
+import { registerAdditions, registerPatches } from "./patching.js";
 
 Hooks.once('init', async function() {
   game.modules.get(MODULE_ID).api = {
@@ -22,13 +22,14 @@ Hooks.once('init', async function() {
   registerPIXIRectangleMethods();
   registerPIXICircleMethods();
   registerPolygonVertexMethods();
+  registerAdditions();
 
+});
+
+Hooks.once('ready', async function () {
   registerPatches();
 });
 
-Hooks.once('ready', async function() {
-//   registerPatches();
-});
 
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
 Hooks.once('devModeReady', ({ registerPackageDebugFlag }) => {

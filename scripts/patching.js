@@ -8,9 +8,10 @@ Wall
 
 // Patches
 
-import { WALL_HEIGHT_MODULE_ID, LEVELS_MODULE_ID } from "./const.js";
+import { WALL_HEIGHT_MODULE_ID, LEVELS_MODULE_ID, MODULE_ID } from "./const.js";
+import { drawMeshes } from "./Shadow.js";
 
-export function registerPatches() {
+export function registerAdditions() {
 
   if ( !Object.hasOwn(LightSource.prototype, "elevation") ) {
     Object.defineProperty(LightSource.prototype, "elevation", {
@@ -42,6 +43,9 @@ export function registerPatches() {
 //     configurable: true
 //   });
 
+}
+
+export function registerPatches() {
 }
 
 /**

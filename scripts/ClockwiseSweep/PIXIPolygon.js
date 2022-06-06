@@ -363,17 +363,20 @@ function translate(delta_x, delta_y) {
 // ---------------- Clipper JS library ---------------------------------------------------
 
 /**
- * Intersect another polygon
+ * Intersect another polygon.
+ * Assumes a single solution from clipper; no holes.
  */
 function intersectPolygon(other) {
-  return this.clipperClip(other, { cliptype: ClipperLib.ClipType.ctIntersection });
+  const solution = this.clipperClip(other, { cliptype: ClipperLib.ClipType.ctIntersection });
+  return PIXI.Polygon.fromClipperPoints(solution[0]);
 }
 
 /**
  * Union another polygon
  */
 function unionPolygon(other) {
-  return this.clipperClip(other, { cliptype: ClipperLib.ClipType.ctUnion });
+  const solution = this.clipperClip(other, { cliptype: ClipperLib.ClipType.ctUnion });
+  return PIXI.Polygon.fromClipperPoints(solution[0]);
 }
 
 /**
@@ -460,7 +463,7 @@ function clipperClip(poly, { cliptype = ClipperLib.ClipType.ctUnion } = {}) {
   c.AddPath(clip, ClipperLib.PolyType.ptClip, true);
   c.Execute(cliptype, solution);
 
-  return PIXI.Polygon.fromClipperPoints(solution[0]);
+  return solution;
 }
 
 /**
