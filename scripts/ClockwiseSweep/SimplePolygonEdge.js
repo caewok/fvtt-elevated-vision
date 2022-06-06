@@ -65,6 +65,9 @@ export class SimplePolygonEdge extends PolygonEdge {
     return this._id || (this._id = this.wall?.id || foundry.utils.randomID());
   }
 
+  get top() { return this.wall.top; }
+  get bottom() { return this.wall.bottom; }
+
   /**
    * Identify which endpoint is further west, or if vertical, further north.
    * Required for quick intersection processing.

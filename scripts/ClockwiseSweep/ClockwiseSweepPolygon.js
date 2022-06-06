@@ -227,6 +227,12 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
 
     // *** NEW *** //
     this._addShadows();
+
+    if ( this.config.debug ) this._drawShadows();
+  }
+
+  _drawShadows() {
+    this.shadows.forEach(s => s.draw());
   }
 
 
@@ -245,7 +251,10 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
       if ( !shadow ) return;
       if ( !e.wall.shadows ) { e.wall.shadows = new Map(); }
       e.wall.shadows.set(this.config.source.object.id, shadow);
-      this.shadows.set(e.wall.id, shadow);
+
+      // Intersect the sweep polygon with the shadow
+      const sweep_shadow = shadow.intersectPolygon(this);
+      this.shadows.set(e.wall.id, sweep_shadow);
     });
   }
 
@@ -273,7 +282,7 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     const walls = this._getWalls();
     for ( const wall of walls ) {
       // Ignore edges that are of a type that should be ignored
-      if ( !this.constructor.testWallInclusion(wall, this.origin, type) ) continue;
+      if ( !EVClockwiseSweepPolygon.EVTestWallInclusion(wall, this.origin, type) ) continue;
 
       // *** NEW *** //
       if (limitedAngle && limitedAngle.edgeIsOutside(wall)) continue;
@@ -323,13 +332,36 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     // *** END NEW *** //
   }
 
+  // Bypass the super.testWallInclusion so that it is not inadvertently wrapped by
+  // wall-height
+  static EVTestWallInclusion(wall, origin, type) {
+
+    // Always include interior walls underneath active roof tiles
+    if ( (type === "sight") && wall.hasActiveRoof ) return true;
+
+    // Ignore walls that are not blocking for this polygon type
+    if ( !wall.data[type] || wall.isOpen ) return false;
+
+    // Ignore walls which are exactly in-line with the origin, except for movement
+    const side = wall.orientPoint(origin);
+    if ( (type !== "move") && (side === CONST.WALL_DIRECTIONS.BOTH) ) return false;
+
+    // Ignore one-directional walls which are facing away from the origin
+    return !wall.data.dir || (side !== wall.data.dir);
+  }
+
+
+
+
   _testEdgesForElevation() {
     // By convention, treat the Wall Height module rangeTop as the elevation
     // Remove edges that will not block the source when viewed straight-on
     // But store for later processing
     this.edgesBelowSource = new Set(); // Top of edge below source top
     this.edgesAboveSource = new Set(); // Bottom of edge above the source top
-    const sourceZ = this._sourceElevation();
+
+    if ( !this.config.source ) return;
+    const sourceZ = this.config.source.elevation ?? 0;
     this.edges.forEach((e, key) => {
       if ( sourceZ > e.top ) {
         this.edgesBelowSource.add(e);
@@ -339,11 +371,6 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
         this.edges.delete(key);
       }
     });
-  }
-
-  _sourceElevation() {
-    if (!this.config.source) return 0;
-    return this.config.source?.elevation ?? 0;
   }
 
   /* -------------------------------------------- */

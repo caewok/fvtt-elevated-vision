@@ -8,7 +8,7 @@ Wall
 
 // Patches
 
-import { WALL_HEIGHT_MODULE_ID } from "./const.js";
+import { WALL_HEIGHT_MODULE_ID, LEVELS_MODULE_ID } from "./const.js";
 
 export function registerPatches() {
 
@@ -49,7 +49,7 @@ export function registerPatches() {
  * @type {number}
  */
 function ambientLightElevation() {
-  return this.document.getFlag(WALL_HEIGHT_MODULE_ID, "rangeTop") ?? 0;
+  return this.document.getFlag(LEVELS_MODULE_ID, "rangeTop") ?? 0;
 }
 
 /**
