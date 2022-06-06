@@ -21,6 +21,8 @@ import { findIntersectionsSortSingle } from "./IntersectionsSort.js";
 import { LimitedAngleSweepPolygon } from "./LimitedAngle.js";
 import { ClipperLib } from "./clipper_unminified.js";
 
+import { Shadow } from "../Shadow.js";
+
 
 /*
 Basic concept:
@@ -222,7 +224,31 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     // *** NEW *** //
     // Step 5 - Intersect boundary
     this._intersectBoundary();
+
+    // *** NEW *** //
+    this._addShadows();
   }
+
+
+  /**
+   * For each edge that is below the light source, calculate a shadow polygon.
+   * This is the quadrilateral formed by the wall casting a shadow from the higher
+   * light on the ground surface.
+   * For now, ground surface is assumed to be elevation 0.
+   * Store shadow map in wall, keyed by source.
+   * Shadows in the sweep are intersected against the sweep polygon.
+   */
+  _addShadows() {
+    this.shadows = new Map();
+    this.edgesBelowSource.forEach(e => {
+      const shadow = Shadow.constructShadow(e.wall, this.config.source);
+      if ( !shadow ) return;
+      if ( !e.wall.shadows ) { e.wall.shadows = new Map(); }
+      e.wall.shadows.set(this.config.source.object.id, shadow);
+      this.shadows.set(e.wall.id, shadow);
+    });
+  }
+
 
   /* -------------------------------------------- */
   /*  Edge Configuration                          */
@@ -314,8 +340,6 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
       }
     });
   }
-
-
 
   _sourceElevation() {
     if (!this.config.source) return 0;

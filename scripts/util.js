@@ -2,37 +2,7 @@
 */
 "use strict";
 
-import { WALL_HEIGHT_MODULE_ID, MODULE_ID } from "./const.js";
-
-/**
- * @param {AmbientLight} l
- * @return {number}
- */
-export function ambientLightElevation(l) {
-  return l.document.getFlag(WALL_HEIGHT_MODULE_ID, "rangeTop") ?? 0;
-}
-
-/**
- * @param {LightSource} s
- * @return {number}
- */
-export function lightSourceElevation(s) { return ambientLightElevation(s.object); }
-
-/**
- * @param {Wall}
- * @return {number}   The topmost point of the wall.
- */
-export function wallTop(w) {
-  return w.document.getFlag(WALL_HEIGHT_MODULE_ID, "top") ?? Number.POSITIVE_INFINITY;
-}
-
-/**
- * @param {Wall}
- * @return {number}   The bottommost point of the wall.
- */
-export function wallBottom(w) {
-  return w.document.getFlag(WALL_HEIGHT_MODULE_ID, "bottom") ?? Number.NEGATIVE_INFINITY
-}
+import { MODULE_ID } from "./const.js";
 
 /**
  * Log message only when debug flag is enabled from DevMode module.
@@ -48,3 +18,35 @@ export function log(...args) {
     // Empty
   }
 }
+
+/**
+ * Get the point on a line AB that forms a perpendicular line to a point C.
+ * From https://stackoverflow.com/questions/10301001/perpendicular-on-a-line-segment-from-a-given-point
+ * This is basically simplified vector projection: https://en.wikipedia.org/wiki/Vector_projection
+ * @param {Point} a
+ * @param {Point} b
+ * @param {Point} c
+ * @return {Point} The point on line AB or null if a,b,c are collinear. Not
+ *                 guaranteed to be within the line segment a|b.
+ */
+export function perpendicularPoint(a, b, c) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const dab = Math.pow(dx, 2) + Math.pow(dy, 2);
+  if ( !dab ) return null;
+
+  const u = ((c.x - a.x) * dx + (c.y - a.y) * dy) / dab;
+  return {
+    x: a.x + u * dx,
+    y: a.y + u * dy
+  }
+}
+
+export function distanceBetweenPoints(a, b) {
+  return Math.sqrt(distanceSquaredBetweenPoints(a, b));
+}
+
+export function distanceSquaredBetweenPoints(a, b) {
+  return Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2);
+}
+
