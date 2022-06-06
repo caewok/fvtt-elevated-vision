@@ -7,21 +7,9 @@ import { registerPIXIRectangleMethods } from "./ClockwiseSweep/PIXIRectangle.js"
 import { registerPIXICircleMethods } from "./ClockwiseSweep/PIXICircle.js";
 import { registerPolygonVertexMethods } from "./ClockwiseSweep/SimplePolygonEdge.js";
 
-export const MODULE_ID = 'elevatedvision';
-/**
- * Log message only when debug flag is enabled from DevMode module.
- * @param {Object[]} args  Arguments passed to console.log.
- */
-export function log(...args) {
-  try {
-    const isDebugging = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
-    if ( isDebugging ) {
-      console.log(MODULE_ID, "|", ...args);
-    }
-  } catch(e) {
-    // Empty
-  }
-}
+import { MODULE_ID } from "./const.js";
+
+import { registerPatches } from "./patching.js";
 
 Hooks.once('init', async function() {
   game.modules.get(MODULE_ID).api = {
@@ -34,6 +22,8 @@ Hooks.once('init', async function() {
   registerPIXIRectangleMethods();
   registerPIXICircleMethods();
   registerPolygonVertexMethods();
+
+  registerPatches();
 });
 
 Hooks.once('ready', async function() {

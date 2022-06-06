@@ -13,13 +13,14 @@ PolygonVertex
 
 "use strict";
 
-import { log } from "../module.js";
+import { log } from "../util.js";
 import { SimplePolygonEdge } from "./SimplePolygonEdge.js";
 import { identifyIntersectionsWithNoEndpoint, lineBlocksPoint } from "./utilities.js";
 import { findIntersectionsBruteRedBlack } from "./IntersectionsBrute.js";
 import { findIntersectionsSortSingle } from "./IntersectionsSort.js";
 import { LimitedAngleSweepPolygon } from "./LimitedAngle.js";
 import { ClipperLib } from "./clipper_unminified.js";
+
 
 /*
 Basic concept:
@@ -289,9 +290,36 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
 
       // Add the temporary edges to the set of edges for the sweep.
       this.config.tempEdges.forEach(e => this.edges.set(e.id, e));
-
     }
+
+    this._testEdgesForElevation();
+
     // *** END NEW *** //
+  }
+
+  _testEdgesForElevation() {
+    // By convention, treat the Wall Height module rangeTop as the elevation
+    // Remove edges that will not block the source when viewed straight-on
+    // But store for later processing
+    this.edgesBelowSource = new Set(); // Top of edge below source top
+    this.edgesAboveSource = new Set(); // Bottom of edge above the source top
+    const sourceZ = this._sourceElevation();
+    this.edges.forEach((e, key) => {
+      if ( sourceZ > e.top ) {
+        this.edgesBelowSource.add(e);
+        this.edges.delete(key);
+      } else if ( sourceZ < e.botom ) {
+        this.edgesAboveSource.add(e);
+        this.edges.delete(key);
+      }
+    });
+  }
+
+
+
+  _sourceElevation() {
+    if (!this.config.source) return 0;
+    return this.config.source?.elevation ?? 0;
   }
 
   /* -------------------------------------------- */
