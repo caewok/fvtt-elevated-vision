@@ -28,6 +28,8 @@ Hooks.once('init', async function() {
 
 Hooks.once('ready', async function () {
   registerPatches();
+
+  CONFIG.Canvas.losBackend = EVClockwiseSweepPolygon;
 });
 
 

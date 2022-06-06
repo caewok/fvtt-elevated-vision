@@ -22,7 +22,7 @@ import { LimitedAngleSweepPolygon } from "./LimitedAngle.js";
 import { ClipperLib } from "./clipper_unminified.js";
 
 import { Shadow } from "../Shadow.js";
-import { drawSegment, COLORS } from "../drawing.js";
+import { drawSegment, COLORS, clearDrawings } from "../drawing.js";
 
 
 /*
@@ -231,10 +231,11 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
   }
 
   _drawShadows({ color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = .5 } = {} ) {
+    clearDrawings();
     this.shadows.forEach(s_arr => {
       s_arr.forEach(s => {
         s.draw({color, width, fill, alpha});
-        drawSegment(s.wall, { color: COLORS.black, alpha: .7 });
+        if ( this.config.debug ) { drawSegment(s.wall, { color: COLORS.black, alpha: .7 }); }
       });
     });
   }
