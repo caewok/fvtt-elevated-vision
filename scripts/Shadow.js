@@ -133,7 +133,10 @@ export class Shadow extends PIXI.Polygon {
    * Used primarily to intersect against the sweep
    */
   intersectPolygon(poly) {
-    const out = super.intersectPolygon(poly);
+    const polyIx = super.intersectPolygon(poly);
+    const out = new this.constructor();
+    Object.assign(out, polyIx);
+
     out.wall = this.wall;
     out.source = this.source;
     out.VT = this.VT;

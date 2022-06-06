@@ -22,6 +22,7 @@ import { LimitedAngleSweepPolygon } from "./LimitedAngle.js";
 import { ClipperLib } from "./clipper_unminified.js";
 
 import { Shadow } from "../Shadow.js";
+import { drawSegment, COLORS } from "../drawing.js";
 
 
 /*
@@ -227,12 +228,13 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
 
     // *** NEW *** //
     this._addShadows();
-
-    if ( this.config.debug ) this._drawShadows();
   }
 
   _drawShadows() {
-    this.shadows.forEach(s => s.draw());
+    this.shadows.forEach(s => {
+      s.draw();
+      drawSegment(s.wall, { color: COLORS.gray, alpha: .7 });
+    });
   }
 
 
@@ -349,9 +351,6 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     // Ignore one-directional walls which are facing away from the origin
     return !wall.data.dir || (side !== wall.data.dir);
   }
-
-
-
 
   _testEdgesForElevation() {
     // By convention, treat the Wall Height module rangeTop as the elevation
@@ -836,6 +835,8 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
         dg.lineStyle(1, 0x000000).beginFill(0xFF0000).drawCircle(c.x, c.y, 6).endFill();
       }
     }
+
+    this._drawShadows();
   }
 
 
