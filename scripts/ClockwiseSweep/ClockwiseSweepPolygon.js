@@ -230,11 +230,11 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     this._addShadows();
   }
 
-  _drawShadows() {
+  _drawShadows({ color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = .5 } = {} ) {
     this.shadows.forEach(s_arr => {
       s_arr.forEach(s => {
-        s.draw();
-        drawSegment(s.wall, { color: COLORS.gray, alpha: .7 });
+        s.draw({color, width, fill, alpha});
+        drawSegment(s.wall, { color: COLORS.black, alpha: .7 });
       });
     });
   }
