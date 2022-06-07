@@ -23,18 +23,11 @@
     {
       "name": "wall-height",
       "manifest": "https://github.com/theripper93/wall-height/blob/main/module.json"
-    },
-
-  ],
-  "conflicts": [
+    }
 
   ],
   "esmodules": [
     "/scripts/module.js"
-  ],
-
-  "styles": [
-    "/styles/module.css"
   ],
   "languages": [
     {
