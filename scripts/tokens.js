@@ -2,6 +2,8 @@
 */
 "use strict";
 
+import { log } from "./util.js";
+
 /*
 Adjustments for token visibility.
 
@@ -49,7 +51,129 @@ function EVTokenIsVisible(wrapped) {
   //         contain the points and
   //      (2) same as (a)(2).
   const lightSources = canvas.lighting.sources;
-
 }
+
+function drawShadowHoles(source, mask) {
+  if ( source.los?.shadows && source.los.shadows.size ) {
+    log("drawShadowHoles", source);
+    source.los.shadows.forEach(s_arr => {
+      s_arr.forEach(s => {
+        mask.beginHole().drawShape(s).endHole();
+      });
+    });
+  }
+}
+
+/**
+ * Override VisionSource.prototype.drawVision
+ * Appears to remove parts of the token field of view circle if unlimited vision
+ */
+export function EVDrawVision() {
+  if ( this._flags.renderFOV ) {
+    this.losMask.clear().beginFill(0xFFFFFF).drawShape(this.los);
+    drawShadowHoles(this, this.losMask);
+    this.losMask.endFill();
+
+    if ( this._flags.useFov ) this._renderTexture();
+  }
+  return LightSource.prototype.drawLight.call(this);
+}
+
+/**
+ * Override VisionSource.prototype.drawSight
+ */
+export function EVDrawSight() {
+  const c = new PIXI.Container();
+  const fov = c.addChild(new PIXI.LegacyGraphics());
+  fov.beginFill(0xFFFFFF).drawCircle(this.x, this.y, this.radius).endFill();
+  const los = c.addChild(new PIXI.LegacyGraphics());
+  los.beginFill(0xFFFFFF).drawShape(this.los);
+  drawShadowHoles(this, los);
+  los.endFill();
+  c.mask = los;
+  return c;
+}
+
+/**
+ * Override SightLayer.prototype.refresh
+ */
+export function EVSightLayerRefresh({forceUpdateFog=false, skipUpdateFog=false}={}) {
+    if ( !this._initialized ) return;
+    if ( !this.tokenVision ) {
+      this.visible = false;
+      return this.restrictVisibility()
+    }
+
+    // Configuration variables
+    const d = canvas.dimensions;
+    const unrestrictedVisibility = canvas.lighting.globalLight;
+    let commitFog = false;
+
+    // Stage the prior vision container to be saved to the FOW texture
+    const prior = this.explored.removeChild(this.vision);
+    if ( prior._explored && !skipUpdateFog ) {
+      this.pending.addChild(prior);
+      commitFog = this.pending.children.length >= this.constructor.FOG_COMMIT_THRESHOLD;
+    }
+    else prior.destroy({children: true});
+
+    // Create a new vision container for this frame
+    const vision = this._createVisionContainer();
+    this.explored.addChild(vision);
+
+    // Draw standard vision sources
+    let inBuffer = canvas.scene.data.padding === 0;
+
+    // Unrestricted visibility, everything in LOS is visible
+    if ( unrestrictedVisibility ) vision.base.beginFill(0xFFFFFF, 1.0).drawShape(d.rect).endFill();
+
+    // Otherwise, provided minimum visibility for each vision source
+    else {
+      for ( let source of this.sources ) {
+        vision.base.beginFill(0xFFFFFF, 1.0).drawCircle(source.x, source.y, d.size / 2);
+      }
+    }
+
+    // Draw field-of-vision for lighting sources
+    for ( let source of canvas.lighting.sources ) {
+      if ( !this.sources.size || !source.active ) continue;
+      const g = new PIXI.LegacyGraphics();
+      g.beginFill(0xFFFFFF, 1.0).drawShape(source.los).endFill();
+      vision.fov.addChild(g);
+      if ( source.data.vision ) {  // Some ambient lights provide vision
+        vision.los.beginFill(0xFFFFFF).drawShape(source.los).endFill();
+      }
+    }
+
+    // Draw sight-based visibility for each vision source
+    for ( let source of this.sources ) {
+      source.active = true;
+      if ( !inBuffer && !d.sceneRect.contains(source.x, source.y) ) inBuffer = true;
+      if ( !unrestrictedVisibility && (source.radius > 0) ) {             // Token FOV radius
+        vision.fov.addChild(source.drawSight());
+      }
+      vision.los.beginFill(0xFFFFFF).drawShape(source.los);
+      drawShadowHoles(vision, vision.los);
+      vision.los.endFill();     // Token LOS mask
+      if ( !skipUpdateFog ) this.updateFog(source, forceUpdateFog);       // Update fog exploration
+    }
+
+    // Commit updates to the Fog of War texture
+    if ( commitFog ) this.commitFog();
+
+    // Alter visibility of the vision layer
+    this.visible = this.sources.size || !game.user.isGM;
+
+    // Apply a mask to the exploration container
+    if ( this.explored.msk ) {
+      const noMask = this.sources.size && inBuffer;
+      this.explored.mask = noMask ? null : this.explored.msk;
+      this.explored.msk.visible = !noMask;
+    }
+
+    // Restrict the visibility of other canvas objects
+    this._inBuffer = inBuffer;
+    this.restrictVisibility();
+  }
 
 
