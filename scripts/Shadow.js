@@ -49,6 +49,7 @@ Class SightLayer extends CanvasLayer
   Tests against every current vision source (e.g., if user has 2+ tokens selected)
   Checks if any point is within the los polygon.
   Then if not yet true, checks if the point is within light source.
+  --> This can control if a token can see another but does not control token's LOS or FOV
 
 Class VisionSource extends PointSource
 - illumination {PIXI.Mesh}: The current vision mesh for this source
@@ -122,12 +123,7 @@ So a token may be visible if:
 - Render LOS accounting for wall heights. Walls below token block visual LOS
 - Need LOS + lighting not in shadow (unless dimsight?)
 
-
-
-
-
-
-
+*/
 
 export class Shadow extends PIXI.Polygon {
 

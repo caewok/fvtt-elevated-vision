@@ -362,13 +362,15 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     this.edgesBelowSource = new Set(); // Top of edge below source top
     this.edgesAboveSource = new Set(); // Bottom of edge above the source top
 
-    if ( !this.config.source ) return;
+    if ( !this.config.source ) { return; }
     const sourceZ = this.config.source.elevation ?? 0;
+    if ( !isFinite(sourceZ) ) { return; } // Ignore lights set with default of positive infinity
+
     this.edges.forEach((e, key) => {
       if ( sourceZ > e.top ) {
         this.edgesBelowSource.add(e);
         this.edges.delete(key);
-      } else if ( sourceZ < e.botom ) {
+      } else if ( sourceZ < e.bottom ) {
         this.edgesAboveSource.add(e);
         this.edges.delete(key);
       }

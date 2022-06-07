@@ -3,7 +3,8 @@ foundry,
 PolygonEdge,
 PolygonVertex,
 CONST,
-Wall
+Wall,
+WallHeight
 */
 
 "use strict";
@@ -65,8 +66,8 @@ export class SimplePolygonEdge extends PolygonEdge {
     return this._id || (this._id = this.wall?.id || foundry.utils.randomID());
   }
 
-  get top() { return this.wall.top; }
-  get bottom() { return this.wall.bottom; }
+  get top() { return this.wall?.top ?? Number.POSITIVE_INFINITY; }
+  get bottom() { return this.wall?.bottom ?? Number.NEGATIVE_INFINITY; }
 
   /**
    * Identify which endpoint is further west, or if vertical, further north.
