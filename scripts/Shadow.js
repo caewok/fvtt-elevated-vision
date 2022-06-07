@@ -169,9 +169,13 @@ export class Shadow extends PIXI.Polygon {
      - lower case: descriptor. e.g., Ve for elevation of V.
 
     */
-    let Te = wall.top; // TO-DO: allow floating walls to let light through the bottom portion
-    let Oe = 0; // TO-DO: allow this to be modified by terrain elevation
-    let Ve = source.elevation;
+
+    // Need to convert elevation units to grid pixel units
+    const gridRatio = canvas.scene.data.grid / canvas.scene.data.gridDistance;
+
+    let Te = wall.top * gridRatio; // TO-DO: allow floating walls to let light through the bottom portion
+    let Oe = 0 * gridRatio; // TO-DO: allow this to be modified by terrain elevation
+    let Ve = source.elevation * gridRatio;
     if ( Ve <= Te ) return null; // Vision object blocked completely by wall
 
     // Need the point of the wall that forms a perpendicular line to the vision object
