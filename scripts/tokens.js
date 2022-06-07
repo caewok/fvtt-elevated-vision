@@ -55,9 +55,11 @@ function EVTokenIsVisible(wrapped) {
 
 function drawShadowHoles(source, mask) {
   if ( source.los?.shadows && source.los.shadows.size ) {
-    log("drawShadowHoles", source);
-    source.los.shadows.forEach(s_arr => {
+    log("\ndrawShadowHoles", source, mask);
+    source.los.shadows.forEach((s_arr, key) => {
+      log(`\ndrawShadowHoles|drawing ${s_arr.length} shadows for wall ${key}`);
       s_arr.forEach(s => {
+        log(`\tdrawShadowHoles|${s.points.length} shadow`);
         mask.beginHole().drawShape(s).endHole();
       });
     });
@@ -141,7 +143,9 @@ export function EVSightLayerRefresh({forceUpdateFog=false, skipUpdateFog=false}=
       g.beginFill(0xFFFFFF, 1.0).drawShape(source.los).endFill();
       vision.fov.addChild(g);
       if ( source.data.vision ) {  // Some ambient lights provide vision
-        vision.los.beginFill(0xFFFFFF).drawShape(source.los).endFill();
+        vision.los.beginFill(0xFFFFFF).drawShape(source.los);
+        drawShadowHoles(source, vision.los);
+        vision.los.endFill();
       }
     }
 
@@ -153,7 +157,7 @@ export function EVSightLayerRefresh({forceUpdateFog=false, skipUpdateFog=false}=
         vision.fov.addChild(source.drawSight());
       }
       vision.los.beginFill(0xFFFFFF).drawShape(source.los);
-      drawShadowHoles(vision, vision.los);
+      drawShadowHoles(source, vision.los);
       vision.los.endFill();     // Token LOS mask
       if ( !skipUpdateFog ) this.updateFog(source, forceUpdateFog);       // Update fog exploration
     }
