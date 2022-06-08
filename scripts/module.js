@@ -21,6 +21,7 @@ Hooks.once('init', async function() {
     drawing,
     util,
     Point3d,
+    Shadow
   };
 
   registerPIXIPolygonMethods();
