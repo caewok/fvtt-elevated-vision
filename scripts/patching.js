@@ -11,7 +11,7 @@ Wall
 import { WALL_HEIGHT_MODULE_ID, LEVELS_MODULE_ID, MODULE_ID } from "./const.js";
 import { drawMeshes } from "./Shadow.js";
 import { log } from "./util.js";
-import { EVSightLayerRefresh, EVDrawVision, EVDrawSight } from "./tokens.js";
+import { EVSightLayerRefresh, EVDrawVision, EVDrawSight, EVSightTestVisibility } from "./tokens.js";
 
 export function registerAdditions() {
 
@@ -69,7 +69,9 @@ export function registerAdditions() {
 export function registerPatches() {
   // libWrapper.register(MODULE_ID, "LightSource.prototype.drawMeshes", drawMeshes, "OVERRIDE");
 //   libWrapper.register(MODULE_ID, "LightSource.prototype.drawMeshes", drawMeshes, "WRAPPER");
-//   libWrapper.register(MODULE_ID, "SightLayer.prototype.testVisibility", testVisibility, "WRAPPER")
+  libWrapper.register(MODULE_ID, "SightLayer.prototype.testVisibility", EVSightTestVisibility, "MIXED");
+//   libWrapper.register(MODULE_ID, "Token.prototype.isVisible", EVTokenIsVisible, "OVERRIDE");
+
   libWrapper.register(MODULE_ID, "SightLayer.prototype.refresh", EVSightLayerRefresh, "OVERRIDE");
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype.drawVision", EVDrawVision, "OVERRIDE");
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", EVDrawSight, "OVERRIDE");

@@ -1,11 +1,11 @@
 /* globals
 game,
-PIXI,
 foundry,
 */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
+import { Point3d } from "./Point3d.js";
 
 /**
  * Log message only when debug flag is enabled from DevMode module.
@@ -42,7 +42,7 @@ export function perpendicularPoint(a, b, c) {
   return {
     x: a.x + u * dx,
     y: a.y + u * dy
-  }
+  };
 }
 
 export function distanceBetweenPoints(a, b) {
@@ -122,56 +122,83 @@ export function lineSegment3dPlaneIntersects(a, b, c, d, e = {x: c.x, y: c.y, z:
  *
  * @returns {boolean} Does the line segment intersect the rectangle in 3d?
  */
-export function lineSegment3dWallIntersects(a, b, wall) {
-  // Four corners of the wall
-  const c = new PIXI.Point(wall.A.x, wall.A.y, wall.bottom);
-  const d = new PIXI.Point(wall.B.x, wall.B.y, wall.bottom);
+export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
+  // Four corners of the wall: c, d, e, f
+  const c = new Point3d(wall.A.x, wall.A.y, wall.bottom);
+  const d = new Point3d(wall.B.x, wall.B.y, wall.bottom);
 
   // First test if wall and segment intersect from 2d overhead.
-  if ( !foundry.utils.lineSegmentIntersects(a, b, c, d) ) { return false; }
+  if ( !foundry.utils.lineSegmentIntersects(a, b, c, d) ) { return null; }
 
   // Second test if segment intersects the wall as a plane
-  const e = new PIXI.Point(wall.A.x, wall.A.y, wall.top);
-  if ( !lineSegment3dPlaneIntersects(a, b, c, d, e) ) { return false; }
+  const e = new Point3d(wall.A.x, wall.A.y, wall.top);
+  if ( !lineSegment3dPlaneIntersects(a, b, c, d, e) ) { return null; }
 
-  // All that remains is to test whether the segment passes under or over the wall
-  // Construct a plane at the top and bottom of the wall. Again, take advantage of
-  // the fact that the wall moves directly up out of the canvas.
-  const f = new PIXI.Point(wall.B.x, wall.B.y, wall.top);
-  const topP = e;
-  topP.x = (e.x === 0 && f.x === 0) ? (e.x + 1) : (e.x + f.x); // Make sure topP is a distinct point
-  if ( !lineSegment3dPlaneIntersects(a, b, e, f, topP) ) { return false; }
+  // At this point, we know the wall, if infinite, would intersect the segment
+  // But the segment might pass above or below.
+  // Simple approach is to get the actual intersection with the infinite plane,
+  // and then test for height.
+  const ix = lineWall3dIntersection(a, b, wall, epsilon);
+  if ( !ix || ix.z < wall.bottom || ix.z > wall.top ) { return null; }
 
-  const bottomP = c;
-  bottomP.x = (c.x === 0 && d.x === 0) ? (c.x + 1) : (c.x + d.x);
-  if ( !lineSegment3dPlaneIntersects(a, b, c, d, bottomP) ) { return false; }
-
-  return true;
+  return ix;
 }
 
 
 /**
  * Get the intersection of a 3d line with a plane.
  * See https://stackoverflow.com/questions/5666222/3d-line-plane-intersection
- * @param {Point3d} a   First point on the line
- * @param {Point3d} b   Second point on the line
- * @param {Point3d} c   Coordinate point on the plane
- * @param {Point3d} d   Normal vector defining the plane direction (need not be normalized)
+ * @param {Point3d} rayPoint        Any point on the line
+ * @param {Point3d} rayDirection    Line direction
+ * @param {Point3d} planePoint      Any point on the plane
+ * @param {Point3d} planeNormal  Plane normal
  * @return {Point3d|null}
  */
+// export function linePlane3dIntersection(rayPoint, rayDirection, planePoint, planeNormal, epsilon = 1e-8) {
+//   const ndotu = planeNormal.dot(rayDirection);
+//   if ( Math.abs(ndotu) < epsilon ) { return null; } // no intersection; line is parallel
+//   const w = rayPoint.sub(planePoint);
+//   const si = (-planeNormal.dot(w)) / ndotu;
+//   return rayDirection.mul(si).add(w).add(planePoint);
+// }
+//
+//
+// export function lineWall3dIntersection(a, b, wall, epsilon = 1e-8) {
+//   const rayPoint = a;
+//   const rayDirection = b.sub(a);
+//
+//   // 3 points on the wall to define the plane
+//   const q = new Point3d(wall.A.x, wall.A.y, wall.bottom);
+//   const r = new Point3d(wall.A.x, wall.A.y, wall.top);
+//   const s = new Point3d(wall.B.x, wall.B.y, wall.bottom);
+//
+//   // Take the cross-product of the vectors qr and qs
+//   const qr = r.sub(q);
+//   const qs = s.sub(q);
+//   const planeNormal = new Point3d(
+//     (qr.y * qs.z) - (qr.z * qs.y),
+//     -((qr.x * qs.z) - (qr.z * qs.x)),
+//     (qr.x * qs.y) - (qr.y * qs.x))
+//
+//   const planePoint = q;
+//
+//
+// }
+
 export function linePlane3dIntersection(a, b, c, d, epsilon = 1e-8) {
-  const u = sub3dPoints(b, a);
-  const dot = dot3dPoints(d, u);
+  const u = b.sub(a);
+  const dot = d.dot(u);
+
   if ( Math.abs(dot) > epsilon ) {
     // The factor of the point between a -> b (0 - 1)
     // if 'fac' is between (0 - 1) the point intersects with the segment.
     // Otherwise:
     // < 0.0: behind a.
     // > 1.0: infront of b.
-    const w = sub3dPoints(a, c);
-    const fac = -dot3dPoints(d, w) / dot;
-    const uFac = mul3dPoint(u, fac);
-    return add3dPoints(a, uFac);
+    const w = a.sub(c);
+    const fac = -d.dot(w) / dot;
+    const uFac = u.mul(fac);
+    return a.add(uFac);
   }
 
   // The segment is parallel to the plane.
@@ -188,53 +215,14 @@ export function linePlane3dIntersection(a, b, c, d, epsilon = 1e-8) {
 export function lineWall3dIntersection(a, b, wall, epsilon = 1e-8) {
   const x = wall.A.x;
   const y = wall.A.y;
-  const c = { x, y, z: 0 };
+  const c = new Point3d(x, y, 0);
 
   // Perpendicular vectors are (-dy, dx) and (dy, -dx)
-  const d = { x: -(wall.B.y - y), y: (wall.B.x - x), z: 0 };
+  const d = new Point3d(-(wall.B.y - y), (wall.B.x - x), 0);
 
   return linePlane3dIntersection(a, b, c, d, epsilon);
 }
 
-/**
- * Add two 3d points.
- * @param {Point3d} a
- * @param {Point3d} b
- * @return {Point3d}
- */
-function add3dPoints(a, b) {
-  return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
-}
-
-/**
- * Subtract two 3d points.
- * @param {Point3d} a
- * @param {Point3d} b
- * @return {Point3d}
- */
-function sub3dPoints(a, b) {
-  return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
-}
-
-/**
- * Dot product of two 3d points.
- * @param {Point3d} a
- * @param {Point3d} b
- * @return {number}
- */
-function dot3dPoints(a, b) {
-  return (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
-}
-
-/**
- * Multiple 3d point by scalar.
- * @param {Point3d} a
- * @param {number} f
- * @return {Point3d}
- */
-function mul3dPoint(a, f) {
-  return { x: a.x * f, y: a.y * f, z: a.z * f };
-}
 
 /**
  * Key for 2d points
