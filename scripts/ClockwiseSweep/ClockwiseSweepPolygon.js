@@ -13,7 +13,6 @@ PolygonVertex
 
 "use strict";
 
-import { log } from "../util.js";
 import { SimplePolygonEdge } from "./SimplePolygonEdge.js";
 import { identifyIntersectionsWithNoEndpoint, lineBlocksPoint } from "./utilities.js";
 import { findIntersectionsBruteRedBlack } from "./IntersectionsBrute.js";
@@ -23,7 +22,7 @@ import { ClipperLib } from "./clipper_unminified.js";
 
 import { Shadow } from "../Shadow.js";
 import { drawSegment, COLORS, clearDrawings } from "../drawing.js";
-import { lineSegment3dWallIntersects, lineWall3dIntersection, point3dKey } from "../util.js";
+import { log, lineSegment3dWallIntersection } from "../util.js";
 
 /*
 Basic concept:
@@ -1163,48 +1162,37 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     dest.z ??= 0;
 
     // Identify Edges
-    const edges = [];
+    const collisions = [];
     const walls = canvas.walls.quadtree.getObjects(ray.bounds);
     for ( let wall of walls ) {
-      if ( !this.testWallInclusion(wall, origin, type) ) continue;
-      const intersects = lineSegment3dWallIntersects(origin, dest, wall);
-      if ( intersects ) {
+      log(`getRayCollisions3d|Testing wall ${wall.id} at origin ${origin.x},${origin.y},${origin.z}`);
+      if ( !this.EVTestWallInclusion(wall, origin, type) ) continue;
+      log(`getRayCollisions3d|testing wall ${wall.id} for intersection`);
+      const x = lineSegment3dWallIntersection(origin, dest, wall);
+      if ( x ) {
+        log(`getRayCollisions3d|testing wall ${wall.id} intersects`);
         if ( mode === "any" ) {   // We may be done already
-          if ( (wall.data[type] === CONST.WALL_SENSE_TYPES.NORMAL) || (edges.length > 1) ) return true;
+          if ( (wall.data[type] === CONST.WALL_SENSE_TYPES.NORMAL) || (walls.length > 1) ) return true;
         }
-        edges.push(wall);
+        x.type = wall.data[type];
+        collisions.push(x);
       }
     }
     if ( mode === "any" ) return false;
 
-    // Identify Collision Points
-    const collisions = [];
-    const points = new Map();
-    for ( let edge of edges ) {
-      const intersects = lineSegment3dWallIntersects(origin, dest, edge);
-      if ( intersects ) {
-        let x = lineWall3dIntersection(origin, dest, edge);
-        if ( !x ) continue;
-
-        // Record the collision
-        x.key = point3dKey(x);
-        if ( points.has(x.key) ) {
-          x = points.get(x.key);
-        } else {
-          x.distance2 = Math.pow(x.x - origin.x, 2) + Math.pow(x.y - origin.y, 2) + Math.pow(x.z - origin.z, 2);
-          x.type = edge.type;
-          points.set(x.key, x);
-          collisions.push(x);
-        }
-      }
-    }
-
     // Return all collisions
-    if ( debug ) this._visualizeCollision(ray, edges, collisions);
+    if ( debug ) this._visualizeCollision(ray, walls, collisions);
     if ( mode === "all" ) return collisions;
 
+    // Calculate distance to return the closest collision
+    collisions.forEach(p => {
+      p.distance2 = Math.pow(p.x - origin.x, 2)
+        + Math.pow(p.y - origin.y, 2)
+        + Math.pow(p.z - origin.z, 2);
+    });
+
     // Return the closest collision
-    collisions.sort((a, b) => a._distance2 - b._distance2);
+    collisions.sort((a, b) => a.distance2 - b.distance2);
     if ( collisions[0].type === CONST.WALL_SENSE_TYPES.LIMITED ) collisions.shift();
     return collisions[0] || null;
   }

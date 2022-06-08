@@ -41,7 +41,7 @@ export function EVSightTestVisibility(wrapped, point, {tolerance=2, object=null}
   if ( !visionSources.size ) return game.user.isGM;
 
   // Determine the array of offset points to test
-  const t = tolerance;
+  const t = tolerance;  // For tokens: tolerance = Math.min(object.w, object.h) / 4;
   const offsets = t > 0
     ? [[0, 0], [-t, -t], [-t, t], [t, t], [t, -t], [-t, 0], [t, 0], [0, -t], [0, t]]
     : [[0, 0]];
@@ -58,7 +58,7 @@ export function EVSightTestVisibility(wrapped, point, {tolerance=2, object=null}
   // Test the middle for better consistency with how offsets above also test center
   const obj_top = object.top;
   const obj_bottom = object.bottom;
-  const obj_center = Math.round((obj_top + obj_bottom) / 2);
+  const obj_center = (obj_top + obj_bottom) / 2;
   const points3d = [];
   const skip_top = obj_top === obj_bottom;
 
@@ -76,7 +76,7 @@ export function EVSightTestVisibility(wrapped, point, {tolerance=2, object=null}
       new Point3d(p.x, p.y, obj_bottom));
   });
 
-  return points.some(p => {
+  return points3d.some(p => {
     let hasLOS = false;
     let hasFOV = false;
     let requireFOV = !canvas.lighting.globalLight;

@@ -71,4 +71,48 @@ export class Point3d extends PIXI.Point {
     return this;
   }
 
+  /**
+   * Add a point to this one.
+   * @param {Point3d|PIXI.Point} p
+   * @return {Point3d}
+   */
+  add(p) {
+    const z = p.z ?? 0;
+    return new this.constructor(this.x + p.x, this.y + p.y, this.z + z);
+  }
+
+  /**
+   * Subtract a point from this one.
+   * @param {Point3d|PIXI.Point} p
+   * @return {Point3d}
+   */
+  sub(p) {
+    const z = p.z ?? 0;
+    return new this.constructor(this.x - p.x, this.y - p.y, this.z - z);
+  }
+
+  /**
+   * Dot product of this point with another.
+   * @param {Point3d} p
+   * @return {number}
+   */
+  dot(p) {
+    const z = p.z ?? 0;
+    return (this.x * p.x) + (this.y * p.y) + (this.z * z);
+  }
+
+  /**
+   * Multiple this point by a scalar
+   * @param {number} f
+   * @return {Point3d}
+   */
+  mul(f) {
+    return new this.constructor(this.x * f, this.y * f, this.z * f);
+  }
+
+  /**
+   * Cross product of this point by another
+   * @param {Point3d} p
+   * @return {number}
+   */
 }
