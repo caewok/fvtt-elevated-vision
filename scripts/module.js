@@ -3,6 +3,7 @@ import { ClipperLib } from "./ClockwiseSweep/clipper_unminified.js";
 import { EVClockwiseSweepPolygon } from "./ClockwiseSweep/ClockwiseSweepPolygon.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
+import * as util from "./util.js";
 
 import { registerPIXIPolygonMethods } from "./ClockwiseSweep/PIXIPolygon.js";
 import { registerPIXIRectangleMethods } from "./ClockwiseSweep/PIXIRectangle.js";
@@ -17,7 +18,8 @@ Hooks.once('init', async function() {
   game.modules.get(MODULE_ID).api = {
     EVClockwiseSweepPolygon,
     ClipperLib,
-    drawing
+    drawing,
+    util,
     Point3d,
   };
 
