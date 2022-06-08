@@ -98,7 +98,7 @@ function replaceInfinity(value) {
  * @type {number}
  */
 function sourceElevation() {
-  replaceInfinity(WallHeight.getSourceElevationTop(this.object.document));
+  return replaceInfinity(WallHeight.getSourceElevationTop(this.object.document));
 }
 
 /**
