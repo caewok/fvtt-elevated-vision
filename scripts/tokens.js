@@ -54,14 +54,11 @@ function EVTokenIsVisible(wrapped) {
 }
 
 function drawShadowHoles(source, mask) {
-  if ( source.los?.shadows && source.los.shadows.size ) {
+  if ( source.los?.shadows && source.los.shadows.length ) {
     log("\ndrawShadowHoles", source, mask);
-    source.los.shadows.forEach((s_arr, key) => {
-      log(`\ndrawShadowHoles|drawing ${s_arr.length} shadows for wall ${key}`);
-      s_arr.forEach(s => {
-        log(`\tdrawShadowHoles|${s.points.length} shadow`);
-        mask.beginHole().drawShape(s).endHole();
-      });
+    source.los.shadows.forEach(s => {
+      log(`\tdrawShadowHoles|${s.points.length} shadow`);
+      mask.beginHole().drawShape(s).endHole();
     });
   }
 }

@@ -232,11 +232,9 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
 
   _drawShadows({ color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = .5 } = {} ) {
     clearDrawings();
-    this.shadows.forEach(s_arr => {
-      s_arr.forEach(s => {
-        s.draw({color, width, fill, alpha});
-        if ( this.config.debug ) { drawSegment(s.wall, { color: COLORS.black, alpha: .7 }); }
-      });
+    this.shadows.forEach(s => {
+      Shadow.prototype.draw.call(s, {color, width, fill, alpha});
+      if ( this.config.debug ) { drawSegment(s.wall, { color: COLORS.black, alpha: .7 }); }
     });
   }
 
@@ -250,7 +248,13 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
    * Shadows in the sweep are intersected against the sweep polygon.
    */
   _addShadows() {
-    this.shadows = new Map();
+    // PIXI.js hates overlapping holes:
+    // https://www.html5gamedevs.com/topic/45827-overlapping-holes-in-pixigraphics/
+    // Use clipper to combine the shadows into a single non-overlapping set
+    const solution = new ClipperLib.Paths();
+    const c = new ClipperLib.Clipper();
+    c.AddPath(this.clipperCoordinates, ClipperLib.PolyType.ptSubject, true); // True to be considered closed
+
     this.edgesBelowSource.forEach(e => {
       const shadow = Shadow.constructShadow(e.wall, this.config.source);
       if ( !shadow ) return;
@@ -259,8 +263,11 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
 
       // Intersect the sweep polygon with the shadow
       // Note this may result in multiple shadow polygons
-      this.shadows.set(e.wall.id, shadow.intersectPolygon(this));
+      c.AddPath(shadow.clipperCoordinates, ClipperLib.PolyType.ptClip, true); // True to be considered closed
     });
+
+    c.Execute(ClipperLib.ClipType.ctIntersection, solution);
+    this.shadows = solution.map(pts => PIXI.Polygon.fromClipperPoints(pts));
   }
 
 
