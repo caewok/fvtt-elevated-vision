@@ -11,7 +11,7 @@ Wall
 import { WALL_HEIGHT_MODULE_ID, LEVELS_MODULE_ID, MODULE_ID } from "./const.js";
 import { drawMeshes } from "./Shadow.js";
 import { log } from "./util.js";
-import { EVSightLayerRefresh, EVDrawVision, EVDrawSight } from "./tokens.js";
+import { EVSightLayerRefresh, EVDrawVision, EVDrawSight, EVSightTestVisibility } from "./tokens.js";
 
 export function registerAdditions() {
 
@@ -69,7 +69,9 @@ export function registerAdditions() {
 export function registerPatches() {
   // libWrapper.register(MODULE_ID, "LightSource.prototype.drawMeshes", drawMeshes, "OVERRIDE");
 //   libWrapper.register(MODULE_ID, "LightSource.prototype.drawMeshes", drawMeshes, "WRAPPER");
-//   libWrapper.register(MODULE_ID, "SightLayer.prototype.testVisibility", testVisibility, "WRAPPER")
+  libWrapper.register(MODULE_ID, "SightLayer.prototype.testVisibility", EVSightTestVisibility, "MIXED");
+//   libWrapper.register(MODULE_ID, "Token.prototype.isVisible", EVTokenIsVisible, "OVERRIDE");
+
   libWrapper.register(MODULE_ID, "SightLayer.prototype.refresh", EVSightLayerRefresh, "OVERRIDE");
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype.drawVision", EVDrawVision, "OVERRIDE");
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", EVDrawSight, "OVERRIDE");
@@ -87,11 +89,19 @@ function testVisibility(wrapped, point, {tolerance = 2, object = null} = {}) {
   return out;
 }
 
+function replaceInfinity(value) {
+  return isFinite(value) ? value
+    : value === Infinity ? Number.MAX_SAFE_INTEGER : Number.MIN_SAFE_INTEGER;
+}
+
 /**
  * For {LightSource|SoundSource|VisionSource} objects
+ * Do not permit infinity, as it screws up orientation and other calculations.
  * @type {number}
  */
-function sourceElevation() { return WallHeight.getSourceElevationTop(this.object.document) }
+function sourceElevation() {
+  replaceInfinity(WallHeight.getSourceElevationTop(this.object.document));
+}
 
 /**
  * For {Token}
@@ -115,11 +125,11 @@ function tokenBottom() {
  * For {Wall}
  * @type {number}
  */
-function wallTop() { return WallHeight.getWallBounds(this).top; }
+function wallTop() { return replaceInfinity(WallHeight.getWallBounds(this).top); }
 
 /**
  * For {Wall}
  * @type {number}
  */
-function wallBottom() { return WallHeight.getWallBounds(this).bottom;  }
+function wallBottom() { return replaceInfinity(WallHeight.getWallBounds(this).bottom);  }
 
