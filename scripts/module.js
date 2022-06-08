@@ -2,6 +2,7 @@ import * as drawing from "./drawing.js";
 import { ClipperLib } from "./ClockwiseSweep/clipper_unminified.js";
 import { EVClockwiseSweepPolygon } from "./ClockwiseSweep/ClockwiseSweepPolygon.js";
 import { Shadow } from "./Shadow.js";
+import { Point3d } from "./Point3d.js";
 
 import { registerPIXIPolygonMethods } from "./ClockwiseSweep/PIXIPolygon.js";
 import { registerPIXIRectangleMethods } from "./ClockwiseSweep/PIXIRectangle.js";
@@ -17,6 +18,7 @@ Hooks.once('init', async function() {
     EVClockwiseSweepPolygon,
     ClipperLib,
     drawing
+    Point3d,
   };
 
   registerPIXIPolygonMethods();
