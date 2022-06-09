@@ -266,7 +266,7 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     });
 
     c.Execute(ClipperLib.ClipType.ctIntersection, solution);
-    this.shadows = solution.map(pts => PIXI.Polygon.fromClipperPoints(pts));
+    this.shadows = solution.map(pts => Shadow.fromClipperPoints(pts));
   }
 
 
