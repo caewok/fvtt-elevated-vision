@@ -250,22 +250,38 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     // PIXI.js hates overlapping holes:
     // https://www.html5gamedevs.com/topic/45827-overlapping-holes-in-pixigraphics/
     // Use clipper to combine the shadows into a single non-overlapping set
+
+    // Combining shadows one at a time with the sweep doesn't work,
+    // because the repeated intersections create incorrect holes.
+    // Instead, try getting Clipper to provide a union of all shadows, then
+    // intersect that against the polygon sweep.
+    // Do we need to intersect the sweep each time first with each shadow?
+
     const solution = new ClipperLib.Paths();
     const c = new ClipperLib.Clipper();
+    const src = this.config.source
+    this.close(); // Should already be closed; but just in case.
     c.AddPath(this.clipperCoordinates, ClipperLib.PolyType.ptSubject, true); // True to be considered closed
 
     this.edgesBelowSource.forEach(e => {
-      const shadow = Shadow.constructShadow(e.wall, this.config.source);
+      const shadow = Shadow.constructShadow(e.wall, src);
       if ( !shadow ) return;
+
       if ( !e.wall.shadows ) { e.wall.shadows = new Map(); }
-      e.wall.shadows.set(this.config.source.object.id, shadow);
+      e.wall.shadows.set(src.object.id, shadow);
 
       // Intersect the sweep polygon with the shadow
       // Note this may result in multiple shadow polygons
       c.AddPath(shadow.clipperCoordinates, ClipperLib.PolyType.ptClip, true); // True to be considered closed
     });
 
+    // c.Execute(ClipperLib.ClipType.ctUnion, solution);
+
+
     c.Execute(ClipperLib.ClipType.ctIntersection, solution);
+
+
+
     this.shadows = solution.map(pts => Shadow.fromClipperPoints(pts));
   }
 
