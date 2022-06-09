@@ -13,7 +13,6 @@ PolygonVertex
 
 "use strict";
 
-import { log } from "../util.js";
 import { SimplePolygonEdge } from "./SimplePolygonEdge.js";
 import { identifyIntersectionsWithNoEndpoint, lineBlocksPoint } from "./utilities.js";
 import { findIntersectionsBruteRedBlack } from "./IntersectionsBrute.js";
@@ -23,7 +22,7 @@ import { ClipperLib } from "./clipper_unminified.js";
 
 import { Shadow } from "../Shadow.js";
 import { drawSegment, COLORS, clearDrawings } from "../drawing.js";
-
+import { log, lineSegment3dWallIntersection } from "../util.js";
 
 /*
 Basic concept:
@@ -232,11 +231,9 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
 
   _drawShadows({ color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = .5 } = {} ) {
     clearDrawings();
-    this.shadows.forEach(s_arr => {
-      s_arr.forEach(s => {
-        s.draw({color, width, fill, alpha});
-        if ( this.config.debug ) { drawSegment(s.wall, { color: COLORS.black, alpha: .7 }); }
-      });
+    this.shadows.forEach(s => {
+      Shadow.prototype.draw.call(s, {color, width, fill, alpha});
+      if ( this.config.debug ) { drawSegment(s.wall, { color: COLORS.black, alpha: .7 }); }
     });
   }
 
@@ -250,17 +247,56 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
    * Shadows in the sweep are intersected against the sweep polygon.
    */
   _addShadows() {
-    this.shadows = new Map();
-    this.edgesBelowSource.forEach(e => {
-      const shadow = Shadow.constructShadow(e.wall, this.config.source);
-      if ( !shadow ) return;
-      if ( !e.wall.shadows ) { e.wall.shadows = new Map(); }
-      e.wall.shadows.set(this.config.source.object.id, shadow);
+    // PIXI.js hates overlapping holes:
+    // https://www.html5gamedevs.com/topic/45827-overlapping-holes-in-pixigraphics/
+    // Use clipper to combine the shadows into a single non-overlapping set
 
-      // Intersect the sweep polygon with the shadow
-      // Note this may result in multiple shadow polygons
-      this.shadows.set(e.wall.id, shadow.intersectPolygon(this));
+    // Combining shadows where each shadow is a single path in an array of paths
+    // doesn't work b/c those paths are combined in a way to keep each separate
+    // sub-path.
+
+    // Instead, union each shadow in turn, then intersect against the polygon sweep.
+
+    const src = this.config.source
+    this.close(); // Should already be closed; but just in case.
+
+    // First, construct the shadows and store in walls for debugging and potential
+    // future performance improvements. TO-DO: Update shadow for wall only when needed.
+    const shadows = [];
+    this.edgesBelowSource.forEach(e => {
+      const shadow = Shadow.constructShadow(e.wall, src);
+      if ( !shadow ) return;
+
+      if ( !e.wall.shadows ) { e.wall.shadows = new Map(); }
+      e.wall.shadows.set(src.object.id, shadow);
+      shadows.push(shadow);
     });
+
+    if ( !shadows.length ) return;
+
+    // Second, union all shadows as necessary
+    let combined_shadow_path = new ClipperLib.Paths();
+    combined_shadow_path.push(shadows[0].clipperCoordinates);
+    if ( shadows.length > 1 ) {
+      for ( let i = 1; i < shadows.length; i += 1 ) {
+        const c = new ClipperLib.Clipper();
+        const solution = new ClipperLib.Paths();
+        c.AddPaths(combined_shadow_path, ClipperLib.PolyType.ptSubject, true);
+        c.AddPath(shadows[i].clipperCoordinates, ClipperLib.PolyType.ptClip, true);
+        c.Execute(ClipperLib.ClipType.ctUnion, solution);
+        combined_shadow_path = solution;
+      }
+    }
+
+    // Third, intersect the shadow(s) with the sweep polygon
+    const c = new ClipperLib.Clipper();
+    const solution = new ClipperLib.Paths();
+    c.AddPath(this.clipperCoordinates, ClipperLib.PolyType.ptSubject, true);
+    c.AddPaths(combined_shadow_path, ClipperLib.PolyType.ptClip, true);
+    c.Execute(ClipperLib.ClipType.ctIntersection, solution);
+
+    // Store the resulting combined shadows
+    this.shadows = solution.map(pts => Shadow.fromClipperPoints(pts));
   }
 
 
@@ -362,13 +398,17 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     this.edgesBelowSource = new Set(); // Top of edge below source top
     this.edgesAboveSource = new Set(); // Bottom of edge above the source top
 
-    if ( !this.config.source ) return;
-    const sourceZ = this.config.source.elevation ?? 0;
+    if ( !this.config.source ) { return; }
+
+    // Ignore lights set with default of positive infinity
+    if ( !isFinite(WallHeight.getSourceElevationTop(this.config.source.object.document)) ) { return; }
+
+    const sourceZ = this.config.source.elevationZ ?? 0;
     this.edges.forEach((e, key) => {
-      if ( sourceZ > e.top ) {
+      if ( sourceZ > e.topZ ) {
         this.edgesBelowSource.add(e);
         this.edges.delete(key);
-      } else if ( sourceZ < e.botom ) {
+      } else if ( sourceZ < e.bottomZ ) {
         this.edgesAboveSource.add(e);
         this.edges.delete(key);
       }
@@ -1133,6 +1173,59 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
 
     this.points = poly.points;
   }
+
+  /**
+   * Check whether a given ray intersects with walls.
+   * This version considers rays with a z element
+   *
+   * @param {PolygonRay} ray            The Ray being tested
+   * @param {object} [options={}]       Options which customize how collision is tested
+   * @param {string} [options.type=move]        Which collision type to check, a value in CONST.WALL_RESTRICTION_TYPES
+   * @param {string} [options.mode=all]         Which type of collisions are returned: any, closest, all
+   * @param {boolean} [options.debug=false]     Visualize some debugging data to help understand the collision test
+   * @return {boolean|object[]|object}  Whether any collision occurred if mode is "any"
+   *                                    An array of collisions, if mode is "all"
+   *                                    The closest collision, if mode is "closest"
+   */
+  static getRayCollisions3d(ray, {type="move", mode="all", debug=false}={}) {
+    const origin = ray.A;
+    const dest = ray.B;
+    origin.z ??= 0;
+    dest.z ??= 0;
+
+    // Identify Edges
+    const collisions = [];
+    const walls = canvas.walls.quadtree.getObjects(ray.bounds);
+    for ( let wall of walls ) {
+      if ( !this.EVTestWallInclusion(wall, origin, type) ) continue;
+      const x = lineSegment3dWallIntersection(origin, dest, wall);
+      if ( x ) {
+        if ( mode === "any" ) {   // We may be done already
+          if ( (wall.data[type] === CONST.WALL_SENSE_TYPES.NORMAL) || (walls.length > 1) ) return true;
+        }
+        x.type = wall.data[type];
+        collisions.push(x);
+      }
+    }
+    if ( mode === "any" ) return false;
+
+    // Return all collisions
+    if ( debug ) this._visualizeCollision(ray, walls, collisions);
+    if ( mode === "all" ) return collisions;
+
+    // Calculate distance to return the closest collision
+    collisions.forEach(p => {
+      p.distance2 = Math.pow(p.x - origin.x, 2)
+        + Math.pow(p.y - origin.y, 2)
+        + Math.pow(p.z - origin.z, 2);
+    });
+
+    // Return the closest collision
+    collisions.sort((a, b) => a.distance2 - b.distance2);
+    if ( collisions[0].type === CONST.WALL_SENSE_TYPES.LIMITED ) collisions.shift();
+    return collisions[0] || null;
+  }
+
 
 }
 
