@@ -127,6 +127,11 @@ So a token may be visible if:
 
 export class Shadow extends PIXI.Polygon {
 
+  constructor(...points) {
+    super(...points);
+    this.close();
+  }
+
   /**
    * Build the parallelogram representing a shadow cast from a wall.
    * Looking top-down with a light or other source object at a given elevation
