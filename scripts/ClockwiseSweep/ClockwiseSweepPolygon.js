@@ -251,37 +251,51 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     // https://www.html5gamedevs.com/topic/45827-overlapping-holes-in-pixigraphics/
     // Use clipper to combine the shadows into a single non-overlapping set
 
-    // Combining shadows one at a time with the sweep doesn't work,
-    // because the repeated intersections create incorrect holes.
-    // Instead, try getting Clipper to provide a union of all shadows, then
-    // intersect that against the polygon sweep.
-    // Do we need to intersect the sweep each time first with each shadow?
+    // Combining shadows where each shadow is a single path in an array of paths
+    // doesn't work b/c those paths are combined in a way to keep each separate
+    // sub-path.
 
-    const solution = new ClipperLib.Paths();
-    const c = new ClipperLib.Clipper();
+    // Instead, union each shadow in turn, then intersect against the polygon sweep.
+
     const src = this.config.source
     this.close(); // Should already be closed; but just in case.
-    c.AddPath(this.clipperCoordinates, ClipperLib.PolyType.ptSubject, true); // True to be considered closed
 
+    // First, construct the shadows and store in walls for debugging and potential
+    // future performance improvements. TO-DO: Update shadow for wall only when needed.
+    const shadows = [];
     this.edgesBelowSource.forEach(e => {
       const shadow = Shadow.constructShadow(e.wall, src);
       if ( !shadow ) return;
 
       if ( !e.wall.shadows ) { e.wall.shadows = new Map(); }
       e.wall.shadows.set(src.object.id, shadow);
-
-      // Intersect the sweep polygon with the shadow
-      // Note this may result in multiple shadow polygons
-      c.AddPath(shadow.clipperCoordinates, ClipperLib.PolyType.ptClip, true); // True to be considered closed
+      shadows.push(shadow);
     });
 
-    // c.Execute(ClipperLib.ClipType.ctUnion, solution);
+    if ( !shadows.length ) return;
 
+    // Second, union all shadows as necessary
+    let combined_shadow_path = new ClipperLib.Paths();
+    combined_shadow_path.push(shadows[0].clipperCoordinates);
+    if ( shadows.length > 1 ) {
+      for ( let i = 1; i < shadows.length; i += 1 ) {
+        const c = new ClipperLib.Clipper();
+        const solution = new ClipperLib.Paths();
+        c.AddPaths(combined_shadow_path, ClipperLib.PolyType.ptSubject, true);
+        c.AddPath(shadows[i].clipperCoordinates, ClipperLib.PolyType.ptClip, true);
+        c.Execute(ClipperLib.ClipType.ctUnion, solution);
+        combined_shadow_path = solution;
+      }
+    }
 
+    // Third, intersect the shadow(s) with the sweep polygon
+    const c = new ClipperLib.Clipper();
+    const solution = new ClipperLib.Paths();
+    c.AddPath(this.clipperCoordinates, ClipperLib.PolyType.ptSubject, true);
+    c.AddPaths(combined_shadow_path, ClipperLib.PolyType.ptClip, true);
     c.Execute(ClipperLib.ClipType.ctIntersection, solution);
 
-
-
+    // Store the resulting combined shadows
     this.shadows = solution.map(pts => Shadow.fromClipperPoints(pts));
   }
 
