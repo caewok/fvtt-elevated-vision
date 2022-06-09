@@ -40,7 +40,7 @@ export function EVLightSourceInitialize(wrapped, data = {}) {
   // Like in LightSource.constructor
   // don't use _createMesh b/c it links to losMask; we want a separate mask
 
-  const shaderCls = GhostLightIlluminationShader; // Just for testing
+  const shaderCls = AdaptiveIlluminationShader; // Just for testing
   const state = new PIXI.State();
   const mesh = new PIXI.Mesh(this.constructor.GEOMETRY, shaderCls.create(), state);
   mesh.mask = new PIXI.LegacyGraphics();
@@ -76,7 +76,7 @@ export function EVLightSourceInitializeShaders(wrapped) {
   };
 
   // Base initialize method will calculate los.
-  createShader(GhostLightIlluminationShader, this.shadowsMesh);
+  createShader(AdaptiveIlluminationShader, this.shadowsMesh);
 }
 
 /**
@@ -104,11 +104,29 @@ export function EVDrawMeshes(wrapped) {
   }
   this.shadowsMesh.mask.endFill();
 
-  // From drawLight/drawColor/drawBackgroun
-// const mesh = this._updateMesh(this.shadowsMesh);
+  // From drawLight
+
+  // Protect against cases where the canvas is being deactivated
+  const shader = this.shadowsMesh.shader;
+  if ( !shader ) return null;
+
+  // Update illumination uniforms
+  const s = this.shadowsMesh;
+  const updateChannels = !(this._flags.lightingVersion >= canvas.lighting.version);
+  if ( this._resetUniforms.illumination || updateChannels ) {
+    this._updateIlluminationUniforms(shader);
+    if ( this._shutdown.illumination ) this._shutdown.illumination = !(s.renderable = true);
+    this._flags.lightingVersion = canvas.lighting.version;
+  }
+  if ( this._resetUniforms.illumination ) {
+    this._resetUniforms.illumination = false;
+  }
+
+
+  const mesh = this._updateMesh(this.shadowsMesh);
 
   // Need to add shadowsMesh to ilm.lights directly. See LightingLayer.prototype.refresh
-//   canvas.lighting.illumination.lights.addChild(mesh);
+  canvas.lighting.illumination.lights.addChild(mesh);
 
   return out;
 }
