@@ -1167,12 +1167,9 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     const collisions = [];
     const walls = canvas.walls.quadtree.getObjects(ray.bounds);
     for ( let wall of walls ) {
-      log(`getRayCollisions3d|Testing wall ${wall.id} at origin ${origin.x},${origin.y},${origin.z}`);
       if ( !this.EVTestWallInclusion(wall, origin, type) ) continue;
-      log(`getRayCollisions3d|testing wall ${wall.id} for intersection`);
       const x = lineSegment3dWallIntersection(origin, dest, wall);
       if ( x ) {
-        log(`getRayCollisions3d|testing wall ${wall.id} intersects`);
         if ( mode === "any" ) {   // We may be done already
           if ( (wall.data[type] === CONST.WALL_SENSE_TYPES.NORMAL) || (walls.length > 1) ) return true;
         }
