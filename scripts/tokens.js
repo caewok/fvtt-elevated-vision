@@ -56,8 +56,8 @@ export function EVSightTestVisibility(wrapped, point, {tolerance=2, object=null}
   // also, if in shadow, has line of sight to a vision source without intersecting a wall.
   // Top and bottom of the token cube---the points to test along the token.
   // Test the middle for better consistency with how offsets above also test center
-  const obj_top = object.top;
-  const obj_bottom = object.bottom;
+  const obj_top = object.topZ;
+  const obj_bottom = object.bottomZ;
   const obj_center = (obj_top + obj_bottom) / 2;
   const points3d = [];
   const skip_top = obj_top === obj_bottom;
@@ -116,7 +116,7 @@ function testVisionSourceLOS(source, p) {
   const point_in_shadow = source.los.shadows.some(s => s.contains(p.x, p.y));
   if ( !point_in_shadow ) { return true; }
 
-  const ray = new Ray(new Point3d(source.x, source.y, source.elevation), p);
+  const ray = new Ray(new Point3d(source.x, source.y, source.elevationZ), p);
   return !EVClockwiseSweepPolygon.getRayCollisions3d(ray, { type: "sight", mode: "any" });
 }
 

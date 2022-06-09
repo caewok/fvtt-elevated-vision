@@ -15,44 +15,44 @@ import { EVSightLayerRefresh, EVDrawVision, EVDrawSight, EVSightTestVisibility }
 
 export function registerAdditions() {
 
-  if ( !Object.hasOwn(VisionSource.prototype, "elevation") ) {
-    Object.defineProperty(VisionSource.prototype, "elevation", {
+  if ( !Object.hasOwn(VisionSource.prototype, "elevationZ") ) {
+    Object.defineProperty(VisionSource.prototype, "elevationZ", {
       get: sourceElevation
     });
   }
 
-  if ( !Object.hasOwn(LightSource.prototype, "elevation") ) {
-    Object.defineProperty(LightSource.prototype, "elevation", {
+  if ( !Object.hasOwn(LightSource.prototype, "elevationZ") ) {
+    Object.defineProperty(LightSource.prototype, "elevationZ", {
       get: sourceElevation
     });
   }
 
-  if ( !Object.hasOwn(SoundSource.prototype, "elevation") ) {
-    Object.defineProperty(SoundSource.prototype, "elevation", {
+  if ( !Object.hasOwn(SoundSource.prototype, "elevationZ") ) {
+    Object.defineProperty(SoundSource.prototype, "elevationZ", {
       get: sourceElevation
     });
   }
 
-  if ( !Object.hasOwn(Wall.prototype, "top") ) {
-    Object.defineProperty(Wall.prototype, "top", {
+  if ( !Object.hasOwn(Wall.prototype, "topZ") ) {
+    Object.defineProperty(Wall.prototype, "topZ", {
       get: wallTop
     });
   }
 
-  if ( !Object.hasOwn(Wall.prototype, "bottom") ) {
-    Object.defineProperty(Wall.prototype, "bottom", {
+  if ( !Object.hasOwn(Wall.prototype, "bottomZ") ) {
+    Object.defineProperty(Wall.prototype, "bottomZ", {
       get: wallBottom
     });
   }
 
-  if ( !Object.hasOwn(Token.prototype, "top") ) {
-    Object.defineProperty(Token.prototype, "top", {
+  if ( !Object.hasOwn(Token.prototype, "topZ") ) {
+    Object.defineProperty(Token.prototype, "topZ", {
       get: tokenTop
     });
   }
 
-  if ( !Object.hasOwn(Token.prototype, "bottom") ) {
-    Object.defineProperty(Token.prototype, "bottom", {
+  if ( !Object.hasOwn(Token.prototype, "bottomZ") ) {
+    Object.defineProperty(Token.prototype, "bottomZ", {
       get: tokenBottom
     });
   }
@@ -77,6 +77,14 @@ export function registerPatches() {
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", EVDrawSight, "OVERRIDE");
 }
 
+
+/**
+ * Convert a grid units value to pixel units, for equivalency with x,y values.
+ */
+function zValue(value) {
+  return value * canvas.scene.data.grid / canvas.scene.data.gridDistance;
+}
+
 /**
  * For testing shadow creation
  */
@@ -90,7 +98,7 @@ function testVisibility(wrapped, point, {tolerance = 2, object = null} = {}) {
 }
 
 function replaceInfinity(value) {
-  return isFinite(value) ? value
+  return isFinite(value) ? zValue(value)
     : value === Infinity ? Number.MAX_SAFE_INTEGER : Number.MIN_SAFE_INTEGER;
 }
 
@@ -109,7 +117,7 @@ function sourceElevation() {
  */
 function tokenTop() {
   // From Wall Height but skip the extra test b/c we know it is a token.
-  return this.document.object.losHeight;
+  return zValue(this.document.object.losHeight);
 }
 
 /**
@@ -118,7 +126,7 @@ function tokenTop() {
  */
 function tokenBottom() {
   // From Wall Height but skip the extra test b/c we know it is a token.
-  return this.document.data.elevation;
+  return zValue(this.document.data.elevation);
 }
 
 /**

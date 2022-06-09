@@ -124,14 +124,14 @@ export function lineSegment3dPlaneIntersects(a, b, c, d, e = {x: c.x, y: c.y, z:
  */
 export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
   // Four corners of the wall: c, d, e, f
-  const c = new Point3d(wall.A.x, wall.A.y, wall.bottom);
-  const d = new Point3d(wall.B.x, wall.B.y, wall.bottom);
+  const c = new Point3d(wall.A.x, wall.A.y, wall.bottomZ);
+  const d = new Point3d(wall.B.x, wall.B.y, wall.bottomZ);
 
   // First test if wall and segment intersect from 2d overhead.
   if ( !foundry.utils.lineSegmentIntersects(a, b, c, d) ) { return null; }
 
   // Second test if segment intersects the wall as a plane
-  const e = new Point3d(wall.A.x, wall.A.y, wall.top);
+  const e = new Point3d(wall.A.x, wall.A.y, wall.topZ);
   if ( !lineSegment3dPlaneIntersects(a, b, c, d, e) ) { return null; }
 
   // At this point, we know the wall, if infinite, would intersect the segment
@@ -139,7 +139,7 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
   // Simple approach is to get the actual intersection with the infinite plane,
   // and then test for height.
   const ix = lineWall3dIntersection(a, b, wall, epsilon);
-  if ( !ix || ix.z < wall.bottom || ix.z > wall.top ) { return null; }
+  if ( !ix || ix.z < wall.bottomZ || ix.z > wall.topZ ) { return null; }
 
   return ix;
 }
@@ -168,9 +168,9 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
 //   const rayDirection = b.sub(a);
 //
 //   // 3 points on the wall to define the plane
-//   const q = new Point3d(wall.A.x, wall.A.y, wall.bottom);
-//   const r = new Point3d(wall.A.x, wall.A.y, wall.top);
-//   const s = new Point3d(wall.B.x, wall.B.y, wall.bottom);
+//   const q = new Point3d(wall.A.x, wall.A.y, wall.bottomZ);
+//   const r = new Point3d(wall.A.x, wall.A.y, wall.topZ);
+//   const s = new Point3d(wall.B.x, wall.B.y, wall.bottomZ);
 //
 //   // Take the cross-product of the vectors qr and qs
 //   const qr = r.sub(q);

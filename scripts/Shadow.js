@@ -170,12 +170,11 @@ export class Shadow extends PIXI.Polygon {
 
     */
 
-    // Need to convert elevation units to grid pixel units
-    const gridRatio = canvas.scene.data.grid / canvas.scene.data.gridDistance;
+    // Note: elevation should already be in grid pixel units
 
-    let Te = wall.top * gridRatio; // TO-DO: allow floating walls to let light through the bottom portion
-    let Oe = 0 * gridRatio; // TO-DO: allow this to be modified by terrain elevation
-    let Ve = source.elevation * gridRatio;
+    let Te = wall.topZ; // TO-DO: allow floating walls to let light through the bottom portion
+    let Oe = 0; // TO-DO: allow this to be modified by terrain elevation
+    let Ve = source.elevationZ;
     if ( Ve <= Te ) return null; // Vision object blocked completely by wall
 
     // Need the point of the wall that forms a perpendicular line to the vision object
@@ -202,28 +201,45 @@ export class Shadow extends PIXI.Polygon {
     api.drawing.drawPoint(source, {color: api.drawing.COLORS.yellow})
 
     VO = Ray.towardsPoint(source, Tix, VOdist)
-    api.drawing.drawPoint(vto.B, {color: api.drawing.COLORS.lightblue})
+    api.drawing.drawPoint(VO.B, {color: api.drawing.COLORS.lightblue})
     */
 
-    // Knowing the distances of the lines VT and VO, we can use the angle alpha
-    // to determine the length of the line V->Tb --> ?
-    // Alpha is the angle between V|T and V|wall.A or V|wall.B
-    const distA = distanceBetweenPoints(wall.A, VT.B);
-    const distB = distanceBetweenPoints(wall.B, VT.B);
+    // We know the small triangle on each side:
+    // V --> T --> wall.A and
+    // V --> T --> wall.B
+    // We need the larger encompassing triangle:
+    // V --> O --> ? (wall.A side and wall.B side)
+
+    // Get the distances between Tix and the wall endpoints.
+    const distA = distanceBetweenPoints(wall.A, Tix);
+    const distB = distanceBetweenPoints(wall.B, Tix);
+
+
+    /* Testing
+    // Ray extending Tix --> Wall.A
+    rayTA = new Ray(wall.A, Tix);
+    rayTA.distance
+
+    rayTB = new Ray(wall.B, Tix);
+    rayTB.distance;
+    */
+
+    // Calculate the hypotenuse of the big triangle on each side.
+    // That hypotenuse is used to extend a line from V past each endpoint.
+    // First get the angle
     const alphaA = Math.atan(distA / VT.distance);
     const alphaB = Math.atan(distB / VT.distance);
 
-    // Get the hypotenuse size to extend a line from V past wall T at endpoint,
-    // given angle alpha.
-    // Should form the parallelogram with wall T on one parallel side
+    // Now calculate the hypotenuse
     const hypA = VOdist / Math.cos(alphaA);
     const hypB = VOdist / Math.cos(alphaB);
 
-    const VAdist = distanceBetweenPoints(source, wall.A);
-    const VBdist = distanceBetweenPoints(source, wall.B);
-
-    const VOa = Ray.towardsPoint(source, wall.A, VAdist + hypA);
-    const VOb = Ray.towardsPoint(source, wall.B, VBdist + hypB);
+    // Extend a line from V past wall T at each endpoint.
+    // Each distance is the hypotenuse ont he side.
+    // given angle alpha.
+    // Should form the parallelogram with wall T on one parallel side
+    const VOa = Ray.towardsPoint(source, wall.A, hypA);
+    const VOb = Ray.towardsPoint(source, wall.B, hypB);
 
     /* Testing
     // Rays extending V --> T.A or T.B --> end of shadow

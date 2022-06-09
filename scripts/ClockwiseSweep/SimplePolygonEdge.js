@@ -66,8 +66,8 @@ export class SimplePolygonEdge extends PolygonEdge {
     return this._id || (this._id = this.wall?.id || foundry.utils.randomID());
   }
 
-  get top() { return this.wall?.top ?? Number.POSITIVE_INFINITY; }
-  get bottom() { return this.wall?.bottom ?? Number.NEGATIVE_INFINITY; }
+  get topZ() { return this.wall?.topZ ?? Number.MAX_SAFE_INTEGER; }
+  get bottomZ() { return this.wall?.bottomZ ?? Number.MIN_SAFE_INTEGER; }
 
   /**
    * Identify which endpoint is further west, or if vertical, further north.
