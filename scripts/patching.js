@@ -18,10 +18,6 @@ import {
   EVSightLayerRefresh,
   EVSightTestVisibility } from "./tokens.js";
 import {
-  EVLightSourceInitialize,
-  EVLightSourceInitializeShaders,
-  EVLightSourceInitializeBlending,
-  EVDrawMeshes,
   EVLightingLayerRefresh,
   EVLightSourceDrawColor,
   EVLightSourceDrawLight } from "./lighting.js";
