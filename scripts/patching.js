@@ -1,17 +1,26 @@
 /* globals
-AmbientLight,
 LightSource,
-Wall
+Wall,
+VisionSource,
+SoundSource,
+Token,
+libWrapper,
+canvas,
+WallHeight
 */
 
 "use strict";
 
 // Patches
 
-import { WALL_HEIGHT_MODULE_ID, LEVELS_MODULE_ID, MODULE_ID } from "./const.js";
-import { drawMeshes } from "./Shadow.js";
-import { log } from "./util.js";
-import { EVSightLayerRefresh, EVDrawVision, EVDrawSight, EVSightTestVisibility } from "./tokens.js";
+import { MODULE_ID } from "./const.js";
+import {
+  EVSightLayerRefresh,
+  EVSightTestVisibility } from "./tokens.js";
+import {
+  EVLightingLayerRefresh,
+  EVLightSourceDrawColor,
+  EVLightSourceDrawLight } from "./lighting.js";
 
 export function registerAdditions() {
 
@@ -57,44 +66,27 @@ export function registerAdditions() {
     });
   }
 
-
-//   Object.defineProperty(Set.prototype, "diff", {
-//     value: function(b) { return new Set([...this].filter(x => !b.has(x))); },
-//     writable: true,
-//     configurable: true
-//   });
-
+  //   Object.defineProperty(Set.prototype, "diff", {
+  //     value: function(b) { return new Set([...this].filter(x => !b.has(x))); },
+  //     writable: true,
+  //     configurable: true
+  //   });
 }
 
 export function registerPatches() {
-  // libWrapper.register(MODULE_ID, "LightSource.prototype.drawMeshes", drawMeshes, "OVERRIDE");
-//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawMeshes", drawMeshes, "WRAPPER");
   libWrapper.register(MODULE_ID, "SightLayer.prototype.testVisibility", EVSightTestVisibility, "MIXED");
-//   libWrapper.register(MODULE_ID, "Token.prototype.isVisible", EVTokenIsVisible, "OVERRIDE");
-
   libWrapper.register(MODULE_ID, "SightLayer.prototype.refresh", EVSightLayerRefresh, "OVERRIDE");
-//   libWrapper.register(MODULE_ID, "VisionSource.prototype.drawVision", EVDrawVision, "OVERRIDE");
-//   libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", EVDrawSight, "OVERRIDE");
-}
 
+  libWrapper.register(MODULE_ID, "LightingLayer.prototype.refresh", EVLightingLayerRefresh, "WRAPPER");
+//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", EVLightSourceDrawLight, "WRAPPER");
+//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawColor", EVLightSourceDrawColor, "WRAPPER");
+}
 
 /**
  * Convert a grid units value to pixel units, for equivalency with x,y values.
  */
 function zValue(value) {
   return value * canvas.scene.data.grid / canvas.scene.data.gridDistance;
-}
-
-/**
- * For testing shadow creation
- */
-function testVisibility(wrapped, point, {tolerance = 2, object = null} = {}) {
-  // Block square around 1000, 1000
-  const out = wrapped(point, { tolerance, object });
-  if ( point.x > 900 && point.x < 1100 && point.y > 900 && point.y < 1100) {
-    return false;
-  }
-  return out;
 }
 
 function replaceInfinity(value) {
@@ -139,5 +131,5 @@ function wallTop() { return replaceInfinity(WallHeight.getWallBounds(this).top);
  * For {Wall}
  * @type {number}
  */
-function wallBottom() { return replaceInfinity(WallHeight.getWallBounds(this).bottom);  }
+function wallBottom() { return replaceInfinity(WallHeight.getWallBounds(this).bottom); }
 
