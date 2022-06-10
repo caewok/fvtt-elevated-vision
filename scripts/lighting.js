@@ -6,6 +6,7 @@ canvas
 "use strict";
 
 import { log } from "./util.js";
+import { MODULE_ID } from "./const.js";
 
 // Class PointSource:
 /**
@@ -131,4 +132,98 @@ export function EVDrawMeshes(wrapped) {
   return out;
 }
 
+/**
+ * Wrap LightingLayer.prototype.refresh
+ * Primarily to test simpler masking option for light shadows
+ */
+export function EVLightingLayerRefresh(wrapped, {darkness, backgroundColor}={}) {
+  wrapped({darkness, backgroundColor});
+
+  // See https://github.com/fantasycalendar/FoundryVTT-Sequencer/blob/3ed6588bb351206cfee4eed6d750dd56744f7861/scripts/module/canvas-effects/canvas-effect.js
+  const maskSprite = new PIXI.Sprite();
+  const maskContainer = new PIXI.Container();
+  const blurFilter = new BlurFilter({ strength: 2 });
+  maskContainer.filters = [blurFilter];
+
+  // Render shadows from light sources
+  for ( const src of this.sources ) {
+    if ( !src.los.shadows || !src.los.shadows.length ) continue;
+    for ( const shadow of src.los.shadows ) {
+      const objMaskSprite = new PIXI.Graphics();
+      const blurFilter = new BlurFilter({ strength: 1 });
+      objMaskSprite.filters = [blurFilter];
+
+      const spriteContainer = new PIXI.Container();
+
+      spriteContainer.addChild(objMaskSprite);
+      spriteContainer.maskSprite = objMaskSprite;
+      maskContainer.addChild(spriteContainer);
+
+      const maskSprite = new PIXI.Sprite();
+
+      //objMaskSprite.beginFill(0xFFFFFF, .5); // white
+      objMaskSprite.beginFill(0x000000, .5); // black
+      objMaskSprite.drawShape(shadow);
+      objMaskSprite.endFill();
+    }
+  }
+
+  this.illumination.lights.addChild(maskContainer);
+  this.coloration.addChild(maskContainer);
+
+
+    // See refresh:
+          // Block illumination
+//       const si = roof.getRoofSprite();
+//       if ( !si ) continue;
+//       si.zIndex = 9999; // By convention
+//       si.tint = this.channels.background.hex;
+//       this.illumination.lights.addChild(si)
+//
+//       // Block coloration
+//       const sc = roof.getRoofSprite();
+//       sc.tint = 0x000000;
+//       this.coloration.addChild(sc);
+
+
+}
+
+
+// From https://github.com/fantasycalendar/FoundryVTT-Sequencer/blob/3ed6588bb351206cfee4eed6d750dd56744f7861/scripts/module/lib/filters/blur-filter.js
+class BlurFilter extends PIXI.filters.BlurFilter {
+
+    /**
+     * Properties & default values:
+     *     - strength [8]
+     *     - blur [2]
+     *     - blurX [2]
+     *     - blurY [2]
+     *     - quality [4]
+     *     - resolution [PIXI.settings.FILTER_RESOLUTION]
+     *     - kernelSize [5]
+     */
+    constructor(inData = {}) {
+
+        inData = foundry.utils.mergeObject({
+            strength: 1,
+            quality: 4,
+            resolution: PIXI.settings.FILTER_RESOLUTION,
+            kernelSize: 5
+        }, inData)
+
+        super(...Object.values(inData));
+
+        this.isValid = true;
+        for (let [key, value] of Object.entries(inData)) {
+            try {
+                this[key] = value;
+            } catch (err) {
+                let warning = `${MODULE_ID} | ${this.constructor.name} | Could not set property ${key}`;
+                ui.notifications.warn(warning);
+                console.warn(warning)
+                this.isValid = false;
+            }
+        }
+    }
+}
 
