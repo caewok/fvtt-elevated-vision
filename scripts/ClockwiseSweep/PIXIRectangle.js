@@ -188,7 +188,6 @@ function _intersectionLeft(a, b) {
     { x: this.x, y: this.y });
 }
 
-
 /**
  * Use the Cohen-Sutherland algorithm approach to split a rectangle into zones:
  *          left    central   right
