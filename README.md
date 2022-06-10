@@ -18,7 +18,7 @@ This Foundry VTT module builds on the [Wall Height](https://foundryvtt.com/packa
 - [Token Lean](https://foundryvtt.com/packages/token-lean). Token Lean is a great addition because it allows tokens to "peak" over the edge of a cliff.
 
 ## Incompatible modules
-None known at this time, but it is likely that [Levels] (https://foundryvtt.com/packages/levels) and [Perfect Vision](https://foundryvtt.com/packages/perfect-vision) will have issues.
+None known at this time, but it is likely that [Levels](https://foundryvtt.com/packages/levels) and [Perfect Vision](https://foundryvtt.com/packages/perfect-vision) will have issues.
 
 # Token shadows
 Whenever a token is above a wall with a top height lower than the token vision elevation, the wall obscures the vision of the token for the area immediately next to the wall opposite the token. As the token approaches, that obscured area becomes smaller (think of approaching a cliff and being able to see more and more of what is directly below the cliff). A token whose vision is obscured by a wall can still view other tokens on the other side of the wall if those tokens are elevated to a point sufficiently high to be seen beyond the wall.
@@ -32,6 +32,7 @@ If that token's vision is instead at elevation 15, it can see past the wall. As 
 <img src="https://raw.githubusercontent.com/caewok/fvtt-elevated-vision/feature/screenshots/screenshots/ravine.jpg" width="400" alt="View of shadows overlooking a ravine">
 
 This token vision shadowing effect is easier to understand when using the Token Lean module, as in this video. Using token lean, the vision origination point of the token is moved closer to the cliff, causing more of the area below to appear and the commensurate shadow area to shrink. This is as if the token is creeping up to the cliff edge and looking over it.
+
 <video src="https://raw.githubusercontent.com/caewok/fvtt-elevated-vision/feature/screenshots/screenshots/ravine_peek.jpg" type="video/webm" alt="Token peeking over a cliff edge into a ravine">
 
 # Lighting shadows
