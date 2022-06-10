@@ -77,12 +77,8 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "SightLayer.prototype.testVisibility", EVSightTestVisibility, "MIXED");
   libWrapper.register(MODULE_ID, "SightLayer.prototype.refresh", EVSightLayerRefresh, "OVERRIDE");
 
-//   libWrapper.register(MODULE_ID, "LightSource.prototype.initialize", EVLightSourceInitialize, "WRAPPER");
-//   libWrapper.register(MODULE_ID, "LightSource.prototype._initializeShaders", EVLightSourceInitializeShaders, "WRAPPER");
-//   libWrapper.register(MODULE_ID, "LightSource.prototype._initializeBlending", EVLightSourceInitializeBlending, "WRAPPER");
-//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawMeshes", EVDrawMeshes, "WRAPPER");
-//   libWrapper.register(MODULE_ID, "LightingLayer.prototype.refresh", EVLightingLayerRefresh, "WRAPPER");
-  libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", EVLightSourceDrawLight, "WRAPPER");
+  libWrapper.register(MODULE_ID, "LightingLayer.prototype.refresh", EVLightingLayerRefresh, "WRAPPER");
+//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", EVLightSourceDrawLight, "WRAPPER");
 //   libWrapper.register(MODULE_ID, "LightSource.prototype.drawColor", EVLightSourceDrawColor, "WRAPPER");
 }
 
