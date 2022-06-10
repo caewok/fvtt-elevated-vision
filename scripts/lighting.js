@@ -67,7 +67,7 @@ export function EVLightingLayerRefresh(wrapped, {darkness, backgroundColor}={}) 
 
       //objMaskSprite.beginFill(0xFFFFFF, .5); // white
       objMaskSprite.beginFill(0x000000, .5); // black
-      objMaskSprite.drawShape(shadow);
+      objMaskSprite.drawShape(shadow.clone());
       objMaskSprite.endFill();
     }
   }
@@ -98,30 +98,21 @@ export function EVLightSourceDrawLight(wrapped) {
   const shadows = this.los.shadows;
   if ( !shadows || !shadows.length ) return wrapped();
 
-  const maskSprite = new PIXI.Sprite();
   const maskContainer = new PIXI.Container();
-  const blurFilter = new BlurFilter({ strength: 2 });
-  maskContainer.filters = [blurFilter];
 
   for ( const shadow of shadows ) {
-    const objMaskSprite = new PIXI.Graphics();
-    const blurFilter = new BlurFilter({ strength: 1 });
-    objMaskSprite.filters = [blurFilter];
+    const gr = new PIXI.Graphics();
+    gr.beginFill(0x000000, .5);
+    gr.drawShape(shadow);
+    gr.endFill();
 
-    const spriteContainer = new PIXI.Container();
-
-    spriteContainer.addChild(objMaskSprite);
-    spriteContainer.maskSprite = objMaskSprite;
-    maskContainer.addChild(spriteContainer);
-
-    const maskSprite = new PIXI.Sprite();
-
-    objMaskSprite.beginFill(0x000000, .5); // black
-    objMaskSprite.drawShape(shadow);
-    objMaskSprite.endFill();
+    const texture = canvas.app.renderer.generateTexture(gr);
+    const maskSprite = new PIXI.Sprite(texture);
+//     maskSprite.tint = canvas.lighting.channels.background.hex;
+//     maskSprite.zIndex = 10;
+    maskContainer.addChild(maskSprite);
   }
-
-  this.illumination.addChild(maskContainer);
+  this.illumination.addChild(maskContainer)
 
   return wrapped();
 }
@@ -131,33 +122,53 @@ export function EVLightSourceDrawLight(wrapped) {
  * Add a mask for shadows of this light to the color container
  */
 export function EVLightSourceDrawColor(wrapped) {
+//   const out = wrapped();
+
   const shadows = this.los.shadows;
   if ( !shadows || !shadows.length ) return wrapped();
 
-  const maskSprite = new PIXI.Sprite();
-  const maskContainer = new PIXI.Container();
-  const blurFilter = new BlurFilter({ strength: 2 });
-  maskContainer.filters = [blurFilter];
+//   const maskContainer = new PIXI.Container();
 
   for ( const shadow of shadows ) {
-    const objMaskSprite = new PIXI.Graphics();
-    const blurFilter = new BlurFilter({ strength: 1 });
-    objMaskSprite.filters = [blurFilter];
+    const gr = new PIXI.Graphics();
+//     gr.beginFill(canvas.lighting.channels.background.hex, .5); // black 0x000000
+    gr.beginFill(0x000000, .5);
+    gr.drawShape(shadow.clone());
+    gr.endFill();
 
-    const spriteContainer = new PIXI.Container();
-
-    spriteContainer.addChild(objMaskSprite);
-    spriteContainer.maskSprite = objMaskSprite;
-    maskContainer.addChild(spriteContainer);
-
-    const maskSprite = new PIXI.Sprite();
-
-    objMaskSprite.beginFill(0x000000, .5); // black
-    objMaskSprite.drawShape(shadow);
-    objMaskSprite.endFill();
+    const texture = canvas.app.renderer.generateTexture(gr);
+    const maskSprite = new PIXI.Sprite(texture);
+    maskSprite.tint = canvas.lighting.channels.background.hex;
+    maskSprite.zIndex = 10;
+    this.coloration.addChild(maskSprite);
   }
 
-  this.coloration.addChild(maskContainer);
+
+  return wrapped();
+}
+
+export function EVLightSourceDrawBackground(wrapped) {
+//   const out = wrapped();
+
+  const shadows = this.los.shadows;
+  if ( !shadows || !shadows.length ) return wrapped();
+
+//   const maskContainer = new PIXI.Container();
+
+  for ( const shadow of shadows ) {
+    const gr = new PIXI.Graphics();
+//     gr.beginFill(canvas.lighting.channels.background.hex, .5); // black 0x000000
+    gr.beginFill(0x000000, .5);
+    gr.drawShape(shadow.clone());
+    gr.endFill();
+
+    const texture = canvas.app.renderer.generateTexture(gr);
+    const maskSprite = new PIXI.Sprite(texture);
+    maskSprite.tint = canvas.lighting.channels.background.hex;
+    maskSprite.zIndex = 10;
+    maskSprite.blendMode = PIXI.BLEND_MODES.ERASE;
+    this.background.addChild(maskSprite);
+  }
 
   return wrapped();
 }

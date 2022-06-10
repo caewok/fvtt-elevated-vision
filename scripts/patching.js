@@ -20,7 +20,8 @@ import {
 import {
   EVLightingLayerRefresh,
   EVLightSourceDrawColor,
-  EVLightSourceDrawLight } from "./lighting.js";
+  EVLightSourceDrawLight,
+  EVLightSourceDrawBackground } from "./lighting.js";
 
 export function registerAdditions() {
 
@@ -77,9 +78,10 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "SightLayer.prototype.testVisibility", EVSightTestVisibility, "MIXED");
   libWrapper.register(MODULE_ID, "SightLayer.prototype.refresh", EVSightLayerRefresh, "OVERRIDE");
 
-  libWrapper.register(MODULE_ID, "LightingLayer.prototype.refresh", EVLightingLayerRefresh, "WRAPPER");
-//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", EVLightSourceDrawLight, "WRAPPER");
+//   libWrapper.register(MODULE_ID, "LightingLayer.prototype.refresh", EVLightingLayerRefresh, "WRAPPER");
+  libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", EVLightSourceDrawLight, "WRAPPER");
 //   libWrapper.register(MODULE_ID, "LightSource.prototype.drawColor", EVLightSourceDrawColor, "WRAPPER");
+//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawBackground", EVLightSourceDrawBackground, "WRAPPER");
 }
 
 /**
