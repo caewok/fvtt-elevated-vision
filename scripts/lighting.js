@@ -184,8 +184,78 @@ export function EVLightingLayerRefresh(wrapped, {darkness, backgroundColor}={}) 
 //       const sc = roof.getRoofSprite();
 //       sc.tint = 0x000000;
 //       this.coloration.addChild(sc);
+}
 
+/**
+ * Wrap LightSource.prototype.drawLight
+ * Add a mask for shadows of this light to the light container
+ */
+export function EVLightSourceDrawLight(wrapped) {
+  const shadows = this.los.shadows;
+  if ( !shadows || !shadows.length ) return wrapped();
 
+  const maskSprite = new PIXI.Sprite();
+  const maskContainer = new PIXI.Container();
+  const blurFilter = new BlurFilter({ strength: 2 });
+  maskContainer.filters = [blurFilter];
+
+  for ( const shadow of shadows ) {
+    const objMaskSprite = new PIXI.Graphics();
+    const blurFilter = new BlurFilter({ strength: 1 });
+    objMaskSprite.filters = [blurFilter];
+
+    const spriteContainer = new PIXI.Container();
+
+    spriteContainer.addChild(objMaskSprite);
+    spriteContainer.maskSprite = objMaskSprite;
+    maskContainer.addChild(spriteContainer);
+
+    const maskSprite = new PIXI.Sprite();
+
+    objMaskSprite.beginFill(0x000000, .5); // black
+    objMaskSprite.drawShape(shadow);
+    objMaskSprite.endFill();
+  }
+
+  this.illumination.addChild(maskContainer);
+
+  return wrapped();
+}
+
+/**
+ * Wrap LightSource.prototype.drawColor
+ * Add a mask for shadows of this light to the color container
+ */
+export function EVLightSourceDrawColor(wrapped) {
+  const shadows = this.los.shadows;
+  if ( !shadows || !shadows.length ) return wrapped();
+
+  const maskSprite = new PIXI.Sprite();
+  const maskContainer = new PIXI.Container();
+  const blurFilter = new BlurFilter({ strength: 2 });
+  maskContainer.filters = [blurFilter];
+
+  for ( const shadow of shadows ) {
+    const objMaskSprite = new PIXI.Graphics();
+    const blurFilter = new BlurFilter({ strength: 1 });
+    objMaskSprite.filters = [blurFilter];
+
+    const spriteContainer = new PIXI.Container();
+
+    spriteContainer.addChild(objMaskSprite);
+    spriteContainer.maskSprite = objMaskSprite;
+    maskContainer.addChild(spriteContainer);
+
+    const maskSprite = new PIXI.Sprite();
+
+    objMaskSprite.beginFill(0x000000, .5); // black
+    objMaskSprite.drawShape(shadow);
+    objMaskSprite.endFill();
+  }
+
+  this.coloration.addChild(maskContainer);
+
+  return wrapped();
 }
 
 

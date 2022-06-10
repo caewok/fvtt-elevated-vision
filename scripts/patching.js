@@ -22,7 +22,9 @@ import {
   EVLightSourceInitializeShaders,
   EVLightSourceInitializeBlending,
   EVDrawMeshes,
-  EVLightingLayerRefresh } from "./lighting.js";
+  EVLightingLayerRefresh,
+  EVLightSourceDrawColor,
+  EVLightSourceDrawLight } from "./lighting.js";
 
 export function registerAdditions() {
 
@@ -83,7 +85,9 @@ export function registerPatches() {
 //   libWrapper.register(MODULE_ID, "LightSource.prototype._initializeShaders", EVLightSourceInitializeShaders, "WRAPPER");
 //   libWrapper.register(MODULE_ID, "LightSource.prototype._initializeBlending", EVLightSourceInitializeBlending, "WRAPPER");
 //   libWrapper.register(MODULE_ID, "LightSource.prototype.drawMeshes", EVDrawMeshes, "WRAPPER");
-  libWrapper.register(MODULE_ID, "LightingLayer.prototype.refresh", EVLightingLayerRefresh, "WRAPPER");
+//   libWrapper.register(MODULE_ID, "LightingLayer.prototype.refresh", EVLightingLayerRefresh, "WRAPPER");
+  libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", EVLightSourceDrawLight, "WRAPPER");
+//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawColor", EVLightSourceDrawColor, "WRAPPER");
 }
 
 /**
