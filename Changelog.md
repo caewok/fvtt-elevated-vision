@@ -1,3 +1,10 @@
+## 0.0.1-alpha5
+Working prototype for token vision and lights. Corrections to the calculation of the shadow polygons and better use of Clipper to union shadows for a given source.
+
+When viewing the vision from a token, areas are shaded if partially obscured by a wall lower than the token. Other tokens elevated above the wall can be seen. Some visual artifacts when moving tokens around but not too bad.
+
+Lights currently add shadows at the lighting layer level, which is not ideal but works for now. Future work needed to mask individual lights properly.
+
 ## 0.0.1-alpha4
 Working prototype for ambient light sources. When the wall height is less than the light source elevation, one or more shadow polygons are constructed representing how the light is obscured by the wall. For now, shadows are just drawn on the canvas.
 
