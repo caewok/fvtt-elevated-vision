@@ -353,11 +353,19 @@ function unscale({ position_dx = 0, position_dy = 0, size_dx = 1, size_dy = 1 } 
  * @param {Number} delta_y  Movement in the y direction.
  */
 function translate(delta_x, delta_y) {
+  const pts = [];
   const ln = this.points.length;
   for (let i = 0; i < ln; i += 2) {
-    this.points[i] = this.points[i] + delta_x;
-    this.points[i + 1] = this.points[i + 1] + delta_y;
+    pts.push(
+      this.points[i] + delta_x,
+      this.points[i + 1] + delta_y
+    );
   }
+  const out = new this.constructor(pts);
+  out._isClockwise = this._isClockwise;
+  out._isConvex = this._isConvex;
+  out._isClosed = this._isClosed;
+  return out;
 }
 
 // ---------------- Clipper JS library ---------------------------------------------------
