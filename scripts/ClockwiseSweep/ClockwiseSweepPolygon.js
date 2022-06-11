@@ -264,6 +264,7 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
     // future performance improvements. TO-DO: Update shadow for wall only when needed.
     const shadows = [];
     this.edgesBelowSource.forEach(e => {
+
       const shadow = Shadow.constructShadow(e.wall, src);
       if ( !shadow ) return;
 
@@ -271,6 +272,10 @@ export class EVClockwiseSweepPolygon extends ClockwiseSweepPolygon {
       e.wall.shadows.set(src.object.id, shadow);
       shadows.push(shadow);
     });
+
+    // TO-DO: Terrain that is below the source creates edges below the source
+    // All terrain on canvas that is within los
+    // Store all shadows in the terrain
 
     if ( !shadows.length ) return;
 
