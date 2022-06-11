@@ -140,8 +140,8 @@ export class Shadow extends PIXI.Polygon {
    * Build the parallelogram representing a shadow cast from a wall.
    * Looking top-down with a light or other source object at a given elevation
    * above a wall.
-   * @param {Wall} w
-   * @param {LightSource} source
+   * @param {Wall} wall
+   * @param {PointSource} source
    * @return {Shadow}
    */
   static constructShadow(wall, source) {
@@ -179,6 +179,28 @@ export class Shadow extends PIXI.Polygon {
 
     */
 
+    // TO-DO:
+    // The infinite shadow polygon should be intersected with terrain polygons.
+    // Each subset polygon must be computed separately.
+    // The remaining 0-level polygon must be computed separately.
+
+
+
+    if ( !canvas.terrain || !canvas.terrain.children.children.length ) {
+      return shadowAtTerrainElevation(wall, source, 0);
+    }
+
+    // See if the infinite shadow covers any terrain
+    const inf_shadow = this.infiniteShadow(wall, source);
+    const terrain_objs = canvas.terrain.children.children.filter(t => {
+      if ( t.elevation === 0 ) return false;
+
+    });
+
+
+
+
+    return shadowAtTerrainElevation(wall, source, 0);
     // Note: elevation should already be in grid pixel units
 
     let Te = wall.topZ; // TO-DO: allow floating walls to let light through the bottom portion
@@ -257,7 +279,7 @@ export class Shadow extends PIXI.Polygon {
     api.drawing.drawSegment({A: VOa.B, B: VOb.B}, {color: api.drawing.COLORS.gray})
     */
 
-    const shadow = new this([wall.A, VOa.B, VOb.B, wall.B]);
+    const shadow = new this.constructor([wall.A, VOa.B, VOb.B, wall.B]);
 
     /* Testing
     api.drawing.drawShape(shadow)
@@ -271,6 +293,151 @@ export class Shadow extends PIXI.Polygon {
     shadow.alpha = { A: alphaA, B: alphaB };
 
     return shadow;
+  }
+
+  /**
+   * Build the parallelogram representing a shadow cast from a wall.
+   * Shadows will be correspondingly smaller if the terrain elevation is higher.
+   * For example, a 20' wall casts a larger shadow on 10' terrain than it will on
+   * 5' terrain.
+   * @param {Wall} wall
+   * @param {LightSource} source
+   * @param {number} elevation      Assume the shadow is falling on terrain of a given
+   *                                elevation. Elevation should already be in grid pixel units.
+   * @return {Shadow}
+   */
+  static shadowAtTerrainElevation(wall, source, elevation = 0) {
+    let Te = wall.topZ; // TO-DO: allow floating walls to let light through the bottom portion
+    let Oe = elevation;
+    let Ve = source.elevationZ;
+    if ( Ve <= Te ) return null; // Vision object blocked completely by wall
+
+    // Need the point of the wall that forms a perpendicular line to the vision object
+    const Tix = perpendicularPoint(wall.A, wall.B, source);
+    if ( !Tix ) return null; // Line collinear with vision object
+    const VT = new Ray(source, Tix);
+
+    // If any elevation is negative, normalize so that the lowest elevation is 0
+    const min_elevation = Math.min(Ve, Oe, Te);
+    if ( min_elevation < 0 ) {
+      const adder = Math.abs(min_elevation);
+      Ve = Ve + adder;
+      Oe = Oe + adder;
+      Te = Te + adder;
+    }
+
+    // Theta is the angle between the 3-D sight line and the sight line in 2-D
+    const theta = Math.atan((Ve - Te) / VT.distance); // Theta is in radians
+    const TOdist = (Te - Oe) / Math.tan(theta); // Tan wants radians
+    const VOdist = VT.distance + TOdist;
+
+    /* Testing
+    // Ray extending out V --> T --> O
+    api.drawing.drawPoint(source, {color: api.drawing.COLORS.yellow})
+
+    VO = Ray.towardsPoint(source, Tix, VOdist)
+    api.drawing.drawPoint(VO.B, {color: api.drawing.COLORS.lightblue})
+    */
+
+    // We know the small triangle on each side:
+    // V --> T --> wall.A and
+    // V --> T --> wall.B
+    // We need the larger encompassing triangle:
+    // V --> O --> ? (wall.A side and wall.B side)
+
+    // Get the distances between Tix and the wall endpoints.
+    const distA = distanceBetweenPoints(wall.A, Tix);
+    const distB = distanceBetweenPoints(wall.B, Tix);
+
+
+    /* Testing
+    // Ray extending Tix --> Wall.A
+    rayTA = new Ray(wall.A, Tix);
+    rayTA.distance
+
+    rayTB = new Ray(wall.B, Tix);
+    rayTB.distance;
+    */
+
+    // Calculate the hypotenuse of the big triangle on each side.
+    // That hypotenuse is used to extend a line from V past each endpoint.
+    // First get the angle
+    const alphaA = Math.atan(distA / VT.distance);
+    const alphaB = Math.atan(distB / VT.distance);
+
+    // Now calculate the hypotenuse
+    const hypA = VOdist / Math.cos(alphaA);
+    const hypB = VOdist / Math.cos(alphaB);
+
+    // Extend a line from V past wall T at each endpoint.
+    // Each distance is the hypotenuse ont he side.
+    // given angle alpha.
+    // Should form the parallelogram with wall T on one parallel side
+    const VOa = Ray.towardsPoint(source, wall.A, hypA);
+    const VOb = Ray.towardsPoint(source, wall.B, hypB);
+
+    /* Testing
+    // Rays extending V --> T.A or T.B --> end of shadow
+    api.drawing.drawSegment(VOa, {color: api.drawing.COLORS.green})
+    api.drawing.drawSegment(VOb, {color: api.drawing.COLORS.orange})
+    api.drawing.drawSegment({A: VOa.B, B: VOb.B}, {color: api.drawing.COLORS.gray})
+    */
+
+    const shadow = new this.constructor([wall.A, VOa.B, VOb.B, wall.B]);
+
+    /* Testing
+    api.drawing.drawShape(shadow)
+    */
+
+    // Cache some values
+    shadow.elevation = elevation;
+    shadow.wall = wall;
+    shadow.source = source;
+    shadow.VT = VT;
+    shadow.theta = theta;
+    shadow.alpha = { A: alphaA, B: alphaB };
+
+    return shadow;
+  }
+
+  /**
+   * Build the parallelogram representing a shadow cast from a wall.
+   * This shadow stretches all the way to the edge of the canvas from the wall.
+   * @param {Wall} wall
+   * @param {LightSource} source
+   * @return {Shadow}
+   */
+  static infiniteShadow(wall, source) {
+    const maxR = canvas.dimensions.maxR;
+    const rayA = new Ray.towardsPoint(source, wall.A, maxR);
+    const rayB = new Ray.towardsPoint(source, wall.B, maxR);
+
+    let boundaryA;
+    let boundaryB;
+    intermediate
+    for ( const boundary of canvas.walls.boundaries ) {
+      if ( boundaryA && boundaryB) ) break;
+
+      if ( !boundaryA && foundry.utils.lineSegmentIntersects(rayA.A, rayA.B, boundary.A, boundary.B) ) {
+        rayA.B = foundry.utils.lineLineIntersection(rayA.A, rayA.B, boundary.A, boundary.B);
+        boundaryA = boundary;
+      }
+
+      if ( !boundaryB && foundry.utils.lineSegmentIntersects(rayB.A, rayB.B, boundary.A, boundary.B) ) {
+        rayB.B = foundry.utils.lineLineIntersection(rayB.A, rayB.B, boundary.A, boundary.B);
+        boundaryB = boundary;
+      }
+    }
+
+    // Should not happen unless the wall is outside the canvas somehow
+    if ( !boundaryA ) { rayA.B = wall.A }
+    if ( !boundaryB ) { rayB.B = wall.B }
+
+    if ( boundaryA && boundaryB && boundaryA !== boundaryB ) {
+      //
+    }
+
+    return new this.constructor([wall.A, rayA.B, rayB.B, wall.B]);
   }
 
   /**
