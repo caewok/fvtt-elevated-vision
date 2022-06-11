@@ -95,31 +95,37 @@ export function EVLightingLayerRefresh(wrapped, {darkness, backgroundColor}={}) 
  * Add a mask for shadows of this light to the light container
  */
 export function EVLightSourceDrawLight(wrapped) {
-//   const out = wrapped(); // Doesn't work at all when doing this first.
+  const out = wrapped(); // Doesn't work at all when doing this first.
 
   const shadows = this.los.shadows;
-  if ( !shadows || !shadows.length ) return  wrapped();
+  if ( !shadows || !shadows.length ) return out;
 
-  const maskContainer = new PIXI.Container();
-  maskContainer.position.set(this.data.x, this.data.y); // does not appear at all
+//   const maskContainer = new PIXI.Container();
+//   maskContainer.position.set(this.data.x, this.data.y); // does not appear at all
 
+  this.losMask.clear().beginFill(0xFFFFFF).drawShape(this.los);
+//   this.losMask.clear().beginFill(0xFFFFFF).drawShape(this.los).endFill();
   for ( const shadow of shadows ) {
-    const gr = new PIXI.Graphics();
-//     gr.beginFill(0x000000, .5);
-//     const s_tr = shadow.translate(-this.x, -this.y); // translate does nothing!
-gr.beginFill(0xFFFFFF, 1)
-    gr.drawShape(shadow.clone());
-    gr.endFill();
+//     this.losMask.beginFill(0x000000, 1).drawShape(shadow).endFill();
 
-    const texture = canvas.app.renderer.generateTexture(gr);
-    const maskSprite = new PIXI.Sprite(texture);
-//     maskSprite.position.set(this.data.x, this.data.y);
-    maskContainer.addChild(maskSprite);
+    this.losMask.beginHole().drawShape(shadow).endHole();
+
   }
-//   out.addChild(maskContainer);
-  this.illumination.addChild(maskContainer);
+  this.losMask.endFill();
 
-  return  wrapped();
+
+//   for ( const shadow of shadows ) {
+//     this.losMask.beginFill(0xFFFFFF, .2).drawShape(shadow).endFill();
+//
+//   }
+
+
+//   out.addChild(maskContainer);
+//   this.illumination.addChild(maskContainer);
+//   out.addChild(maskContainer);
+//   out.mask = maskContainer;
+//   maskContainer.position.set(this.data.x, this.data.y)
+  return out;
 }
 
 /* Testing
@@ -129,8 +135,12 @@ maskContainer = ill.children[0]
 maskSprite = maskContainer.children[0]
 canvas.app.stage.addChild(maskSprite)
 
+mask = ill.mask.children[0]
+canvas.app.stage.addChild(mask)
+
 // draw original shadow
-l.source.los.shadows[0].draw();
+shadow = l.source.los.shadows[0]
+shadow.draw();
 
 */
 
