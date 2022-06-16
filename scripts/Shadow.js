@@ -409,23 +409,41 @@ export class Shadow extends PIXI.Polygon {
    */
   static infiniteShadow(wall, source) {
     const maxR = canvas.dimensions.maxR;
-    const rayA = new Ray.towardsPoint(source, wall.A, maxR);
-    const rayB = new Ray.towardsPoint(source, wall.B, maxR);
+
+    // We want the wall oriented clockwise for consistency with the canvas wall boundaries.
+    const orient = foundry.utils.orient2dFast(source, wall.A, wall.B);
+    if ( !orient ) return null;
+
+    const ccwEndpoint = orient < 0 ? wall.A : wall.B;
+    const cwEndpoint = orient < 0 ? wall.B : wall.A;
+    const rayCCW = new Ray.towardsPoint(source, ccwEndpoint, maxR);
+    const rayCW = new Ray.towardsPoint(source, cwEndpoint, maxR);
+
+    // We have to add canvas boundaries b/c a very wide shadow could basically split
+    // the canvas in half, and it is likely that maxR would be insufficiently large
+    // to get a proper polygon in that case.
+    // Take advantage of fact that canvas.walls.boundaries are ordered:
+    // nw --> ne --> se --> sw --> nw
 
     let boundaryA;
     let boundaryB;
-    intermediate
+    let first_boundary = false;
+    const intermediate_pts = [];
     for ( const boundary of canvas.walls.boundaries ) {
-      if ( boundaryA && boundaryB) ) break;
+      if ( boundaryA && boundaryB) { break; }
+
+      if ( first_boundary ) { intermediate_pts.push(boundary.A) }
 
       if ( !boundaryA && foundry.utils.lineSegmentIntersects(rayA.A, rayA.B, boundary.A, boundary.B) ) {
         rayA.B = foundry.utils.lineLineIntersection(rayA.A, rayA.B, boundary.A, boundary.B);
         boundaryA = boundary;
+        first_boundary = true;
       }
 
       if ( !boundaryB && foundry.utils.lineSegmentIntersects(rayB.A, rayB.B, boundary.A, boundary.B) ) {
         rayB.B = foundry.utils.lineLineIntersection(rayB.A, rayB.B, boundary.A, boundary.B);
         boundaryB = boundary;
+        first_boundary = true;
       }
     }
 
@@ -433,11 +451,13 @@ export class Shadow extends PIXI.Polygon {
     if ( !boundaryA ) { rayA.B = wall.A }
     if ( !boundaryB ) { rayB.B = wall.B }
 
-    if ( boundaryA && boundaryB && boundaryA !== boundaryB ) {
-      //
+    if ( intermediate_pts.length ) {
+      return new this.constructor([wall.A, rayA.B, ...intermediate_pts, rayB.B, wall.B]);
+    } else {
+      return new this.constructor([wall.A, rayA.B, rayB.B, wall.B]);
     }
 
-    return new this.constructor([wall.A, rayA.B, rayB.B, wall.B]);
+
   }
 
   /**
