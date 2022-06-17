@@ -7,6 +7,7 @@ canvas
 
 import { log } from "./util.js";
 import { MODULE_ID } from "./const.js";
+import { InvertFilter } from "./InvertFilter.js";
 
 // Class PointSource:
 /**
@@ -90,6 +91,29 @@ export function EVLightingLayerRefresh(wrapped, {darkness, backgroundColor}={}) 
 //       this.coloration.addChild(sc);
 }
 
+
+// Draw gradient circle
+function gradient(from, to) {
+  const c = document.createElement("canvas");
+  const ctx = c.getContext("2d");
+  const grd = ctx.createLinearGradient(0,0,100,100);
+  grd.addColorStop(0, from);
+  grd.addColorStop(1, to);
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,100,100);
+  return new PIXI.Texture.from(c);
+}
+
+// alternatively, dg = new PIXI.Graphics()
+dg = canvas.controls.debug;
+cir = new PIXI.Circle(0, 0, 500)
+dg.beginTextureFill(gradient('#9ff', '#033'))
+dg.drawShape(cir)
+dg.endFill()
+
+
+
+
 /**
  * Wrap LightSource.prototype.drawLight
  * Add a mask for shadows of this light to the light container
@@ -100,18 +124,54 @@ export function EVLightSourceDrawLight(wrapped) {
   const shadows = this.los.shadows;
   if ( !shadows || !shadows.length ) return out;
 
+  const shadowGraphics = new PIXI.Graphics();
+
+  for ( const shadow of shadows ) {
+
+
+  }
+
+
+
+
+
+  const shadows = this.los.shadows;
+  if ( !shadows || !shadows.length ) return out;
+
+//   const maskSprite = new PIXI.Sprite();
+
+  const shadowGraphics = new PIXI.Graphics();
+
 //   const maskContainer = new PIXI.Container();
 //   maskContainer.position.set(this.data.x, this.data.y); // does not appear at all
 
-  this.losMask.clear().beginFill(0xFFFFFF).drawShape(this.los);
+//   this.losMask.clear().beginFill(0xFFFFFF).drawShape(this.los);
 //   this.losMask.clear().beginFill(0xFFFFFF).drawShape(this.los).endFill();
+//   this.losMask.clear()
   for ( const shadow of shadows ) {
-//     this.losMask.beginFill(0x000000, 1).drawShape(shadow).endFill();
+    shadowGraphics.beginFill(0xFFFFFF, .7).drawShape(shadow).endFill();
 
-    this.losMask.beginHole().drawShape(shadow).endHole();
+//     this.losMask.beginFill(0x000000, .5).drawShape(shadow).endFill();
+//     this.losMask.beginFill(0xFFFFFF, .5).drawShape(shadow).endFill();
+//     this.losMask.beginHole().drawShape(shadow).endHole();
 
   }
-  this.losMask.endFill();
+  shadowGraphics.endFill();
+
+  // https://stackoverflow.com/questions/50940737/how-to-convert-a-graphic-to-a-sprite-in-pixijs
+  const shadowTexture = canvas.app.renderer.generateTexture(shadowGraphics);
+  const shadowSprite = new PIXI.Sprite(shadowTexture);
+
+//   this.losMask.endFill();
+
+  // this.losMask.filters = [new InvertFilter];
+  this.illumination.filters ??= [];
+
+  // from https://github.com/pixijs/pixijs/issues/8207
+  this.illumination.filters.push(new PIXI.SpriteMaskFilter(undefined, `\
+
+
+  this.illumination.filters[0].maskSprite = shadowSprite;
 
 
 //   for ( const shadow of shadows ) {
