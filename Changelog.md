@@ -1,3 +1,8 @@
+## 0.0.1-alpha6
+Switched to better method to block token and lights for shadows. Fixes the visual artifacts. Shadows for a token given unlimited lighting are very faint, which might be fine but would probably prefer a bit more darkness.
+
+All three parts of lighting are blocked fully. Would prefer something with an alpha gradient to blend the lighting shadows.
+
 ## 0.0.1-alpha5
 Working prototype for token vision and lights. Corrections to the calculation of the shadow polygons and better use of Clipper to union shadows for a given source.
 
