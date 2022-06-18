@@ -36,6 +36,26 @@ import { InvertFilter } from "./InvertFilter.js";
 //   return mesh
 
 
+/**
+ * Wrap LightSource.prototype._drawRenderTextureContainer
+ */
+export function EVLightSourceDrawRenderTextureContainer(wrapped) {
+  const c = wrapped();
+
+  const shadows = this.los.shadows;
+  if ( !shadows || !shadows.length ) {
+    log("EVLightSourceDrawRenderTexture|no shadows");
+    return c;
+  }
+
+  for ( const shadow of shadows ) {
+    const g = c.addChild(new PIXI.LegacyGraphics());
+    g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
+  }
+
+  return c;
+}
+
 
 /**
  * Wrap LightingLayer.prototype.refresh
@@ -92,26 +112,34 @@ export function EVLightingLayerRefresh(wrapped, {darkness, backgroundColor}={}) 
 }
 
 
-// Draw gradient circle
-function gradient(from, to) {
-  const c = document.createElement("canvas");
-  const ctx = c.getContext("2d");
-  const grd = ctx.createLinearGradient(0,0,100,100);
-  grd.addColorStop(0, from);
-  grd.addColorStop(1, to);
-  ctx.fillStyle = grd;
-  ctx.fillRect(0,0,100,100);
-  return new PIXI.Texture.from(c);
-}
+// // Draw gradient circle
+// function gradient(from, to) {
+//   const c = document.createElement("canvas");
+//   const ctx = c.getContext("2d");
+//   const grd = ctx.createLinearGradient(0,0,100,100);
+//   grd.addColorStop(0, from);
+//   grd.addColorStop(1, to);
+//   ctx.fillStyle = grd;
+//   ctx.fillRect(0,0,100,100);
+//   return new PIXI.Texture.from(c);
+// }
+//
+// // alternatively, dg = new PIXI.Graphics()
+// dg = canvas.controls.debug;
+// cir = new PIXI.Circle(0, 0, 500)
+// dg.beginTextureFill(gradient('#9ff', '#033'))
+// dg.drawShape(cir)
+// dg.endFill()
+//
 
-// alternatively, dg = new PIXI.Graphics()
-dg = canvas.controls.debug;
-cir = new PIXI.Circle(0, 0, 500)
-dg.beginTextureFill(gradient('#9ff', '#033'))
-dg.drawShape(cir)
-dg.endFill()
 
+/*
+From PointSource:
+losMask = new PIXI.LegacyGraphics();
 
+From LightSource.drawMeshes:
+this.losMask.clear().beginFill(0xFFFFFF).drawShape(this.los).endFill();
+ */
 
 
 /**
@@ -119,65 +147,45 @@ dg.endFill()
  * Add a mask for shadows of this light to the light container
  */
 export function EVLightSourceDrawLight(wrapped) {
-  const out = wrapped(); // Doesn't work at all when doing this first.
-
-  const shadows = this.los.shadows;
-  if ( !shadows || !shadows.length ) return out;
-
-  const shadowGraphics = new PIXI.Graphics();
-
-  for ( const shadow of shadows ) {
+  const out = wrapped(); // Doesn't work at all unless doing this first
 
 
-  }
-
-
-
-
-
-  const shadows = this.los.shadows;
-  if ( !shadows || !shadows.length ) return out;
-
-//   const maskSprite = new PIXI.Sprite();
-
-  const shadowGraphics = new PIXI.Graphics();
-
-//   const maskContainer = new PIXI.Container();
-//   maskContainer.position.set(this.data.x, this.data.y); // does not appear at all
-
-//   this.losMask.clear().beginFill(0xFFFFFF).drawShape(this.los);
+  //this.mask = new PIXI.LegacyGraphics();
 //   this.losMask.clear().beginFill(0xFFFFFF).drawShape(this.los).endFill();
-//   this.losMask.clear()
-  for ( const shadow of shadows ) {
-    shadowGraphics.beginFill(0xFFFFFF, .7).drawShape(shadow).endFill();
-
-//     this.losMask.beginFill(0x000000, .5).drawShape(shadow).endFill();
-//     this.losMask.beginFill(0xFFFFFF, .5).drawShape(shadow).endFill();
-//     this.losMask.beginHole().drawShape(shadow).endHole();
-
+  //this.losMask.clear();
+  const shadows = this.los.shadows;
+  if ( !shadows || !shadows.length ) {
+    log("EVLightSourceDrawLight|no shadows");
+    return out;
   }
-  shadowGraphics.endFill();
+
+  this.losMask.removeChildren();
+
+//   this.losMask.mask =
+//   const shadowMask = new PIXI.LegacyGraphics();
+  // const shadowGraphics = new PIXI.Graphics();
+//   shadowGraphics.beginFill(0xFFFFFF).drawShape(this.los).endFill();
+
+  log(`EVLightSourceDrawLight| ${shadows.length} shadows`);
+  for ( const shadow of shadows ) {
+    const shadowGraphics = new PIXI.Graphics();
+    shadowGraphics.beginFill(0xffffff).drawShape(shadow).endFill();
+    this.losMask.addChild(shadowGraphics);
+  }
+
+//   this.addChild(shadowGraphics)
+//   this.losMask.addChild(shadowGraphics);
+
+
+
+//   out.mask = shadowMask;
+
 
   // https://stackoverflow.com/questions/50940737/how-to-convert-a-graphic-to-a-sprite-in-pixijs
-  const shadowTexture = canvas.app.renderer.generateTexture(shadowGraphics);
-  const shadowSprite = new PIXI.Sprite(shadowTexture);
+ //  const shadowTexture = canvas.app.renderer.generateTexture(shadowGraphics);
+//   const shadowSprite = new PIXI.Sprite(shadowTexture);
 
 //   this.losMask.endFill();
-
-  // this.losMask.filters = [new InvertFilter];
-  this.illumination.filters ??= [];
-
-  // from https://github.com/pixijs/pixijs/issues/8207
-  this.illumination.filters.push(new PIXI.SpriteMaskFilter(undefined, `\
-
-
-  this.illumination.filters[0].maskSprite = shadowSprite;
-
-
-//   for ( const shadow of shadows ) {
-//     this.losMask.beginFill(0xFFFFFF, .2).drawShape(shadow).endFill();
-//
-//   }
 
 
 //   out.addChild(maskContainer);
@@ -261,42 +269,4 @@ export function EVLightSourceDrawBackground(wrapped) {
   return wrapped();
 }
 
-
-// From https://github.com/fantasycalendar/FoundryVTT-Sequencer/blob/3ed6588bb351206cfee4eed6d750dd56744f7861/scripts/module/lib/filters/blur-filter.js
-class BlurFilter extends PIXI.filters.BlurFilter {
-
-    /**
-     * Properties & default values:
-     *     - strength [8]
-     *     - blur [2]
-     *     - blurX [2]
-     *     - blurY [2]
-     *     - quality [4]
-     *     - resolution [PIXI.settings.FILTER_RESOLUTION]
-     *     - kernelSize [5]
-     */
-    constructor(inData = {}) {
-
-        inData = foundry.utils.mergeObject({
-            strength: 1,
-            quality: 4,
-            resolution: PIXI.settings.FILTER_RESOLUTION,
-            kernelSize: 5
-        }, inData)
-
-        super(...Object.values(inData));
-
-        this.isValid = true;
-        for (let [key, value] of Object.entries(inData)) {
-            try {
-                this[key] = value;
-            } catch (err) {
-                let warning = `${MODULE_ID} | ${this.constructor.name} | Could not set property ${key}`;
-                ui.notifications.warn(warning);
-                console.warn(warning)
-                this.isValid = false;
-            }
-        }
-    }
-}
 
