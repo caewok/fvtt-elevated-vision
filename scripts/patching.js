@@ -15,8 +15,9 @@ WallHeight
 
 import { MODULE_ID } from "./const.js";
 import {
-  EVSightLayerRefresh,
-  EVSightTestVisibility } from "./tokens.js";
+  EVSightTestVisibility,
+  EVVisionSourceDrawSight,
+  EVVisionSourceDrawRenderTextureContainer } from "./tokens.js";
 import {
   EVLightSourceDrawRenderTextureContainer } from "./lighting.js";
 
@@ -73,13 +74,11 @@ export function registerAdditions() {
 
 export function registerPatches() {
   libWrapper.register(MODULE_ID, "SightLayer.prototype.testVisibility", EVSightTestVisibility, "MIXED");
-  libWrapper.register(MODULE_ID, "SightLayer.prototype.refresh", EVSightLayerRefresh, "OVERRIDE");
+
+  libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", EVVisionSourceDrawSight, "WRAPPER");
+  libWrapper.register(MODULE_ID, "VisionSource.prototype._drawRenderTextureContainer", EVVisionSourceDrawRenderTextureContainer, "WRAPPER");
 
   libWrapper.register(MODULE_ID, "LightSource.prototype._drawRenderTextureContainer", EVLightSourceDrawRenderTextureContainer, "WRAPPER");
-//   libWrapper.register(MODULE_ID, "LightingLayer.prototype.refresh", EVLightingLayerRefresh, "WRAPPER");
-//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", EVLightSourceDrawLight, "WRAPPER");
-//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawColor", EVLightSourceDrawColor, "WRAPPER");
-//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawBackground", EVLightSourceDrawBackground, "WRAPPER");
 }
 
 /**
