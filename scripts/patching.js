@@ -18,10 +18,6 @@ import {
   EVSightLayerRefresh,
   EVSightTestVisibility } from "./tokens.js";
 import {
-  EVLightingLayerRefresh,
-  EVLightSourceDrawColor,
-  EVLightSourceDrawLight,
-  EVLightSourceDrawBackground,
   EVLightSourceDrawRenderTextureContainer } from "./lighting.js";
 
 export function registerAdditions() {
