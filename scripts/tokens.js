@@ -121,6 +121,47 @@ function testVisionSourceLOS(source, p) {
 }
 
 
+/**
+ * Wrap VisionSource.prototype._drawRenderTextureContainer
+ */
+export function EVVisionSourceDrawRenderTextureContainer(wrapped) {
+  const c = wrapped();
+
+  const shadows = this.los.shadows;
+  if ( !shadows || !shadows.length ) {
+    log("EVVisionSourceDrawRenderTextureContainer|no shadows");
+    return c;
+  }
+
+  for ( const shadow of shadows ) {
+    const g = c.addChild(new PIXI.LegacyGraphics());
+    g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
+  }
+
+  return c;
+}
+
+/**
+ * Wrap VisionSource.prototype.drawSight
+ */
+export function EVVisionSourceDrawSight(wrapped) {
+  const c = wrapped();
+
+  const shadows = this.los.shadows;
+  if ( !shadows || !shadows.length ) {
+    log("EVVisionSourceDrawSight|no shadows");
+    return c;
+  }
+
+  for ( const shadow of shadows ) {
+    const g = c.addChild(new PIXI.LegacyGraphics());
+    g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
+  }
+
+  return c;
+}
+
+
 function drawShadowHoles(source, mask) {
   if ( source.los?.shadows && source.los.shadows.length ) {
     log("\ndrawShadowHoles", source, mask);
