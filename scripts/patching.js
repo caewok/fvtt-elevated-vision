@@ -14,12 +14,21 @@ WallHeight
 // Patches
 
 import { MODULE_ID } from "./const.js";
+
 import {
-  EVSightTestVisibility,
-  EVVisionSourceDrawSight,
-  EVVisionSourceDrawRenderTextureContainer } from "./tokens.js";
+  EVTestVisibility,
+  EVVisionSourceDrawSight
+} from "./tokens.js";
+
+// import {
+//   } from "./lighting.js";
+
 import {
-  EVLightSourceDrawRenderTextureContainer } from "./lighting.js";
+  EVTestWallInclusion,
+  EVIdentifyEdges,
+  EVCompute,
+  EVDrawShadows
+} from "./clockwise_sweep.js";
 
 export function registerAdditions() {
 
@@ -65,6 +74,12 @@ export function registerAdditions() {
     });
   }
 
+  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_drawShadows", {
+    value: EVDrawShadows,
+    writable: true,
+    configurable: true
+  })
+
   //   Object.defineProperty(Set.prototype, "diff", {
   //     value: function(b) { return new Set([...this].filter(x => !b.has(x))); },
   //     writable: true,
@@ -73,12 +88,17 @@ export function registerAdditions() {
 }
 
 export function registerPatches() {
-  libWrapper.register(MODULE_ID, "SightLayer.prototype.testVisibility", EVSightTestVisibility, "MIXED");
+  libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.testVisibility", EVTestVisibility, libWrapper.MIXED);
 
-  libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", EVVisionSourceDrawSight, "WRAPPER");
-  libWrapper.register(MODULE_ID, "VisionSource.prototype._drawRenderTextureContainer", EVVisionSourceDrawRenderTextureContainer, "WRAPPER");
+  libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", EVVisionSourceDrawSight, libWrapper.WRAPPER);
+//   libWrapper.register(MODULE_ID, "VisionSource.prototype._drawRenderTextureContainer", EVVisionSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
 
-  libWrapper.register(MODULE_ID, "LightSource.prototype._drawRenderTextureContainer", EVLightSourceDrawRenderTextureContainer, "WRAPPER");
+//   libWrapper.register(MODULE_ID, "LightSource.prototype._drawRenderTextureContainer", EVLightSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
+
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.testWallInclusion", EVTestWallInclusion, libWrapper.OVERRIDE);
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._identifyEdges", EVIdentifyEdges, libWrapper.WRAPPER);
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", EVCompute, libWrapper.WRAPPER);
+
 }
 
 /**
@@ -117,7 +137,7 @@ function tokenTop() {
  */
 function tokenBottom() {
   // From Wall Height but skip the extra test b/c we know it is a token.
-  return zValue(this.document.data.elevation);
+  return zValue(this.document.elevation);
 }
 
 /**

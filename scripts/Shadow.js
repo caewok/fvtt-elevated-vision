@@ -1,13 +1,13 @@
 /* globals
 PIXI,
 Ray,
-canvas
+canvas,
+ClipperLib
 */
 "use strict";
 
 import { perpendicularPoint, distanceBetweenPoints, log } from "./util.js";
 import { COLORS, drawShape } from "./drawing.js";
-import { ClipperLib } from "./ClockwiseSweep/clipper_unminified.js";
 
 
 /* Default Foundry v9 handling of lights and token sight
@@ -311,41 +311,3 @@ export class Shadow extends PIXI.Polygon {
     canvas.controls.debug.endFill();
   }
 }
-
-export function drawMeshes(wrap) {
-  const out = wrap();
-  this.los._drawShadows();
-  return out;
-}
-// export function drawMeshes() {
-//   // Destroy an existing render texture
-//   if ( !this._flags.useFov ) {
-//     if ( this.fovTexture ) this.fovTexture.destroy(true);
-//     this.fovTexture = null;
-//   }
-//
-//   // Update the render texture
-//   if ( this._flags.renderFOV ) {
-//     this.losMask.clear().beginFill(0xFFFFFF).drawShape(this.los);
-//
-//     if ( this.los?.shadows && this.los.shadows.size ) {
-//       this.los.shadows.forEach(s_arr => {
-//         s_arr.forEach(s => {
-//           log("Drawing shadow", s);
-//           this.losMask.beginHole().drawShape(s).endHole();
-//         });
-//       });
-//     }
-//
-//     this.losMask.endFill();
-//
-//     if ( this._flags.useFov ) this._renderTexture();
-//     else this._flags.renderFOV = false;
-//   }
-//
-//   // Draw new meshes
-//   const background = this.drawBackground();
-//   const light = this.drawLight();
-//   const color = this.drawColor();
-//   return {background, light, color};
-// }
