@@ -113,10 +113,10 @@ export function EVIdentifyEdges(wrapped) {
   this.edgesBelowSource = new Set(); // Top of edge below source top
   this.edgesAboveSource = new Set(); // Bottom of edge above the source top
 
-  if ( !this.config.source ) { return; }
+  if ( !this.config.source ) return;
 
   // Ignore lights set with default of positive infinity
-  if ( !isFinite(WallHeight.getSourceElevationTop(this.config.source.object.document)) ) { return; }
+  if ( !isFinite(this.config.source.top) ) return;
 
   const sourceZ = this.config.source.elevationZ ?? 0;
   this.edges.forEach((e, key) => {
