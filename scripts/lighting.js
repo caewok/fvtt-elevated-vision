@@ -36,24 +36,5 @@ import { InvertFilter } from "./InvertFilter.js";
 //   return mesh
 
 
-/**
- * Wrap LightSource.prototype._drawRenderTextureContainer
- */
-export function EVLightSourceDrawRenderTextureContainer(wrapped) {
-  const c = wrapped();
-
-  const shadows = this.los.shadows;
-  if ( !shadows || !shadows.length ) {
-    log("EVLightSourceDrawRenderTexture|no shadows");
-    return c;
-  }
-
-  for ( const shadow of shadows ) {
-    const g = c.addChild(new PIXI.LegacyGraphics());
-    g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
-  }
-
-  return c;
-}
 
 

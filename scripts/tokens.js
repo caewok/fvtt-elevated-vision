@@ -8,8 +8,8 @@ Ray
 "use strict";
 
 import { log } from "./util.js";
-import { EVClockwiseSweepPolygon } from "./ClockwiseSweep/ClockwiseSweepPolygon.js";
 import { Point3d } from "./Point3d.js";
+import { getRayCollisions3d } from "./clockwise_sweep.js";
 
 /*
 Adjustments for token visibility.
@@ -26,28 +26,22 @@ If not visible due to los/fov:
 
 
 /**
- * Override of SightLayer.prototype.testVisibility (canvas.sight.testVisibility)
+ * Override of CanvasVisibility.prototype.testVisibility (canvas.sight.testVisibility)
  */
-export function EVSightTestVisibility(wrapped, point, {tolerance=2, object=null}={}) {
+export function EVTestVisibility(wrapped, point, {tolerance=2, object=null}={}) {
   if ( !object || !(object instanceof Token) ) return wrapped(point, { tolerance, object });
 
-  log(`EVSightTestVisibility at ${point.x},${point.y} for ${object.id}`, object);
-  // ** This is copied directly from SightLayer.prototype.testVisibility **
+  log(`EVTestVisibility at ${point.x},${point.y} for ${object.id}`, object);
 
-  const visionSources = this.sources;
-  const lightSources = canvas.lighting.sources;
-  const d = canvas.dimensions;
+  // ** This is copied directly from CanvasVisibility.prototype.testVisibility **
+  const { lightSources, visionSources } = canvas.effects;
   if ( !visionSources.size ) return game.user.isGM;
 
   // Determine the array of offset points to test
-  const t = tolerance;  // For tokens: tolerance = Math.min(object.w, object.h) / 4;
-  const offsets = t > 0
-    ? [[0, 0], [-t, -t], [-t, t], [t, t], [t, -t], [-t, 0], [t, 0], [0, -t], [0, t]]
-    : [[0, 0]];
+  // For tokens: tolerance = Math.min(object.w, object.h) / 4;
+  const t = tolerance;
+  const offsets = t > 0 ? [[0, 0], [-t, -t], [-t, t], [t, t], [t, -t], [-t, 0], [t, 0], [0, -t], [0, t]] : [[0, 0]];
   const points = offsets.map(o => new PIXI.Point(point.x + o[0], point.y + o[1]));
-
-  // If the point is entirely inside the buffer region, it may be hidden from view
-  if ( !this._inBuffer && !points.some(p => d.sceneRect.contains(p.x, p.y)) ) return false;
 
   // ** Modified after this **
 
@@ -116,29 +110,9 @@ function testVisionSourceLOS(source, p) {
   if ( !point_in_shadow ) { return true; }
 
   const ray = new Ray(new Point3d(source.x, source.y, source.elevationZ), p);
-  return !EVClockwiseSweepPolygon.getRayCollisions3d(ray, { type: "sight", mode: "any" });
+  return !getRayCollisions3d(ray, { type: "sight", mode: "any" });
 }
 
-
-/**
- * Wrap VisionSource.prototype._drawRenderTextureContainer
- */
-export function EVVisionSourceDrawRenderTextureContainer(wrapped) {
-  const c = wrapped();
-
-  const shadows = this.los.shadows;
-  if ( !shadows || !shadows.length ) {
-    log("EVVisionSourceDrawRenderTextureContainer|no shadows");
-    return c;
-  }
-
-  for ( const shadow of shadows ) {
-    const g = c.addChild(new PIXI.LegacyGraphics());
-    g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
-  }
-
-  return c;
-}
 
 /**
  * Wrap VisionSource.prototype.drawSight

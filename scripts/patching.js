@@ -14,12 +14,21 @@ WallHeight
 // Patches
 
 import { MODULE_ID } from "./const.js";
+
 import {
-  EVSightTestVisibility,
-  EVVisionSourceDrawSight,
-  EVVisionSourceDrawRenderTextureContainer } from "./tokens.js";
+  EVTestVisibility,
+  EVVisionSourceDrawSight
+} from "./tokens.js";
+
+// import {
+//   } from "./lighting.js";
+
 import {
-  EVLightSourceDrawRenderTextureContainer } from "./lighting.js";
+  EVTestWallInclusion,
+  EVIdentifyEdges,
+  EVCompute,
+  EVDrawShadows
+} from "./clockwise_sweep.js";
 
 export function registerAdditions() {
 
@@ -65,6 +74,12 @@ export function registerAdditions() {
     });
   }
 
+  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_drawShadows", {
+    value: EVDrawShadows,
+    writable: true,
+    configurable: true
+  })
+
   //   Object.defineProperty(Set.prototype, "diff", {
   //     value: function(b) { return new Set([...this].filter(x => !b.has(x))); },
   //     writable: true,
@@ -73,12 +88,17 @@ export function registerAdditions() {
 }
 
 export function registerPatches() {
-  libWrapper.register(MODULE_ID, "SightLayer.prototype.testVisibility", EVSightTestVisibility, "MIXED");
+  libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.testVisibility", EVTestVisibility, libWrapper.MIXED, {perf_mode: libWrapper.PERF_FAST});
 
-  libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", EVVisionSourceDrawSight, "WRAPPER");
-  libWrapper.register(MODULE_ID, "VisionSource.prototype._drawRenderTextureContainer", EVVisionSourceDrawRenderTextureContainer, "WRAPPER");
+  libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", EVVisionSourceDrawSight, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//   libWrapper.register(MODULE_ID, "VisionSource.prototype._drawRenderTextureContainer", EVVisionSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
 
-  libWrapper.register(MODULE_ID, "LightSource.prototype._drawRenderTextureContainer", EVLightSourceDrawRenderTextureContainer, "WRAPPER");
+//   libWrapper.register(MODULE_ID, "LightSource.prototype._drawRenderTextureContainer", EVLightSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
+
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.testWallInclusion", EVTestWallInclusion, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._identifyEdges", EVIdentifyEdges, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", EVCompute, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
 }
 
 /**
@@ -88,10 +108,10 @@ function zValue(value) {
   return value * canvas.scene.data.grid / canvas.scene.data.gridDistance;
 }
 
-function replaceInfinity(value) {
-  return isFinite(value) ? zValue(value)
-    : value === Infinity ? Number.MAX_SAFE_INTEGER : Number.MIN_SAFE_INTEGER;
-}
+// function replaceInfinity(value) {
+//   return isFinite(value) ? zValue(value)
+//     : value === Infinity ? Number.MAX_SAFE_INTEGER : Number.MIN_SAFE_INTEGER;
+// }
 
 /**
  * For {LightSource|SoundSource|VisionSource} objects
@@ -99,7 +119,8 @@ function replaceInfinity(value) {
  * @type {number}
  */
 function sourceElevation() {
-  return replaceInfinity(WallHeight.getSourceElevationTop(this.object.document));
+//   return replaceInfinity(WallHeight.getSourceElevationTop(this.object.document));
+  return this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY;
 }
 
 /**
@@ -117,18 +138,22 @@ function tokenTop() {
  */
 function tokenBottom() {
   // From Wall Height but skip the extra test b/c we know it is a token.
-  return zValue(this.document.data.elevation);
+  return zValue(this.document.elevation);
 }
 
 /**
  * For {Wall}
  * @type {number}
  */
-function wallTop() { return replaceInfinity(WallHeight.getWallBounds(this).top); }
+function wallTop() {
+  return this.document.flags?.['wall-height'].top ?? Number.MAX_SAFE_INTEGER;
+}
 
 /**
  * For {Wall}
  * @type {number}
  */
-function wallBottom() { return replaceInfinity(WallHeight.getWallBounds(this).bottom); }
+function wallBottom() {
+  return this.document.flags?.['wall-height'].top ?? Number.MIN_SAFE_INTEGER;
+}
 
