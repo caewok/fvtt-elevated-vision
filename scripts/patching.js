@@ -24,7 +24,7 @@ import {
 //   } from "./lighting.js";
 
 import {
-  EVTestWallInclusion,
+  testWallInclusionClockwiseSweep,
   EVIdentifyEdges,
   EVCompute,
   EVDrawShadows
@@ -95,7 +95,7 @@ export function registerPatches() {
 
 //   libWrapper.register(MODULE_ID, "LightSource.prototype._drawRenderTextureContainer", EVLightSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
 
-  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.testWallInclusion", EVTestWallInclusion, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.testWallInclusion", testWallInclusionClockwiseSweep, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._identifyEdges", EVIdentifyEdges, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", EVCompute, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 

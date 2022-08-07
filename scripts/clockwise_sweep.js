@@ -82,19 +82,19 @@ export function EVDrawShadows({ color = COLORS.gray, width = 1, fill = COLORS.gr
  * Override ClockwisePolygonSweep.testWallInclusion
  * Ensure that Wall Height does not remove walls here that will be caught later
  */
-export function EVTestWallInclusion(wall, origin, type) {
+export function testWallInclusionClockwiseSweep(wall, origin, type) {
   // Always include interior walls underneath active roof tiles
   if ( (type === "sight") && wall.hasActiveRoof ) return true;
 
   // Ignore walls that are not blocking for this polygon type
-  if ( !wall.document[type] || wall.isOpen ) return false;
+  if ( !wall.data[type] || wall.isOpen ) return false;
 
   // Ignore walls which are exactly in-line with the origin, except for movement
   const side = wall.orientPoint(origin);
   if ( (type !== "move") && (side === CONST.WALL_DIRECTIONS.BOTH) ) return false;
 
   // Ignore one-directional walls which are facing away from the origin
-  return !wall.document.dir || (side !== wall.document.dir);
+  return !wall.data.dir || (side !== wall.data.dir);
 }
 
 
