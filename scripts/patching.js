@@ -16,18 +16,19 @@ WallHeight
 import { MODULE_ID } from "./const.js";
 
 import {
-  EVTestVisibility,
-  EVVisionSourceDrawSight
+  testVisibilityLightSource,
+  testNaturalVisibilityVisionMode,
+  drawSightVisionSource
 } from "./tokens.js";
 
 // import {
 //   } from "./lighting.js";
 
 import {
-  testWallInclusionClockwiseSweep,
-  EVIdentifyEdges,
-  EVCompute,
-  EVDrawShadows
+  _testWallInclusionClockwisePolygonSweep,
+  _identifyEdgesClockwisePolygonSweep,
+  _computeClockwisePolygonSweep,
+  _drawShadowsClockwiseSweepPolygon
 } from "./clockwise_sweep.js";
 
 export function registerAdditions() {
@@ -75,7 +76,7 @@ export function registerAdditions() {
   }
 
   Object.defineProperty(ClockwiseSweepPolygon.prototype, "_drawShadows", {
-    value: EVDrawShadows,
+    value: _drawShadowsClockwiseSweepPolygon,
     writable: true,
     configurable: true
   })
@@ -88,16 +89,18 @@ export function registerAdditions() {
 }
 
 export function registerPatches() {
-  libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.testVisibility", EVTestVisibility, libWrapper.MIXED, {perf_mode: libWrapper.PERF_FAST});
-
-  libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", EVVisionSourceDrawSight, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", drawSightVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype._drawRenderTextureContainer", EVVisionSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
 
 //   libWrapper.register(MODULE_ID, "LightSource.prototype._drawRenderTextureContainer", EVLightSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
 
-  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.testWallInclusion", testWallInclusionClockwiseSweep, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._identifyEdges", EVIdentifyEdges, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", EVCompute, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "VisionMode.prototype.testNaturalVisibility", testNaturalVisibilityVisionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
+
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._testWallInclusion", _testWallInclusionClockwisePolygonSweep, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._identifyEdges", _identifyEdgesClockwisePolygonSweep, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwisePolygonSweep, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
 }
 
@@ -105,7 +108,7 @@ export function registerPatches() {
  * Convert a grid units value to pixel units, for equivalency with x,y values.
  */
 function zValue(value) {
-  return value * canvas.scene.data.grid / canvas.scene.data.gridDistance;
+  return value * canvas.scene.grid.size / canvas.scene.grid.distance;
 }
 
 // function replaceInfinity(value) {

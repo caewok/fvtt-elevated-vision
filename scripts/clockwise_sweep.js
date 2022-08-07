@@ -15,7 +15,7 @@ import { log } from "./util.js";
  * Store shadow map in wall, keyed by source.
  * Shadows in the sweep are intersected against the sweep polygon.
  */
-export function EVCompute(wrapped) {
+export function _computeClockwisePolygonSweep(wrapped) {
    wrapped();
 
   // PIXI.js hates overlapping holes:
@@ -29,7 +29,10 @@ export function EVCompute(wrapped) {
   // Instead, union each shadow in turn, then intersect against the polygon sweep.
 
   const src = this.config.source
-  this.close(); // Should already be closed; but just in case.
+  if ( !this.isClosed ) {
+    const ln = this.points.length;
+    this.addPoint({ x: this.points[ln - 2], y: this.points[ln -1] })
+  }
 
   // First, construct the shadows and store in walls for debugging and potential
   // future performance improvements. TO-DO: Update shadow for wall only when needed.
@@ -70,7 +73,7 @@ export function EVCompute(wrapped) {
   this.shadows = solution.map(pts => Shadow.fromClipperPoints(pts));
 }
 
-export function EVDrawShadows({ color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = .5 } = {} ) {
+export function _drawShadowsClockwiseSweepPolygon({ color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = .5 } = {} ) {
   clearDrawings();
   this.shadows.forEach(s => {
     Shadow.prototype.draw.call(s, {color, width, fill, alpha});
@@ -82,19 +85,29 @@ export function EVDrawShadows({ color = COLORS.gray, width = 1, fill = COLORS.gr
  * Override ClockwisePolygonSweep.testWallInclusion
  * Ensure that Wall Height does not remove walls here that will be caught later
  */
-export function testWallInclusionClockwiseSweep(wall, origin, type) {
+export function _testWallInclusionClockwisePolygonSweep(wall, bounds) {
+  const {type, boundaryShapes} = this.config;
+
+  // First test for inclusion in our overall bounding box
+  if ( !bounds.lineSegmentIntersects(wall.A, wall.B, { inside: true }) ) return false;
+
+  // Specific boundary shapes may impose additional requirements
+  for ( const shape of boundaryShapes ) {
+    if ( shape._includeEdge && !shape._includeEdge(wall.A, wall.B) ) return false;
+  }
+
+  // Ignore walls which are nearly collinear with the origin, except for movement
+  const side = wall.orientPoint(this.origin);
+  if ( (type !== "move") && !side ) return false;
+
   // Always include interior walls underneath active roof tiles
   if ( (type === "sight") && wall.hasActiveRoof ) return true;
 
-  // Ignore walls that are not blocking for this polygon type
-  if ( !wall.data[type] || wall.isOpen ) return false;
-
-  // Ignore walls which are exactly in-line with the origin, except for movement
-  const side = wall.orientPoint(origin);
-  if ( (type !== "move") && (side === CONST.WALL_DIRECTIONS.BOTH) ) return false;
+  // Otherwise, ignore walls that are not blocking for this polygon type
+  else if ( !wall.document[type] || wall.isOpen ) return false;
 
   // Ignore one-directional walls which are facing away from the origin
-  return !wall.data.dir || (side !== wall.data.dir);
+  return !wall.document.dir || (side !== wall.document.dir);
 }
 
 
@@ -104,7 +117,7 @@ export function testWallInclusionClockwiseSweep(wall, origin, type) {
  * Move into different buckets depending on where the wall is in relation to the source
  * elevation.
  */
-export function EVIdentifyEdges(wrapped) {
+export function _identifyEdgesClockwisePolygonSweep(wrapped) {
   wrapped();
 
   // By convention, treat the Wall Height module rangeTop as the elevation
