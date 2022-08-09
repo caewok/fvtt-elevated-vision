@@ -133,7 +133,10 @@ export class Shadow extends PIXI.Polygon {
     // Round to nearest pixel to avoid some visual artifacts when joining shadows
     this.points = this.points.map(val => Math.round(val));
 
-    this.close();
+    if ( !this.isClosed ) {
+      const ln = this.points.length;
+      this.addPoint({ x: this.points[ln - 2], y: this.points[ln -1] });
+    }
   }
 
   /**
@@ -290,7 +293,7 @@ export class Shadow extends PIXI.Polygon {
       model.wall = this.wall;
       model.source = this.source;
       model.VT = this.VT;
-      model.theta = this.theta
+      model.theta = this.theta;
       model.alpha = this.alpha;
 
       return model;
