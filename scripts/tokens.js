@@ -1,9 +1,8 @@
 /* globals
 Token,
-canvas,
-game,
 PIXI,
-Ray
+Ray,
+CONFIG
 */
 "use strict";
 
@@ -24,27 +23,26 @@ If not visible due to los/fov:
 
 */
 
+/**
+ * Helper function to construct a test object for testVisiblity
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @returns {object}  Object with { point, hasLOS: false, hasFOV: false }
+ */
+function buildTestObject(x, y, z = 0, hasLOS = false, hasFOV = false) {
+  return { point: new Point3d(x, y, z), hasLOS, hasFOV };
+}
 
 /**
- * Override of CanvasVisibility.prototype.testVisibility (canvas.sight.testVisibility)
+ * Add 3d points for testing visibility
+ * Try a single 3d center point for middle, top, bottom.
+ * Then add middle, top, bottom for all other points around the boundary.
+ * @param {object[]} tests    Object array with { point, hasLOS, hasFOV }
+ * @param {object} object     An optional reference to the object whose visibility is being tested
+ * @returns {object[]} Modified tests array
  */
-export function EVTestVisibility(wrapped, point, {tolerance=2, object=null}={}) {
-  if ( !object || !(object instanceof Token) ) return wrapped(point, { tolerance, object });
-
-  log(`EVTestVisibility at ${point.x},${point.y} for ${object.id}`, object);
-
-  // ** This is copied directly from CanvasVisibility.prototype.testVisibility **
-  const { lightSources, visionSources } = canvas.effects;
-  if ( !visionSources.size ) return game.user.isGM;
-
-  // Determine the array of offset points to test
-  // For tokens: tolerance = Math.min(object.w, object.h) / 4;
-  const t = tolerance;
-  const offsets = t > 0 ? [[0, 0], [-t, -t], [-t, t], [t, t], [t, -t], [-t, 0], [t, 0], [0, -t], [0, t]] : [[0, 0]];
-  const points = offsets.map(o => new PIXI.Point(point.x + o[0], point.y + o[1]));
-
-  // ** Modified after this **
-
+function create3dTestPoints(tests, object) {
   // We need a point that provides both LOS and FOV membership, and
   // also, if in shadow, has line of sight to a vision source without intersecting a wall.
   // Top and bottom of the token cube---the points to test along the token.
@@ -52,53 +50,64 @@ export function EVTestVisibility(wrapped, point, {tolerance=2, object=null}={}) 
   const obj_top = object.topZ;
   const obj_bottom = object.bottomZ;
   const obj_center = (obj_top + obj_bottom) / 2;
-  const points3d = [];
   const skip_top = obj_top === obj_bottom;
 
   // Try a single 3d center point for middle, top, bottom.
   // Then add middle, top, bottom for all other points around the boundary.
-  const p0 = points.shift();
-  points3d.push(new Point3d(p0.x, p0.y, obj_center));
+  const t0 = tests.shift();
+  const tests3d = [];
+  tests3d.push(buildTestObject(t0.point.x, t0.point.y, obj_center, t0.hasLOS, t0.hasFOV));
 
-  points.forEach(p => {
-    points3d.push(new Point3d(p.x, p.y, obj_center));
+  tests.forEach(t => {
+    const { x, y } = t.point;
+    const { hasLOS, hasFOV } = t;
+
+    tests3d.push(buildTestObject(x, y, obj_center, hasLOS, hasFOV));
     if ( skip_top ) return;
 
-    points3d.push(
-      new Point3d(p.x, p.y, obj_top),
-      new Point3d(p.x, p.y, obj_bottom));
+    tests3d.push(
+      buildTestObject(x, y, obj_top, hasLOS, hasFOV),
+      buildTestObject(x, y, obj_bottom, hasLOS, hasFOV));
   });
 
-  return points3d.some(p => {
-    let hasLOS = false;
-    let hasFOV = false;
-    let requireFOV = !canvas.lighting.globalLight;
+  return tests3d;
+}
 
-    // Check vision sources
-    for ( const source of visionSources.values() ) {
-      if ( !source.active ) continue;               // The source may be currently inactive
-      if ( !hasLOS || (!hasFOV && requireFOV) ) {   // Do we need to test for LOS?
-        hasLOS = testVisionSourceLOS(source, p);
-        if ( !hasFOV && requireFOV ) {  // Do we need to test for FOV?
-          if ( source.fov.contains(p.x, p.y) ) hasFOV = true;
-        }
-      }
+/**
+ * Wrap LightSource.prototype.testVisibility
+ */
+export function testVisibilityLightSource(wrapper, {tests, object} = {}) {
+  if ( !object || !(object instanceof Token) ) return wrapper({tests, object});
 
-      if ( hasLOS && (!requireFOV || hasFOV) ) {    // Did we satisfy all required conditions?
-        return true;
-      }
-    }
-
-    // Check light sources
-    for ( const source of lightSources.values() ) {
-      if ( !source.active ) continue;               // The source may be currently inactive
-      if ( source.containsPoint(p) ) {
-        if ( source.data.vision && testVisionSourceLOS(source, p) ) hasLOS = true;
-        hasFOV = true;
-      }
-      if ( hasLOS && (!requireFOV || hasFOV) ) return true;
+  tests = create3dTestPoints(tests, object);
+  const doc = object.document;
+  if ( (doc instanceof Token) && doc.hasStatusEffect(CONFIG.specialStatusEffects.INVISIBLE) ) return false;
+  return tests.some(test => {
+    const contains = testVisionSourceLOS(this, test.point);
+    if ( contains ) {
+      if ( this.data.vision ) test.hasLOS = true;
+      test.hasFOV = true;
+      return test.hasLOS;
     }
     return false;
+  });
+}
+
+/**
+ * Wrap VisionMode.prototype.testNaturalVisibility
+ */
+export function testNaturalVisibilityVisionMode(wrapper, {tests, object} = {}) {
+  if ( !object || !(object instanceof Token) ) return wrapper({tests, object});
+
+  tests = create3dTestPoints(tests, object);
+
+  return tests.some(test => {
+    if ( !test.hasFOV && testVisionSourceLOS(this, test.point) ) {
+      test.hasFOV = test.hasLOS = true;
+      return true;
+    }
+    if ( !test.hasLOS && testVisionSourceLOS(this, test.point)) test.hasLOS = true;
+    return (test.hasFOV && test.hasLOS);
   });
 }
 
@@ -117,12 +126,14 @@ function testVisionSourceLOS(source, p) {
 /**
  * Wrap VisionSource.prototype.drawSight
  */
-export function EVVisionSourceDrawSight(wrapped) {
+export function drawSightVisionSource(wrapped) {
+  log("drawSightVisionSource");
+
   const c = wrapped();
 
   const shadows = this.los.shadows;
   if ( !shadows || !shadows.length ) {
-    log("EVVisionSourceDrawSight|no shadows");
+    log("drawSightVisionSource|no shadows");
     return c;
   }
 
