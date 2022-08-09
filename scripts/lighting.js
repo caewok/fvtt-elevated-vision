@@ -6,7 +6,133 @@ canvas
 
 import { log } from "./util.js";
 import { MODULE_ID } from "./const.js";
-// import { InvertFilter } from "./InvertFilter.js";
+
+
+export function createAdaptiveLightingShader(wrapped, ...args) {
+  const replaceUniformStr = "uniform sampler2D uBkgSampler;";
+  const replaceFragStr = "float depth = smoothstep(0.0, 1.0, vDepth);";
+
+  this.fragmentShader = this.fragmentShader.replace(
+    replaceUniformStr, `${replaceUniformStr}\n${UNIFORMS}`);
+
+  this.fragmentShader = this.fragmentShader.replace(
+    replaceFragStr, `${replaceFragStr}\n${DEPTH_CALCULATION}`);
+
+   const shader = wrapped(...args);
+   shader.uniforms.EV_numWalls = 0;
+   shader.uniforms.EV_wallCoords = new Float32Array();
+   shader.uniforms.EV_pointRadius = .1;
+   return shader;
+
+}
+
+const UNIFORMS =
+`
+uniform int EV_numWalls;
+uniform vec3 EV_wallCoords[numWalls];
+uniform float EV_pointRadius;
+`;
+
+// For now, just mark the endpoints of walls
+// If near a wall endpoint, make depth 0.
+const DEPTH_CALCULATION =
+`
+for ( int i = 0; i < EV_numWalls; i++ ) {
+  const e0 = [EV_wallCoords[i], 1];
+  if ( distance(e0, gl_FragCoord) < EV_pointRadius ) {
+    depth = 0;
+    break;
+  }
+}
+`;
+
+/**
+ * @param {number[]} mat    Array, representing a square matrix
+ * @param {number[]} vec    Array, representing a vector
+ * @return {number[]} Vector result of mat * v
+ */
+function multMatrixVector(mat, vec) {
+  const vln = vec.length;
+  const matLn = mat.length;
+  if ( matLn % vln !== 0 ) console.warn("multSquareMatrixVector requires matrix rows to equal vector length.");
+
+  const res = [];
+  for ( let r = 0; r < matLn; r += vln ) {
+    let val = 0;
+    for ( let c = 0; c < vln; c += 1 ) {
+//       console.log(`r: ${r}; c: ${c} | ${mat[r + c]} * ${vec[c]}`)
+      val += mat[r + c] * vec[c];
+    }
+    res.push(val);
+  }
+  return res;
+}
+
+/**
+ * @param {number[]} mat3   Array, representing a 3x3 matrix.
+ * @return {number[]} An array representing a 4x4 matrix
+ */
+function to4D(mat3) {
+  return [
+    mat3[0], mat3[1], mat3[2], 0,
+    mat3[3], mat3[4], mat3[5], 0,
+    mat3[6], mat3[7], mat3[9], 0,
+    0, 0, 0, 1
+  ];
+}
+
+export function _updateColorationUniformsLightSource(wrapped) {
+  wrapped();
+  if ( this instanceof GlobalLightSource ) return;
+  updateLightUniforms(this.coloration.shader);
+}
+
+export function _updateIlluminationUniformsLightSource(wrapped) {
+  wrapped();
+  if ( this instanceof GlobalLightSource ) return;
+  updateLightUniforms(this.illumination.shader);
+}
+
+function updateLightUniforms(shader) {
+  const u = shader.uniforms;
+
+  const translationMatrix = shader.program.translationMatrix.value; // Float32Array[9]
+  const projectionMatrix = shader.program.projectionMatrix.value; // Float32Array[9]
+
+  // change to a 4-d array, b/c we want to include the elevation
+  const translationMatrix4d = to4D(translationMatrix);
+  const projectionMatrix4d = to4D(projectionMatrix);
+
+  u.EV_numWalls = this.los.shadows.length;
+  u.EV_pointRadius = .1;
+
+  const wallCoords = [];
+  for ( let i = 0; i < u.EV_numWalls; i += 1 ) {
+    const s = this.los.shadows[i];
+    const e = s.wall.topZ;
+
+    const a = multMatrixVector(projectionMatrix4d, multMatrixVector(translationMatrix4d, [s.wall.A.x, s.wall.A.y, e, 1]));
+    const b = multMatrixVector(projectionMatrix4d, multMatrixVector(translationMatrix4d, [s.wall.B.x, s.wall.B.y, e, 1]));
+
+    wallCoords.push(...a, ...b);
+  }
+
+  u.EV_wallCoords = new Float32Array(wallCoords);
+}
+
+
+
+
+/*
+ this.fragmentShader = this.fragmentShader.replace(
+            "uniform sampler2D uBkgSampler;",
+            "uniform sampler2D uBkgSampler;\nuniform sampler2D mymodule_maskTexture;"
+        );
+        this.fragmentShader = this.fragmentShader.replace(
+             "float depth = smoothstep(0.0, 1.0, vDepth);",
+             "float depth = smoothstep(0.0, 1.0, vDepth);\ndepth *= texture2D(mymodule_maskTexture, vSamplerUvs).r;"
+        );
+*/
 
 // export function _createLOSLightSource(wrapped) {
 //   log("_createLOSLightSource");
@@ -23,9 +149,9 @@ import { MODULE_ID } from "./const.js";
 
 
 export function drawLightLightSource(wrapped) {
-  log("drawLightLightSource")
+  log("drawLightLightSource");
   if ( this.los.shadows && this.los.shadows.length ) {
-    log("drawLightLightSource has shadows")
+    log("drawLightLightSource has shadows");
 //     this.illumination.filters = [this.createReverseShadowMaskFilter()];
   }
 
@@ -58,35 +184,35 @@ export function drawLightLightSource(wrapped) {
 // }
 
 // Simple version
-export function _createLOSLightSource(wrapped) {
-  const los = wrapped();
-  this.createReverseMaskFilter();
-  this.illumination.filters = [this.reverseMaskFilter];
-  this.coloration.filters = [this.reverseMaskFilter];
-  return los;
-}
-
-// Added to LightSource.prototype
-export function createReverseMaskFilter() {
-  const rt = canvas.primary.createRenderTexture({renderFunction: renderInnerCircle.bind(this), clearColor: [0, 0, 0, 0]});
-  this.reverseMaskFilter = ReverseMaskFilter.create({
-    uMaskSampler: rt,
-    channel: "a"
-  });
-  this.reverseMaskFilter.blendMode = PIXI.BLEND_MODES.NORMAL;
-  return this.reverseMaskFilter;
-}
-
-function renderInnerCircle(renderer) {
-  const cir = new PIXI.Circle(0, 0, 50);
-  const graphics = new PIXI.Graphics();
-  const rt = renderer.renderTexture;
-  graphics.beginFill(0, 1); // color, alpha
-  graphics.drawCircle(cir);
-  graphics.endFill;
-  renderer.render(graphics, rt);
-  return rt;
-}
+// export function _createLOSLightSource(wrapped) {
+//   const los = wrapped();
+//   this.createReverseMaskFilter();
+//   this.illumination.filters = [this.reverseMaskFilter];
+//   this.coloration.filters = [this.reverseMaskFilter];
+//   return los;
+// }
+//
+// // Added to LightSource.prototype
+// export function createReverseMaskFilter() {
+//   const rt = canvas.primary.createRenderTexture({renderFunction: renderInnerCircle.bind(this), clearColor: [0, 0, 0, 0]});
+//   this.reverseMaskFilter = ReverseMaskFilter.create({
+//     uMaskSampler: rt,
+//     channel: "a"
+//   });
+//   this.reverseMaskFilter.blendMode = PIXI.BLEND_MODES.NORMAL;
+//   return this.reverseMaskFilter;
+// }
+//
+// function renderInnerCircle(renderer) {
+//   const cir = new PIXI.Circle(0, 0, 50);
+//   const graphics = new PIXI.Graphics();
+//   const rt = renderer.renderTexture;
+//   graphics.beginFill(0, 1); // color, alpha
+//   graphics.drawCircle(cir);
+//   graphics.endFill;
+//   renderer.render(graphics, rt);
+//   return rt;
+// }
 
 
 

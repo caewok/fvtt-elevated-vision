@@ -22,11 +22,9 @@ import {
 } from "./tokens.js";
 
 import {
-  drawLightLightSource,
-//   createReverseShadowMaskFilter,
-//   renderShadows,
-  _createLOSLightSource,
-  createReverseMaskFilter
+  createAdaptiveLightingShader,
+  _updateColorationUniformsLightSource,
+  _updateIlluminationUniformsLightSource
 } from "./lighting.js";
 
 import {
@@ -109,7 +107,11 @@ export function registerAdditions() {
 export function registerPatches() {
   libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", drawSightVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
-  libWrapper.register(MODULE_ID, "LightSource.prototype._createLOS", _createLOSLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "AdaptiveLightingShader.create", createAdaptiveLightingShader, libWrapper.WRAPPER);
+  libWrapper.register(MODULE_ID, "LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, libWrapper.WRAPPER);
+  libWrapper.register(MODULE_ID, "LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, libWrapper.WRAPPER);
+
+//   libWrapper.register(MODULE_ID, "LightSource.prototype._createLOS", _createLOSLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 //   libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", drawLightLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype._drawRenderTextureContainer", EVVisionSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
 
