@@ -127,11 +127,13 @@ function testVisionSourceLOS(source, p) {
  * Wrap VisionSource.prototype.drawSight
  */
 export function drawSightVisionSource(wrapped) {
+  log("drawSightVisionSource");
+
   const c = wrapped();
 
   const shadows = this.los.shadows;
   if ( !shadows || !shadows.length ) {
-    log("EVVisionSourceDrawSight|no shadows");
+    log("drawSightVisionSource|no shadows");
     return c;
   }
 

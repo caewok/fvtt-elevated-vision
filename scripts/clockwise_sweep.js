@@ -1,9 +1,14 @@
 /* globals
-
+ClipperLib,
+canvas,
+CONST,
+ClockwiseSweepPolygon
 */
 "use strict";
 
-import { log } from "./util.js";
+import { log, lineSegment3dWallIntersection } from "./util.js";
+import { COLORS, drawSegment, clearDrawings } from "./drawing.js";
+import { Shadow } from "./Shadow.js";
 
 /**
  * Wrap ClockwisePolygonSweep.prototype._compute
@@ -16,7 +21,9 @@ import { log } from "./util.js";
  * Shadows in the sweep are intersected against the sweep polygon.
  */
 export function _computeClockwisePolygonSweep(wrapped) {
-   wrapped();
+  wrapped();
+
+  log("_computeClockwisePolygonSweep");
 
   // PIXI.js hates overlapping holes:
   // https://www.html5gamedevs.com/topic/45827-overlapping-holes-in-pixigraphics/
@@ -28,10 +35,10 @@ export function _computeClockwisePolygonSweep(wrapped) {
 
   // Instead, union each shadow in turn, then intersect against the polygon sweep.
 
-  const src = this.config.source
+  const src = this.config.source;
   if ( !this.isClosed ) {
     const ln = this.points.length;
-    this.addPoint({ x: this.points[ln - 2], y: this.points[ln -1] })
+    this.addPoint({ x: this.points[ln - 2], y: this.points[ln -1] });
   }
 
   // First, construct the shadows and store in walls for debugging and potential
@@ -50,13 +57,13 @@ export function _computeClockwisePolygonSweep(wrapped) {
 
   // Second, union all shadows as necessary
   let combined_shadow_path = new ClipperLib.Paths();
-  combined_shadow_path.push(shadows[0].clipperCoordinates);
+  combined_shadow_path.push(shadows[0].toClipperPoints());
   if ( shadows.length > 1 ) {
     for ( let i = 1; i < shadows.length; i += 1 ) {
       const c = new ClipperLib.Clipper();
       const solution = new ClipperLib.Paths();
       c.AddPaths(combined_shadow_path, ClipperLib.PolyType.ptSubject, true);
-      c.AddPath(shadows[i].clipperCoordinates, ClipperLib.PolyType.ptClip, true);
+      c.AddPath(shadows[i].toClipperPoints(), ClipperLib.PolyType.ptClip, true);
       c.Execute(ClipperLib.ClipType.ctUnion, solution);
       combined_shadow_path = solution;
     }
@@ -65,7 +72,7 @@ export function _computeClockwisePolygonSweep(wrapped) {
   // Third, intersect the shadow(s) with the sweep polygon
   const c = new ClipperLib.Clipper();
   const solution = new ClipperLib.Paths();
-  c.AddPath(this.clipperCoordinates, ClipperLib.PolyType.ptSubject, true);
+  c.AddPath(this.toClipperPoints(), ClipperLib.PolyType.ptSubject, true);
   c.AddPaths(combined_shadow_path, ClipperLib.PolyType.ptClip, true);
   c.Execute(ClipperLib.ClipType.ctIntersection, solution);
 
@@ -73,8 +80,10 @@ export function _computeClockwisePolygonSweep(wrapped) {
   this.shadows = solution.map(pts => Shadow.fromClipperPoints(pts));
 }
 
-export function _drawShadowsClockwiseSweepPolygon({ color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = .5 } = {} ) {
+export function _drawShadowsClockwiseSweepPolygon(
+  { color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = .5 } = {} ) {
   clearDrawings();
+  if ( !this.shadows ) return;
   this.shadows.forEach(s => {
     Shadow.prototype.draw.call(s, {color, width, fill, alpha});
     if ( this.config.debug ) { drawSegment(s.wall, { color: COLORS.black, alpha: .7 }); }
@@ -82,12 +91,29 @@ export function _drawShadowsClockwiseSweepPolygon({ color = COLORS.gray, width =
 }
 
 /**
+ * Override ClockwisePolygonSweep.prototype.getWalls
+ * Ensure that Wall Height does not remove walls here that will be caught later
+ */
+export function _getWallsClockwisePolygonSweep() {
+  log("_getWallsClockwisePolygonSweep");
+  const bounds = this._defineBoundingBox();
+  const {type, boundaryShapes} = this.config;
+  const collisionTest = (o, rect) => testWallInclusion(o.t, rect, this.origin, type, boundaryShapes);
+  return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+}
+
+/**
  * Override ClockwisePolygonSweep.testWallInclusion
  * Ensure that Wall Height does not remove walls here that will be caught later
  */
 export function _testWallInclusionClockwisePolygonSweep(wall, bounds) {
-  const {type, boundaryShapes} = this.config;
+  log("_testWallInclusionClockwisePolygonSweep")
 
+  const {type, boundaryShapes} = this.config;
+  return testWallInclusion(wall, bounds, this.origin, type, boundaryShapes);
+}
+
+function testWallInclusion(wall, bounds, origin, type, boundaryShapes = []) {
   // First test for inclusion in our overall bounding box
   if ( !bounds.lineSegmentIntersects(wall.A, wall.B, { inside: true }) ) return false;
 
@@ -97,7 +123,7 @@ export function _testWallInclusionClockwisePolygonSweep(wall, bounds) {
   }
 
   // Ignore walls which are nearly collinear with the origin, except for movement
-  const side = wall.orientPoint(this.origin);
+  const side = wall.orientPoint(origin);
   if ( (type !== "move") && !side ) return false;
 
   // Always include interior walls underneath active roof tiles
@@ -120,6 +146,8 @@ export function _testWallInclusionClockwisePolygonSweep(wall, bounds) {
 export function _identifyEdgesClockwisePolygonSweep(wrapped) {
   wrapped();
 
+  log("_identifyEdgesClockwisePolygonSweep");
+
   // By convention, treat the Wall Height module rangeTop as the elevation
   // Remove edges that will not block the source when viewed straight-on
   // But store for later processing
@@ -128,15 +156,16 @@ export function _identifyEdgesClockwisePolygonSweep(wrapped) {
 
   if ( !this.config.source ) return;
 
-  // Ignore lights set with default of positive infinity
-  if ( !isFinite(this.config.source.top) ) return;
-
   const sourceZ = this.config.source.elevationZ ?? 0;
+
+  // Ignore lights set with default of positive infinity
+  if ( !isFinite(sourceZ) ) return;
+
   this.edges.forEach((e, key) => {
-    if ( sourceZ > e.topZ ) {
+    if ( sourceZ > e.wall.topZ ) {
       this.edgesBelowSource.add(e);
       this.edges.delete(key);
-    } else if ( sourceZ < e.bottomZ ) {
+    } else if ( sourceZ < e.wall.bottomZ ) {
       this.edgesAboveSource.add(e);
       this.edges.delete(key);
     }
@@ -162,11 +191,13 @@ export function getRayCollisions3d(ray, {type="move", mode="all", debug=false}={
   origin.z ??= 0;
   dest.z ??= 0;
 
+  log(`getRayCollisions3d ${origin.x},${origin.y} --> ${dest.x},${dest.y}`);
+
   // Identify Edges
   const collisions = [];
   const walls = canvas.walls.quadtree.getObjects(ray.bounds);
   for ( let wall of walls ) {
-    if ( !EVTestWallInclusion(wall, origin, type) ) continue;
+    if ( !testWallInclusion(wall, origin, ray.bounds, type) ) continue;
     const x = lineSegment3dWallIntersection(origin, dest, wall);
     if ( x ) {
       if ( mode === "any" ) {   // We may be done already

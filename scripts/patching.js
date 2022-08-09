@@ -21,14 +21,20 @@ import {
   drawSightVisionSource
 } from "./tokens.js";
 
-// import {
-//   } from "./lighting.js";
+import {
+  drawLightLightSource,
+//   createReverseShadowMaskFilter,
+//   renderShadows,
+  _createLOSLightSource,
+  createReverseMaskFilter
+} from "./lighting.js";
 
 import {
   _testWallInclusionClockwisePolygonSweep,
   _identifyEdgesClockwisePolygonSweep,
   _computeClockwisePolygonSweep,
-  _drawShadowsClockwiseSweepPolygon
+  _drawShadowsClockwiseSweepPolygon,
+  _getWallsClockwisePolygonSweep
 } from "./clockwise_sweep.js";
 
 export function registerAdditions() {
@@ -81,6 +87,18 @@ export function registerAdditions() {
     configurable: true
   })
 
+  Object.defineProperty(LightSource.prototype, "createReverseMaskFilter", {
+    value: createReverseMaskFilter,
+    writable: true,
+    configurable: true
+  })
+
+//   Object.defineProperty(LightSource.prototype, "renderShadows", {
+//     value: renderShadows,
+//     writable: true,
+//     configurable: true
+//   })
+
   //   Object.defineProperty(Set.prototype, "diff", {
   //     value: function(b) { return new Set([...this].filter(x => !b.has(x))); },
   //     writable: true,
@@ -90,6 +108,9 @@ export function registerAdditions() {
 
 export function registerPatches() {
   libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", drawSightVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
+  libWrapper.register(MODULE_ID, "LightSource.prototype._createLOS", _createLOSLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", drawLightLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype._drawRenderTextureContainer", EVVisionSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
 
 //   libWrapper.register(MODULE_ID, "LightSource.prototype._drawRenderTextureContainer", EVLightSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
@@ -97,7 +118,7 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "VisionMode.prototype.testNaturalVisibility", testNaturalVisibilityVisionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
-
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._getWalls", _getWallsClockwisePolygonSweep, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._testWallInclusion", _testWallInclusionClockwisePolygonSweep, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._identifyEdges", _identifyEdgesClockwisePolygonSweep, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwisePolygonSweep, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
@@ -149,7 +170,7 @@ function tokenBottom() {
  * @type {number}
  */
 function wallTop() {
-  return this.document.flags?.['wall-height'].top ?? Number.MAX_SAFE_INTEGER;
+  return this.document.flags?.['wall-height']?.top ?? Number.MAX_SAFE_INTEGER;
 }
 
 /**
@@ -157,6 +178,6 @@ function wallTop() {
  * @type {number}
  */
 function wallBottom() {
-  return this.document.flags?.['wall-height'].top ?? Number.MIN_SAFE_INTEGER;
+  return this.document.flags?.['wall-height']?.top ?? Number.MIN_SAFE_INTEGER;
 }
 
