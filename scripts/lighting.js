@@ -72,9 +72,12 @@ uniform float EV_pointRadius;
 // }
 // `;
 
+// origin is vec3
 const DEPTH_CALCULATION =
 `
-depth = 0.5;
+if ( dist < 0.1 ) {
+  depth = 0.0;
+}
 `
 
 /**
