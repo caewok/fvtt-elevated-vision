@@ -32,6 +32,7 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
 
   const replaceUniformStr = "uniform sampler2D uBkgSampler;";
   const replaceFragStr = "float depth = smoothstep(0.0, 1.0, vDepth);";
+  const replaceFnStr = "void main() {";
 
   this.fragmentShader = this.fragmentShader.replace(
     replaceUniformStr, `${replaceUniformStr}\n${UNIFORMS}`);
@@ -39,14 +40,16 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   this.fragmentShader = this.fragmentShader.replace(
     replaceFragStr, `${replaceFragStr}\n${DEPTH_CALCULATION}`);
 
-   const shader = wrapped(...args);
-   shader.uniforms.EV_numEndpoints = 0;
-   shader.uniforms.EV_wallElevations = new Float32Array();
-   shader.uniforms.EV_wallCoords = new Float32Array();
-   shader.uniforms.EV_pointRadius = .1;
-   shader.uniforms.EV_lightElevation = .5;
-   return shader;
+  this.fragmentShader = this.fragmentShader.replace(
+    replaceFnStr, `${FUNCTIONS}\n${replaceFnStr}\n`);
 
+  const shader = wrapped(...args);
+  shader.uniforms.EV_numEndpoints = 0;
+  shader.uniforms.EV_wallElevations = new Float32Array();
+  shader.uniforms.EV_wallCoords = new Float32Array();
+  shader.uniforms.EV_pointRadius = .1;
+  shader.uniforms.EV_lightElevation = .5;
+  return shader;
 }
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
@@ -57,7 +60,7 @@ const MAX_NUM_WALLS = 100;
 const UNIFORMS =
 `
 uniform int EV_numEndpoints;
-uniform vec2 EV_wallCoords[${MAX_NUM_WALLS * 2}];
+uniform vec4 EV_wallCoords[${MAX_NUM_WALLS}];
 uniform float EV_wallElevations[${MAX_NUM_WALLS}];
 uniform float EV_pointRadius;
 uniform float EV_lightElevation;
@@ -150,16 +153,54 @@ If vUvs is (.4, .5), then it is 5 feet away (.1*2) from the circle center in the
 
 
 // Draw the endpoints
+// const DEPTH_CALCULATION =
+// `
+// const int maxEndpoints = ${MAX_NUM_WALLS * 2};
+// for ( int i = 0; i < maxEndpoints; i++ ) {
+//   if ( i >= EV_numEndpoints ) break;
+//
+//   vec2 coords = EV_wallCoords[i];
+//
+//   float distCoord0 = distance(vUvs, coords) * 2.0;
+//   if ( distCoord0 < .01 ) {
+//     depth = 0.0;
+//     break;
+//   }
+// }
+// `
+
+const FUNCTIONS =
+`
+float orient2d(in vec2 a, in vec2 b, in vec2 c) {
+  return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
+}
+
+bool lineSegmentIntersects(in vec2 a, in vec2 b, in vec2 c, in vec2 d) {
+  float xa = orient2d(a, b, c);
+  float xb = orient2d(a, b, d);
+  if ( xa == 0.0 && xb == 0.0 ) return false;
+
+  bool xab = (xa * xb) <= 0.0;
+  bool xcd = (orient2d(c, d, a) * orient2d(c, d, b)) <= 0.0;
+  return xab && xcd;
+}
+
+`
+
+// Shadow calculation using endpoints.
+// For now, just depth 0 if in shadow
+// Shadow everything behind the wall
 const DEPTH_CALCULATION =
 `
+const vec2 center = vec2(0.5);
 const int maxEndpoints = ${MAX_NUM_WALLS * 2};
 for ( int i = 0; i < maxEndpoints; i++ ) {
   if ( i >= EV_numEndpoints ) break;
 
-  vec2 coords = EV_wallCoords[i];
+  vec4 wall = EV_wallCoords[i];
 
-  float distCoord0 = distance(vUvs, coords) * 2.0;
-  if ( distCoord0 < .01 ) {
+  // does this location --> origin intersect the wall?
+  if ( lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) {
     depth = 0.0;
     break;
   }
