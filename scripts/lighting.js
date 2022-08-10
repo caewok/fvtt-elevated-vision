@@ -175,6 +175,7 @@ float orient2d(in vec2 a, in vec2 b, in vec2 c) {
   return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
 }
 
+// Does segment AB intersect the segment CD?
 bool lineSegmentIntersects(in vec2 a, in vec2 b, in vec2 c, in vec2 d) {
   float xa = orient2d(a, b, c);
   float xb = orient2d(a, b, d);
@@ -185,15 +186,29 @@ bool lineSegmentIntersects(in vec2 a, in vec2 b, in vec2 c, in vec2 d) {
   return xab && xcd;
 }
 
+// Point on line AB that forms perpendicular point to C
+vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c, inout bool isZero) {
+  vec2 deltaBA = b - a;
+
+  // TO-DO: dab might be 0 --- is this an issue?
+  float dab = pow(deltaBA.x, 2.0) + pow(deltaBA.y, 2.0);
+  isZero = dab == 0.0;
+  vec2 deltaCA = c - a;
+
+  float u = ((deltaCA.x * deltaBA.x) + (deltaCA.y * deltaBA.y)) / dab;
+  return vec2(a.x + (u * deltaBA.x), a.y + (u * deltaBA.y));
+}
 `
 
 // Shadow calculation using endpoints.
 // For now, just depth 0 if in shadow
-// Shadow everything behind the wall
+// 1. Determine if the pixel location --> origin intersects the wall (overhead x,y view)
+// 2. Determine if the pixel location --> origin intersects the wall (cross-section x,z view)
 const DEPTH_CALCULATION =
 `
 const vec2 center = vec2(0.5);
 const int maxEndpoints = ${MAX_NUM_WALLS * 2};
+const float originElevation = 0.5;
 for ( int i = 0; i < maxEndpoints; i++ ) {
   if ( i >= EV_numEndpoints ) break;
 
@@ -201,11 +216,48 @@ for ( int i = 0; i < maxEndpoints; i++ ) {
 
   // does this location --> origin intersect the wall?
   if ( lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) {
-    depth = 0.0;
-    break;
+    // Point of wall that forms a perpendicular line to the origin light
+    bool isZero = false;
+    vec2 wallIxOrigin = perpendicularPoint(wall.xy, wall.zw, center, isZero);
+    if ( !isZero ) {
+      vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs, isZero);
+      if ( !isZero ) {
+        float distVT = distance(center, wallIxOrigin);
+        float distTO = distance(vUvs, wallIxPoint);
+
+        float theta = atan((EV_lightElevation - originElevation) / distVT);
+        float distTOMax = (EV_wallElevations[i] - originElevation)  / tan(theta);
+
+        if ( distTO < distTOMax ) {
+          depth = 0.0;
+          break;
+        }
+      }
+    }
   }
 }
 `
+
+/*
+Rotate a line to be vertical
+
+if A.x == B.x already vertical
+
+Take the lesser x: A.x or B.x. Rotate around that.
+minP = A.x < B.x ? A : B
+
+Two versions:
+minP.y < maxP.y: line slopes down. angle = tan(angle) = opp / adj = (maxP.y - minP.y) / (maxP.x - minP.x)
+minP.y > maxP.y: line slopes up. angle = tan(angle) = opp / adj = (minP.y - maxP.y) / (maxP.x - minP.x)
+
+[x] = [ cos(angle) -sin(angle) ]
+[y]   [ sin(angle)  cos(angle) ]
+
+Also need to rotate in z direction (yz clockwise 90º / counter 270º?)
+[ 0 cos(270) -sin(270) ]
+[ 0 sin(270)  cos(270) ]
+[ 0 0         1]
+*/
 
 
 /**
