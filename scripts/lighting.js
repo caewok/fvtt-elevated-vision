@@ -156,7 +156,9 @@ const int maxEndpoints = ${MAX_NUM_WALLS * 2};
 for ( int i = 0; i < maxEndpoints; i++ ) {
   if ( i >= EV_numEndpoints ) break;
 
-  float distCoord0 = distance(vUvs, EV_wallCoords[i]) * 2.0;
+  vec2 coords = EV_wallCoords[i];
+
+  float distCoord0 = distance(vUvs, coords) * 2.0;
   if ( distCoord0 < .01 ) {
     depth = 0.0;
     break;
@@ -285,7 +287,7 @@ function circleCoord(a, center = 0, radius, r_inv = 1 / radius) {
 */
 
 export function _createLOSLightSource(wrapped) {
-  log(`_createLOSLightSource ${this.source.id}`);
+  log(`_createLOSLightSource ${this.object.id}`);
   const los = wrapped();
 //   if ( !los.shadows || !los.shadows.length ) return los;
 //
@@ -294,6 +296,14 @@ export function _createLOSLightSource(wrapped) {
 //   this.illumination.filters = [this.reverseShadowMaskFilter];
 //   this.coloration.filters = [this.reverseShadowMaskFilter];
 //
+
+  // TO-DO: Only reset uniforms if:
+  // 1. there are shadows
+  // 2. there were previously shadows but are now none
+
+  this._resetUniforms.illumination = true;
+  this._resetUniforms.coloration = true;
+
   return los;
 }
 

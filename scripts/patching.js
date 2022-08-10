@@ -25,7 +25,8 @@ import {
   createAdaptiveLightingShader,
   _updateColorationUniformsLightSource,
   _updateIlluminationUniformsLightSource,
-  _updateEVLightUniformsLightSource
+  _updateEVLightUniformsLightSource,
+  _createLOSLightSource
 } from "./lighting.js";
 
 import {
@@ -112,7 +113,7 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, libWrapper.WRAPPER);
   libWrapper.register(MODULE_ID, "LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, libWrapper.WRAPPER);
 
-//   libWrapper.register(MODULE_ID, "LightSource.prototype._createLOS", _createLOSLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "LightSource.prototype._createLOS", _createLOSLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 //   libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", drawLightLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype._drawRenderTextureContainer", EVVisionSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
 
