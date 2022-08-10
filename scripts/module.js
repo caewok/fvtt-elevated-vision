@@ -21,10 +21,15 @@ Hooks.once('init', async function() {
 
   registerPIXIPolygonMethods();
   registerAdditions();
+//   registerPatches();
 
 });
 
 Hooks.once('ready', async function () {
+  //registerPatches();
+});
+
+Hooks.once('libWrapper.Ready', async function() {
   registerPatches();
 });
 

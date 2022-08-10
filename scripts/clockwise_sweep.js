@@ -44,6 +44,7 @@ export function _computeClockwisePolygonSweep(wrapped) {
   // First, construct the shadows and store in walls for debugging and potential
   // future performance improvements. TO-DO: Update shadow for wall only when needed.
   const shadows = [];
+  this.shadowsWalls = [];
   this.edgesBelowSource.forEach(e => {
     const shadow = Shadow.constructShadow(e.wall, src);
     if ( !shadow ) return;
@@ -51,6 +52,7 @@ export function _computeClockwisePolygonSweep(wrapped) {
     if ( !e.wall.shadows ) { e.wall.shadows = new Map(); }
     e.wall.shadows.set(src.object.id, shadow);
     shadows.push(shadow);
+    this.shadowsWalls.push(shadow);
   });
 
   if ( !shadows.length ) return;

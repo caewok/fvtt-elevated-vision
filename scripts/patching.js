@@ -6,7 +6,7 @@ SoundSource,
 Token,
 libWrapper,
 canvas,
-WallHeight
+ClockwiseSweepPolygon
 */
 
 "use strict";
@@ -81,12 +81,6 @@ export function registerAdditions() {
 
   Object.defineProperty(ClockwiseSweepPolygon.prototype, "_drawShadows", {
     value: _drawShadowsClockwiseSweepPolygon,
-    writable: true,
-    configurable: true
-  })
-
-  Object.defineProperty(LightSource.prototype, "createReverseMaskFilter", {
-    value: createReverseMaskFilter,
     writable: true,
     configurable: true
   })

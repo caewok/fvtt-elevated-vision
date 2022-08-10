@@ -9,6 +9,17 @@ import { MODULE_ID } from "./const.js";
 
 
 export function createAdaptiveLightingShader(wrapped, ...args) {
+//   if (!this.fragmentShader.includes("#version 300 es")) {
+// //     this.vertexShader = "#version 300 es \n" + this.vertexShader;
+//     this.fragmentShader = "#version 300 es \n precision mediump float; \n" + this.fragmentShader;
+//   }
+
+  log("createAdaptiveLightingShader");
+
+  if ( this.fragmentShader.includes(UNIFORMS) ) return wrapped(...args);
+
+  log("createAdaptiveLightingShader adding shadow shader code");
+
   const replaceUniformStr = "uniform sampler2D uBkgSampler;";
   const replaceFragStr = "float depth = smoothstep(0.0, 1.0, vDepth);";
 
@@ -19,32 +30,52 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
     replaceFragStr, `${replaceFragStr}\n${DEPTH_CALCULATION}`);
 
    const shader = wrapped(...args);
-   shader.uniforms.EV_numWalls = 0;
+   shader.uniforms.EV_numEndpoints = 0;
+   shader.uniforms.EV_wallHeights = new Float32Array();
    shader.uniforms.EV_wallCoords = new Float32Array();
    shader.uniforms.EV_pointRadius = .1;
    return shader;
 
 }
 
+// In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
+const MAX_NUM_WALLS = 100;
+
+// 4 coords per wall (A, B endpoints).
 const UNIFORMS =
 `
-uniform int EV_numWalls;
-uniform vec3 EV_wallCoords[numWalls];
+uniform int EV_numEndpoints;
+uniform vec2 EV_wallCoords[${MAX_NUM_WALLS * 2}];
+uniform float EV_wallHeights[${MAX_NUM_WALLS}];
 uniform float EV_pointRadius;
 `;
 
 // For now, just mark the endpoints of walls
 // If near a wall endpoint, make depth 0.
+// Use maxIts to avoid issue in GLSL 1 about indexing conditional must be constant
+// const DEPTH_CALCULATION =
+// `
+// const int maxIts = ${MAX_NUM_WALLS * 2};
+// for ( int i = 0; i < maxIts; i++ ) {
+//   if ( maxIts > EV_numEndpoints ) break;
+//
+//   vec2 coords = EV_wallCoords[i];
+//   float z = EV_wallHeights[i / 2];
+//
+//   vec3 e0 = vec3(coords, z);
+//   vec4 t0 = vec4(projectionMatrix * (translationMatrix * e0), 1);
+//
+//   if ( distance(t0, gl_FragCoord) < EV_pointRadius ) {
+//     depth = 0.0;
+//     break;
+//   }
+// }
+// `;
+
 const DEPTH_CALCULATION =
 `
-for ( int i = 0; i < EV_numWalls; i++ ) {
-  const e0 = [EV_wallCoords[i], 1];
-  if ( distance(e0, gl_FragCoord) < EV_pointRadius ) {
-    depth = 0;
-    break;
-  }
-}
-`;
+depth = 0.5;
+`
 
 /**
  * @param {number[]} mat    Array, representing a square matrix
@@ -84,40 +115,37 @@ function to4D(mat3) {
 export function _updateColorationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
-  updateLightUniforms(this.coloration.shader);
+  log(`_updateColorationUniformsLightSource ${this.object.id}`);
+  updateLightUniforms(this.coloration.shader, this.los.shadowsWalls);
 }
 
 export function _updateIlluminationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
-  updateLightUniforms(this.illumination.shader);
+  log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
+  updateLightUniforms(this.illumination.shader, this.los.shadowsWalls);
 }
 
-function updateLightUniforms(shader) {
+function updateLightUniforms(shader, shadows) {
   const u = shader.uniforms;
 
-  const translationMatrix = shader.program.translationMatrix.value; // Float32Array[9]
-  const projectionMatrix = shader.program.projectionMatrix.value; // Float32Array[9]
-
-  // change to a 4-d array, b/c we want to include the elevation
-  const translationMatrix4d = to4D(translationMatrix);
-  const projectionMatrix4d = to4D(projectionMatrix);
-
-  u.EV_numWalls = this.los.shadows.length;
+  u.EV_numEndpoints = shadows.length;
   u.EV_pointRadius = .1;
 
   const wallCoords = [];
+  const wallHeights = [];
   for ( let i = 0; i < u.EV_numWalls; i += 1 ) {
-    const s = this.los.shadows[i];
-    const e = s.wall.topZ;
+    const s = shadows[i];
+    wallHeights.push(s.wall.topZ);
+    wallCoords.push(
+      s.wall.A.x, s.wall.A.y,
+      s.wall.B.x, s.wall.B.y
+    );
 
-    const a = multMatrixVector(projectionMatrix4d, multMatrixVector(translationMatrix4d, [s.wall.A.x, s.wall.A.y, e, 1]));
-    const b = multMatrixVector(projectionMatrix4d, multMatrixVector(translationMatrix4d, [s.wall.B.x, s.wall.B.y, e, 1]));
-
-    wallCoords.push(...a, ...b);
   }
 
   u.EV_wallCoords = new Float32Array(wallCoords);
+  u.EV_wallHeights = new Float32Array(wallHeights);
 }
 
 
@@ -134,9 +162,9 @@ function updateLightUniforms(shader) {
         );
 */
 
-// export function _createLOSLightSource(wrapped) {
-//   log("_createLOSLightSource");
-//   const los = wrapped();
+export function _createLOSLightSource(wrapped) {
+  log(`_createLOSLightSource ${this.source.id}`);
+  const los = wrapped();
 //   if ( !los.shadows || !los.shadows.length ) return los;
 //
 //   log("Adding shadow filter");
@@ -144,8 +172,8 @@ function updateLightUniforms(shader) {
 //   this.illumination.filters = [this.reverseShadowMaskFilter];
 //   this.coloration.filters = [this.reverseShadowMaskFilter];
 //
-//   return los;
-// }
+  return los;
+}
 
 
 export function drawLightLightSource(wrapped) {
