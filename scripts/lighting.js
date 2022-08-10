@@ -7,6 +7,16 @@ canvas
 import { log } from "./util.js";
 import { MODULE_ID } from "./const.js";
 
+/*
+https://ptb.discord.com/channels/732325252788387980/734082399453052938/1006958083320336534
+
+- aVertexPosition are the vertices of the polygon normalized; origin is (0,0), radius 1
+-  vUvs is aVertexPosition transformed such that the center is (0.5,0.5) and the radius 0.5, such that it's in the range [0,1]x[0,1]. Therefore the * 2.0 is required to calculate dist, otherwise dist wouldn't be in the range [0,1]
+- aDepthValue/vDepth is the edge falloff: the distance to the boundary of the polygon normalized
+- vSamplerUvs are the texture coordinates used for sampling from a screen-sized texture
+
+*/
+
 
 export function createAdaptiveLightingShader(wrapped, ...args) {
 //   if (!this.fragmentShader.includes("#version 300 es")) {
@@ -31,9 +41,10 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
 
    const shader = wrapped(...args);
    shader.uniforms.EV_numEndpoints = 0;
-   shader.uniforms.EV_wallHeights = new Float32Array();
+   shader.uniforms.EV_wallElevations = new Float32Array();
    shader.uniforms.EV_wallCoords = new Float32Array();
    shader.uniforms.EV_pointRadius = .1;
+   shader.uniforms.EV_lightElevation = .5;
    return shader;
 
 }
@@ -42,12 +53,14 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
 const MAX_NUM_WALLS = 100;
 
 // 4 coords per wall (A, B endpoints).
+// I don't know why uniform vec2 EV_wallCoords[${MAX_NUM_WALLS * 2}]; doesn't work
 const UNIFORMS =
 `
 uniform int EV_numEndpoints;
-uniform vec2 EV_wallCoords[${MAX_NUM_WALLS * 2}];
-uniform float EV_wallHeights[${MAX_NUM_WALLS}];
+uniform float EV_wallCoords[${MAX_NUM_WALLS * 4}];
+uniform float EV_wallElevations[${MAX_NUM_WALLS}];
 uniform float EV_pointRadius;
+uniform float EV_lightElevation;
 `;
 
 // For now, just mark the endpoints of walls
@@ -87,15 +100,67 @@ If vUvs is (.4, .5), then it is 5 feet away (.1*2) from the circle center in the
 
 */
 
+
+// Draw an empty space with 2.5 foot radius, 10 feet from circle center
+// const DEPTH_CALCULATION =
+// `
+// vec2 coord = vec2(.3, .5);
+// float distCoord = distance(vUvs, coord) * 2.0;
+//
+// if ( distCoord < EV_pointRadius ) {
+//   depth = 0.0;
+// }
+// `
+
+// Draw the height as alpha
+// const DEPTH_CALCULATION =
+// `
+// if ( EV_numEndpoints > 0 ) {
+//   depth = clamp(EV_wallElevations[0], 0.0, 1.0);
+// }
+//
+// `
+
+// Draw the light elevation as alpha
+// const DEPTH_CALCULATION =
+// `
+// depth = clamp(EV_lightElevation, 0.0, 1.0);
+//
+// `
+
+// Draw coord as alpha
+// const DEPTH_CALCULATION =
+// `
+// if ( EV_numEndpoints > 0 ) {
+//   float x = EV_wallCoords[0];
+//   depth = clamp(x, 0.0, 1.0);
+// }
+// `
+
+// Draw coord as alpha
+// const DEPTH_CALCULATION =
+// `
+// if ( EV_numEndpoints > 0 ) {
+//   vec2 coord0 = vec2(EV_wallCoords[0], EV_wallCoords[1]);
+//   depth = clamp(coord0.x, 0.0, 1.0);
+// }
+// `
+
+
+
+
+// Draw the first endpoint
 const DEPTH_CALCULATION =
 `
-vec2 coord = vec2(.3, .5);
-float distCoord = distance(vUvs, coord) * 2.0;
-
-if ( distCoord < .1 ) {
-  depth = 0.0;
+if ( EV_numEndpoints > 0 ) {
+  vec2 coord0 = vec2(EV_wallCoords[0], EV_wallCoords[1]);
+  float distCoord0 = distance(vUvs, coord0) * 2.0;
+  if ( distCoord0 < .01 ) {
+    depth = 0.0;
+  }
 }
 `
+
 
 /**
  * @param {number[]} mat    Array, representing a square matrix
@@ -135,29 +200,38 @@ function to4D(mat3) {
 export function _updateColorationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
+
   log(`_updateColorationUniformsLightSource ${this.object.id}`);
-  updateLightUniforms(this.coloration.shader, this.los.shadowsWalls, this.center, this.radius);
+  const { x, y, radius } = this;
+  this._updateEVLightUniforms(this.coloration.shader);
 }
 
 export function _updateIlluminationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
+
   log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
-  updateLightUniforms(this.illumination.shader, this.los.shadowsWalls, this.center, this.radius);
+  const { x, y, radius } = this;
+  this._updateEVLightUniforms(this.illumination.shader);
 }
 
-function updateLightUniforms(shader, shadows, center, radius) {
-  const u = shader.uniforms;
+export function _updateEVLightUniformsLightSource(shader) {
+  const { x, y, radius, elevationZ } = this;
+  const shadows = this.los.shadowsWalls;
+  const center = {x, y};
 
-  u.EV_numEndpoints = shadows.length;
-  u.EV_pointRadius = .1;
+  const u = shader.uniforms;
+  const numWalls = shadows.length
+
+  u.EV_numEndpoints = numWalls * 2;
+  u.EV_pointRadius = .2;
 
   const wallCoords = [];
-  const wallHeights = [];
+  const wallElevations = [];
   const r_inv = 1 / radius;
-  for ( let i = 0; i < u.EV_numWalls; i += 1 ) {
+  for ( let i = 0; i < numWalls; i += 1 ) {
     const s = shadows[i];
-    wallHeights.push(elevationCircleCoord(s.wall.topZ, radius, r_inv));
+    wallElevations.push(circleCoord(s.wall.topZ, 0, radius, r_inv));
     const a = pointCircleCoord(s.wall.A, center, radius, r_inv);
     const b = pointCircleCoord(s.wall.B, center, radius, r_inv);
 
@@ -165,11 +239,11 @@ function updateLightUniforms(shader, shadows, center, radius) {
       a.x, a.y,
       b.x, b.y
     );
-
   }
 
   u.EV_wallCoords = new Float32Array(wallCoords);
-  u.EV_wallHeights = new Float32Array(wallHeights);
+  u.EV_wallElevations = new Float32Array(wallElevations);
+  u.EV_lightElevation = circleCoord(elevationZ, 0, radius, r_inv);
 }
 
 /**
@@ -184,13 +258,13 @@ function updateLightUniforms(shader, shadows, center, radius) {
  */
 function pointCircleCoord(point, center, radius, r_inv = 1 / radius) {
   return {
-    x: ((point.x + center.x) * r_inv) - 0.5,
-    y: ((point.y + center.y) * r_inv) - 0.5,
+    x: circleCoord(point.x, center.x, radius, r_inv),
+    y: circleCoord(point.y, center.y, radius, r_inv)
   }
 }
 
-function elevationCircleCoord(a, radius, r_inv = 1 / radius) {
-  return (a * r_inv) - 0.5;
+function circleCoord(a, center = 0, radius, r_inv = 1 / radius) {
+  return (((a - center) * r_inv) + 1) * 0.5;
 }
 
 

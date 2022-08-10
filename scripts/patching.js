@@ -24,7 +24,8 @@ import {
 import {
   createAdaptiveLightingShader,
   _updateColorationUniformsLightSource,
-  _updateIlluminationUniformsLightSource
+  _updateIlluminationUniformsLightSource,
+  _updateEVLightUniformsLightSource
 } from "./lighting.js";
 
 import {
@@ -81,6 +82,12 @@ export function registerAdditions() {
 
   Object.defineProperty(ClockwiseSweepPolygon.prototype, "_drawShadows", {
     value: _drawShadowsClockwiseSweepPolygon,
+    writable: true,
+    configurable: true
+  })
+
+  Object.defineProperty(LightSource.prototype, "_updateEVLightUniforms", {
+    value: _updateEVLightUniformsLightSource,
     writable: true,
     configurable: true
   })
