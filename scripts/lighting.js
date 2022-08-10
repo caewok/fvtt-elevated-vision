@@ -57,7 +57,7 @@ const MAX_NUM_WALLS = 100;
 const UNIFORMS =
 `
 uniform int EV_numEndpoints;
-uniform float EV_wallCoords[${MAX_NUM_WALLS * 4}];
+uniform vec2 EV_wallCoords[${MAX_NUM_WALLS * 2}];
 uniform float EV_wallElevations[${MAX_NUM_WALLS}];
 uniform float EV_pointRadius;
 uniform float EV_lightElevation;
@@ -141,7 +141,7 @@ If vUvs is (.4, .5), then it is 5 feet away (.1*2) from the circle center in the
 // const DEPTH_CALCULATION =
 // `
 // if ( EV_numEndpoints > 0 ) {
-//   vec2 coord0 = vec2(EV_wallCoords[0], EV_wallCoords[1]);
+//   vec2 coord0 = EV_wallCoords[0];
 //   depth = clamp(coord0.x, 0.0, 1.0);
 // }
 // `
@@ -149,14 +149,17 @@ If vUvs is (.4, .5), then it is 5 feet away (.1*2) from the circle center in the
 
 
 
-// Draw the first endpoint
+// Draw the endpoints
 const DEPTH_CALCULATION =
 `
-if ( EV_numEndpoints > 0 ) {
-  vec2 coord0 = vec2(EV_wallCoords[0], EV_wallCoords[1]);
-  float distCoord0 = distance(vUvs, coord0) * 2.0;
+const int maxEndpoints = ${MAX_NUM_WALLS * 2};
+for ( int i = 0; i < maxEndpoints; i++ ) {
+  if ( i >= EV_numEndpoints ) break;
+
+  float distCoord0 = distance(vUvs, EV_wallCoords[i]) * 2.0;
   if ( distCoord0 < .01 ) {
     depth = 0.0;
+    break;
   }
 }
 `
@@ -241,8 +244,8 @@ export function _updateEVLightUniformsLightSource(shader) {
     );
   }
 
-  u.EV_wallCoords = new Float32Array(wallCoords);
-  u.EV_wallElevations = new Float32Array(wallElevations);
+  u.EV_wallCoords = wallCoords
+  u.EV_wallElevations = wallElevations;
   u.EV_lightElevation = circleCoord(elevationZ, 0, radius, r_inv);
 }
 
