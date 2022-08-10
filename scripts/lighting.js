@@ -73,9 +73,26 @@ uniform float EV_pointRadius;
 // `;
 
 // origin is vec3
+/*
+float dist = distance(vUvs, vec2(0.5)) * 2.0;
+dist 1 is the radius size
+so:
+  if ( dist < 0.1 ) { depth = 0.0; }
+  if radius is 25, 25 * .1 = 2.5; alpha/depth will be 0 within 2.5 feet of the center.
+
+Thus, vec2(0.5) (0.5, 0.5) must be the circle center.
+If vUvs is (0, 0), then distance([0,0], [0.5,0.5]) = .707 * 2 = 1.414
+If vUvs is (.4, .5), then it is 5 feet away (.1*2) from the circle center in the x direction.
+  distance([.4, .5], [.5,.5]) = 0.1 * 2 = .2
+
+*/
+
 const DEPTH_CALCULATION =
 `
-if ( dist < 0.1 ) {
+vec2 coord = vec2(.3, .5);
+float distCoord = distance(vUvs, coord) * 2.0;
+
+if ( distCoord < .1 ) {
   depth = 0.0;
 }
 `
@@ -119,17 +136,17 @@ export function _updateColorationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
   log(`_updateColorationUniformsLightSource ${this.object.id}`);
-  updateLightUniforms(this.coloration.shader, this.los.shadowsWalls);
+  updateLightUniforms(this.coloration.shader, this.los.shadowsWalls, this.center, this.radius);
 }
 
 export function _updateIlluminationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
   log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
-  updateLightUniforms(this.illumination.shader, this.los.shadowsWalls);
+  updateLightUniforms(this.illumination.shader, this.los.shadowsWalls, this.center, this.radius);
 }
 
-function updateLightUniforms(shader, shadows) {
+function updateLightUniforms(shader, shadows, center, radius) {
   const u = shader.uniforms;
 
   u.EV_numEndpoints = shadows.length;
@@ -137,18 +154,43 @@ function updateLightUniforms(shader, shadows) {
 
   const wallCoords = [];
   const wallHeights = [];
+  const r_inv = 1 / radius;
   for ( let i = 0; i < u.EV_numWalls; i += 1 ) {
     const s = shadows[i];
-    wallHeights.push(s.wall.topZ);
+    wallHeights.push(elevationCircleCoord(s.wall.topZ, radius, r_inv));
+    const a = pointCircleCoord(s.wall.A, center, radius, r_inv);
+    const b = pointCircleCoord(s.wall.B, center, radius, r_inv);
+
     wallCoords.push(
-      s.wall.A.x, s.wall.A.y,
-      s.wall.B.x, s.wall.B.y
+      a.x, a.y,
+      b.x, b.y
     );
 
   }
 
   u.EV_wallCoords = new Float32Array(wallCoords);
   u.EV_wallHeights = new Float32Array(wallHeights);
+}
+
+/**
+ * Transform a point coordinate to be in relation to a circle center and radius.
+ * Between 0 and 1 where [0.5, 0.5] is the center
+ * [0, .5] is at the edge in the westerly direction.
+ * [1, .5] is the edge in the easterly direction
+ * @param {Point} point
+ * @param {number} radius
+ * @param {Point} center
+ * @returns {Point}
+ */
+function pointCircleCoord(point, center, radius, r_inv = 1 / radius) {
+  return {
+    x: ((point.x + center.x) * r_inv) - 0.5,
+    y: ((point.y + center.y) * r_inv) - 0.5,
+  }
+}
+
+function elevationCircleCoord(a, radius, r_inv = 1 / radius) {
+  return (a * r_inv) - 0.5;
 }
 
 
