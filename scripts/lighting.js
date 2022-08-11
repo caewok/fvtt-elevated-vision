@@ -44,7 +44,7 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
     replaceFnStr, `${FUNCTIONS}\n${replaceFnStr}\n`);
 
   const shader = wrapped(...args);
-  shader.uniforms.EV_numEndpoints = 0;
+  shader.uniforms.EV_numWalls = 0;
   shader.uniforms.EV_wallElevations = new Float32Array();
   shader.uniforms.EV_wallCoords = new Float32Array();
   shader.uniforms.EV_pointRadius = .1;
@@ -59,7 +59,7 @@ const MAX_NUM_WALLS = 100;
 // I don't know why uniform vec2 EV_wallCoords[${MAX_NUM_WALLS * 2}]; doesn't work
 const UNIFORMS =
 `
-uniform int EV_numEndpoints;
+uniform int EV_numWalls;
 uniform vec4 EV_wallCoords[${MAX_NUM_WALLS}];
 uniform float EV_wallElevations[${MAX_NUM_WALLS}];
 uniform float EV_pointRadius;
@@ -187,12 +187,11 @@ bool lineSegmentIntersects(in vec2 a, in vec2 b, in vec2 c, in vec2 d) {
 }
 
 // Point on line AB that forms perpendicular point to C
-vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c, inout bool isZero) {
+vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c) {
   vec2 deltaBA = b - a;
 
-  // TO-DO: dab might be 0 --- is this an issue?
+  // dab might be 0 but only if a and b are equal
   float dab = pow(deltaBA.x, 2.0) + pow(deltaBA.y, 2.0);
-  isZero = dab == 0.0;
   vec2 deltaCA = c - a;
 
   float u = ((deltaCA.x * deltaBA.x) + (deltaCA.y * deltaBA.y)) / dab;
@@ -210,33 +209,157 @@ const vec2 center = vec2(0.5);
 const int maxEndpoints = ${MAX_NUM_WALLS * 2};
 const float originElevation = 0.5;
 for ( int i = 0; i < maxEndpoints; i++ ) {
-  if ( i >= EV_numEndpoints ) break;
+  if ( i >= EV_numWalls ) break;
 
   vec4 wall = EV_wallCoords[i];
 
   // does this location --> origin intersect the wall?
-  if ( lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) {
-    // Point of wall that forms a perpendicular line to the origin light
-    bool isZero = false;
-    vec2 wallIxOrigin = perpendicularPoint(wall.xy, wall.zw, center, isZero);
-    if ( !isZero ) {
-      vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs, isZero);
-      if ( !isZero ) {
-        float distVT = distance(center, wallIxOrigin);
-        float distTO = distance(vUvs, wallIxPoint);
+  if ( !lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) continue;
 
-        float theta = atan((EV_lightElevation - originElevation) / distVT);
-        float distTOMax = (EV_wallElevations[i] - originElevation)  / tan(theta);
+  // Point of wall that forms a perpendicular line to the origin light
+  vec2 wallIxOrigin = perpendicularPoint(wall.xy, wall.zw, center);
+  vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
 
-        if ( distTO < distTOMax ) {
-          depth = 0.0;
-          break;
-        }
-      }
-    }
+  float distVT = distance(center, wallIxOrigin);
+  float distTO = distance(vUvs, wallIxPoint);
+
+  float theta = atan(abs(EV_lightElevation - originElevation) / distVT);
+  float distTOMax = abs(EV_wallElevations[i] - originElevation)  / tan(theta);
+
+  if ( distTO < distTOMax ) {
+    depth = 0.0;
+    //depth = smoothstep(0.0, 1.0, distTO);
+    //depth = distTO / distTOMax;
+    break;
   }
 }
 `
+
+/**
+Testing:
+
+COLORS = {
+  orange: 0xFFA500,
+  yellow: 0xFFFF00,
+  greenyellow: 0xADFF2F,
+  green: 0x00FF00,
+  blue: 0x0000FF,
+  lightblue: 0xADD8E6,
+  red: 0xFF0000,
+  gray: 0x808080,
+  black: 0x000000,
+  white: 0xFFFFFF
+};
+
+function distance(a, b) {
+  return Math.hypot(b.x - a.x, b.y - a.y)
+}
+
+function perpendicularPoint(a, b, c) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const dab = Math.pow(dx, 2) + Math.pow(dy, 2);
+  if ( !dab ) return null;
+
+  const u = (((c.x - a.x) * dx) + ((c.y - a.y) * dy)) / dab;
+  return {
+    x: a.x + u * dx,
+    y: a.y + u * dy
+  };
+}
+
+function revCirclePoint(p, c, r) {
+  return {
+    x: revCircleCoord(p.x, c.x, r),
+    y: revCircleCoord(p.y, c.y, r)
+  }
+}
+
+function revCircleCoord(p, c, r) {
+  return (((p * 2) - 1) * r) + c;
+}
+
+function drawTranslatedPoint(p, c, r, { color = COLORS.red, alpha = 1, radius = 5 } = {}) {
+  p = revCirclePoint(p, c, r);
+  canvas.controls.debug
+      .beginFill(color, alpha)
+      .drawCircle(p.x, p.y, radius)
+      .endFill();
+}
+
+function drawTranslatedSegment(s, c, r, { color = COLORS.blue, alpha = 1, width = 1 } = {}) {
+  const A = revCirclePoint(s.A, c, r);
+  const B = revCirclePoint(s.B, c, r);
+
+  canvas.controls.debug.lineStyle(width, color, alpha)
+      .moveTo(A.x, A.y)
+      .lineTo(B.x, B.y);
+}
+
+
+[l] = canvas.lighting.placeables
+cirCenter = { x: l.source.x, y: l.source.y }
+cirRadius = l.source.radius
+
+shader = l.source.illumination.shader
+let { EV_lightElevation, EV_numWalls, EV_pointRadius, EV_wallCoords, EV_wallElevations } = shader.uniforms;
+
+center = { x: 0.5, y: 0.5 };
+drawTranslatedPoint(center, cirCenter, cirRadius, {color: COLORS.blue});
+
+maxEndpoints = 200;
+originElevation = 0.5
+
+for ( let j = 0; j < 10000; j += 1 ) {
+// vUvs = { x: 0.1, y: 0.1 }
+vUvs = { x: Math.random(), y: Math.random() }
+
+drawTranslatedPoint(vUvs, cirCenter, cirRadius, {color: COLORS.red, alpha: .1, radius: 2});
+  for ( let i = 0; i < maxEndpoints; i++ ) {
+    if ( i >= EV_numWalls ) break;
+
+    wall = {
+      x: EV_wallCoords[i * 4],
+      y: EV_wallCoords[i * 4 + 1],
+      z: EV_wallCoords[i * 4 + 2],
+      w: EV_wallCoords[i * 4 + 3]
+    }
+    A = { x: wall.x, y: wall.y };
+    B = { x: wall.z, y: wall.w }
+
+  //   drawTranslatedSegment({A, B}, cirCenter, cirRadius, {color: COLORS.black})
+
+    // does this location --> origin intersect the wall?
+    if ( !foundry.utils.lineSegmentIntersects(vUvs, center, {x: wall.x, y: wall.y}, {x: wall.z, y: wall.w}) ) continue;
+
+  //   drawTranslatedSegment({A: center, B: vUvs}, cirCenter, cirRadius, { color: COLORS.blue, alpha: 0.5})
+
+    // Point of wall that forms a perpendicular line to the origin light
+    wallIxOrigin = perpendicularPoint(A, B, center);
+    if ( !wallIxOrigin ) continue;
+
+    wallIxPoint = perpendicularPoint(A, B, vUvs);
+    if ( !wallIxPoint ) continue;
+
+    distVT = distance(center, wallIxOrigin);
+    distTO = distance(vUvs, wallIxPoint);
+
+    theta = Math.atan(Math.abs(EV_lightElevation - originElevation) / distVT);
+    distTOMax = Math.abs(EV_wallElevations[i] - originElevation)  / Math.tan(theta);
+
+    if ( distTO < distTOMax ) {
+      //depth = 0.0;
+      //depth = smoothstep(0.0, 1.0, distTO);
+      depth = distTO / distTOMax;
+      drawTranslatedPoint(vUvs, cirCenter, cirRadius, {color: COLORS.red, alpha: 1, radius: 2});
+      break;
+    }
+  }
+}
+
+
+*/
+
 
 /*
 Rotate a line to be vertical
@@ -321,7 +444,7 @@ export function _updateEVLightUniformsLightSource(shader) {
   const u = shader.uniforms;
   const numWalls = shadows.length
 
-  u.EV_numEndpoints = numWalls * 2;
+  u.EV_numWalls = numWalls;
   u.EV_pointRadius = .2;
 
   const wallCoords = [];
@@ -332,11 +455,7 @@ export function _updateEVLightUniformsLightSource(shader) {
     wallElevations.push(circleCoord(s.wall.topZ, 0, radius, r_inv));
     const a = pointCircleCoord(s.wall.A, center, radius, r_inv);
     const b = pointCircleCoord(s.wall.B, center, radius, r_inv);
-
-    wallCoords.push(
-      a.x, a.y,
-      b.x, b.y
-    );
+    wallCoords.push(a.x, a.y, b.x, b.y);
   }
 
   u.EV_wallCoords = wallCoords
@@ -364,6 +483,19 @@ function pointCircleCoord(point, center, radius, r_inv = 1 / radius) {
 function circleCoord(a, center = 0, radius, r_inv = 1 / radius) {
   return (((a - center) * r_inv) + 1) * 0.5;
 }
+
+// (((a - c) / r) + 1) * 0.5 = p
+//
+// ((a-c) / r) + 1 = p * 2
+// ((a - c) / r) = (p * 2) - 1
+// ((a - c)) = ((p * 2) - 1) * r
+// a = (((p * 2) - 1) * r) + c
+
+function revCircleCoord(p, center = 0, radius) {
+  return (((p * 2) - 1) * radius) + c;
+}
+
+
 
 
 
