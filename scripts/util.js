@@ -46,7 +46,7 @@ export function perpendicularPoint(a, b, c) {
 }
 
 export function distanceBetweenPoints(a, b) {
-  return Math.sqrt(distanceSquaredBetweenPoints(a, b));
+  return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
 export function distanceSquaredBetweenPoints(a, b) {

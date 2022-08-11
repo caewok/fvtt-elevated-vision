@@ -4,7 +4,7 @@ canvas
 */
 "use strict";
 
-import { log } from "./util.js";
+import { log, perpendicularPoint, distanceBetweenPoints } from "./util.js";
 import { MODULE_ID } from "./const.js";
 
 /*
@@ -47,8 +47,8 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   shader.uniforms.EV_numWalls = 0;
   shader.uniforms.EV_wallElevations = new Float32Array();
   shader.uniforms.EV_wallCoords = new Float32Array();
-  shader.uniforms.EV_pointRadius = .1;
   shader.uniforms.EV_lightElevation = .5;
+  shader.uniforms.EV_wallDistances = new Float32Array();
   return shader;
 }
 
@@ -62,7 +62,7 @@ const UNIFORMS =
 uniform int EV_numWalls;
 uniform vec4 EV_wallCoords[${MAX_NUM_WALLS}];
 uniform float EV_wallElevations[${MAX_NUM_WALLS}];
-uniform float EV_pointRadius;
+uniform float EV_wallDistances[${MAX_NUM_WALLS}];
 uniform float EV_lightElevation;
 `;
 
@@ -200,20 +200,57 @@ vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c) {
 `
 
 
+/*
+
+ Looking at a cross-section:
+  O----------W----V-----?
+  | \ Ø      |    |
+Oe|    \     |    |
+  |       \  |    |
+  |          \    |
+  |        We| Ø \ | <- point V where obj can be seen by O for given elevations
+  ----------------•----
+  |<-   OV      ->|
+ e = height of O (vision/light object center)
+ Ø = theta
+ W = wall
+
+Oe must be greater than We or no shadow.
+
+opp = Oe - We
+adj = OW
+theta = atan(opp / adj)
+
+OV = Oe / tan(theta)
+
+*/
+
+
 const DEPTH_CALCULATION =
 `
 const vec2 center = vec2(0.5);
 vec4 wall = EV_wallCoords[0];
+float We =  EV_wallElevations[0];
 // Does this location --> origin intersect the wall?
-if ( lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) {
+if ( EV_lightElevation > EV_wallElevations[0] && lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) {
+   float distOW = EV_wallDistances[0];
+
    // Distance from wall (as line) to this location
    vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
-   float distWallPoint = distance(vUvs, wallIxPoint);
+   float distWP = distance(vUvs, wallIxPoint);
 
-   if ( distWallPoint < 0.1 ) {
-     // depth = 0.0; // Single depth value is fine.
-     // depth = 1.0 - (distWallPoint / 0.1); // Reverse gradient is fine
-     depth = distWallPoint / 0.1;
+   // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
+   // atan(y, x) equivalent to JS Math.atan2(y, x)
+   float theta = atan((EV_lightElevation - We) /  distOW);
+
+   // Distance from center/origin to furthest part of shadow perpendicular to wall
+   float distOV = EV_lightElevation / tan(theta);   // tan(theta) = Oe / OV
+   float maxDistWP = distOV - distOW;
+
+   if ( distWP < maxDistWP ) {
+     depth = 0.0; // Single depth value is fine.
+//      depth = 1.0 - (distWP / maxDistWP); // Reverse gradient is fine
+//      depth = distWP / maxDistWP;
    }
 }
 `
@@ -332,7 +369,7 @@ cirCenter = { x: l.source.x, y: l.source.y }
 cirRadius = l.source.radius
 
 shader = l.source.illumination.shader
-let { EV_lightElevation, EV_numWalls, EV_pointRadius, EV_wallCoords, EV_wallElevations } = shader.uniforms;
+let { EV_lightElevation, EV_numWalls, EV_wallCoords, EV_wallElevations } = shader.uniforms;
 
 center = { x: 0.5, y: 0.5 };
 drawTranslatedPoint(center, cirCenter, cirRadius, {color: COLORS.blue});
@@ -472,28 +509,48 @@ export function _updateEVLightUniformsLightSource(shader) {
   const { x, y, radius, elevationZ } = this;
   const shadows = this.los.shadowsWalls;
   if ( !shadows ) return;
+
   const center = {x, y};
+  const r_inv = 1 / radius;
+  const numWalls = shadows.length
+  const lightE = elevationGridUnits(elevationZ);
 
   const u = shader.uniforms;
-  const numWalls = shadows.length
 
+  // Radius is .5 in the shader coordinates; adjust elevation accordingly
+  u.EV_lightElevation = lightE * 0.5 * r_inv;
   u.EV_numWalls = numWalls;
-  u.EV_pointRadius = .2;
 
+  const center_shader = {x: 0.5, y: 0.5};
   const wallCoords = [];
   const wallElevations = [];
-  const r_inv = 1 / radius;
+  const wallDistances = [];
+
   for ( let i = 0; i < numWalls; i += 1 ) {
     const s = shadows[i];
-    wallElevations.push(circleCoord(s.wall.topZ, 0, radius, r_inv));
     const a = pointCircleCoord(s.wall.A, center, radius, r_inv);
     const b = pointCircleCoord(s.wall.B, center, radius, r_inv);
+
+    // Point where line from light, perpendicular to wall, intersects
+    const wallIx = perpendicularPoint(a, b, center_shader);
+    if ( !wallIx ) continue; // Likely a and b not proper wall
+    const wallOriginDist = distanceBetweenPoints(center_shader, wallIx);
+    wallDistances.push(wallOriginDist);
+
+    const wallE = elevationGridUnits(s.wall.topZ);
+    wallElevations.push(wallE * 0.5 * r_inv);
+
     wallCoords.push(a.x, a.y, b.x, b.y);
   }
 
   u.EV_wallCoords = wallCoords
   u.EV_wallElevations = wallElevations;
-  u.EV_lightElevation = circleCoord(elevationZ, 0, radius, r_inv);
+  u.EV_wallDistances = wallDistances;
+}
+
+function elevationGridUnits(e) {
+  const { distance, size } = canvas.grid.grid.options.dimensions;
+  return (e * size) / distance
 }
 
 /**
@@ -506,27 +563,27 @@ export function _updateEVLightUniformsLightSource(shader) {
  * @param {Point} center
  * @returns {Point}
  */
-function pointCircleCoord(point, center, radius, r_inv = 1 / radius) {
+function pointCircleCoord(point, center, r, r_inv = 1 / r) {
   return {
-    x: circleCoord(point.x, center.x, radius, r_inv),
-    y: circleCoord(point.y, center.y, radius, r_inv)
+    x: circleCoord(point.x, center.x, r, r_inv),
+    y: circleCoord(point.y, center.y, r, r_inv)
   }
 }
 
-function circleCoord(a, center = 0, radius, r_inv = 1 / radius) {
-  return (((a - center) * r_inv) + 1) * 0.5;
+function circleCoord(a, c = 0, r, r_inv = 1 / r) {
+  return ((a - c) * r_inv * 0.5) + 0.5
 }
 
-// (((a - c) / r) + 1) * 0.5 = p
-//
-// ((a-c) / r) + 1 = p * 2
-// ((a - c) / r) = (p * 2) - 1
-// ((a - c)) = ((p * 2) - 1) * r
-// a = (((p * 2) - 1) * r) + c
+// ((a - c) / 2r) + 0.5 = p
+//  ((a - c) / 2r) = p +  0.5
+//  a - c = (p + 0.5) * 2r
+//  a = (p + 0.5) * 2r + c
 
-function revCircleCoord(p, center = 0, radius) {
-  return (((p * 2) - 1) * radius) + c;
+function revCircleCoord(p, c = 0, r) {
+  return ((p + 0.5) * 2 * r) + c;
 }
+
+
 
 
 
@@ -568,12 +625,11 @@ export function _createLOSLightSource(wrapped) {
 
 export function drawLightLightSource(wrapped) {
   log("drawLightLightSource");
-  if ( this.los.shadows && this.los.shadows.length ) {
+  const isDebugging = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+  if ( isDebugging && this.los.shadows && this.los._drawShadows ) {
     log("drawLightLightSource has shadows");
-//     this.illumination.filters = [this.createReverseShadowMaskFilter()];
+    this.los._drawShadows();
   }
-
-  if ( this.los._drawShadows ) this.los._drawShadows();
   return wrapped();
 }
 //
