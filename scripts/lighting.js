@@ -199,44 +199,74 @@ vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c) {
 }
 `
 
+
+const DEPTH_CALCULATION =
+`
+const vec2 center = vec2(0.5);
+vec4 wall = EV_wallCoords[0];
+// Does this location --> origin intersect the wall?
+if ( lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) {
+   // Distance from wall (as line) to this location
+   vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
+   float distWallPoint = distance(vUvs, wallIxPoint);
+
+   if ( distWallPoint < 0.1 ) {
+     // depth = 0.0; // Single depth value is fine.
+     // depth = 1.0 - (distWallPoint / 0.1); // Reverse gradient is fine
+     depth = distWallPoint / 0.1;
+   }
+}
+`
+
 // Shadow calculation using endpoints.
 // For now, just depth 0 if in shadow
 // 1. Determine if the pixel location --> origin intersects the wall (overhead x,y view)
 // 2. Determine if the pixel location --> origin intersects the wall (cross-section x,z view)
-const DEPTH_CALCULATION =
-`
-const vec2 center = vec2(0.5);
-const int maxEndpoints = ${MAX_NUM_WALLS * 2};
-const float originElevation = 0.5;
-for ( int i = 0; i < maxEndpoints; i++ ) {
-  if ( i >= EV_numWalls ) break;
-
-  vec4 wall = EV_wallCoords[i];
-
-  // does this location --> origin intersect the wall?
-  if ( !lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) continue;
-
-  // Point of wall that forms a perpendicular line to the origin light
-  vec2 wallIxOrigin = perpendicularPoint(wall.xy, wall.zw, center);
-  vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
-
-  float distVT = distance(center, wallIxOrigin);
-  float distTO = distance(vUvs, wallIxPoint);
-
-  float theta = atan(abs(EV_lightElevation - originElevation) / distVT);
-  float distTOMax = abs(EV_wallElevations[i] - originElevation)  / tan(theta);
-
-  if ( distTO < distTOMax ) {
-    depth = 0.0;
-    //depth = smoothstep(0.0, 1.0, distTO);
-    //depth = distTO / distTOMax;
-    break;
-  }
-}
-`
+// const DEPTH_CALCULATION =
+// `
+// const vec2 center = vec2(0.5);
+// const int maxEndpoints = ${MAX_NUM_WALLS * 2};
+// const float originElevation = 0.5;
+// for ( int i = 0; i < maxEndpoints; i++ ) {
+//   if ( i >= EV_numWalls ) break;
+//
+//   vec4 wall = EV_wallCoords[i];
+//
+//   // does this location --> origin intersect the wall?
+//   if ( !lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) continue;
+//
+//   // Point of wall that forms a perpendicular line to the origin light
+//   vec2 wallIxOrigin = perpendicularPoint(wall.xy, wall.zw, center);
+//   vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
+//
+//   float distVT = distance(center, wallIxOrigin);
+//   float distTO = distance(vUvs, wallIxPoint);
+//
+//   float theta = atan(abs(EV_lightElevation - originElevation) / distVT);
+//   float distTOMax = abs(EV_wallElevations[i] - originElevation)  / tan(theta);
+//
+//   if ( distTO < distTOMax ) {
+// //     if ( distTO < 0.5 ) {
+// //       depth = 0.25;
+// //     } else {
+// //       depth = .75;
+// //     }
+//
+//     depth = .25;
+// //     depth = smoothstep(0.0, 1.0, distTO / distTOMax);
+//
+// //     depth = clamp(distTO, 0.1, 0.9);
+// //     depth = clamp(distTO / distTOMax, 0.4, 0.7);
+// //     depth = (1.0 - (distTO / distTOMax)); // This reverses it
+//     break;
+//   }
+// }
+// `
 
 /**
 Testing:
+
+function clearDrawings() { canvas.controls.debug.clear(); }
 
 COLORS = {
   orange: 0xFFA500,
@@ -350,8 +380,10 @@ drawTranslatedPoint(vUvs, cirCenter, cirRadius, {color: COLORS.red, alpha: .1, r
     if ( distTO < distTOMax ) {
       //depth = 0.0;
       //depth = smoothstep(0.0, 1.0, distTO);
-      depth = distTO / distTOMax;
-      drawTranslatedPoint(vUvs, cirCenter, cirRadius, {color: COLORS.red, alpha: 1, radius: 2});
+      depth = (1 - distTO / distTOMax);
+      if ( depth < 0 || depth > 1 ) console.log(depth);
+
+      drawTranslatedPoint(vUvs, cirCenter, cirRadius, {color: COLORS.red, alpha: depth, radius: 2});
       break;
     }
   }
@@ -439,6 +471,7 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
 export function _updateEVLightUniformsLightSource(shader) {
   const { x, y, radius, elevationZ } = this;
   const shadows = this.los.shadowsWalls;
+  if ( !shadows ) return;
   const center = {x, y};
 
   const u = shader.uniforms;
