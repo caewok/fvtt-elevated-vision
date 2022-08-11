@@ -6,7 +6,7 @@ SoundSource,
 Token,
 libWrapper,
 canvas,
-WallHeight
+ClockwiseSweepPolygon
 */
 
 "use strict";
@@ -22,11 +22,12 @@ import {
 } from "./tokens.js";
 
 import {
-  drawLightLightSource,
-//   createReverseShadowMaskFilter,
-//   renderShadows,
+  createAdaptiveLightingShader,
+  _updateColorationUniformsLightSource,
+  _updateIlluminationUniformsLightSource,
+  _updateEVLightUniformsLightSource,
   _createLOSLightSource,
-  createReverseMaskFilter
+  drawLightLightSource
 } from "./lighting.js";
 
 import {
@@ -87,8 +88,8 @@ export function registerAdditions() {
     configurable: true
   })
 
-  Object.defineProperty(LightSource.prototype, "createReverseMaskFilter", {
-    value: createReverseMaskFilter,
+  Object.defineProperty(LightSource.prototype, "_updateEVLightUniforms", {
+    value: _updateEVLightUniformsLightSource,
     writable: true,
     configurable: true
   })
@@ -109,8 +110,12 @@ export function registerAdditions() {
 export function registerPatches() {
   libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", drawSightVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
+  libWrapper.register(MODULE_ID, "AdaptiveLightingShader.create", createAdaptiveLightingShader, libWrapper.WRAPPER);
+  libWrapper.register(MODULE_ID, "LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, libWrapper.WRAPPER);
+  libWrapper.register(MODULE_ID, "LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, libWrapper.WRAPPER);
+
   libWrapper.register(MODULE_ID, "LightSource.prototype._createLOS", _createLOSLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-//   libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", drawLightLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "LightSource.prototype.drawLight", drawLightLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype._drawRenderTextureContainer", EVVisionSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
 
 //   libWrapper.register(MODULE_ID, "LightSource.prototype._drawRenderTextureContainer", EVLightSourceDrawRenderTextureContainer, libWrapper.WRAPPER);
