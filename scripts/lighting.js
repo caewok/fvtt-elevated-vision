@@ -229,11 +229,19 @@ OV = Oe / tan(theta)
 const DEPTH_CALCULATION =
 `
 const vec2 center = vec2(0.5);
-vec4 wall = EV_wallCoords[0];
-float We =  EV_wallElevations[0];
-// Does this location --> origin intersect the wall?
-if ( EV_lightElevation > EV_wallElevations[0] && lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) {
-   float distOW = EV_wallDistances[0];
+const int maxEndpoints = ${MAX_NUM_WALLS * 2};
+for ( int i = 0; i < maxEndpoints; i++ ) {
+  if ( i >= EV_numWalls ) break;
+
+  // If the wall is higher than the light, skip. (Should not currently happen.)
+  float We = EV_wallElevations[i];
+  if ( EV_lightElevation <= We ) continue;
+
+  // If the wall does not intersect the line between the center and this point, no shadow here.
+  vec4 wall = EV_wallCoords[i];
+  if ( !lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) continue;
+
+  float distOW = EV_wallDistances[i];
 
    // Distance from wall (as line) to this location
    vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
@@ -244,13 +252,14 @@ if ( EV_lightElevation > EV_wallElevations[0] && lineSegmentIntersects(vUvs, cen
    float theta = atan((EV_lightElevation - We) /  distOW);
 
    // Distance from center/origin to furthest part of shadow perpendicular to wall
-   float distOV = EV_lightElevation / tan(theta);   // tan(theta) = Oe / OV
+   float distOV = EV_lightElevation / tan(theta);
    float maxDistWP = distOV - distOW;
 
    if ( distWP < maxDistWP ) {
-     depth = 0.0; // Single depth value is fine.
-//      depth = 1.0 - (distWP / maxDistWP); // Reverse gradient is fine
-//      depth = distWP / maxDistWP;
+     // Current location is within shadow.
+     // Could be more than one wall casting shadow on this point, so don't break.
+     // depth = 0.0; // For testing
+     depth = distWP / maxDistWP;
    }
 }
 `
