@@ -18,7 +18,6 @@ import { MODULE_ID } from "./const.js";
 import {
   testVisibilityLightSource,
   testNaturalVisibilityVisionMode,
-  drawSightVisionSource
 } from "./tokens.js";
 
 import {
@@ -31,14 +30,17 @@ import {
 } from "./lighting.js";
 
 import {
-  _testWallInclusionClockwisePolygonSweep,
   _identifyEdgesClockwisePolygonSweep,
-  _computeClockwisePolygonSweep,
-  _drawShadowsClockwiseSweepPolygon,
-  _getWallsClockwisePolygonSweep
+  _drawShadowsClockwiseSweep
 } from "./clockwise_sweep.js";
 
 export function registerAdditions() {
+
+  if ( !Object.hasOwn(MovementSource.prototype, "elevationZ") ) {
+    Object.defineProperty(MovementSource.prototype, "elevationZ", {
+      get: movementSourceElevation
+    });
+  }
 
   if ( !Object.hasOwn(VisionSource.prototype, "elevationZ") ) {
     Object.defineProperty(VisionSource.prototype, "elevationZ", {
@@ -82,17 +84,17 @@ export function registerAdditions() {
     });
   }
 
-  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_drawShadows", {
-    value: _drawShadowsClockwiseSweepPolygon,
-    writable: true,
-    configurable: true
-  })
-
   Object.defineProperty(LightSource.prototype, "_updateEVLightUniforms", {
     value: _updateEVLightUniformsLightSource,
     writable: true,
     configurable: true
-  })
+  });
+
+  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_drawShadows", {
+    value: _drawShadowsClockwiseSweepPolygon,
+    writable: true,
+    configurable: true
+  });
 
 //   Object.defineProperty(LightSource.prototype, "renderShadows", {
 //     value: renderShadows,
@@ -108,8 +110,6 @@ export function registerAdditions() {
 }
 
 export function registerPatches() {
-  libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", drawSightVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-
   libWrapper.register(MODULE_ID, "AdaptiveLightingShader.create", createAdaptiveLightingShader, libWrapper.WRAPPER);
   libWrapper.register(MODULE_ID, "LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, libWrapper.WRAPPER);
   libWrapper.register(MODULE_ID, "LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, libWrapper.WRAPPER);
@@ -123,11 +123,7 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "VisionMode.prototype.testNaturalVisibility", testNaturalVisibilityVisionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
-  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._getWalls", _getWallsClockwisePolygonSweep, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._testWallInclusion", _testWallInclusionClockwisePolygonSweep, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._identifyEdges", _identifyEdgesClockwisePolygonSweep, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwisePolygonSweep, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-
 }
 
 /**
@@ -150,6 +146,14 @@ function zValue(value) {
 function sourceElevation() {
 //   return replaceInfinity(WallHeight.getSourceElevationTop(this.object.document));
   return this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY;
+}
+
+/**
+ * For {MovementSource} objects
+ */
+function movementSourceElevation() {
+  // Same as tokenTop
+  return zValue(this.object.document.object.losHeight);
 }
 
 /**

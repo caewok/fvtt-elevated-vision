@@ -123,24 +123,25 @@ function testVisionSourceLOS(source, p) {
 }
 
 
+// No longer used in v10
 /**
  * Wrap VisionSource.prototype.drawSight
  */
-export function drawSightVisionSource(wrapped) {
-  log("drawSightVisionSource");
-
-  const c = wrapped();
-
-  const shadows = this.los.shadows;
-  if ( !shadows || !shadows.length ) {
-    log("drawSightVisionSource|no shadows");
-    return c;
-  }
-
-  for ( const shadow of shadows ) {
-    const g = c.addChild(new PIXI.LegacyGraphics());
-    g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
-  }
-
-  return c;
-}
+// export function drawSightVisionSource(wrapped) {
+//   log("drawSightVisionSource");
+//
+//   const c = wrapped();
+//
+//   const shadows = this.los.shadows;
+//   if ( !shadows || !shadows.length ) {
+//     log("drawSightVisionSource|no shadows");
+//     return c;
+//   }
+//
+//   for ( const shadow of shadows ) {
+//     const g = c.addChild(new PIXI.LegacyGraphics());
+//     g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
+//   }
+//
+//   return c;
+// }
