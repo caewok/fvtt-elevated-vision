@@ -18,12 +18,12 @@ import { Shadow } from "./Shadow.js";
  * get walls below the source.
  * Wall Height will have already removed these walls from the LOS, so can just store here.
  */
-export function _identifyEdgesClockwisePolygonSweep(wrapped) {
+export function _identifyEdgesClockwiseSweepPolygon(wrapped) {
   wrapped();
   log("_identifyEdgesClockwisePolygonSweep");
 
   // Ignore lights set with default of positive infinity
-  const sourceZ = this.config.source.elevationZ ?? 0;
+  const sourceZ = this.config.source.elevationZ;
   if ( !isFinite(sourceZ) ) return;
 
   // From ClockwisePolygonSweep.prototype.getWalls
@@ -74,19 +74,17 @@ function testShadowWallInclusion(wall, bounds, origin, type, boundaryShapes = []
 /**
  * For debugging: draw the shadows for this LOS object using the debug drawing tools.
  */
-export function _drawShadowsClockwisePolygonSweep(
+export function _drawShadowsClockwiseSweepPolygon(
   { color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = 0.5 } = {}) {
-  const walls = this.los.edgesBelowSource;
-  if ( !walls.size ) return;
+  const walls = this.edgesBelowSource;
+  if ( !walls || !walls.size ) return;
 
   clearDrawings();
   for ( const w of walls ) {
-    const shadow = Shadow.constructShadow(e.wall, this.config.src);
+    const shadow = Shadow.constructShadow(w, this.config.source);
     if ( !shadow ) continue;
     shadow.draw({color, width, fill, alpha});
   }
-
-
 }
 
 /**

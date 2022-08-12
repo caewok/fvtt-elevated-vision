@@ -4,8 +4,17 @@ canvas
 */
 "use strict";
 
-import { log, perpendicularPoint, distanceBetweenPoints } from "./util.js";
+import { log, perpendicularPoint, distanceBetweenPoints, zValue } from "./util.js";
 import { MODULE_ID } from "./const.js";
+
+/** To test a light
+drawing = game.modules.get("elevatedvision").api.drawing
+drawing.clearDrawings()
+[l] = canvas.lighting.placeables
+l.source.los._drawShadows()
+
+*/
+
 
 /*
 https://ptb.discord.com/channels/732325252788387980/734082399453052938/1006958083320336534
@@ -333,15 +342,14 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
 export function _updateEVLightUniformsLightSource(shader) {
   const { x, y, radius, elevationZ } = this;
   const walls = this.los.edgesBelowSource;
-  if ( !walls.size ) return;
+  if ( !walls || !walls.size ) return;
 
   const center = {x, y};
   const r_inv = 1 / radius;
-  const lightE = elevationGridUnits(elevationZ);
 
   // Radius is .5 in the shader coordinates; adjust elevation accordingly
   const u = shader.uniforms;
-  u.EV_lightElevation = lightE * 0.5 * r_inv;
+  u.EV_lightElevation = elevationZ * 0.5 * r_inv;
   u.EV_numWalls = walls.size;
 
   const center_shader = {x: 0.5, y: 0.5};
@@ -358,9 +366,7 @@ export function _updateEVLightUniformsLightSource(shader) {
     if ( !wallIx ) continue; // Likely a and b not proper wall
     const wallOriginDist = distanceBetweenPoints(center_shader, wallIx);
     wallDistances.push(wallOriginDist);
-
-    const wallE = elevationGridUnits(w.topZ);
-    wallElevations.push(wallE * 0.5 * r_inv);
+    wallElevations.push(w.topZ * 0.5 * r_inv);
 
     wallCoords.push(a.x, a.y, b.x, b.y);
   }
@@ -368,16 +374,6 @@ export function _updateEVLightUniformsLightSource(shader) {
   u.EV_wallCoords = wallCoords
   u.EV_wallElevations = wallElevations;
   u.EV_wallDistances = wallDistances;
-}
-
-/**
- * Convert value to grid units.
- * @param {number} e
- * @returns {number}
- */
-function elevationGridUnits(e) {
-  const { distance, size } = canvas.grid.grid.options.dimensions;
-  return (e * size) / distance
 }
 
 /**
@@ -445,18 +441,4 @@ export function _createLOSLightSource(wrapped) {
   this._resetUniforms.coloration = true;
 
   return los;
-}
-
-/**
- * Wrap LightSource.prototype.drawLight
- * For debugging; draw the shadows using the debug graphics.
- */
-export function drawLightLightSource(wrapped) {
-  log("drawLightLightSource");
-  const isDebugging = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
-  if ( isDebugging && this.los.shadows && this.los._drawShadows ) {
-    log("drawLightLightSource has shadows");
-    this.los._drawShadows();
-  }
-  return wrapped();
 }
