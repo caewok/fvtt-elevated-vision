@@ -39,7 +39,10 @@ import {
 
 import {
   _computeClockwiseSweepPolygon,
-  _drawShadowsClockwiseSweepPolygon
+  _drawShadowsClockwiseSweepPolygon,
+  _testShadowWallInclusionClockwisePolygonSweep,
+  testCollision3dClockwiseSweepPolygon,
+  _testCollision3dClockwiseSweepPolygon
 } from "./clockwise_sweep.js";
 
 export function registerAdditions() {
@@ -110,6 +113,24 @@ export function registerAdditions() {
     configurable: true
   });
 
+  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_testShadowWallInclusion", {
+    value: _testShadowWallInclusionClockwisePolygonSweep,
+    writable: true,
+    configurable: true
+  });
+
+  Object.defineProperty(ClockwiseSweepPolygon, "testCollision3d", {
+    value: testCollision3dClockwiseSweepPolygon,
+    writable: true,
+    configurable: true
+  });
+
+  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_testCollision3d", {
+    value: _testCollision3dClockwiseSweepPolygon,
+    writable: true,
+    configurable: true
+  });
+
 //   Object.defineProperty(LightSource.prototype, "renderShadows", {
 //     value: renderShadows,
 //     writable: true,
@@ -142,8 +163,8 @@ export function registerPatches() {
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
   // ----- Visibility testing ----- //
-//   libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-//   libWrapper.register(MODULE_ID, "VisionMode.prototype.testNaturalVisibility", testNaturalVisibilityVisionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "VisionMode.prototype.testNaturalVisibility", testNaturalVisibilityVisionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
 }
 

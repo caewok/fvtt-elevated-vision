@@ -29,7 +29,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   // From ClockwisePolygonSweep.prototype.getWalls
   const bounds = this._defineBoundingBox();
   const {type, boundaryShapes} = this.config;
-  const collisionTest = (o, rect) => testShadowWallInclusion(o.t, rect, this.origin, type, boundaryShapes, sourceZ);
+  const collisionTest = (o, rect) => this._testShadowWallInclusion(o.t, rect);
   const walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
   this.wallsBelowSource = new Set(walls); // Top of edge below source top
 
@@ -78,9 +78,14 @@ export function _computeClockwiseSweepPolygon(wrapped) {
  * @param {number} sourceZ
  * @returns {Wall[]}
  */
-function testShadowWallInclusion(wall, bounds, origin, type, boundaryShapes = [], sourceZ) {
+export function _testShadowWallInclusionClockwisePolygonSweep(wall, bounds) {
   // Only keep the wall if it is below the source elevation
-  if ( sourceZ <= wall.topZ ) return false;
+  if ( this.config.source.elevationZ <= wall.topZ ) return false;
+  return originalTestWallInclusion.call(this, wall, bounds);
+}
+
+function originalTestWallInclusion(wall, bounds) {
+  const {type, boundaryShapes} = this.config;
 
   // First test for inclusion in our overall bounding box
   if ( !bounds.lineSegmentIntersects(wall.A, wall.B, { inside: true }) ) return false;
@@ -91,7 +96,7 @@ function testShadowWallInclusion(wall, bounds, origin, type, boundaryShapes = []
   }
 
   // Ignore walls which are nearly collinear with the origin, except for movement
-  const side = wall.orientPoint(origin);
+  const side = wall.orientPoint(this.origin);
   if ( (type !== "move") && !side ) return false;
 
   // Always include interior walls underneath active roof tiles
@@ -118,6 +123,15 @@ export function _drawShadowsClockwiseSweepPolygon(
   }
 }
 
+
+export function testCollision3dClockwiseSweepPolygon(origin, destination, {mode="all", ...config}={}) {
+  const poly = new this();
+  const ray = new Ray(origin, destination);
+  config.boundaryShapes ||= [];
+  config.boundaryShapes.push(ray.bounds);
+  return poly._testCollision3d(ray, mode);
+}
+
 /**
  * Check whether a given ray intersects with walls.
  * This version considers rays with a z element
@@ -131,20 +145,22 @@ export function _drawShadowsClockwiseSweepPolygon(
  *                                    An array of collisions, if mode is "all"
  *                                    The closest collision, if mode is "closest"
  */
-export function getRayCollisions3d(ray, {type="move", mode="all", debug=false}={}) {
+export function _testCollision3dClockwiseSweepPolygon(ray, mode) {
   const origin = ray.A;
   const dest = ray.B;
   origin.z ??= 0;
   dest.z ??= 0;
 
-  log(`getRayCollisions3d ${origin.x},${origin.y} --> ${dest.x},${dest.y}`);
+  log(`getRayCollisions3d ${origin.x},${origin.y}${origin.z} --> ${dest.x},${dest.y},${dest.z}`);
 
-  // Identify Edges
+
+  // Identify candidate edges
+  // Don't use this._identifyEdges b/c we need all edges, including those excluded by Wall Height
+  const collisionTest = (o, rect) => originalTestWallInclusion.call(this, o.t, rect);
+  const walls = canvas.walls.quadtree.getObjects(ray.bounds, { collisionTest });
   const collisions = [];
-  const walls = canvas.walls.quadtree.getObjects(ray.bounds);
   for ( let wall of walls ) {
-    if ( !testWallInclusion(wall, ray.bounds, origin, type) ) continue;
-    const x = lineSegment3dWallIntersection(origin, dest, wall);
+    const x = lineSegment3dWallIntersection(ray.A, dest, wall);
     if ( x ) {
       if ( mode === "any" ) {   // We may be done already
         if ( (wall.document[type] === CONST.WALL_SENSE_TYPES.NORMAL) || (walls.length > 1) ) return true;
@@ -156,7 +172,7 @@ export function getRayCollisions3d(ray, {type="move", mode="all", debug=false}={
   if ( mode === "any" ) return false;
 
   // Return all collisions
-  if ( debug ) ClockwiseSweepPolygon._visualizeCollision(ray, walls, collisions);
+  if ( this.config.debug ) ClockwiseSweepPolygon._visualizeCollision(ray, walls, collisions);
   if ( mode === "all" ) return collisions;
 
   // Calculate distance to return the closest collision
@@ -171,3 +187,5 @@ export function getRayCollisions3d(ray, {type="move", mode="all", debug=false}={
   if ( collisions[0].type === CONST.WALL_SENSE_TYPES.LIMITED ) collisions.shift();
   return collisions[0] || null;
 }
+
+

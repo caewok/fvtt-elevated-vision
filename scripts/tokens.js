@@ -8,7 +8,6 @@ CONFIG
 
 import { log } from "./util.js";
 import { Point3d } from "./Point3d.js";
-import { getRayCollisions3d } from "./clockwise_sweep.js";
 
 /*
 Adjustments for token visibility.
@@ -119,7 +118,7 @@ function testVisionSourceLOS(source, p) {
   if ( !point_in_shadow ) { return true; }
 
   const ray = new Ray(new Point3d(source.x, source.y, source.elevationZ), p);
-  return !getRayCollisions3d(ray, { type: "sight", mode: "any" });
+  return !ClockwiseSweepPolygon.testCollision3d(ray, { type: "sight", mode: "any" });
 }
 
 

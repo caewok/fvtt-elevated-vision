@@ -4,7 +4,6 @@ import { Point3d } from "./Point3d.js";
 import * as util from "./util.js";
 
 import { registerPIXIPolygonMethods } from "./PIXIPolygon.js";
-import { getRayCollisions3d } from "./clockwise_sweep.js";
 
 import { MODULE_ID } from "./const.js";
 
@@ -15,8 +14,7 @@ Hooks.once('init', async function() {
     drawing,
     util,
     Point3d,
-    Shadow,
-    getRayCollisions3d
+    Shadow
   };
 
   registerPIXIPolygonMethods();
