@@ -33,7 +33,8 @@ import {
   initializeVisionSource,
   // _updateMeshVisionSource,
   _updateColorationUniformsVisionSource,
-  _updateIlluminationUniformsVisionSource
+  _updateIlluminationUniformsVisionSource,
+  refreshCanvasVisibility
 } from "./vision.js";
 
 import {
@@ -135,6 +136,8 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "LightSource.prototype._createLOS", _createLOSLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
   // ----- Drawing shadows for vision sources ----- //
+  libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibility, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateColorationUniforms", _updateColorationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 

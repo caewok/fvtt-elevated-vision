@@ -356,7 +356,7 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
  */
 export function _updateEVLightUniformsLightSource(shader) {
   const { x, y, radius, elevationZ } = this;
-  const walls = this.los.edgesBelowSource;
+  const walls = this.los.wallsBelowSource;
   if ( !walls || !walls.size ) return;
 
   const center = {x, y};

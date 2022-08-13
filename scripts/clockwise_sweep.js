@@ -30,8 +30,15 @@ export function _identifyEdgesClockwiseSweepPolygon(wrapped) {
   const bounds = this._defineBoundingBox();
   const {type, boundaryShapes} = this.config;
   const collisionTest = (o, rect) => testShadowWallInclusion(o.t, rect, this.origin, type, boundaryShapes, sourceZ);
-  const edges = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
-  this.edgesBelowSource = new Set(edges); // Top of edge below source top
+  const walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+  this.wallsBelowSource = new Set(walls); // Top of edge below source top
+
+  this.shadows = [];
+  for ( const w of this.wallsBelowSource ) {
+    const shadow = Shadow.constructShadow(w, this.config.source);
+    if ( !shadow ) continue;
+    this.shadows.push(shadow);
+  }
 }
 
 /**
@@ -76,13 +83,11 @@ function testShadowWallInclusion(wall, bounds, origin, type, boundaryShapes = []
  */
 export function _drawShadowsClockwiseSweepPolygon(
   { color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = 0.5 } = {}) {
-  const walls = this.edgesBelowSource;
-  if ( !walls || !walls.size ) return;
+  const shadows = this.shadows;
+  if ( !shadows || !shadows.length ) return;
 
   clearDrawings();
-  for ( const w of walls ) {
-    const shadow = Shadow.constructShadow(w, this.config.source);
-    if ( !shadow ) continue;
+  for ( const shadow of shadows ) {
     shadow.draw({color, width, fill, alpha});
   }
 }
