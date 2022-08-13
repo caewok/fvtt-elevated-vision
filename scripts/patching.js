@@ -38,7 +38,7 @@ import {
 } from "./vision.js";
 
 import {
-  _identifyEdgesClockwiseSweepPolygon,
+  _computeClockwiseSweepPolygon,
   _drawShadowsClockwiseSweepPolygon
 } from "./clockwise_sweep.js";
 
@@ -125,7 +125,7 @@ export function registerAdditions() {
 
 export function registerPatches() {
   // ----- Locating edges that create shadows in the LOS ----- //
-  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._identifyEdges", _identifyEdgesClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
   // ----- Shader code for drawing shadows ----- //
   libWrapper.register(MODULE_ID, "AdaptiveLightingShader.create", createAdaptiveLightingShader, libWrapper.WRAPPER);

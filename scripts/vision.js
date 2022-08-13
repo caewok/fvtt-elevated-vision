@@ -119,68 +119,62 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
 
   // Create a new vision for this frame
   const vision = canvas.masks.vision.createVision();
-  vision.fov.beginFill(0xFFFFFF, 1.0);
-  vision.los.beginFill(0xFFFFFF, 1.0);
 
   // Draw field-of-vision for lighting sources
   for ( let lightSource of canvas.effects.lightSources ) {
     if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
 
-    vision.fov.beginFill(0xFFFFFF, 1.0);
-    vision.los.beginFill(0xFFFFFF, 1.0);
-    vision.fov.drawShape(lightSource.los);
-    if ( lightSource.data.vision ) vision.los.drawShape(lightSource.los);
-    vision.fov.endFill();
-    vision.los.endFill();
+    vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
+    if ( lightSource.data.vision ) vision.los.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
 
     // Draw shadows, if any
-    const shadows = lightSource.los.shadows;
-    if ( !shadows || !shadows.length ) continue;
-
-    vision.fov.beginFill(0x000000, 1.0);
-    vision.los.beginFill(0x000000, 1.0);
-    for ( const shadow of shadows ) {
-      // const g = vision.fov.addChild(new PIXI.LegacyGraphics());
+//     const shadows = lightSource.los.shadows;
+//     if ( !shadows || !shadows.length ) continue;
+//
+//     for ( const shadow of shadows ) {
+//       const g = vision.fov.addChild(new PIXI.LegacyGraphics());
 //       g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
-      vision.fov.drawShape(shadow);
-      if ( lightSource.data.vision ) vision.los.drawShape(shadow);
-    }
-    vision.fov.endFill();
-    vision.los.endFill();
+//       if ( lightSource.data.vision ) {
+//         const g = vision.los.addChild(new PIXI.LegacyGraphics());
+//         g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
+//       }
+//     }
   }
 
   // Draw sight-based visibility for each vision source
-  vision.fov.beginFill(0xFFFFFF, 1.0);
   for ( let visionSource of canvas.effects.visionSources ) {
-    vision.los.beginFill(0xFFFFFF, 1.0);
     visionSource.active = true;
 
     // Draw FOV polygon or provide some baseline visibility of the token's space
-    if ( visionSource.radius > 0 ) vision.fov.drawShape(visionSource.fov);
-    else {
+    if ( visionSource.radius > 0 ) {
+      vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.fov).endFill();
+    } else {
       const baseR = canvas.dimensions.size / 2;
       vision.base.beginFill(0xFFFFFF, 1.0).drawCircle(visionSource.x, visionSource.y, baseR).endFill();
     }
 
     // Draw LOS mask
-    vision.los.drawShape(visionSource.los);
-
-    vision.los.endFill();
+    vision.los.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.los).endFill();
 
     // Draw shadows, if any
     const shadows = visionSource.los.shadows;
     if ( shadows && shadows.length ) {
-      vision.los.beginFill(0x000000, 1.0);
-      for ( const shadow of shadows ) vision.los.drawShape(shadow);
-      vision.los.endFill();
+      for ( const shadow of shadows ) {
+        const FOV = visionSource.radius > 0 ? vision.fov : vision.base;
+        const gFOV = FOV.addChild(new PIXI.LegacyGraphics())
+        gFOV.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
+
+        const LOS = vision.los;
+        const gLOS = LOS.addChild(new PIXI.LegacyGraphics());
+        gLOS.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
+
+      }
     }
 
     // Record Fog of war exploration
     if ( canvas.fog.update(visionSource, forceUpdateFog) ) vision._explored = true;
   }
 
-  // Conclude fill for vision graphics
-  vision.fov.endFill();
 
   // Commit updates to the Fog of War texture
   if ( commitFog ) canvas.fog.commit();

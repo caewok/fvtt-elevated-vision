@@ -18,9 +18,9 @@ import { Shadow } from "./Shadow.js";
  * get walls below the source.
  * Wall Height will have already removed these walls from the LOS, so can just store here.
  */
-export function _identifyEdgesClockwiseSweepPolygon(wrapped) {
+export function _computeClockwiseSweepPolygon(wrapped) {
   wrapped();
-  log("_identifyEdgesClockwisePolygonSweep");
+  log("_computeClockwiseSweepPolygon");
 
   // Ignore lights set with default of positive infinity
   const sourceZ = this.config.source.elevationZ;
@@ -33,13 +33,42 @@ export function _identifyEdgesClockwiseSweepPolygon(wrapped) {
   const walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
   this.wallsBelowSource = new Set(walls); // Top of edge below source top
 
+  // Construct shadows from the walls below the light source
   this.shadows = [];
+  this.combinedShadows = [];
+  if ( !this.wallsBelowSource.size ) return;
+
+  // Store each shadow individually
   for ( const w of this.wallsBelowSource ) {
     const shadow = Shadow.constructShadow(w, this.config.source);
     if ( !shadow ) continue;
     this.shadows.push(shadow);
   }
+
+  // Combine the shadows and trim to be within the LOS
+  let combined_shadow_path = new ClipperLib.Paths();
+  combined_shadow_path.push(this.shadows[0].toClipperPoints());
+  if ( this.shadows.length > 1 ) {
+    for ( let i = 1; i < this.shadows.length; i += 1 ) {
+      const c = new ClipperLib.Clipper();
+      const solution = new ClipperLib.Paths();
+      c.AddPaths(combined_shadow_path, ClipperLib.PolyType.ptSubject, true);
+      c.AddPath(this.shadows[i].toClipperPoints(), ClipperLib.PolyType.ptClip, true);
+      c.Execute(ClipperLib.ClipType.ctUnion, solution);
+      combined_shadow_path = solution;
+    }
+  }
+
+  // Third, intersect the shadow(s) with the sweep polygon
+  const c = new ClipperLib.Clipper();
+  const solution = new ClipperLib.Paths();
+  c.AddPath(this.toClipperPoints(), ClipperLib.PolyType.ptSubject, true);
+  c.AddPaths(combined_shadow_path, ClipperLib.PolyType.ptClip, true);
+  c.Execute(ClipperLib.ClipType.ctIntersection, solution);
+
+  this.combinedShadows = solution.map(pts => Shadow.fromClipperPoints(pts));
 }
+
 
 /**
  * Taken from ClockwisePolygonSweep.prototype._testWallInclusion but
