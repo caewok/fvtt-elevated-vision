@@ -3,9 +3,9 @@ LightSource,
 Wall,
 VisionSource,
 SoundSource,
+MovementSource
 Token,
 libWrapper,
-canvas,
 ClockwiseSweepPolygon
 */
 
@@ -18,7 +18,7 @@ import { zValue } from "./util.js";
 
 import {
   testVisibilityLightSource,
-  testNaturalVisibilityVisionMode,
+  testNaturalVisibilityVisionMode
 } from "./tokens.js";
 
 import {
@@ -30,10 +30,6 @@ import {
 } from "./lighting.js";
 
 import {
-  initializeVisionSource,
-  // _updateMeshVisionSource,
-  _updateColorationUniformsVisionSource,
-  _updateIlluminationUniformsVisionSource,
   refreshCanvasVisibility
 } from "./vision.js";
 
@@ -130,18 +126,6 @@ export function registerAdditions() {
     writable: true,
     configurable: true
   });
-
-//   Object.defineProperty(LightSource.prototype, "renderShadows", {
-//     value: renderShadows,
-//     writable: true,
-//     configurable: true
-//   })
-
-  //   Object.defineProperty(Set.prototype, "diff", {
-  //     value: function(b) { return new Set([...this].filter(x => !b.has(x))); },
-  //     writable: true,
-  //     configurable: true
-  //   });
 }
 
 export function registerPatches() {
@@ -159,27 +143,10 @@ export function registerPatches() {
   // ----- Drawing shadows for vision sources ----- //
   libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibility, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
 
-//   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateColorationUniforms", _updateColorationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-//   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-
   // ----- Visibility testing ----- //
   libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "VisionMode.prototype.testNaturalVisibility", testNaturalVisibilityVisionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-
 }
-
-
-
-// function replaceInfinity(value) {
-//   return isFinite(value) ? zValue(value)
-//     : value === Infinity ? Number.MAX_SAFE_INTEGER : Number.MIN_SAFE_INTEGER;
-// }
-
-/**
- * For {LightSource|SoundSource|VisionSource} objects
- * Do not permit infinity, as it screws up orientation and other calculations.
- * @type {number}
- */
 
 /**
  * For MovementSource objects, use the token's elevation
@@ -237,7 +204,7 @@ function tokenBottom() {
  * @type {number} Elevation, in grid units to match x,y coordinates.
  */
 function wallTop() {
-  return zValue(this.document.flags?.['wall-height']?.top ?? Number.POSITIVE_INFINITY);
+  return zValue(this.document.flags?.["wall-height"]?.top ?? Number.POSITIVE_INFINITY);
 }
 
 /**
@@ -245,6 +212,6 @@ function wallTop() {
  * @type {number} Elevation, in grid units to match x,y coordinates.
  */
 function wallBottom() {
-  return zValue(this.document.flags?.['wall-height']?.top ?? Number.NEGATIVE_INFINITY);
+  return zValue(this.document.flags?.["wall-height"]?.top ?? Number.NEGATIVE_INFINITY);
 }
 
