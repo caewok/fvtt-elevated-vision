@@ -4,8 +4,17 @@ canvas
 */
 "use strict";
 
-import { log, perpendicularPoint, distanceBetweenPoints } from "./util.js";
+import { log, perpendicularPoint, distanceBetweenPoints, zValue } from "./util.js";
 import { MODULE_ID } from "./const.js";
+
+/** To test a light
+drawing = game.modules.get("elevatedvision").api.drawing
+drawing.clearDrawings()
+[l] = canvas.lighting.placeables
+l.source.los._drawShadows()
+
+*/
+
 
 /*
 https://ptb.discord.com/channels/732325252788387980/734082399453052938/1006958083320336534
@@ -17,7 +26,13 @@ https://ptb.discord.com/channels/732325252788387980/734082399453052938/100695808
 
 */
 
+// In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
+const MAX_NUM_WALLS = 100;
 
+/**
+ * Wrap AdaptiveLightingShader.prototype.create
+ * Add uniforms used by the fragment shader to draw shadows in the color and illumination shaders.
+ */
 export function createAdaptiveLightingShader(wrapped, ...args) {
 //   if (!this.fragmentShader.includes("#version 300 es")) {
 // //     this.vertexShader = "#version 300 es \n" + this.vertexShader;
@@ -43,20 +58,23 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   this.fragmentShader = this.fragmentShader.replace(
     replaceFnStr, `${FUNCTIONS}\n${replaceFnStr}\n`);
 
+  // replace at the very end
+  this.fragmentShader = this.fragmentShader.replace(new RegExp("}$"), `${FRAG_COLOR}\n }\n`);
+
+
   const shader = wrapped(...args);
   shader.uniforms.EV_numWalls = 0;
-  shader.uniforms.EV_wallElevations = new Float32Array();
-  shader.uniforms.EV_wallCoords = new Float32Array();
-  shader.uniforms.EV_lightElevation = .5;
-  shader.uniforms.EV_wallDistances = new Float32Array();
+  shader.uniforms.EV_wallElevations = new Float32Array(MAX_NUM_WALLS);
+  shader.uniforms.EV_wallCoords = new Float32Array(MAX_NUM_WALLS*4);;
+  shader.uniforms.EV_lightElevation = 0.5;
+  shader.uniforms.EV_wallDistances = new Float32Array(MAX_NUM_WALLS);
+  shader.uniforms.EV_isVision = false;
   return shader;
 }
 
-// In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
-const MAX_NUM_WALLS = 100;
+
 
 // 4 coords per wall (A, B endpoints).
-// I don't know why uniform vec2 EV_wallCoords[${MAX_NUM_WALLS * 2}]; doesn't work
 const UNIFORMS =
 `
 uniform int EV_numWalls;
@@ -64,111 +82,10 @@ uniform vec4 EV_wallCoords[${MAX_NUM_WALLS}];
 uniform float EV_wallElevations[${MAX_NUM_WALLS}];
 uniform float EV_wallDistances[${MAX_NUM_WALLS}];
 uniform float EV_lightElevation;
+uniform bool EV_isVision;
 `;
 
-// For now, just mark the endpoints of walls
-// If near a wall endpoint, make depth 0.
-// Use maxIts to avoid issue in GLSL 1 about indexing conditional must be constant
-// const DEPTH_CALCULATION =
-// `
-// const int maxIts = ${MAX_NUM_WALLS * 2};
-// for ( int i = 0; i < maxIts; i++ ) {
-//   if ( maxIts > EV_numEndpoints ) break;
-//
-//   vec2 coords = EV_wallCoords[i];
-//   float z = EV_wallHeights[i / 2];
-//
-//   vec3 e0 = vec3(coords, z);
-//   vec4 t0 = vec4(projectionMatrix * (translationMatrix * e0), 1);
-//
-//   if ( distance(t0, gl_FragCoord) < EV_pointRadius ) {
-//     depth = 0.0;
-//     break;
-//   }
-// }
-// `;
-
-// origin is vec3
-/*
-float dist = distance(vUvs, vec2(0.5)) * 2.0;
-dist 1 is the radius size
-so:
-  if ( dist < 0.1 ) { depth = 0.0; }
-  if radius is 25, 25 * .1 = 2.5; alpha/depth will be 0 within 2.5 feet of the center.
-
-Thus, vec2(0.5) (0.5, 0.5) must be the circle center.
-If vUvs is (0, 0), then distance([0,0], [0.5,0.5]) = .707 * 2 = 1.414
-If vUvs is (.4, .5), then it is 5 feet away (.1*2) from the circle center in the x direction.
-  distance([.4, .5], [.5,.5]) = 0.1 * 2 = .2
-
-*/
-
-
-// Draw an empty space with 2.5 foot radius, 10 feet from circle center
-// const DEPTH_CALCULATION =
-// `
-// vec2 coord = vec2(.3, .5);
-// float distCoord = distance(vUvs, coord) * 2.0;
-//
-// if ( distCoord < EV_pointRadius ) {
-//   depth = 0.0;
-// }
-// `
-
-// Draw the height as alpha
-// const DEPTH_CALCULATION =
-// `
-// if ( EV_numEndpoints > 0 ) {
-//   depth = clamp(EV_wallElevations[0], 0.0, 1.0);
-// }
-//
-// `
-
-// Draw the light elevation as alpha
-// const DEPTH_CALCULATION =
-// `
-// depth = clamp(EV_lightElevation, 0.0, 1.0);
-//
-// `
-
-// Draw coord as alpha
-// const DEPTH_CALCULATION =
-// `
-// if ( EV_numEndpoints > 0 ) {
-//   float x = EV_wallCoords[0];
-//   depth = clamp(x, 0.0, 1.0);
-// }
-// `
-
-// Draw coord as alpha
-// const DEPTH_CALCULATION =
-// `
-// if ( EV_numEndpoints > 0 ) {
-//   vec2 coord0 = EV_wallCoords[0];
-//   depth = clamp(coord0.x, 0.0, 1.0);
-// }
-// `
-
-
-
-
-// Draw the endpoints
-// const DEPTH_CALCULATION =
-// `
-// const int maxEndpoints = ${MAX_NUM_WALLS * 2};
-// for ( int i = 0; i < maxEndpoints; i++ ) {
-//   if ( i >= EV_numEndpoints ) break;
-//
-//   vec2 coords = EV_wallCoords[i];
-//
-//   float distCoord0 = distance(vUvs, coords) * 2.0;
-//   if ( distCoord0 < .01 ) {
-//     depth = 0.0;
-//     break;
-//   }
-// }
-// `
-
+// Helper functions used to calculate shadow trapezoids.
 const FUNCTIONS =
 `
 float orient2d(in vec2 a, in vec2 b, in vec2 c) {
@@ -225,12 +142,11 @@ OV = Oe / tan(theta)
 
 */
 
-
 const DEPTH_CALCULATION =
 `
 const vec2 center = vec2(0.5);
-const int maxEndpoints = ${MAX_NUM_WALLS * 2};
-for ( int i = 0; i < maxEndpoints; i++ ) {
+const int maxWalls = ${MAX_NUM_WALLS};
+for ( int i = 0; i < maxWalls; i++ ) {
   if ( i >= EV_numWalls ) break;
 
   // If the wall is higher than the light, skip. (Should not currently happen.)
@@ -260,54 +176,16 @@ for ( int i = 0; i < maxEndpoints; i++ ) {
      // Could be more than one wall casting shadow on this point, so don't break.
      // depth = 0.0; // For testing
      depth = distWP / maxDistWP;
+
+     if ( EV_isVision ) depth = 0.0;
    }
 }
 `
 
-// Shadow calculation using endpoints.
-// For now, just depth 0 if in shadow
-// 1. Determine if the pixel location --> origin intersects the wall (overhead x,y view)
-// 2. Determine if the pixel location --> origin intersects the wall (cross-section x,z view)
-// const DEPTH_CALCULATION =
-// `
-// const vec2 center = vec2(0.5);
-// const int maxEndpoints = ${MAX_NUM_WALLS * 2};
-// const float originElevation = 0.5;
-// for ( int i = 0; i < maxEndpoints; i++ ) {
-//   if ( i >= EV_numWalls ) break;
-//
-//   vec4 wall = EV_wallCoords[i];
-//
-//   // does this location --> origin intersect the wall?
-//   if ( !lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) continue;
-//
-//   // Point of wall that forms a perpendicular line to the origin light
-//   vec2 wallIxOrigin = perpendicularPoint(wall.xy, wall.zw, center);
-//   vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
-//
-//   float distVT = distance(center, wallIxOrigin);
-//   float distTO = distance(vUvs, wallIxPoint);
-//
-//   float theta = atan(abs(EV_lightElevation - originElevation) / distVT);
-//   float distTOMax = abs(EV_wallElevations[i] - originElevation)  / tan(theta);
-//
-//   if ( distTO < distTOMax ) {
-// //     if ( distTO < 0.5 ) {
-// //       depth = 0.25;
-// //     } else {
-// //       depth = .75;
-// //     }
-//
-//     depth = .25;
-// //     depth = smoothstep(0.0, 1.0, distTO / distTOMax);
-//
-// //     depth = clamp(distTO, 0.1, 0.9);
-// //     depth = clamp(distTO / distTOMax, 0.4, 0.7);
-// //     depth = (1.0 - (distTO / distTOMax)); // This reverses it
-//     break;
-//   }
-// }
-// `
+const FRAG_COLOR =
+`
+  if ( EV_isVision && depth == 0.0 ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+`
 
 /**
 Testing:
@@ -438,64 +316,10 @@ drawTranslatedPoint(vUvs, cirCenter, cirRadius, {color: COLORS.red, alpha: .1, r
 
 */
 
-
-/*
-Rotate a line to be vertical
-
-if A.x == B.x already vertical
-
-Take the lesser x: A.x or B.x. Rotate around that.
-minP = A.x < B.x ? A : B
-
-Two versions:
-minP.y < maxP.y: line slopes down. angle = tan(angle) = opp / adj = (maxP.y - minP.y) / (maxP.x - minP.x)
-minP.y > maxP.y: line slopes up. angle = tan(angle) = opp / adj = (minP.y - maxP.y) / (maxP.x - minP.x)
-
-[x] = [ cos(angle) -sin(angle) ]
-[y]   [ sin(angle)  cos(angle) ]
-
-Also need to rotate in z direction (yz clockwise 90º / counter 270º?)
-[ 0 cos(270) -sin(270) ]
-[ 0 sin(270)  cos(270) ]
-[ 0 0         1]
-*/
-
-
 /**
- * @param {number[]} mat    Array, representing a square matrix
- * @param {number[]} vec    Array, representing a vector
- * @return {number[]} Vector result of mat * v
+ * Wrap LightSource.prototype._updateColorationUniforms.
+ * Add uniforms needed for the shadow fragment shader.
  */
-function multMatrixVector(mat, vec) {
-  const vln = vec.length;
-  const matLn = mat.length;
-  if ( matLn % vln !== 0 ) console.warn("multSquareMatrixVector requires matrix rows to equal vector length.");
-
-  const res = [];
-  for ( let r = 0; r < matLn; r += vln ) {
-    let val = 0;
-    for ( let c = 0; c < vln; c += 1 ) {
-//       console.log(`r: ${r}; c: ${c} | ${mat[r + c]} * ${vec[c]}`)
-      val += mat[r + c] * vec[c];
-    }
-    res.push(val);
-  }
-  return res;
-}
-
-/**
- * @param {number[]} mat3   Array, representing a 3x3 matrix.
- * @return {number[]} An array representing a 4x4 matrix
- */
-function to4D(mat3) {
-  return [
-    mat3[0], mat3[1], mat3[2], 0,
-    mat3[3], mat3[4], mat3[5], 0,
-    mat3[6], mat3[7], mat3[9], 0,
-    0, 0, 0, 1
-  ];
-}
-
 export function _updateColorationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
@@ -505,6 +329,10 @@ export function _updateColorationUniformsLightSource(wrapped) {
   this._updateEVLightUniforms(this.coloration.shader);
 }
 
+/**
+ * Wrap LightSource.prototype._updateIlluminationUniforms.
+ * Add uniforms needed for the shadow fragment shader.
+ */
 export function _updateIlluminationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
@@ -514,40 +342,46 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
   this._updateEVLightUniforms(this.illumination.shader);
 }
 
+/**
+ * Helper function to add uniforms for the light shaders.
+ * Add:
+ * - elevation of the light
+ * - number of walls that are in the LOS and below the light source elevation
+ * For each wall that is below the light source, add
+ *   (in the coordinate system used in the shader):
+ * - wall coordinates
+ * - wall elevations
+ * - distance between the wall and the light source center
+ * @param {PIXI.Shader} shader
+ */
 export function _updateEVLightUniformsLightSource(shader) {
   const { x, y, radius, elevationZ } = this;
-  const shadows = this.los.shadowsWalls;
-  if ( !shadows ) return;
+  const walls = this.los.wallsBelowSource;
+  if ( !walls || !walls.size ) return;
 
   const center = {x, y};
   const r_inv = 1 / radius;
-  const numWalls = shadows.length
-  const lightE = elevationGridUnits(elevationZ);
-
-  const u = shader.uniforms;
 
   // Radius is .5 in the shader coordinates; adjust elevation accordingly
-  u.EV_lightElevation = lightE * 0.5 * r_inv;
-  u.EV_numWalls = numWalls;
+  const u = shader.uniforms;
+  u.EV_lightElevation = elevationZ * 0.5 * r_inv;
+  u.EV_numWalls = walls.size;
 
   const center_shader = {x: 0.5, y: 0.5};
   const wallCoords = [];
   const wallElevations = [];
   const wallDistances = [];
 
-  for ( let i = 0; i < numWalls; i += 1 ) {
-    const s = shadows[i];
-    const a = pointCircleCoord(s.wall.A, center, radius, r_inv);
-    const b = pointCircleCoord(s.wall.B, center, radius, r_inv);
+  for ( const w of walls ) {
+    const a = pointCircleCoord(w.A, center, radius, r_inv);
+    const b = pointCircleCoord(w.B, center, radius, r_inv);
 
     // Point where line from light, perpendicular to wall, intersects
     const wallIx = perpendicularPoint(a, b, center_shader);
     if ( !wallIx ) continue; // Likely a and b not proper wall
     const wallOriginDist = distanceBetweenPoints(center_shader, wallIx);
     wallDistances.push(wallOriginDist);
-
-    const wallE = elevationGridUnits(s.wall.topZ);
-    wallElevations.push(wallE * 0.5 * r_inv);
+    wallElevations.push(w.topZ * 0.5 * r_inv);
 
     wallCoords.push(a.x, a.y, b.x, b.y);
   }
@@ -557,19 +391,15 @@ export function _updateEVLightUniformsLightSource(shader) {
   u.EV_wallDistances = wallDistances;
 }
 
-function elevationGridUnits(e) {
-  const { distance, size } = canvas.grid.grid.options.dimensions;
-  return (e * size) / distance
-}
-
 /**
  * Transform a point coordinate to be in relation to a circle center and radius.
  * Between 0 and 1 where [0.5, 0.5] is the center
  * [0, .5] is at the edge in the westerly direction.
  * [1, .5] is the edge in the easterly direction
  * @param {Point} point
- * @param {number} radius
  * @param {Point} center
+ * @param {number} r      Radius
+ * @param {number} r_inv  Inverse of the radius. Optional; for repeated calcs.
  * @returns {Point}
  */
 function pointCircleCoord(point, center, r, r_inv = 1 / r) {
@@ -579,47 +409,44 @@ function pointCircleCoord(point, center, r, r_inv = 1 / r) {
   }
 }
 
+/**
+ * Transform a coordinate to be in relation to a circle center and radius.
+ * Between 0 and 1 where [0.5, 0.5] is the center.
+ * @param {number} a    Coordinate value
+ * @param {number} c    Center value, along the axis of interest
+ * @param {number} r    Light circle radius
+ * @param {number} r_inv  Inverse of the radius. Optional; for repeated calcs.
+ * @returns {number}
+ */
 function circleCoord(a, c = 0, r, r_inv = 1 / r) {
   return ((a - c) * r_inv * 0.5) + 0.5
 }
 
-// ((a - c) / 2r) + 0.5 = p
-//  ((a - c) / 2r) = p +  0.5
-//  a - c = (p + 0.5) * 2r
-//  a = (p + 0.5) * 2r + c
-
+/**
+ * Inverse of circleCoord.
+ * @param {number} p    Coordinate value, in the shader coordinate system between 0 and 1.
+ * @param {number} c    Center value, along the axis of interest
+ * @param {number} r    Radius
+ * @returns {number}
+ */
 function revCircleCoord(p, c = 0, r) {
+  // Calc:
+  // ((a - c) / 2r) + 0.5 = p
+  //  ((a - c) / 2r) = p +  0.5
+  //  a - c = (p + 0.5) * 2r
+  //  a = (p + 0.5) * 2r + c
   return ((p + 0.5) * 2 * r) + c;
 }
 
-
-
-
-
-
-
-
-/*
- this.fragmentShader = this.fragmentShader.replace(
-            "uniform sampler2D uBkgSampler;",
-            "uniform sampler2D uBkgSampler;\nuniform sampler2D mymodule_maskTexture;"
-        );
-        this.fragmentShader = this.fragmentShader.replace(
-             "float depth = smoothstep(0.0, 1.0, vDepth);",
-             "float depth = smoothstep(0.0, 1.0, vDepth);\ndepth *= texture2D(mymodule_maskTexture, vSamplerUvs).r;"
-        );
-*/
-
+/**
+ * Wrap LightSource.prototype._createLOS.
+ * Trigger an update to the illumination and coloration uniforms, so that
+ * the light reflects the current shadow positions when dragged.
+ * @returns {ClockwiseSweepPolygon}
+ */
 export function _createLOSLightSource(wrapped) {
   log(`_createLOSLightSource ${this.object.id}`);
   const los = wrapped();
-//   if ( !los.shadows || !los.shadows.length ) return los;
-//
-//   log("Adding shadow filter");
-//   this.createReverseShadowMaskFilter()
-//   this.illumination.filters = [this.reverseShadowMaskFilter];
-//   this.coloration.filters = [this.reverseShadowMaskFilter];
-//
 
   // TO-DO: Only reset uniforms if:
   // 1. there are shadows
@@ -630,164 +457,3 @@ export function _createLOSLightSource(wrapped) {
 
   return los;
 }
-
-
-export function drawLightLightSource(wrapped) {
-  log("drawLightLightSource");
-  const isDebugging = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
-  if ( isDebugging && this.los.shadows && this.los._drawShadows ) {
-    log("drawLightLightSource has shadows");
-    this.los._drawShadows();
-  }
-  return wrapped();
-}
-//
-// export function createReverseShadowMaskFilter() {
-// //   if ( !this.reverseShadowMaskFilter ) {
-//     this.shadowsRenderTexture =
-//        canvas.primary.createRenderTexture({renderFunction: this.renderShadows.bind(this), clearColor: [0, 0, 0, 0]});
-//     this.reverseShadowMaskFilter = ReverseMaskFilter.create({
-//       uMaskSampler: this.shadowsRenderTexture,
-//       channel: "a"
-//     });
-//     this.reverseShadowMaskFilter.blendMode = PIXI.BLEND_MODES.NORMAL;
-// //   }
-//   return this.reverseShadowMaskFilter;
-// }
-//
-// export function renderShadows(renderer) {
-//   const cir = new PIXI.Circle(0, 0, 50);
-//   const graphics = new PIXI.Graphics();
-//   const rt = renderer.renderTexture;
-//   graphics.beginFill(0, 1); // color, alpha
-//   graphics.drawCircle(cir);
-//   graphics.endFill;
-//   renderer.render(graphics, rt);
-//   return rt;
-// }
-
-// Simple version
-// export function _createLOSLightSource(wrapped) {
-//   const los = wrapped();
-//   this.createReverseMaskFilter();
-//   this.illumination.filters = [this.reverseMaskFilter];
-//   this.coloration.filters = [this.reverseMaskFilter];
-//   return los;
-// }
-//
-// // Added to LightSource.prototype
-// export function createReverseMaskFilter() {
-//   const rt = canvas.primary.createRenderTexture({renderFunction: renderInnerCircle.bind(this), clearColor: [0, 0, 0, 0]});
-//   this.reverseMaskFilter = ReverseMaskFilter.create({
-//     uMaskSampler: rt,
-//     channel: "a"
-//   });
-//   this.reverseMaskFilter.blendMode = PIXI.BLEND_MODES.NORMAL;
-//   return this.reverseMaskFilter;
-// }
-//
-// function renderInnerCircle(renderer) {
-//   const cir = new PIXI.Circle(0, 0, 50);
-//   const graphics = new PIXI.Graphics();
-//   const rt = renderer.renderTexture;
-//   graphics.beginFill(0, 1); // color, alpha
-//   graphics.drawCircle(cir);
-//   graphics.endFill;
-//   renderer.render(graphics, rt);
-//   return rt;
-// }
-
-
-
-
-// export function renderShadows(renderer) {
-//   if ( !this.los.shadows || !this.los.shadows.length ) return;
-//
-//   const graphics = new PIXI.Graphics();
-//   const rt = renderer.renderTexture;
-//
-//   for ( const shadow of this.los.shadows) {
-//     graphics.beginFill(0, 1); // color, alpha
-//     graphics.drawPolygon(shadow);
-//     graphics.endFill;
-//   }
-//   renderer.render(graphics, rt);
-//   return rt;
-// }
-
-
-
-
-//   #createReverseMaskFilter() {
-//     if ( !this.reverseMaskfilter ) {
-//       this.reverseMaskfilter = ReverseMaskFilter.create({
-//         uMaskSampler: canvas.primary.tokensRenderTexture,
-//         channel: "a"
-//       });
-//       this.reverseMaskfilter.blendMode = PIXI.BLEND_MODES.NORMAL;
-//     }
-//     return this.reverseMaskfilter;
-//   }
-//
-//
-//    this.tokensRenderTexture =
-//       this.createRenderTexture({renderFunction: this._renderTokens.bind(this), clearColor: [0, 0, 0, 0]});
-//
-//
-//
-//
-//
-//   createRenderTexture({renderFunction, clearColor}={}) {
-//     const renderOptions = {};
-//     const renderer = canvas.app?.renderer;
-//
-//     // Creating the render texture
-//     const renderTexture = PIXI.RenderTexture.create({
-//       width: renderer?.screen.width ?? window.innerWidth,
-//       height: renderer?.screen.height ?? window.innerHeight,
-//       resolution: renderer.resolution ?? PIXI.settings.RESOLUTION
-//     });
-//     renderOptions.renderFunction = renderFunction;            // Binding the render function
-//     renderOptions.clearColor = clearColor;                    // Saving the optional clear color
-//     this.#renderPaths.set(renderTexture, renderOptions);      // Push into the render paths
-//
-//     // Return a reference to the render texture
-//     return renderTexture;
-//   }
-//
-//   _renderTokens(renderer) {
-//     for ( const tokenMesh of this.tokens ) {
-//       tokenMesh.render(renderer);
-//     }
-//
-
-
-// Class PointSource:
-/**
- * Create a new Mesh for this source using a provided shader class
- * @param {Function} shaderCls  The subclass of AdaptiveLightingShader being used for this Mesh
- * @returns {PIXI.Mesh}         The created Mesh
- * @protected
- */
-//   _createMesh(shaderCls) {
-//     const state = new PIXI.State();
-//     const mesh = new PIXI.Mesh(this.constructor.GEOMETRY, shaderCls.create(), state);
-//     mesh.mask = this.losMask;
-//     Object.defineProperty(mesh, "uniforms", {get: () => mesh.shader.uniforms});
-//     return mesh;
-//   }
-
-/**
- * Update the position and size of the mesh each time it is drawn.
- * @param {PIXI.Mesh} mesh      The Mesh being updated
- * @returns {PIXI.Mesh}         The updated Mesh
- * @protected
- */
-// _updateMesh(mesh) {
-//   mesh.position.set(this.data.x, this.data.y);
-//   mesh.width = mesh.height = this.radius * 2;
-//   return mesh
-
-
-
-

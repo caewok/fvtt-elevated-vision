@@ -10,112 +10,78 @@ import { log, lineSegment3dWallIntersection } from "./util.js";
 import { COLORS, drawSegment, clearDrawings } from "./drawing.js";
 import { Shadow } from "./Shadow.js";
 
+
 /**
- * Wrap ClockwisePolygonSweep.prototype._compute
- * Add shadows after computation is complete
- * For each edge that is below the light source, calculate a shadow polygon.
- * This is the quadrilateral formed by the wall casting a shadow from the higher
- * light on the ground surface.
- * For now, ground surface is assumed to be elevation 0.
- * Store shadow map in wall, keyed by source.
- * Shadows in the sweep are intersected against the sweep polygon.
+ * Wrap ClockwisePolygonSweep.prototype._identifyEdges
+ * Get walls that are below the
+ * For compatibility with Wall Height and other modules, just re-run quad tree to
+ * get walls below the source.
+ * Wall Height will have already removed these walls from the LOS, so can just store here.
  */
-export function _computeClockwisePolygonSweep(wrapped) {
+export function _computeClockwiseSweepPolygon(wrapped) {
   wrapped();
+  log("_computeClockwiseSweepPolygon");
 
-  log("_computeClockwisePolygonSweep");
+  // Ignore lights set with default of positive infinity
+  const sourceZ = this.config.source.elevationZ;
+  if ( !isFinite(sourceZ) ) return;
 
-  // PIXI.js hates overlapping holes:
-  // https://www.html5gamedevs.com/topic/45827-overlapping-holes-in-pixigraphics/
-  // Use clipper to combine the shadows into a single non-overlapping set
-
-  // Combining shadows where each shadow is a single path in an array of paths
-  // doesn't work b/c those paths are combined in a way to keep each separate
-  // sub-path.
-
-  // Instead, union each shadow in turn, then intersect against the polygon sweep.
-
-  const src = this.config.source;
-  if ( !this.isClosed ) {
-    const ln = this.points.length;
-    this.addPoint({ x: this.points[ln - 2], y: this.points[ln -1] });
-  }
-
-  // First, construct the shadows and store in walls for debugging and potential
-  // future performance improvements. TO-DO: Update shadow for wall only when needed.
-  const shadows = [];
-  this.shadowsWalls = [];
-  this.edgesBelowSource.forEach(e => {
-    const shadow = Shadow.constructShadow(e.wall, src);
-    if ( !shadow ) return;
-
-    if ( !e.wall.shadows ) { e.wall.shadows = new Map(); }
-    e.wall.shadows.set(src.object.id, shadow);
-    shadows.push(shadow);
-    this.shadowsWalls.push(shadow);
-  });
-
-  if ( !shadows.length ) return;
-
-  // Second, union all shadows as necessary
-  let combined_shadow_path = new ClipperLib.Paths();
-  combined_shadow_path.push(shadows[0].toClipperPoints());
-  if ( shadows.length > 1 ) {
-    for ( let i = 1; i < shadows.length; i += 1 ) {
-      const c = new ClipperLib.Clipper();
-      const solution = new ClipperLib.Paths();
-      c.AddPaths(combined_shadow_path, ClipperLib.PolyType.ptSubject, true);
-      c.AddPath(shadows[i].toClipperPoints(), ClipperLib.PolyType.ptClip, true);
-      c.Execute(ClipperLib.ClipType.ctUnion, solution);
-      combined_shadow_path = solution;
-    }
-  }
-
-  // Third, intersect the shadow(s) with the sweep polygon
-  const c = new ClipperLib.Clipper();
-  const solution = new ClipperLib.Paths();
-  c.AddPath(this.toClipperPoints(), ClipperLib.PolyType.ptSubject, true);
-  c.AddPaths(combined_shadow_path, ClipperLib.PolyType.ptClip, true);
-  c.Execute(ClipperLib.ClipType.ctIntersection, solution);
-
-  // Store the resulting combined shadows
-  this.shadows = solution.map(pts => Shadow.fromClipperPoints(pts));
-}
-
-export function _drawShadowsClockwiseSweepPolygon(
-  { color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = .5 } = {} ) {
-  clearDrawings();
-  if ( !this.shadows ) return;
-  this.shadows.forEach(s => {
-    Shadow.prototype.draw.call(s, {color, width, fill, alpha});
-    if ( this.config.debug ) { drawSegment(s.wall, { color: COLORS.black, alpha: .7 }); }
-  });
-}
-
-/**
- * Override ClockwisePolygonSweep.prototype.getWalls
- * Ensure that Wall Height does not remove walls here that will be caught later
- */
-export function _getWallsClockwisePolygonSweep() {
-  log("_getWallsClockwisePolygonSweep");
+  // From ClockwisePolygonSweep.prototype.getWalls
   const bounds = this._defineBoundingBox();
   const {type, boundaryShapes} = this.config;
-  const collisionTest = (o, rect) => testWallInclusion(o.t, rect, this.origin, type, boundaryShapes);
-  return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+  const collisionTest = (o, rect) => testShadowWallInclusion(o.t, rect, this.origin, type, boundaryShapes, sourceZ);
+  const walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+  this.wallsBelowSource = new Set(walls); // Top of edge below source top
+
+  // Construct shadows from the walls below the light source
+  this.shadows = [];
+  this.combinedShadows = [];
+  if ( !this.wallsBelowSource.size ) return;
+
+  // Store each shadow individually
+  for ( const w of this.wallsBelowSource ) {
+    const shadow = Shadow.constructShadow(w, this.config.source);
+    if ( !shadow ) continue;
+    this.shadows.push(shadow);
+  }
+  if ( !this.shadows.length ) return;
+
+  // Combine the shadows and trim to be within the LOS
+  // We want one or more LOS polygons along with non-overlapping holes.
+  const scalingFactor = 1;
+  const c = new ClipperLib.Clipper();
+  const solution = new ClipperLib.Paths();
+  c.AddPath(this.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptSubject, true);
+  for ( const shadow of this.shadows ) {
+    c.AddPath(shadow.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptClip, true);
+  }
+  c.Execute(ClipperLib.ClipType.ctDifference, solution);
+
+  const clean_delta = 0.1
+  ClipperLib.Clipper.CleanPolygons(solution, clean_delta * scalingFactor);
+  this.combinedShadows = solution.map(pts => {
+    const poly = PIXI.Polygon.fromClipperPoints(pts, scalingFactor);
+    poly.isHole = !ClipperLib.Clipper.Orientation(pts);
+    return poly;
+  });
 }
+
 
 /**
- * Override ClockwisePolygonSweep.testWallInclusion
- * Ensure that Wall Height does not remove walls here that will be caught later
+ * Taken from ClockwisePolygonSweep.prototype._testWallInclusion but
+ * adds test for the wall height.
+ * @param {Wall} wall
+ * @param {PIXI.Rectangle} bounds
+ * @param {Point} origin
+ * @param {string} type
+ * @param {object[]} boundaryShapes
+ * @param {number} sourceZ
+ * @returns {Wall[]}
  */
-export function _testWallInclusionClockwisePolygonSweep(wall, bounds) {
-  log("_testWallInclusionClockwisePolygonSweep")
+function testShadowWallInclusion(wall, bounds, origin, type, boundaryShapes = [], sourceZ) {
+  // Only keep the wall if it is below the source elevation
+  if ( sourceZ <= wall.topZ ) return false;
 
-  const {type, boundaryShapes} = this.config;
-  return testWallInclusion(wall, bounds, this.origin, type, boundaryShapes);
-}
-
-function testWallInclusion(wall, bounds, origin, type, boundaryShapes = []) {
   // First test for inclusion in our overall bounding box
   if ( !bounds.lineSegmentIntersects(wall.A, wall.B, { inside: true }) ) return false;
 
@@ -138,40 +104,18 @@ function testWallInclusion(wall, bounds, origin, type, boundaryShapes = []) {
   return !wall.document.dir || (side !== wall.document.dir);
 }
 
-
 /**
- * Wrap ClockwisePolygonSweep.prototype._identifyEdges
- * Test edges for elevation once the edges are set.
- * Move into different buckets depending on where the wall is in relation to the source
- * elevation.
+ * For debugging: draw the shadows for this LOS object using the debug drawing tools.
  */
-export function _identifyEdgesClockwisePolygonSweep(wrapped) {
-  wrapped();
+export function _drawShadowsClockwiseSweepPolygon(
+  { color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = 0.5 } = {}) {
+  const shadows = this.shadows;
+  if ( !shadows || !shadows.length ) return;
 
-  log("_identifyEdgesClockwisePolygonSweep");
-
-  // By convention, treat the Wall Height module rangeTop as the elevation
-  // Remove edges that will not block the source when viewed straight-on
-  // But store for later processing
-  this.edgesBelowSource = new Set(); // Top of edge below source top
-  this.edgesAboveSource = new Set(); // Bottom of edge above the source top
-
-  if ( !this.config.source ) return;
-
-  const sourceZ = this.config.source.elevationZ ?? 0;
-
-  // Ignore lights set with default of positive infinity
-  if ( !isFinite(sourceZ) ) return;
-
-  this.edges.forEach((e, key) => {
-    if ( sourceZ > e.wall.topZ ) {
-      this.edgesBelowSource.add(e);
-      this.edges.delete(key);
-    } else if ( sourceZ < e.wall.bottomZ ) {
-      this.edgesAboveSource.add(e);
-      this.edges.delete(key);
-    }
-  });
+  clearDrawings();
+  for ( const shadow of shadows ) {
+    shadow.draw({color, width, fill, alpha});
+  }
 }
 
 /**
@@ -199,7 +143,7 @@ export function getRayCollisions3d(ray, {type="move", mode="all", debug=false}={
   const collisions = [];
   const walls = canvas.walls.quadtree.getObjects(ray.bounds);
   for ( let wall of walls ) {
-    if ( !testWallInclusion(wall, origin, ray.bounds, type) ) continue;
+    if ( !testWallInclusion(wall, ray.bounds, origin, type) ) continue;
     const x = lineSegment3dWallIntersection(origin, dest, wall);
     if ( x ) {
       if ( mode === "any" ) {   // We may be done already

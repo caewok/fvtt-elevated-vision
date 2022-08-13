@@ -8,6 +8,14 @@ import { MODULE_ID } from "./const.js";
 import { Point3d } from "./Point3d.js";
 
 /**
+ * Convert a grid units value to pixel units, for equivalency with x,y values.
+ */
+export function zValue(value) {
+  const { distance, size } = canvas.scene.grid;
+  return (value * size) / distance;
+}
+
+/**
  * Log message only when debug flag is enabled from DevMode module.
  * @param {Object[]} args  Arguments passed to console.log.
  */
