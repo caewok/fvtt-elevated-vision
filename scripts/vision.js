@@ -124,14 +124,18 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
   for ( let lightSource of canvas.effects.lightSources ) {
     if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
     const shadows = lightSource.los.combinedShadows || [];
-    vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
-    drawShadowHoles(vision.fov, shadows); // Works b/c the shadows previously trimmed to lightSource.los
-    vision.los.endFill();
+    if ( shadows.length ) {
+      drawShadows(vision.fov, shadows)
+    } else {
+      vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
+    }
 
     if ( lightSource.data.vision ) {
-      vision.los.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
-      drawShadowHoles(vision.los, shadows); // Works b/c the shadows previously trimmed to lightSource.los
-      vision.los.endFill();
+      if ( shadows.length ) {
+        drawShadows(vision.los, shadows);
+      } else {
+        vision.los.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
+      }
     }
   }
 
@@ -149,9 +153,11 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
     }
 
     // Draw LOS mask
-    vision.los.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.los);
-    drawShadowHoles(vision.los, shadows) // Works b/c the shadows previously trimmed to visionSource.los
-    vision.los.endFill();
+    if ( shadows.length ) {
+      drawShadows(vision.los, shadows);
+    } else {
+      vision.los.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.los).endFill();
+    }
 
     // Record Fog of war exploration
     if ( canvas.fog.update(visionSource, forceUpdateFog) ) vision._explored = true;
@@ -173,10 +179,16 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
  * @param {Shadow[]} shadows    Array of shadows
  * @param {PIXI.Graphics} graphics
  */
-function drawShadowHoles(graphics, shadows) {
+function drawShadows(graphics, shadows) {
+  graphics.beginFill(0xFFFFFF, 1.0);
   for ( const shadow of shadows ) {
-    graphics.beginHole();
-    graphics.drawShape(shadow);
-    graphics.endHole();
+    if ( shadow.isHole ) {
+      graphics.beginHole();
+      graphics.drawShape(shadow);
+      graphics.endHole();
+    } else {
+      graphics.drawShape(shadow);
+    }
   }
+  graphics.endFill();
 }
