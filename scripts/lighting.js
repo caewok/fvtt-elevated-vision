@@ -26,6 +26,9 @@ https://ptb.discord.com/channels/732325252788387980/734082399453052938/100695808
 
 */
 
+// In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
+const MAX_NUM_WALLS = 100;
+
 /**
  * Wrap AdaptiveLightingShader.prototype.create
  * Add uniforms used by the fragment shader to draw shadows in the color and illumination shaders.
@@ -55,17 +58,21 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   this.fragmentShader = this.fragmentShader.replace(
     replaceFnStr, `${FUNCTIONS}\n${replaceFnStr}\n`);
 
+  // replace at the very end
+  this.fragmentShader = this.fragmentShader.replace(new RegExp("}$"), `${FRAG_COLOR}\n }\n`);
+
+
   const shader = wrapped(...args);
   shader.uniforms.EV_numWalls = 0;
-  shader.uniforms.EV_wallElevations = new Float32Array();
-  shader.uniforms.EV_wallCoords = new Float32Array();
-  shader.uniforms.EV_lightElevation = .5;
-  shader.uniforms.EV_wallDistances = new Float32Array();
+  shader.uniforms.EV_wallElevations = new Float32Array(MAX_NUM_WALLS);
+  shader.uniforms.EV_wallCoords = new Float32Array(MAX_NUM_WALLS*4);;
+  shader.uniforms.EV_lightElevation = 0.5;
+  shader.uniforms.EV_wallDistances = new Float32Array(MAX_NUM_WALLS);
+  shader.uniforms.EV_isVision = false;
   return shader;
 }
 
-// In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
-const MAX_NUM_WALLS = 100;
+
 
 // 4 coords per wall (A, B endpoints).
 const UNIFORMS =
@@ -75,6 +82,7 @@ uniform vec4 EV_wallCoords[${MAX_NUM_WALLS}];
 uniform float EV_wallElevations[${MAX_NUM_WALLS}];
 uniform float EV_wallDistances[${MAX_NUM_WALLS}];
 uniform float EV_lightElevation;
+uniform bool EV_isVision;
 `;
 
 // Helper functions used to calculate shadow trapezoids.
@@ -137,8 +145,8 @@ OV = Oe / tan(theta)
 const DEPTH_CALCULATION =
 `
 const vec2 center = vec2(0.5);
-const int maxEndpoints = ${MAX_NUM_WALLS * 2};
-for ( int i = 0; i < maxEndpoints; i++ ) {
+const int maxWalls = ${MAX_NUM_WALLS};
+for ( int i = 0; i < maxWalls; i++ ) {
   if ( i >= EV_numWalls ) break;
 
   // If the wall is higher than the light, skip. (Should not currently happen.)
@@ -168,8 +176,15 @@ for ( int i = 0; i < maxEndpoints; i++ ) {
      // Could be more than one wall casting shadow on this point, so don't break.
      // depth = 0.0; // For testing
      depth = distWP / maxDistWP;
+
+     if ( EV_isVision ) depth = 0.0;
    }
 }
+`
+
+const FRAG_COLOR =
+`
+  if ( EV_isVision && depth == 0.0 ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
 `
 
 /**

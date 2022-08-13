@@ -6,6 +6,7 @@ canvas
 
 import { log } from "./util.js";
 import { MODULE_ID } from "./const.js";
+import { Shadow } from "./Shadow.js";
 
 /** To test a token
 drawing = game.modules.get("elevatedvision").api.drawing
@@ -19,6 +20,34 @@ _token.vision.los._drawShadows()
 // _updateColorationUniforms basically same as LightSource
 // _updateIlluminationUniforms basically same as LightSource
 // _updateEVLightUniforms can be reused from LightSource
+
+/**
+ * Wrap VisionSource.prototype._updateColorationUniforms.
+ * Add uniforms needed for the shadow fragment shader.
+ */
+export function _updateColorationUniformsVisionSource(wrapped) {
+  wrapped();
+  if ( this instanceof GlobalLightSource ) return;
+
+  log(`_updateColorationUniformsLightSource ${this.object.id}`);
+  const { x, y, radius } = this;
+  this._updateEVLightUniforms(this.coloration.shader);
+  this.coloration.shader.uniforms.EV_isVision = true;
+}
+
+/**
+ * Wrap VisionSource.prototype._updateIlluminationUniforms.
+ * Add uniforms needed for the shadow fragment shader.
+ */
+export function _updateIlluminationUniformsVisionSource(wrapped) {
+  wrapped();
+  if ( this instanceof GlobalLightSource ) return;
+
+  log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
+  const { x, y, radius } = this;
+  this._updateEVLightUniforms(this.illumination.shader);
+  this.illumination.shader.uniforms.EV_isVision = true;
+}
 
 // Currently no VisionSource.prototype._createLOS.
 // So must instead wrap initialize
@@ -40,3 +69,29 @@ export function initializeVisionSource(wrapped) {
 
   return out;
 }
+
+
+
+
+// Below does not appear to do anything, good or bad.
+// export function _updateMeshVisionSource(wrapped, mesh) {
+//   // add shadow mask
+//
+//   log("_updateMeshVisionSource");
+//
+//   const shadowWalls = this.los.edgesBelowSource;
+//   if ( !shadowWalls || !shadowWalls.size ) return;
+//
+//   log("_updateMeshVisionSource shadow walls encountered");
+//
+//   mesh.mask = new PIXI.Container;
+//
+//   for ( const w of shadowWalls ) {
+//     const shadow = Shadow.constructShadow(w, this.los.config.source);
+//     if ( !shadow ) continue;
+//     const g = mesh.mask.addChild(new PIXI.LegacyGraphics());
+//     g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
+//   }
+//
+//   return wrapped(mesh);
+// }
