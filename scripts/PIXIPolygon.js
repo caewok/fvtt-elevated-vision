@@ -1,49 +1,13 @@
 /* globals
 PIXI,
-foundry,
 ClipperLib
 */
 
 "use strict";
 
-/* Additions to the PIXI.Polygon class
-*/
-
+/* Additions to the PIXI.Polygon class */
 
 // ---------------- Clipper JS library ---------------------------------------------------
-
-
-/**
- * Point contained in polygon
- * Returns 0 if false, -1 if pt is on poly and +1 if pt is in poly.
- */
-function clipperContains(pt) {
-  const path = this.toClipperCoordinates;
-  return ClipperLib.Clipper.PointInPolygon(new ClipperLib.FPoint(pt.x, pt.y), path);
-}
-
-/**
- * Are the polygon points oriented clockwise?
- */
-function clipperIsClockwise() {
-  const path = this.toClipperCoordinates;
-  return ClipperLib.Clipper.Orientation(path);
-}
-
-/**
- * Get bounding box
- * @return {PIXI.Rectangle}
- */
-function clipperBounds() {
-  const path = this.toClipperCoordinates();
-  const bounds = ClipperLib.JS.BoundsOfPath(path); // Returns ClipperLib.FRect
-
-  return new NormalizedRectangle(
-    bounds.left,
-    bounds.top,
-    bounds.right - bounds.left,
-    bounds.bottom - bounds.top);
-}
 
 /**
  * Clip a polygon with another.
@@ -66,44 +30,13 @@ function clipperClip(poly, { cliptype = ClipperLib.ClipType.ctUnion } = {}) {
   return solution;
 }
 
-/**
- * Area of polygon
- */
-function area() {
-  const path = this.toClipperPoints;
-  return Math.abs(ClipperLib.Clipper.Area(path));
-}
 
 // ----------------  ADD METHODS TO THE PIXI.POLYGON PROTOTYPE --------------------------
 export function registerPIXIPolygonMethods() {
 
   // ----------------  CLIPPER LIBRARY METHODS ------------------------
-  Object.defineProperty(PIXI.Polygon.prototype, "clipperContains", {
-    value: clipperContains,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(PIXI.Polygon.prototype, "clipperIsClockwise", {
-    value: clipperIsClockwise,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(PIXI.Polygon.prototype, "clipperBounds", {
-    value: clipperBounds,
-    writable: true,
-    configurable: true
-  });
-
   Object.defineProperty(PIXI.Polygon.prototype, "clipperClip", {
     value: clipperClip,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(PIXI.Polygon.prototype, "area", {
-    value: area,
     writable: true,
     configurable: true
   });

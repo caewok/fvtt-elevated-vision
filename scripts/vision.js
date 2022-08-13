@@ -1,12 +1,12 @@
 /* globals
-PIXI,
-canvas
+canvas,
+GlobalLightSource,
+FogManager,
+game
 */
 "use strict";
 
 import { log } from "./util.js";
-import { MODULE_ID } from "./const.js";
-import { Shadow } from "./Shadow.js";
 
 /** To test a token
 drawing = game.modules.get("elevatedvision").api.drawing
@@ -30,7 +30,6 @@ export function _updateColorationUniformsVisionSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateColorationUniformsLightSource ${this.object.id}`);
-  const { x, y, radius } = this;
   this._updateEVLightUniforms(this.coloration.shader);
   this.coloration.shader.uniforms.EV_isVision = true;
 }
@@ -44,7 +43,6 @@ export function _updateIlluminationUniformsVisionSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
-  const { x, y, radius } = this;
   this._updateEVLightUniforms(this.illumination.shader);
   this.illumination.shader.uniforms.EV_isVision = true;
 }
@@ -69,33 +67,6 @@ export function initializeVisionSource(wrapped) {
 
   return out;
 }
-
-
-
-
-// Below does not appear to do anything, good or bad.
-// export function _updateMeshVisionSource(wrapped, mesh) {
-//   // add shadow mask
-//
-//   log("_updateMeshVisionSource");
-//
-//   const shadowWalls = this.los.wallsBelowSource;
-//   if ( !shadowWalls || !shadowWalls.size ) return;
-//
-//   log("_updateMeshVisionSource shadow walls encountered");
-//
-//   mesh.mask = new PIXI.Container;
-//
-//   for ( const w of shadowWalls ) {
-//     const shadow = Shadow.constructShadow(w, this.los.config.source);
-//     if ( !shadow ) continue;
-//     const g = mesh.mask.addChild(new PIXI.LegacyGraphics());
-//     g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
-//   }
-//
-//   return wrapped(mesh);
-// }
-
 
 /**
  * Override CanvasVisibility.prototype.refresh to handle shadows.
@@ -125,7 +96,7 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
     if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
     const shadows = lightSource.los.combinedShadows || [];
     if ( shadows.length ) {
-      drawShadows(vision.fov, shadows)
+      drawShadows(vision.fov, shadows);
     } else {
       vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
     }

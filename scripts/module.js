@@ -1,3 +1,9 @@
+/* globals
+Hooks,
+game
+*/
+"use strict";
+
 import * as drawing from "./drawing.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
@@ -9,7 +15,7 @@ import { MODULE_ID } from "./const.js";
 
 import { registerAdditions, registerPatches } from "./patching.js";
 
-Hooks.once('init', async function() {
+Hooks.once("init", async function() {
   game.modules.get(MODULE_ID).api = {
     drawing,
     util,
@@ -19,21 +25,15 @@ Hooks.once('init', async function() {
 
   registerPIXIPolygonMethods();
   registerAdditions();
-//   registerPatches();
-
 });
 
-Hooks.once('ready', async function () {
-  //registerPatches();
-});
-
-Hooks.once('libWrapper.Ready', async function() {
+Hooks.once("libWrapper.Ready", async function() {
   registerPatches();
 });
 
 
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
-Hooks.once('devModeReady', ({ registerPackageDebugFlag }) => {
+Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(MODULE_ID);
 });
 

@@ -1,11 +1,9 @@
 /* globals
-PIXI,
-canvas
+GlobalLightSource
 */
 "use strict";
 
-import { log, perpendicularPoint, distanceBetweenPoints, zValue } from "./util.js";
-import { MODULE_ID } from "./const.js";
+import { log, perpendicularPoint, distanceBetweenPoints } from "./util.js";
 
 /** To test a light
 drawing = game.modules.get("elevatedvision").api.drawing
@@ -20,7 +18,9 @@ l.source.los._drawShadows()
 https://ptb.discord.com/channels/732325252788387980/734082399453052938/1006958083320336534
 
 - aVertexPosition are the vertices of the polygon normalized; origin is (0,0), radius 1
--  vUvs is aVertexPosition transformed such that the center is (0.5,0.5) and the radius 0.5, such that it's in the range [0,1]x[0,1]. Therefore the * 2.0 is required to calculate dist, otherwise dist wouldn't be in the range [0,1]
+- vUvs is aVertexPosition transformed such that the center is (0.5,0.5) and the radius 0.5,
+  such that it's in the range [0,1]x[0,1]. Therefore the * 2.0 is required to calculate dist,
+  otherwise dist wouldn't be in the range [0,1]
 - aDepthValue/vDepth is the edge falloff: the distance to the boundary of the polygon normalized
 - vSamplerUvs are the texture coordinates used for sampling from a screen-sized texture
 
@@ -34,11 +34,6 @@ const MAX_NUM_WALLS = 100;
  * Add uniforms used by the fragment shader to draw shadows in the color and illumination shaders.
  */
 export function createAdaptiveLightingShader(wrapped, ...args) {
-//   if (!this.fragmentShader.includes("#version 300 es")) {
-// //     this.vertexShader = "#version 300 es \n" + this.vertexShader;
-//     this.fragmentShader = "#version 300 es \n precision mediump float; \n" + this.fragmentShader;
-//   }
-
   log("createAdaptiveLightingShader");
 
   if ( this.fragmentShader.includes(UNIFORMS) ) return wrapped(...args);
@@ -58,21 +53,18 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   this.fragmentShader = this.fragmentShader.replace(
     replaceFnStr, `${FUNCTIONS}\n${replaceFnStr}\n`);
 
-  // replace at the very end
-  this.fragmentShader = this.fragmentShader.replace(new RegExp("}$"), `${FRAG_COLOR}\n }\n`);
-
+  // Replace at the very end
+  this.fragmentShader = this.fragmentShader.replace(/}$/, `${FRAG_COLOR}\n }\n`);
 
   const shader = wrapped(...args);
   shader.uniforms.EV_numWalls = 0;
   shader.uniforms.EV_wallElevations = new Float32Array(MAX_NUM_WALLS);
-  shader.uniforms.EV_wallCoords = new Float32Array(MAX_NUM_WALLS*4);;
+  shader.uniforms.EV_wallCoords = new Float32Array(MAX_NUM_WALLS*4);
   shader.uniforms.EV_lightElevation = 0.5;
   shader.uniforms.EV_wallDistances = new Float32Array(MAX_NUM_WALLS);
   shader.uniforms.EV_isVision = false;
   return shader;
 }
-
-
 
 // 4 coords per wall (A, B endpoints).
 const UNIFORMS =
@@ -114,7 +106,7 @@ vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c) {
   float u = ((deltaCA.x * deltaBA.x) + (deltaCA.y * deltaBA.y)) / dab;
   return vec2(a.x + (u * deltaBA.x), a.y + (u * deltaBA.y));
 }
-`
+`;
 
 
 /*
@@ -180,141 +172,12 @@ for ( int i = 0; i < maxWalls; i++ ) {
      if ( EV_isVision ) depth = 0.0;
    }
 }
-`
+`;
 
 const FRAG_COLOR =
 `
   if ( EV_isVision && depth == 0.0 ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-`
-
-/**
-Testing:
-
-function clearDrawings() { canvas.controls.debug.clear(); }
-
-COLORS = {
-  orange: 0xFFA500,
-  yellow: 0xFFFF00,
-  greenyellow: 0xADFF2F,
-  green: 0x00FF00,
-  blue: 0x0000FF,
-  lightblue: 0xADD8E6,
-  red: 0xFF0000,
-  gray: 0x808080,
-  black: 0x000000,
-  white: 0xFFFFFF
-};
-
-function distance(a, b) {
-  return Math.hypot(b.x - a.x, b.y - a.y)
-}
-
-function perpendicularPoint(a, b, c) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const dab = Math.pow(dx, 2) + Math.pow(dy, 2);
-  if ( !dab ) return null;
-
-  const u = (((c.x - a.x) * dx) + ((c.y - a.y) * dy)) / dab;
-  return {
-    x: a.x + u * dx,
-    y: a.y + u * dy
-  };
-}
-
-function revCirclePoint(p, c, r) {
-  return {
-    x: revCircleCoord(p.x, c.x, r),
-    y: revCircleCoord(p.y, c.y, r)
-  }
-}
-
-function revCircleCoord(p, c, r) {
-  return (((p * 2) - 1) * r) + c;
-}
-
-function drawTranslatedPoint(p, c, r, { color = COLORS.red, alpha = 1, radius = 5 } = {}) {
-  p = revCirclePoint(p, c, r);
-  canvas.controls.debug
-      .beginFill(color, alpha)
-      .drawCircle(p.x, p.y, radius)
-      .endFill();
-}
-
-function drawTranslatedSegment(s, c, r, { color = COLORS.blue, alpha = 1, width = 1 } = {}) {
-  const A = revCirclePoint(s.A, c, r);
-  const B = revCirclePoint(s.B, c, r);
-
-  canvas.controls.debug.lineStyle(width, color, alpha)
-      .moveTo(A.x, A.y)
-      .lineTo(B.x, B.y);
-}
-
-
-[l] = canvas.lighting.placeables
-cirCenter = { x: l.source.x, y: l.source.y }
-cirRadius = l.source.radius
-
-shader = l.source.illumination.shader
-let { EV_lightElevation, EV_numWalls, EV_wallCoords, EV_wallElevations } = shader.uniforms;
-
-center = { x: 0.5, y: 0.5 };
-drawTranslatedPoint(center, cirCenter, cirRadius, {color: COLORS.blue});
-
-maxEndpoints = 200;
-originElevation = 0.5
-
-for ( let j = 0; j < 10000; j += 1 ) {
-// vUvs = { x: 0.1, y: 0.1 }
-vUvs = { x: Math.random(), y: Math.random() }
-
-drawTranslatedPoint(vUvs, cirCenter, cirRadius, {color: COLORS.red, alpha: .1, radius: 2});
-  for ( let i = 0; i < maxEndpoints; i++ ) {
-    if ( i >= EV_numWalls ) break;
-
-    wall = {
-      x: EV_wallCoords[i * 4],
-      y: EV_wallCoords[i * 4 + 1],
-      z: EV_wallCoords[i * 4 + 2],
-      w: EV_wallCoords[i * 4 + 3]
-    }
-    A = { x: wall.x, y: wall.y };
-    B = { x: wall.z, y: wall.w }
-
-  //   drawTranslatedSegment({A, B}, cirCenter, cirRadius, {color: COLORS.black})
-
-    // does this location --> origin intersect the wall?
-    if ( !foundry.utils.lineSegmentIntersects(vUvs, center, {x: wall.x, y: wall.y}, {x: wall.z, y: wall.w}) ) continue;
-
-  //   drawTranslatedSegment({A: center, B: vUvs}, cirCenter, cirRadius, { color: COLORS.blue, alpha: 0.5})
-
-    // Point of wall that forms a perpendicular line to the origin light
-    wallIxOrigin = perpendicularPoint(A, B, center);
-    if ( !wallIxOrigin ) continue;
-
-    wallIxPoint = perpendicularPoint(A, B, vUvs);
-    if ( !wallIxPoint ) continue;
-
-    distVT = distance(center, wallIxOrigin);
-    distTO = distance(vUvs, wallIxPoint);
-
-    theta = Math.atan(Math.abs(EV_lightElevation - originElevation) / distVT);
-    distTOMax = Math.abs(EV_wallElevations[i] - originElevation)  / Math.tan(theta);
-
-    if ( distTO < distTOMax ) {
-      //depth = 0.0;
-      //depth = smoothstep(0.0, 1.0, distTO);
-      depth = (1 - distTO / distTOMax);
-      if ( depth < 0 || depth > 1 ) console.log(depth);
-
-      drawTranslatedPoint(vUvs, cirCenter, cirRadius, {color: COLORS.red, alpha: depth, radius: 2});
-      break;
-    }
-  }
-}
-
-
-*/
+`;
 
 /**
  * Wrap LightSource.prototype._updateColorationUniforms.
@@ -325,7 +188,6 @@ export function _updateColorationUniformsLightSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateColorationUniformsLightSource ${this.object.id}`);
-  const { x, y, radius } = this;
   this._updateEVLightUniforms(this.coloration.shader);
 }
 
@@ -338,7 +200,6 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
-  const { x, y, radius } = this;
   this._updateEVLightUniforms(this.illumination.shader);
 }
 
@@ -373,8 +234,8 @@ export function _updateEVLightUniformsLightSource(shader) {
   const wallDistances = [];
 
   for ( const w of walls ) {
-    const a = pointCircleCoord(w.A, center, radius, r_inv);
-    const b = pointCircleCoord(w.B, center, radius, r_inv);
+    const a = pointCircleCoord(w.A, radius, center, r_inv);
+    const b = pointCircleCoord(w.B, radius, center, r_inv);
 
     // Point where line from light, perpendicular to wall, intersects
     const wallIx = perpendicularPoint(a, b, center_shader);
@@ -386,7 +247,7 @@ export function _updateEVLightUniformsLightSource(shader) {
     wallCoords.push(a.x, a.y, b.x, b.y);
   }
 
-  u.EV_wallCoords = wallCoords
+  u.EV_wallCoords = wallCoords;
   u.EV_wallElevations = wallElevations;
   u.EV_wallDistances = wallDistances;
 }
@@ -402,11 +263,11 @@ export function _updateEVLightUniformsLightSource(shader) {
  * @param {number} r_inv  Inverse of the radius. Optional; for repeated calcs.
  * @returns {Point}
  */
-function pointCircleCoord(point, center, r, r_inv = 1 / r) {
+function pointCircleCoord(point, r, center, r_inv = 1 / r) {
   return {
-    x: circleCoord(point.x, center.x, r, r_inv),
-    y: circleCoord(point.y, center.y, r, r_inv)
-  }
+    x: circleCoord(point.x, r, center.x, r_inv),
+    y: circleCoord(point.y, r, center.y, r_inv)
+  };
 }
 
 /**
@@ -418,8 +279,8 @@ function pointCircleCoord(point, center, r, r_inv = 1 / r) {
  * @param {number} r_inv  Inverse of the radius. Optional; for repeated calcs.
  * @returns {number}
  */
-function circleCoord(a, c = 0, r, r_inv = 1 / r) {
-  return ((a - c) * r_inv * 0.5) + 0.5
+function circleCoord(a, r, c = 0, r_inv = 1 / r) {
+  return ((a - c) * r_inv * 0.5) + 0.5;
 }
 
 /**
@@ -429,7 +290,7 @@ function circleCoord(a, c = 0, r, r_inv = 1 / r) {
  * @param {number} r    Radius
  * @returns {number}
  */
-function revCircleCoord(p, c = 0, r) {
+function revCircleCoord(p, r, c = 0) {
   // Calc:
   // ((a - c) / 2r) + 0.5 = p
   //  ((a - c) / 2r) = p +  0.5

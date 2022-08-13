@@ -2,12 +2,14 @@
 ClipperLib,
 canvas,
 CONST,
-ClockwiseSweepPolygon
+ClockwiseSweepPolygon,
+PIXI,
+Ray
 */
 "use strict";
 
 import { log, lineSegment3dWallIntersection } from "./util.js";
-import { COLORS, drawSegment, clearDrawings } from "./drawing.js";
+import { COLORS, clearDrawings } from "./drawing.js";
 import { Shadow } from "./Shadow.js";
 
 
@@ -28,7 +30,6 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   // From ClockwisePolygonSweep.prototype.getWalls
   const bounds = this._defineBoundingBox();
-  const {type, boundaryShapes} = this.config;
   const collisionTest = (o, rect) => this._testShadowWallInclusion(o.t, rect);
   const walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
   this.wallsBelowSource = new Set(walls); // Top of edge below source top
@@ -57,7 +58,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   }
   c.Execute(ClipperLib.ClipType.ctDifference, solution);
 
-  const clean_delta = 0.1
+  const clean_delta = 0.1;
   ClipperLib.Clipper.CleanPolygons(solution, clean_delta * scalingFactor);
   this.combinedShadows = solution.map(pts => {
     const poly = PIXI.Polygon.fromClipperPoints(pts, scalingFactor);
@@ -123,12 +124,24 @@ export function _drawShadowsClockwiseSweepPolygon(
   }
 }
 
-
+/**
+ * 3d version of ClockwiseSweepPolygon.testCollision
+ * Test whether a Ray between the origin and destination points would collide with a boundary of this Polygon
+ * @param {Point} origin                          An origin point
+ * @param {Point} destination                     A destination point
+ * @param {PointSourcePolygonConfig} config       The configuration that defines a certain Polygon type
+ * @param {string} [config.mode]                  The collision mode to test: "any", "all", or "closest"
+ * @returns {boolean|Point3d|Point3d[]|null} The collision result depends on the mode of the test:
+ *                                                * any: returns a boolean for whether any collision occurred
+ *                                                * all: returns a sorted array of Point3d instances
+ *                                                * closest: returns a Point3d instance or null
+ */
 export function testCollision3dClockwiseSweepPolygon(origin, destination, {mode="all", ...config}={}) {
   const poly = new this();
   const ray = new Ray(origin, destination);
   config.boundaryShapes ||= [];
   config.boundaryShapes.push(ray.bounds);
+  poly.initialize(origin, config);
   return poly._testCollision3d(ray, mode);
 }
 
@@ -150,6 +163,7 @@ export function _testCollision3dClockwiseSweepPolygon(ray, mode) {
   const dest = ray.B;
   origin.z ??= 0;
   dest.z ??= 0;
+  const type = this.config.type;
 
   log(`getRayCollisions3d ${origin.x},${origin.y}${origin.z} --> ${dest.x},${dest.y},${dest.z}`);
 
@@ -187,5 +201,3 @@ export function _testCollision3dClockwiseSweepPolygon(ray, mode) {
   if ( collisions[0].type === CONST.WALL_SENSE_TYPES.LIMITED ) collisions.shift();
   return collisions[0] || null;
 }
-
-

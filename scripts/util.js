@@ -1,6 +1,7 @@
 /* globals
 game,
 foundry,
+canvas
 */
 "use strict";
 
@@ -48,8 +49,8 @@ export function perpendicularPoint(a, b, c) {
 
   const u = (((c.x - a.x) * dx) + ((c.y - a.y) * dy)) / dab;
   return {
-    x: a.x + u * dx,
-    y: a.y + u * dy
+    x: a.x + (u * dx),
+    y: a.y + (u * dy)
   };
 }
 

@@ -1,8 +1,8 @@
 /* globals
 Token,
-PIXI,
 Ray,
-CONFIG
+CONFIG,
+ClockwiseSweepPolygon
 */
 "use strict";
 
