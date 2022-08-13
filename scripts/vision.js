@@ -123,80 +123,35 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
   // Draw field-of-vision for lighting sources
   for ( let lightSource of canvas.effects.lightSources ) {
     if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
-
+    const shadows = lightSource.los.combinedShadows || [];
     vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
-    if ( lightSource.data.vision ) vision.los.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
+    drawShadowHoles(vision.fov, shadows); // Works b/c the shadows previously trimmed to lightSource.los
+    vision.los.endFill();
 
-    // Draw shadows, if any
-//     const shadows = lightSource.los.shadows;
-//     if ( !shadows || !shadows.length ) continue;
-//
-//     for ( const shadow of shadows ) {
-//       const g = vision.fov.addChild(new PIXI.LegacyGraphics());
-//       g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
-//       if ( lightSource.data.vision ) {
-//         const g = vision.los.addChild(new PIXI.LegacyGraphics());
-//         g.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
-//       }
-//     }
+    if ( lightSource.data.vision ) {
+      vision.los.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
+      drawShadowHoles(vision.los, shadows); // Works b/c the shadows previously trimmed to lightSource.los
+      vision.los.endFill();
+    }
   }
 
   // Draw sight-based visibility for each vision source
   for ( let visionSource of canvas.effects.visionSources ) {
     visionSource.active = true;
-    const shadows = visionSource.los.combinedShadows;
+    const shadows = visionSource.los.combinedShadows || [];
 
     // Draw FOV polygon or provide some baseline visibility of the token's space
     if ( visionSource.radius > 0 ) {
-      vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.fov)
-//       if ( shadows && shadows.length ) {
-//         for ( const shadow of shadows ) {
-//           vision.fov.beginHole();
-//           vision.fov.drawShape(shadow);
-//           vision.fov.endHole();
-//         }
-//       }
-      vision.fov.endFill();
+      vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.fov).endFill();
     } else {
       const baseR = canvas.dimensions.size / 2;
-      //vision.base.beginFill(0xFFFFFF, 1.0).drawCircle(visionSource.x, visionSource.y, baseR).
-      const cirPoly = new PIXI.Circle(visionSource.x, visionSource.y, baseR).toPolygon;
-      vision.base.beginFill(0xFFFFFF, 1.0).drawShape(cirPoly);
-//       if ( shadows && shadows.length ) {
-//         for ( const shadow of shadows ) {
-//           vision.base.beginHole();
-//           vision.base.drawShape(shadow);
-//           vision.base.endHole();
-//         }
-//       }
-      vision.base.endFill();
+      vision.base.beginFill(0xFFFFFF, 1.0).drawCircle(visionSource.x, visionSource.y, baseR).endFill();
     }
 
     // Draw LOS mask
     vision.los.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.los);
-    if ( shadows && shadows.length ) {
-      for ( const shadow of shadows ) {
-        vision.los.beginHole();
-        vision.los.drawShape(shadow);
-        vision.los.endHole();
-      }
-    }
+    drawShadowHoles(vision.los, shadows) // Works b/c the shadows previously trimmed to visionSource.los
     vision.los.endFill();
-
-    // Draw shadows, if any
-//     const shadows = visionSource.los.shadows;
-//     if ( shadows && shadows.length ) {
-//       for ( const shadow of shadows ) {
-//         const FOV = visionSource.radius > 0 ? vision.fov : vision.base;
-//         const gFOV = FOV.addChild(new PIXI.LegacyGraphics())
-//         gFOV.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
-//
-//         const LOS = vision.los;
-//         const gLOS = LOS.addChild(new PIXI.LegacyGraphics());
-//         gLOS.beginFill(0x000000, 1.0).drawShape(shadow).endFill();
-//
-//       }
-//     }
 
     // Record Fog of war exploration
     if ( canvas.fog.update(visionSource, forceUpdateFog) ) vision._explored = true;
@@ -211,4 +166,17 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
 
   // Restrict the visibility of other canvas objects
   this.restrictVisibility();
+}
+
+/**
+ * Helper function to draw shadows as holes for a given graphics
+ * @param {Shadow[]} shadows    Array of shadows
+ * @param {PIXI.Graphics} graphics
+ */
+function drawShadowHoles(graphics, shadows) {
+  for ( const shadow of shadows ) {
+    graphics.beginHole();
+    graphics.drawShape(shadow);
+    graphics.endHole();
+  }
 }
