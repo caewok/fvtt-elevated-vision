@@ -15,7 +15,12 @@ import { MODULE_ID } from "./const.js";
 
 import { registerAdditions, registerPatches } from "./patching.js";
 
-import { addElevationLayerSceneControls } from "./controls.js";
+import {
+  addElevationLayerSceneControls,
+  addElevationLayerSubControls,
+  renderElevationLayerSubControls
+} from "./controls.js";
+
 import { ElevationLayer } from "./ElevationLayer.js";
 
 Hooks.once("init", async function() {
@@ -42,6 +47,8 @@ Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
 });
 
 Hooks.on("getSceneControlButtons", addElevationLayerSceneControls);
+Hooks.on("renderSceneControls", addElevationLayerSubControls);
+Hooks.on("renderTerrainLayerToolBar", renderElevationLayerSubControls);
 
 
 function registerLayer() {
