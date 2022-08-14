@@ -21,14 +21,17 @@ import {
   renderElevationLayerSubControls
 } from "./controls.js";
 
-import { ElevationLayer } from "./ElevationLayer.js";
+import { ElevationLayer, ElevationGrid } from "./ElevationLayer.js";
+
 
 Hooks.once("init", async function() {
   game.modules.get(MODULE_ID).api = {
     drawing,
     util,
     Point3d,
-    Shadow
+    Shadow,
+    ElevationLayer,
+    ElevationGrid
   };
 
   registerPIXIPolygonMethods();
@@ -38,6 +41,13 @@ Hooks.once("init", async function() {
 
 Hooks.once("libWrapper.Ready", async function() {
   registerPatches();
+});
+
+Hooks.once("canvasReady", async function() {
+  // Set the elevation grid now that we know scene dimensions
+  const elevationLayer = canvas.layers.find(obj => obj.name === "ElevationLayer");
+  if ( !elevationLayer ) return;
+  elevationLayer.elevationGrid = new ElevationGrid();
 });
 
 

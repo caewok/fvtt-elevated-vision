@@ -34,8 +34,8 @@ On canvas:
 export class ElevationLayer extends InteractionLayer {
   constructor() {
     super();
+    this.elevationGrid = new ElevationGrid();
   }
-
 
   /** @override */
   static get layerOptions() {
@@ -50,4 +50,65 @@ export class ElevationLayer extends InteractionLayer {
     super._draw(options);
   }
 
+}
+
+export class ElevationGrid {
+  // Include the padding.
+  constructor(width = canvas.scene?.dimensions?.width || 0, height = canvas.scene?.dimensions?.height || 0) {
+    this.width = width;
+    this.height = height;
+    this.data = new Uint8Array(width * height);
+  }
+
+  get elevationstep() {
+    return canvas.scene.dimensions.distance;
+  }
+
+  get elevationmax() {
+    return 255 * this.elevationstep;
+  }
+
+  _setLocationToValue(x, y, value) {
+    this.data[(x * this.height) + y];
+  }
+
+  _valueForLocation(x, y) {
+    return this.data[(x * this.height) + y];
+  }
+
+  elevationForLocation(x, y) {
+    return this._valueForLocation(x, y) * this.elevationstep;
+  }
+
+  averageElevationForGridSpace(gx, gy) {
+    const { width, height } = canvas.grid.grid;
+
+    const sum = 0;
+    const maxX = gx + width;
+    const maxY = gy + height;
+    for ( let x = gx; x < maxX; x += 1 ) {
+      for ( let y = gy; y < maxY; y += 1 ) {
+        sum += this._valueForLocation(x, y);
+      }
+    }
+
+    const numPixels = width * height;
+    return (sum / numPixels) / this.elevationstep;
+  }
+
+  clampElevation(e) {
+    e = Math.round(e / this.elevationstep) * this.elevationstep;
+    return Math.clamped(e, 0, this.elevationmax);
+  }
+
+  setGridSpace(gx, gy, elevation = 0) {
+    const value = this.clampElevation(elevation) / this.elevationstep;
+    const maxX = gx + canvas.grid.grid.width;
+    const maxY = gy + canvas.grid.grid.height;
+    for ( let x = gx; x < maxX; x += 1 ) {
+      for ( let y = gy; y < maxY; y += 1 ) {
+        this._setLocationToValue(x, y, value);
+      }
+    }
+  }
 }

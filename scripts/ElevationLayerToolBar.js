@@ -8,19 +8,25 @@ mergeObject,
 
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
+import { FIFOQueue } from "./FIFOQueue.js";
 
 export class ElevationLayerToolBar extends Application {
   constructor() {
     super(...arguments);
+
+    // As the elevation default to 0, it makes sense to start at 1 unit of elevation.
     this.currElevation = canvas.scene.dimensions.distance;
+    this.undoQueue = new FIFOQueue(50);
+    this.elevationLayer = canvas.layers.find(obj => obj.name === "ElevationLayer");
+    this.elevationGrid =  this.elevationLayer.elevationGrid
   }
 
   get elevationstep() {
-    return canvas.scene.dimensions.distance;
+    return this.elevationGrid.elevationstep;
   }
 
   get elevationmax() {
-    return 255 * this.elevationstep;
+    return this.elevationGrid.elevationmax;
   }
 
   /**
@@ -30,8 +36,7 @@ export class ElevationLayerToolBar extends Application {
    * @returns {number}
    */
   clampElevation(e) {
-    e = Math.round(e / this.elevationstep) * this.elevationstep;
-    return Math.clamped(e, 0, this.elevationmax);
+    this.elevationGrid.clampElevation(e);
   }
 
   static get defaultOptions() {
@@ -99,4 +104,12 @@ export class ElevationLayerToolBar extends Application {
     await super._render(...args);
     $("#controls").append(this.element);
   }
+
+  /**
+   * If the user clicks a canvas location, change its elevation using the selected tool.
+   * @param {PIXI.InteractionEvent} event
+   */
+   _onClickLeft(event) {
+     log("clickLeft", event);
+   }
 }
