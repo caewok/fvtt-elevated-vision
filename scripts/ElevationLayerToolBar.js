@@ -15,6 +15,25 @@ export class ElevationLayerToolBar extends Application {
     this.currElevation = canvas.scene.dimensions.distance;
   }
 
+  get elevationstep() {
+    return canvas.scene.dimensions.distance;
+  }
+
+  get elevationmax() {
+    return 255 * this.elevationstep;
+  }
+
+  /**
+   * Keep elevation between 0 and the elevationmax.
+   * Round to the nearest step.
+   * @param {number} e   Elevation value to clamp.
+   * @returns {number}
+   */
+  clampElevation(e) {
+    e = Math.round(e / this.elevationstep) * this.elevationstep;
+    return Math.clamped(e, 0, this.elevationmax);
+  }
+
   static get defaultOptions() {
     const options = {
       classes: ["form"],
@@ -35,36 +54,44 @@ export class ElevationLayerToolBar extends Application {
   activateListeners(html) {
     super.activateListeners(html);
     $(".control-btn[data-tool]", html).on("click", this._onHandleClick.bind(this));
+    $("#el-curr-elevation", html).on("change", this._onHandleChange.bind(this));
   }
 
   getData(options) {
-    const elevationstep = canvas.scene.dimensions.distance;
     return {
-      elevationstep,
-      elevationmax: 255 * elevationstep,
+      elevationstep: this.elevationstep,
+      elevationmax: this.elevationstep,
       elevationcurr: this.currElevation
     };
+  }
+
+  /**
+   * Handle when the user manually changes the elevation number
+   * @param {Event} event
+   */
+  _onHandleChange(event) {
+    if ( event.currentTarget.id !== "el-curr-elevation" ) return;
+    const userValue = parseInt(event.currentTarget.value);
+    log(`User input ${userValue}`);
+    this.currElevation = this.clampElevation(userValue);
+    this.render();
   }
 
   _onHandleClick(event) {
     const btn = event.currentTarget;
     const id = $(btn).attr("id");
-    const elevationstep = canvas.scene.dimensions.distance;
     log(id);
 
     switch ( id ) {
       case "el-inc-elevation":
-        this.currElevation += elevationstep;
+        this.currElevation += this.elevationstep;
         break;
       case "el-dec-elevation":
-        this.currElevation -= elevationstep;
-        break;
-      case "el-curr-elevation":
-        this.currElevation = $(btn).attr("value");
+        this.currElevation -= this.elevationstep;
         break;
     }
 
-    this.currElevation = Math.clamped(this.currElevation, 0, 255 * elevationstep);
+    this.currElevation = this.clampElevation(this.currElevation);
     this.render();
   }
 
