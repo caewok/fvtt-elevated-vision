@@ -1,5 +1,6 @@
 /* globals
-game
+game,
+canvas
 */
 "use strict";
 
@@ -26,6 +27,7 @@ export function addElevationLayerSceneControls(controls) {
     visible: isGM,
     layer: "elevation",
     activeTool: "fill-by-grid",
+    currentElevation: canvas.scene?.dimensions?.distance || 0,
     tools: [
       {
         name: "fill-by-grid",
@@ -48,7 +50,8 @@ export function addElevationLayerSceneControls(controls) {
       {
         name: "border",
         title: "Border spacer",
-        icon: "fas fa-horizontal-rule"
+        icon: "fas fa-horizontal-rule",
+        active: false
       },
 
       {
@@ -75,9 +78,10 @@ export function addElevationLayerSceneControls(controls) {
 export function addElevationLayerSubControls(controls) {
   if ( !canvas || !canvas.elevation ) return;
 
-  if ( controls.activeControl == "elevation" ) {
+  if ( controls.activeControl === "elevation" ) {
     if ( !canvas.elevation.toolbar ) canvas.elevation.toolbar = new ElevationLayerToolBar();
     canvas.elevation.toolbar.render(true);
+
   } else {
     if ( !canvas.elevation.toolbar ) return;
     canvas.elevation.toolbar.close();
@@ -87,7 +91,7 @@ export function addElevationLayerSubControls(controls) {
 export function renderElevationLayerSubControls() {
   const tools = $(canvas.elevation.toolbar.form).parent();
   if ( !tools ) return;
-  const controltools = $('li[data-tool="fill-by-pixel"]').closest('.sub-controls');
-	controltools.addClass('elevation-controls');
-	canvas.elevation.toolbar.element.addClass('active');
+  const controltools = $("li[data-tool='fill-by-pixel']").closest(".sub-controls");
+  controltools.addClass("elevation-controls");
+  canvas.elevation.toolbar.element.addClass("active");
 }

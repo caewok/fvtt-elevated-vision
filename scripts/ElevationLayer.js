@@ -3,6 +3,8 @@
 */
 "use strict";
 
+import { log } from "./util.js";
+
 /* Elevation layer
 
 Allow the user to "paint" areas with different elevations. This elevation data will then
@@ -35,6 +37,7 @@ export class ElevationLayer extends InteractionLayer {
   constructor() {
     super();
     this.elevationGrid = new ElevationGrid();
+    this.controls = ui.controls.controls.find(obj => obj.name === "elevation");
   }
 
   /** @override */
@@ -50,6 +53,40 @@ export class ElevationLayer extends InteractionLayer {
     super._draw(options);
   }
 
+  /* ----- Event Listeners and Handlers ----- /*
+
+  /**
+   * If the user clicks a canvas location, change its elevation using the selected tool.
+   * @param {PIXI.InteractionEvent} event
+   */
+  _onClickLeft(event) {
+    const { x, y } = event.data.origin;
+    const activeTool = this.controls.activeTool;
+    const currE = this.controls.currentElevation;
+
+    log(`clickLeft at ${x},${y} with tool ${activeTool} and elevation ${currE}`, event);
+
+    switch ( activeTool ) {
+      case "fill-by-grid":
+        this._fillGridSpace(x, y, currE);
+        break;
+      case "fill-by-pixel":
+        log("fill-by-pixel not yet implemented.");
+        break;
+      case "fill-space":
+        log("fill-space not yet implemented.");
+        break;
+    }
+
+    // Standard left-click handling
+    super._onClickLeft(event);
+   }
+
+   _fillGridSpace(x, y, elevation) {
+     const [gx, gy] = canvas.grid.grid.getGridPositionFromPixels(x, y);
+     this.elevationGrid.setGridSpaceToElevation(gx, gy, elevation)
+   }
+
 }
 
 export class ElevationGrid {
@@ -60,16 +97,21 @@ export class ElevationGrid {
     this.data = new Uint8Array(width * height);
   }
 
-  get elevationstep() {
+  get elevationStep() {
     return canvas.scene.dimensions.distance;
   }
 
-  get elevationmax() {
-    return 255 * this.elevationstep;
+  get elevationMax() {
+    return 255 * this.elevationStep;
+  }
+
+  get averageElevation() {
+    const sum = this.data.reduce((a, b) => a + b);
+    return sum / (this.width * this.height);
   }
 
   _setLocationToValue(x, y, value) {
-    this.data[(x * this.height) + y];
+    this.data[(x * this.height) + y] = value;
   }
 
   _valueForLocation(x, y) {
@@ -77,7 +119,7 @@ export class ElevationGrid {
   }
 
   elevationForLocation(x, y) {
-    return this._valueForLocation(x, y) * this.elevationstep;
+    return this._valueForLocation(x, y) * this.elevationStep;
   }
 
   averageElevationForGridSpace(gx, gy) {
@@ -93,20 +135,25 @@ export class ElevationGrid {
     }
 
     const numPixels = width * height;
-    return (sum / numPixels) / this.elevationstep;
+    return (sum / numPixels) / this.elevationStep;
   }
 
   clampElevation(e) {
-    e = Math.round(e / this.elevationstep) * this.elevationstep;
-    return Math.clamped(e, 0, this.elevationmax);
+    e = isNaN(e) ? 0 : e;
+    e = Math.round(e / this.elevationStep) * this.elevationStep;
+    return Math.clamped(e, 0, this.elevationMax);
   }
 
-  setGridSpace(gx, gy, elevation = 0) {
-    const value = this.clampElevation(elevation) / this.elevationstep;
-    const maxX = gx + canvas.grid.grid.width;
-    const maxY = gy + canvas.grid.grid.height;
-    for ( let x = gx; x < maxX; x += 1 ) {
-      for ( let y = gy; y < maxY; y += 1 ) {
+  setGridSpaceToElevation(gx, gy, elevation = 0) {
+    // Get the top left corner, then fill in the values in the grid
+    const [ tlx, tly ] = canvas.grid.grid.getPixelsFromGridPosition(gx, gy);
+    const size = canvas.scene.dimensions.size;
+
+    const value = this.clampElevation(elevation) / this.elevationStep;
+    const maxX = tlx + size;
+    const maxY = tly + size;
+    for ( let x = tlx; x < maxX; x += 1 ) {
+      for ( let y = tly; y < maxY; y += 1 ) {
         this._setLocationToValue(x, y, value);
       }
     }

@@ -15,18 +15,25 @@ export class ElevationLayerToolBar extends Application {
     super(...arguments);
 
     // As the elevation default to 0, it makes sense to start at 1 unit of elevation.
-    this.currElevation = canvas.scene.dimensions.distance;
     this.undoQueue = new FIFOQueue(50);
-    this.elevationLayer = canvas.layers.find(obj => obj.name === "ElevationLayer");
-    this.elevationGrid =  this.elevationLayer.elevationGrid
+    this.elevationGrid = canvas.elevation.elevationGrid
+    this.currentElevation = canvas.scene.dimensions.distance;
   }
 
-  get elevationstep() {
-    return this.elevationGrid.elevationstep;
+  get elevationStep() {
+    return this.elevationGrid.elevationStep;
   }
 
-  get elevationmax() {
-    return this.elevationGrid.elevationmax;
+  get elevationMax() {
+    return this.elevationGrid.elevationMax;
+  }
+
+  get currentElevation() {
+    return canvas.elevation.controls.currentElevation;
+  }
+
+  set currentElevation(value) {
+    canvas.elevation.controls.currentElevation = value;
   }
 
   /**
@@ -36,7 +43,7 @@ export class ElevationLayerToolBar extends Application {
    * @returns {number}
    */
   clampElevation(e) {
-    this.elevationGrid.clampElevation(e);
+    return this.elevationGrid.clampElevation(e);
   }
 
   static get defaultOptions() {
@@ -64,9 +71,9 @@ export class ElevationLayerToolBar extends Application {
 
   getData(options) {
     return {
-      elevationstep: this.elevationstep,
-      elevationmax: this.elevationstep,
-      elevationcurr: this.currElevation
+      elevationstep: this.elevationStep,
+      elevationmax: this.elevationMax,
+      elevationcurr: this.currentElevation
     };
   }
 
@@ -78,7 +85,7 @@ export class ElevationLayerToolBar extends Application {
     if ( event.currentTarget.id !== "el-curr-elevation" ) return;
     const userValue = parseInt(event.currentTarget.value);
     log(`User input ${userValue}`);
-    this.currElevation = this.clampElevation(userValue);
+    this.currentElevation = this.clampElevation(userValue);
     this.render();
   }
 
@@ -86,17 +93,17 @@ export class ElevationLayerToolBar extends Application {
     const btn = event.currentTarget;
     const id = $(btn).attr("id");
     log(id);
-
+    let newElevation = this.currentElevation || 0;
     switch ( id ) {
       case "el-inc-elevation":
-        this.currElevation += this.elevationstep;
+        newElevation += this.elevationStep;
         break;
       case "el-dec-elevation":
-        this.currElevation -= this.elevationstep;
+        newElevation -= this.elevationStep;
         break;
     }
 
-    this.currElevation = this.clampElevation(this.currElevation);
+    this.currentElevation = this.clampElevation(newElevation);
     this.render();
   }
 
@@ -104,12 +111,4 @@ export class ElevationLayerToolBar extends Application {
     await super._render(...args);
     $("#controls").append(this.element);
   }
-
-  /**
-   * If the user clicks a canvas location, change its elevation using the selected tool.
-   * @param {PIXI.InteractionEvent} event
-   */
-   _onClickLeft(event) {
-     log("clickLeft", event);
-   }
 }
