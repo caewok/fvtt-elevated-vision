@@ -15,6 +15,9 @@ import { MODULE_ID } from "./const.js";
 
 import { registerAdditions, registerPatches } from "./patching.js";
 
+import { addElevationLayerSceneControls } from "./controls.js";
+import { ElevationLayer } from "./ElevationLayer.js";
+
 Hooks.once("init", async function() {
   game.modules.get(MODULE_ID).api = {
     drawing,
@@ -25,6 +28,7 @@ Hooks.once("init", async function() {
 
   registerPIXIPolygonMethods();
   registerAdditions();
+  registerLayer();
 });
 
 Hooks.once("libWrapper.Ready", async function() {
@@ -37,3 +41,9 @@ Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(MODULE_ID);
 });
 
+Hooks.on("getSceneControlButtons", addElevationLayerSceneControls);
+
+
+function registerLayer() {
+  CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer }
+}
