@@ -4,6 +4,7 @@
 "use strict";
 
 import { log } from "./util.js";
+import { ElevationGrid } from "./ElevationGrid.js";
 
 /* Elevation layer
 
@@ -36,21 +37,93 @@ On canvas:
 export class ElevationLayer extends InteractionLayer {
   constructor() {
     super();
-    this.elevationGrid = new ElevationGrid();
+    this.elevationGrid = new ElevationGrid(); // Have to set manually after canvas dimensions are set
     this.controls = ui.controls.controls.find(obj => obj.name === "elevation");
   }
+
+  /**
+   * The weather overlay container
+   * @type {FullCanvasContainer}
+   */
+  weather;
+
+  /**
+   * The currently active weather effect
+   * @type {ParticleEffect}
+   */
+  weatherEffect;
+
+  /**
+   * An occlusion filter that prevents weather from being displayed in certain regions
+   * @type {AbstractBaseMaskFilter}
+   */
+  weatherOcclusionFilter;
+
+  get elevation() {
+    return this.#elevation;
+  }
+
+  set elevation(value) {
+    this.#elevation = value;
+    canvas.primary.sortChildren();
+  }
+
+  #elevation = 9000;
 
   /** @override */
   static get layerOptions() {
     return mergeObject(super.layerOptions, {
       name: "Elevation",
-      zIndex: 35
     });
   }
 
   /** @override */
   async _draw(options) {
-    super._draw(options);
+    this.weatherOcclusionFilter = InverseOcclusionMaskFilter.create({
+      alphaOcclusion: 0,
+      uMaskSampler: canvas.masks.tileOcclusion.renderTexture,
+      channel: "b"
+    });
+    this.drawWeather();
+  }
+
+  /* -------------------------------------------- */
+
+  /** @inheritdoc */
+  async _tearDown(options) {
+    this.weatherEffect?.destroy();
+    this.weather = this.weatherEffect = null;
+    return super._tearDown();
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Draw the weather container.
+   * @returns {FullCanvasContainer|null}    The weather container, or null if no effect is present
+   */
+  drawWeather() {
+    if ( this.weatherEffect ) this.weatherEffect.stop();
+    const effect = CONFIG.weatherEffects[canvas.scene.elevation];
+    if ( !effect ) {
+      this.weatherOcclusionFilter.enabled = false;
+      return null;
+    }
+
+    // Create the effect and begin playback
+    if ( !this.weather ) {
+      const w = new FullCanvasContainer();
+      w.accessibleChildren = w.interactiveChildren = false;
+      w.filterArea = canvas.app.renderer.screen;
+      this.weather = this.addChild(w);
+    }
+    this.weatherEffect = new effect(this.weather);
+    this.weatherEffect.play();
+
+    // Apply occlusion filter
+    this.weatherOcclusionFilter.enabled = true;
+    this.weather.filters = [this.weatherOcclusionFilter];
+    return this.weather;
   }
 
   /* ----- Event Listeners and Handlers ----- /*
@@ -89,73 +162,10 @@ export class ElevationLayer extends InteractionLayer {
 
 }
 
-export class ElevationGrid {
-  // Include the padding.
-  constructor(width = canvas.scene?.dimensions?.width || 0, height = canvas.scene?.dimensions?.height || 0) {
-    this.width = width;
-    this.height = height;
-    this.data = new Uint8Array(width * height);
-  }
 
-  get elevationStep() {
-    return canvas.scene.dimensions.distance;
-  }
 
-  get elevationMax() {
-    return 255 * this.elevationStep;
-  }
+/*
+renderer = canvas.app.renderer
+gl = renderer.gl;
 
-  get averageElevation() {
-    const sum = this.data.reduce((a, b) => a + b);
-    return sum / (this.width * this.height);
-  }
-
-  _setLocationToValue(x, y, value) {
-    this.data[(x * this.height) + y] = value;
-  }
-
-  _valueForLocation(x, y) {
-    return this.data[(x * this.height) + y];
-  }
-
-  elevationForLocation(x, y) {
-    return this._valueForLocation(x, y) * this.elevationStep;
-  }
-
-  averageElevationForGridSpace(gx, gy) {
-    const { width, height } = canvas.grid.grid;
-
-    const sum = 0;
-    const maxX = gx + width;
-    const maxY = gy + height;
-    for ( let x = gx; x < maxX; x += 1 ) {
-      for ( let y = gy; y < maxY; y += 1 ) {
-        sum += this._valueForLocation(x, y);
-      }
-    }
-
-    const numPixels = width * height;
-    return (sum / numPixels) / this.elevationStep;
-  }
-
-  clampElevation(e) {
-    e = isNaN(e) ? 0 : e;
-    e = Math.round(e / this.elevationStep) * this.elevationStep;
-    return Math.clamped(e, 0, this.elevationMax);
-  }
-
-  setGridSpaceToElevation(gx, gy, elevation = 0) {
-    // Get the top left corner, then fill in the values in the grid
-    const [ tlx, tly ] = canvas.grid.grid.getPixelsFromGridPosition(gx, gy);
-    const size = canvas.scene.dimensions.size;
-
-    const value = this.clampElevation(elevation) / this.elevationStep;
-    const maxX = tlx + size;
-    const maxY = tly + size;
-    for ( let x = tlx; x < maxX; x += 1 ) {
-      for ( let y = tly; y < maxY; y += 1 ) {
-        this._setLocationToValue(x, y, value);
-      }
-    }
-  }
-}
+*/
