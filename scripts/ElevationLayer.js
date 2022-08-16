@@ -102,13 +102,39 @@ export class ElevationLayer extends InteractionLayer {
     // Create the effect and begin playback
     if ( !this.elevationGridContainer ) {
       const w = new FullCanvasContainer();
-      w.accessibleChildren = w.interactiveChildren = false;
-      w.filterArea = canvas.app.renderer.screen;
+//       w.width = this.elevationGrid.width;
+//       w.height = this.elevationGrid.height;
+
+//       w.accessibleChildren = w.interactiveChildren = false;
+//       w.filterArea = canvas.app.renderer.screen;
       this.elevationGridContainer = this.addChild(w);
     }
 
+
+    const data = new Float32Array(this.elevationGrid.area * 4);
+    for ( let i = 0; i < data.length; i += 4) {
+//       if ( i > 1000 * 4 ) break;
+
+      data[i] = (i > (1000 * 4)) ? 1.0 : 0.0;
+      data[i] = (i > (1000 * 4)) ? 0.0 : 1.0;
+      data[i] = 0.0;
+      data[i] = .8;
+    }
+
+    this._currentTex = PIXI.BaseTexture.fromBuffer(data, this.elevationGrid.width, this.elevationGrid.height, {
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      format: PIXI.FORMATS.RGBA
+    });
+
+//     this._currentTex = PIXI.BaseTexture.fromBuffer(this.elevationGrid._data, this.elevationGrid.width, this.elevationGrid.height, {
+//       scaleMode: PIXI.SCALE_MODES.NEAREST,
+//       format: PIXI.FORMATS.LUMINANCE
+//     });
+
     const elevationFilter = ElevationFilter.create({
-      u_resolution: [canvas.dimensions.width, canvas.dimensions.height]
+      u_resolution: [this.elevationGrid.width, this.elevationGrid.height],
+      uElevation: this._currentTex
+      //uElevation: this.elevationGrid._texture
     });
     this.elevationGridContainer.filters = [elevationFilter];
     return this.elevationGridContainer;
@@ -158,10 +184,47 @@ class ElevationFilter extends AbstractBaseFilter {
 
   static fragmentShader = `
   uniform vec2 u_resolution;
+  uniform sampler2D uSampler;
+  uniform sampler2D uElevation;
+  varying vec2 vTextureCoord;
 
   void main() {
-    vec2 st = gl_FragCoord.xy / u_resolution;
-    gl_FragColor = vec4(st.x, st.y, 0.5, 1.0);
+    vec4 tex = texture2D(uSampler, vTextureCoord);
+    vec4 elevation = texture2D(uElevation, vTextureCoord);
+//     vec2 st = gl_FragCoord.xy/u_resolution;
+
+
+
+    if ( vTextureCoord.x > 0.1 && vTextureCoord.y > 0.0 ) {
+      gl_FragColor = vec4(vTextureCoord.x, vTextureCoord.y, 0.0, 0.8);
+    } else {
+      gl_FragColor = tex;
+    }
+
+
+//     gl_FragColor = elevation;
+    // if ( elevation.x > 0.0 ) {
+//       gl_FragColor = elevation;
+//     } else {
+//       gl_FragColor = vec4(st.x,st.y,0.0,0.8);
+//     }
+
+//     vec2 st = gl_FragCoord.xy/u_resolution;
+//     gl_FragColor = vec4(st.x,st.y,0.0,0.8);
+//     gl_FragColor = elevation;
+
+//     if ( elevation.a > 0.0 ) {
+//       gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+//     } else if ( elevation.x > 0 ) {
+//       gl_FragColor = vec4(1.0, 0.0, 0.0, .5);
+//     } else if ( elevation.y > 0 ) {
+//       gl_FragColor = vec4(0.0, 1.0, 0.0, .5);
+//     } else if ( elevation.z > 0 ) {
+//       gl_FragColor = vec4(0.0, 0.0, 1.0, .5);
+//     }
+//     else {
+//       gl_FragColor = tex;
+//     }
   }
   `
 
