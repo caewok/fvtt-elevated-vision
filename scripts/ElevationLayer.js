@@ -108,8 +108,7 @@ export class ElevationLayer extends InteractionLayer {
     }
 
     const elevationFilter = ElevationFilter.create({
-      width: canvas.dimensions.width,
-      height: canvas.dimensions.height
+      u_resolution: [canvas.dimensions.width, canvas.dimensions.height]
     });
     this.elevationGridContainer.filters = [elevationFilter];
     return this.elevationGridContainer;
@@ -154,16 +153,13 @@ export class ElevationLayer extends InteractionLayer {
 
 class ElevationFilter extends AbstractBaseFilter {
   static defaultUniforms = {
-    width: 1,
-    height: 1
+    resolution: [1, 1]
   };
 
   static fragmentShader = `
-  uniform float width;
-  uniform float height;
+  uniform vec2 u_resolution;
 
   void main() {
-    vec2 u_resolution = vec2(width, height);
     vec2 st = gl_FragCoord.xy / u_resolution;
     gl_FragColor = vec4(st.x, st.y, 0.5, 1.0);
   }
