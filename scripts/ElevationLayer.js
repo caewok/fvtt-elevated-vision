@@ -5,6 +5,7 @@
 
 import { log } from "./util.js";
 import { ElevationGrid } from "./ElevationGrid.js";
+import * as drawing from "./drawing.js";
 
 /* Elevation layer
 
@@ -42,22 +43,11 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
-   * The weather overlay container
+   * The elevationGrid overlay container
    * @type {FullCanvasContainer}
    */
-  weather;
+  elevationGridContainer;
 
-  /**
-   * The currently active weather effect
-   * @type {ParticleEffect}
-   */
-  weatherEffect;
-
-  /**
-   * An occlusion filter that prevents weather from being displayed in certain regions
-   * @type {AbstractBaseMaskFilter}
-   */
-  weatherOcclusionFilter;
 
   get elevation() {
     return this.#elevation;
@@ -79,20 +69,19 @@ export class ElevationLayer extends InteractionLayer {
 
   /** @override */
   async _draw(options) {
-    this.weatherOcclusionFilter = InverseOcclusionMaskFilter.create({
-      alphaOcclusion: 0,
-      uMaskSampler: canvas.masks.tileOcclusion.renderTexture,
-      channel: "b"
-    });
-    this.drawWeather();
+//     this.weatherOcclusionFilter = InverseOcclusionMaskFilter.create({
+//       alphaOcclusion: 0,
+//       uMaskSampler: canvas.masks.tileOcclusion.renderTexture,
+//       channel: "b"
+//     });
+    if ( canvas.elevation.active ) this.drawElevation();
   }
 
   /* -------------------------------------------- */
 
   /** @inheritdoc */
   async _tearDown(options) {
-    this.weatherEffect?.destroy();
-    this.weather = this.weatherEffect = null;
+    this.elevationGridContainer = null;
     return super._tearDown();
   }
 
@@ -102,28 +91,28 @@ export class ElevationLayer extends InteractionLayer {
    * Draw the weather container.
    * @returns {FullCanvasContainer|null}    The weather container, or null if no effect is present
    */
-  drawWeather() {
-    if ( this.weatherEffect ) this.weatherEffect.stop();
-    const effect = CONFIG.weatherEffects[canvas.scene.elevation];
-    if ( !effect ) {
-      this.weatherOcclusionFilter.enabled = false;
-      return null;
+  drawElevation() {
+    // Draw walls
+    for ( const wall of canvas.walls.placeables ) {
+      drawing.drawSegment(wall, { color: drawing.COLORS.red });
+      drawing.drawPoint(wall.A, { color: drawing.COLORS.red });
+      drawing.drawPoint(wall.B, { color: drawing.COLORS.red });
     }
 
     // Create the effect and begin playback
-    if ( !this.weather ) {
+    if ( !this.elevationGridContainer ) {
       const w = new FullCanvasContainer();
       w.accessibleChildren = w.interactiveChildren = false;
       w.filterArea = canvas.app.renderer.screen;
-      this.weather = this.addChild(w);
+      this.elevationGridContainer = this.addChild(w);
     }
-    this.weatherEffect = new effect(this.weather);
-    this.weatherEffect.play();
 
-    // Apply occlusion filter
-    this.weatherOcclusionFilter.enabled = true;
-    this.weather.filters = [this.weatherOcclusionFilter];
-    return this.weather;
+    const elevationFilter = ElevationFilter.create({
+      width: canvas.dimensions.width,
+      height: canvas.dimensions.height
+    });
+    this.elevationGridContainer.filters = [elevationFilter];
+    return this.elevationGridContainer;
   }
 
   /* ----- Event Listeners and Handlers ----- /*
@@ -162,6 +151,41 @@ export class ElevationLayer extends InteractionLayer {
 
 }
 
+
+class ElevationFilter extends AbstractBaseFilter {
+  static defaultUniforms = {
+    width: 1,
+    height: 1
+  };
+
+  static fragmentShader = `
+  uniform float width;
+  uniform float height;
+
+  void main() {
+    vec2 u_resolution = vec2(width, height);
+    vec2 st = gl_FragCoord.xy / u_resolution;
+    gl_FragColor = vec4(st.x, st.y, 0.5, 1.0);
+  }
+  `
+
+//   static fragmentShader = `
+//   varying vec2 vTextureCoord;
+//   uniform sampler2D uSampler;
+//   uniform vec3 color;
+//   uniform float alpha;
+//   uniform vec2 u_resolution;
+//
+//   void main() {
+//     vec4 tex = texture2D(uSampler, vTextureCoord);
+//     vec2 st = gl_FragCoord.xy/u_resolution;
+//     gl_FragColor = vec4(st.x,st.y,0.0,1.0);
+//     // gl_FragColor = vec4(st.x, st.y, 0.0, 0.75);
+//     // gl_FragColor = vec4(tex.x, tex.y, 0.0, 0.75);
+//   }
+//   `;
+
+}
 
 
 /*

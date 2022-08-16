@@ -56,6 +56,21 @@ downloadPNG(sprite)
 downloadPNG(sprite2)
 
 
+sm = new SpriteMesh()
+
+
+renderer = canvas.app.renderer;
+var stage = new PIXI.Container();
+let {width, height} = canvas.dimensions;
+logo = PIXI.Sprite.from("systems/dnd5e/icons/items/armor/halfplate.png")
+
+sm = new SpriteMesh(logo.texture)
+sm.position.set(canvas.dimensions.sceneX, canvas.dimensions.sceneY)
+
+sm.render(renderer)
+
+
+
 
   */
 
