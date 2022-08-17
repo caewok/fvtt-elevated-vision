@@ -16,16 +16,16 @@ export class ElevationLayerToolBar extends Application {
 
     // As the elevation default to 0, it makes sense to start at 1 unit of elevation.
     this.undoQueue = new FIFOQueue(50);
-    this.elevationGrid = canvas.elevation.elevationGrid
+    this.elevation = canvas.elevation;
     this.currentElevation = canvas.scene.dimensions.distance;
   }
 
   get elevationStep() {
-    return this.elevationGrid.elevationStep;
+    return this.elevation.elevationStep;
   }
 
   get elevationMax() {
-    return this.elevationGrid.elevationMax;
+    return this.elevation.elevationMax;
   }
 
   get currentElevation() {
@@ -37,13 +37,13 @@ export class ElevationLayerToolBar extends Application {
   }
 
   /**
-   * Keep elevation between 0 and the elevationmax.
+   * Keep elevation between the designated min and max.
    * Round to the nearest step.
    * @param {number} e   Elevation value to clamp.
    * @returns {number}
    */
   clampElevation(e) {
-    return this.elevationGrid.clampElevation(e);
+    return this.elevation.clampElevation(e);
   }
 
   static get defaultOptions() {

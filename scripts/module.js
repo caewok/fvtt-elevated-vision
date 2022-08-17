@@ -47,7 +47,7 @@ Hooks.once("libWrapper.Ready", async function() {
 Hooks.once("canvasReady", async function() {
   // Set the elevation grid now that we know scene dimensions
   if ( !canvas.elevation ) return;
-  canvas.elevation.elevationGrid.initialize();
+  canvas.elevation.initialize();
 });
 
 

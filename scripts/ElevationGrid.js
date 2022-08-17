@@ -140,7 +140,12 @@ sm.render(renderer)
     // In the future, will load from database.
     // TO-DO: Also allow loading from an image file provided by user?
     this._data = new Uint8Array(this.area);
-    this._texture = new PIXI.BaseTexture(new PIXI.BufferResource(this._data, { width: this.width, height: this.height }));
+//     this._texture = new PIXI.BaseTexture(new PIXI.BufferResource(this._data, { width: this.width, height: this.height }));
+
+   this._texture = PIXI.BaseTexture.fromBuffer(this.data, this.width, this.height, {
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      format: PIXI.FORMATS.ALPHA
+    });
 
 //     this._texture = PIXI.Texture.fromBuffer(this._data, this.width, this.height, this.#resolution);
     return this._texture;
