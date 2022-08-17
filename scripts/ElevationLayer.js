@@ -181,6 +181,9 @@ export class ElevationLayer extends InteractionLayer {
 
   /** @inheritdoc */
   async _tearDown(options) {
+    log("_tearDown");
+//     this._graphicsContainer.destroy({children: true});
+//     this._graphicsContainer = null;
     this.container = null;
     return super._tearDown();
   }
