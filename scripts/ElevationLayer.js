@@ -115,32 +115,13 @@ export class ElevationLayer extends InteractionLayer {
       w.addChild(new PIXI.Sprite.from(PIXI.Texture.EMPTY));
     }
 
-    this._currentTexture = this.elevationGrid;
+//     this._currentTexture = this.elevationGrid;
 
-
-    const data = new Float32Array(this.elevationGrid.area * 4);
-    for ( let i = 0; i < data.length; i += 4) {
-//       if ( i > 1000 * 4 ) break;
-
-      data[i] = (i > (1000 * 4)) ? 1.0 : 0.0;
-      data[i+1] = (i > (1000 * 4)) ? 0.0 : 1.0;
-      data[i+2] = 0.0;
-      data[i+3] = .8;
-    }
-
-    this._currentTex = PIXI.BaseTexture.fromBuffer(data, this.elevationGrid.width, this.elevationGrid.height, {
-      scaleMode: PIXI.SCALE_MODES.NEAREST,
-      format: PIXI.FORMATS.RGBA
-    });
-
-//     this._currentTex = PIXI.BaseTexture.fromBuffer(this.elevationGrid._data, this.elevationGrid.width, this.elevationGrid.height, {
-//       scaleMode: PIXI.SCALE_MODES.NEAREST,
-//       format: PIXI.FORMATS.LUMINANCE
-//     });
+    const spriteForShader = new PIXI.Sprite.from('https://assets.codepen.io/292864/internal/avatars/users/default.png?fit=crop&format=auto&height=512&version=1&width=512')
 
     const elevationFilter = ElevationFilter.create({
-      u_resolution: [this.elevationGrid.width, this.elevationGrid.height],
-      uElevation: this._currentTex
+      dimensions: [this.elevationGrid.width, this.elevationGrid.height],
+      elevationSampler: spriteForShader.texture
       //uElevation: this.elevationGrid._texture
     });
     this.container.filters = [elevationFilter];
@@ -243,13 +224,14 @@ class ElevationFilter extends AbstractBaseFilter {
 
     varying vec2 vTextureCoord;
     varying vec2 vCanvasCoord;
+    varying vec2 vCanvasCoordNorm;
 
     void main(void)
     {
        vTextureCoord = aVertexPosition * (outputFrame.zw * inputSize.zw);
        vec2 position = aVertexPosition * max(outputFrame.zw, vec2(0.)) + outputFrame.xy;
        vCanvasCoord = (canvasMatrix * vec3(position, 1.0)).xy;
-//        vCanvasCoordNorm = vCanvasCoord / dimensions;
+       vCanvasCoordNorm = vCanvasCoord / dimensions;
        gl_Position = vec4((projectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
     }
   `;
@@ -257,13 +239,14 @@ class ElevationFilter extends AbstractBaseFilter {
   static fragmentShader = `
     varying vec2 vTextureCoord;
     varying vec2 vCanvasCoord;
+    varying vec2 vCanvasCoordNorm;
 
     uniform sampler2D uSampler;
     uniform sampler2D elevationSampler;
 
     void main() {
       vec4 tex = texture2D(uSampler, vTextureCoord);
-      vec4 elevation = texture2D(elevationSampler, vTextureCoord);
+      vec4 elevation = texture2D(elevationSampler, vCanvasCoordNorm);
       gl_FragColor = elevation;
 
 //       if ( elevation.a > 0.) {
