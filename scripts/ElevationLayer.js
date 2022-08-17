@@ -48,6 +48,14 @@ export class ElevationLayer extends InteractionLayer {
   /**
    * Container to hold the current graphics objects representing elevation
    */
+  _graphicsContainer = new PIXI.Container;
+
+  /**
+   * Container representing the canvas
+   * @type {FullCanvasContainer}
+   */
+  container;
+
 
 
   /**
@@ -173,6 +181,9 @@ export class ElevationLayer extends InteractionLayer {
 
   /** @inheritdoc */
   async _tearDown(options) {
+    log("_tearDown");
+//     this._graphicsContainer.destroy({children: true});
+//     this._graphicsContainer = null;
     this.container = null;
     return super._tearDown();
   }
@@ -229,18 +240,23 @@ export class ElevationLayer extends InteractionLayer {
     const [tlx, tly] = canvas.grid.grid.getTopLeft(p.x, p.y);
     const { w, h } = canvas.grid;
 
-    const graphics = new PIXI.Graphics();
+    const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     graphics.beginFill(this.elevationHex(elevation), 1.0);
     graphics.drawRect(tlx, tly, w, h);
     graphics.endFill();
 
-    canvas.app.renderer.render(graphics, this._elevationTexture);
-
-    graphics.destroy();
+    this.renderGraphics();
 
 //     this.drawElevation();
 
     // TO-DO: Destroy graphics? Clear graphics and reuse?
+  }
+
+  /**
+   * (Re)render the graphics stored in the container.
+   */
+  renderGraphics() {
+    canvas.app.renderer.render(this._graphicsContainer, this._elevationTexture);
   }
 
   /**
