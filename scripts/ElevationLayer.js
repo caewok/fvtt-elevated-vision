@@ -110,38 +110,41 @@ export class ElevationLayer extends InteractionLayer {
     if ( ! this.container ) {
       const w = new FullCanvasContainer();
       this.container = this.addChild(w);
+
+      // The container must be rendering something in order for the shader to show
+      w.addChild(new PIXI.Sprite.from(PIXI.Texture.EMPTY));
     }
 
-    // Bring in some images
-    const spriteForShader = new PIXI.Sprite.from('https://assets.codepen.io/292864/internal/avatars/users/default.png?fit=crop&format=auto&height=512&version=1&width=512')
-    // This image is a random image from imgur (which has CORS enabled so Codepen can grab it)
-//     const skyrimComic = new PIXI.Sprite.from('https://i.imgur.com/6BheBL1.jpeg')
-    const skyrimComic = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
-    // Note: The container must be rendering something in order for the shader to show,
-    // which is why we add this sprite to it.  It is a different sprite than spriteForShader
-    // to prove that the shader is rendering the spriteForShader ONLY via the texture uniform
-    // and not because it's a child.  Try removing the filter to see what it looks like without the
-    // shader applied
-    this.container.addChild(skyrimComic);
+    this._currentTexture = this.elevationGrid;
 
-    const shaderCode = `
-      varying vec2 vTextureCoord;
-      uniform sampler2D uTexture;
 
-      void main(void) {
-        gl_FragColor = texture2D(uTexture, vTextureCoord);
-        // Set the red to 0 just to show that the shader is having an effect
-        // this will make the texture render without any red
-        gl_FragColor.r = 0.0;
-      }
-    `;
-    const uniforms = {
-          // Pass the texture to the shader uniform
-          // "uTexture" could be named whatever you want
-          uTexture: spriteForShader.texture
+    const data = new Float32Array(this.elevationGrid.area * 4);
+    for ( let i = 0; i < data.length; i += 4) {
+//       if ( i > 1000 * 4 ) break;
+
+      data[i] = (i > (1000 * 4)) ? 1.0 : 0.0;
+      data[i+1] = (i > (1000 * 4)) ? 0.0 : 1.0;
+      data[i+2] = 0.0;
+      data[i+3] = .8;
     }
-    const simpleShader = new PIXI.Filter('',shaderCode,uniforms);
-    this.container.filters = [simpleShader]
+
+    this._currentTex = PIXI.BaseTexture.fromBuffer(data, this.elevationGrid.width, this.elevationGrid.height, {
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      format: PIXI.FORMATS.RGBA
+    });
+
+//     this._currentTex = PIXI.BaseTexture.fromBuffer(this.elevationGrid._data, this.elevationGrid.width, this.elevationGrid.height, {
+//       scaleMode: PIXI.SCALE_MODES.NEAREST,
+//       format: PIXI.FORMATS.LUMINANCE
+//     });
+
+    const elevationFilter = ElevationFilter.create({
+      u_resolution: [this.elevationGrid.width, this.elevationGrid.height],
+      uElevation: this._currentTex
+      //uElevation: this.elevationGrid._texture
+    });
+    this.container.filters = [elevationFilter];
+    return this.container;
   }
 
   /* ----- Event Listeners and Handlers ----- /*
