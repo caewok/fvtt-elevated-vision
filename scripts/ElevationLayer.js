@@ -87,6 +87,13 @@ export class ElevationLayer extends InteractionLayer {
 
   /* -------------------------------------------- */
 
+  applyFilter() {
+    const w = new FullCanvasContainer();
+    this.container = this.addChild(w);
+    this.filter = MyFilter.create();
+    w.filters = [this.filter];
+  }
+
   /**
    * Draw the weather container.
    * @returns {FullCanvasContainer|null}    The weather container, or null if no effect is present
@@ -109,12 +116,26 @@ export class ElevationLayer extends InteractionLayer {
       this.elevationGridContainer = this.addChild(w);
 //     }
 
+    const { width, height } = this.elevationGrid;
 
-    this.elevationFilter = ElevationFilter.create({
-      u_dimensions: [this.elevationGrid.width, this.elevationGrid.height],
-    });
-    this.elevationGridContainer.filters = [this.elevationFilter];
-    return this.elevationGridContainer;
+    this.geometry = new PIXI.Geometry()
+      .addAttribute("aVertexPosition",
+        [0, 0,
+         width, 0,
+         width, height,
+         0, height], 2)
+      .addAttribute("aUvs",
+        [0, 0,
+         1, 0,
+         1, 1,
+         0, 1], 2)
+      .addIndex([0, 1, 2, 0, 2, 3]);
+
+    this.shader = ColorAdjustmentsSamplerShader.create({ tintAlpha: [.1, 1, 0, .8] });
+    const quad = new PIXI.Mesh(this.geometry, this.shader);
+
+    quad.position.set(0, 0);
+    w.addChild(quad);
   }
 
   /* ----- Event Listeners and Handlers ----- /*
@@ -154,134 +175,118 @@ export class ElevationLayer extends InteractionLayer {
 }
 
 
-class ElevationFilter extends AbstractBaseFilter {
-  static defaultUniforms = {
-    u_dimensions: [1, 1],
-  };
 
+class MyFilter extends AbstractBaseFilter {
   static vertexShader = `
-    attribute vec2 aVertexPosition;
+  attribute vec2 aVertexPosition;
 
-    uniform mat3 projectionMatrix;
-    uniform vec2 screenDimensions;
-    uniform vec4 inputSize;
-    uniform vec4 outputFrame;
-
-    varying vec2 vTextureCoord;
-    varying vec2 vMaskTextureCoord;
-    varying vec2 vPosition;
-    varying vec2 aPosition;
-
-    // getting normalized coord for the tile texture
-    vec2 filterTextureCoord( void ) {
-      return aVertexPosition * (outputFrame.zw * inputSize.zw);
-    }
-
-    // getting normalized coord for a screen sized mask render texture
-    vec2 filterMaskTextureCoord( in vec2 textureCoord ) {
-      return (textureCoord * inputSize.xy + outputFrame.xy) / screenDimensions;
-    }
-
-    void main() {
-      aPosition = aVertexPosition;
-      vPosition = aVertexPosition * max(outputFrame.zw, vec2(0.)) + outputFrame.xy;
-      vTextureCoord = filterTextureCoord();
-      vMaskTextureCoord = filterMaskTextureCoord(vTextureCoord);
-      gl_Position = vec4(vPosition, 0., 1.);
-    }
-  `
-
-  static fragmentShader = `
-  uniform vec2 u_dimensions;
-  uniform vec4 filterArea;
+  uniform mat3 projectionMatrix;
 
   varying vec2 vTextureCoord;
-  varying vec2 vMaskTextureCoord;
-  varying vec2 vPosition;
-  varying vec2 aPosition;
+  varying vec3 tPos;
+  varying vec2 vSamplerUvs;
 
-  uniform sampler2D uSampler;
-  uniform sampler2D uElevation;
+  uniform vec4 inputSize;
+  uniform vec4 outputFrame;
+  uniform vec2 screenDimensions;
 
-  void main() {
-    vec4 tex = texture2D(uSampler, vTextureCoord);
+  vec4 filterVertexPosition( void )
+  {
+      vec2 position = aVertexPosition * max(outputFrame.zw, vec2(0.)) + outputFrame.xy;
 
-    gl_FragCoord =
+      return vec4((projectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
+  }
 
-//     if ( aPosition.x > 0.5 ) {
-//       gl_FragColor = vec4(aPosition.x, aPosition.y, 0.0, 0.8);
-//     } else {
-//       gl_FragColor = tex;
-//     }
+  vec2 filterTextureCoord( void )
+  {
+      return aVertexPosition * (outputFrame.zw * inputSize.zw);
+  }
 
-
-//     vec2 pixelCoord = vTextureCoord * filterArea.xy;
-//     vec2 normCoord = pixelCoord / u_dimensions;
-//
-//     gl_FragColor = vec4(normCoord.x, normCoord.y, 0.0, 0.8);
-//
-//     if ( normCoord.x > 0.0 ) {
-//       gl_FragColor = vec4(normCoord.x, normCoord.y, 0.0, 0.8);
-//     } else {
-//       gl_FragColor = tex;
-//     }
-
-//     gl_FragColor = vec4(1.0, 0.0, 0.0, 0.8);
-
-//     vec4 tex = texture2D(uSampler, vSamplerUvs);
-//     vec2 st = gl_FragCoord.xy/u_resolution;
-
-
-
-    // if ( vSamplerUvs.x > 0.1 && vSamplerUvs.y > 0.0 ) {
-//       gl_FragColor = vec4(vSamplerUvs.x, vSamplerUvs.y, 0.0, 0.8);
-//     } else {
-//       gl_FragColor = tex;
-//     }
-
-//     vec4 elevation = texture2D(uElevation, vTextureCoord);
-
-//     gl_FragColor = elevation;
-    // if ( elevation.x > 0.0 ) {
-//       gl_FragColor = elevation;
-//     } else {
-//       gl_FragColor = vec4(st.x,st.y,0.0,0.8);
-//     }
-
-//     vec2 st = gl_FragCoord.xy/u_resolution;
-//     gl_FragColor = vec4(st.x,st.y,0.0,0.8);
-//     gl_FragColor = elevation;
-
-//     if ( elevation.a > 0.0 ) {
-//       gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
-//     } else if ( elevation.x > 0 ) {
-//       gl_FragColor = vec4(1.0, 0.0, 0.0, .5);
-//     } else if ( elevation.y > 0 ) {
-//       gl_FragColor = vec4(0.0, 1.0, 0.0, .5);
-//     } else if ( elevation.z > 0 ) {
-//       gl_FragColor = vec4(0.0, 0.0, 1.0, .5);
-//     }
-//     else {
-//       gl_FragColor = tex;
-//     }
+  void main(void)
+  {
+      gl_Position = filterVertexPosition();
+      vTextureCoord = filterTextureCoord();
+      tPos = vec3(aVertexPosition, 1.0);
+      vSamplerUvs = tPos.xy / screenDimensions;
   }
   `
 
-//   static fragmentShader = `
-//   varying vec2 vTextureCoord;
-//   uniform sampler2D uSampler;
-//   uniform vec3 color;
-//   uniform float alpha;
-//   uniform vec2 u_resolution;
-//
-//   void main() {
-//     vec4 tex = texture2D(uSampler, vTextureCoord);
-//     vec2 st = gl_FragCoord.xy/u_resolution;
-//     gl_FragColor = vec4(st.x,st.y,0.0,1.0);
-//     // gl_FragColor = vec4(st.x, st.y, 0.0, 0.75);
-//     // gl_FragColor = vec4(tex.x, tex.y, 0.0, 0.75);
-//   }
-//   `;
+  static fragmentShader = `
+    varying vec2 vTextureCoord;
+    uniform sampler2D uSampler;
+    varying vec2 vSamplerUvs;
+
+    void main() {
+      vec4 tex = texture2D(uSampler, vTextureCoord);
+      if ( vSamplerUvs.x > 1000.) {
+        gl_FragColor = vec4(1., 0. , 0., 1.);
+      } else {
+        gl_FragColor = tex;
+      }
+    }
+  `
+}
+
+class ColorAdjustmentFilter extends AbstractBaseFilter {
+  static defaultUniforms = {
+    gamma: 1,
+    saturation: 1,
+    contrast: 1,
+    brightness: 1,
+    red: 1,
+    green: 1,
+    blue: 1,
+    alpha: 1,
+  }
+
+  static fragmentShader = `
+    varying vec2 vTextureCoord;
+    uniform sampler2D uSampler;
+
+    uniform float gamma;
+    uniform float contrast;
+    uniform float saturation;
+    uniform float brightness;
+    uniform float red;
+    uniform float green;
+    uniform float blue;
+    uniform float alpha;
+
+    void main(void)
+    {
+        vec4 c = texture2D(uSampler, vTextureCoord);
+
+        if (c.a > 0.0) {
+            c.rgb /= c.a;
+
+            float g = max(0.0001, gamma);
+
+            vec3 rgb = pow(c.rgb, vec3(1. / g));
+            rgb = mix(vec3(.5), mix(vec3(dot(vec3(.2125, .7154, .0721), rgb)), rgb, saturation), contrast);
+            rgb.r *= red;
+            rgb.g *= green;
+            rgb.b *= blue;
+            c.rgb = rgb * brightness;
+
+            c.rgb *= c.a;
+        }
+
+        gl_FragColor = c * alpha;
+    }
+  `
+
+}
+
+class ElevationFilter extends AbstractBaseFilter {
+  static defaultUniforms = {
+
+  };
+
+
+  static fragmentShader = `
+
+
+  `
 
 }
 
