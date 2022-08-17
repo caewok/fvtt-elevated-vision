@@ -118,23 +118,61 @@ export class ElevationLayer extends InteractionLayer {
 
     const { width, height } = this.elevationGrid;
 
-    this.geometry = new PIXI.Geometry()
-      .addAttribute("aVertexPosition",
-        [0, 0,
-         width, 0,
-         width, height,
-         0, height], 2)
-      .addAttribute("aUvs",
-        [0, 0,
-         1, 0,
-         1, 1,
-         0, 1], 2)
-      .addIndex([0, 1, 2, 0, 2, 3]);
+    const geometry = new PIXI.Geometry()
+    .addAttribute('aVertexPosition', // the attribute name
+        [-100, -100, // x, y
+            100, -100, // x, y
+            100, 100,
+            -100, 100], // x, y
+        2) // the size of the attribute
+    .addAttribute('aUvs', // the attribute name
+        [0, 0, // u, v
+            1, 0, // u, v
+            1, 1,
+            0, 1], // u, v
+        2) // the size of the attribute
+    .addIndex([0, 1, 2, 0, 2, 3]);
 
-    this.shader = ColorAdjustmentsSamplerShader.create({ tintAlpha: [.1, 1, 0, .8] });
-    const quad = new PIXI.Mesh(this.geometry, this.shader);
+    const shader = PIXI.Shader.from(`
 
-    quad.position.set(0, 0);
+        precision mediump float;
+
+        attribute vec2 aVertexPosition;
+        attribute vec2 aUvs;
+
+        uniform mat3 translationMatrix;
+        uniform mat3 projectionMatrix;
+
+        varying vec2 vUvs;
+
+        void main() {
+
+            vUvs = aUvs;
+            gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
+
+        }`,
+
+    `precision mediump float;
+
+        varying vec2 vUvs;
+
+        uniform sampler2D uSampler2;
+
+        void main() {
+
+            gl_FragColor = texture2D(uSampler2, vUvs );
+        }
+
+    `,
+    {
+        uSampler2: PIXI.Texture.from('systems/dnd5e/icons/items/armor/halfplate.png'),
+    });
+
+    const quad = new PIXI.Mesh(geometry, shader);
+
+    quad.position.set(400, 300);
+    quad.scale.set(2);
+
     w.addChild(quad);
   }
 
@@ -178,53 +216,47 @@ export class ElevationLayer extends InteractionLayer {
 
 class MyFilter extends AbstractBaseFilter {
   static vertexShader = `
-  attribute vec2 aVertexPosition;
+    attribute vec2 aVertexPosition;
 
-  uniform mat3 projectionMatrix;
+    uniform mat3 projectionMatrix;
+    uniform mat3 canvasMatrix;
+    uniform vec4 inputSize;
+    uniform vec4 outputFrame;
 
-  varying vec2 vTextureCoord;
-  varying vec3 tPos;
-  varying vec2 vSamplerUvs;
+    varying vec2 vTextureCoord;
+    varying vec2 vCanvasCoord;
 
-  uniform vec4 inputSize;
-  uniform vec4 outputFrame;
-  uniform vec2 screenDimensions;
-
-  vec4 filterVertexPosition( void )
-  {
-      vec2 position = aVertexPosition * max(outputFrame.zw, vec2(0.)) + outputFrame.xy;
-
-      return vec4((projectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
-  }
-
-  vec2 filterTextureCoord( void )
-  {
-      return aVertexPosition * (outputFrame.zw * inputSize.zw);
-  }
-
-  void main(void)
-  {
-      gl_Position = filterVertexPosition();
-      vTextureCoord = filterTextureCoord();
-      tPos = vec3(aVertexPosition, 1.0);
-      vSamplerUvs = tPos.xy / screenDimensions;
-  }
-  `
+    void main(void)
+    {
+       vTextureCoord = aVertexPosition * (outputFrame.zw * inputSize.zw);
+       vec2 position = aVertexPosition * max(outputFrame.zw, vec2(0.)) + outputFrame.xy;
+       vCanvasCoord = (canvasMatrix * vec3(position, 1.0)).xy;
+       gl_Position = vec4((projectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
+    }
+  `;
 
   static fragmentShader = `
     varying vec2 vTextureCoord;
+    varying vec2 vCanvasCoord;
+
     uniform sampler2D uSampler;
-    varying vec2 vSamplerUvs;
 
     void main() {
       vec4 tex = texture2D(uSampler, vTextureCoord);
-      if ( vSamplerUvs.x > 1000.) {
+      if ( vCanvasCoord.x > 1000.) {
         gl_FragColor = vec4(1., 0. , 0., 1.);
       } else {
         gl_FragColor = tex;
       }
     }
-  `
+  `;
+
+  /** @override */
+  apply(filterManager, input, output, clear, currentState) {
+    this.uniforms.canvasMatrix ??= new PIXI.Matrix();
+    this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
+    return super.apply(filterManager, input, output, clear, currentState);
+  }
 }
 
 class ColorAdjustmentFilter extends AbstractBaseFilter {
