@@ -106,74 +106,42 @@ export class ElevationLayer extends InteractionLayer {
       drawing.drawPoint(wall.B, { color: drawing.COLORS.red });
     }
 
-    // Create the effect and begin playback
-//     if ( !this.elevationGridContainer ) {
+    // Represent the elevation using a filter
+    if ( ! this.container ) {
       const w = new FullCanvasContainer();
-//       const w = new PIXI.Container();
-//       w.width = this.elevationGrid.width;
-//       w.height = this.elevationGrid.height;
-//       this.filterArea =
-      this.elevationGridContainer = this.addChild(w);
-//     }
+      this.container = this.addChild(w);
+    }
 
-    const { width, height } = this.elevationGrid;
+    // Bring in some images
+    const spriteForShader = new PIXI.Sprite.from('https://assets.codepen.io/292864/internal/avatars/users/default.png?fit=crop&format=auto&height=512&version=1&width=512')
+    // This image is a random image from imgur (which has CORS enabled so Codepen can grab it)
+//     const skyrimComic = new PIXI.Sprite.from('https://i.imgur.com/6BheBL1.jpeg')
+    const skyrimComic = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
+    // Note: The container must be rendering something in order for the shader to show,
+    // which is why we add this sprite to it.  It is a different sprite than spriteForShader
+    // to prove that the shader is rendering the spriteForShader ONLY via the texture uniform
+    // and not because it's a child.  Try removing the filter to see what it looks like without the
+    // shader applied
+    this.container.addChild(skyrimComic);
 
-    const geometry = new PIXI.Geometry()
-    .addAttribute('aVertexPosition', // the attribute name
-        [-100, -100, // x, y
-            100, -100, // x, y
-            100, 100,
-            -100, 100], // x, y
-        2) // the size of the attribute
-    .addAttribute('aUvs', // the attribute name
-        [0, 0, // u, v
-            1, 0, // u, v
-            1, 1,
-            0, 1], // u, v
-        2) // the size of the attribute
-    .addIndex([0, 1, 2, 0, 2, 3]);
+    const shaderCode = `
+      varying vec2 vTextureCoord;
+      uniform sampler2D uTexture;
 
-    const shader = PIXI.Shader.from(`
-
-        precision mediump float;
-
-        attribute vec2 aVertexPosition;
-        attribute vec2 aUvs;
-
-        uniform mat3 translationMatrix;
-        uniform mat3 projectionMatrix;
-
-        varying vec2 vUvs;
-
-        void main() {
-
-            vUvs = aUvs;
-            gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
-
-        }`,
-
-    `precision mediump float;
-
-        varying vec2 vUvs;
-
-        uniform sampler2D uSampler2;
-
-        void main() {
-
-            gl_FragColor = texture2D(uSampler2, vUvs );
-        }
-
-    `,
-    {
-        uSampler2: PIXI.Texture.from('systems/dnd5e/icons/items/armor/halfplate.png'),
-    });
-
-    const quad = new PIXI.Mesh(geometry, shader);
-
-    quad.position.set(400, 300);
-    quad.scale.set(2);
-
-    w.addChild(quad);
+      void main(void) {
+        gl_FragColor = texture2D(uTexture, vTextureCoord);
+        // Set the red to 0 just to show that the shader is having an effect
+        // this will make the texture render without any red
+        gl_FragColor.r = 0.0;
+      }
+    `;
+    const uniforms = {
+          // Pass the texture to the shader uniform
+          // "uTexture" could be named whatever you want
+          uTexture: spriteForShader.texture
+    }
+    const simpleShader = new PIXI.Filter('',shaderCode,uniforms);
+    this.container.filters = [simpleShader]
   }
 
   /* ----- Event Listeners and Handlers ----- /*
@@ -252,6 +220,7 @@ class MyFilter extends AbstractBaseFilter {
   `;
 
   /** @override */
+  // Thanks to https://ptb.discord.com/channels/732325252788387980/734082399453052938/1009287977261879388
   apply(filterManager, input, output, clear, currentState) {
     this.uniforms.canvasMatrix ??= new PIXI.Matrix();
     this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
@@ -259,66 +228,56 @@ class MyFilter extends AbstractBaseFilter {
   }
 }
 
-class ColorAdjustmentFilter extends AbstractBaseFilter {
-  static defaultUniforms = {
-    gamma: 1,
-    saturation: 1,
-    contrast: 1,
-    brightness: 1,
-    red: 1,
-    green: 1,
-    blue: 1,
-    alpha: 1,
-  }
+class ElevationFilter extends AbstractBaseFilter {
+  static vertexShader = `
+    attribute vec2 aVertexPosition;
 
-  static fragmentShader = `
+    uniform mat3 projectionMatrix;
+    uniform mat3 canvasMatrix;
+    uniform vec4 inputSize;
+    uniform vec4 outputFrame;
+    uniform vec2 dimensions;
+
     varying vec2 vTextureCoord;
-    uniform sampler2D uSampler;
-
-    uniform float gamma;
-    uniform float contrast;
-    uniform float saturation;
-    uniform float brightness;
-    uniform float red;
-    uniform float green;
-    uniform float blue;
-    uniform float alpha;
+    varying vec2 vCanvasCoord;
 
     void main(void)
     {
-        vec4 c = texture2D(uSampler, vTextureCoord);
-
-        if (c.a > 0.0) {
-            c.rgb /= c.a;
-
-            float g = max(0.0001, gamma);
-
-            vec3 rgb = pow(c.rgb, vec3(1. / g));
-            rgb = mix(vec3(.5), mix(vec3(dot(vec3(.2125, .7154, .0721), rgb)), rgb, saturation), contrast);
-            rgb.r *= red;
-            rgb.g *= green;
-            rgb.b *= blue;
-            c.rgb = rgb * brightness;
-
-            c.rgb *= c.a;
-        }
-
-        gl_FragColor = c * alpha;
+       vTextureCoord = aVertexPosition * (outputFrame.zw * inputSize.zw);
+       vec2 position = aVertexPosition * max(outputFrame.zw, vec2(0.)) + outputFrame.xy;
+       vCanvasCoord = (canvasMatrix * vec3(position, 1.0)).xy;
+//        vCanvasCoordNorm = vCanvasCoord / dimensions;
+       gl_Position = vec4((projectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
     }
-  `
-
-}
-
-class ElevationFilter extends AbstractBaseFilter {
-  static defaultUniforms = {
-
-  };
-
+  `;
 
   static fragmentShader = `
+    varying vec2 vTextureCoord;
+    varying vec2 vCanvasCoord;
 
+    uniform sampler2D uSampler;
+    uniform sampler2D elevationSampler;
 
-  `
+    void main() {
+      vec4 tex = texture2D(uSampler, vTextureCoord);
+      vec4 elevation = texture2D(elevationSampler, vTextureCoord);
+      gl_FragColor = elevation;
+
+//       if ( elevation.a > 0.) {
+//         gl_FragColor = vec4(1., 0. , 0., 0.8);
+//       } else {
+//         gl_FragColor = tex;
+//       }
+    }
+  `;
+
+  /** @override */
+  // Thanks to https://ptb.discord.com/channels/732325252788387980/734082399453052938/1009287977261879388
+  apply(filterManager, input, output, clear, currentState) {
+    this.uniforms.canvasMatrix ??= new PIXI.Matrix();
+    this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
+    return super.apply(filterManager, input, output, clear, currentState);
+  }
 
 }
 
