@@ -325,7 +325,7 @@ export class ElevationLayer extends InteractionLayer {
       this.container = this.addChild(w);
 
       // The container must be rendering something in order for the shader to show
-      w.addChild(new PIXI.Sprite.from(PIXI.Texture.EMPTY));
+      //w.addChild(new PIXI.Sprite.from(PIXI.Texture.EMPTY));
     }
 
     const elevationFilter = ElevationFilter.create({
