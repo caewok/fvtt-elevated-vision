@@ -32,6 +32,43 @@ export function log(...args) {
 }
 
 /**
+ * User FileReader to retrieve the DataURL from the file.
+ * Parallels readTextFromFile
+ * @param {File} file   A File object
+ * @return {Promise.<String>} A Promise which resolves to the loaded DataURL.
+ */
+export function readDataURLFromFile(file) {
+  const reader = new FileReader();
+  return new Promise((resolve, reject) => {
+    reader.onload = ev => { // eslint-disable-line no-unused-vars
+      resolve(reader.result);
+    };
+    reader.onerror = ev => { // eslint-disable-line no-unused-vars
+      reader.abort();
+      reject();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+  /**
+   * Convert base64 image to raw binary data
+   * @param {object} image64  HTML image64 object
+   * @returns {ArrayBuffer} The raw image data.
+   */
+export convertBase64ToImage(image64) {
+    const byteString = atob(image64.src.split(",")[1]);
+
+    // Write the bytes of the string to an ArrayBuffer
+    const ln = byteString.length;
+    const ab = new ArrayBuffer(ln);
+    const dw = new DataView(ab);
+    for ( let i = 0; i < ln; i += 1 ) dw.setUint8(i, byteString.charCodeAt(i));
+
+    return ab;
+  }
+
+/**
  * Get the point on a line AB that forms a perpendicular line to a point C.
  * From https://stackoverflow.com/questions/10301001/perpendicular-on-a-line-segment-from-a-given-point
  * This is basically simplified vector projection: https://en.wikipedia.org/wiki/Vector_projection

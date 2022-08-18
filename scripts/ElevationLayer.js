@@ -6,11 +6,14 @@ PIXI,
 mergeObject,
 FullCanvasContainer,
 AbstractBaseFilter,
-saveDataToFile
+saveDataToFile,
+Dialog,
+renderTemplate,
+game
 */
 "use strict";
 
-import { log } from "./util.js";
+import { log, readDataURLFromFile, convertBase64ToImage } from "./util.js";
 import * as drawing from "./drawing.js";
 
 /* Elevation layer
@@ -47,10 +50,16 @@ export class ElevationLayer extends InteractionLayer {
     this.controls = ui.controls.controls.find(obj => obj.name === "elevation");
   }
 
+  _backgroundElevation = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
+
   /**
    * Container to hold the current graphics objects representing elevation
    */
   _graphicsContainer = new PIXI.Container();
+
+  /**
+   * Sprite representing the background elevation
+   */
 
   /**
    * Container representing the canvas
@@ -153,6 +162,7 @@ export class ElevationLayer extends InteractionLayer {
 
   /** @override */
   _activate() {
+    log("Activating Elevation Layer.")
     this.drawElevation();
   }
 
@@ -165,7 +175,7 @@ export class ElevationLayer extends InteractionLayer {
 
   /** @inheritdoc */
   async _tearDown(options) {
-    log("_tearDown");
+    log("_tearDown Elevation Layer");
 //     this._graphicsContainer.destroy({children: true});
 //     this._graphicsContainer = null;
     this.container = null;
@@ -189,8 +199,21 @@ export class ElevationLayer extends InteractionLayer {
    * Initialize elevation data - resetting it when switching scenes or re-drawing canvas
    */
   async initialize() {
+    log("Initializing elevation layer")
+
     this._initialized = false;
     this._resolution = this._configureResolution();
+
+    // Initialize container to hold the elevation data and GM modifications
+    const w = new FullCanvasContainer();
+    this.container = this.addChild(w);
+
+    // Add the render texture for displaying elevation information to the GM
+    this._elevationTexture = PIXI.RenderTexture.create(this._resolution);
+
+    // Add the sprite that holds the default background elevation settings
+    this._graphicsContainer.addChild(this._backgroundElevation)
+
     await this.loadElevationData();
 
     this._initialized = true;
@@ -210,13 +233,85 @@ export class ElevationLayer extends InteractionLayer {
   async loadElevationData() {
     // For now, create brand new
 //     this._sprite.texture = PIXI.Texture.EMPTY;
-    this._elevationTexture = PIXI.RenderTexture.create(this._resolution);
 
     // Following won't work if _resolution.format = PIXI.FORMATS.ALPHA
     // texImage2D: type FLOAT but ArrayBufferView not Float32Array when using the filter
 //     const { width, height } = this._resolution;
 //     this._elevationBuffer = new Uint8Array(width * height);
 //     this._elevationTexture = PIXI.Texture.fromBuffer(this._elevationBuffer, width, height, this._resolution);
+  }
+
+
+
+  /**
+   * Import elevation data as png. Same format as download.
+   * See importFromJSONDialog in Foundry.
+   * @returns {Promise<void>}
+   */
+  async importDialog() {
+    new Dialog({
+      title: `Import Elevation Data: ${canvas.scene.name}`,
+      content: await renderTemplate("templates/apps/import-data.html", {
+        hint1: game.i18n.format("Elevation.ImportDataHint1", {document: "PNG"}),
+        hint2: game.i18n.format("Elevation.ImportDataHint2", {name: canvas.scene.name})
+      }),
+      buttons: {
+        import: {
+          icon: '<i class="fas fa-file-import"></i>',
+          label: "Import",
+          callback: html => {
+            const form = html.find("form")[0];
+            if ( !form.data.files.length ) return ui.notifications.error("You did not upload a data file!");
+            log("import", form.data.files)
+//             let dataURL;
+//             readDataURLFromFile(form.data.files[0]).then(dat => dataURL = dat);
+//             log("dataURL", dataURL);
+//             this.importFromPNG(dataURL);
+            readDataURLFromFile(form.data.files[0]).then(dataURL => this.importFromPNG(dataURL));
+          }
+        },
+        no: {
+          icon: '<i class="fas fa-times"></i>',
+          label: "Cancel"
+        }
+      },
+      default: "import"
+    }, {
+      width: 400
+    }).render(true);
+  }
+
+  importFromPNG(file) {
+    log(`PNG import ${file.toString()}`, file)
+
+    const loader = PIXI.Loader.shared;
+    loader.add('elevation', file);
+
+    loader.load((loader, resources) => {
+      const sprite = PIXI.Sprite.from(file);
+
+      log(`Loaded sprite with dim ${sprite.width},${sprite.height}`, sprite);
+
+      // Adjust position for sprite if necessary; abort if no match found.
+      const { width, height, sceneWidth, sceneHeight, sceneRect } = canvas.dimensions;
+      if ( sprite.width === sceneWidth && sprite.height === sceneHeight ) {
+        sprite.position = sceneRect;
+      } else if ( sprite.width !== width && sprite.height !== height ) {
+        ui.notifications.error("PNG elevation file dimensions do not match the scene. Try resizing the PNG file to the scene size.")
+        return;
+      }
+
+      log("rendering PNG")
+
+      // let sprite = PIXI.Sprite.from("elevation/test_001.png");
+      // TO-DO: Remove the graphics? Or better to leave and use separate clear button for that?
+      canvas.elevation._backgroundElevation.texture.destroy();
+      canvas.elevation._backgroundElevation.texture = sprite.texture;
+
+      //canvas.elevation._backgroundElevation = sprite;
+
+      canvas.elevation.renderElevation();
+    });
   }
 
   /**
@@ -230,27 +325,12 @@ export class ElevationLayer extends InteractionLayer {
     const imageExtension = format.split('/')[1];
     fileName += "." + imageExtension;
 
-    this.renderGraphics();
+    this.renderElevation();
     const image64 = canvas.app.renderer.extract.image(this._elevationTexture, format);
     saveDataToFile(this.convertBase64ToImage(image64), format, fileName);
   }
 
-  /**
-   * Convert base64 image to raw binary data
-   * @param {object} image64  HTML image64 object
-   * @returns {ArrayBuffer} The raw image data.
-   */
-  convertBase64ToImage(image64) {
-    const byteString = atob(image64.src.split(",")[1]);
 
-    // Write the bytes of the string to an ArrayBuffer
-    const ln = byteString.length;
-    const ab = new ArrayBuffer(ln);
-    const dw = new DataView(ab);
-    for ( let i = 0; i < ln; i += 1 ) dw.setUint8(i, byteString.charCodeAt(i));
-
-    return ab;
-  }
 
   // TO-DO: Preferably download as alpha, possibly by constructing a new texture?
 
@@ -344,7 +424,7 @@ export class ElevationLayer extends InteractionLayer {
     graphics.drawRect(tlx, tly, w, h);
     graphics.endFill();
 
-    this.renderGraphics();
+    this.renderElevation();
 
 //     this.drawElevation();
 
@@ -354,9 +434,11 @@ export class ElevationLayer extends InteractionLayer {
   /**
    * (Re)render the graphics stored in the container.
    */
-  renderGraphics() {
+  renderElevation() {
     this.#pixelArray = undefined; // Invalidate the pixel array cache
 //     this._elevationTexture.render(this._graphicsContainer);
+//     if ( #backgroundElevation )
+
     canvas.app.renderer.render(this._graphicsContainer, this._elevationTexture);
   }
 
@@ -373,15 +455,6 @@ export class ElevationLayer extends InteractionLayer {
       drawing.drawSegment(wall, { color: drawing.COLORS.red });
       drawing.drawPoint(wall.A, { color: drawing.COLORS.red });
       drawing.drawPoint(wall.B, { color: drawing.COLORS.red });
-    }
-
-    // Represent the elevation using a filter
-    if ( !this.container ) {
-      const w = new FullCanvasContainer();
-      this.container = this.addChild(w);
-
-      // The container must be rendering something in order for the shader to show
-      //w.addChild(new PIXI.Sprite.from(PIXI.Texture.EMPTY));
     }
 
     const elevationFilter = ElevationFilter.create({

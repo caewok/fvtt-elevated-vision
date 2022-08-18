@@ -72,6 +72,23 @@ export function addElevationLayerSceneControls(controls) {
 //         icon: "fas fa-rotate-left"
 //       },
 
+
+
+      {
+        name: "upload",
+        title: "Upload elevation data and replace in scene",
+        icon: "fas fa-file-arrow-up",
+        onClick: () => {
+					//canvas.elevation.importDialog()
+					new FilePicker({
+              type: "image",
+              displayMode: "thumbs",
+              tileSize: false,
+              callback: canvas.elevation.importFromPNG
+            }).render(true);
+				}
+      },
+
       {
         name: "download",
         title: "Download elevation data",
