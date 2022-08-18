@@ -5,7 +5,8 @@ canvas,
 PIXI,
 mergeObject,
 FullCanvasContainer,
-AbstractBaseFilter
+AbstractBaseFilter,
+saveDataToFile
 */
 "use strict";
 
@@ -121,9 +122,9 @@ export class ElevationLayer extends InteractionLayer {
     // Gradient from red (255, 0, 0) to blue (0, 0, 255)
     // Flip at 128
     // Helps visualization
-//     const r = value;
-//     const g = 0;
-//     const b = value - 255;
+    // const r = value;
+    // const g = 0;
+    // const b = value - 255;
 
     log(`elevationHex elevation ${e}, value ${value}`);
 
@@ -211,6 +212,52 @@ export class ElevationLayer extends InteractionLayer {
 //     this._sprite.texture = PIXI.Texture.EMPTY;
     this._elevationTexture = PIXI.RenderTexture.create(this._resolution);
   }
+
+  /**
+   * Download the elevation data as an image file.
+   * Currently writes the texture as RGBA?
+   * @param {object} [options]  Options that affect how the image file is formatted.
+   * @param {string} [options.format] Image format, e.g. "image/jpeg" or "image/webp".
+   * @param {string} [options.fileName] Name of the file. Extension will be added based on format.
+   */
+  async downloadElevationData({ format = "image/png", fileName = "elevation"} = {}) {
+    const imageExtension = format.split('/')[1];
+    fileName += "." + imageExtension;
+
+    const image64 = canvas.app.renderer.extract.image(this._elevationTexture, format);
+    saveDataToFile(this.convertBase64ToImage(image64), format, fileName);
+  }
+
+  /**
+   * Convert base64 image to raw binary data
+   * @param {object} image64  HTML image64 object
+   * @returns {ArrayBuffer} The raw image data.
+   */
+  convertBase64ToImage(image64) {
+    const byteString = atob(image64.src.split(",")[1]);
+
+    // Write the bytes of the string to an ArrayBuffer
+    const ln = byteString.length;
+    const ab = new ArrayBuffer(ln);
+    const dw = new DataView(ab);
+    for ( let i = 0; i < ln; i += 1 ) dw.setUint8(i, byteString.charCodeAt(i));
+
+    return ab;
+  }
+
+  // TO-DO: Preferably download as alpha, possibly by constructing a new texture?
+
+  //     const { width, height } = this._resolution;
+  //     const tex = PIXI.Texture.fromBuffer(this.pixelArray, width, height, {
+  //       resolution: 1.0,
+  //       mipmap: PIXI.MIPMAP_MODES.OFF,
+  //       scaleMode: PIXI.SCALE_MODES.LINEAR,
+  //       multisample: PIXI.MSAA_QUALITY.NONE,
+  //       format: PIXI.FORMATS.ALPHA
+  //     })
+  //
+  //     const s = new PIXI.Sprite(texture);
+  //     const png = canvas.app.renderer.extract.image(s, "image/png")
 
   /**
    * Cache for the pixel data array
@@ -313,6 +360,7 @@ export class ElevationLayer extends InteractionLayer {
     this.#pixelArray = undefined;
 
     // Draw walls
+    // TO-DO: Add to the layer render using graphics instead of the debug display?
     for ( const wall of canvas.walls.placeables ) {
       drawing.drawSegment(wall, { color: drawing.COLORS.red });
       drawing.drawPoint(wall.A, { color: drawing.COLORS.red });
@@ -489,5 +537,9 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3.0 - 2.0 * t);
 }
 
+new FilePicker({activeSource: "data", current: "icons/magic/earth"}).render(true);
+
+png64 = ImageHelper.textureToImage(el._elevationTexture, { format: "image/png" })
+webp64 = ImageHelper.textureToImage(el._elevationTexture, { format: "image/webp", quality: 1 })
 
 */
