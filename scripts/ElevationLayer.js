@@ -4,7 +4,8 @@ ui,
 canvas,
 PIXI,
 mergeObject,
-FullCanvasContainer
+FullCanvasContainer,
+AbstractBaseFilter
 */
 "use strict";
 
@@ -48,15 +49,13 @@ export class ElevationLayer extends InteractionLayer {
   /**
    * Container to hold the current graphics objects representing elevation
    */
-  _graphicsContainer = new PIXI.Container;
+  _graphicsContainer = new PIXI.Container();
 
   /**
    * Container representing the canvas
    * @type {FullCanvasContainer}
    */
   container;
-
-
 
   /**
    * This is the z-order replacement in v10. Not elevation for the terrain!
@@ -105,26 +104,10 @@ export class ElevationLayer extends InteractionLayer {
     return (255 * this.elevationStep) - this.elevationMin;
   }
 
-  // ----- Methods to retrieve elevation for the scene ---- //
-  elevationForLocation(x, y) {
-    console.warn("elevationForLocation not yet implemented");
+  pixelValueToElevation(value) {
+    return (Math.round(value) * this.elevationStep) - this.elevationMin;
   }
 
-  averageElevationForGridSpace(gx, gy) {
-    const { width, height } = canvas.grid.grid;
-
-    let sum = 0;
-    const maxX = gx + width;
-    const maxY = gy + height;
-    for ( let x = gx; x < maxX; x += 1 ) {
-      for ( let y = gy; y < maxY; y += 1 ) {
-        sum += this._valueForLocation(x, y);
-      }
-    }
-
-    const numPixels = width * height;
-    return (sum / numPixels) / this.elevationStep;
-  }
 
   /**
    * Color used to store this elevation value.
@@ -185,7 +168,7 @@ export class ElevationLayer extends InteractionLayer {
 //     this._graphicsContainer.destroy({children: true});
 //     this._graphicsContainer = null;
     this.container = null;
-    return super._tearDown();
+    return super._tearDown(options);
   }
 
   /* -------------------------------------------- */
@@ -229,6 +212,68 @@ export class ElevationLayer extends InteractionLayer {
     this._elevationTexture = PIXI.RenderTexture.create(this._resolution);
   }
 
+  /**
+   * Cache for the pixel data array
+   */
+  #pixelArray;
+
+  get pixelArray() {
+    if ( this.#pixelArray ) return this.#pixelArray;
+
+    const arr = canvas.app.renderer.extract.pixels(this._elevationTexture);
+    // Only keep the red channel.
+    // For loop remains probably the most efficient way to accomplish this
+    const pixels = [];
+    for ( let x = 0; x < arr.length; x += 4 ) {
+      pixels.push(arr[x]);
+    }
+    return this.#pixelArray = pixels;
+  }
+
+  /**
+   * Return the raw pixel value at a given location in the elevation grid.
+   * @param {number} x
+   * @param {number} y
+   * @returns {number} Number between 0 and 1.
+   */
+  _valueForLocation(x, y) {
+    return this.pixelArray[(y * this._resolution.width) + x];
+  }
+
+  elevationAt(x, y) {
+    const value = this._valueForLocation(x, y);
+    return this.pixelValueToElevation(value);
+  }
+
+  // canvas.grid.grid.getGridPositionFromPixels(x, y)
+
+  averageElevationForGridSpace(row, col) {
+    const [x, y] = canvas.grid.grid.getPixelsFromGridPosition(row, col);
+    return this.averageElevationForGridPoint(x, y);
+  }
+
+  averageElevationAtGridPoint(x, y) {
+    const { w, h } = canvas.grid.grid;
+    const [tlx, tly] = canvas.grid.grid.getTopLeft(x, y);
+
+    let sum = 0;
+    const maxX = tlx + w;
+    const maxY = tly + h;
+    for ( let x = tlx; x < maxX; x += 1 ) {
+      for ( let y = tly; y < maxY; y += 1 ) {
+        sum += this._valueForLocation(x, y);
+      }
+    }
+
+    const numPixels = w * h;
+    return this.pixelValueToElevation(sum / numPixels);
+  }
+
+  averageElevation() {
+    const sum = this.pixelArray.reduce((a, b) => a + b);
+    return sum / (this._resolution.width * this._resolution.height);
+  }
+
 
   /**
    * Set the elevation for the grid space that contains the point.
@@ -256,6 +301,7 @@ export class ElevationLayer extends InteractionLayer {
    * (Re)render the graphics stored in the container.
    */
   renderGraphics() {
+    this.#pixelArray = undefined; // Invalidate the pixel array cache
     canvas.app.renderer.render(this._graphicsContainer, this._elevationTexture);
   }
 
@@ -264,6 +310,8 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {FullCanvasContainer|null}    The weather container, or null if no effect is present
    */
   drawElevation() {
+    this.#pixelArray = undefined;
+
     // Draw walls
     for ( const wall of canvas.walls.placeables ) {
       drawing.drawSegment(wall, { color: drawing.COLORS.red });
