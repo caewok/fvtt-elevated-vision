@@ -211,6 +211,12 @@ export class ElevationLayer extends InteractionLayer {
     // For now, create brand new
 //     this._sprite.texture = PIXI.Texture.EMPTY;
     this._elevationTexture = PIXI.RenderTexture.create(this._resolution);
+
+    // Following won't work if _resolution.format = PIXI.FORMATS.ALPHA
+    // texImage2D: type FLOAT but ArrayBufferView not Float32Array when using the filter
+//     const { width, height } = this._resolution;
+//     this._elevationBuffer = new Uint8Array(width * height);
+//     this._elevationTexture = PIXI.Texture.fromBuffer(this._elevationBuffer, width, height, this._resolution);
   }
 
   /**
@@ -224,6 +230,7 @@ export class ElevationLayer extends InteractionLayer {
     const imageExtension = format.split('/')[1];
     fileName += "." + imageExtension;
 
+    this.renderGraphics();
     const image64 = canvas.app.renderer.extract.image(this._elevationTexture, format);
     saveDataToFile(this.convertBase64ToImage(image64), format, fileName);
   }
@@ -349,6 +356,7 @@ export class ElevationLayer extends InteractionLayer {
    */
   renderGraphics() {
     this.#pixelArray = undefined; // Invalidate the pixel array cache
+//     this._elevationTexture.render(this._graphicsContainer);
     canvas.app.renderer.render(this._graphicsContainer, this._elevationTexture);
   }
 
