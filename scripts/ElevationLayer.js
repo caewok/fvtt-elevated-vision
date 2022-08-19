@@ -235,6 +235,16 @@ export class ElevationLayer extends InteractionLayer {
     await this.loadSceneElevationData();
 
     this._initialized = true;
+
+    window.addEventListener("mousemove", (event) => {
+      if ( !canvas.ready ) return;
+      if (!canvas.elevation.active) return;
+
+//       log(`mouse at ${event.clientX},${event.clientY}`, event);
+      const pos = canvas.app.renderer.plugins.interaction.mouse.getLocalPosition(canvas.app.stage)
+      log(`mouse at ${pos.x},${pos.y}`, event);
+
+    }, { passive: true })
   }
 
   _configureResolution() {
@@ -509,6 +519,9 @@ export class ElevationLayer extends InteractionLayer {
     // Standard left-click handling
     super._onClickLeft(event);
   }
+
+
+
 }
 
 class MyFilter extends AbstractBaseFilter {
