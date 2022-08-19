@@ -197,6 +197,7 @@ export class ElevationLayer extends InteractionLayer {
     // Probably need to figure out how to destroy and/or remove these objects
     //     this._graphicsContainer.destroy({children: true});
     //     this._graphicsContainer = null;
+    this.#destroy();
     this.container = null;
     return super._tearDown(options);
   }
@@ -343,7 +344,6 @@ export class ElevationLayer extends InteractionLayer {
 
     canvas.elevation.renderElevation();
     canvas.elevation._requiresSave = true;
-
   }
 
   /**
@@ -430,6 +430,27 @@ export class ElevationLayer extends InteractionLayer {
     this._requiresSave = true;
 
     // TO-DO: Destroy graphics? Clear graphics and reuse?
+  }
+
+  /**
+   * Remove all elevation data from the scene.
+   */
+  async clearElevationData() {
+    this.#destroy();
+    await canvas.scene.unsetFlag(MODULE_ID, FLAG_ELEVATION_IMAGE);
+    this._requiresSave = false;
+    this.renderElevation();
+  }
+
+  /**
+   * Destroy elevation data when changing scenes or clearing data.
+   */
+  #destroy() {
+    this._backgroundElevation.destroy();
+    this._backgroundElevation = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
+
+    this._graphicsContainer.destroy({children: true});
+    this._graphicsContainer = new PIXI.Container()
   }
 
   /**

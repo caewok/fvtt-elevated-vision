@@ -60,11 +60,14 @@ export function addElevationLayerSceneControls(controls) {
 //         icon: "fas fa-fill"
 //       },
 //
-//       {
-//         name: "clear",
-//         title: "Clear all",
-//         icon: "fas fa-trash-can"
-//       },
+      {
+        name: "clear",
+        title: "Clear all",
+        icon: "fas fa-trash-can",
+        onClick: () => {
+          canvas.elevation.clearElevationData();
+        }
+      },
 //
 //       {
 //         name: "undo",
