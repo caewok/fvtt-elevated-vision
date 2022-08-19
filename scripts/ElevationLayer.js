@@ -9,12 +9,13 @@ AbstractBaseFilter,
 saveDataToFile,
 Dialog,
 renderTemplate,
-game
+game,
+isEmpty
 */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { log, readDataURLFromFile, convertBase64ToImage } from "./util.js";
+import { log, readDataURLFromFile, convertBase64ToImage, extractPixels } from "./util.js";
 import * as drawing from "./drawing.js";
 
 /* Elevation layer
@@ -247,12 +248,12 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   async loadSceneElevationData() {
-    log("loadSceneElevationData")
+    log("loadSceneElevationData");
     const png64 = canvas.scene.getFlag(MODULE_ID, "elevationPNG64");
     if ( !png64 ) return;
 
     if ( isEmpty(png64) ) {
-      canvas.scene.unsetFlag(MODULE_ID, "elevationPNG64")
+      canvas.scene.unsetFlag(MODULE_ID, "elevationPNG64");
       return;
     }
 
@@ -308,37 +309,28 @@ export class ElevationLayer extends InteractionLayer {
   async importFromPNG(file) {
     log(`PNG import ${file}`, file);
 
-//     const loader = PIXI.Loader.shared;
-//     loader.add("elevation", file);
+    // See https://stackoverflow.com/questions/41494623/pixijs-sprite-not-loading
+    const texture = await PIXI.Texture.fromURL(file);
+    log(`Loaded texture with dim ${texture.width},${texture.height}`, texture);
 
-//     return loader.load((loader, resources) => {
-      // Or just resources.elevation.texture?
-//       const sprite = PIXI.Sprite.from(resources.elevation);
+    // Adjust position for sprite if necessary; abort if no match found.
+    const { width, height, sceneWidth, sceneHeight, sceneRect } = canvas.dimensions;
+    if ( texture.width === sceneWidth && texture.height === sceneHeight ) {
+      texture.position = sceneRect;
+    } else if ( texture.width !== width && texture.height !== height ) {
+      ui.notifications.error("PNG elevation file dimensions do not match the scene. Try resizing the PNG file to the scene size.");
+      return;
+    }
 
-      // See https://stackoverflow.com/questions/41494623/pixijs-sprite-not-loading
-      const texture = await PIXI.Texture.fromURL(file);
-      log(`Loaded texture with dim ${texture.width},${texture.height}`, texture);
+    log("rendering PNG");
 
-      // Adjust position for sprite if necessary; abort if no match found.
-      const { width, height, sceneWidth, sceneHeight, sceneRect } = canvas.dimensions;
-      if ( texture.width === sceneWidth && texture.height === sceneHeight ) {
-        texture.position = sceneRect;
-      } else if ( texture.width !== width && texture.height !== height ) {
-        ui.notifications.error("PNG elevation file dimensions do not match the scene. Try resizing the PNG file to the scene size.");
-        return;
-      }
+    // Testing: let sprite = PIXI.Sprite.from("elevation/test_001.png");
+    canvas.elevation._backgroundElevation.texture.destroy();
+    canvas.elevation._backgroundElevation.texture = texture;
 
-      log("rendering PNG");
+    canvas.elevation.renderElevation();
+    canvas.elevation._requiresSave = true;
 
-      // Testing: let sprite = PIXI.Sprite.from("elevation/test_001.png");
-      canvas.elevation._backgroundElevation.texture.destroy();
-      canvas.elevation._backgroundElevation.texture = texture;
-
-      // canvas.elevation._backgroundElevation = sprite;
-
-      canvas.elevation.renderElevation();
-      canvas.elevation._requiresSave = true;
-//     });
   }
 
   /**
@@ -349,8 +341,8 @@ export class ElevationLayer extends InteractionLayer {
    * @param {string} [options.fileName] Name of the file. Extension will be added based on format.
    */
   async downloadElevationData({ format = "image/png", fileName = "elevation"} = {}) {
-    const imageExtension = format.split('/')[1];
-    fileName += "." + imageExtension;
+    const imageExtension = format.split("/")[1];
+    fileName += `.${imageExtension}`;
 
     this.renderElevation();
     const image64 = canvas.app.renderer.extract.image(this._elevationTexture, format);
@@ -382,37 +374,10 @@ export class ElevationLayer extends InteractionLayer {
   //     const s = new PIXI.Sprite(texture);
   //     const png = canvas.app.renderer.extract.image(s, "image/png")
 
-  /**
-   * Cache for the pixel data array
-   */
-  #pixelArray;
-
-  get pixelArray() {
-    if ( this.#pixelArray ) return this.#pixelArray;
-
-    const arr = canvas.app.renderer.extract.pixels(this._elevationTexture);
-    // Only keep the red channel.
-    // For loop remains probably the most efficient way to accomplish this
-    const pixels = [];
-    for ( let x = 0; x < arr.length; x += 4 ) {
-      pixels.push(arr[x]);
-    }
-    return this.#pixelArray = pixels;
-  }
-
-  /**
-   * Return the raw pixel value at a given location in the elevation grid.
-   * @param {number} x
-   * @param {number} y
-   * @returns {number} Number between 0 and 1.
-   */
-  _valueForLocation(x, y) {
-    return this.pixelArray[(y * this._resolution.width) + x];
-  }
 
   elevationAt(x, y) {
-    const value = this._valueForLocation(x, y);
-    return this.pixelValueToElevation(value);
+    const gridRect = new PIXI.Rectangle(x, y, 1, 1);
+    return this.averageElevation(gridRect);
   }
 
   averageElevationForGridSpace(row, col) {
@@ -424,22 +389,18 @@ export class ElevationLayer extends InteractionLayer {
     const { w, h } = canvas.grid.grid;
     const [tlx, tly] = canvas.grid.grid.getTopLeft(x, y);
 
-    let sum = 0;
-    const maxX = tlx + w;
-    const maxY = tly + h;
-    for ( let x = tlx; x < maxX; x += 1 ) {
-      for ( let y = tly; y < maxY; y += 1 ) {
-        sum += this._valueForLocation(x, y);
-      }
-    }
-
-    const numPixels = w * h;
-    return this.pixelValueToElevation(sum / numPixels);
+    const gridRect = new PIXI.Rectangle(tlx, tly, w, h);
+    return this.averageElevation(gridRect);
   }
 
-  averageElevation() {
-    const sum = this.pixelArray.reduce((a, b) => a + b);
-    return sum / (this._resolution.width * this._resolution.height);
+  averageElevation(gridRect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
+    const arr = extractPixels(this._elevationTexture, gridRect);
+    let sum = 0;
+    const ln = arr.length;
+    for ( let i = 0; i < ln; i += 4 ) {
+      sum += arr[i];
+    }
+    return this.pixelValueToElevation(sum) / (gridRect.width * gridRect.height);
   }
 
 
@@ -469,10 +430,6 @@ export class ElevationLayer extends InteractionLayer {
    * (Re)render the graphics stored in the container.
    */
   renderElevation() {
-    this.#pixelArray = undefined; // Invalidate the pixel array cache
-    // this._elevationTexture.render(this._graphicsContainer);
-    // if ( #backgroundElevation )
-
     canvas.app.renderer.render(this._graphicsContainer, this._elevationTexture);
   }
 
@@ -481,7 +438,6 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {FullCanvasContainer|null}    The weather container, or null if no effect is present
    */
   drawElevation() {
-    this.#pixelArray = undefined;
 
     // Draw walls
     // TO-DO: Add to the layer render using graphics instead of the debug display?
