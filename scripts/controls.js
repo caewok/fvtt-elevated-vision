@@ -35,41 +35,67 @@ export function addElevationLayerSceneControls(controls) {
         icon: "fas fa-brush"
       },
 
+//       {
+//         name: "fill-by-pixel",
+//         title: "Fill by Pixel",
+//         icon: "fas fa-paintbrush-fine"
+//       },
+//
+//       {
+//         name: "fill-space",
+//         title: "Fill enclosed by walls",
+//         icon: "fas fa-fill-drip"
+//       },
+//
+//       {
+//         name: "border",
+//         title: "Border spacer",
+//         icon: "fas fa-horizontal-rule",
+//         active: false
+//       },
+//
+//       {
+//         name: "fill-all",
+//         title: "Set all to current elevation",
+//         icon: "fas fa-fill"
+//       },
+//
+//       {
+//         name: "clear",
+//         title: "Clear all",
+//         icon: "fas fa-trash-can"
+//       },
+//
+//       {
+//         name: "undo",
+//         title: "Undo",
+//         icon: "fas fa-rotate-left"
+//       },
+
+
+
       {
-        name: "fill-by-pixel",
-        title: "Fill by Pixel",
-        icon: "fas fa-paintbrush-fine"
+        name: "upload",
+        title: "Upload elevation data and replace in scene",
+        icon: "fas fa-file-arrow-up",
+        onClick: () => {
+					//canvas.elevation.importDialog()
+					new FilePicker({
+              type: "image",
+              displayMode: "thumbs",
+              tileSize: false,
+              callback: canvas.elevation.importFromPNG
+            }).render(true);
+				}
       },
 
       {
-        name: "fill-space",
-        title: "Fill enclosed by walls",
-        icon: "fas fa-fill-drip"
-      },
-
-      {
-        name: "border",
-        title: "Border spacer",
-        icon: "fas fa-horizontal-rule",
-        active: false
-      },
-
-      {
-        name: "fill-all",
-        title: "Set all to current elevation",
-        icon: "fas fa-fill"
-      },
-
-      {
-        name: "clear",
-        title: "Clear all",
-        icon: "fas fa-trash-can"
-      },
-
-      {
-        name: "undo",
-        title: "Undo",
-        icon: "fas fa-rotate-left"
+        name: "download",
+        title: "Download elevation data",
+        icon: "fas fa-file-arrow-down",
+        onClick: () => {
+					canvas.elevation.downloadElevationData()
+				}
       }
     ]
   });
