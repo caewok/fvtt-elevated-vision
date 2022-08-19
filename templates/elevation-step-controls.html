@@ -1,0 +1,15 @@
+<ol id="elevationlayer-tools" class="control-tools flexcol">
+    <li class="control-tool" title="{{localize "ElevationLayer.IncrementElevation"}}">
+        <button class="control-btn" id="el-inc-elevation" data-tool="inc-elevation" type="button">
+            <i class="fas fa-chevron-up"></i>
+        </button>
+    </li>
+    <li id="el-elevation-number" class="control-tool" title="{{localize "ElevationLayer.CurrentElevation"}}">
+        <input type="number" id="el-curr-elevation" step={{ elevationstep }} min=0 max={{ elevationmax }} value={{ elevationcurr }}>
+    </li>
+    <li class="control-tool" title="{{localize "ElevationLayer.DecrementElevation"}}">
+        <button class="control-btn" id="el-dec-elevation" data-tool="dec-elevation" type="button">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+    </li>
+</ol>

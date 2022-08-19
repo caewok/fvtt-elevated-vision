@@ -15,20 +15,39 @@ import { MODULE_ID } from "./const.js";
 
 import { registerAdditions, registerPatches } from "./patching.js";
 
+import {
+  addElevationLayerSceneControls,
+  addElevationLayerSubControls,
+  renderElevationLayerSubControls
+} from "./controls.js";
+
+import { ElevationLayer } from "./ElevationLayer.js";
+import { ElevationGrid } from "./ElevationGrid.js";
+
+
 Hooks.once("init", async function() {
   game.modules.get(MODULE_ID).api = {
     drawing,
     util,
     Point3d,
-    Shadow
+    Shadow,
+    ElevationLayer,
+    ElevationGrid
   };
 
   registerPIXIPolygonMethods();
   registerAdditions();
+  registerLayer();
 });
 
 Hooks.once("libWrapper.Ready", async function() {
   registerPatches();
+});
+
+Hooks.once("canvasReady", async function() {
+  // Set the elevation grid now that we know scene dimensions
+  if ( !canvas.elevation ) return;
+  canvas.elevation.initialize();
 });
 
 
@@ -37,3 +56,11 @@ Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(MODULE_ID);
 });
 
+Hooks.on("getSceneControlButtons", addElevationLayerSceneControls);
+Hooks.on("renderSceneControls", addElevationLayerSubControls);
+Hooks.on("renderTerrainLayerToolBar", renderElevationLayerSubControls);
+
+
+function registerLayer() {
+  CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer }
+}
