@@ -84,7 +84,7 @@ export function addElevationLayerSceneControls(controls) {
               type: "image",
               displayMode: "thumbs",
               tileSize: false,
-              callback: canvas.elevation.importFromPNG
+              callback: canvas.elevation.importFromImageFile
             }).render(true);
 				}
       },
@@ -94,7 +94,7 @@ export function addElevationLayerSceneControls(controls) {
         title: "Download elevation data",
         icon: "fas fa-file-arrow-down",
         onClick: () => {
-					canvas.elevation.downloadElevationData()
+					canvas.elevation.downloadElevationData({format: "image/webp"});
 				}
       }
     ]
