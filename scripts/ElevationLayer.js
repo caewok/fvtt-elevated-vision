@@ -14,7 +14,7 @@ isEmpty
 */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, FLAG_ELEVATION_IMAGE } from "./const.js";
 import { log, readDataURLFromFile, convertBase64ToImage, extractPixels } from "./util.js";
 import * as drawing from "./drawing.js";
 
@@ -249,18 +249,18 @@ export class ElevationLayer extends InteractionLayer {
 
   async loadSceneElevationData() {
     log("loadSceneElevationData");
-    const png64 = canvas.scene.getFlag(MODULE_ID, "elevationPNG64");
-    if ( !png64 ) return;
+    const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAG_ELEVATION_IMAGE);
+    if ( !elevationImage ) return;
 
-    if ( isEmpty(png64) ) {
-      canvas.scene.unsetFlag(MODULE_ID, "elevationPNG64");
+    if ( isEmpty(elevationImage) || isEmpty(elevationImage.imageData) ) {
+      canvas.scene.unsetFlag(MODULE_ID, FLAG_ELEVATION_IMAGE);
       return;
     }
 
     // We are loading a saved file, so we only want to require a save if the scene
     // elevation has already been modified.
     const neededSave = this._requiresSave;
-    await this.importFromPNG(png64);
+    await this.importFromImageFile(elevationImage.imageData);
     this._requiresSave = neededSave;
 
     // Following won't work if _resolution.format = PIXI.FORMATS.ALPHA
@@ -271,17 +271,30 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
+   * Store the elevation data for the scene in a flag for the scene
+   */
+  async saveSceneElevationData() {
+    const format = "image/webp";
+    this.renderElevation();
+
+     // Depending on format, may need quality = 1 to avoid lossy compression
+    const imageData = canvas.app.renderer.extract.base64(this._elevationTexture, format, 1);
+    const saveObj = { imageData, format };
+
+    await canvas.scene.setFlag(MODULE_ID, FLAG_ELEVATION_IMAGE, saveObj);
+    this._requiresSave = false;
+  }
+
+  /**
    * Import elevation data as png. Same format as download.
    * See importFromJSONDialog in Foundry.
    * @returns {Promise<void>}
    */
   async importDialog() {
-    const importFn = this.importFromPNG.bind(this);
-
     new Dialog({
       title: `Import Elevation Data: ${canvas.scene.name}`,
       content: await renderTemplate("templates/apps/import-data.html", {
-        hint1: game.i18n.format("Elevation.ImportDataHint1", {document: "PNG"}),
+        hint1: game.i18n.format("Elevation.ImportDataHint1", {document: "PNG or webp"}),
         hint2: game.i18n.format("Elevation.ImportDataHint2", {name: canvas.scene.name})
       }),
       buttons: {
@@ -292,7 +305,7 @@ export class ElevationLayer extends InteractionLayer {
             const form = html.find("form")[0];
             if ( !form.data.files.length ) return ui.notifications.error("You did not upload a data file!");
             log("import", form.data.files);
-            readDataURLFromFile(form.data.files[0]).then(dataURL => importFn(dataURL));
+            readDataURLFromFile(form.data.files[0]).then(dataURL => this.importFromImageFile(dataURL));
           }
         },
         no: {
@@ -306,8 +319,8 @@ export class ElevationLayer extends InteractionLayer {
     }).render(true);
   }
 
-  async importFromPNG(file) {
-    log(`PNG import ${file}`, file);
+  async importFromImageFile(file) {
+    log(`import ${file}`, file);
 
     // See https://stackoverflow.com/questions/41494623/pixijs-sprite-not-loading
     const texture = await PIXI.Texture.fromURL(file);
@@ -318,11 +331,11 @@ export class ElevationLayer extends InteractionLayer {
     if ( texture.width === sceneWidth && texture.height === sceneHeight ) {
       texture.position = sceneRect;
     } else if ( texture.width !== width && texture.height !== height ) {
-      ui.notifications.error("PNG elevation file dimensions do not match the scene. Try resizing the PNG file to the scene size.");
+      ui.notifications.error("Image elevation file dimensions do not match the scene. Try resizing the image file to the scene size.");
       return;
     }
 
-    log("rendering PNG");
+    log("rendering image file");
 
     // Testing: let sprite = PIXI.Sprite.from("elevation/test_001.png");
     canvas.elevation._backgroundElevation.texture.destroy();
@@ -345,20 +358,13 @@ export class ElevationLayer extends InteractionLayer {
     fileName += `.${imageExtension}`;
 
     this.renderElevation();
-    const image64 = canvas.app.renderer.extract.image(this._elevationTexture, format);
+
+    // Depending on format, may need quality = 1 to avoid lossy compression
+    const image64 = canvas.app.renderer.extract.image(this._elevationTexture, format, 1);
     saveDataToFile(convertBase64ToImage(image64), format, fileName);
   }
 
-  /**
-   * Store the elevation data for the scene in a flag for the scene
-   */
-  async saveSceneElevationData() {
-    const format = "image/png";
-    this.renderElevation();
-    const image64 = canvas.app.renderer.extract.image(this._elevationTexture, format);
-    await canvas.scene.setFlag(MODULE_ID, "elevationPNG64", image64.src);
-    this._requiresSave = false;
-  }
+
 
   // TO-DO: Preferably download as alpha, possibly by constructing a new texture?
 
