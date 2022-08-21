@@ -1,5 +1,7 @@
 /* globals
-GlobalLightSource
+GlobalLightSource,
+canvas,
+PIXI
 */
 "use strict";
 
@@ -36,25 +38,35 @@ const MAX_NUM_WALLS = 100;
 export function createAdaptiveLightingShader(wrapped, ...args) {
   log("createAdaptiveLightingShader");
 
-  if ( this.fragmentShader.includes(UNIFORMS) ) return wrapped(...args);
+  if ( this.fragmentShader.includes(FRAGMENT_UNIFORMS) ) return wrapped(...args);
 
   log("createAdaptiveLightingShader adding shadow shader code");
-
-  const replaceUniformStr = "uniform sampler2D uBkgSampler;";
+  const replaceFragUniformStr = "uniform sampler2D uBkgSampler;";
   const replaceFragStr = "float depth = smoothstep(0.0, 1.0, vDepth);";
-  const replaceFnStr = "void main() {";
+  const replaceFragFnStr = "void main() {";
 
   this.fragmentShader = this.fragmentShader.replace(
-    replaceUniformStr, `${replaceUniformStr}\n${UNIFORMS}`);
+    replaceFragUniformStr, `${replaceFragUniformStr}\n${FRAGMENT_UNIFORMS}`);
 
   this.fragmentShader = this.fragmentShader.replace(
     replaceFragStr, `${replaceFragStr}\n${DEPTH_CALCULATION}`);
 
   this.fragmentShader = this.fragmentShader.replace(
-    replaceFnStr, `${FUNCTIONS}\n${replaceFnStr}\n`);
+    replaceFragFnStr, `${FRAGMENT_FUNCTIONS}\n${replaceFragFnStr}\n`);
 
   // Replace at the very end
   this.fragmentShader = this.fragmentShader.replace(/}$/, `${FRAG_COLOR}\n }\n`);
+
+
+  log("createAdaptiveLightingShader adding shadow vertex code");
+  const replaceVertexUniformStr = "uniform vec3 origin;";
+  const replaceVertexStr = "vDepth = aDepthValue;";
+
+  this.vertexShader = this.vertexShader.replace(
+    replaceVertexUniformStr, `${replaceVertexUniformStr}\n${VERTEX_UNIFORMS}`);
+
+  this.vertexShader = this.vertexShader.replace(
+    replaceVertexStr, `${replaceVertexStr}\n${VERTEX_CANVAS_POSITION}`);
 
   const shader = wrapped(...args);
   shader.uniforms.EV_numWalls = 0;
@@ -63,11 +75,37 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   shader.uniforms.EV_lightElevation = 0.5;
   shader.uniforms.EV_wallDistances = new Float32Array(MAX_NUM_WALLS);
   shader.uniforms.EV_isVision = false;
+  shader.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture ?? PIXI.Texture.EMPTY;
+  shader.uniforms.EV_canvasDimensions = canvas.dimensions
+    ? [canvas.dimensions.width, canvas.dimensions.height] : [0, 0];
+
+  shader.uniforms.EV_canvasMatrix ??= new PIXI.Matrix();
+
   return shader;
 }
 
+const VERTEX_UNIFORMS =
+`
+uniform vec2 EV_canvasDimensions;
+varying vec2 EV_vCanvasCoordNorm;
+// uniform vec4 worldMatrix;
+uniform mat3 EV_canvasMatrix;
+`;
+
+const VERTEX_CANVAS_POSITION =
+`
+//   vec2 EV_vCanvasCoord = (translationMatrix * vec3(aVertexPosition, 1.0)).xy;
+//   EV_vCanvasCoordNorm = EV_vCanvasCoord / EV_canvasDimensions;
+
+//   vec4 EV_vCanvasCoord = worldMatrix * vec4(aVertexPosition, 1.0, 1.0);
+//   EV_vCanvasCoordNorm = (worldMatrix / vec4(EV_canvasDimensions, 1.0, 1.0)).xy;
+
+   vec2 EV_vCanvasCoord = (EV_canvasMatrix * vec3(aVertexPosition, 1.0)).xy;
+   EV_vCanvasCoordNorm = EV_vCanvasCoord / EV_canvasDimensions;
+`;
+
 // 4 coords per wall (A, B endpoints).
-const UNIFORMS =
+const FRAGMENT_UNIFORMS =
 `
 uniform int EV_numWalls;
 uniform vec4 EV_wallCoords[${MAX_NUM_WALLS}];
@@ -75,10 +113,12 @@ uniform float EV_wallElevations[${MAX_NUM_WALLS}];
 uniform float EV_wallDistances[${MAX_NUM_WALLS}];
 uniform float EV_lightElevation;
 uniform bool EV_isVision;
+uniform sampler2D EV_elevationSampler;
+varying vec2 EV_vCanvasCoordNorm;
 `;
 
 // Helper functions used to calculate shadow trapezoids.
-const FUNCTIONS =
+const FRAGMENT_FUNCTIONS =
 `
 float orient2d(in vec2 a, in vec2 b, in vec2 c) {
   return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
@@ -176,7 +216,17 @@ for ( int i = 0; i < maxWalls; i++ ) {
 
 const FRAG_COLOR =
 `
-  if ( EV_isVision && depth == 0.0 ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+  if ( EV_isVision && depth == 0.0 ) {
+//     gl_FragColor = vec4(EV_vCanvasCoordNorm.xy, 0.0, 1.0);
+    vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_vCanvasCoordNorm);
+
+    gl_FragColor = backgroundElevation;
+//     if ( backgroundElevation.r > 0.1 ) {
+//       gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+//     } else {
+//       gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+//     }
+  }
 `;
 
 /**
@@ -188,7 +238,7 @@ export function _updateColorationUniformsLightSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateColorationUniformsLightSource ${this.object.id}`);
-  this._updateEVLightUniforms(this.coloration.shader);
+  this._updateEVLightUniforms(this.coloration);
 }
 
 /**
@@ -200,7 +250,7 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
-  this._updateEVLightUniforms(this.illumination.shader);
+  this._updateEVLightUniforms(this.illumination);
 }
 
 /**
@@ -215,7 +265,8 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
  * - distance between the wall and the light source center
  * @param {PIXI.Shader} shader
  */
-export function _updateEVLightUniformsLightSource(shader) {
+export function _updateEVLightUniformsLightSource(mesh) {
+  const shader = mesh.shader;
   const { x, y, radius, elevationZ } = this;
   const walls = this.los.wallsBelowSource;
   if ( !walls || !walls.size ) return;
@@ -250,6 +301,15 @@ export function _updateEVLightUniformsLightSource(shader) {
   u.EV_wallCoords = wallCoords;
   u.EV_wallElevations = wallElevations;
   u.EV_wallDistances = wallDistances;
+  u.EV_elevationSampler = canvas.elevation._elevationTexture;
+  u.EV_canvasDimensions = [canvas.dimensions.width, canvas.dimensions.height];
+  u.EV_isVision = true;
+
+  shader.uniforms.EV_canvasMatrix ??= new PIXI.Matrix();
+  shader.uniforms.EV_canvasMatrix
+    .copyFrom(canvas.stage.worldTransform)
+    .invert()
+    .append(mesh.transform.worldTransform);
 }
 
 /**
@@ -290,7 +350,7 @@ function circleCoord(a, r, c = 0, r_inv = 1 / r) {
  * @param {number} r    Radius
  * @returns {number}
  */
-function revCircleCoord(p, r, c = 0) {
+function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-vars
   // Calc:
   // ((a - c) / 2r) + 0.5 = p
   //  ((a - c) / 2r) = p +  0.5

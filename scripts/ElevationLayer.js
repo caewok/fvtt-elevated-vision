@@ -399,14 +399,19 @@ export class ElevationLayer extends InteractionLayer {
     return this.averageElevation(gridRect);
   }
 
-  averageElevation(gridRect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
+  _averageValue(gridRect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
     const arr = extractPixels(this._elevationTexture, gridRect);
     let sum = 0;
     const ln = arr.length;
     for ( let i = 0; i < ln; i += 4 ) {
       sum += arr[i];
     }
-    return this.pixelValueToElevation(sum) / (gridRect.width * gridRect.height);
+
+    return sum / (gridRect.width * gridRect.height);
+  }
+
+  averageElevation(gridRect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
+    return this.pixelValueToElevation(this._averageValue(gridRect));
   }
 
 
