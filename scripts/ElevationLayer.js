@@ -399,6 +399,10 @@ export class ElevationLayer extends InteractionLayer {
     return this.averageElevation(gridRect);
   }
 
+  // To extract pixel values for debugging
+  // api = game.modules.get("elevatedvision").api;
+  // api.util.extractPixels(canvas.elevation._elevationTexture, _token.bounds)
+
   _averageValue(gridRect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
     const arr = extractPixels(this._elevationTexture, gridRect);
     let sum = 0;

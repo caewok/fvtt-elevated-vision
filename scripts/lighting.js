@@ -58,15 +58,15 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   this.fragmentShader = this.fragmentShader.replace(/}$/, `${FRAG_COLOR}\n }\n`);
 
 
-  log("createAdaptiveLightingShader adding shadow vertex code");
-  const replaceVertexUniformStr = "uniform vec3 origin;";
-  const replaceVertexStr = "vDepth = aDepthValue;";
-
-  this.vertexShader = this.vertexShader.replace(
-    replaceVertexUniformStr, `${replaceVertexUniformStr}\n${VERTEX_UNIFORMS}`);
-
-  this.vertexShader = this.vertexShader.replace(
-    replaceVertexStr, `${replaceVertexStr}\n${VERTEX_CANVAS_POSITION}`);
+//   log("createAdaptiveLightingShader adding shadow vertex code");
+//   const replaceVertexUniformStr = "uniform vec3 origin;";
+//   const replaceVertexStr = "vDepth = aDepthValue;";
+//
+//   this.vertexShader = this.vertexShader.replace(
+//     replaceVertexUniformStr, `${replaceVertexUniformStr}\n${VERTEX_UNIFORMS}`);
+//
+//   this.vertexShader = this.vertexShader.replace(
+//     replaceVertexStr, `${replaceVertexStr}\n${VERTEX_CANVAS_POSITION}`);
 
   const shader = wrapped(...args);
   shader.uniforms.EV_numWalls = 0;
@@ -76,10 +76,8 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   shader.uniforms.EV_wallDistances = new Float32Array(MAX_NUM_WALLS);
   shader.uniforms.EV_isVision = false;
   shader.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture ?? PIXI.Texture.EMPTY;
-  shader.uniforms.EV_canvasDimensions = canvas.dimensions
-    ? [canvas.dimensions.width, canvas.dimensions.height] : [0, 0];
 
-  shader.uniforms.EV_canvasMatrix ??= new PIXI.Matrix();
+  shader.uniforms.EV_transform = [1, 1, 1, 1];
 
   return shader;
 }
@@ -89,7 +87,7 @@ const VERTEX_UNIFORMS =
 uniform vec2 EV_canvasDimensions;
 varying vec2 EV_vCanvasCoordNorm;
 // uniform vec4 worldMatrix;
-uniform mat3 EV_canvasMatrix;
+uniform vec4 EV_transform;
 `;
 
 const VERTEX_CANVAS_POSITION =
@@ -114,7 +112,7 @@ uniform float EV_wallDistances[${MAX_NUM_WALLS}];
 uniform float EV_lightElevation;
 uniform bool EV_isVision;
 uniform sampler2D EV_elevationSampler;
-varying vec2 EV_vCanvasCoordNorm;
+uniform vec4 EV_transform;
 `;
 
 // Helper functions used to calculate shadow trapezoids.
@@ -172,10 +170,20 @@ theta = atan(opp / adj)
 
 OV = Oe / tan(theta)
 
+Also need the height from the current position on the canvas for which the shadow no longer
+applies. That can be simplified:
+- Subtract the current pixel elevation from the light elevation to get a new light elevation.
+
+
+
 */
 
 const DEPTH_CALCULATION =
 `
+// If elevation at this point is above the light, then set depth to 0.0.
+// vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_vCanvasCoordNorm);
+// if ( backgroundElevation.r)
+
 const vec2 center = vec2(0.5);
 const int maxWalls = ${MAX_NUM_WALLS};
 for ( int i = 0; i < maxWalls; i++ ) {
@@ -218,7 +226,8 @@ const FRAG_COLOR =
 `
   if ( EV_isVision && depth == 0.0 ) {
 //     gl_FragColor = vec4(EV_vCanvasCoordNorm.xy, 0.0, 1.0);
-    vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_vCanvasCoordNorm);
+    vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
+    vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
 
     gl_FragColor = backgroundElevation;
 //     if ( backgroundElevation.r > 0.1 ) {
@@ -268,8 +277,9 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
 export function _updateEVLightUniformsLightSource(mesh) {
   const shader = mesh.shader;
   const { x, y, radius, elevationZ } = this;
+  const { width, height } = canvas.dimensions;
+
   const walls = this.los.wallsBelowSource;
-  if ( !walls || !walls.size ) return;
 
   const center = {x, y};
   const r_inv = 1 / radius;
@@ -302,14 +312,24 @@ export function _updateEVLightUniformsLightSource(mesh) {
   u.EV_wallElevations = wallElevations;
   u.EV_wallDistances = wallDistances;
   u.EV_elevationSampler = canvas.elevation._elevationTexture;
-  u.EV_canvasDimensions = [canvas.dimensions.width, canvas.dimensions.height];
+  u.EV_canvasDimensions = [width, height];
   u.EV_isVision = true;
 
-  shader.uniforms.EV_canvasMatrix ??= new PIXI.Matrix();
-  shader.uniforms.EV_canvasMatrix
-    .copyFrom(canvas.stage.worldTransform)
-    .invert()
-    .append(mesh.transform.worldTransform);
+  // Screen-space to local coords:
+  // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010914586532261909
+  // shader.uniforms.EV_canvasMatrix ??= new PIXI.Matrix();
+  // shader.uniforms.EV_canvasMatrix
+  //   .copyFrom(canvas.stage.worldTransform)
+  //   .invert()
+  //   .append(mesh.transform.worldTransform);
+
+  // Alternative version using vUvs, given that light source mesh have no rotation
+  // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010999752030171136
+  u.EV_transform = [
+    radius * 2 / width,
+    radius * 2 / height,
+    (x - radius) / width,
+    (y - radius) / height];
 }
 
 /**
