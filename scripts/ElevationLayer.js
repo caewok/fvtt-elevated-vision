@@ -76,6 +76,13 @@ export class ElevationLayer extends InteractionLayer {
   #elevation = 9000;
 
   /**
+   * Maximum pixel value. Currently pixels range between 0 and 255 for a color channel.
+   */
+  #maximumPixelValue = 255;
+
+  get maximumPixelValue() { return this.#maximumPixelValue; }
+
+  /**
    * Flag for when the elevation data has changed for the scene, requiring a save.
    * Currently happens when the user changes the data or uploads a new data file.
    */
@@ -119,7 +126,7 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   get elevationMax() {
-    return (255 * this.elevationStep) - this.elevationMin;
+    return (this.#maximumPixelValue * this.elevationStep) - this.elevationMin;
   }
 
   pixelValueToElevation(value) {
@@ -145,7 +152,7 @@ export class ElevationLayer extends InteractionLayer {
 
     log(`elevationHex elevation ${e}, value ${value}`);
 
-    return PIXI.utils.rgb2hex([value / 255, 0, 0]);
+    return PIXI.utils.rgb2hex([value / this.#maximumPixelValue, 0, 0]);
   }
 
   /**
@@ -278,7 +285,7 @@ export class ElevationLayer extends InteractionLayer {
     const format = "image/webp";
     this.renderElevation();
 
-     // Depending on format, may need quality = 1 to avoid lossy compression
+    // Depending on format, may need quality = 1 to avoid lossy compression
     const imageData = canvas.app.renderer.extract.base64(this._elevationTexture, format, 1);
     const saveObj = { imageData, format };
 
@@ -363,8 +370,6 @@ export class ElevationLayer extends InteractionLayer {
     const image64 = canvas.app.renderer.extract.image(this._elevationTexture, format, 1);
     saveDataToFile(convertBase64ToImage(image64), format, fileName);
   }
-
-
 
   // TO-DO: Preferably download as alpha, possibly by constructing a new texture?
 
@@ -459,7 +464,7 @@ export class ElevationLayer extends InteractionLayer {
     this._backgroundElevation = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
 
     this._graphicsContainer.destroy({children: true});
-    this._graphicsContainer = new PIXI.Container()
+    this._graphicsContainer = new PIXI.Container();
   }
 
   /**

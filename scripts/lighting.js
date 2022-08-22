@@ -58,16 +58,6 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   this.fragmentShader = this.fragmentShader.replace(/}$/, `${FRAG_COLOR}\n }\n`);
 
 
-//   log("createAdaptiveLightingShader adding shadow vertex code");
-//   const replaceVertexUniformStr = "uniform vec3 origin;";
-//   const replaceVertexStr = "vDepth = aDepthValue;";
-//
-//   this.vertexShader = this.vertexShader.replace(
-//     replaceVertexUniformStr, `${replaceVertexUniformStr}\n${VERTEX_UNIFORMS}`);
-//
-//   this.vertexShader = this.vertexShader.replace(
-//     replaceVertexStr, `${replaceVertexStr}\n${VERTEX_CANVAS_POSITION}`);
-
   const shader = wrapped(...args);
   shader.uniforms.EV_numWalls = 0;
   shader.uniforms.EV_wallElevations = new Float32Array(MAX_NUM_WALLS);
@@ -79,28 +69,11 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
 
   shader.uniforms.EV_transform = [1, 1, 1, 1];
 
+  // [min, step, maxPixelValue ]
+  shader.uniforms.EV_elevationResolution = [0, 1, 255, 1];
+
   return shader;
 }
-
-const VERTEX_UNIFORMS =
-`
-uniform vec2 EV_canvasDimensions;
-varying vec2 EV_vCanvasCoordNorm;
-// uniform vec4 worldMatrix;
-uniform vec4 EV_transform;
-`;
-
-const VERTEX_CANVAS_POSITION =
-`
-//   vec2 EV_vCanvasCoord = (translationMatrix * vec3(aVertexPosition, 1.0)).xy;
-//   EV_vCanvasCoordNorm = EV_vCanvasCoord / EV_canvasDimensions;
-
-//   vec4 EV_vCanvasCoord = worldMatrix * vec4(aVertexPosition, 1.0, 1.0);
-//   EV_vCanvasCoordNorm = (worldMatrix / vec4(EV_canvasDimensions, 1.0, 1.0)).xy;
-
-   vec2 EV_vCanvasCoord = (EV_canvasMatrix * vec3(aVertexPosition, 1.0)).xy;
-   EV_vCanvasCoordNorm = EV_vCanvasCoord / EV_canvasDimensions;
-`;
 
 // 4 coords per wall (A, B endpoints).
 const FRAGMENT_UNIFORMS =
@@ -113,6 +86,7 @@ uniform float EV_lightElevation;
 uniform bool EV_isVision;
 uniform sampler2D EV_elevationSampler;
 uniform vec4 EV_transform;
+uniform vec4 EV_elevationResolution;
 `;
 
 // Helper functions used to calculate shadow trapezoids.
@@ -171,71 +145,81 @@ theta = atan(opp / adj)
 OV = Oe / tan(theta)
 
 Also need the height from the current position on the canvas for which the shadow no longer
-applies. That can be simplified:
-- Subtract the current pixel elevation from the light elevation to get a new light elevation.
-
-
-
+applies. That can be simplified by just shifting the elevations of the above diagram.
+So Oe becomes Oe - pixelE. We = We - pixelE.
 */
 
 const DEPTH_CALCULATION =
 `
-// If elevation at this point is above the light, then set depth to 0.0.
-// vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_vCanvasCoordNorm);
-// if ( backgroundElevation.r)
+bool inShadow = false;
+vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
+vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
+if ( pixelElevation > EV_lightElevation ) {
+  // If elevation at this point is above the light, then light cannot hit this pixel.
+  depth = 0.0;
+} else {
+  float adjLightElevation = EV_lightElevation - pixelElevation;
 
-const vec2 center = vec2(0.5);
-const int maxWalls = ${MAX_NUM_WALLS};
-for ( int i = 0; i < maxWalls; i++ ) {
-  if ( i >= EV_numWalls ) break;
+  const vec2 center = vec2(0.5);
+  const int maxWalls = ${MAX_NUM_WALLS};
+  for ( int i = 0; i < maxWalls; i++ ) {
+    if ( i >= EV_numWalls ) break;
 
-  // If the wall is higher than the light, skip. (Should not currently happen.)
-  float We = EV_wallElevations[i];
-  if ( EV_lightElevation <= We ) continue;
+    // If the wall is higher than the light, skip. Should not currently occur.
+    float We = EV_wallElevations[i];
+    if ( EV_lightElevation <= We ) continue;
 
-  // If the wall does not intersect the line between the center and this point, no shadow here.
-  vec4 wall = EV_wallCoords[i];
-  if ( !lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) continue;
+    // If the pixel is above the wall, skip.
+    if ( pixelElevation >= We ) continue;
 
-  float distOW = EV_wallDistances[i];
+    // If the wall does not intersect the line between the center and this point, no shadow here.
+    vec4 wall = EV_wallCoords[i];
+    if ( !lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) continue;
 
-   // Distance from wall (as line) to this location
-   vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
-   float distWP = distance(vUvs, wallIxPoint);
+    float distOW = EV_wallDistances[i];
 
-   // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
-   // atan(y, x) equivalent to JS Math.atan2(y, x)
-   float theta = atan((EV_lightElevation - We) /  distOW);
+    // Distance from wall (as line) to this location
+    vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
+    float distWP = distance(vUvs, wallIxPoint);
 
-   // Distance from center/origin to furthest part of shadow perpendicular to wall
-   float distOV = EV_lightElevation / tan(theta);
-   float maxDistWP = distOV - distOW;
+    float adjWe = We - pixelElevation;
 
-   if ( distWP < maxDistWP ) {
-     // Current location is within shadow.
-     // Could be more than one wall casting shadow on this point, so don't break.
-     // depth = 0.0; // For testing
-     depth = distWP / maxDistWP;
+    // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
+    // atan(y, x) equivalent to JS Math.atan2(y, x)
+    float theta = atan((adjLightElevation - adjWe) /  distOW);
 
-     if ( EV_isVision ) depth = 0.0;
-   }
+    // Distance from center/origin to furthest part of shadow perpendicular to wall
+    float distOV = adjLightElevation / tan(theta);
+    float maxDistWP = distOV - distOW;
+
+    if ( distWP < maxDistWP ) {
+      // Current location is within shadow.
+      // Could be more than one wall casting shadow on this point, so don't break out of the loop.
+      // depth = 0.0; // For testing
+      inShadow = true;
+
+      depth = distWP / maxDistWP;
+    }
+  }
 }
 `;
 
 const FRAG_COLOR =
 `
-  if ( EV_isVision && depth == 0.0 ) {
+  if ( EV_isVision && inShadow ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+//   if ( EV_isVision && depth == 0.0 ) {
 //     gl_FragColor = vec4(EV_vCanvasCoordNorm.xy, 0.0, 1.0);
-    vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
-    vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+//     vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
+//     vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
 
-    gl_FragColor = backgroundElevation;
+//     gl_FragColor = backgroundElevation;
 //     if ( backgroundElevation.r > 0.1 ) {
 //       gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
 //     } else {
 //       gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
 //     }
-  }
+//   }
 `;
 
 /**
@@ -279,7 +263,7 @@ export function _updateEVLightUniformsLightSource(mesh) {
   const { x, y, radius, elevationZ } = this;
   const { width, height } = canvas.dimensions;
 
-  const walls = this.los.wallsBelowSource;
+  const walls = this.los.wallsBelowSource || new Set();
 
   const center = {x, y};
   const r_inv = 1 / radius;
@@ -312,8 +296,7 @@ export function _updateEVLightUniformsLightSource(mesh) {
   u.EV_wallElevations = wallElevations;
   u.EV_wallDistances = wallDistances;
   u.EV_elevationSampler = canvas.elevation._elevationTexture;
-  u.EV_canvasDimensions = [width, height];
-  u.EV_isVision = true;
+//   u.EV_isVision = true;
 
   // Screen-space to local coords:
   // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010914586532261909
@@ -330,6 +313,23 @@ export function _updateEVLightUniformsLightSource(mesh) {
     radius * 2 / height,
     (x - radius) / width,
     (y - radius) / height];
+
+  /*
+  Elevation of a given pixel from the texture value:
+  texture value in the shader is between 0 and 1. Represents value / maximumPixelValue where
+  maximumPixelValue is currently 255.
+
+  To get to elevation in the light vUvs space:
+  elevationCanvasUnits = (((value * maximumPixelValue * elevationStep) - elevationMin) * size) / distance;
+  elevationLightUnits = elevationCanvasUnits * 0.5 * r_inv;
+  = (((value * maximumPixelValue * elevationStep) - elevationMin) * size) * inv_distance * 0.5 * r_inv;
+  */
+
+  // [min, step, maxPixelValue ]
+  const { elevationMin, elevationStep, maximumPixelValue} = canvas.elevation;
+  const { distance, size } = canvas.scene.grid;
+  const elevationMult = size * (1 / distance) * 0.5 * r_inv;
+  shader.uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
 }
 
 /**
