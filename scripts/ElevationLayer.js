@@ -240,6 +240,7 @@ export class ElevationLayer extends InteractionLayer {
     this._graphicsContainer.addChild(this._backgroundElevation);
 
     await this.loadSceneElevationData();
+    this.renderElevation();
 
     this._initialized = true;
   }

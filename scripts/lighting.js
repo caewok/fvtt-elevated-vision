@@ -68,6 +68,7 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   shader.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture ?? PIXI.Texture.EMPTY;
 
   shader.uniforms.EV_transform = [1, 1, 1, 1];
+  shader.uniforms.EV_hasElevationSampler = false;
 
   // [min, step, maxPixelValue ]
   shader.uniforms.EV_elevationResolution = [0, 1, 255, 1];
@@ -87,6 +88,7 @@ uniform bool EV_isVision;
 uniform sampler2D EV_elevationSampler;
 uniform vec4 EV_transform;
 uniform vec4 EV_elevationResolution;
+uniform bool EV_hasElevationSampler;
 `;
 
 // Helper functions used to calculate shadow trapezoids.
@@ -152,13 +154,17 @@ So Oe becomes Oe - pixelE. We = We - pixelE.
 const DEPTH_CALCULATION =
 `
 bool inShadow = false;
-vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
-vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
+if ( EV_hasElevationSampler ) {
+  vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
+  backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+}
+
 float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
 if ( pixelElevation > EV_lightElevation ) {
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
-} else {
+} else if ( EV_numWalls > 0 ) {
   float adjLightElevation = EV_lightElevation - pixelElevation;
 
   const vec2 center = vec2(0.5);
@@ -274,9 +280,9 @@ export function _updateEVLightUniformsLightSource(mesh) {
   u.EV_numWalls = walls.size;
 
   const center_shader = {x: 0.5, y: 0.5};
-  const wallCoords = [];
-  const wallElevations = [];
-  const wallDistances = [];
+  let wallCoords = [];
+  let wallElevations = [];
+  let wallDistances = [];
 
   for ( const w of walls ) {
     const a = pointCircleCoord(w.A, radius, center, r_inv);
@@ -292,10 +298,14 @@ export function _updateEVLightUniformsLightSource(mesh) {
     wallCoords.push(a.x, a.y, b.x, b.y);
   }
 
+  if ( !wallCoords.length ) wallCoords = new Float32Array(MAX_NUM_WALLS*4);
+  if ( !wallElevations.length ) wallElevations = new Float32Array(MAX_NUM_WALLS);
+  if ( !wallDistances.length ) wallDistances = new Float32Array(MAX_NUM_WALLS);
+
   u.EV_wallCoords = wallCoords;
   u.EV_wallElevations = wallElevations;
   u.EV_wallDistances = wallDistances;
-  u.EV_elevationSampler = canvas.elevation._elevationTexture;
+  u.EV_elevationSampler = canvas.elevation?._elevationTexture;
 //   u.EV_isVision = true;
 
   // Screen-space to local coords:
@@ -326,10 +336,16 @@ export function _updateEVLightUniformsLightSource(mesh) {
   */
 
   // [min, step, maxPixelValue ]
-  const { elevationMin, elevationStep, maximumPixelValue} = canvas.elevation;
-  const { distance, size } = canvas.scene.grid;
-  const elevationMult = size * (1 / distance) * 0.5 * r_inv;
-  shader.uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+  if ( !u.EV_elevationSampler ) {
+    u.EV_elevationSampler = PIXI.Texture.EMPTY;
+    u.EV_hasElevationSampler = false;
+  } else {
+    const { elevationMin, elevationStep, maximumPixelValue} = canvas.elevation;
+    const { distance, size } = canvas.scene.grid;
+    const elevationMult = size * (1 / distance) * 0.5 * r_inv;
+    u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+    u.EV_hasElevationSampler = true;
+  }
 }
 
 /**
