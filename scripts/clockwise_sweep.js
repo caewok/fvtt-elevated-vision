@@ -25,7 +25,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   log("_computeClockwiseSweepPolygon");
 
   // Ignore lights set with default of positive infinity
-  const sourceZ = this.config.source.elevationZ;
+  const sourceZ = this.config.source?.elevationZ;
   if ( !isFinite(sourceZ) ) return;
 
   // From ClockwisePolygonSweep.prototype.getWalls

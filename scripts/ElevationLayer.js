@@ -11,7 +11,8 @@ Dialog,
 renderTemplate,
 game,
 isEmpty,
-PolygonVertex
+PolygonVertex,
+CONFIG
 */
 "use strict";
 
@@ -413,9 +414,12 @@ export class ElevationLayer extends InteractionLayer {
 
   /**
    * Set the elevation for the grid space that contains the point.
-   * @param {Point} p   Point within the grid square/hex.
-   * @param {number} elevation
-   * @param {}
+   * @param {Point} p             Point within the grid square/hex.
+   * @param {number} elevation    Elevation to use
+   * @param {object}  [options]   Options that affect setting this elevation
+   * @param {boolean} [options.temporary]   If true, don't immediately require a save.
+   *   This setting does not prevent a save if the user further modifies the canvas.
+   * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
   setElevationForGridSpace(p, elevation = 0, { temporary = false } = {}) {
     // Get the top left corner, then fill in the values in the grid
@@ -430,6 +434,25 @@ export class ElevationLayer extends InteractionLayer {
     this.renderElevation();
 
     this._requiresSave = !temporary;
+
+    return graphics;
+  }
+
+  /**
+   * Construct a LOS polygon from this point and fill with the provided elevation.
+   * @param {Point} origin   Point where viewer is assumed to be.
+   * @param {number} elevation
+   * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
+   */
+  fillLOS(origin, elevation = 0, { type = "light"} = {}) {
+    const los = CONFIG.Canvas.losBackend.create(origin, { type });
+
+    const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
+    graphics.beginFill(this.elevationHex(elevation), 1.0);
+    graphics.drawPolygon(los);
+    graphics.endFill();
+
+    this.renderElevation();
 
     return graphics;
   }
@@ -491,7 +514,7 @@ export class ElevationLayer extends InteractionLayer {
    */
   _onClickLeft(event) {
     const o = event.data.origin;
-    const activeTool = this.controls.activeTool;
+    const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
 
     log(`clickLeft at ${o.x},${o.y} with tool ${activeTool} and elevation ${currE}`, event);
@@ -499,6 +522,9 @@ export class ElevationLayer extends InteractionLayer {
     switch ( activeTool ) {
       case "fill-by-grid":
         this.setElevationForGridSpace(o, currE);
+        break;
+      case "fill-by-los":
+        this.fillLOS(o, currE);
         break;
       case "fill-by-pixel":
         log("fill-by-pixel not yet implemented.");
@@ -518,7 +544,7 @@ export class ElevationLayer extends InteractionLayer {
    */
   _onDragLeftStart(event) {
     const o = event.data.origin;
-    const activeTool = this.controls.activeTool;
+    const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
     log(`dragLeftStart at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
 
@@ -538,7 +564,7 @@ export class ElevationLayer extends InteractionLayer {
   _onDragLeftMove(event) {
     const o = event.data.origin;
     const d = event.data.destination;
-    const activeTool = this.controls.activeTool;
+    const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
 //     log(`dragLeftMove from ${o.x},${o.y} to ${d.x},${d.y} with tool ${activeTool} and elevation ${currE}`, event);
 
@@ -548,7 +574,7 @@ export class ElevationLayer extends InteractionLayer {
       const [tlx, tly] = canvas.grid.grid.getTopLeft(d.x, d.y);
       const p = new PolygonVertex(tlx, tly);
       if ( !this.#temporaryGraphics.has(p.key) ) {
-        log(`dragLeftMove at ${d.x}, ${d.y} with tool ${activeTool} and elevation ${currE}`, event);
+        log(`dragLeftMove from ${o.x},${o.y} to ${d.x}, ${d.y} with tool ${activeTool} and elevation ${currE}`, event);
         const child = this.setElevationForGridSpace(d, currE, { temporary: true });
         this.#temporaryGraphics.set(p.key, child);
       }
@@ -561,7 +587,7 @@ export class ElevationLayer extends InteractionLayer {
   _onDragLeftDrop(event) {
     const o = event.data.origin;
     const d = event.data.destination;
-    const activeTool = this.controls.activeTool;
+    const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
     log(`dragLeftDrop at ${o.x}, ${o.y} to ${d.x},${d.y} with tool ${activeTool} and elevation ${currE}`, event);
 
@@ -580,7 +606,7 @@ export class ElevationLayer extends InteractionLayer {
 
   _onDragLeftCancel(event) {
 //     const o = event.data.origin;
-    const activeTool = this.controls.activeTool;
+    const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
     // log(`dragLeftCancel with tool ${activeTool} and elevation ${currE}`, event);
 
@@ -599,14 +625,14 @@ export class ElevationLayer extends InteractionLayer {
 
   _onMouseWheel(event) {
     const o = event.data.origin;
-    const activeTool = this.controls.activeTool;
+    const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
     log(`mouseWheel at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
   }
 
   async _onDeleteKey(event) {
     const o = event.data.origin;
-    const activeTool = this.controls.activeTool;
+    const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
     log(`deleteKey at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
   }
