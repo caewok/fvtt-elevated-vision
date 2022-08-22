@@ -10,7 +10,8 @@ saveDataToFile,
 Dialog,
 renderTemplate,
 game,
-isEmpty
+isEmpty,
+PolygonVertex
 */
 "use strict";
 
@@ -121,6 +122,8 @@ export class ElevationLayer extends InteractionLayer {
   get elevationMax() {
     return (255 * this.elevationStep) - this.elevationMin;
   }
+
+  #temporaryGraphics = new Map();
 
   pixelValueToElevation(value) {
     return (Math.round(value) * this.elevationStep) - this.elevationMin;
@@ -278,7 +281,7 @@ export class ElevationLayer extends InteractionLayer {
     const format = "image/webp";
     this.renderElevation();
 
-     // Depending on format, may need quality = 1 to avoid lossy compression
+    // Depending on format, may need quality = 1 to avoid lossy compression
     const imageData = canvas.app.renderer.extract.base64(this._elevationTexture, format, 1);
     const saveObj = { imageData, format };
 
@@ -364,8 +367,6 @@ export class ElevationLayer extends InteractionLayer {
     saveDataToFile(convertBase64ToImage(image64), format, fileName);
   }
 
-
-
   // TO-DO: Preferably download as alpha, possibly by constructing a new texture?
 
   //     const { width, height } = this._resolution;
@@ -414,8 +415,9 @@ export class ElevationLayer extends InteractionLayer {
    * Set the elevation for the grid space that contains the point.
    * @param {Point} p   Point within the grid square/hex.
    * @param {number} elevation
+   * @param {}
    */
-  setElevationForGridSpace(p, elevation = 0) {
+  setElevationForGridSpace(p, elevation = 0, { temporary = false } = {}) {
     // Get the top left corner, then fill in the values in the grid
     const [tlx, tly] = canvas.grid.grid.getTopLeft(p.x, p.y);
     const { w, h } = canvas.grid;
@@ -427,9 +429,9 @@ export class ElevationLayer extends InteractionLayer {
 
     this.renderElevation();
 
-    this._requiresSave = true;
+    this._requiresSave = !temporary;
 
-    // TO-DO: Destroy graphics? Clear graphics and reuse?
+    return graphics;
   }
 
   /**
@@ -450,7 +452,7 @@ export class ElevationLayer extends InteractionLayer {
     this._backgroundElevation = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
 
     this._graphicsContainer.destroy({children: true});
-    this._graphicsContainer = new PIXI.Container()
+    this._graphicsContainer = new PIXI.Container();
   }
 
   /**
@@ -509,6 +511,106 @@ export class ElevationLayer extends InteractionLayer {
     // Standard left-click handling
     super._onClickLeft(event);
   }
+
+  /**
+   * If the user initiates a drag-left:
+   * - fill-by-grid: keep a temporary set of left corner grid locations and draw the grid
+   */
+  _onDragLeftStart(event) {
+    const o = event.data.origin;
+    const activeTool = this.controls.activeTool;
+    const currE = this.controls.currentElevation;
+    log(`dragLeftStart at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
+
+    if ( activeTool === "fill-by-grid" ) {
+      this.#temporaryGraphics.clear(); // Should be accomplished elsewhere already
+      const [tlx, tly] = canvas.grid.grid.getTopLeft(o.x, o.y);
+      const p = new PolygonVertex(tlx, tly);
+      const child = this.setElevationForGridSpace(o, currE, { temporary: true });
+      this.#temporaryGraphics.set(p.key, child);
+    }
+  }
+
+  /**
+   * User continues a drag left.
+   * - fill-by-grid: If new grid space, add.
+   */
+  _onDragLeftMove(event) {
+    const o = event.data.origin;
+    const d = event.data.destination;
+    const activeTool = this.controls.activeTool;
+    const currE = this.controls.currentElevation;
+//     log(`dragLeftMove from ${o.x},${o.y} to ${d.x},${d.y} with tool ${activeTool} and elevation ${currE}`, event);
+
+    // TO-DO: What if the user changes the elevation mid-drag? (if MouseWheel enabled)
+
+    if ( activeTool === "fill-by-grid" ) {
+      const [tlx, tly] = canvas.grid.grid.getTopLeft(d.x, d.y);
+      const p = new PolygonVertex(tlx, tly);
+      if ( !this.#temporaryGraphics.has(p.key) ) {
+        log(`dragLeftMove at ${d.x}, ${d.y} with tool ${activeTool} and elevation ${currE}`, event);
+        const child = this.setElevationForGridSpace(d, currE, { temporary: true });
+        this.#temporaryGraphics.set(p.key, child);
+      }
+    }
+  }
+
+  /**
+   * User commits the drag
+   */
+  _onDragLeftDrop(event) {
+    const o = event.data.origin;
+    const d = event.data.destination;
+    const activeTool = this.controls.activeTool;
+    const currE = this.controls.currentElevation;
+    log(`dragLeftDrop at ${o.x}, ${o.y} to ${d.x},${d.y} with tool ${activeTool} and elevation ${currE}`, event);
+
+    if ( activeTool === "fill-by-grid" ) {
+      const [tlx, tly] = canvas.grid.grid.getTopLeft(d.x, d.y);
+      const p = new PolygonVertex(tlx, tly);
+      if ( !this.#temporaryGraphics.has(p.key) ) {
+        const child = this.setElevationForGridSpace(d, currE, { temporary: true });
+        this.#temporaryGraphics.set(p.key, child);
+      }
+
+      this.#temporaryGraphics.clear(); // Don't destroy children b/c added already to main graphics
+      this._requiresSave = true;
+    }
+  }
+
+  _onDragLeftCancel(event) {
+//     const o = event.data.origin;
+    const activeTool = this.controls.activeTool;
+    const currE = this.controls.currentElevation;
+    // log(`dragLeftCancel with tool ${activeTool} and elevation ${currE}`, event);
+
+    if ( activeTool === "fill-by-grid" ) {
+      if ( !this.#temporaryGraphics.size ) return;
+      log(`dragLeftCancel with tool ${activeTool} and elevation ${currE}`, event);
+
+      // Remove the temporary graphics from main graphics
+      this.#temporaryGraphics.forEach(child => {
+        this._graphicsContainer.removeChild(child);
+        child.destroy();
+      });
+      this.#temporaryGraphics.clear();
+    }
+  }
+
+  _onMouseWheel(event) {
+    const o = event.data.origin;
+    const activeTool = this.controls.activeTool;
+    const currE = this.controls.currentElevation;
+    log(`mouseWheel at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
+  }
+
+  async _onDeleteKey(event) {
+    const o = event.data.origin;
+    const activeTool = this.controls.activeTool;
+    const currE = this.controls.currentElevation;
+    log(`deleteKey at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
+  }
+
 }
 
 class MyFilter extends AbstractBaseFilter {
