@@ -35,6 +35,12 @@ export function addElevationLayerSceneControls(controls) {
         icon: "fas fa-brush"
       },
 
+      {
+        name: "fill-by-los",
+        title: "Fill by Line-of-Sight",
+        icon: "fas fa-eye"
+      },
+
 //       {
 //         name: "fill-by-pixel",
 //         title: "Fill by Pixel",
