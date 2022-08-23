@@ -497,9 +497,18 @@ export class ElevationLayer extends InteractionLayer {
          outside the boundary polygon than it can be ignored
     */
 
+    /* testing
+    origin = _token.center
+    el = canvas.elevation
+    api = game.modules.get("elevatedvision").api
+    WallTracer = api.WallTracer
+    distanceSquaredBetweenPoints = api.util.distanceSquaredBetweenPoints;
+    angleBetweenPoints = api.util.angleBetweenPoints
 
-    const wallTracerMap = WallTracer.constructWallTracerMap(origin);
-    const wallTracerSet = new Set(WallTracer.values());
+    */
+
+    let wallTracerMap = WallTracer.constructWallTracerMap(origin);
+    let wallTracerSet = new Set(wallTracerMap.values());
 
     let useInnerBounds = canvas.dimensions.sceneRect.contains(origin.x, origin.y);
     let boundaries = useInnerBounds
@@ -515,6 +524,12 @@ export class ElevationLayer extends InteractionLayer {
     for ( let i = 0; i < candidateLn; i += 1 ) {
       const startingWall = wallTracerMap.get(candidateIxs[i].wall);
       const ccw = startingWall.orderedEndpoints.ccw;
+      /* debug
+      drawSegment(startingWall)
+      drawPoint(ccw, {color: COLORS.black})
+      startingEndpoint = ccw
+      startingIx = candidateIxs[i]
+      */
       closedBoundary = this._testForClosedBoundaryWalls(
         startingWall,
         ccw,
@@ -588,11 +603,10 @@ export class ElevationLayer extends InteractionLayer {
 
     if ( startingIx ) {
       startDistance2 = distanceSquaredBetweenPoints(startingEndpoint, startingIx);
-      poly.addPoint(startingIx.x, startingIx.y);
+      //poly.addPoint(startingIx);
     } else {
-      poly.addPoint(startingEndpoint.x, startingEndpoint.y);
+      poly.addPoint(startingEndpoint);
     }
-
 
     while ( i < maxIter ) {
       i += 1;
@@ -603,20 +617,33 @@ export class ElevationLayer extends InteractionLayer {
       if ( currWall.numIntersections ) currWall.processIntersections(wallTracerMap);
       const next = currWall.nextFromStartingEndpoint(startingEndpoint, startDistance2);
 
+      /* debug
+      drawSegment(next.wall)
+      drawPoint(next.startingEndpoint, {color: COLORS.black})
+      */
+
       if ( !next ) {
         // Need to reverse directions
         startingEndpoint = currWall.otherEndpoint(startingEndpoint);
         startDistance2 = 0;
-        poly.addPoint(startingEndpoint.x, startingEndpoint.y);
+        poly.addPoint(startingEndpoint);
       } else {
         currWall = next.wall;
         startingEndpoint = next.startingEndpoint;
-        if ( next.ix ) poly.addPoint(next.ix.x, next.ix.y);
-        else poly.addPoint(startingEndpoint.x, startingEndpoint.y);
+        if ( next.ix ) {
+          startDistance2 = distanceSquaredBetweenPoints(startingEndpoint, next.ix)
+          poly.addPoint(next.ix);
+        } else {
+          startDistance2 = 0;
+          poly.addPoint(startingEndpoint);
+        }
       }
 
       if ( currWall === startingWall ) break;
     }
+
+    // Need to close the polygon if possible
+    if ( poly.points[0] === currWall.B.x && poly.points[1] === currWall.B.y ) poly.addPoint(currWall.B);
 
     if ( !poly.isClosed ) return false;
 
@@ -696,7 +723,7 @@ export class ElevationLayer extends InteractionLayer {
         log("fill-by-pixel not yet implemented.");
         break;
       case "fill-space":
-        log("fill-space not yet implemented.");
+        this.fill(o, currE);
         break;
     }
 

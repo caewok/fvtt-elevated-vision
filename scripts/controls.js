@@ -47,11 +47,11 @@ export function addElevationLayerSceneControls(controls) {
 //         icon: "fas fa-paintbrush-fine"
 //       },
 //
-//       {
-//         name: "fill-space",
-//         title: "Fill enclosed by walls",
-//         icon: "fas fa-fill-drip"
-//       },
+      {
+        name: "fill-space",
+        title: "Fill space enclosed by walls",
+        icon: "fas fa-fill-drip"
+      },
 //
 //       {
 //         name: "border",

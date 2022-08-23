@@ -158,19 +158,22 @@ export class WallTracer {
 
     const startEndpoint = this[start];
     const endEndpoint = this[end];
-    const firstWall = endpointWalls.first;
+    const firstWall = endpointWalls.first();
+    const firstEndpoint = endEndpoint.equals(firstWall.A) ? firstWall.B : firstWall.A;
+    if ( endpointWalls.size === 1 ) {
+      return { wall: firstWall, startingEndpoint: firstWall.otherEndpoint(firstEndpoint) }
+    }
 
-    const firstEndpoint = endEndpoint.equals(firstWall.A) ? firstWall.A : firstWall.B;
-    let angle = angleBetweenPoints(startEndpoint, endEndpoint, firstEndpoint);
+    let angle = angleBetweenPoints(startEndpoint, endEndpoint, firstEndpoint, { clockwiseAngle: true })
     const nextWall = endpointWalls.reduce((prev, curr) => {
-      const currEndpoint = endEndpoint.equals(curr.A) ? curr.A : curr.B;
-      const currAngle = angleBetweenPoints(startEndpoint, endEndpoint, currEndpoint);
+      const currEndpoint = endEndpoint.equals(curr.A) ? curr.B : curr.A;
+      const currAngle = angleBetweenPoints(startEndpoint, endEndpoint, currEndpoint, { clockwiseAngle: true });
       if ( currAngle < angle ) {
         angle = currAngle;
         return curr;
       }
       return prev;
-    });
+    }, firstWall);
 
     return { wall: nextWall, startingEndpoint: nextWall.matchingEndpoint(endEndpoint) };
   }
@@ -193,16 +196,16 @@ export class WallTracer {
       const intersectingWalls = this._intersectionMap.get(key);
       const clockwise = intersectingWalls.reduce((prev, curr) => {
         let startingEndpoint = curr.wall.A;
-        let angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.B);
+        let angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.B, { clockwiseAngle: true });
 
         if ( points2dAlmostEqual(curr.wall.A, curr.ix) ) {
           // Aready set above; do nothing
 
         } else if ( points2dAlmostEqual(curr.wall.B, curr.ix) ) {
-          angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.A);
+          angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.A, { clockwiseAngle: true });
           startingEndpoint = curr.wall.B;
         } else {
-          const angleA = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.A);
+          const angleA = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.A, { clockwiseAngle: true });
           const angleB = angle;
           angle = Math.min(angleA, angleB);
           startingEndpoint = angleA < angleB ? curr.wall.B : curr.wall.A;
