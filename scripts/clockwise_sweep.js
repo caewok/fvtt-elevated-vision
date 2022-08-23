@@ -7,7 +7,7 @@ Ray
 */
 "use strict";
 
-import { log, lineSegment3dWallIntersection } from "./util.js";
+import { log, lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles } from "./util.js";
 import { COLORS, clearDrawings } from "./drawing.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
@@ -49,24 +49,8 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   // Combine the shadows and trim to be within the LOS
   // We want one or more LOS polygons along with non-overlapping holes.
-  const scalingFactor = 1;
-  const c = new ClipperLib.Clipper();
-  const solution = new ClipperLib.Paths();
-  c.AddPath(this.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptSubject, true);
-  for ( const shadow of this.shadows ) {
-    c.AddPath(shadow.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptClip, true);
-  }
-  c.Execute(ClipperLib.ClipType.ctDifference, solution);
-
-  const clean_delta = 0.1;
-  ClipperLib.Clipper.CleanPolygons(solution, clean_delta * scalingFactor);
-  this.combinedShadows = solution.map(pts => {
-    const poly = PIXI.Polygon.fromClipperPoints(pts, scalingFactor);
-    poly.isHole = !ClipperLib.Clipper.Orientation(pts);
-    return poly;
-  });
+  this.combinedShadows = combineBoundaryPolygonWithHoles(this, this.shadows);
 }
-
 
 /**
  * Taken from ClockwisePolygonSweep.prototype._testWallInclusion but

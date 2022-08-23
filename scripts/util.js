@@ -1,13 +1,70 @@
 /* globals
 game,
 foundry,
-canvas
+canvas,
+ClipperLib,
+PIXI
 */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./Point3d.js";
 
+/**
+ * Combine a PIXI polygon with 1 or more holes contained within (or partially within) the boundary.
+ * If no holes, will clean the polygon, which may (rarely) result in holes.
+ * @param {PIXI.Polygon} boundary   Polygon representing the boundary shape.
+ * @param {PIXI.Polygon[]} holes    Array of polygons representing holes in the boundary shape.
+ * @returns {PIXI.Polygon[]} Array of polygons where holes are labeled with isHole
+ */
+export function combineBoundaryPolygonWithHoles(boundary, holes, { scalingFactor = 1, cleanDelta = 0.1 } = {}) {
+  const c = new ClipperLib.Clipper();
+  const solution = new ClipperLib.Paths();
+  if ( holes.length) {
+    c.AddPath(boundary.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptSubject, true);
+    for ( const hole of holes ) {
+      c.AddPath(hole.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptClip, true);
+    }
+    c.Execute(ClipperLib.ClipType.ctDifference, solution);
+  } else {
+    solution.push(boundary.toClipperPoints({scalingFactor}));
+  }
+
+  ClipperLib.Clipper.CleanPolygons(solution, cleanDelta * scalingFactor);
+  return solution.map(pts => {
+    const poly = PIXI.Polygon.fromClipperPoints(pts, scalingFactor);
+    poly.isHole = !ClipperLib.Clipper.Orientation(pts);
+    return poly;
+  });
+}
+
+/**
+ * Draw an array of polygons, where polygons marked with "isHole" should be considered holes.
+ * To avoid artifacts, this polygon array should be created using "combineBoundaryPolygonWithHoles"
+ * or otherwise cleaned such that holes are entirely contained in the polygon.
+ * Other PIXI shapes may or may not work, as currently PIXI holes work only with polygon boundaries.
+ * See https://pixijs.download/release/docs/PIXI.Graphics.html#beginHole
+ * @param {PIXI.Polygon} polygonArray         Polygons representing boundaries or holes.
+ * @param {object} [options]                  Options to affect the drawing
+ * @param {PIXI.Graphics} [options.graphics]  Graphics object to use
+ * @param {hex} [options.fill]                Fill color
+ * @param {number} [options.alpha]            Alpha value for the fill
+ */
+export function drawPolygonWithHoles(polygonArray, {
+  graphics = canvas.controls.debug,
+  fillColor = 0xFFFFFF,
+  alpha = 1.0 } = {}) {
+
+  graphics.beginFill(fillColor, alpha);
+  for ( const poly of polygonArray ) {
+    if ( poly.isHole ) {
+      graphics.beginHole();
+      graphics.drawShape(poly);
+      graphics.endHole();
+    } else graphics.drawShape(poly);
+  }
+  graphics.endFill();
+}
 
 /**
  * From https://stackoverflow.com/questions/14446511/most-efficient-method-to-groupby-on-an-array-of-objects
@@ -22,17 +79,32 @@ import { Point3d } from "./Point3d.js";
  * @returns Map of the array grouped by the grouping function. map = new Map<K, Array<V>>()
  */
 export function groupBy(list, keyGetter) {
-    const map = new Map();
-    list.forEach((item) => {
-         const key = keyGetter(item);
-         const collection = map.get(key);
-         if (!collection) {
-             map.set(key, [item]);
-         } else {
-             collection.push(item);
-         }
-    });
-    return map;
+  const map = new Map();
+  list.forEach(item => {
+    const key = keyGetter(item);
+    const collection = map.get(key);
+
+    if (!collection) map.set(key, [item]);
+    else collection.push(item);
+  });
+  return map;
+}
+
+/**
+ * Test if two points are almost equal.
+ * If points have keys, better to use p.equal
+ * @param {Point} a   Point with 2 dimensions
+ * @param {Point} b   Point with 2 dimensions
+ * @returns {boolean}
+ */
+export function points2dAlmostEqual(a, b, epsilon = 1e-08) {
+  return a.x.almostEqual(b.x, epsilon) && a.y.almostEqual(b.y, epsilon);
+}
+
+export function points3dAlmostEqual(a, b, epsilon = 1e-08) {
+  return a.x.almostEqual(b.x, epsilon)
+    && a.y.almostEqual(b.y, epsilon)
+    && a.z.almostEqual(b.z, epsilon);
 }
 
 /**
@@ -55,52 +127,52 @@ export function extractPixels(target, frame) {
   let generated = false;
   if (target)
   {
-      if (target instanceof PIXI.RenderTexture)
-      {
-          renderTexture = target;
-      }
-      else
-      {
-          renderTexture = renderer.generateTexture(target);
-          generated = true;
-      }
+    if (target instanceof PIXI.RenderTexture)
+    {
+      renderTexture = target;
+    }
+    else
+    {
+      renderTexture = renderer.generateTexture(target);
+      generated = true;
+    }
   }
   if (renderTexture)
   {
-      resolution = renderTexture.baseTexture.resolution;
-      frame = frame ?? renderTexture.frame;
-      renderer.renderTexture.bind(renderTexture);
+    resolution = renderTexture.baseTexture.resolution;
+    frame = frame ?? renderTexture.frame;
+    renderer.renderTexture.bind(renderTexture);
   }
   else
   {
-      resolution = renderer.resolution;
-      if (!frame)
-      {
-          frame = new Rectangle();
-          frame.width = renderer.width;
-          frame.height = renderer.height;
-      }
-      renderer.renderTexture.bind(null);
+    resolution = renderer.resolution;
+    if (!frame)
+    {
+      frame = new PIXI.Rectangle();
+      frame.width = renderer.width;
+      frame.height = renderer.height;
+    }
+    renderer.renderTexture.bind(null);
   }
   const width = Math.round(frame.width * resolution);
   const height = Math.round(frame.height * resolution);
   const BYTES_PER_PIXEL = 4;
 
   const webglPixels = new Uint8Array(BYTES_PER_PIXEL * width * height);
-  // read pixels to the array
+  // Read pixels to the array
   const gl = renderer.gl;
   gl.readPixels(
-      Math.round(frame.x * resolution),
-      Math.round(frame.y * resolution),
-      width,
-      height,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      webglPixels
+    Math.round(frame.x * resolution),
+    Math.round(frame.y * resolution),
+    width,
+    height,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    webglPixels
   );
   if (generated)
   {
-      renderTexture.destroy(true);
+    renderTexture.destroy(true);
   }
   PIXI.Extract.arrayPostDivide(webglPixels, webglPixels);
   return webglPixels;
@@ -149,22 +221,22 @@ export function readDataURLFromFile(file) {
   });
 }
 
-  /**
-   * Convert base64 image to raw binary data
-   * @param {object} image64  HTML image64 object
-   * @returns {ArrayBuffer} The raw image data.
-   */
+/**
+ * Convert base64 image to raw binary data
+ * @param {object} image64  HTML image64 object
+ * @returns {ArrayBuffer} The raw image data.
+ */
 export function convertBase64ToImage(image64) {
-    const byteString = atob(image64.src.split(",")[1]);
+  const byteString = atob(image64.src.split(",")[1]);
 
-    // Write the bytes of the string to an ArrayBuffer
-    const ln = byteString.length;
-    const ab = new ArrayBuffer(ln);
-    const dw = new DataView(ab);
-    for ( let i = 0; i < ln; i += 1 ) dw.setUint8(i, byteString.charCodeAt(i));
+  // Write the bytes of the string to an ArrayBuffer
+  const ln = byteString.length;
+  const ab = new ArrayBuffer(ln);
+  const dw = new DataView(ab);
+  for ( let i = 0; i < ln; i += 1 ) dw.setUint8(i, byteString.charCodeAt(i));
 
-    return ab;
-  }
+  return ab;
+}
 
 /**
  * Get the point on a line AB that forms a perpendicular line to a point C.

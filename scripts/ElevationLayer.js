@@ -12,7 +12,8 @@ renderTemplate,
 game,
 isEmpty,
 PolygonVertex,
-CONFIG
+CONFIG,
+Ray
 */
 "use strict";
 
@@ -23,9 +24,11 @@ import {
   convertBase64ToImage,
   extractPixels,
   distanceSquaredBetweenPoints,
-  angleBetweenPoints } from "./util.js";
+  drawPolygonWithHoles,
+  combineBoundaryPolygonWithHoles } from "./util.js";
 import * as drawing from "./drawing.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
+import { WallTracer } from "./WallTracer.js";
 
 /* Elevation layer
 
@@ -496,111 +499,129 @@ export class ElevationLayer extends InteractionLayer {
 
 
     const wallTracerMap = WallTracer.constructWallTracerMap(origin);
-
-    // wallTracerSet = new Set();
+    const wallTracerSet = new Set(WallTracer.values());
 
     let useInnerBounds = canvas.dimensions.sceneRect.contains(origin.x, origin.y);
     let boundaries = useInnerBounds
       ? canvas.walls.innerBounds : canvas.walls.outerBounds;
-
-    canvas.walls.placeables.forEach(w => {
-      const wt = new WallTracer(w, origin);
-      wallTracerMap.set(wall, wt);
-      wallTracerSet.add(wt);
-    });
-
-    boundaries.forEach(w => {
-      const wt = new WallTracer(w, origin);
-      wallTracerMap.set(wall, wt);
-      wallTracerSet.add(wt);
-    });
-
-    this._addWallEndpointConnections(wallTracerSet);
-
     let dest = { x: useInnerBounds ? canvas.dimensions.sceneX : 0, y: origin.y };
-    let candidateWalls = this._getAllWallCollisions(origin, dest, "sorted");
+    let candidateIxs = this._getAllWallCollisions(origin, dest, "sorted");
     let westWall = boundaries.find(b => b.id.toLowerCase().includes("left"));
-    candidateWalls.push({wall: westWall});
+    candidateIxs.push({wall: westWall});
 
 
-    let candidateLn = candidateWalls.length;
-    for ( let i = 0; i < candidateLength; i += 1 ) {
-      this._testForClosedBoundaryWalls(wallTracerMap.get(candidateWalls[i].wall))
-
+    let candidateLn = candidateIxs.length;
+    let closedBoundary;
+    for ( let i = 0; i < candidateLn; i += 1 ) {
+      const startingWall = wallTracerMap.get(candidateIxs[i].wall);
+      const ccw = startingWall.orderedEndpoints.ccw;
+      closedBoundary = this._testForClosedBoundaryWalls(
+        startingWall,
+        ccw,
+        wallTracerMap,
+        wallTracerSet,
+        candidateIxs[i]);
+      if ( closedBoundary ) break;
     }
 
+    // Shouldn't happen, but...
+    if ( !closedBoundary ) {
+      console.warn(`No closed boundary found for fill at ${origin.x},${origin.y}`);
+      return;
+    }
+
+    // Test for holes
+    // Holes must have walls entirely contained by the boundary.
+    // (If the "hole" intersected the boundary, then the boundary would have included part
+    //  of the "hole.")
+    const holes = [];
+    const collisionTest = (o, rect) => rect.contains(o.t.A) && rect.contains(o.t.B);
+    const enclosingBounds = closedBoundary.getBounds();
+    const enclosedWallsArray = canvas.walls.quadtree.getObjects(enclosingBounds, collisionTest);
+
+    for ( const wall of enclosedWallsArray ) {
+      const wt = wallTracerMap.get(wall);
+      if ( !wallTracerSet.has(wt) ) continue;
+
+      let holeBoundary = this._testForClosedBoundaryWalls(
+        wt,
+        wt.A,
+        wallTracerMap,
+        wallTracerSet);
+
+      // If the holeBoundary not found, we need to try in the opposite direction.
+      holeBoundary ||= this._testForClosedBoundaryWalls(
+        wt,
+        wt.B,
+        wallTracerMap,
+        wallTracerSet);
+
+      if ( holeBoundary ) holes.push(holeBoundary);
+    }
+
+    // Clean the boundary and holes
+    // Basically the same technique as constructing shadows
+    const combinedFill = combineBoundaryPolygonWithHoles(closedBoundary, holes);
+
+    // Create the graphics representing the fill!
+    const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
+    drawPolygonWithHoles(combinedFill, { graphics, fillColor: this.elevationHex(elevation) });
+
+    this.renderElevation();
+
+    return graphics;
   }
 
   _getAllWallCollisions(origin, destination, mode) {
     const ray = new Ray(origin, destination);
     const walls = canvas.walls.quadtree.getObjects(ray.bounds);
-    return testWallsForIntersections(origin, destination, walls, mode)
+    return testWallsForIntersections(origin, destination, walls, mode);
   }
 
-  _addWallEndpointConnections(walls) {
-    const wallsArray = [...walls];
-    const ln = wallsArray.length;
-    for ( let i = 0; i < ln; i += 1 ) {
-      for ( let j = i + 1; j < ln; j += 1 ) {
-        const wi = wallsArray[i];
-        const wj = wallsArray[j];
-        wi.addEndpointConnections(wj);
-      }
-    }
-  }
+  _testForClosedBoundaryWalls(startingWall, startingEndpoint, wallTracerMap, wallTracerSet, startingIx) {
+    const poly = new PIXI.Polygon();
 
-  _findBoundaryWalls(origin, walls) {
-    const dest =
-
-    CONFIG.Canvas.losBackend.testCollision(origin, dest, { mode: "all" })
-
-  }
-
-  _testForClosedBoundaryWalls(origin, startingWall) {
     const maxIter = 1000;
     let i = 0;
     let currWall = startingWall;
+    let startDistance2 = 0;
+
+    if ( startingIx ) {
+      startDistance2 = distanceSquaredBetweenPoints(startingEndpoint, startingIx);
+      poly.addPoint(startingIx.x, startingIx.y);
+    } else {
+      poly.addPoint(startingEndpoint.x, startingEndpoint.y);
+    }
+
+
     while ( i < maxIter ) {
       i += 1;
       // Determine ccw and cw endpoints
       // If origin --> A --> B is cw, then A is ccw, B is cw
-      const { cw, ccw } = this._getOrderedEndpoints(origin, wall);
+      wallTracerSet.delete(currWall);
 
-      // If there are intersections with this wall, start with closest to cw
-      // Pick the clockwise direction, which might be this wall
-      if ( currWall.intersectsWith.size ) {
+      if ( currWall.numIntersections ) currWall.processIntersections(wallTracerMap);
+      const next = currWall.nextFromStartingEndpoint(startingEndpoint, startDistance2);
 
-        const intersectingWallData = [...wall.intersectsWith.entries()]
-          .map(([wall, ix]) => {
-            return { wall, ix, dist: distanceSquaredBetweenPoints(origin, ix) };
-          })
-          .sort((a, b) => {
-            return a.dist - b.dist;
-          });
-
-        for ( let i = 0; i < ln; i += 1 ) {
-          const currIxWallData = intersectingWallData[i];
-          const ix = currIxWallData.ix;
-          const intersectingWalls = intersectingWallData
-            .filter(obj => obj.dist.almostEqual(currIxWallData.dist))
-            .map(obj => obj.wall);
-
-          const clockwiseWall = intersectingWalls.reduce((prev, curr) => {
-             const angle = angleBetweenPoints(cw, ix, curr);
-             if ( prev.angle < angle ) return prev;
-             return { wall: curr, angle };
-          }, { wall: currWall, angle: Math.PI});
-        }
-
+      if ( !next ) {
+        // Need to reverse directions
+        startingEndpoint = currWall.otherEndpoint(startingEndpoint);
+        startDistance2 = 0;
+        poly.addPoint(startingEndpoint.x, startingEndpoint.y);
+      } else {
+        currWall = next.wall;
+        startingEndpoint = next.startingEndpoint;
+        if ( next.ix ) poly.addPoint(next.ix.x, next.ix.y);
+        else poly.addPoint(startingEndpoint.x, startingEndpoint.y);
       }
 
-
+      if ( currWall === startingWall ) break;
     }
+
+    if ( !poly.isClosed ) return false;
+
+    return poly;
   }
-
-
-
-
 
   /**
    * Remove all elevation data from the scene.

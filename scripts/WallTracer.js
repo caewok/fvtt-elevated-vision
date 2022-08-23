@@ -1,4 +1,8 @@
-
+/* globals
+canvas,
+foundry
+*/
+"use strict";
 
 /*
 
@@ -10,14 +14,22 @@ Class with methods to link and trace walls
    at an intersection or the endpoint.
 */
 
-import { groupBy } from "./utils.js";
+import {
+  angleBetweenPoints,
+  groupBy,
+  distanceSquaredBetweenPoints,
+  points2dAlmostEqual } from "./util.js";
 
-class WallTracer {
-  static #oppositeEndpoint = { A: "B", B: "A" }
+export class WallTracer {
+  static #oppositeEndpoint = { A: "B", B: "A" };
 
   _endpointWalls = { A: new Set(), B: new Set() };
 
+  _orderedEndpoints = { cw: undefined, ccw: undefined };
+
   _intersectionMap = new Map();
+
+  _next = { A: undefined, B: undefined };
 
   // Intersections are sorted from distance from A
   // Each element is a set of walls along with ix and distance
@@ -26,9 +38,6 @@ class WallTracer {
   constructor(wall, origin) {
     this.origin = origin;
     this.wall = wall;
-    this._setOrderedEndpoints();
-
-    this._next = { A: undefined, B: undefined }
   }
 
 
@@ -40,6 +49,9 @@ class WallTracer {
 
   get numIntersections() { return this.wall.intersectsWith.size; }
 
+  otherEndpoint(endpoint) { return endpoint.equals(this.A) ? this.B : this.A; }
+
+  matchingEndpoint(vertex) { return vertex.equals(this.A) ? this.A : this.B; }
 
   /**
    * Build a map of wall tracers from walls in the scene.
@@ -52,9 +64,15 @@ class WallTracer {
     const boundaries = useInnerBounds
       ? canvas.walls.innerBounds : canvas.walls.outerBounds;
     const wallTracerMap = new Map();
-    const wtArray = [...walls];
-    canvas.walls.placeables.forEach(w => {
-      const wt = new WallTracer(w, origin);
+    const wtArray = [];
+    canvas.walls.placeables.forEach(wall => {
+      const wt = new WallTracer(wall, origin);
+      wallTracerMap.set(wall, wt);
+      wtArray.push(wt);
+    });
+
+    boundaries.forEach(wall => {
+      const wt = new WallTracer(wall, origin);
       wallTracerMap.set(wall, wt);
       wtArray.push(wt);
     });
@@ -69,10 +87,12 @@ class WallTracer {
       }
     }
 
-    return WallTracerMap;
+    return wallTracerMap;
   }
 
-  orderedEndpoints() {
+  get orderedEndpoints() {
+    if ( this._orderedEndpoints.cw ) return this._orderedEndpoints;
+
     const { A, B, origin } = this;
     const o = foundry.utils.orient2dFast(origin, A, B);
     let cw;
@@ -85,7 +105,7 @@ class WallTracer {
       [cw, ccw] = o > 0 ? [A, B] : [B, A];
     }
 
-    return { cw, ccw };
+    return (this._orderedEndpoints = { cw, ccw });
   }
 
   addEndpointConnections(other) {
@@ -95,15 +115,18 @@ class WallTracer {
     if ( other.wallKeys.has(this.B.key) ) this._endpointWalls.B.add(other);
   }
 
-  get next(start = "A") {
-    return this._next[start]
-      || { this._next[start] = this._findNext(start) };
+  nextFromStartingEndpoint(startEndpoint, startDistance2 = 0) {
+    const start = startEndpoint.equals(this.A) ? "A" : "B";
+    return this.next(start, startDistance2);
   }
 
-  _findNext(start) {
-    if ( !this.intersectsWith.size ) return this._findNextFromEndpoint(start);
-    return this._findNextFromIntersection(start);
+  next(start = "A", startDistance2 = 0) {
+    return this._next[start] || (this._next[start] = this._findNext(start, startDistance2));
+  }
 
+  _findNext(start, startDistance2 = 0) {
+    if ( !this.numIntersections ) return this._findNextFromEndpoint(start);
+    return this._findNextFromIntersection(start, startDistance2);
   }
 
   processIntersections(wallTracerMap) {
@@ -113,10 +136,13 @@ class WallTracer {
     // Key: intersection distance, rounded
     // Each intersection has a set of walls
     // Assume few intersections, so can sort keys on the fly
-    const intersectingWallData = [...wall.intersectsWith.entries()]
-      .map(([wall, ix]) => {
-        return { wallTracerMap.get(wall), ix, dist: Math.round(distanceSquaredBetweenPoints(origin, ix)) };
-      });
+    const intersectingWallData = [...this.wall.intersectsWith.entries()].map(entry => {
+      const [wall, ix] = entry;
+      return {
+        wall: wallTracerMap.get(wall),
+        ix,
+        dist: Math.round(distanceSquaredBetweenPoints(origin, ix)) };
+    });
 
     this._intersectionMap = groupBy(intersectingWallData, obj => obj.dist);
   }
@@ -134,21 +160,65 @@ class WallTracer {
     const endEndpoint = this[end];
     const firstWall = endpointWalls.first;
 
-    const firstEndpoint = endEndpoint.equals(firstWall[start]) ? firstWall[start] : firstWall[end];
+    const firstEndpoint = endEndpoint.equals(firstWall.A) ? firstWall.A : firstWall.B;
     let angle = angleBetweenPoints(startEndpoint, endEndpoint, firstEndpoint);
-    return endpointWalls.reduce((prev, curr) => {
-      const currEndpoint = endEndpoint.equals(curr[start]) ? curr[start] : curr[end];
+    const nextWall = endpointWalls.reduce((prev, curr) => {
+      const currEndpoint = endEndpoint.equals(curr.A) ? curr.A : curr.B;
       const currAngle = angleBetweenPoints(startEndpoint, endEndpoint, currEndpoint);
       if ( currAngle < angle ) {
         angle = currAngle;
         return curr;
-      };
+      }
       return prev;
     });
+
+    return { wall: nextWall, startingEndpoint: nextWall.matchingEndpoint(endEndpoint) };
   }
 
-  _findNextFromIntersection(start) {
-    if ( !this.intersectsWith.size ) return null;
+  _findNextFromIntersection(start, startDistance2 = 0) {
+    if ( !this.numIntersections ) return null;
+    if ( !this._intersectionMap.size ) {
+      console.warn("Need to construct intersection map first.");
+      return null;
+    }
+
+    const keys = [...this._intersectionMap.keys()];
+    if ( start === "A" ) keys.sort((a, b) => a - b);
+    else keys.sort((a, b) => b - a);
+
+    const startEndpoint = this[start];
+
+    for ( const key of keys ) {
+      if ( key <= startDistance2 ) continue;
+      const intersectingWalls = this._intersectionMap.get(key);
+      const clockwise = intersectingWalls.reduce((prev, curr) => {
+        let startingEndpoint = curr.wall.A;
+        let angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.B);
+
+        if ( points2dAlmostEqual(curr.wall.A, curr.ix) ) {
+          // Aready set above; do nothing
+
+        } else if ( points2dAlmostEqual(curr.wall.B, curr.ix) ) {
+          angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.A);
+          startingEndpoint = curr.wall.B;
+        } else {
+          const angleA = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.A);
+          const angleB = angle;
+          angle = Math.min(angleA, angleB);
+          startingEndpoint = angleA < angleB ? curr.wall.B : curr.wall.A;
+        }
+
+        if ( prev.angle < angle ) return prev;
+        return { wall: curr.wall, angle, ix: curr.ix, startingEndpoint };
+      }, { wall: this, angle: Math.PI});
+
+      if ( clockwise.wall !== this ) return clockwise;
+    }
+
+    // None of the intersections work, so the next wall must be from the endpoint.
+    // This should only happen if the intersection(s) are at an endpoint for the
+    // other intersecting wall(s).
+    return this._findNextFromEndpoint(start);
   }
 
 }
