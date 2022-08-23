@@ -10,6 +10,32 @@ import { Point3d } from "./Point3d.js";
 
 
 /**
+ * From https://stackoverflow.com/questions/14446511/most-efficient-method-to-groupby-on-an-array-of-objects
+ * Takes an Array<V>, and a grouping function,
+ * and returns a Map of the array grouped by the grouping function.
+ *
+ * @param {Array} list An array of type V.
+ * @param {Function} keyGetter A Function that takes the the Array type V as an input, and returns a value of type K.
+ *                  K is generally intended to be a property key of V.
+ *                  keyGetter: (input: V) => K): Map<K, Array<V>>
+ *
+ * @returns Map of the array grouped by the grouping function. map = new Map<K, Array<V>>()
+ */
+export function groupBy(list, keyGetter) {
+    const map = new Map();
+    list.forEach((item) => {
+         const key = keyGetter(item);
+         const collection = map.get(key);
+         if (!collection) {
+             map.set(key, [item]);
+         } else {
+             collection.push(item);
+         }
+    });
+    return map;
+}
+
+/**
  * From https://pixijs.download/release/docs/packages_extract_src_Extract.ts.html
  * canvas.app.renderer.extract.pixels doesn't work in 6.4.2
  * Appears fixed in 6.5.0. https://github.com/pixijs/pixijs/pull/8388
@@ -227,6 +253,22 @@ export function lineSegment3dPlaneIntersects(a, b, c, d, e = {x: c.x, y: c.y, z:
 }
 
 /**
+ * Get the angle between three points, A --> B --> C, to the right of B.
+ * Assumes A|B and B|C have lengths > 0.
+ * @param {Point} a   First point
+ * @param {Point} b   Second point
+ * @param {Point} c   Third point
+ * @returns {number}  Angle, in radians
+ */
+export function angleBetweenPoints(a, b, c) {
+  const ba = { x: a.x - b.x, y: a.y - b.y };
+  const bc = { x: c.x - b.x, y: c.y - b.y };
+  const dot = (ba.x * bc.x) + (ba.y * bc.y);
+  const denom = distanceBetweenPoints(a, b) * distanceBetweenPoints(b, c);
+  return Math.acos(dot / denom);
+}
+
+/**
  * Quickly test whether the line segment AB intersects with a wall in 3d.
  * Extension of lineSegmentPlaneIntersects where the plane is not infinite.
  * Takes advantage of the fact that 3d walls in Foundry move straight out of the canvas
@@ -245,11 +287,16 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
   const c = new Point3d(wall.A.x, wall.A.y, wall.bottomZ);
   const d = new Point3d(wall.B.x, wall.B.y, wall.bottomZ);
 
+  if ( c.z === Number.NEGATIVE_INFINITY ) c.z = Number.MIN_SAFE_INTEGER;
+  if ( d.z === Number.NEGATIVE_INFINITY ) d.z = Number.MIN_SAFE_INTEGER;
+
   // First test if wall and segment intersect from 2d overhead.
   if ( !foundry.utils.lineSegmentIntersects(a, b, c, d) ) { return null; }
 
   // Second test if segment intersects the wall as a plane
   const e = new Point3d(wall.A.x, wall.A.y, wall.topZ);
+  if ( e.z === Number.POSITIVE_INFINITY ) e.z = Number.MAX_SAFE_INTEGER;
+
   if ( !lineSegment3dPlaneIntersects(a, b, c, d, e) ) { return null; }
 
   // At this point, we know the wall, if infinite, would intersect the segment

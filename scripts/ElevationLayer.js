@@ -17,8 +17,15 @@ CONFIG
 "use strict";
 
 import { MODULE_ID, FLAG_ELEVATION_IMAGE } from "./const.js";
-import { log, readDataURLFromFile, convertBase64ToImage, extractPixels } from "./util.js";
+import {
+  log,
+  readDataURLFromFile,
+  convertBase64ToImage,
+  extractPixels,
+  distanceSquaredBetweenPoints,
+  angleBetweenPoints } from "./util.js";
 import * as drawing from "./drawing.js";
+import { testWallsForIntersections } from "./clockwise_sweep.js";
 
 /* Elevation layer
 
@@ -415,7 +422,7 @@ export class ElevationLayer extends InteractionLayer {
   /**
    * Set the elevation for the grid space that contains the point.
    * @param {Point} p             Point within the grid square/hex.
-   * @param {number} elevation    Elevation to use
+   * @param {number} elevation    Elevation to use to fill the grid space
    * @param {object}  [options]   Options that affect setting this elevation
    * @param {boolean} [options.temporary]   If true, don't immediately require a save.
    *   This setting does not prevent a save if the user further modifies the canvas.
@@ -440,8 +447,11 @@ export class ElevationLayer extends InteractionLayer {
 
   /**
    * Construct a LOS polygon from this point and fill with the provided elevation.
-   * @param {Point} origin   Point where viewer is assumed to be.
-   * @param {number} elevation
+   * @param {Point} origin        Point where viewer is assumed to be.
+   * @param {number} elevation    Elevation to use for the fill.
+   * @param {object} [options]    Options that affect the fill.
+   * @param {string} [options.type]   Type of line-of-sight to use, which can affect
+   *   which walls are included. Defaults to "light".
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
   fillLOS(origin, elevation = 0, { type = "light"} = {}) {
@@ -456,6 +466,141 @@ export class ElevationLayer extends InteractionLayer {
 
     return graphics;
   }
+
+
+  /**
+   * Fill spaces enclosed by walls from a given origin point.
+   * @param {Point} origin    Start point for the fill.
+   * @param {number} elevation
+   * @returns {PIXI.Graphics}   The child graphics added to the _graphicsContainer
+   */
+  fill(origin, elevation) {
+    /* Algorithm
+      Prelim: Gather set of all walls, including boundary walls.
+      1. Shoot a line to the west and identify colliding walls.
+      2. Pick closest and remember it.
+
+      Determine open/closed
+      3. Follow the wall clockwise and turn clockwise at each intersection or endpoint.
+      4. If back to original wall, found the boundary.
+      5. If ends without hitting original wall, this wall set is open.
+         Remove walls from set; redo from (1).
+
+      Once boundary polygon is found:
+      1. Get all (potentially) enclosed walls. Use bounding rect.
+      2. Omit any walls whose endpoint(s) lie outside the actual boundary polygon.
+      3. For each wall, determine if open or closed using open/closed algorithm.
+      4. If open, omit walls from set. If closed, these are holes. If the linked walls travels
+         outside the boundary polygon than it can be ignored
+    */
+
+
+    const wallTracerMap = WallTracer.constructWallTracerMap(origin);
+
+    // wallTracerSet = new Set();
+
+    let useInnerBounds = canvas.dimensions.sceneRect.contains(origin.x, origin.y);
+    let boundaries = useInnerBounds
+      ? canvas.walls.innerBounds : canvas.walls.outerBounds;
+
+    canvas.walls.placeables.forEach(w => {
+      const wt = new WallTracer(w, origin);
+      wallTracerMap.set(wall, wt);
+      wallTracerSet.add(wt);
+    });
+
+    boundaries.forEach(w => {
+      const wt = new WallTracer(w, origin);
+      wallTracerMap.set(wall, wt);
+      wallTracerSet.add(wt);
+    });
+
+    this._addWallEndpointConnections(wallTracerSet);
+
+    let dest = { x: useInnerBounds ? canvas.dimensions.sceneX : 0, y: origin.y };
+    let candidateWalls = this._getAllWallCollisions(origin, dest, "sorted");
+    let westWall = boundaries.find(b => b.id.toLowerCase().includes("left"));
+    candidateWalls.push({wall: westWall});
+
+
+    let candidateLn = candidateWalls.length;
+    for ( let i = 0; i < candidateLength; i += 1 ) {
+      this._testForClosedBoundaryWalls(wallTracerMap.get(candidateWalls[i].wall))
+
+    }
+
+  }
+
+  _getAllWallCollisions(origin, destination, mode) {
+    const ray = new Ray(origin, destination);
+    const walls = canvas.walls.quadtree.getObjects(ray.bounds);
+    return testWallsForIntersections(origin, destination, walls, mode)
+  }
+
+  _addWallEndpointConnections(walls) {
+    const wallsArray = [...walls];
+    const ln = wallsArray.length;
+    for ( let i = 0; i < ln; i += 1 ) {
+      for ( let j = i + 1; j < ln; j += 1 ) {
+        const wi = wallsArray[i];
+        const wj = wallsArray[j];
+        wi.addEndpointConnections(wj);
+      }
+    }
+  }
+
+  _findBoundaryWalls(origin, walls) {
+    const dest =
+
+    CONFIG.Canvas.losBackend.testCollision(origin, dest, { mode: "all" })
+
+  }
+
+  _testForClosedBoundaryWalls(origin, startingWall) {
+    const maxIter = 1000;
+    let i = 0;
+    let currWall = startingWall;
+    while ( i < maxIter ) {
+      i += 1;
+      // Determine ccw and cw endpoints
+      // If origin --> A --> B is cw, then A is ccw, B is cw
+      const { cw, ccw } = this._getOrderedEndpoints(origin, wall);
+
+      // If there are intersections with this wall, start with closest to cw
+      // Pick the clockwise direction, which might be this wall
+      if ( currWall.intersectsWith.size ) {
+
+        const intersectingWallData = [...wall.intersectsWith.entries()]
+          .map(([wall, ix]) => {
+            return { wall, ix, dist: distanceSquaredBetweenPoints(origin, ix) };
+          })
+          .sort((a, b) => {
+            return a.dist - b.dist;
+          });
+
+        for ( let i = 0; i < ln; i += 1 ) {
+          const currIxWallData = intersectingWallData[i];
+          const ix = currIxWallData.ix;
+          const intersectingWalls = intersectingWallData
+            .filter(obj => obj.dist.almostEqual(currIxWallData.dist))
+            .map(obj => obj.wall);
+
+          const clockwiseWall = intersectingWalls.reduce((prev, curr) => {
+             const angle = angleBetweenPoints(cw, ix, curr);
+             if ( prev.angle < angle ) return prev;
+             return { wall: curr, angle };
+          }, { wall: currWall, angle: Math.PI});
+        }
+
+      }
+
+
+    }
+  }
+
+
+
+
 
   /**
    * Remove all elevation data from the scene.

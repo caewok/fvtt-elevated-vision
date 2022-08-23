@@ -2,7 +2,6 @@
 ClipperLib,
 canvas,
 CONST,
-ClockwiseSweepPolygon,
 PIXI,
 Ray
 */
@@ -11,6 +10,7 @@ Ray
 import { log, lineSegment3dWallIntersection } from "./util.js";
 import { COLORS, clearDrawings } from "./drawing.js";
 import { Shadow } from "./Shadow.js";
+import { Point3d } from "./Point3d.js";
 
 
 /**
@@ -159,34 +159,32 @@ export function testCollision3dClockwiseSweepPolygon(origin, destination, {mode=
  *                                    The closest collision, if mode is "closest"
  */
 export function _testCollision3dClockwiseSweepPolygon(ray, mode) {
-  const origin = ray.A;
-  const dest = ray.B;
-  origin.z ??= 0;
-  dest.z ??= 0;
-  const type = this.config.type;
-
-  log(`getRayCollisions3d ${origin.x},${origin.y}${origin.z} --> ${dest.x},${dest.y},${dest.z}`);
-
-
   // Identify candidate edges
   // Don't use this._identifyEdges b/c we need all edges, including those excluded by Wall Height
   const collisionTest = (o, rect) => originalTestWallInclusion.call(this, o.t, rect);
   const walls = canvas.walls.quadtree.getObjects(ray.bounds, { collisionTest });
+  return testWallsForIntersections(ray.A, ray.B, walls, mode, this.config.type);
+}
+
+export function testWallsForIntersections(origin, destination, walls, mode, type) {
+  origin = new Point3d(origin.x, origin.y, origin.z);
+  destination = new Point3d(destination.x, destination.y, destination.z);
+
   const collisions = [];
   for ( let wall of walls ) {
-    const x = lineSegment3dWallIntersection(ray.A, dest, wall);
+    const x = lineSegment3dWallIntersection(origin, destination, wall);
     if ( x ) {
       if ( mode === "any" ) {   // We may be done already
-        if ( (wall.document[type] === CONST.WALL_SENSE_TYPES.NORMAL) || (walls.length > 1) ) return true;
+        if ( (type && wall.document[type] === CONST.WALL_SENSE_TYPES.NORMAL) || (walls.length > 1) ) return true;
       }
-      x.type = wall.document[type];
+      if ( type ) x.type = wall.document[type];
+      x.wall = wall;
       collisions.push(x);
     }
   }
   if ( mode === "any" ) return false;
 
   // Return all collisions
-  if ( this.config.debug ) ClockwiseSweepPolygon._visualizeCollision(ray, walls, collisions);
   if ( mode === "all" ) return collisions;
 
   // Calculate distance to return the closest collision
@@ -198,6 +196,9 @@ export function _testCollision3dClockwiseSweepPolygon(ray, mode) {
 
   // Return the closest collision
   collisions.sort((a, b) => a.distance2 - b.distance2);
-  if ( collisions[0].type === CONST.WALL_SENSE_TYPES.LIMITED ) collisions.shift();
+  if ( collisions[0]?.type === CONST.WALL_SENSE_TYPES.LIMITED ) collisions.shift();
+
+  if ( mode === "sorted" ) return collisions;
+
   return collisions[0] || null;
 }
