@@ -25,7 +25,8 @@ import {
   extractPixels,
   distanceSquaredBetweenPoints,
   drawPolygonWithHoles,
-  combineBoundaryPolygonWithHoles } from "./util.js";
+  combineBoundaryPolygonWithHoles,
+  points2dAlmostEqual } from "./util.js";
 import * as drawing from "./drawing.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { WallTracer } from "./WallTracer.js";
@@ -522,8 +523,8 @@ export class ElevationLayer extends InteractionLayer {
     let candidateLn = candidateIxs.length;
     let closedBoundary;
     for ( let i = 0; i < candidateLn; i += 1 ) {
-      const startingWall = wallTracerMap.get(candidateIxs[i].wall);
-      const ccw = startingWall.orderedEndpoints.ccw;
+      let startingWall = wallTracerMap.get(candidateIxs[i].wall);
+      let ccw = startingWall.orderedEndpoints.ccw;
       /* debug
       drawSegment(startingWall)
       drawPoint(ccw, {color: COLORS.black})
@@ -601,7 +602,7 @@ export class ElevationLayer extends InteractionLayer {
       drawPoint(startingEndpoint, {color: COLORS.black})
     */
 
-    const maxIter = 1000;
+    let maxIter = 1000;
     let i = 0;
     let currWall = startingWall;
     let currEndpoint = startingEndpoint
@@ -613,49 +614,61 @@ export class ElevationLayer extends InteractionLayer {
     } else {
       poly.addPoint(startingEndpoint);
     }
+    let currDistance2 = startDistance2;
+    let passedStartingPoint = false;
 
     while ( i < maxIter ) {
-      i += 1;
+
       // Determine ccw and cw endpoints
       // If origin --> A --> B is cw, then A is ccw, B is cw
       wallTracerSet.delete(currWall);
 
       if ( currWall.numIntersections ) currWall.processIntersections(wallTracerMap);
-      const next = currWall.nextFromStartingEndpoint(currEndpoint, startDistance2);
+      let next = currWall.nextFromStartingEndpoint(currEndpoint, currDistance2);
 
       /* debug
       drawSegment(next.wall)
       drawPoint(next.startingEndpoint, {color: COLORS.black})
       */
 
+      let pointToAdd;
       if ( !next ) {
         // Need to reverse directions
         currEndpoint = currWall.otherEndpoint(currEndpoint);
-        startDistance2 = 0;
-        poly.addPoint(currEndpoint);
+        currDistance2 = 0;
+        pointToAdd = currEndpoint;
       } else {
         currWall = next.wall;
         currEndpoint = next.startingEndpoint;
         if ( next.ix ) {
-          startDistance2 = distanceSquaredBetweenPoints(currEndpoint, next.ix)
-          poly.addPoint(next.ix);
+          currDistance2 = distanceSquaredBetweenPoints(currEndpoint, next.ix)
+          pointToAdd = next.ix;
         } else {
-          startDistance2 = 0;
-          poly.addPoint(currEndpoint);
+          currDistance2 = 0;
+          pointToAdd = currEndpoint;
         }
       }
 
-      if ( currWall === startingWall ) break;
+      poly.addPoint(pointToAdd);
+
+
+
+      // Stop when returning to the first point.
+      // This is tricky because it is possible to return to the starting wall multiple times.
+      // 1. Simple polygon. Connects at the starting wall endpoint.
+      // 2. Starting below an intersection. Intersection may return to starting wall.
+      //    Need to pass the starting point before returning.
+      // 3. Starting above an intersection.
+      //    Must pass the starting point after processing the intersection at end.
+      if ( currWall === startingWall && currDistance2 <= startDistance2 ) passedStartingPoint = true;
+
+      if ( passedStartingPoint && points2dAlmostEqual(pointToAdd, {x: poly.points[0], y: poly.points[1]}) ) break;
+
+      i += 1;
     }
 
-    // Need to close the polygon if possible
-    if ( currWall.numIntersections ) currWall.processIntersections(wallTracerMap);
-    const next = currWall.nextFromStartingEndpoint(currEndpoint, startDistance2);
-    poly.addPoint(next.ix ? next.ix : next.startingEndpoint);
-
-    if ( !poly.isClosed ) return false;
-
-    return poly;
+    if ( poly.isClosed ) return poly;
+    return false;
   }
 
   /**

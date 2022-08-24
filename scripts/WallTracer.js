@@ -30,7 +30,7 @@ export class WallTracer {
 
   _intersectionMap = new Map();
 
-  _next = { A: undefined, B: undefined };
+  _next = { A: new Map(), B: new Map() };
 
   // Intersections are sorted from distance from A
   // Each element is a set of walls along with ix and distance
@@ -122,7 +122,14 @@ export class WallTracer {
   }
 
   next(start = "A", startDistance2 = 0) {
-    return this._next[start] || (this._next[start] = this._findNext(start, startDistance2));
+    startDistance2 = Math.round(startDistance2);
+
+    const m = this._next[start];
+    if ( m.has(startDistance2) ) return m.get(startDistance2);
+
+    const next = this._findNext(start, startDistance2);
+    m.set(startDistance2, next);
+    return next;
   }
 
   _findNext(start, startDistance2 = 0) {
@@ -188,19 +195,19 @@ export class WallTracer {
     }
 
     const keys = [...this._intersectionMap.keys()];
-    if ( start === "A" ) {
-      keys.sort((a, b) => a - b);
-    } else {
+    let flipKeys = start === "B";
+    if ( flipKeys ) {
       keys.sort((a, b) => b - a);
-
-      // reverse the start distance
       startDistance2 = Math.pow(distanceBetweenPoints(this.A, this.B) - Math.sqrt(startDistance2), 2);
-    }
+    } else keys.sort((a, b) => a - b);
+
+
 
     const startEndpoint = this[start];
 
     for ( const key of keys ) {
-      if ( key <= Math.round(startDistance2) ) continue;
+      const ignoreKey = flipKeys ? key >= startDistance2 : key <= startDistance2;
+      if ( ignoreKey ) continue;
       const intersectingWalls = this._intersectionMap.get(key);
       const clockwise = intersectingWalls.reduce((prev, curr) => {
         let startingEndpoint = curr.wall.A;
