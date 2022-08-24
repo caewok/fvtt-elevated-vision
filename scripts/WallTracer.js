@@ -18,7 +18,8 @@ import {
   angleBetweenPoints,
   groupBy,
   distanceSquaredBetweenPoints,
-  points2dAlmostEqual } from "./util.js";
+  points2dAlmostEqual,
+  distanceBetweenPoints } from "./util.js";
 
 export class WallTracer {
   static #oppositeEndpoint = { A: "B", B: "A" };
@@ -136,12 +137,13 @@ export class WallTracer {
     // Key: intersection distance, rounded
     // Each intersection has a set of walls
     // Assume few intersections, so can sort keys on the fly
+    const A = this.wall.A;
     const intersectingWallData = [...this.wall.intersectsWith.entries()].map(entry => {
       const [wall, ix] = entry;
       return {
         wall: wallTracerMap.get(wall),
         ix,
-        dist: Math.round(distanceSquaredBetweenPoints(origin, ix)) };
+        dist: Math.round(distanceSquaredBetweenPoints(A, ix)) };
     });
 
     this._intersectionMap = groupBy(intersectingWallData, obj => obj.dist);
@@ -186,13 +188,19 @@ export class WallTracer {
     }
 
     const keys = [...this._intersectionMap.keys()];
-    if ( start === "A" ) keys.sort((a, b) => a - b);
-    else keys.sort((a, b) => b - a);
+    if ( start === "A" ) {
+      keys.sort((a, b) => a - b);
+    } else {
+      keys.sort((a, b) => b - a);
+
+      // reverse the start distance
+      startDistance2 = Math.pow(distanceBetweenPoints(this.A, this.B) - Math.sqrt(startDistance2), 2);
+    }
 
     const startEndpoint = this[start];
 
     for ( const key of keys ) {
-      if ( key <= startDistance2 ) continue;
+      if ( key <= Math.round(startDistance2) ) continue;
       const intersectingWalls = this._intersectionMap.get(key);
       const clockwise = intersectingWalls.reduce((prev, curr) => {
         let startingEndpoint = curr.wall.A;

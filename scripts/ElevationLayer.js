@@ -596,9 +596,15 @@ export class ElevationLayer extends InteractionLayer {
   _testForClosedBoundaryWalls(startingWall, startingEndpoint, wallTracerMap, wallTracerSet, startingIx) {
     const poly = new PIXI.Polygon();
 
+    /* debug
+      drawSegment(startingWall)
+      drawPoint(startingEndpoint, {color: COLORS.black})
+    */
+
     const maxIter = 1000;
     let i = 0;
     let currWall = startingWall;
+    let currEndpoint = startingEndpoint
     let startDistance2 = 0;
 
     if ( startingIx ) {
@@ -615,7 +621,7 @@ export class ElevationLayer extends InteractionLayer {
       wallTracerSet.delete(currWall);
 
       if ( currWall.numIntersections ) currWall.processIntersections(wallTracerMap);
-      const next = currWall.nextFromStartingEndpoint(startingEndpoint, startDistance2);
+      const next = currWall.nextFromStartingEndpoint(currEndpoint, startDistance2);
 
       /* debug
       drawSegment(next.wall)
@@ -624,18 +630,18 @@ export class ElevationLayer extends InteractionLayer {
 
       if ( !next ) {
         // Need to reverse directions
-        startingEndpoint = currWall.otherEndpoint(startingEndpoint);
+        currEndpoint = currWall.otherEndpoint(currEndpoint);
         startDistance2 = 0;
-        poly.addPoint(startingEndpoint);
+        poly.addPoint(currEndpoint);
       } else {
         currWall = next.wall;
-        startingEndpoint = next.startingEndpoint;
+        currEndpoint = next.startingEndpoint;
         if ( next.ix ) {
-          startDistance2 = distanceSquaredBetweenPoints(startingEndpoint, next.ix)
+          startDistance2 = distanceSquaredBetweenPoints(currEndpoint, next.ix)
           poly.addPoint(next.ix);
         } else {
           startDistance2 = 0;
-          poly.addPoint(startingEndpoint);
+          poly.addPoint(currEndpoint);
         }
       }
 
@@ -643,7 +649,9 @@ export class ElevationLayer extends InteractionLayer {
     }
 
     // Need to close the polygon if possible
-    if ( poly.points[0] === currWall.B.x && poly.points[1] === currWall.B.y ) poly.addPoint(currWall.B);
+    if ( currWall.numIntersections ) currWall.processIntersections(wallTracerMap);
+    const next = currWall.nextFromStartingEndpoint(currEndpoint, startDistance2);
+    poly.addPoint(next.ix ? next.ix : next.startingEndpoint);
 
     if ( !poly.isClosed ) return false;
 
