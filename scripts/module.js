@@ -24,6 +24,7 @@ import {
 import { ElevationLayer } from "./ElevationLayer.js";
 import { ElevationGrid } from "./ElevationGrid.js";
 import { WallTracer } from "./WallTracer.js";
+import { FILOQueue } from "./FILOQueue.js";
 
 
 Hooks.once("init", async function() {
