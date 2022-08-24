@@ -3,9 +3,9 @@
 */
 "use strict";
 
-// FIFO queue.
+// FILO queue.
 // Used by ElevationLayerToolBar to store undo history
-export class FIFOQueue {
+export class FILOQueue {
   constructor(max = 50) {
     this.elements = [];
   }

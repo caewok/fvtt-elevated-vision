@@ -8,14 +8,12 @@ mergeObject,
 
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
-import { FIFOQueue } from "./FIFOQueue.js";
 
 export class ElevationLayerToolBar extends Application {
   constructor() {
     super(...arguments);
 
     // As the elevation default to 0, it makes sense to start at 1 unit of elevation.
-    this.undoQueue = new FIFOQueue(50);
     this.elevation = canvas.elevation;
     this.currentElevation = canvas.scene.dimensions.distance;
   }

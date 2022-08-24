@@ -30,6 +30,7 @@ import {
 import * as drawing from "./drawing.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { WallTracer } from "./WallTracer.js";
+import { FILOQueue } from "./FILOQueue.js";
 
 /* Elevation layer
 
@@ -63,6 +64,8 @@ export class ElevationLayer extends InteractionLayer {
   constructor() {
     super();
     this.controls = ui.controls.controls.find(obj => obj.name === "elevation");
+
+    this.undoQueue = new FILOQueue();
   }
 
   _backgroundElevation = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
@@ -446,6 +449,8 @@ export class ElevationLayer extends InteractionLayer {
 
     this._requiresSave = !temporary;
 
+    this.undoQueue.enqueue(graphics);
+
     return graphics;
   }
 
@@ -467,6 +472,8 @@ export class ElevationLayer extends InteractionLayer {
     graphics.endFill();
 
     this.renderElevation();
+
+    this.undoQueue.enqueue(graphics);
 
     return graphics;
   }
@@ -585,6 +592,8 @@ export class ElevationLayer extends InteractionLayer {
 
     this.renderElevation();
 
+    this.undoQueue.enqueue(graphics);
+
     return graphics;
   }
 
@@ -669,6 +678,18 @@ export class ElevationLayer extends InteractionLayer {
 
     if ( poly.isClosed ) return poly;
     return false;
+  }
+
+  /**
+   * Undo the prior graphics addition.
+   */
+  undo() {
+    const g = this.undoQueue.dequeue();
+    if ( !g ) return;
+    this._graphicsContainer.removeChild(g);
+    g.destroy();
+    this._requiresSave = true;
+    this.renderElevation();
   }
 
   /**

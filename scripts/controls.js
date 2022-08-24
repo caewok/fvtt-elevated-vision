@@ -70,23 +70,17 @@ export function addElevationLayerSceneControls(controls) {
         name: "clear",
         title: "Clear all",
         icon: "fas fa-trash-can",
+        button: true,
         onClick: () => {
           canvas.elevation.clearElevationData();
         }
       },
-//
-//       {
-//         name: "undo",
-//         title: "Undo",
-//         icon: "fas fa-rotate-left"
-//       },
-
-
 
       {
         name: "upload",
         title: "Upload elevation data and replace in scene",
         icon: "fas fa-file-arrow-up",
+        button: true,
         onClick: () => {
 					//canvas.elevation.importDialog()
 					new FilePicker({
@@ -102,10 +96,23 @@ export function addElevationLayerSceneControls(controls) {
         name: "download",
         title: "Download elevation data",
         icon: "fas fa-file-arrow-down",
+        button: true,
         onClick: () => {
 					canvas.elevation.downloadElevationData({format: "image/webp"});
 				}
+      },
+
+      {
+        name: "undo",
+        title: "Undo",
+        icon: "fas fa-rotate-left",
+//         visible: canvas?.elevation?.undoQueue?.length,
+        button: true,
+        onClick: () => {
+          canvas.elevation.undo();
+        }
       }
+
     ]
   });
 }
