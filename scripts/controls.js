@@ -72,7 +72,11 @@ export function addElevationLayerSceneControls(controls) {
         icon: "fas fa-trash-can",
         button: true,
         onClick: () => {
-          canvas.elevation.clearElevationData();
+          Dialog.confirm({
+            title: "Clear all elevation data",
+            content: "Are you sure you want to remove all elevation data from the scene?",
+            yes: () => canvas.elevation.clearElevationData()
+          });
         }
       },
 
