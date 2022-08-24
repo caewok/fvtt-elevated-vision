@@ -23,6 +23,7 @@ import {
 
 import { ElevationLayer } from "./ElevationLayer.js";
 import { ElevationGrid } from "./ElevationGrid.js";
+import { WallTracer } from "./WallTracer.js";
 
 
 Hooks.once("init", async function() {
@@ -32,7 +33,8 @@ Hooks.once("init", async function() {
     Point3d,
     Shadow,
     ElevationLayer,
-    ElevationGrid
+    ElevationGrid,
+    WallTracer
   };
 
   registerPIXIPolygonMethods();

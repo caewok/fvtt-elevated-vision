@@ -12,13 +12,24 @@ renderTemplate,
 game,
 isEmpty,
 PolygonVertex,
-CONFIG
+CONFIG,
+Ray
 */
 "use strict";
 
 import { MODULE_ID, FLAG_ELEVATION_IMAGE } from "./const.js";
-import { log, readDataURLFromFile, convertBase64ToImage, extractPixels } from "./util.js";
+import {
+  log,
+  readDataURLFromFile,
+  convertBase64ToImage,
+  extractPixels,
+  distanceSquaredBetweenPoints,
+  drawPolygonWithHoles,
+  combineBoundaryPolygonWithHoles,
+  points2dAlmostEqual } from "./util.js";
 import * as drawing from "./drawing.js";
+import { testWallsForIntersections } from "./clockwise_sweep.js";
+import { WallTracer } from "./WallTracer.js";
 
 /* Elevation layer
 
@@ -415,7 +426,7 @@ export class ElevationLayer extends InteractionLayer {
   /**
    * Set the elevation for the grid space that contains the point.
    * @param {Point} p             Point within the grid square/hex.
-   * @param {number} elevation    Elevation to use
+   * @param {number} elevation    Elevation to use to fill the grid space
    * @param {object}  [options]   Options that affect setting this elevation
    * @param {boolean} [options.temporary]   If true, don't immediately require a save.
    *   This setting does not prevent a save if the user further modifies the canvas.
@@ -440,8 +451,11 @@ export class ElevationLayer extends InteractionLayer {
 
   /**
    * Construct a LOS polygon from this point and fill with the provided elevation.
-   * @param {Point} origin   Point where viewer is assumed to be.
-   * @param {number} elevation
+   * @param {Point} origin        Point where viewer is assumed to be.
+   * @param {number} elevation    Elevation to use for the fill.
+   * @param {object} [options]    Options that affect the fill.
+   * @param {string} [options.type]   Type of line-of-sight to use, which can affect
+   *   which walls are included. Defaults to "light".
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
   fillLOS(origin, elevation = 0, { type = "light"} = {}) {
@@ -455,6 +469,206 @@ export class ElevationLayer extends InteractionLayer {
     this.renderElevation();
 
     return graphics;
+  }
+
+
+  /**
+   * Fill spaces enclosed by walls from a given origin point.
+   * @param {Point} origin    Start point for the fill.
+   * @param {number} elevation
+   * @returns {PIXI.Graphics}   The child graphics added to the _graphicsContainer
+   */
+  fill(origin, elevation) {
+    /* Algorithm
+      Prelim: Gather set of all walls, including boundary walls.
+      1. Shoot a line to the west and identify colliding walls.
+      2. Pick closest and remember it.
+
+      Determine open/closed
+      3. Follow the wall clockwise and turn clockwise at each intersection or endpoint.
+      4. If back to original wall, found the boundary.
+      5. If ends without hitting original wall, this wall set is open.
+         Remove walls from set; redo from (1).
+
+      Once boundary polygon is found:
+      1. Get all (potentially) enclosed walls. Use bounding rect.
+      2. Omit any walls whose endpoint(s) lie outside the actual boundary polygon.
+      3. For each wall, determine if open or closed using open/closed algorithm.
+      4. If open, omit walls from set. If closed, these are holes. If the linked walls travels
+         outside the boundary polygon than it can be ignored
+    */
+
+    /* testing
+    origin = _token.center
+    el = canvas.elevation
+    api = game.modules.get("elevatedvision").api
+    WallTracer = api.WallTracer
+    distanceSquaredBetweenPoints = api.util.distanceSquaredBetweenPoints;
+    angleBetweenPoints = api.util.angleBetweenPoints
+
+    */
+
+    let wallTracerMap = WallTracer.constructWallTracerMap(origin);
+    let wallTracerSet = new Set(wallTracerMap.values());
+
+    let useInnerBounds = canvas.dimensions.sceneRect.contains(origin.x, origin.y);
+    let boundaries = useInnerBounds
+      ? canvas.walls.innerBounds : canvas.walls.outerBounds;
+    let dest = { x: useInnerBounds ? canvas.dimensions.sceneX : 0, y: origin.y };
+    let candidateIxs = this._getAllWallCollisions(origin, dest, "sorted");
+    let westWall = boundaries.find(b => b.id.toLowerCase().includes("left"));
+    candidateIxs.push({wall: westWall});
+
+
+    let candidateLn = candidateIxs.length;
+    let closedBoundary;
+    for ( let i = 0; i < candidateLn; i += 1 ) {
+      let startingWall = wallTracerMap.get(candidateIxs[i].wall);
+      let ccw = startingWall.orderedEndpoints.ccw;
+      /* debug
+      drawSegment(startingWall)
+      drawPoint(ccw, {color: COLORS.black})
+      startingEndpoint = ccw
+      startingIx = candidateIxs[i]
+      */
+      closedBoundary = this._testForClosedBoundaryWalls(
+        startingWall,
+        ccw,
+        wallTracerMap,
+        wallTracerSet,
+        candidateIxs[i]);
+      if ( closedBoundary ) break;
+    }
+
+    // Shouldn't happen, but...
+    if ( !closedBoundary ) {
+      console.warn(`No closed boundary found for fill at ${origin.x},${origin.y}`);
+      return;
+    }
+
+    // Test for holes
+    // Holes must have walls entirely contained by the boundary.
+    // (If the "hole" intersected the boundary, then the boundary would have included part
+    //  of the "hole.")
+    const holes = [];
+    const collisionTest = (o, rect) => rect.contains(o.t.A) && rect.contains(o.t.B);
+    const enclosingBounds = closedBoundary.getBounds();
+    const enclosedWallsArray = canvas.walls.quadtree.getObjects(enclosingBounds, collisionTest);
+
+    for ( const wall of enclosedWallsArray ) {
+      const wt = wallTracerMap.get(wall);
+      if ( !wallTracerSet.has(wt) ) continue;
+
+      let holeBoundary = this._testForClosedBoundaryWalls(
+        wt,
+        wt.A,
+        wallTracerMap,
+        wallTracerSet);
+
+      // If the holeBoundary not found, we need to try in the opposite direction.
+      holeBoundary ||= this._testForClosedBoundaryWalls(
+        wt,
+        wt.B,
+        wallTracerMap,
+        wallTracerSet);
+
+      if ( holeBoundary ) holes.push(holeBoundary);
+    }
+
+    // Clean the boundary and holes
+    // Basically the same technique as constructing shadows
+    const combinedFill = combineBoundaryPolygonWithHoles(closedBoundary, holes);
+
+    // Create the graphics representing the fill!
+    const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
+    drawPolygonWithHoles(combinedFill, { graphics, fillColor: this.elevationHex(elevation) });
+
+    this.renderElevation();
+
+    return graphics;
+  }
+
+  _getAllWallCollisions(origin, destination, mode) {
+    const ray = new Ray(origin, destination);
+    const walls = canvas.walls.quadtree.getObjects(ray.bounds);
+    return testWallsForIntersections(origin, destination, walls, mode);
+  }
+
+  _testForClosedBoundaryWalls(startingWall, startingEndpoint, wallTracerMap, wallTracerSet, startingIx) {
+    const poly = new PIXI.Polygon();
+
+    /* debug
+      drawSegment(startingWall)
+      drawPoint(startingEndpoint, {color: COLORS.black})
+    */
+
+    let maxIter = 1000;
+    let i = 0;
+    let currWall = startingWall;
+    let currEndpoint = startingEndpoint
+    let startDistance2 = 0;
+
+    if ( startingIx ) {
+      startDistance2 = distanceSquaredBetweenPoints(startingEndpoint, startingIx);
+      //poly.addPoint(startingIx);
+    } else {
+      poly.addPoint(startingEndpoint);
+    }
+    let currDistance2 = startDistance2;
+    let passedStartingPoint = false;
+
+    while ( i < maxIter ) {
+
+      // Determine ccw and cw endpoints
+      // If origin --> A --> B is cw, then A is ccw, B is cw
+      wallTracerSet.delete(currWall);
+
+      if ( currWall.numIntersections ) currWall.processIntersections(wallTracerMap);
+      let next = currWall.nextFromStartingEndpoint(currEndpoint, currDistance2);
+
+      /* debug
+      drawSegment(next.wall)
+      drawPoint(next.startingEndpoint, {color: COLORS.black})
+      */
+
+      let pointToAdd;
+      if ( !next ) {
+        // Need to reverse directions
+        currEndpoint = currWall.otherEndpoint(currEndpoint);
+        currDistance2 = 0;
+        pointToAdd = currEndpoint;
+      } else {
+        currWall = next.wall;
+        currEndpoint = next.startingEndpoint;
+        if ( next.ix ) {
+          currDistance2 = distanceSquaredBetweenPoints(currEndpoint, next.ix)
+          pointToAdd = next.ix;
+        } else {
+          currDistance2 = 0;
+          pointToAdd = currEndpoint;
+        }
+      }
+
+      poly.addPoint(pointToAdd);
+
+
+
+      // Stop when returning to the first point.
+      // This is tricky because it is possible to return to the starting wall multiple times.
+      // 1. Simple polygon. Connects at the starting wall endpoint.
+      // 2. Starting below an intersection. Intersection may return to starting wall.
+      //    Need to pass the starting point before returning.
+      // 3. Starting above an intersection.
+      //    Must pass the starting point after processing the intersection at end.
+      if ( currWall === startingWall && currDistance2 <= startDistance2 ) passedStartingPoint = true;
+
+      if ( passedStartingPoint && points2dAlmostEqual(pointToAdd, {x: poly.points[0], y: poly.points[1]}) ) break;
+
+      i += 1;
+    }
+
+    if ( poly.isClosed ) return poly;
+    return false;
   }
 
   /**
@@ -530,7 +744,7 @@ export class ElevationLayer extends InteractionLayer {
         log("fill-by-pixel not yet implemented.");
         break;
       case "fill-space":
-        log("fill-space not yet implemented.");
+        this.fill(o, currE);
         break;
     }
 

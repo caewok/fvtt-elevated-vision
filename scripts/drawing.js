@@ -45,6 +45,8 @@ export function drawPolygonPoints(poly, { color = COLORS.red, alpha = 1, radius 
   for ( const pt of poly.iteratePoints() ) { drawPoint(pt, { color, alpha, radius}); }
 }
 
+
+
 /**
  * Draw a segment on the canvas.
  * @param {Segment} s   Object with A and B {x, y} points.

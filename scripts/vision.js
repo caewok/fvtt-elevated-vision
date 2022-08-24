@@ -6,7 +6,7 @@ game
 */
 "use strict";
 
-import { log } from "./util.js";
+import { log, drawPolygonWithHoles } from "./util.js";
 
 /** To test a token
 drawing = game.modules.get("elevatedvision").api.drawing
@@ -96,14 +96,14 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
     if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
     const shadows = lightSource.los.combinedShadows || [];
     if ( shadows.length ) {
-      drawShadows(vision.fov, shadows);
+      drawPolygonWithHoles(shadows, { graphics: vision.fov });
     } else {
       vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
     }
 
     if ( lightSource.data.vision ) {
       if ( shadows.length ) {
-        drawShadows(vision.los, shadows);
+        drawPolygonWithHoles(shadows, { graphics: vision.los });
       } else {
         vision.los.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
       }
@@ -125,7 +125,7 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
 
     // Draw LOS mask
     if ( shadows.length ) {
-      drawShadows(vision.los, shadows);
+      drawPolygonWithHoles(shadows, { graphics: vision.los });
     } else {
       vision.los.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.los).endFill();
     }
@@ -143,23 +143,4 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
 
   // Restrict the visibility of other canvas objects
   this.restrictVisibility();
-}
-
-/**
- * Helper function to draw shadows as holes for a given graphics
- * @param {Shadow[]} shadows    Array of shadows
- * @param {PIXI.Graphics} graphics
- */
-function drawShadows(graphics, shadows) {
-  graphics.beginFill(0xFFFFFF, 1.0);
-  for ( const shadow of shadows ) {
-    if ( shadow.isHole ) {
-      graphics.beginHole();
-      graphics.drawShape(shadow);
-      graphics.endHole();
-    } else {
-      graphics.drawShape(shadow);
-    }
-  }
-  graphics.endFill();
 }
