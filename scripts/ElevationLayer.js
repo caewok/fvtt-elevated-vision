@@ -69,6 +69,8 @@ export class ElevationLayer extends InteractionLayer {
     this._activateHoverListener();
   }
 
+  _HOVER_DELAY = 500; // Delay in milliseconds before displaying elevation value.
+
   _activateHoverListener() {
     PIXI.BitmapFont.from("TitleFont", {
       fill: "#333333",
@@ -94,10 +96,10 @@ export class ElevationLayer extends InteractionLayer {
 
       setTimeout(() => {
         let now = Date.now();
-        if ( now - moveTime < 1000 ) return;
+        if ( now - moveTime < this._HOVER_DELAY ) return;
         this.updateElevationLabel(pos);
         this.elevationLabel.visible = true;
-      }, 1000)
+      }, this._HOVER_DELAY)
 
     }, { passive: true });
   }
