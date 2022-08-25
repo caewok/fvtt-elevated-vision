@@ -214,7 +214,7 @@ if ( pixelElevation > EV_lightElevation ) {
 
 const FRAG_COLOR =
 `
-  if ( EV_isVision && inShadow ) gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  if ( EV_isVision && inShadow ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
 //   if ( EV_isVision && depth == 0.0 ) {
 //     gl_FragColor = vec4(EV_vCanvasCoordNorm.xy, 0.0, 1.0);
 //     vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;

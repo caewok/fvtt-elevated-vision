@@ -32,7 +32,8 @@ import {
 import {
   refreshCanvasVisibility,
   _updateColorationUniformsVisionSource,
-  _updateIlluminationUniformsVisionSource
+  _updateIlluminationUniformsVisionSource,
+  _updateBackgroundUniformsVisionSource
 //   initializeVisionSource
 } from "./vision.js";
 
@@ -147,6 +148,7 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibility, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateColorationUniforms", _updateColorationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "VisionSource.prototype._updateBackgroundUniforms", _updateBackgroundUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
   // This causes brightness to be NaN and basically breaks vision
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype.initialize", initializeVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});

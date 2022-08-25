@@ -33,8 +33,11 @@ export function _updateColorationUniformsVisionSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateColorationUniformsVisionSource ${this.object.id}`);
-  this._updateEVVisionUniforms(this.coloration);
-  this.coloration.shader.uniforms.EV_isVision = true;
+
+  // Not sure yet how to handle elevation with vision.
+  // Two components enter into this: vision and FOW (VisiblityFilter)
+//   this._updateEVVisionUniforms(this.coloration);
+//   this.coloration.shader.uniforms.EV_isVision = true;
 }
 
 /**
@@ -46,8 +49,21 @@ export function _updateIlluminationUniformsVisionSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateIlluminationUniformsVisionSource ${this.object.id}`);
-  this._updateEVVisionUniforms(this.illumination);
-  this.illumination.shader.uniforms.EV_isVision = true;
+//   this._updateEVVisionUniforms(this.illumination);
+//   this.illumination.shader.uniforms.EV_isVision = true;
+}
+
+/**
+ * Wrap VisionSource.prototype._updateBackgroundUniforms.
+ * Add uniforms needed for the shadow fragment shader.
+ */
+export function _updateBackgroundUniformsVisionSource(wrapped) {
+  wrapped();
+  if ( this instanceof GlobalLightSource ) return;
+
+  log(`_updateBackgroundUniformsVisionSource ${this.object.id}`);
+//   this._updateEVVisionUniforms(this.background);
+//   this.background.shader.uniforms.EV_isVision = true;
 }
 
 
