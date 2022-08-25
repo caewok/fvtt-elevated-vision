@@ -30,7 +30,7 @@ export function _updateColorationUniformsVisionSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateColorationUniformsLightSource ${this.object.id}`);
-  this._updateEVLightUniforms(this.coloration.shader);
+  this._updateEVLightUniforms(this.coloration);
   this.coloration.shader.uniforms.EV_isVision = true;
 }
 
@@ -43,7 +43,7 @@ export function _updateIlluminationUniformsVisionSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
-  this._updateEVLightUniforms(this.illumination.shader);
+  this._updateEVLightUniforms(this.illumination);
   this.illumination.shader.uniforms.EV_isVision = true;
 }
 

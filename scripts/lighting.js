@@ -164,6 +164,7 @@ float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_e
 if ( pixelElevation > EV_lightElevation ) {
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
+  if ( EV_isVision ) inShadow = true;
 } else if ( EV_numWalls > 0 ) {
   float adjLightElevation = EV_lightElevation - pixelElevation;
 
