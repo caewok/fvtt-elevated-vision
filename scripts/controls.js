@@ -52,20 +52,7 @@ export function addElevationLayerSceneControls(controls) {
         title: "Fill space enclosed by walls",
         icon: "fas fa-fill-drip"
       },
-//
-//       {
-//         name: "border",
-//         title: "Border spacer",
-//         icon: "fas fa-horizontal-rule",
-//         active: false
-//       },
-//
-//       {
-//         name: "fill-all",
-//         title: "Set all to current elevation",
-//         icon: "fas fa-fill"
-//       },
-//
+
       {
         name: "clear",
         title: "Clear all",

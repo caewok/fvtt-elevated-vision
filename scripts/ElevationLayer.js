@@ -66,6 +66,47 @@ export class ElevationLayer extends InteractionLayer {
     this.controls = ui.controls.controls.find(obj => obj.name === "elevation");
 
     this.undoQueue = new FILOQueue();
+    this._activateHoverListener();
+  }
+
+  _activateHoverListener() {
+    PIXI.BitmapFont.from("TitleFont", {
+      fill: "#333333",
+      fontSize: 24,
+
+//       fontWeight: 'bold',
+    });
+
+    this.elevationLabel = new PIXI.BitmapText("", { fontName: "TitleFont" });
+    this.elevationLabel.anchor = {x: 0, y: 1};
+    canvas.stage.addChild(this.elevationLabel);
+
+    let moveTime = Date.now();
+    window.addEventListener("mousemove", (event) => {
+      if ( !canvas.ready ) return;
+      if ( !canvas.elevation.active ) return;
+
+      const pos = canvas.app.renderer.plugins.interaction.mouse.getLocalPosition(canvas.app.stage);
+      //const pos = canvas.app.renderer.plugins.interaction.mouse.getLocalPosition(canvas.app.stage)
+      log(`mouse at ${pos.x},${pos.y}`, event); // just for testing
+      moveTime = Date.now();
+      this.elevationLabel.visible = false;
+
+      setTimeout(() => {
+        let now = Date.now();
+        if ( now - moveTime < 1000 ) return;
+        this.updateElevationLabel(pos);
+        this.elevationLabel.visible = true;
+      }, 1000)
+
+    }, { passive: true });
+  }
+
+  updateElevationLabel({x, y}) {
+    log(`Updating elevation label at ${x},${y}`);
+    const value = this.elevationAt(x, y);
+    this.elevationLabel.text = value.toString();
+    this.elevationLabel.position = {x, y};
   }
 
   _backgroundElevation = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
@@ -191,12 +232,14 @@ export class ElevationLayer extends InteractionLayer {
     log("Activating Elevation Layer.");
     this.drawElevation();
     this.container.visible = true;
+    canvas.stage.addChild(this.elevationLabel);
   }
 
   /** @override */
   _deactivate() {
     log("De-activating Elevation Layer.");
     if ( !this.container ) return;
+    canvas.stage.removeChild(this.elevationLabel)
     if ( this._requiresSave ) this.saveSceneElevationData();
     drawing.clearDrawings();
     this.container.visible = false;
