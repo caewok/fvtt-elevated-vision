@@ -237,7 +237,7 @@ export function _updateColorationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
 
-  log(`_updateColorationUniformsLightSource ${this.object.id}`);
+//   log(`_updateColorationUniformsLightSource ${this.object.id}`);
   this._updateEVLightUniforms(this.coloration);
 }
 
@@ -249,7 +249,7 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
 
-  log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
+//   log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
   this._updateEVLightUniforms(this.illumination);
 }
 

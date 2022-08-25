@@ -32,7 +32,7 @@ export function _updateColorationUniformsVisionSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
 
-  log(`_updateColorationUniformsVisionSource ${this.object.id}`);
+//   log(`_updateColorationUniformsVisionSource ${this.object.id}`);
 
   // Not sure yet how to handle elevation with vision.
   // Two components enter into this: vision and FOW (VisiblityFilter)
@@ -48,7 +48,7 @@ export function _updateIlluminationUniformsVisionSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
 
-  log(`_updateIlluminationUniformsVisionSource ${this.object.id}`);
+//   log(`_updateIlluminationUniformsVisionSource ${this.object.id}`);
 //   this._updateEVVisionUniforms(this.illumination);
 //   this.illumination.shader.uniforms.EV_isVision = true;
 }
@@ -61,7 +61,7 @@ export function _updateBackgroundUniformsVisionSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
 
-  log(`_updateBackgroundUniformsVisionSource ${this.object.id}`);
+//   log(`_updateBackgroundUniformsVisionSource ${this.object.id}`);
 //   this._updateEVVisionUniforms(this.background);
 //   this.background.shader.uniforms.EV_isVision = true;
 }
