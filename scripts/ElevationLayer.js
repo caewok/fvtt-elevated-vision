@@ -133,6 +133,13 @@ export class ElevationLayer extends InteractionLayer {
   #elevation = 9000;
 
   /**
+   * Maximum pixel value. Currently pixels range between 0 and 255 for a color channel.
+   */
+  #maximumPixelValue = 255;
+
+  get maximumPixelValue() { return this.#maximumPixelValue; }
+
+  /**
    * Flag for when the elevation data has changed for the scene, requiring a save.
    * Currently happens when the user changes the data or uploads a new data file.
    */
@@ -176,7 +183,7 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   get elevationMax() {
-    return (255 * this.elevationStep) - this.elevationMin;
+    return (this.#maximumPixelValue * this.elevationStep) - this.elevationMin;
   }
 
   #temporaryGraphics = new Map();
@@ -204,7 +211,7 @@ export class ElevationLayer extends InteractionLayer {
 
     log(`elevationHex elevation ${e}, value ${value}`);
 
-    return PIXI.utils.rgb2hex([value / 255, 0, 0]);
+    return PIXI.utils.rgb2hex([value / this.#maximumPixelValue, 0, 0]);
   }
 
   /**
@@ -294,6 +301,7 @@ export class ElevationLayer extends InteractionLayer {
     this._graphicsContainer.addChild(this._backgroundElevation);
 
     await this.loadSceneElevationData();
+    this.renderElevation();
 
     this._initialized = true;
   }
@@ -458,14 +466,23 @@ export class ElevationLayer extends InteractionLayer {
     return this.averageElevation(gridRect);
   }
 
-  averageElevation(gridRect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
+  // To extract pixel values for debugging
+  // api = game.modules.get("elevatedvision").api;
+  // api.util.extractPixels(canvas.elevation._elevationTexture, _token.bounds)
+
+  _averageValue(gridRect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
     const arr = extractPixels(this._elevationTexture, gridRect);
     let sum = 0;
     const ln = arr.length;
     for ( let i = 0; i < ln; i += 4 ) {
       sum += arr[i];
     }
-    return this.pixelValueToElevation(sum) / (gridRect.width * gridRect.height);
+
+    return sum / (gridRect.width * gridRect.height);
+  }
+
+  averageElevation(gridRect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
+    return this.pixelValueToElevation(this._averageValue(gridRect));
   }
 
 

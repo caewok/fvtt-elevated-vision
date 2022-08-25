@@ -1,5 +1,7 @@
 /* globals
-GlobalLightSource
+GlobalLightSource,
+canvas,
+PIXI
 */
 "use strict";
 
@@ -36,25 +38,25 @@ const MAX_NUM_WALLS = 100;
 export function createAdaptiveLightingShader(wrapped, ...args) {
   log("createAdaptiveLightingShader");
 
-  if ( this.fragmentShader.includes(UNIFORMS) ) return wrapped(...args);
+  if ( this.fragmentShader.includes(FRAGMENT_UNIFORMS) ) return wrapped(...args);
 
   log("createAdaptiveLightingShader adding shadow shader code");
-
-  const replaceUniformStr = "uniform sampler2D uBkgSampler;";
+  const replaceFragUniformStr = "uniform sampler2D uBkgSampler;";
   const replaceFragStr = "float depth = smoothstep(0.0, 1.0, vDepth);";
-  const replaceFnStr = "void main() {";
+  const replaceFragFnStr = "void main() {";
 
   this.fragmentShader = this.fragmentShader.replace(
-    replaceUniformStr, `${replaceUniformStr}\n${UNIFORMS}`);
+    replaceFragUniformStr, `${replaceFragUniformStr}\n${FRAGMENT_UNIFORMS}`);
 
   this.fragmentShader = this.fragmentShader.replace(
     replaceFragStr, `${replaceFragStr}\n${DEPTH_CALCULATION}`);
 
   this.fragmentShader = this.fragmentShader.replace(
-    replaceFnStr, `${FUNCTIONS}\n${replaceFnStr}\n`);
+    replaceFragFnStr, `${FRAGMENT_FUNCTIONS}\n${replaceFragFnStr}\n`);
 
   // Replace at the very end
   this.fragmentShader = this.fragmentShader.replace(/}$/, `${FRAG_COLOR}\n }\n`);
+
 
   const shader = wrapped(...args);
   shader.uniforms.EV_numWalls = 0;
@@ -63,11 +65,19 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   shader.uniforms.EV_lightElevation = 0.5;
   shader.uniforms.EV_wallDistances = new Float32Array(MAX_NUM_WALLS);
   shader.uniforms.EV_isVision = false;
+  shader.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture ?? PIXI.Texture.EMPTY;
+
+  shader.uniforms.EV_transform = [1, 1, 1, 1];
+  shader.uniforms.EV_hasElevationSampler = false;
+
+  // [min, step, maxPixelValue ]
+  shader.uniforms.EV_elevationResolution = [0, 1, 255, 1];
+
   return shader;
 }
 
 // 4 coords per wall (A, B endpoints).
-const UNIFORMS =
+const FRAGMENT_UNIFORMS =
 `
 uniform int EV_numWalls;
 uniform vec4 EV_wallCoords[${MAX_NUM_WALLS}];
@@ -75,10 +85,14 @@ uniform float EV_wallElevations[${MAX_NUM_WALLS}];
 uniform float EV_wallDistances[${MAX_NUM_WALLS}];
 uniform float EV_lightElevation;
 uniform bool EV_isVision;
+uniform sampler2D EV_elevationSampler;
+uniform vec4 EV_transform;
+uniform vec4 EV_elevationResolution;
+uniform bool EV_hasElevationSampler;
 `;
 
 // Helper functions used to calculate shadow trapezoids.
-const FUNCTIONS =
+const FRAGMENT_FUNCTIONS =
 `
 float orient2d(in vec2 a, in vec2 b, in vec2 c) {
   return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
@@ -132,51 +146,86 @@ theta = atan(opp / adj)
 
 OV = Oe / tan(theta)
 
+Also need the height from the current position on the canvas for which the shadow no longer
+applies. That can be simplified by just shifting the elevations of the above diagram.
+So Oe becomes Oe - pixelE. We = We - pixelE.
 */
 
 const DEPTH_CALCULATION =
 `
-const vec2 center = vec2(0.5);
-const int maxWalls = ${MAX_NUM_WALLS};
-for ( int i = 0; i < maxWalls; i++ ) {
-  if ( i >= EV_numWalls ) break;
+bool inShadow = false;
+vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
+if ( EV_hasElevationSampler ) {
+  vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
+  backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+}
 
-  // If the wall is higher than the light, skip. (Should not currently happen.)
-  float We = EV_wallElevations[i];
-  if ( EV_lightElevation <= We ) continue;
+float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
+if ( pixelElevation > EV_lightElevation ) {
+  // If elevation at this point is above the light, then light cannot hit this pixel.
+  depth = 0.0;
+} else if ( EV_numWalls > 0 ) {
+  float adjLightElevation = EV_lightElevation - pixelElevation;
 
-  // If the wall does not intersect the line between the center and this point, no shadow here.
-  vec4 wall = EV_wallCoords[i];
-  if ( !lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) continue;
+  const vec2 center = vec2(0.5);
+  const int maxWalls = ${MAX_NUM_WALLS};
+  for ( int i = 0; i < maxWalls; i++ ) {
+    if ( i >= EV_numWalls ) break;
 
-  float distOW = EV_wallDistances[i];
+    // If the wall is higher than the light, skip. Should not currently occur.
+    float We = EV_wallElevations[i];
+    if ( EV_lightElevation <= We ) continue;
 
-   // Distance from wall (as line) to this location
-   vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
-   float distWP = distance(vUvs, wallIxPoint);
+    // If the pixel is above the wall, skip.
+    if ( pixelElevation >= We ) continue;
 
-   // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
-   // atan(y, x) equivalent to JS Math.atan2(y, x)
-   float theta = atan((EV_lightElevation - We) /  distOW);
+    // If the wall does not intersect the line between the center and this point, no shadow here.
+    vec4 wall = EV_wallCoords[i];
+    if ( !lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) continue;
 
-   // Distance from center/origin to furthest part of shadow perpendicular to wall
-   float distOV = EV_lightElevation / tan(theta);
-   float maxDistWP = distOV - distOW;
+    float distOW = EV_wallDistances[i];
 
-   if ( distWP < maxDistWP ) {
-     // Current location is within shadow.
-     // Could be more than one wall casting shadow on this point, so don't break.
-     // depth = 0.0; // For testing
-     depth = distWP / maxDistWP;
+    // Distance from wall (as line) to this location
+    vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
+    float distWP = distance(vUvs, wallIxPoint);
 
-     if ( EV_isVision ) depth = 0.0;
-   }
+    float adjWe = We - pixelElevation;
+
+    // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
+    // atan(y, x) equivalent to JS Math.atan2(y, x)
+    float theta = atan((adjLightElevation - adjWe) /  distOW);
+
+    // Distance from center/origin to furthest part of shadow perpendicular to wall
+    float distOV = adjLightElevation / tan(theta);
+    float maxDistWP = distOV - distOW;
+
+    if ( distWP < maxDistWP ) {
+      // Current location is within shadow.
+      // Could be more than one wall casting shadow on this point, so don't break out of the loop.
+      // depth = 0.0; // For testing
+      inShadow = true;
+
+      depth = distWP / maxDistWP;
+    }
+  }
 }
 `;
 
 const FRAG_COLOR =
 `
-  if ( EV_isVision && depth == 0.0 ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+  if ( EV_isVision && inShadow ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+//   if ( EV_isVision && depth == 0.0 ) {
+//     gl_FragColor = vec4(EV_vCanvasCoordNorm.xy, 0.0, 1.0);
+//     vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
+//     vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+
+//     gl_FragColor = backgroundElevation;
+//     if ( backgroundElevation.r > 0.1 ) {
+//       gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+//     } else {
+//       gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+//     }
+//   }
 `;
 
 /**
@@ -188,7 +237,7 @@ export function _updateColorationUniformsLightSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateColorationUniformsLightSource ${this.object.id}`);
-  this._updateEVLightUniforms(this.coloration.shader);
+  this._updateEVLightUniforms(this.coloration);
 }
 
 /**
@@ -200,7 +249,7 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
   if ( this instanceof GlobalLightSource ) return;
 
   log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
-  this._updateEVLightUniforms(this.illumination.shader);
+  this._updateEVLightUniforms(this.illumination);
 }
 
 /**
@@ -215,10 +264,12 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
  * - distance between the wall and the light source center
  * @param {PIXI.Shader} shader
  */
-export function _updateEVLightUniformsLightSource(shader) {
+export function _updateEVLightUniformsLightSource(mesh) {
+  const shader = mesh.shader;
   const { x, y, radius, elevationZ } = this;
-  const walls = this.los.wallsBelowSource;
-  if ( !walls || !walls.size ) return;
+  const { width, height } = canvas.dimensions;
+
+  const walls = this.los.wallsBelowSource || new Set();
 
   const center = {x, y};
   const r_inv = 1 / radius;
@@ -229,9 +280,9 @@ export function _updateEVLightUniformsLightSource(shader) {
   u.EV_numWalls = walls.size;
 
   const center_shader = {x: 0.5, y: 0.5};
-  const wallCoords = [];
-  const wallElevations = [];
-  const wallDistances = [];
+  let wallCoords = [];
+  let wallElevations = [];
+  let wallDistances = [];
 
   for ( const w of walls ) {
     const a = pointCircleCoord(w.A, radius, center, r_inv);
@@ -247,9 +298,54 @@ export function _updateEVLightUniformsLightSource(shader) {
     wallCoords.push(a.x, a.y, b.x, b.y);
   }
 
+  if ( !wallCoords.length ) wallCoords = new Float32Array(MAX_NUM_WALLS*4);
+  if ( !wallElevations.length ) wallElevations = new Float32Array(MAX_NUM_WALLS);
+  if ( !wallDistances.length ) wallDistances = new Float32Array(MAX_NUM_WALLS);
+
   u.EV_wallCoords = wallCoords;
   u.EV_wallElevations = wallElevations;
   u.EV_wallDistances = wallDistances;
+  u.EV_elevationSampler = canvas.elevation?._elevationTexture;
+//   u.EV_isVision = true;
+
+  // Screen-space to local coords:
+  // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010914586532261909
+  // shader.uniforms.EV_canvasMatrix ??= new PIXI.Matrix();
+  // shader.uniforms.EV_canvasMatrix
+  //   .copyFrom(canvas.stage.worldTransform)
+  //   .invert()
+  //   .append(mesh.transform.worldTransform);
+
+  // Alternative version using vUvs, given that light source mesh have no rotation
+  // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010999752030171136
+  u.EV_transform = [
+    radius * 2 / width,
+    radius * 2 / height,
+    (x - radius) / width,
+    (y - radius) / height];
+
+  /*
+  Elevation of a given pixel from the texture value:
+  texture value in the shader is between 0 and 1. Represents value / maximumPixelValue where
+  maximumPixelValue is currently 255.
+
+  To get to elevation in the light vUvs space:
+  elevationCanvasUnits = (((value * maximumPixelValue * elevationStep) - elevationMin) * size) / distance;
+  elevationLightUnits = elevationCanvasUnits * 0.5 * r_inv;
+  = (((value * maximumPixelValue * elevationStep) - elevationMin) * size) * inv_distance * 0.5 * r_inv;
+  */
+
+  // [min, step, maxPixelValue ]
+  if ( !u.EV_elevationSampler ) {
+    u.EV_elevationSampler = PIXI.Texture.EMPTY;
+    u.EV_hasElevationSampler = false;
+  } else {
+    const { elevationMin, elevationStep, maximumPixelValue} = canvas.elevation;
+    const { distance, size } = canvas.scene.grid;
+    const elevationMult = size * (1 / distance) * 0.5 * r_inv;
+    u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+    u.EV_hasElevationSampler = true;
+  }
 }
 
 /**
@@ -290,7 +386,7 @@ function circleCoord(a, r, c = 0, r_inv = 1 / r) {
  * @param {number} r    Radius
  * @returns {number}
  */
-function revCircleCoord(p, r, c = 0) {
+function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-vars
   // Calc:
   // ((a - c) / 2r) + 0.5 = p
   //  ((a - c) / 2r) = p +  0.5
