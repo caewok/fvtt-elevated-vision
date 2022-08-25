@@ -32,9 +32,8 @@ import {
 import {
   refreshCanvasVisibility,
   _updateColorationUniformsVisionSource,
-  _updateIlluminationUniformsVisionSource,
-  _updateEVVisionUniformsVisionSource,
-  initializeVisionSource
+  _updateIlluminationUniformsVisionSource
+//   initializeVisionSource
 } from "./vision.js";
 
 import {
@@ -102,7 +101,7 @@ export function registerAdditions() {
   });
 
   Object.defineProperty(VisionSource.prototype, "_updateEVVisionUniforms", {
-    value: _updateEVVisionUniformsVisionSource,
+    value: _updateEVLightUniformsLightSource,
     writable: true,
     configurable: true
   });
