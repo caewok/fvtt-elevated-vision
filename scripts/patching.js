@@ -30,7 +30,11 @@ import {
 } from "./lighting.js";
 
 import {
-  refreshCanvasVisibility
+  refreshCanvasVisibility,
+  _updateColorationUniformsVisionSource,
+  _updateIlluminationUniformsVisionSource,
+  _updateBackgroundUniformsVisionSource
+//   initializeVisionSource
 } from "./vision.js";
 
 import {
@@ -97,7 +101,7 @@ export function registerAdditions() {
     configurable: true
   });
 
-  Object.defineProperty(VisionSource.prototype, "_updateEVLightUniforms", {
+  Object.defineProperty(VisionSource.prototype, "_updateEVVisionUniforms", {
     value: _updateEVLightUniformsLightSource,
     writable: true,
     configurable: true
@@ -142,6 +146,13 @@ export function registerPatches() {
 
   // ----- Drawing shadows for vision sources ----- //
   libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibility, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "VisionSource.prototype._updateColorationUniforms", _updateColorationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "VisionSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "VisionSource.prototype._updateBackgroundUniforms", _updateBackgroundUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
+  // This causes brightness to be NaN and basically breaks vision
+//   libWrapper.register(MODULE_ID, "VisionSource.prototype.initialize", initializeVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
 
   // ----- Visibility testing ----- //
   libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});

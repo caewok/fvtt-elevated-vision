@@ -2,11 +2,14 @@
 canvas,
 GlobalLightSource,
 FogManager,
-game
+game,
+PIXI
 */
 "use strict";
 
-import { log, drawPolygonWithHoles } from "./util.js";
+import { log, drawPolygonWithHoles, perpendicularPoint, distanceBetweenPoints } from "./util.js";
+
+const MAX_NUM_WALLS = 100;
 
 /** To test a token
 drawing = game.modules.get("elevatedvision").api.drawing
@@ -29,9 +32,12 @@ export function _updateColorationUniformsVisionSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
 
-  log(`_updateColorationUniformsLightSource ${this.object.id}`);
-  this._updateEVLightUniforms(this.coloration.shader);
-  this.coloration.shader.uniforms.EV_isVision = true;
+  log(`_updateColorationUniformsVisionSource ${this.object.id}`);
+
+  // Not sure yet how to handle elevation with vision.
+  // Two components enter into this: vision and FOW (VisiblityFilter)
+//   this._updateEVVisionUniforms(this.coloration);
+//   this.coloration.shader.uniforms.EV_isVision = true;
 }
 
 /**
@@ -42,10 +48,26 @@ export function _updateIlluminationUniformsVisionSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
 
-  log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
-  this._updateEVLightUniforms(this.illumination.shader);
-  this.illumination.shader.uniforms.EV_isVision = true;
+  log(`_updateIlluminationUniformsVisionSource ${this.object.id}`);
+//   this._updateEVVisionUniforms(this.illumination);
+//   this.illumination.shader.uniforms.EV_isVision = true;
 }
+
+/**
+ * Wrap VisionSource.prototype._updateBackgroundUniforms.
+ * Add uniforms needed for the shadow fragment shader.
+ */
+export function _updateBackgroundUniformsVisionSource(wrapped) {
+  wrapped();
+  if ( this instanceof GlobalLightSource ) return;
+
+  log(`_updateBackgroundUniformsVisionSource ${this.object.id}`);
+//   this._updateEVVisionUniforms(this.background);
+//   this.background.shader.uniforms.EV_isVision = true;
+}
+
+
+
 
 // Currently no VisionSource.prototype._createLOS.
 // So must instead wrap initialize
