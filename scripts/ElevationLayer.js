@@ -69,8 +69,16 @@ export class ElevationLayer extends InteractionLayer {
     this._activateHoverListener();
   }
 
-  _HOVER_DELAY = 500; // Delay in milliseconds before displaying elevation value.
+  /**
+   * Delay in milliseconds before displaying elevation value when mouse hovers.
+   * @type {number}
+   */
+  _HOVER_DELAY = 500;
 
+  /**
+   * Activate a listener to display elevation values when the mouse hovers over an area
+   * of the canvas in the elevation layer.
+   */
   _activateHoverListener() {
     PIXI.BitmapFont.from("TitleFont", {
       fill: "#333333",
@@ -100,6 +108,12 @@ export class ElevationLayer extends InteractionLayer {
     }, { passive: true });
   }
 
+  /**
+   * Update the elevation label to the elevation value at the provided location,
+   * and move the label to that location.
+   * @param {number} x
+   * @param {number} y
+   */
   updateElevationLabel({x, y}) {
     log(`Updating elevation label at ${x},${y}`);
     const value = this.elevationAt(x, y);
@@ -107,16 +121,21 @@ export class ElevationLayer extends InteractionLayer {
     this.elevationLabel.position = {x, y};
   }
 
+  /**
+   * Sprite that contains the elevation values from the saved elevation file.
+   * This is added to the _graphicsContainer, along with any graphics representing
+   * adjustments by the GM to the scene elevation.
+   * @type {PIXI.Sprite}
+   */
   _backgroundElevation = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
 
   /**
-   * Container to hold the current graphics objects representing elevation
+   * Container to hold the current graphics objects representing elevation.
+   * These graphics objects are created when the GM modifies the scene elevation using
+   * the layer tools.
+   * @type {PIXI.Container}
    */
   _graphicsContainer = new PIXI.Container();
-
-  /**
-   * Sprite representing the background elevation
-   */
 
   /**
    * Container representing the canvas
@@ -132,6 +151,7 @@ export class ElevationLayer extends InteractionLayer {
 
   /**
    * Maximum pixel value. Currently pixels range between 0 and 255 for a color channel.
+   * @type {number}
    */
   #maximumPixelValue = 255;
 
@@ -140,9 +160,16 @@ export class ElevationLayer extends InteractionLayer {
   /**
    * Flag for when the elevation data has changed for the scene, requiring a save.
    * Currently happens when the user changes the data or uploads a new data file.
+   * @type {boolean}
    */
   _requiresSave = false; // Avoid private field here b/c it causes problems for arrow functions
 
+  /* ------------------------ */
+
+  /**
+   * Value used by Foundry for sorting display of the layer. *NOT* related to elevation data.
+   * @type {number}
+   */
   get elevation() {
     return this.#elevation;
   }
@@ -151,6 +178,8 @@ export class ElevationLayer extends InteractionLayer {
     this.#elevation = value;
     canvas.primary.sortChildren();
   }
+
+  /* ------------------------ */
 
   /**
    * Increment between elevation measurements. Should be a positive integer.
@@ -170,6 +199,12 @@ export class ElevationLayer extends InteractionLayer {
     this.#elevationStep = value;
   }
 
+  /* ------------------------ */
+
+  /**
+   * Minimum elevation value for a scene.
+   * @type {number}
+   */
   #elevationMin = 0;
 
   get elevationMin() {
@@ -180,16 +215,32 @@ export class ElevationLayer extends InteractionLayer {
     this.#elevationMin = value;
   }
 
+  /* ------------------------ */
+
+  /**
+   * Calculated maximum elevation value for the scene.
+   * @type {number}
+   */
   get elevationMax() {
     return (this.#maximumPixelValue * this.elevationStep) - this.elevationMin;
   }
 
+  /* ------------------------ */
+
+  /**
+   * Stores graphics created when dragging using the fill-by-grid control.
+   * @param {Map<PIXI.Graphics>}
+   */
   #temporaryGraphics = new Map();
 
+  /**
+   * Convert a pixel value to an elevation value.
+   * @param {number} value    Pixel value
+   * @returns {number}
+   */
   pixelValueToElevation(value) {
     return (Math.round(value) * this.elevationStep) - this.elevationMin;
   }
-
 
   /**
    * Color used to store this elevation value.
@@ -269,6 +320,11 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /* -------------------------------------------- */
+
+  /**
+   * Has the elevation layer been initialized?
+   * @type {boolean}
+   */
   _initialized = false;
 
   /**
@@ -296,6 +352,10 @@ export class ElevationLayer extends InteractionLayer {
     this._initialized = true;
   }
 
+  /**
+   * Values used when rendering elevation data to a texture representing the scene canvas.
+   * @returns {object}
+   */
   _configureResolution() {
     return {
       resolution: 1.0,
@@ -307,6 +367,9 @@ export class ElevationLayer extends InteractionLayer {
     };
   }
 
+  /**
+   * Load the elevation data from the image stored in a scene flag.
+   */
   async loadSceneElevationData() {
     log("loadSceneElevationData");
     const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAG_ELEVATION_IMAGE);
@@ -379,6 +442,10 @@ export class ElevationLayer extends InteractionLayer {
     }).render(true);
   }
 
+  /**
+   * Import elevation data from the provided image file location into the scene.
+   * @param {File} file
+   */
   async importFromImageFile(file) {
     log(`import ${file}`, file);
 
@@ -676,12 +743,35 @@ export class ElevationLayer extends InteractionLayer {
     return graphics;
   }
 
+  /**
+   * Helper function to get all walls that may intersect a ray, and then
+   * return the intersections of those walls.
+   * @param {Point} origin        Origin of the ray.
+   * @param {Point} destination   Destination of the ray
+   * @param {"any"|"all"|"sorted"|"closest"}  mode    Affects return value.
+   * @returns {Point3d[][Point3d|boolean|null]}
+   *    any: True if any wall intersects.
+   *    all: Array of intersections that intersect.
+   *    sorted: Sorted array by distance from origin.
+   *    closest: Closest intersection from origin.
+   * Intersections each have the respective wall attached as the "wall" property.
+   */
   _getAllWallCollisions(origin, destination, mode) {
     const ray = new Ray(origin, destination);
     const walls = canvas.walls.quadtree.getObjects(ray.bounds);
     return testWallsForIntersections(origin, destination, walls, mode);
   }
 
+  /**
+   * Walk from a starting wall, turning right at each intersection or endpoint,
+   * to determine whether the wall is part of a closed polygon boundary.
+   * @param {WallTracer} startingWall
+   * @param {PolygonVertex} startingEndpoint
+   * @param {Map<Wall, WallTracer>} wallTracerMap
+   * @param {Set<WallTracer>} wallTracerSet   Walls encountered will be removed from this set.
+   * @param {Point} startingIx  Where to start on the starting wall.
+   * @returns {PIXI.Polygon|false} Return the closed polygon or false if no closed polygon found.
+   */
   _testForClosedBoundaryWalls(startingWall, startingEndpoint, wallTracerMap, wallTracerSet, startingIx) {
     const poly = new PIXI.Polygon();
 
@@ -914,6 +1004,11 @@ export class ElevationLayer extends InteractionLayer {
     }
   }
 
+  /**
+   * User cancels the drag.
+   * Currently does not appear triggered by anything, but conceivably could be triggered
+   * by hitting escape while in a drag.
+   */
   _onDragLeftCancel(event) {
     const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
@@ -931,6 +1026,9 @@ export class ElevationLayer extends InteractionLayer {
     }
   }
 
+  /**
+   * User scrolls the mouse wheel. Currently does nothing in response.
+   */
   _onMouseWheel(event) {
     const o = event.data.origin;
     const activeTool = game.activeTool;
@@ -938,6 +1036,9 @@ export class ElevationLayer extends InteractionLayer {
     log(`mouseWheel at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
   }
 
+  /**
+   * User hits delete key. Currently not triggered (at least on this M1 Mac).
+   */
   async _onDeleteKey(event) {
     const o = event.data.origin;
     const activeTool = game.activeTool;
@@ -947,6 +1048,13 @@ export class ElevationLayer extends InteractionLayer {
 
 }
 
+/**
+ * Filter used to display the elevation layer coloration of elevation data.
+ * elevationSampler is a texture that stores elevation data in the red channel.
+ * Elevation data currently displayed as a varying red color with varying alpha.
+ * Alpha is gamma corrected to ensure only darker alphas and red shades are used, to
+ * ensure the lower elevation values are perceivable.
+ */
 class ElevationFilter extends AbstractBaseFilter {
   static vertexShader = `
     attribute vec2 aVertexPosition;

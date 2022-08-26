@@ -193,7 +193,7 @@ Suggestions or PRs welcome!
 - [ ] Token HUD to place the token "on the ground".
 - [ ] Use mousewheel to adjust elevation setting.
 - [ ] Fix sizing of current elevation display.
-- [ ] Better display of elevation values by color on a scene. Possibly a red gradient or red to blue gradient.
+- [ ] Better display of elevation values by color on a scene. Possibly a red to blue gradient.
 - [x] Adjust shadows based on terrain elevation.
 - [x] Fix visual errors that can arise when moving tokens around with multiple shadows present.
 
