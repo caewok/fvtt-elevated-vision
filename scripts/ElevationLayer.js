@@ -74,9 +74,7 @@ export class ElevationLayer extends InteractionLayer {
   _activateHoverListener() {
     PIXI.BitmapFont.from("TitleFont", {
       fill: "#333333",
-      fontSize: 24,
-
-//       fontWeight: 'bold',
+      fontSize: 24
     });
 
     this.elevationLabel = new PIXI.BitmapText("", { fontName: "TitleFont" });
@@ -84,13 +82,11 @@ export class ElevationLayer extends InteractionLayer {
     canvas.stage.addChild(this.elevationLabel);
 
     let moveTime = Date.now();
-    window.addEventListener("mousemove", (event) => {
+    window.addEventListener("mousemove", event => {  // eslint-disable-line no-unused-vars
       if ( !canvas.ready ) return;
       if ( !canvas.elevation.active ) return;
 
       const pos = canvas.app.renderer.plugins.interaction.mouse.getLocalPosition(canvas.app.stage);
-      //const pos = canvas.app.renderer.plugins.interaction.mouse.getLocalPosition(canvas.app.stage)
-      log(`mouse at ${pos.x},${pos.y}`, event); // just for testing
       moveTime = Date.now();
       this.elevationLabel.visible = false;
 
@@ -99,7 +95,7 @@ export class ElevationLayer extends InteractionLayer {
         if ( now - moveTime < this._HOVER_DELAY ) return;
         this.updateElevationLabel(pos);
         this.elevationLabel.visible = true;
-      }, this._HOVER_DELAY)
+      }, this._HOVER_DELAY);
 
     }, { passive: true });
   }
@@ -248,7 +244,7 @@ export class ElevationLayer extends InteractionLayer {
   _deactivate() {
     log("De-activating Elevation Layer.");
     if ( !this.container ) return;
-    canvas.stage.removeChild(this.elevationLabel)
+    canvas.stage.removeChild(this.elevationLabel);
     if ( this._requiresSave ) this.saveSceneElevationData();
     drawing.clearDrawings();
     this.container.visible = false;
@@ -273,14 +269,6 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /* -------------------------------------------- */
-
-  applyFilter() {
-    const w = new FullCanvasContainer();
-    this.container = this.addChild(w);
-    this.filter = MyFilter.create();
-    w.filters = [this.filter];
-  }
-
   _initialized = false;
 
   /**
@@ -419,7 +407,7 @@ export class ElevationLayer extends InteractionLayer {
 
   /**
    * Download the elevation data as an image file.
-   * Currently writes the texture as RGBA?
+   * Currently writes the texture elevation data to red channel.
    * @param {object} [options]  Options that affect how the image file is formatted.
    * @param {string} [options.format] Image format, e.g. "image/jpeg" or "image/webp".
    * @param {string} [options.fileName] Name of the file. Extension will be added based on format.
@@ -450,16 +438,35 @@ export class ElevationLayer extends InteractionLayer {
   //     const png = canvas.app.renderer.extract.image(s, "image/png")
 
 
+  /**
+   * Retrieve the elevation at a single pixel location, using canvas coordinates.
+   * @param {number} x
+   * @param {number} y
+   * @returns {number} Elevation value.
+   */
   elevationAt(x, y) {
     const gridRect = new PIXI.Rectangle(x, y, 1, 1);
     return this.averageElevation(gridRect);
   }
 
+  /**
+   * Calculate the average elevation for a grid space.
+   * @param {number} row    Grid row
+   * @param {number} col    Grid column
+   * @returns {number} Elevation value.
+   */
   averageElevationForGridSpace(row, col) {
     const [x, y] = canvas.grid.grid.getPixelsFromGridPosition(row, col);
     return this.averageElevationForGridPoint(x, y);
   }
 
+  /**
+   * Retrieve the average elevation of the grid space that encloses these
+   * coordinates. Currently assumes a rectangular grid.
+   * @param {number} x
+   * @param {number} y
+   * @returns {number} Elevation value.
+   */
   averageElevationAtGridPoint(x, y) {
     const { w, h } = canvas.grid.grid;
     const [tlx, tly] = canvas.grid.grid.getTopLeft(x, y);
@@ -472,19 +479,29 @@ export class ElevationLayer extends InteractionLayer {
   // api = game.modules.get("elevatedvision").api;
   // api.util.extractPixels(canvas.elevation._elevationTexture, _token.bounds)
 
-  _averageValue(gridRect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
-    const arr = extractPixels(this._elevationTexture, gridRect);
+  /**
+   * Calculate the average value of the pixels within a provided rectangle.
+   * @param {PIXI.Rectangle} rect
+   * @returns {number} Average pixel values
+   */
+  _averageValue(rect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
+    const arr = extractPixels(this._elevationTexture, rect);
     let sum = 0;
     const ln = arr.length;
     for ( let i = 0; i < ln; i += 4 ) {
       sum += arr[i];
     }
 
-    return sum / (gridRect.width * gridRect.height);
+    return sum / (rect.width * rect.height);
   }
 
-  averageElevation(gridRect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
-    return this.pixelValueToElevation(this._averageValue(gridRect));
+  /**
+   * Calculate the average elevation value underneath a given rectangle.
+   * @param {PIXI.Rectangle} rect
+   * @returns {number} Elevation value
+   */
+  averageElevation(rect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
+    return this.pixelValueToElevation(this._averageValue(rect));
   }
 
 
@@ -594,7 +611,7 @@ export class ElevationLayer extends InteractionLayer {
     for ( let i = 0; i < candidateLn; i += 1 ) {
       let startingWall = wallTracerMap.get(candidateIxs[i].wall);
       let ccw = startingWall.orderedEndpoints.ccw;
-      /* debug
+      /* Debug
       drawSegment(startingWall)
       drawPoint(ccw, {color: COLORS.black})
       startingEndpoint = ccw
@@ -668,7 +685,7 @@ export class ElevationLayer extends InteractionLayer {
   _testForClosedBoundaryWalls(startingWall, startingEndpoint, wallTracerMap, wallTracerSet, startingIx) {
     const poly = new PIXI.Polygon();
 
-    /* debug
+    /* Debug
       drawSegment(startingWall)
       drawPoint(startingEndpoint, {color: COLORS.black})
     */
@@ -676,12 +693,11 @@ export class ElevationLayer extends InteractionLayer {
     let maxIter = 1000;
     let i = 0;
     let currWall = startingWall;
-    let currEndpoint = startingEndpoint
+    let currEndpoint = startingEndpoint;
     let startDistance2 = 0;
 
     if ( startingIx ) {
       startDistance2 = distanceSquaredBetweenPoints(startingEndpoint, startingIx);
-      //poly.addPoint(startingIx);
     } else {
       poly.addPoint(startingEndpoint);
     }
@@ -697,7 +713,7 @@ export class ElevationLayer extends InteractionLayer {
       if ( currWall.numIntersections ) currWall.processIntersections(wallTracerMap);
       let next = currWall.nextFromStartingEndpoint(currEndpoint, currDistance2);
 
-      /* debug
+      /* Debug
       drawSegment(next.wall)
       drawPoint(next.startingEndpoint, {color: COLORS.black})
       */
@@ -712,7 +728,7 @@ export class ElevationLayer extends InteractionLayer {
         currWall = next.wall;
         currEndpoint = next.startingEndpoint;
         if ( next.ix ) {
-          currDistance2 = distanceSquaredBetweenPoints(currEndpoint, next.ix)
+          currDistance2 = distanceSquaredBetweenPoints(currEndpoint, next.ix);
           pointToAdd = next.ix;
         } else {
           currDistance2 = 0;
@@ -721,8 +737,6 @@ export class ElevationLayer extends InteractionLayer {
       }
 
       poly.addPoint(pointToAdd);
-
-
 
       // Stop when returning to the first point.
       // This is tricky because it is possible to return to the starting wall multiple times.
@@ -863,7 +877,6 @@ export class ElevationLayer extends InteractionLayer {
     const d = event.data.destination;
     const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
-//     log(`dragLeftMove from ${o.x},${o.y} to ${d.x},${d.y} with tool ${activeTool} and elevation ${currE}`, event);
 
     // TO-DO: What if the user changes the elevation mid-drag? (if MouseWheel enabled)
 
@@ -902,10 +915,8 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   _onDragLeftCancel(event) {
-//     const o = event.data.origin;
     const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
-    // log(`dragLeftCancel with tool ${activeTool} and elevation ${currE}`, event);
 
     if ( activeTool === "fill-by-grid" ) {
       if ( !this.#temporaryGraphics.size ) return;
@@ -934,52 +945,6 @@ export class ElevationLayer extends InteractionLayer {
     log(`deleteKey at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
   }
 
-}
-
-class MyFilter extends AbstractBaseFilter {
-  static vertexShader = `
-    attribute vec2 aVertexPosition;
-
-    uniform mat3 projectionMatrix;
-    uniform mat3 canvasMatrix;
-    uniform vec4 inputSize;
-    uniform vec4 outputFrame;
-
-    varying vec2 vTextureCoord;
-    varying vec2 vCanvasCoord;
-
-    void main(void)
-    {
-       vTextureCoord = aVertexPosition * (outputFrame.zw * inputSize.zw);
-       vec2 position = aVertexPosition * max(outputFrame.zw, vec2(0.)) + outputFrame.xy;
-       vCanvasCoord = (canvasMatrix * vec3(position, 1.0)).xy;
-       gl_Position = vec4((projectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
-    }
-  `;
-
-  static fragmentShader = `
-    varying vec2 vTextureCoord;
-    varying vec2 vCanvasCoord;
-
-    uniform sampler2D uSampler;
-
-    void main() {
-      vec4 tex = texture2D(uSampler, vTextureCoord);
-      if ( vCanvasCoord.x > 1000.) {
-        gl_FragColor = vec4(1., 0. , 0., 1.);
-      } else {
-        gl_FragColor = tex;
-      }
-    }
-  `;
-
-  /** @override */
-  // Thanks to https://ptb.discord.com/channels/732325252788387980/734082399453052938/1009287977261879388
-  apply(filterManager, input, output, clear, currentState) {
-    this.uniforms.canvasMatrix ??= new PIXI.Matrix();
-    this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
-    return super.apply(filterManager, input, output, clear, currentState);
-  }
 }
 
 class ElevationFilter extends AbstractBaseFilter {
@@ -1026,14 +991,6 @@ class ElevationFilter extends AbstractBaseFilter {
         float alphaAdj = pow(elevation.r, 1. / 2.2);
         gl_FragColor = vec4(alphaAdj, 0., 0., alphaAdj);
       }
-
-//       gl_FragColor = elevation;
-
-//       if ( elevation.x > .5) {
-//         gl_FragColor = elevation;
-//       } else {
-//         gl_FragColor = tex;
-//       }
     }
   `;
 
@@ -1046,23 +1003,3 @@ class ElevationFilter extends AbstractBaseFilter {
   }
 
 }
-
-
-/*
-renderer = canvas.app.renderer
-gl = renderer.gl;
-
-*/
-
-/*
-function smoothstep(edge0, edge1, x) {
-  const t = Math.clamped((x - edge0) / (edge1 - edge0), 0, 1);
-  return t * t * (3.0 - 2.0 * t);
-}
-
-new FilePicker({activeSource: "data", current: "icons/magic/earth"}).render(true);
-
-png64 = ImageHelper.textureToImage(el._elevationTexture, { format: "image/png" })
-webp64 = ImageHelper.textureToImage(el._elevationTexture, { format: "image/webp", quality: 1 })
-
-*/
