@@ -3,10 +3,10 @@ LightSource,
 Wall,
 VisionSource,
 SoundSource,
+MovementSource
 Token,
 libWrapper,
-canvas,
-WallHeight
+ClockwiseSweepPolygon
 */
 
 "use strict";
@@ -14,30 +14,60 @@ WallHeight
 // Patches
 
 import { MODULE_ID } from "./const.js";
+import { zValue } from "./util.js";
+
 import {
-  EVSightTestVisibility,
-  EVVisionSourceDrawSight,
-  EVVisionSourceDrawRenderTextureContainer } from "./tokens.js";
+  testVisibilityLightSource,
+  testNaturalVisibilityVisionMode
+} from "./tokens.js";
+
 import {
-  EVLightSourceDrawRenderTextureContainer } from "./lighting.js";
+  createAdaptiveLightingShader,
+  _updateColorationUniformsLightSource,
+  _updateIlluminationUniformsLightSource,
+  _updateEVLightUniformsLightSource,
+  _createLOSLightSource
+} from "./lighting.js";
+
+import {
+  refreshCanvasVisibility,
+  _updateColorationUniformsVisionSource,
+  _updateIlluminationUniformsVisionSource,
+  _updateBackgroundUniformsVisionSource
+//   initializeVisionSource
+} from "./vision.js";
+
+import {
+  _computeClockwiseSweepPolygon,
+  _drawShadowsClockwiseSweepPolygon,
+  _testShadowWallInclusionClockwisePolygonSweep,
+  testCollision3dClockwiseSweepPolygon,
+  _testCollision3dClockwiseSweepPolygon
+} from "./clockwise_sweep.js";
 
 export function registerAdditions() {
 
+  if ( !Object.hasOwn(MovementSource.prototype, "elevationZ") ) {
+    Object.defineProperty(MovementSource.prototype, "elevationZ", {
+      get: movementSourceElevation
+    });
+  }
+
   if ( !Object.hasOwn(VisionSource.prototype, "elevationZ") ) {
     Object.defineProperty(VisionSource.prototype, "elevationZ", {
-      get: sourceElevation
+      get: visionSourceElevation
     });
   }
 
   if ( !Object.hasOwn(LightSource.prototype, "elevationZ") ) {
     Object.defineProperty(LightSource.prototype, "elevationZ", {
-      get: sourceElevation
+      get: lightSourceElevation
     });
   }
 
   if ( !Object.hasOwn(SoundSource.prototype, "elevationZ") ) {
     Object.defineProperty(SoundSource.prototype, "elevationZ", {
-      get: sourceElevation
+      get: soundSourceElevation
     });
   }
 
@@ -65,70 +95,134 @@ export function registerAdditions() {
     });
   }
 
-  //   Object.defineProperty(Set.prototype, "diff", {
-  //     value: function(b) { return new Set([...this].filter(x => !b.has(x))); },
-  //     writable: true,
-  //     configurable: true
-  //   });
+  Object.defineProperty(LightSource.prototype, "_updateEVLightUniforms", {
+    value: _updateEVLightUniformsLightSource,
+    writable: true,
+    configurable: true
+  });
+
+  Object.defineProperty(VisionSource.prototype, "_updateEVVisionUniforms", {
+    value: _updateEVLightUniformsLightSource,
+    writable: true,
+    configurable: true
+  });
+
+  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_drawShadows", {
+    value: _drawShadowsClockwiseSweepPolygon,
+    writable: true,
+    configurable: true
+  });
+
+  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_testShadowWallInclusion", {
+    value: _testShadowWallInclusionClockwisePolygonSweep,
+    writable: true,
+    configurable: true
+  });
+
+  Object.defineProperty(ClockwiseSweepPolygon, "testCollision3d", {
+    value: testCollision3dClockwiseSweepPolygon,
+    writable: true,
+    configurable: true
+  });
+
+  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_testCollision3d", {
+    value: _testCollision3dClockwiseSweepPolygon,
+    writable: true,
+    configurable: true
+  });
 }
 
 export function registerPatches() {
-  libWrapper.register(MODULE_ID, "SightLayer.prototype.testVisibility", EVSightTestVisibility, "MIXED");
+  // ----- Locating edges that create shadows in the LOS ----- //
+  libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
-  libWrapper.register(MODULE_ID, "VisionSource.prototype.drawSight", EVVisionSourceDrawSight, "WRAPPER");
-  libWrapper.register(MODULE_ID, "VisionSource.prototype._drawRenderTextureContainer", EVVisionSourceDrawRenderTextureContainer, "WRAPPER");
+  // ----- Shader code for drawing shadows ----- //
+  libWrapper.register(MODULE_ID, "AdaptiveLightingShader.create", createAdaptiveLightingShader, libWrapper.WRAPPER);
 
-  libWrapper.register(MODULE_ID, "LightSource.prototype._drawRenderTextureContainer", EVLightSourceDrawRenderTextureContainer, "WRAPPER");
+  // ----- Drawing shadows for light sources ----- //
+  libWrapper.register(MODULE_ID, "LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "LightSource.prototype._createLOS", _createLOSLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
+  // ----- Drawing shadows for vision sources ----- //
+  libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibility, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "VisionSource.prototype._updateColorationUniforms", _updateColorationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "VisionSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "VisionSource.prototype._updateBackgroundUniforms", _updateBackgroundUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
+  // This causes brightness to be NaN and basically breaks vision
+//   libWrapper.register(MODULE_ID, "VisionSource.prototype.initialize", initializeVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
+
+  // ----- Visibility testing ----- //
+  libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "VisionMode.prototype.testNaturalVisibility", testNaturalVisibilityVisionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 }
 
 /**
- * Convert a grid units value to pixel units, for equivalency with x,y values.
+ * For MovementSource objects, use the token's elevation
+ * @type {number} Elevation, in grid units to match x,y coordinates.
  */
-function zValue(value) {
-  return value * canvas.scene.data.grid / canvas.scene.data.gridDistance;
-}
-
-function replaceInfinity(value) {
-  return isFinite(value) ? zValue(value)
-    : value === Infinity ? Number.MAX_SAFE_INTEGER : Number.MIN_SAFE_INTEGER;
+function movementSourceElevation() {
+  return this.object.topZ;
 }
 
 /**
- * For {LightSource|SoundSource|VisionSource} objects
- * Do not permit infinity, as it screws up orientation and other calculations.
- * @type {number}
+ * For VisionSource objects, use the token's elevation.
+ * @type {number} Elevation, in grid units to match x,y coordinates.
  */
-function sourceElevation() {
-  return replaceInfinity(WallHeight.getSourceElevationTop(this.object.document));
+function visionSourceElevation() {
+  return this.object.topZ;
 }
 
 /**
- * For {Token}
- * @type {number}
+ * For LightSource objects, default to infinite elevation.
+ * This is to identify lights that should be treated like in default Foundry.
+ * @type {number} Elevation, in grid units to match x,y coordinates.
+ */
+function lightSourceElevation() {
+  return zValue(this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY);
+}
+
+/**
+ * For SoundSource objects, default to 0 elevation.
+ * @type {number} Elevation, in grid units to match x,y coordinates.
+ */
+function soundSourceElevation() {
+  return zValue(this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY);
+}
+
+/**
+ * For Token objects, default to 0 elevation.
+ * @type {number} Elevation, in grid units to match x,y coordinates.
  */
 function tokenTop() {
   // From Wall Height but skip the extra test b/c we know it is a token.
-  return zValue(this.document.object.losHeight);
+  return zValue(this.document.object.losHeight ?? 0);
 }
 
 /**
- * For {Token}
- * @type {number}
+ * For Token objects, default to 0 elevation.
+ * @type {number} Elevation, in grid units to match x,y coordinates.
  */
 function tokenBottom() {
   // From Wall Height but skip the extra test b/c we know it is a token.
-  return zValue(this.document.data.elevation);
+  return zValue(this.document.elevation ?? 0);
 }
 
 /**
- * For {Wall}
- * @type {number}
+ * For Wall objects, default to infinite top/bottom elevation.
+ * @type {number} Elevation, in grid units to match x,y coordinates.
  */
-function wallTop() { return replaceInfinity(WallHeight.getWallBounds(this).top); }
+function wallTop() {
+  return zValue(this.document.flags?.["wall-height"]?.top ?? Number.POSITIVE_INFINITY);
+}
 
 /**
- * For {Wall}
- * @type {number}
+ * For Wall objects, default to infinite top/bottom elevation.
+ * @type {number} Elevation, in grid units to match x,y coordinates.
  */
-function wallBottom() { return replaceInfinity(WallHeight.getWallBounds(this).bottom); }
+function wallBottom() {
+  return zValue(this.document.flags?.["wall-height"]?.top ?? Number.NEGATIVE_INFINITY);
+}
 

@@ -1,3 +1,29 @@
+## 0.0.1.-alpha8
+Working in v10.277. Will undoubtedly break in v10.279.
+
+- Elevation layer
+  - Set elevation by grid space
+  - Set elevation by filling line-of-sight
+  - Set elevation by filling space enclosed by walls
+  - Load and save elevation by image file
+  - Automatic save of elevation settings by scene
+  - Undo
+  - Clear all elevation, with confirmation dialog
+  - Shades of red represent elevation on the elevation layer
+  - Hover to see the precise elevation value at a location
+- Tokens
+  - Visibility of other tokens based on elevation.
+  - Automatic elevation change when moving token across the map.
+- Lighting
+  - Calculate lighting shadows based on wall and light elevation.
+  - Account for canvas terrain elevation for lighting shadows
+- Fog of War
+  - Fog of war polygon modified by wall shadows
+  - Does not currently account for terrain elevation
+
+## 0.0.1.-alpha7
+Updated module.json for installing in v10.
+
 ## 0.0.1-alpha6
 Switched to better method to block token and lights for shadows. Fixes the visual artifacts. Shadows for a token given unlimited lighting are very faint, which might be fine but would probably prefer a bit more darkness.
 

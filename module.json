@@ -1,12 +1,15 @@
 {
   "name": "elevatedvision",
+  "minimumCoreVersion": "10"
+  "id": "elevatedvision",
   "title": "Elevated Vision",
-  "description": "Modify Foundry VTT vision and lighting based on terrain, token, or wall elevations",
   "version": "This is auto replaced",
   "library": false,
   "manifestPlusVersion": "1.0.0",
-  "minimumCoreVersion": "9",
-  "compatibleCoreVersion": "9",
+  "compatibility": {
+    "minimum": "10.277",
+    "verified": "10.277"
+  },
   "authors": [
     {
       "name": "caewok",
@@ -14,18 +17,20 @@
       "discord": "caewok#9192"
     }
   ],
-  "dependencies": [
-    {
-      "name": "lib-wrapper",
-      "manifest": "https://raw.githubusercontent.com/ruipin/fvtt-lib-wrapper/master/module.json"
-    },
-
-    {
-      "name": "wall-height",
-      "manifest": "https://github.com/theripper93/wall-height/blob/main/module.json"
-    }
-
-  ],
+  "relationships": {
+    "requires": [
+      {
+        "id": "lib-wrapper",
+        "type": "module",
+        "manifest": "https://raw.githubusercontent.com/ruipin/fvtt-lib-wrapper/master/module.json"
+      },
+      {
+        "id": "wall-height",
+        "type": "module",
+        "manifest": "https://github.com/theripper93/wall-height/blob/main/module.json"
+      }
+    ]
+  },
   "esmodules": [
     "/scripts/module.js"
   ],
@@ -33,16 +38,14 @@
     {
       "lang": "en",
       "name": "English",
-      "path": "languages/en.json"
+      "path": "languages/en.json",
+      "title": "Token Visibility",
+      "description": "Modify Foundry VTT vision and lighting based on terrain, token, or wall elevations"
     }
   ],
   "url": "This is auto replaced",
   "manifest": "This is auto replaced",
   "download": "This is auto replaced",
-  "media": [
-    {
-      "type": "icon",
-      "url": "https://avatars2.githubusercontent.com/u/71292812?s=400&u=ccdb4eeb7abf551ca8f314e5a9bfd0479a4d3d41&v=4"
-    }
-  ]
+  "license": "LICENSE",
+  "readme": "README.md"
 }

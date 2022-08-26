@@ -1,11 +1,190 @@
 /* globals
 game,
 foundry,
+canvas,
+ClipperLib,
+PIXI
 */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./Point3d.js";
+
+/**
+ * Combine a PIXI polygon with 1 or more holes contained within (or partially within) the boundary.
+ * If no holes, will clean the polygon, which may (rarely) result in holes.
+ * @param {PIXI.Polygon} boundary   Polygon representing the boundary shape.
+ * @param {PIXI.Polygon[]} holes    Array of polygons representing holes in the boundary shape.
+ * @returns {PIXI.Polygon[]} Array of polygons where holes are labeled with isHole
+ */
+export function combineBoundaryPolygonWithHoles(boundary, holes, { scalingFactor = 1, cleanDelta = 0.1 } = {}) {
+  const c = new ClipperLib.Clipper();
+  const solution = new ClipperLib.Paths();
+  if ( holes.length) {
+    c.AddPath(boundary.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptSubject, true);
+    for ( const hole of holes ) {
+      c.AddPath(hole.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptClip, true);
+    }
+    c.Execute(ClipperLib.ClipType.ctDifference, solution);
+  } else {
+    solution.push(boundary.toClipperPoints({scalingFactor}));
+  }
+
+  ClipperLib.Clipper.CleanPolygons(solution, cleanDelta * scalingFactor);
+  return solution.map(pts => {
+    const poly = PIXI.Polygon.fromClipperPoints(pts, scalingFactor);
+    poly.isHole = !ClipperLib.Clipper.Orientation(pts);
+    return poly;
+  });
+}
+
+/**
+ * Draw an array of polygons, where polygons marked with "isHole" should be considered holes.
+ * To avoid artifacts, this polygon array should be created using "combineBoundaryPolygonWithHoles"
+ * or otherwise cleaned such that holes are entirely contained in the polygon.
+ * Other PIXI shapes may or may not work, as currently PIXI holes work only with polygon boundaries.
+ * See https://pixijs.download/release/docs/PIXI.Graphics.html#beginHole
+ * @param {PIXI.Polygon} polygonArray         Polygons representing boundaries or holes.
+ * @param {object} [options]                  Options to affect the drawing
+ * @param {PIXI.Graphics} [options.graphics]  Graphics object to use
+ * @param {hex} [options.fill]                Fill color
+ * @param {number} [options.alpha]            Alpha value for the fill
+ */
+export function drawPolygonWithHoles(polygonArray, {
+  graphics = canvas.controls.debug,
+  fillColor = 0xFFFFFF,
+  alpha = 1.0 } = {}) {
+
+  graphics.beginFill(fillColor, alpha);
+  for ( const poly of polygonArray ) {
+    if ( poly.isHole ) {
+      graphics.beginHole();
+      graphics.drawShape(poly);
+      graphics.endHole();
+    } else graphics.drawShape(poly);
+  }
+  graphics.endFill();
+}
+
+/**
+ * From https://stackoverflow.com/questions/14446511/most-efficient-method-to-groupby-on-an-array-of-objects
+ * Takes an Array<V>, and a grouping function,
+ * and returns a Map of the array grouped by the grouping function.
+ *
+ * @param {Array} list An array of type V.
+ * @param {Function} keyGetter A Function that takes the the Array type V as an input, and returns a value of type K.
+ *                  K is generally intended to be a property key of V.
+ *                  keyGetter: (input: V) => K): Map<K, Array<V>>
+ *
+ * @returns Map of the array grouped by the grouping function. map = new Map<K, Array<V>>()
+ */
+export function groupBy(list, keyGetter) {
+  const map = new Map();
+  list.forEach(item => {
+    const key = keyGetter(item);
+    const collection = map.get(key);
+
+    if (!collection) map.set(key, [item]);
+    else collection.push(item);
+  });
+  return map;
+}
+
+/**
+ * Test if two points are almost equal.
+ * If points have keys, better to use p.equal
+ * @param {Point} a   Point with 2 dimensions
+ * @param {Point} b   Point with 2 dimensions
+ * @returns {boolean}
+ */
+export function points2dAlmostEqual(a, b, epsilon = 1e-08) {
+  return a.x.almostEqual(b.x, epsilon) && a.y.almostEqual(b.y, epsilon);
+}
+
+export function points3dAlmostEqual(a, b, epsilon = 1e-08) {
+  return a.x.almostEqual(b.x, epsilon)
+    && a.y.almostEqual(b.y, epsilon)
+    && a.z.almostEqual(b.z, epsilon);
+}
+
+/**
+ * From https://pixijs.download/release/docs/packages_extract_src_Extract.ts.html
+ * canvas.app.renderer.extract.pixels doesn't work in 6.4.2
+ * Appears fixed in 6.5.0. https://github.com/pixijs/pixijs/pull/8388
+ *
+ * Will return a one-dimensional array containing the pixel data of the entire texture in RGBA
+ * order, with integer values between 0 and 255 (included).
+ * @param {DisplayObject|RenderTexture} target  A displayObject or renderTexture
+ *   to convert. If left empty will use the main renderer
+ * @param {PixelExtractOptions|PIXI.Rectangle} The frame the extraction is restricted to.
+ * @returns {Uint8Array} One-dimensional array containing the pixel data of the entire texture
+ */
+export function extractPixels(target, frame) {
+
+  const renderer = canvas.app.renderer;
+  let resolution;
+  let renderTexture;
+  let generated = false;
+  if (target)
+  {
+    if (target instanceof PIXI.RenderTexture)
+    {
+      renderTexture = target;
+    }
+    else
+    {
+      renderTexture = renderer.generateTexture(target);
+      generated = true;
+    }
+  }
+  if (renderTexture)
+  {
+    resolution = renderTexture.baseTexture.resolution;
+    frame = frame ?? renderTexture.frame;
+    renderer.renderTexture.bind(renderTexture);
+  }
+  else
+  {
+    resolution = renderer.resolution;
+    if (!frame)
+    {
+      frame = new PIXI.Rectangle();
+      frame.width = renderer.width;
+      frame.height = renderer.height;
+    }
+    renderer.renderTexture.bind(null);
+  }
+  const width = Math.round(frame.width * resolution);
+  const height = Math.round(frame.height * resolution);
+  const BYTES_PER_PIXEL = 4;
+
+  const webglPixels = new Uint8Array(BYTES_PER_PIXEL * width * height);
+  // Read pixels to the array
+  const gl = renderer.gl;
+  gl.readPixels(
+    Math.round(frame.x * resolution),
+    Math.round(frame.y * resolution),
+    width,
+    height,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    webglPixels
+  );
+  if (generated)
+  {
+    renderTexture.destroy(true);
+  }
+  PIXI.Extract.arrayPostDivide(webglPixels, webglPixels);
+  return webglPixels;
+}
+
+/**
+ * Convert a grid units value to pixel units, for equivalency with x,y values.
+ */
+export function zValue(value) {
+  const { distance, size } = canvas.scene.grid;
+  return (value * size) / distance;
+}
 
 /**
  * Log message only when debug flag is enabled from DevMode module.
@@ -20,6 +199,43 @@ export function log(...args) {
   } catch(e) {
     // Empty
   }
+}
+
+/**
+ * User FileReader to retrieve the DataURL from the file.
+ * Parallels readTextFromFile
+ * @param {File} file   A File object
+ * @return {Promise.<String>} A Promise which resolves to the loaded DataURL.
+ */
+export function readDataURLFromFile(file) {
+  const reader = new FileReader();
+  return new Promise((resolve, reject) => {
+    reader.onload = ev => { // eslint-disable-line no-unused-vars
+      resolve(reader.result);
+    };
+    reader.onerror = ev => { // eslint-disable-line no-unused-vars
+      reader.abort();
+      reject();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Convert base64 image to raw binary data
+ * @param {object} image64  HTML image64 object
+ * @returns {ArrayBuffer} The raw image data.
+ */
+export function convertBase64ToImage(image64) {
+  const byteString = atob(image64.src.split(",")[1]);
+
+  // Write the bytes of the string to an ArrayBuffer
+  const ln = byteString.length;
+  const ab = new ArrayBuffer(ln);
+  const dw = new DataView(ab);
+  for ( let i = 0; i < ln; i += 1 ) dw.setUint8(i, byteString.charCodeAt(i));
+
+  return ab;
 }
 
 /**
@@ -40,13 +256,13 @@ export function perpendicularPoint(a, b, c) {
 
   const u = (((c.x - a.x) * dx) + ((c.y - a.y) * dy)) / dab;
   return {
-    x: a.x + u * dx,
-    y: a.y + u * dy
+    x: a.x + (u * dx),
+    y: a.y + (u * dy)
   };
 }
 
 export function distanceBetweenPoints(a, b) {
-  return Math.sqrt(distanceSquaredBetweenPoints(a, b));
+  return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
 export function distanceSquaredBetweenPoints(a, b) {
@@ -109,6 +325,27 @@ export function lineSegment3dPlaneIntersects(a, b, c, d, e = {x: c.x, y: c.y, z:
 }
 
 /**
+ * Get the angle between three points, A --> B --> C.
+ * Assumes A|B and B|C have lengths > 0.
+ * @param {Point} a   First point
+ * @param {Point} b   Second point
+ * @param {Point} c   Third point
+ * @param {object} [options]  Options that affect the calculation
+ * @param {boolean} [options.clockwiseAngle]  If true, return the clockwise angle.
+ * @returns {number}  Angle, in radians
+ */
+export function angleBetweenPoints(a, b, c, { clockwiseAngle = false } = {}) {
+  const ba = { x: a.x - b.x, y: a.y - b.y };
+  const bc = { x: c.x - b.x, y: c.y - b.y };
+  const dot = (ba.x * bc.x) + (ba.y * bc.y);
+  const denom = distanceBetweenPoints(a, b) * distanceBetweenPoints(b, c);
+
+  let angle = Math.acos(dot / denom);
+  if ( clockwiseAngle && foundry.utils.orient2dFast(a, b, c) > 0 ) angle = (Math.PI * 2) - angle;
+  return angle;
+}
+
+/**
  * Quickly test whether the line segment AB intersects with a wall in 3d.
  * Extension of lineSegmentPlaneIntersects where the plane is not infinite.
  * Takes advantage of the fact that 3d walls in Foundry move straight out of the canvas
@@ -127,11 +364,16 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
   const c = new Point3d(wall.A.x, wall.A.y, wall.bottomZ);
   const d = new Point3d(wall.B.x, wall.B.y, wall.bottomZ);
 
+  if ( c.z === Number.NEGATIVE_INFINITY ) c.z = Number.MIN_SAFE_INTEGER;
+  if ( d.z === Number.NEGATIVE_INFINITY ) d.z = Number.MIN_SAFE_INTEGER;
+
   // First test if wall and segment intersect from 2d overhead.
   if ( !foundry.utils.lineSegmentIntersects(a, b, c, d) ) { return null; }
 
   // Second test if segment intersects the wall as a plane
   const e = new Point3d(wall.A.x, wall.A.y, wall.topZ);
+  if ( e.z === Number.POSITIVE_INFINITY ) e.z = Number.MAX_SAFE_INTEGER;
+
   if ( !lineSegment3dPlaneIntersects(a, b, c, d, e) ) { return null; }
 
   // At this point, we know the wall, if infinite, would intersect the segment
