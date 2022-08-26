@@ -391,8 +391,8 @@ function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-vars
  * the light reflects the current shadow positions when dragged.
  * @returns {ClockwiseSweepPolygon}
  */
-export function _createLOSLightSource(wrapped) {
-  log(`_createLOSLightSource ${this.object.id}`);
+export function _createPolygonLightSource(wrapped) {
+  log(`_createPolygonLightSource ${this.object.id}`);
   const los = wrapped();
 
   // TO-DO: Only reset uniforms if:
