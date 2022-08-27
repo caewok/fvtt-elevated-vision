@@ -17,8 +17,10 @@ import { MODULE_ID } from "./const.js";
 import { zValue } from "./util.js";
 
 import {
+  testVisibilityDetectionMode,
   testVisibilityLightSource,
-  testNaturalVisibilityVisionMode
+  _testLOSDetectionMode,
+  _testRangeDetectionMode
 } from "./tokens.js";
 
 import {
@@ -26,7 +28,7 @@ import {
   _updateColorationUniformsLightSource,
   _updateIlluminationUniformsLightSource,
   _updateEVLightUniformsLightSource,
-  _createLOSLightSource
+  _createPolygonLightSource
 } from "./lighting.js";
 
 import {
@@ -142,7 +144,7 @@ export function registerPatches() {
   // ----- Drawing shadows for light sources ----- //
   libWrapper.register(MODULE_ID, "LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "LightSource.prototype._createLOS", _createLOSLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "LightSource.prototype._createPolygon", _createPolygonLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
   // ----- Drawing shadows for vision sources ----- //
   libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibility, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
@@ -155,8 +157,11 @@ export function registerPatches() {
 
 
   // ----- Visibility testing ----- //
-  libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "VisionMode.prototype.testNaturalVisibility", testNaturalVisibilityVisionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.MIXED, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "DetectionMode.prototype.testVisibility", testVisibilityDetectionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "DetectionMode.prototype._testRange", _testRangeDetectionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "DetectionMode.prototype._testLOS", _testLOSDetectionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
 }
 
 /**
@@ -223,6 +228,6 @@ function wallTop() {
  * @type {number} Elevation, in grid units to match x,y coordinates.
  */
 function wallBottom() {
-  return zValue(this.document.flags?.["wall-height"]?.top ?? Number.NEGATIVE_INFINITY);
+  return zValue(this.document.flags?.["wall-height"]?.bottom ?? Number.NEGATIVE_INFINITY);
 }
 

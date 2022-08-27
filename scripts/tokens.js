@@ -27,10 +27,11 @@ If not visible due to los/fov:
  * @param {number} x
  * @param {number} y
  * @param {number} z
- * @returns {object}  Object with { point, hasLOS: false, hasFOV: false }
+ * @returns {object}  Object with { point, los }
+ *  See CanvasVisibility.prototype.testVisibility
  */
-function buildTestObject(x, y, z = 0, hasLOS = false, hasFOV = false) {
-  return { point: new Point3d(x, y, z), hasLOS, hasFOV };
+function buildTestObject(x, y, z = 0) {
+  return { point: new Point3d(x, y, z), los: new Map() };
 }
 
 /**
@@ -55,18 +56,18 @@ function create3dTestPoints(tests, object) {
   // Then add middle, top, bottom for all other points around the boundary.
   const t0 = tests.shift();
   const tests3d = [];
-  tests3d.push(buildTestObject(t0.point.x, t0.point.y, obj_center, t0.hasLOS, t0.hasFOV));
+  tests3d.push(buildTestObject(t0.point.x, t0.point.y, obj_center));
 
   tests.forEach(t => {
     const { x, y } = t.point;
     const { hasLOS, hasFOV } = t;
 
-    tests3d.push(buildTestObject(x, y, obj_center, hasLOS, hasFOV));
+    tests3d.push(buildTestObject(x, y, obj_center));
     if ( skip_top ) return;
 
     tests3d.push(
-      buildTestObject(x, y, obj_top, hasLOS, hasFOV),
-      buildTestObject(x, y, obj_bottom, hasLOS, hasFOV));
+      buildTestObject(x, y, obj_top),
+      buildTestObject(x, y, obj_bottom));
   });
 
   return tests3d;
@@ -93,32 +94,71 @@ export function testVisibilityLightSource(wrapper, {tests, object} = {}) {
 }
 
 /**
- * Wrap VisionMode.prototype.testNaturalVisibility
+ * Wrap DetectionMode.prototype.testVisibility
+ * Add additional 3d test points for token objects
  */
-export function testNaturalVisibilityVisionMode(wrapper, {tests, object} = {}) {
-  if ( !object || !(object instanceof Token) ) return wrapper({tests, object});
-
-  tests = create3dTestPoints(tests, object);
-
-  return tests.some(test => {
-    if ( !test.hasFOV && testVisionSourceLOS(this, test.point) ) {
-      test.hasFOV = test.hasLOS = true;
-      return true;
-    }
-    if ( !test.hasLOS && testVisionSourceLOS(this, test.point)) test.hasLOS = true;
-    return (test.hasFOV && test.hasLOS);
-  });
+export function testVisibilityDetectionMode(wrapper, visionSource, mode, {object, tests} = {}) {
+  if ( object && object instanceof Token) tests = create3dTestPoints(tests, object);
+  return wrapper(visionSource, mode, {object, tests});
 }
 
+/**
+ * Wrap DetectionMode.prototype._testRange
+ * Use a 3-D range test if the test point is 3d.
+ */
+export function _testRangeDetectionMode(wrapper, visionSource, mode, target, test) {
+  const res2d = wrapper(visionSource, mode, target, test)
+  if ( !res2d || !test.point.hasOwnProperty("z") ) return res2d;
+
+  const radius = visionSource.object.getLightRadius(mode.range);
+  const dx = test.point.x - visionSource.x;
+  const dy = test.point.y - visionSource.y;
+  const dz = test.point.z - visionSource.topZ;
+  return ((dx * dx) + (dy * dy) + (dz * dz)) <= (radius * radius);
+}
+
+/**
+ * Wrap DetectionMode.prototype._testLOS
+ * Tokens only.
+ */
+export function _testLOSDetectionMode(wrapper, visionSource, test) {
+  const res2d = wrapper(visionSource, test);
+
+  if ( !res2d || !test.point.hasOwnProperty("z") ) return res2d;
+  if ( !this.walls ) return true;
+
+  const hasLOS = testVisionSourceLOS(visionSource, test.point);
+  test.los.set(visionSource, hasLOS);
+
+  return hasLOS;
+}
+
+/**
+ * Wrap VisionMode.prototype.testNaturalVisibility
+ */
+// export function testNaturalVisibilityVisionMode(wrapper, {tests, object} = {}) {
+//   if ( !object || !(object instanceof Token) ) return wrapper({tests, object});
+//
+//   tests = create3dTestPoints(tests, object);
+//
+//   return tests.some(test => {
+//     if ( !test.hasFOV && testVisionSourceLOS(this, test.point) ) {
+//       test.hasFOV = test.hasLOS = true;
+//       return true;
+//     }
+//     if ( !test.hasLOS && testVisionSourceLOS(this, test.point)) test.hasLOS = true;
+//     return (test.hasFOV && test.hasLOS);
+//   });
+// }
+
 function testVisionSourceLOS(source, p) {
-  if ( !source.los.contains(p.x, p.y) ) { return false; }
-  if ( !source.los.shadows?.length ) { return true; }
+  if ( !source.los.contains(p.x, p.y) ) return false;
+  if ( !source.los.shadows?.length ) return true;
 
   const point_in_shadow = source.los.shadows.some(s => s.contains(p.x, p.y));
-  if ( !point_in_shadow ) { return true; }
+  if ( !point_in_shadow ) return true;
 
-  const ray = new Ray(new Point3d(source.x, source.y, source.elevationZ), p);
-  return !ClockwiseSweepPolygon.testCollision3d(ray, { type: "sight", mode: "any" });
+  return !ClockwiseSweepPolygon.testCollision3d(new Point3d(source.x, source.y, source.elevationZ), p, { type: "sight", mode: "any" });
 }
 
 
