@@ -13,6 +13,10 @@ const MAX_NUM_WALLS = 100;
 // Test filter
 
 class MyLOSFilter extends AbstractBaseFilter {
+  static defaultUniforms = {
+    EV_hasElevationSampler: false
+  };
+
   static vertexShader = `
     attribute vec2 aVertexPosition;
     attribute vec2 aTextureCoord;
@@ -36,17 +40,33 @@ class MyLOSFilter extends AbstractBaseFilter {
   `;
 
   static fragmentShader = `
-    varying vec2 vTextureCoord;
-    varying vec2 vCanvasCoord;
+    varying vec2 vTextureCoord; // x,y coordinates between 0 and 1
+    varying vec2 vCanvasCoord; // x,y coordinates equal to canvas coordinate system
     uniform sampler2D uSampler;
     uniform sampler2D EV_elevationSampler;
-
-    vec4 color1 = vec4(1.0,0.0,0.0,1.0);
-    vec4 color2 = vec4(0.21,0.47,0.68,1.0);
+    uniform bool EV_hasElevationSampler;
+    uniform vec2 EV_sceneXY;
+    uniform vec2 EV_canvasXY;
 
     void main() {
       vec4 fg = texture2D(uSampler, vTextureCoord);
-      gl_FragColor = color1 * fg.a;
+      // vec4 backgroundElevation = texture2D(EV_elevationSampler, vTextureCoord - EV_sceneXY);
+      vec4 backgroundElevation = texture2D(EV_elevationSampler, vCanvasCoord / EV_canvasXY);
+
+      if ( backgroundElevation.r > 0.0 ) {
+        // backgroundElevation = texture2D(EV_elevationSampler, vCanvasCoord);
+        fg = vec4(1., 0., 1., 1.) * fg.a;
+
+
+      }
+
+//       if ( backgroundElevation.r > 0.0 ) {
+//         fg = vec4(0., 0., 0., 0.);
+//       }
+
+      gl_FragColor = fg;
+
+
 
 //       gl_FragColor = mix(color2, color1, vCanvasCoord.y);
 //       vec4 fg = texture2D(uSampler, vTextureCoord);
@@ -61,7 +81,15 @@ class MyLOSFilter extends AbstractBaseFilter {
   /** @override */
   // Thanks to https://ptb.discord.com/channels/732325252788387980/734082399453052938/1009287977261879388
   apply(filterManager, input, output, clear, currentState) {
+    this.uniforms.EV_canvasXY = [canvas.dimensions.width, canvas.dimensions.height];
     this.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture;
+    this.uniforms.EV_sceneXY = [canvas.dimensions.sceneX, canvas.dimensions.sceneY];
+
+//     this.uniforms.EV_hasElevationSampler = Boolean(this.uniforms.EV_elevationSampler);
+//     this.uniforms.EV_elevationSampler ??= PIXI.Texture.EMPTY;
+
+//     console.log(`apply filter ${this.uniforms.EV_hasElevationSampler}`).
+    this.uniforms.EV_hasElevationSampler = true;
     this.uniforms.canvasMatrix ??= new PIXI.Matrix();
     this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
     return super.apply(filterManager, input, output, clear, currentState);
