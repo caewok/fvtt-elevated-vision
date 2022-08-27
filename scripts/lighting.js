@@ -41,7 +41,7 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   if ( this.fragmentShader.includes(FRAGMENT_UNIFORMS) ) return wrapped(...args);
 
   log("createAdaptiveLightingShader adding shadow shader code");
-  const replaceFragUniformStr = "uniform sampler2D uBkgSampler;";
+  const replaceFragUniformStr = "uniform sampler2D depthTexture;";
   const replaceFragStr = "float depth = smoothstep(0.0, 1.0, vDepth);";
   const replaceFragFnStr = "void main() {";
 
@@ -49,10 +49,10 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
     replaceFragUniformStr, `${replaceFragUniformStr}\n${FRAGMENT_UNIFORMS}`);
 
   this.fragmentShader = this.fragmentShader.replace(
-    replaceFragStr, `${replaceFragStr}\n${DEPTH_CALCULATION}`);
+    replaceFragFnStr, `${FRAGMENT_FUNCTIONS}\n${replaceFragFnStr}\n`);
 
   this.fragmentShader = this.fragmentShader.replace(
-    replaceFragFnStr, `${FRAGMENT_FUNCTIONS}\n${replaceFragFnStr}\n`);
+    replaceFragStr, `${replaceFragStr}\n${DEPTH_CALCULATION}`);
 
   // Replace at the very end
   this.fragmentShader = this.fragmentShader.replace(/}$/, `${FRAG_COLOR}\n }\n`);
@@ -391,8 +391,8 @@ function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-vars
  * the light reflects the current shadow positions when dragged.
  * @returns {ClockwiseSweepPolygon}
  */
-export function _createLOSLightSource(wrapped) {
-  log(`_createLOSLightSource ${this.object.id}`);
+export function _createPolygonLightSource(wrapped) {
+  log(`_createPolygonLightSource ${this.object.id}`);
   const los = wrapped();
 
   // TO-DO: Only reset uniforms if:
