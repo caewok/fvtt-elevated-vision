@@ -17,8 +17,10 @@ import { MODULE_ID } from "./const.js";
 import { zValue } from "./util.js";
 
 import {
+  testVisibilityDetectionMode,
   testVisibilityLightSource,
-  testNaturalVisibilityVisionMode
+  _testLOSDetectionMode,
+  _testRangeDetectionMode
 } from "./tokens.js";
 
 import {
@@ -155,8 +157,11 @@ export function registerPatches() {
 
 
   // ----- Visibility testing ----- //
-  libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "VisionMode.prototype.testNaturalVisibility", testNaturalVisibilityVisionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.MIXED, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "DetectionMode.prototype.testVisibility", testVisibilityDetectionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "DetectionMode.prototype._testRange", _testRangeDetectionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "DetectionMode.prototype._testLOS", _testLOSDetectionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
 }
 
 /**
