@@ -228,6 +228,6 @@ function wallTop() {
  * @type {number} Elevation, in grid units to match x,y coordinates.
  */
 function wallBottom() {
-  return zValue(this.document.flags?.["wall-height"]?.top ?? Number.NEGATIVE_INFINITY);
+  return zValue(this.document.flags?.["wall-height"]?.bottom ?? Number.NEGATIVE_INFINITY);
 }
 

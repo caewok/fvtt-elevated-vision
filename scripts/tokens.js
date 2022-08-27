@@ -108,7 +108,7 @@ export function testVisibilityDetectionMode(wrapper, visionSource, mode, {object
  */
 export function _testRangeDetectionMode(wrapper, visionSource, mode, target, test) {
   const res2d = wrapper(visionSource, mode, target, test)
-  if ( !res2d || !test.hasOwnProperty("z") ) return res2d;
+  if ( !res2d || !test.point.hasOwnProperty("z") ) return res2d;
 
   const radius = visionSource.object.getLightRadius(mode.range);
   const dx = test.point.x - visionSource.x;
@@ -124,10 +124,13 @@ export function _testRangeDetectionMode(wrapper, visionSource, mode, target, tes
 export function _testLOSDetectionMode(wrapper, visionSource, test) {
   const res2d = wrapper(visionSource, test);
 
-  if ( !res2d || !test.hasOwnProperty("z") ) return res2d;
+  if ( !res2d || !test.point.hasOwnProperty("z") ) return res2d;
   if ( !this.walls ) return true;
 
-  return testVisionSourceLOS(visionSource, test)
+  const hasLOS = testVisionSourceLOS(visionSource, test.point);
+  test.los.set(visionSource, hasLOS);
+
+  return hasLOS;
 }
 
 /**
@@ -155,8 +158,7 @@ function testVisionSourceLOS(source, p) {
   const point_in_shadow = source.los.shadows.some(s => s.contains(p.x, p.y));
   if ( !point_in_shadow ) return true;
 
-  const ray = new Ray(new Point3d(source.x, source.y, source.elevationZ), p);
-  return !ClockwiseSweepPolygon.testCollision3d(ray, { type: "sight", mode: "any" });
+  return !ClockwiseSweepPolygon.testCollision3d(new Point3d(source.x, source.y, source.elevationZ), p, { type: "sight", mode: "any" });
 }
 
 
