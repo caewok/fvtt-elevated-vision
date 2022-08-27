@@ -360,19 +360,21 @@ export function angleBetweenPoints(a, b, c, { clockwiseAngle = false } = {}) {
  * @returns {boolean} Does the line segment intersect the rectangle in 3d?
  */
 export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
-  // Four corners of the wall: c, d, e, f
-  const c = new Point3d(wall.A.x, wall.A.y, wall.bottomZ);
-  const d = new Point3d(wall.B.x, wall.B.y, wall.bottomZ);
+  let bottomZ = wall.bottomZ;
+  let topZ = wall.bottomZ;
 
-  if ( c.z === Number.NEGATIVE_INFINITY ) c.z = Number.MIN_SAFE_INTEGER;
-  if ( d.z === Number.NEGATIVE_INFINITY ) d.z = Number.MIN_SAFE_INTEGER;
+  if ( !isFinite(bottomZ) ) bottomZ = Number.MIN_SAFE_INTEGER;
+  if ( !isFinite(topZ) ) topZ = Number.MAX_SAFE_INTEGER;
+
+  // Four corners of the wall: c, d, e, f
+  const c = new Point3d(wall.A.x, wall.A.y, bottomZ);
+  const d = new Point3d(wall.B.x, wall.B.y, bottomZ);
 
   // First test if wall and segment intersect from 2d overhead.
   if ( !foundry.utils.lineSegmentIntersects(a, b, c, d) ) { return null; }
 
   // Second test if segment intersects the wall as a plane
-  const e = new Point3d(wall.A.x, wall.A.y, wall.topZ);
-  if ( e.z === Number.POSITIVE_INFINITY ) e.z = Number.MAX_SAFE_INTEGER;
+  const e = new Point3d(wall.A.x, wall.A.y, topZ);
 
   if ( !lineSegment3dPlaneIntersects(a, b, c, d, e) ) { return null; }
 
