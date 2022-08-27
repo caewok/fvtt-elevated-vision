@@ -13,23 +13,55 @@ const MAX_NUM_WALLS = 100;
 // Test filter
 
 class MyLOSFilter extends AbstractBaseFilter {
+  static vertexShader = `
+    attribute vec2 aVertexPosition;
+    attribute vec2 aTextureCoord;
+
+    uniform mat3 projectionMatrix;
+    uniform mat3 canvasMatrix;
+    uniform vec4 inputSize;
+    uniform vec4 outputFrame;
+
+    varying vec2 vTextureCoord;
+    varying vec2 vCanvasCoord;
+
+
+    void main(void)
+    {
+       vTextureCoord = aVertexPosition * (outputFrame.zw * inputSize.zw);
+       vec2 position = aVertexPosition * max(outputFrame.zw, vec2(0.)) + outputFrame.xy;
+       vCanvasCoord = (canvasMatrix * vec3(position, 1.0)).xy;
+       gl_Position = vec4((projectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
+    }
+  `;
+
   static fragmentShader = `
     varying vec2 vTextureCoord;
-
+    varying vec2 vCanvasCoord;
     uniform sampler2D uSampler;
+    uniform sampler2D EV_elevationSampler;
 
-    // start and end colors
-    vec4 color1 = vec4(1.0,1.0,1.0,1.0);
+    vec4 color1 = vec4(1.0,0.0,0.0,1.0);
     vec4 color2 = vec4(0.21,0.47,0.68,1.0);
 
     void main() {
-      gl_FragColor = mix(color2, color1, vTextureCoord.y);
+      vec4 fg = texture2D(uSampler, vTextureCoord);
+      gl_FragColor = color1 * fg.a;
+
+//       gl_FragColor = mix(color2, color1, vCanvasCoord.y);
+//       vec4 fg = texture2D(uSampler, vTextureCoord);
+      // gl_FragColor = mix(color2, color1, vFilterCoord.y);
+//       vec4 mixCol = mix(color2, color1, vFilterCoord.y);
+//       gl_FragColor = mix(fg, mixCol, 1.0);
+
+
     }
   `;
 
   /** @override */
   // Thanks to https://ptb.discord.com/channels/732325252788387980/734082399453052938/1009287977261879388
   apply(filterManager, input, output, clear, currentState) {
+    this.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture;
     this.uniforms.canvasMatrix ??= new PIXI.Matrix();
     this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
     return super.apply(filterManager, input, output, clear, currentState);
@@ -43,10 +75,16 @@ g.filters = [myFilter];
 
 
 g = canvas.controls.debug
+los = _token.vision.los;
+g.clear()
+myFilter = MyLOSFilter.create();
 g.filters = [myFilter];
 
-los = _token.vision.los;
+
+// g.beginFill(0x008000, 0.5);
+g.beginFill(0xFFFFFF, 1.0)
 g.drawShape(los);
+g.endFill()
 
 
 
