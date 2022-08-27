@@ -92,7 +92,7 @@ uniform bool EV_hasElevationSampler;
 `;
 
 // Helper functions used to calculate shadow trapezoids.
-const FRAGMENT_FUNCTIONS =
+export const FRAGMENT_FUNCTIONS =
 `
 float orient2d(in vec2 a, in vec2 b, in vec2 c) {
   return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
@@ -173,7 +173,7 @@ if ( pixelElevation > EV_lightElevation ) {
   for ( int i = 0; i < maxWalls; i++ ) {
     if ( i >= EV_numWalls ) break;
 
-    // If the wall is higher than the light, skip. Should not currently occur.
+    // If the wall is higher than the light, skip. Should not occur.
     float We = EV_wallElevations[i];
     if ( EV_lightElevation <= We ) continue;
 
@@ -267,7 +267,6 @@ export function _updateEVLightUniformsLightSource(mesh) {
   // Radius is .5 in the shader coordinates; adjust elevation accordingly
   const u = shader.uniforms;
   u.EV_lightElevation = elevationZ * 0.5 * r_inv;
-  u.EV_numWalls = walls.size;
 
   const center_shader = {x: 0.5, y: 0.5};
   let wallCoords = [];
@@ -287,6 +286,8 @@ export function _updateEVLightUniformsLightSource(mesh) {
 
     wallCoords.push(a.x, a.y, b.x, b.y);
   }
+
+  u.EV_numWalls = wallElevations.length;
 
   if ( !wallCoords.length ) wallCoords = new Float32Array(MAX_NUM_WALLS*4);
   if ( !wallElevations.length ) wallElevations = new Float32Array(MAX_NUM_WALLS);
