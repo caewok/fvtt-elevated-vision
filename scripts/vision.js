@@ -8,7 +8,7 @@ PIXI
 "use strict";
 
 import { log, drawPolygonWithHoles, perpendicularPoint, distanceBetweenPoints } from "./util.js";
-import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
+// import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
 
 const MAX_NUM_WALLS = 100;
 
