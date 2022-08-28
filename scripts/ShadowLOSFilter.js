@@ -204,9 +204,9 @@ assume r is 0.1
 
 /**
 api = game.modules.get("elevatedvision").api
+ShadowLOSFilter = api.ShadowLOSFilter;
 perpendicularPoint = api.util.perpendicularPoint;
 distanceBetweenPoints = api.util.distanceBetweenPoints;
-ShadowLOSFilter = api.ShadowLOSFilter;
 
 myFilter = MyLOSFilter.create();
 g = new PIXI.Graphics();
@@ -219,7 +219,7 @@ source = _token.vision
 los = source.los;
 
 g.clear()
-myFilter = ShadowLOSFilter.create(undefined, source)
+myFilter = ShadowLOSFilter.create({}, source)
 g.filters = [myFilter];
 
 
@@ -348,8 +348,9 @@ export class ShadowLOSFilter extends AbstractBaseFilter {
 
   /** @override */
   static create(uniforms={}, source) {
-    updateShadowFilterUniforms(uniforms, source);
-    return super.create(uniforms);
+    uniforms = { ...this.defaultUniforms, ...uniforms};
+    uniforms = updateShadowFilterUniforms(uniforms, source);
+    return new this(this.vertexShader, this.fragmentShader, uniforms);
   }
 
   /** @override */
@@ -373,12 +374,12 @@ export class ShadowLOSFilter extends AbstractBaseFilter {
 }
 
 function updateShadowFilterUniforms(uniforms, source) {
-  const walls = source.los.wallsBelowSource;
-  if ( !walls || !walls.size ) return;
+  const walls = source.los.wallsBelowSource || new Set();
   const { x, y } = source;
 
-
   uniforms.EV_sourceCanvasElevation = source.elevationZ;
+  if ( !isFinite(uniforms.EV_sourceCanvasElevation) ) uniforms.EV_sourceCanvasElevation = Number.MAX_SAFE_INTEGER;
+
   uniforms.EV_sourceCanvasLocation = [x, y];
 
   let wallCoords = [];
@@ -407,4 +408,6 @@ function updateShadowFilterUniforms(uniforms, source) {
   uniforms.EV_wallCanvasCoords = wallCoords;
   uniforms.EV_wallCanvasElevations = wallElevations;
   uniforms.EV_wallCanvasDistances = wallDistances;
+
+  return uniforms;
 }

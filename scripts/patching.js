@@ -35,7 +35,8 @@ import {
   refreshCanvasVisibility,
   _updateColorationUniformsVisionSource,
   _updateIlluminationUniformsVisionSource,
-  _updateBackgroundUniformsVisionSource
+  _updateBackgroundUniformsVisionSource,
+  createVisionCanvasVisionMask
 //   initializeVisionSource
 } from "./vision.js";
 
@@ -152,6 +153,9 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateBackgroundUniforms", _updateBackgroundUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
+  // ----- Drawing terrain elevation shadows for LOS/Fog ----- //
+  libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMask, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+
   // This causes brightness to be NaN and basically breaks vision
 //   libWrapper.register(MODULE_ID, "VisionSource.prototype.initialize", initializeVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
@@ -186,6 +190,7 @@ function visionSourceElevation() {
  * @type {number} Elevation, in grid units to match x,y coordinates.
  */
 function lightSourceElevation() {
+  if ( this instanceof GlobalLightSource ) return Number.POSITIVE_INFINITY;
   return zValue(this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY);
 }
 

@@ -8,7 +8,7 @@ PIXI
 "use strict";
 
 import { log, drawPolygonWithHoles, perpendicularPoint, distanceBetweenPoints } from "./util.js";
-// import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
+import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
 
 const MAX_NUM_WALLS = 100;
 
@@ -92,6 +92,28 @@ export function initializeVisionSource(wrapped) {
 }
 
 /**
+ * Override CanvasVisionMask.prototype.createVision
+ * Need to be able to add graphics children so that ShadowLOSFilter can be applied
+ * per light or vision source. Cannot filter the parent b/c cannot distinguish which
+ * source is responsible for which graphic shape unless each source has its own PIXI.Graphics.
+ * Two issues:
+ * 1. PIXI.Graphics only work as containers in part. Drawing in the parent and the
+ *    children results in only the parent displaying.
+ * 2. Masking only works with PIXI.Graphics or PIXI.Sprite. Unlikely to work with
+ *    filters on graphics b/c they would likely be applied too late.
+ */
+export function createVisionCanvasVisionMask() {
+  const vision = new PIXI.Container();
+  vision.base = vision.addChild(new PIXI.LegacyGraphics());
+  vision.fov = vision.addChild(new PIXI.Container());
+  vision.los = vision.addChild(new PIXI.Container());
+  vision.losMask = vision.addChild(new PIXI.LegacyGraphics());
+  vision.mask = vision.losMask;
+  vision._explored = false;
+  return this.vision = this.addChild(vision);
+}
+
+/**
  * Override CanvasVisibility.prototype.refresh to handle shadows.
  */
 
@@ -113,45 +135,47 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
 
   // Create a new vision for this frame
   const vision = canvas.masks.vision.createVision();
+  const fillColor = 0xFF0000;
 
   // Draw field-of-vision for lighting sources
   for ( let lightSource of canvas.effects.lightSources ) {
     if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
-    const shadows = lightSource.los.combinedShadows || [];
-    if ( shadows.length ) {
-      drawPolygonWithHoles(shadows, { graphics: vision.fov });
-    } else {
-      vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
+    const g = vision.fov.addChild(new PIXI.LegacyGraphics())
+    g.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
+
+    if ( !(lightSource instanceof GlobalLightSource )) {
+      // No shadows possible for the global light source
+//       const shadowFilter = ShadowLOSFilter.create({}, lightSource);
+//       g.filters = [shadowFilter];
     }
 
     if ( lightSource.data.vision ) {
-      if ( shadows.length ) {
-        drawPolygonWithHoles(shadows, { graphics: vision.los });
-      } else {
-        vision.los.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
-      }
+      const g = vision.los.addChild(new PIXI.LegacyGraphics());
+//       g.filters = [shadowFilter];
+      g.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
+       vision.losMask.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
     }
   }
 
   // Draw sight-based visibility for each vision source
   for ( let visionSource of canvas.effects.visionSources ) {
     visionSource.active = true;
-    const shadows = visionSource.los.combinedShadows || [];
 
     // Draw FOV polygon or provide some baseline visibility of the token's space
     if ( visionSource.radius > 0 ) {
-      vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.fov).endFill();
+      const g = vision.fov.addChild(new PIXI.LegacyGraphics());
+      //       g.filters = [shadowFilter];
+      g.beginFill(fillColor, 1.0).drawShape(visionSource.fov).endFill();
     } else {
       const baseR = canvas.dimensions.size / 2;
-      vision.base.beginFill(0xFFFFFF, 1.0).drawCircle(visionSource.x, visionSource.y, baseR).endFill();
+      vision.base.beginFill(fillColor, 1.0).drawCircle(visionSource.x, visionSource.y, baseR).endFill();
     }
 
-    // Draw LOS mask
-    if ( shadows.length ) {
-      drawPolygonWithHoles(shadows, { graphics: vision.los });
-    } else {
-      vision.los.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.los).endFill();
-    }
+    const g = vision.los.addChild(new PIXI.LegacyGraphics());
+//     const shadowFilter = ShadowLOSFilter.create({}, visionSource);
+//     g.filters = [shadowFilter];
+     g.beginFill(fillColor, 1.0).drawShape(visionSource.los).endFill();
+     vision.losMask.beginFill(fillColor, 1.0).drawShape(visionSource.los).endFill();
 
     // Record Fog of war exploration
     if ( canvas.fog.update(visionSource, forceUpdateFog) ) vision._explored = true;
@@ -167,8 +191,3 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
   // Restrict the visibility of other canvas objects
   this.restrictVisibility();
 }
-
-
-
-
-
