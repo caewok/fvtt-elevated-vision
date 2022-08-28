@@ -25,6 +25,7 @@ import { ElevationLayer } from "./ElevationLayer.js";
 import { ElevationGrid } from "./ElevationGrid.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
+import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
 
 
 Hooks.once("init", async function() {
@@ -35,7 +36,8 @@ Hooks.once("init", async function() {
     Shadow,
     ElevationLayer,
     ElevationGrid,
-    WallTracer
+    WallTracer,
+    ShadowLOSFilter
   };
 
   registerPIXIPolygonMethods();

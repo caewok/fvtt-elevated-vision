@@ -206,7 +206,7 @@ assume r is 0.1
 api = game.modules.get("elevatedvision").api
 perpendicularPoint = api.util.perpendicularPoint;
 distanceBetweenPoints = api.util.distanceBetweenPoints;
-MAX_NUM_WALLS = 100
+ShadowLOSFilter = api.ShadowLOSFilter;
 
 myFilter = MyLOSFilter.create();
 g = new PIXI.Graphics();
@@ -222,10 +222,6 @@ g.clear()
 myFilter = ShadowLOSFilter.create(undefined, source)
 g.filters = [myFilter];
 
-
-g.clear()
-myFilter = MyLOSFilter.create({ }, source)
-g.filters = [myFilter];
 
 // g.beginFill(0x008000, 0.5);
 g.beginFill(0xFFFFFF, 1.0)
@@ -246,7 +242,7 @@ g.endFill()
  * https://www.html5gamedevs.com/topic/37350-how-to-apply-pixifilter-on-polygon-pixigraphics/
  * https://jsfiddle.net/ravindu89/vsvL9knj/6/
  */
-class ShadowLOSFilter extends AbstractBaseFilter {
+export class ShadowLOSFilter extends AbstractBaseFilter {
   /** @override */
   static defaultUniforms = {
     EV_numWalls: 0,
@@ -321,7 +317,7 @@ class ShadowLOSFilter extends AbstractBaseFilter {
         for ( int i = 0; i < maxWalls; i++ ) {
           if ( i >= EV_numWalls ) break;
 
-          inShadow = locationInWallShadow(
+          bool thisWallInShadow = locationInWallShadow(
             EV_wallCanvasCoords[i],
             EV_wallCanvasElevations[i],
             EV_wallCanvasDistances[i],
@@ -332,8 +328,9 @@ class ShadowLOSFilter extends AbstractBaseFilter {
             percentDistanceFromWall
           );
 
-          if ( inShadow ) {
-            // Current location is within shadow of wall
+          if ( thisWallInShadow ) {
+            // Current location is within shadow of this wall
+            inShadow = true;
             break;
           }
         }
@@ -350,9 +347,9 @@ class ShadowLOSFilter extends AbstractBaseFilter {
   `;
 
   /** @override */
-  create(uniforms={}, source) {
+  static create(uniforms={}, source) {
     updateShadowFilterUniforms(uniforms, source);
-    return super.apply(uniforms);
+    return super.create(uniforms);
   }
 
   /** @override */

@@ -237,10 +237,11 @@ if ( pixelElevation > EV_lightElevation ) {
       percentDistanceFromWall
     );
 
-    // Current location is within shadow of the wall
-    // Don't break out of loop; could be more than one wall casting shadow on this point.
-    // For now, use the closest shadow for depth.
+
     if ( thisWallInShadow ) {
+      // Current location is within shadow of the wall
+      // Don't break out of loop; could be more than one wall casting shadow on this point.
+      // For now, use the closest shadow for depth.
       inShadow = true;
       depth = min(depth, percentDistanceFromWall);
     }
