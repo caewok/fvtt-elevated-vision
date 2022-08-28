@@ -120,6 +120,60 @@ vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c) {
   float u = ((deltaCA.x * deltaBA.x) + (deltaCA.y * deltaBA.y)) / dab;
   return vec2(a.x + (u * deltaBA.x), a.y + (u * deltaBA.y));
 }
+
+// Calculate the canvas elevation given a pixel value
+// Maps 0–1 to elevation in canvas coordinates.
+// EV_elevationResolution:
+// r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
+float canvasElevationFromPixel(in float pixel, in vec4 EV_elevationResolution) {
+  return ((pixel * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
+}
+
+// Determine if a given location from a wall is in shadow or not.
+bool locationInWallShadow(
+  in vec4 wall,
+  in float wallElevation,
+  in float wallDistance,
+  in float sourceElevation,
+  in vec2 sourceLocation,
+  in float pixelElevation,
+  in vec2 pixelLocation,
+  out float percentDistanceFromWall) {
+
+  percentDistanceFromWall = 0.0; // Set a default value when returning early.
+
+  // If the wall is higher than the light, skip. Should not occur.
+  if ( sourceElevation <= wallElevation ) return false;
+
+  // If the pixel is above the wall, skip.
+  if ( pixelElevation >= wallElevation ) return false;
+
+  // If the wall does not intersect the line between the center and this point, no shadow here.
+  if ( !lineSegmentIntersects(pixelLocation, sourceLocation, wall.xy, wall.zw) ) return false;
+
+  float adjSourceElevation = sourceElevation - pixelElevation;
+
+  // Distance from wall (as line) to this location
+  vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, pixelLocation);
+  float distWP = distance(pixelLocation, wallIxPoint);
+
+  float adjWe = wallElevation - pixelElevation;
+
+  // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
+  // atan(y, x) equivalent to JS Math.atan2(y, x)
+  float theta = atan((adjSourceElevation - adjWe) /  wallDistance);
+
+  // Distance from center/origin to furthest part of shadow perpendicular to wall
+  float distOV = adjSourceElevation / tan(theta);
+  float maxDistWP = distOV - wallDistance;
+
+  if ( distWP < maxDistWP ) {
+    // Current location is within shadow of the wall
+    percentDistanceFromWall = distWP / maxDistWP;
+    return true;
+  }
+  return false;
+}
 `;
 
 

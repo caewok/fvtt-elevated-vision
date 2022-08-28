@@ -14,7 +14,10 @@ const MAX_NUM_WALLS = 100;
 
 class MyLOSFilter extends AbstractBaseFilter {
   static defaultUniforms = {
-    EV_hasElevationSampler: false
+    EV_hasElevationSampler: false,
+    EV_elevationResolution: [0, 1, 255, 1],
+    EV_sourceElevation: 0,
+    EV_sourceXY: [0, 0]
   };
 
   static vertexShader = `
@@ -45,24 +48,68 @@ class MyLOSFilter extends AbstractBaseFilter {
     uniform sampler2D uSampler;
     uniform sampler2D EV_elevationSampler;
     uniform bool EV_hasElevationSampler;
-    uniform vec2 EV_sceneXY;
     uniform vec2 EV_canvasXY;
+    uniform vec4 EV_elevationResolution;
+    uniform float EV_sourceElevation;
+    uniform vec2 EV_sourceXY;
 
     void main() {
       vec4 fg = texture2D(uSampler, vTextureCoord);
-      // vec4 backgroundElevation = texture2D(EV_elevationSampler, vTextureCoord - EV_sceneXY);
       vec4 backgroundElevation = texture2D(EV_elevationSampler, vCanvasCoord / EV_canvasXY);
+      float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
+      bool inShadow = false;
 
-      if ( backgroundElevation.r > 0.0 ) {
-        // backgroundElevation = texture2D(EV_elevationSampler, vCanvasCoord);
-        fg = vec4(1., 0., 1., 1.) * fg.a;
+      if ( pixelElevation > EV_sourceElevation ) {
+        // Pixel location is above the source, so it is in shadow.
+        inShadow = true;
+      } else if ( EV_numWalls > 0 ) {
+        // If pixel location is in a shadow area, it might be visible if terrain is high enough.
+        float adjSourceElevation = EV_sourceElevation - pixelElevation;
 
+        const int maxWalls = ${MAX_NUM_WALLS};
+        for ( int i = 0; i < maxWalls; i++ ) {
 
+          // If the wall is higher than the light, skip. Should not occur.
+          float We = EV_wallElevations[i]
+          if ( EV_sourceElevation <= We ) continue;
+
+          // If the pixel is above the wall, skip.
+          if ( pixelElevation >= We ) continue;
+
+          // If the wall does not intersect the line between the center and this point, no shadow here.
+          vec4 wall = EV_wallCoords[i];
+          if ( !lineSegmentIntersects(vCanvasCoord, EV_sourceXY, wall.xy, wall.zw) ) continue;
+
+          float distOW = EV_wallDistances[i];
+
+          // Distance from wall (as line) to this location
+          vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vCanvasCoord);
+          float distWP = distance(vCanvasCoord, wallIxPoint);
+
+          float adjWe = We - pixelElevation;
+
+          // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
+          // atan(y, x) equivalent to JS Math.atan2(y, x)
+          float theta = atan((adjSourceElevation - adjWe) /  distOW);
+
+          // Distance from center/origin to furthest part of shadow perpendicular to wall
+          float distOV = adjSourceElevation / tan(theta);
+          float maxDistWP = distOV - distOW;
+
+          if ( distWP < maxDistWP ) {
+            // Current location is within shadow
+            inShadow = true;
+            break;
+          }
+        }
       }
 
-//       if ( backgroundElevation.r > 0.0 ) {
-//         fg = vec4(0., 0., 0., 0.);
-//       }
+      if ( inShadow ) {
+        fg = vec4(0., 0., 0., 0.) * fg.a;
+        // fg = vec4(1., 0., 1., 1.) * fg.a; // color it magenta if inside polygon
+      } else {
+        fg = vec4(1., 1., 1., 1.) * fg.a;
+      }
 
       gl_FragColor = fg;
 
@@ -85,6 +132,11 @@ class MyLOSFilter extends AbstractBaseFilter {
     this.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture;
     this.uniforms.EV_sceneXY = [canvas.dimensions.sceneX, canvas.dimensions.sceneY];
 
+    // [min, step, maxPixValue, canvasMult]
+    const { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+    const { size, distance } = canvas.dimensions;
+    this.uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, size / distance];
+
 //     this.uniforms.EV_hasElevationSampler = Boolean(this.uniforms.EV_elevationSampler);
 //     this.uniforms.EV_elevationSampler ??= PIXI.Texture.EMPTY;
 
@@ -96,18 +148,84 @@ class MyLOSFilter extends AbstractBaseFilter {
   }
 }
 
+// Mostly for testing
+function convertElevation({pixel, pixelInt, elevation, canvasElevation } = {}) {
+  if ( !pixel && !pixelInt && !elevation && !canvasElevation ) pixel = 0;
+
+  if ( pixelInt ) pixel = pixelInt / canvas.elevation.maximumPixelValue;
+  else if ( elevation ) pixel = elevationToPixel(elevation);
+  else if ( canvasElevation ) pixel = canvasElevationToPixel(canvasElevation);
+
+  return {
+    pixel: pixel,
+    pixelInt: pixelInt ?? pixel * canvas.elevation.maximumPixelValue,
+    elevation: elevation ?? pixelToElevation(pixel),
+    canvasElevation: canvasElevation ?? pixelToCanvasElevation(pixel)
+  }
+}
+
+function pixelToCanvasElevation(pixelValue) {
+  const { size, distance } = canvas.dimensions;
+  const elevation = pixelToElevation(pixelValue);
+  return (elevation * size) / distance;
+}
+
+function pixelToElevation(pixelValue) {
+  const { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+  return (pixelValue * maximumPixelValue * elevationStep) - elevationMin;
+}
+
+function canvasElevationToPixel(canvasElevation) {
+  const { size, distance } = canvas.dimensions;
+  const elevation = (canvasElevation * dist) / size;
+  return elevationToPixel(elevation);
+}
+
+function elevationToPixel(elevation) {
+  const { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+  return (elevation + elevationMin) / (maximumPixelValue * elevationStep);
+}
+
 /**
+vec4 backgroundElevation = texture2D(EV_elevationSampler, vCanvasCoord / EV_canvasXY);
+backgroundElevation.r is between 0 and 1
+eMult = size / dist = 100 / 5 = 20
+
+
+assume r is 0.1
+((r * pixelMax * eStep) - eMin )* eMult
+((0.1 * 255 * 5) - 0) = 127.5 * 20 = 2550
+
+
+
+
+
+
+
+/**
+api = game.modules.get("elevatedvision").api
+perpendicularPoint = api.util.perpendicularPoint;
+distanceBetweenPoints = api.util.distanceBetweenPoints;
+MAX_NUM_WALLS = 100
+
 myFilter = MyLOSFilter.create();
 g = new PIXI.Graphics();
 g.filters = [myFilter];
 
 
 g = canvas.controls.debug
-los = _token.vision.los;
+
+source = _token.vision
+los = source.los;
+
 g.clear()
-myFilter = MyLOSFilter.create();
+myFilter = ShadowLOSFilter.create(undefined, source)
 g.filters = [myFilter];
 
+
+g.clear()
+myFilter = MyLOSFilter.create({ }, source)
+g.filters = [myFilter];
 
 // g.beginFill(0x008000, 0.5);
 g.beginFill(0xFFFFFF, 1.0)
@@ -132,11 +250,11 @@ class ShadowLOSFilter extends AbstractBaseFilter {
   /** @override */
   static defaultUniforms = {
     EV_numWalls: 0,
-    EV_wallElevations: new Float32Array(MAX_NUM_WALLS),
-    EV_wallCoords: new Float32Array(MAX_NUM_WALLS*4),
-    EV_sourceElevation: 0,
-    EV_sourceLocation: [0, 0],
-    EV_wallDistances: new Float32Array(MAX_NUM_WALLS),
+    EV_wallCanvasCoords: new Float32Array(MAX_NUM_WALLS*4),
+    EV_wallCanvasElevations: new Float32Array(MAX_NUM_WALLS),
+    EV_sourceCanvasElevation: 0,
+    EV_sourceCanvasLocation: [0, 0],
+    EV_wallCanvasDistances: new Float32Array(MAX_NUM_WALLS),
     EV_hasElevationSampler: false,
 
     // [min, step, maxPixValue]
@@ -168,74 +286,67 @@ class ShadowLOSFilter extends AbstractBaseFilter {
     varying vec2 vCanvasCoord;
 
     uniform sampler2D uSampler;
+    uniform vec2 EV_canvasXY;
     uniform int EV_numWalls;
-    uniform vec4 EV_wallCoords[${MAX_NUM_WALLS}];
-    uniform float EV_wallElevations[${MAX_NUM_WALLS}];
-    uniform float EV_wallDistances[${MAX_NUM_WALLS}];
-    uniform float EV_sourceElevation;
-    uniform vec2 EV_sourceLocation;
+    uniform vec4 EV_wallCanvasCoords[${MAX_NUM_WALLS}];
+    uniform float EV_wallCanvasElevations[${MAX_NUM_WALLS}];
+    uniform float EV_wallCanvasDistances[${MAX_NUM_WALLS}];
+    uniform float EV_sourceCanvasElevation;
+    uniform vec2 EV_sourceCanvasLocation;
     uniform sampler2D EV_elevationSampler;
-    uniform vec4 EV_elevationResolution;
     uniform bool EV_hasElevationSampler;
+    uniform vec4 EV_elevationResolution;
 
     ${FRAGMENT_FUNCTIONS}
 
     vec4 visionColor = vec4(1.0,1.0,1.0,1.0);
 
     void main() {
-      float inShadow = 0.0;
-      vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
-      if ( EV_hasElevationSampler ) {
-        vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
-        backgroundElevation = texture2D(EV_elevationSampler, vCanvasCoord);
+      vec4 fg = texture2D(uSampler, vTextureCoord);
+
+      if ( !EV_hasElevationSampler ) {
+        gl_FragColor = fg;
+        return;
       }
 
-      float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
-      if ( pixelElevation > EV_sourceElevation ) {
-        inShadow = 1.0;
+      vec4 backgroundElevation = texture2D(EV_elevationSampler, vCanvasCoord / EV_canvasXY);
+      float pixelCanvasElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
+      bool inShadow = false;
+      float percentDistanceFromWall;
+
+      if ( pixelCanvasElevation > EV_sourceCanvasElevation ) {
+        inShadow = true;
       } else if ( EV_numWalls > 0 ) {
-        float adjSourceElevation = EV_sourceElevation - pixelElevation;
         const int maxWalls = ${MAX_NUM_WALLS};
         for ( int i = 0; i < maxWalls; i++ ) {
           if ( i >= EV_numWalls ) break;
 
-          // If the wall is higher than the light, skip. Should not occur.
-          float We = EV_wallElevations[i];
-          if ( EV_lightElevation <= We ) continue;
+          inShadow = locationInWallShadow(
+            EV_wallCanvasCoords[i],
+            EV_wallCanvasElevations[i],
+            EV_wallCanvasDistances[i],
+            EV_sourceCanvasElevation,
+            EV_sourceCanvasLocation,
+            pixelCanvasElevation,
+            vCanvasCoord,
+            percentDistanceFromWall
+          );
 
-          // If the pixel is above the wall, skip.
-          if ( pixelElevation >= We ) continue;
-
-          // If the wall does not intersect the line between the center and this point, no shadow here.
-          vec4 wall = EV_wallCoords[i];
-          if ( !lineSegmentIntersects(vCanvasCoord, EV_sourceLocation, wall.xy, wall.zw) ) continue;
-
-          float distOW = EV_wallDistances[i];
-
-          // Distance from wall (as line) to this location
-          vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vCanvasCoord);
-          float distWP = distance(vUvs, wallIxPoint);
-
-          float adjWe = We - pixelElevation;
-
-          // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
-          // atan(y, x) equivalent to JS Math.atan2(y, x)
-          float theta = atan((adjSourceElevation - adjWe) /  distOW);
-
-          // Distance from center/origin to furthest part of shadow perpendicular to wall
-          float distOV = adjSourceElevation / tan(theta);
-          float maxDistWP = distOV - distOW;
-
-          if ( distWP < maxDistWP ) {
-            // Current location is within shadow.
-            inShadow = 1.0;
+          if ( inShadow ) {
+            // Current location is within shadow of wall
             break;
           }
+        }
       }
-    }
 
-    vec4 fg = texture2D(uSampler, vTextureCoord);
-    gl_FragColor = mix(visionColor, fg, inShadow);
+      if ( inShadow ) {
+        fg = vec4(0., 0., 0., 0.) * fg.a;
+      } else {
+        fg = vec4(1., 1., 1., 1.) * fg.a;
+      }
+
+      gl_FragColor = fg;
+    }
   `;
 
   /** @override */
@@ -247,9 +358,16 @@ class ShadowLOSFilter extends AbstractBaseFilter {
   /** @override */
   // Thanks to https://ptb.discord.com/channels/732325252788387980/734082399453052938/1009287977261879388
   apply(filterManager, input, output, clear, currentState) {
+    const { size, distance, width, height } = canvas.dimensions;
+
+    this.uniforms.EV_canvasXY = [width, height];
     this.uniforms.EV_elevationSampler = canvas.elevation?._elevationTexture;
     this.uniforms.EV_hasElevationSampler = Boolean(this.uniforms.EV_elevationSampler);
     this.uniforms.EV_elevationSampler ??= PIXI.Texture.EMPTY;
+
+    // [min, step, maxPixValue, canvasMult]
+    const { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+    this.uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, size / distance];
 
     this.uniforms.canvasMatrix ??= new PIXI.Matrix();
     this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
@@ -260,11 +378,12 @@ class ShadowLOSFilter extends AbstractBaseFilter {
 function updateShadowFilterUniforms(uniforms, source) {
   const walls = source.los.wallsBelowSource;
   if ( !walls || !walls.size ) return;
+  const { x, y } = source;
 
-  uniforms.EV_sourceElevation = source.elevationZ;
-  uniforms.EV_sourceLocation = [ source.x, source.y ];
 
-  const center = { x: source.x, y: source.y };
+  uniforms.EV_sourceCanvasElevation = source.elevationZ;
+  uniforms.EV_sourceCanvasLocation = [x, y];
+
   let wallCoords = [];
   let wallElevations = [];
   let wallDistances = [];
@@ -273,10 +392,10 @@ function updateShadowFilterUniforms(uniforms, source) {
     const b = w.B;
 
     // Point where line from light, perpendicular to wall, intersects
-    const wallIx = perpendicularPoint(a, b, center);
+    const wallIx = perpendicularPoint(a, b, {x, y});
     if ( !wallIx ) continue; // Likely a and b not proper wall.
 
-    const wallOriginDist = distanceBetweenPoints(center, wallIx);
+    const wallOriginDist = distanceBetweenPoints({x, y}, wallIx);
     wallDistances.push(wallOriginDist);
     wallElevations.push(w.topZ);
     wallCoords.push(a.x, a.y, b.x, b.y)
@@ -288,7 +407,7 @@ function updateShadowFilterUniforms(uniforms, source) {
   if ( !wallElevations.length ) wallElevations = new Float32Array(MAX_NUM_WALLS);
   if ( !wallDistances.length ) wallDistances = new Float32Array(MAX_NUM_WALLS);
 
-  uniforms.EV_wallCoords = wallCoords;
-  uniforms.EV_wallElevations = wallElevations;
-  uniforms.EV_wallDistances = wallDistances;
+  uniforms.EV_wallCanvasCoords = wallCoords;
+  uniforms.EV_wallCanvasElevations = wallElevations;
+  uniforms.EV_wallCanvasDistances = wallDistances;
 }
