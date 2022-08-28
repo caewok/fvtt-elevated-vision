@@ -133,7 +133,7 @@ float canvasElevationFromPixel(in float pixel, in vec4 EV_elevationResolution) {
 bool locationInWallShadow(
   in vec4 wall,
   in float wallElevation,
-  in float wallDistance,
+  in float wallDistance, // distance from source location to wall
   in float sourceElevation,
   in vec2 sourceLocation,
   in float pixelElevation,
@@ -151,16 +151,14 @@ bool locationInWallShadow(
   // If the wall does not intersect the line between the center and this point, no shadow here.
   if ( !lineSegmentIntersects(pixelLocation, sourceLocation, wall.xy, wall.zw) ) return false;
 
-  float adjSourceElevation = sourceElevation - pixelElevation;
-
   // Distance from wall (as line) to this location
   vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, pixelLocation);
   float distWP = distance(pixelLocation, wallIxPoint);
 
-  float adjWe = wallElevation - pixelElevation;
-
   // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
   // atan(y, x) equivalent to JS Math.atan2(y, x)
+  float adjWe = wallElevation - pixelElevation;
+  float adjSourceElevation = sourceElevation - pixelElevation;
   float theta = atan((adjSourceElevation - adjWe) /  wallDistance);
 
   // Distance from center/origin to furthest part of shadow perpendicular to wall
