@@ -143,28 +143,30 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
     const g = vision.fov.addChild(new PIXI.LegacyGraphics())
     g.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
 
-    if ( !(lightSource instanceof GlobalLightSource )) {
-      // No shadows possible for the global light source
-//       const shadowFilter = ShadowLOSFilter.create({}, lightSource);
-//       g.filters = [shadowFilter];
-    }
+    // At least for now, GlobalLightSource cannot provide vision.
+    // No shadows possible for the global light source
+    if ( lightSource instanceof GlobalLightSource ) continue;
+
+    const shadowFilter = ShadowLOSFilter.create({}, lightSource);
+    g.filters = [shadowFilter];
 
     if ( lightSource.data.vision ) {
       const g = vision.los.addChild(new PIXI.LegacyGraphics());
-//       g.filters = [shadowFilter];
+      g.filters = [shadowFilter];
       g.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
-       vision.losMask.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
+      vision.losMask.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
     }
   }
 
   // Draw sight-based visibility for each vision source
   for ( let visionSource of canvas.effects.visionSources ) {
     visionSource.active = true;
+    const shadowFilter = ShadowLOSFilter.create({}, visionSource);
 
     // Draw FOV polygon or provide some baseline visibility of the token's space
     if ( visionSource.radius > 0 ) {
       const g = vision.fov.addChild(new PIXI.LegacyGraphics());
-      //       g.filters = [shadowFilter];
+      g.filters = [shadowFilter];
       g.beginFill(fillColor, 1.0).drawShape(visionSource.fov).endFill();
     } else {
       const baseR = canvas.dimensions.size / 2;
@@ -172,10 +174,9 @@ export function refreshCanvasVisibility({forceUpdateFog=false}={}) {
     }
 
     const g = vision.los.addChild(new PIXI.LegacyGraphics());
-//     const shadowFilter = ShadowLOSFilter.create({}, visionSource);
-//     g.filters = [shadowFilter];
-     g.beginFill(fillColor, 1.0).drawShape(visionSource.los).endFill();
-     vision.losMask.beginFill(fillColor, 1.0).drawShape(visionSource.los).endFill();
+    g.filters = [shadowFilter];
+    g.beginFill(fillColor, 1.0).drawShape(visionSource.los).endFill();
+    vision.losMask.beginFill(fillColor, 1.0).drawShape(visionSource.los).endFill();
 
     // Record Fog of war exploration
     if ( canvas.fog.update(visionSource, forceUpdateFog) ) vision._explored = true;
