@@ -204,9 +204,9 @@ assume r is 0.1
 
 /**
 api = game.modules.get("elevatedvision").api
+ShadowLOSFilter = api.ShadowLOSFilter;
 perpendicularPoint = api.util.perpendicularPoint;
 distanceBetweenPoints = api.util.distanceBetweenPoints;
-ShadowLOSFilter = api.ShadowLOSFilter;
 
 myFilter = MyLOSFilter.create();
 g = new PIXI.Graphics();
@@ -219,7 +219,7 @@ source = _token.vision
 los = source.los;
 
 g.clear()
-myFilter = ShadowLOSFilter.create(undefined, source)
+myFilter = ShadowLOSFilter.create({}, source)
 g.filters = [myFilter];
 
 
@@ -295,10 +295,17 @@ export class ShadowLOSFilter extends AbstractBaseFilter {
 
     ${FRAGMENT_FUNCTIONS}
 
-    vec4 visionColor = vec4(1.0,1.0,1.0,1.0);
+    vec4 visionColor = vec4(1., 0., 0., 1.);
+    vec4 shadowColor = vec4(0., 0., 0., 0.);
 
     void main() {
       vec4 fg = texture2D(uSampler, vTextureCoord);
+
+      if ( fg.a == 0. ) {
+//         discard;
+        gl_FragColor = fg;
+        return;
+      }
 
       if ( !EV_hasElevationSampler ) {
         gl_FragColor = fg;
@@ -336,10 +343,11 @@ export class ShadowLOSFilter extends AbstractBaseFilter {
         }
       }
 
+
       if ( inShadow ) {
-        fg = vec4(0., 0., 0., 0.) * fg.a;
+        fg = shadowColor * fg.a;
       } else {
-        fg = vec4(1., 1., 1., 1.) * fg.a;
+        fg = visionColor * fg.a;
       }
 
       gl_FragColor = fg;
@@ -348,8 +356,9 @@ export class ShadowLOSFilter extends AbstractBaseFilter {
 
   /** @override */
   static create(uniforms={}, source) {
-    updateShadowFilterUniforms(uniforms, source);
-    return super.create(uniforms);
+    uniforms = { ...this.defaultUniforms, ...uniforms};
+    uniforms = updateShadowFilterUniforms(uniforms, source);
+    return new this(this.vertexShader, this.fragmentShader, uniforms);
   }
 
   /** @override */
@@ -367,18 +376,19 @@ export class ShadowLOSFilter extends AbstractBaseFilter {
     this.uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, size / distance];
 
     this.uniforms.canvasMatrix ??= new PIXI.Matrix();
-    this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
+    this.uniforms.canvasMatrix.copyFrom(currentState.target.worldTransform).invert();
+    //this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
     return super.apply(filterManager, input, output, clear, currentState);
   }
 }
 
 function updateShadowFilterUniforms(uniforms, source) {
-  const walls = source.los.wallsBelowSource;
-  if ( !walls || !walls.size ) return;
+  const walls = source.los.wallsBelowSource || new Set();
   const { x, y } = source;
 
-
   uniforms.EV_sourceCanvasElevation = source.elevationZ;
+  if ( !isFinite(uniforms.EV_sourceCanvasElevation) ) uniforms.EV_sourceCanvasElevation = Number.MAX_SAFE_INTEGER;
+
   uniforms.EV_sourceCanvasLocation = [x, y];
 
   let wallCoords = [];
@@ -407,4 +417,29 @@ function updateShadowFilterUniforms(uniforms, source) {
   uniforms.EV_wallCanvasCoords = wallCoords;
   uniforms.EV_wallCanvasElevations = wallElevations;
   uniforms.EV_wallCanvasDistances = wallDistances;
+
+  return uniforms;
 }
+
+// For testing
+//
+// function perpendicularPoint(a, b, c) {
+//   const dx = b.x - a.x;
+//   const dy = b.y - a.y;
+//   const dab = Math.pow(dx, 2) + Math.pow(dy, 2);
+//   if ( !dab ) return null;
+//
+//   const u = (((c.x - a.x) * dx) + ((c.y - a.y) * dy)) / dab;
+//   return {
+//     x: a.x + (u * dx),
+//     y: a.y + (u * dy)
+//   };
+// }
+//
+// function distanceBetweenPoints(a, b) {
+//   return Math.hypot(b.x - a.x, b.y - a.y);
+// }
+//
+// function distanceSquaredBetweenPoints(a, b) {
+//   return Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2);
+// }

@@ -15,6 +15,7 @@ ClockwiseSweepPolygon
 
 import { MODULE_ID } from "./const.js";
 import { zValue } from "./util.js";
+import { getSetting, SETTINGS } from "./settings.js";
 
 import {
   testVisibilityDetectionMode,
@@ -32,7 +33,9 @@ import {
 } from "./lighting.js";
 
 import {
-  refreshCanvasVisibility,
+  refreshCanvasVisibilityPolygons,
+  refreshCanvasVisibilityShader,
+  createVisionCanvasVisionMask,
   _updateColorationUniformsVisionSource,
   _updateIlluminationUniformsVisionSource,
   _updateBackgroundUniformsVisionSource
@@ -147,7 +150,6 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "LightSource.prototype._createPolygon", _createPolygonLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
   // ----- Drawing shadows for vision sources ----- //
-  libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibility, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateColorationUniforms", _updateColorationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "VisionSource.prototype._updateBackgroundUniforms", _updateBackgroundUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
@@ -162,6 +164,13 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "DetectionMode.prototype._testRange", _testRangeDetectionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "DetectionMode.prototype._testLOS", _testLOSDetectionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
+  // ----- Drawing shadows for vision source LOS, fog  ----- //
+  if ( getSetting(SETTINGS.VISION_USE_SHADER) ) {
+    libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMask, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+  } else {
+    libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+  }
 }
 
 /**
@@ -186,6 +195,7 @@ function visionSourceElevation() {
  * @type {number} Elevation, in grid units to match x,y coordinates.
  */
 function lightSourceElevation() {
+  if ( this instanceof GlobalLightSource ) return Number.POSITIVE_INFINITY;
   return zValue(this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY);
 }
 
