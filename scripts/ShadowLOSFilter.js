@@ -301,6 +301,12 @@ export class ShadowLOSFilter extends AbstractBaseFilter {
     void main() {
       vec4 fg = texture2D(uSampler, vTextureCoord);
 
+      if ( fg.a == 0. ) {
+//         discard;
+        gl_FragColor = fg;
+        return;
+      }
+
       if ( !EV_hasElevationSampler ) {
         gl_FragColor = fg;
         return;
@@ -337,6 +343,7 @@ export class ShadowLOSFilter extends AbstractBaseFilter {
         }
       }
 
+
       if ( inShadow ) {
         fg = shadowColor * fg.a;
       } else {
@@ -369,7 +376,8 @@ export class ShadowLOSFilter extends AbstractBaseFilter {
     this.uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, size / distance];
 
     this.uniforms.canvasMatrix ??= new PIXI.Matrix();
-    this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
+    this.uniforms.canvasMatrix.copyFrom(currentState.target.worldTransform).invert();
+    //this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
     return super.apply(filterManager, input, output, clear, currentState);
   }
 }
@@ -412,3 +420,26 @@ function updateShadowFilterUniforms(uniforms, source) {
 
   return uniforms;
 }
+
+// For testing
+//
+// function perpendicularPoint(a, b, c) {
+//   const dx = b.x - a.x;
+//   const dy = b.y - a.y;
+//   const dab = Math.pow(dx, 2) + Math.pow(dy, 2);
+//   if ( !dab ) return null;
+//
+//   const u = (((c.x - a.x) * dx) + ((c.y - a.y) * dy)) / dab;
+//   return {
+//     x: a.x + (u * dx),
+//     y: a.y + (u * dy)
+//   };
+// }
+//
+// function distanceBetweenPoints(a, b) {
+//   return Math.hypot(b.x - a.x, b.y - a.y);
+// }
+//
+// function distanceSquaredBetweenPoints(a, b) {
+//   return Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2);
+// }
