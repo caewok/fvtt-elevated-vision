@@ -15,6 +15,8 @@ import { MODULE_ID } from "./const.js";
 
 import { registerAdditions, registerPatches } from "./patching.js";
 
+import { registerSettings } from "./settings.js";
+
 import {
   addElevationLayerSceneControls,
   addElevationLayerSubControls,
@@ -46,6 +48,7 @@ Hooks.once("init", async function() {
 });
 
 Hooks.once("libWrapper.Ready", async function() {
+  registerSettings();
   registerPatches();
 });
 
