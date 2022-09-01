@@ -33,16 +33,16 @@ export const COLORS = {
  * @param {Number}  alpha   Transparency level.
  * @param {Number}  radius  Radius of the point in pixels.
  */
-export function drawPoint(p, { color = COLORS.red, alpha = 1, radius = 5 } = {}) {
+export function drawPoint(p, { graphics = canvas.controls.debug, color = COLORS.red, alpha = 1, radius = 5 } = {}) {
   /* eslint-disable indent */
-  canvas.controls.debug
+  graphics
       .beginFill(color, alpha)
       .drawCircle(p.x, p.y, radius)
       .endFill();
 }
 
-export function drawPolygonPoints(poly, { color = COLORS.red, alpha = 1, radius = 5 } = {}) {
-  for ( const pt of poly.iteratePoints() ) { drawPoint(pt, { color, alpha, radius}); }
+export function drawPolygonPoints(poly, { graphics = canvas.controls.debug, color = COLORS.red, alpha = 1, radius = 5 } = {}) {
+  for ( const pt of poly.iteratePoints() ) { drawPoint(pt, { graphics, color, alpha, radius}); }
 }
 
 
@@ -55,11 +55,12 @@ export function drawPolygonPoints(poly, { color = COLORS.red, alpha = 1, radius 
  * @param {Number}  alpha   Transparency level.
  * @param {Number}  width   Width of the line in pixels.
  */
-export function drawSegment(s, { color = COLORS.blue, alpha = 1, width = 1 } = {}) {
+export function drawSegment(s, { graphics = canvas.controls.debug, color = COLORS.blue, alpha = 1, width = 1 } = {}) {
   /* eslint-disable indent */
-  canvas.controls.debug.lineStyle(width, color, alpha)
-      .moveTo(s.A.x, s.A.y)
-      .lineTo(s.B.x, s.B.y);
+  graphics
+    .lineStyle(width, color, alpha)
+    .moveTo(s.A.x, s.A.y)
+    .lineTo(s.B.x, s.B.y);
 }
 
 /**
@@ -69,8 +70,8 @@ export function drawSegment(s, { color = COLORS.blue, alpha = 1, width = 1 } = {
  * @param {Hex}     color   Hex code for the color to use.
  * @param {Number}  width   Width of the line in pixels.
  */
-export function drawShape(shape, { color = COLORS.black, width = 1 } = {}) {
-  canvas.controls.debug.lineStyle(width, color).drawShape(shape);
+export function drawShape(shape, { graphics = canvas.controls.debug, color = COLORS.black, width = 1 } = {}) {
+  graphics.lineStyle(width, color).drawShape(shape);
 }
 
 export const drawPolygon = drawShape;
@@ -82,15 +83,15 @@ export const drawPolygon = drawShape;
  * @param {Point}   p     Location of the start of the text.
  * @param {String}  text  Text to draw.
  */
-export function labelPoint(p, text) {
+export function labelPoint(p, text, { graphics = canvas.controls.debug } = {}) {
   if (!canvas.controls.debug.polygonText) {
-    canvas.controls.debug.polygonText = canvas.controls.addChild(new PIXI.Container());
+    graphics.polygonText = canvas.controls.addChild(new PIXI.Container());
   }
-  const polygonText = canvas.controls.debug.polygonText;
+  const polygonText = graphics.polygonText;
 
   // Update existing label if it exists at or very near Poly endpoint
   const idx = polygonText.children.findIndex(c => p.x.almostEqual(c.position.x) && p.y.almostEqual(c.position.y));
-  if (idx !== -1) { canvas.controls.debug.polygonText.removeChildAt(idx); }
+  if (idx !== -1) { graphics.polygonText.removeChildAt(idx); }
 
   const t = polygonText.addChild(new PIXI.Text(String(text), CONFIG.canvasTextStyle));
   t.position.set(p.x, p.y);
@@ -99,12 +100,12 @@ export function labelPoint(p, text) {
 /**
  * Clear all labels created by labelPoint.
  */
-export function clearLabels() {
-  canvas.controls.debug.polygonText?.removeChildren();
+export function clearLabels({ graphics = canvas.controls.debug } = {}) {
+  graphics.polygonText?.removeChildren();
 }
 
 /**
  * Clear all drawings, such as those created by drawPoint, drawSegment, or drawPolygon.
  */
-export function clearDrawings() { canvas.controls.debug.clear(); }
+export function clearDrawings({ graphics = canvas.controls.debug } = {}) { graphics.clear(); }
 
