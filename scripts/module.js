@@ -4,31 +4,33 @@ game
 */
 "use strict";
 
+import { MODULE_ID } from "./const.js";
+
+// API imports
 import * as drawing from "./drawing.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
 import * as util from "./util.js";
+import { EVVisionContainer } from "./vision.js";
+import { WallTracer } from "./WallTracer.js";
+import { FILOQueue } from "./FILOQueue.js";
+import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
+import { ElevationGrid } from "./ElevationGrid.js";
 
+// Register methods, patches, settings
 import { registerPIXIPolygonMethods } from "./PIXIPolygon.js";
-
-import { MODULE_ID } from "./const.js";
-
 import { registerAdditions, registerPatches } from "./patching.js";
-
 import { registerSettings } from "./settings.js";
 
+// For elevation layer registration and API
+import { ElevationLayer } from "./ElevationLayer.js";
+
+// Elevation Layer control tools
 import {
   addElevationLayerSceneControls,
   addElevationLayerSubControls,
   renderElevationLayerSubControls
 } from "./controls.js";
-
-import { ElevationLayer } from "./ElevationLayer.js";
-import { ElevationGrid } from "./ElevationGrid.js";
-import { WallTracer } from "./WallTracer.js";
-import { FILOQueue } from "./FILOQueue.js";
-import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
-
 
 Hooks.once("init", async function() {
   game.modules.get(MODULE_ID).api = {
@@ -39,16 +41,22 @@ Hooks.once("init", async function() {
     ElevationLayer,
     ElevationGrid,
     WallTracer,
-    ShadowLOSFilter
+    ShadowLOSFilter,
+    EVVisionContainer
   };
 
+  // These methods need to be registered early
+  registerSettings();
   registerPIXIPolygonMethods();
-  registerAdditions();
   registerLayer();
+  registerAdditions();
 });
 
-Hooks.once("libWrapper.Ready", async function() {
-  registerSettings();
+// Hooks.once("libWrapper.Ready", async function() {
+//   registerPatches();
+// });
+
+Hooks.once("setup", async function() {
   registerPatches();
 });
 

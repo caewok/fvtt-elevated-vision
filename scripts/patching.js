@@ -36,9 +36,11 @@ import {
   refreshCanvasVisibilityPolygons,
   refreshCanvasVisibilityShader,
   createVisionCanvasVisionMask,
+  clearCanvasVisionMask,
   _updateColorationUniformsVisionSource,
   _updateIlluminationUniformsVisionSource,
-  _updateBackgroundUniformsVisionSource
+  _updateBackgroundUniformsVisionSource,
+  _getEVTexture
 //   initializeVisionSource
 } from "./vision.js";
 
@@ -135,7 +137,31 @@ export function registerAdditions() {
     writable: true,
     configurable: true
   });
+
+  if ( getSetting(SETTINGS.VISION_USE_SHADER) ) {
+    // Set up similar pool of RenderTexture objects as that of the FogManager
+    // Here, for CanvasVisionMask
+    Object.defineProperty(CanvasVisionMask.prototype, "_EV_textures", {
+      value: [],
+      writable: true,
+      configurable: true
+    });
+
+    Object.defineProperty(CanvasVisionMask.prototype, "_getEVTexture", {
+      value: _getEVTexture,
+      writable: true,
+      configurable: true
+    });
+
+//     Object.defineProperty(CanvasVisionMask.prototype, "_EV_sprite", {
+//       value: new PIXI.Sprite(PIXI.Texture.EMPTY),
+//       writable: true,
+//       configurable: true
+//     });
+  }
 }
+
+
 
 export function registerPatches() {
   // ----- Locating edges that create shadows in the LOS ----- //
@@ -168,6 +194,8 @@ export function registerPatches() {
   if ( getSetting(SETTINGS.VISION_USE_SHADER) ) {
     libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
     libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMask, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.clear", clearCanvasVisionMask, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
   } else {
     libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
   }
