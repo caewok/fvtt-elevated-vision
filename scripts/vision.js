@@ -216,9 +216,9 @@ export class EVVisionContainer extends PIXI.Container {
     this.los = undefined;
 
     // Return reusable RenderTexture to the pool
-//     if ( this.mask.texture instanceof PIXI.RenderTexture ) canvas.masks.vision._EV_textures.push(this.mask.texture);
-//     else this.mask.texture?.destroy();
-//     this.mask.texture = undefined;
+    if ( this.mask.texture instanceof PIXI.RenderTexture ) canvas.masks.vision._EV_textures.push(this.mask.texture);
+    else this.mask.texture?.destroy();
+    this.mask.texture = undefined;
 
     super.destroy(options)
   }
@@ -350,7 +350,7 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
 
   // Update the LOS mask sprite
   log(`Rendering LOS Mask. texture valid? ${vision.mask.texture?.valid}`);
-  vision._renderLOS()
+  vision._renderLOS();
 //
 // //   canvas.app.renderer.render(vision.los, vision.mask.texture);
   log(`Finished rendering LOS Mask. texture valid? ${vision.mask.texture?.valid}`);
