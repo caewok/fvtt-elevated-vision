@@ -923,8 +923,8 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
-   * Draw the weather container.
-   * @returns {FullCanvasContainer|null}    The weather container, or null if no effect is present
+   * Draw the elevation container.
+   * @returns {FullCanvasContainer|null}    The elevation container
    */
   drawElevation() {
     const elevationFilter = ElevationFilter.create({

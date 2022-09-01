@@ -64,7 +64,7 @@ Hooks.once("setup", async function() {
   registerPatches();
 });
 
-Hooks.once("canvasReady", async function() {
+Hooks.on("canvasReady", async function() {
   // Set the elevation grid now that we know scene dimensions
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
