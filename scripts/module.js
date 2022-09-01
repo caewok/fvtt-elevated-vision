@@ -5,6 +5,7 @@ game
 "use strict";
 
 import { MODULE_ID } from "./const.js";
+import { log } from "./util.js";
 
 // API imports
 import * as drawing from "./drawing.js";
@@ -125,3 +126,17 @@ Hooks.on("preUpdateToken", async function(token, update, options, userId) {
 
   update.elevation = newTerrainElevation;
 });
+
+
+Hooks.on("renderSceneConfig", injectSceneConfiguration);
+async function injectSceneConfiguration(app, html, data) {
+  log("injectSceneConfig", app, html, data)
+
+  if ( !app.object.getFlag(MODULE_ID, "elevationmin") ) app.object.setFlag(MODULE_ID, "elevationmin", 0);
+  if ( !app.object.getFlag(MODULE_ID, "elevationstep") ) app.object.setFlag(MODULE_ID, "elevationstep", canvas.dimensions.distance);
+
+  const form = html.find(`input[name="initial.scale"]`).closest(".form-group");
+  const snippet = await renderTemplate(`modules/${MODULE_ID}/templates/scene-elevation-config.html`, data);
+  form.append(snippet);
+  app.setPosition({ height: "auto" });
+}
