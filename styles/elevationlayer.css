@@ -55,6 +55,10 @@
     padding-left: 8px;
 }
 
+#elevationlayer-tools #el-curr-elevation {
+  color: #DCDCDC;
+}
+
 #elevationlayer-tools #el-elevation-number {
     cursor: default;
     position: center;
