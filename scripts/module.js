@@ -32,6 +32,9 @@ import {
   renderElevationLayerSubControls
 } from "./controls.js";
 
+// Settings, to toggle whether to change elevation on token move
+import { SETTINGS, getSetting } from "./settings.js";
+
 Hooks.once("init", async function() {
   game.modules.get(MODULE_ID).api = {
     drawing,
@@ -90,6 +93,8 @@ Hooks.on("preUpdateToken", async function(token, update, options, userId) {
   // Token moves to 35' terrain. No auto update to elevation.
   // Token moves to 30' terrain. Token & terrain elevation now match.
   // Token moves to 35' terrain. Auto update, b/c previously at 30' (Token "landed.")
+
+  if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
 
   util.log("preUpdateToken", token, update, options, userId);
   if ( !("x" in update || "y" in update) ) return;
