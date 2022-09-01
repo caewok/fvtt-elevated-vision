@@ -1,3 +1,10 @@
+## 0.0.1
+First public release!
+Fixes since alpha10:
+- Display wall ranges in elevation layer
+- Better sizing of elevation number control; css fixes.
+
+
 ## 0.0.1-alpha10
 Account for terrain elevation in fog-of-war/token vision.
 Add setting to switch between accounting for terrain elevation (shader) or not (polygons only) in token vision.
