@@ -171,6 +171,65 @@ export function refreshCanvasVisibilityPolygons({forceUpdateFog=false}={}) {
 }
 
 
+// VisionContainerClass so that certain properties can be overriden
+export class EVVisionContainer extends PIXI.Container {
+  constructor() {
+    super();
+
+    this.base = this.addChild(new PIXI.LegacyGraphics());
+    this.fov = this.addChild(new PIXI.LegacyGraphics());
+
+    // Store the LOS separately from the container children
+    // Will use in _render to construct sprite mask
+    this.los = new PIXI.LegacyGraphics();
+    this.mask = this.addChild(new PIXI.Sprite());
+
+    this._explored = false;
+  }
+
+  _renderLOS() {
+    // Return reusable RenderTexture to the pool
+    if ( this.mask.texture instanceof PIXI.RenderTexture ) canvas.masks.vision._EV_textures.push(this.mask.texture);
+    else this.mask.texture?.destroy();
+
+    const tex = canvas.masks.vision._getEVTexture();
+    canvas.app.renderer.render(this.los, tex);
+    this.mask.texture = tex;
+  }
+
+
+  // Failing for some reason; may revisit as alternative to explicitly calling
+  // _renderLOS. The latter is likely more performant, as it can be called outside the
+  // render loop.
+//   _render() {
+//    //  if ( this.los ) {
+// //       const tex = canvas.masks.vision._getEVTexture();
+// //       canvas.app.renderer.render(this.los, tex);
+// //
+// //       // Return reusable RenderTexture to the pool
+// // //     if ( this.mask.texture instanceof PIXI.RenderTexture ) canvas.masks.vision._EV_textures.push(this.mask.texture);
+// // //     else this.mask.texture?.destroy();
+// //       this.mask.texture = tex;
+// //       this.los.destroy(true);
+// //       this.los = undefined;
+// //     }
+//
+//     super._render();
+//   }
+
+  destroy(options) {
+    if ( this.los ) this.los.destroy(true);
+    this.los = undefined;
+
+    // Return reusable RenderTexture to the pool
+    if ( this.mask.texture instanceof PIXI.RenderTexture ) canvas.masks.vision._EV_textures.push(this.mask.texture);
+    else this.mask.texture?.destroy();
+    this.mask.texture = undefined;
+
+    super.destroy(options)
+  }
+}
+
 
 /**
  * Override CanvasVisionMask.prototype.createVision
@@ -188,16 +247,46 @@ export function refreshCanvasVisibilityPolygons({forceUpdateFog=false}={}) {
  * messing with the vision and vision mask.
  */
 export function createVisionCanvasVisionMask() {
-  const vision = new PIXI.Container();
-  vision.base = vision.addChild(new PIXI.LegacyGraphics());
-  vision.fov = vision.addChild(new PIXI.LegacyGraphics());
-
-  // Will create sprite to render LOS as mask in refreshCanvasVisibilityShader
-  vision.los = new PIXI.LegacyGraphics();
-  vision.mask = vision.addChild(new PIXI.Sprite());
-
-  vision._explored = false;
+  const vision = new EVVisionContainer();
   return this.vision = this.addChild(vision);
+}
+
+export function _getEVTexture() {
+  if ( this._EV_textures.length ) {
+    const tex = this._EV_textures.pop();
+    if ( tex.valid ) return tex;
+  }
+  return PIXI.RenderTexture.create({
+    width: canvas.dimensions.width,
+    height: canvas.dimensions.height,
+    scaleMode: PIXI.SCALE_MODES.NEAREST,
+    multisample: PIXI.MSAA_QUALITY.NONE });
+}
+
+// export function _renderLOSMaskCanvasVisionMask() {
+//   // Create a staging texture and render the LOS container to it.
+//   const tex = this._getEVTexture();
+//   canvas.app.renderer.render(this.vision.los, tex);
+//
+//   // Return reusable RenderTexture to the pool
+//   if ( this._EV_sprite.texture instanceof PIXI.RenderTexture ) this._EV_textures.push(this._EV_sprite.texture);
+//   else this._EV_sprite.texture?.destroy();
+//   this._EV_sprite.texture = tex;
+//
+//   //
+//   this.vision.los.destroy(true);
+//   this.vision.los = undefined;
+//
+// }
+
+
+export function clearCanvasVisionMask(wrapped) {
+  while ( this._EV_textures.length ) {
+    const t = this._EV_textures.pop();
+    t.destroy(true);
+  }
+
+  wrapped();
 }
 
 export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
@@ -206,6 +295,8 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
     this.visible = false;
     return this.restrictVisibility();
   }
+
+  log("refreshCanvasVisibilityShader");
 
   // Stage the priorVision vision container to be saved to the FOW texture
   let commitFog = false;
@@ -264,10 +355,11 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
   }
 
   // Update the LOS mask sprite
-  // TO-DO: Fix this to not create a bunch of new textures. Maybe rotate or clear and redraw?
-  const rt = PIXI.RenderTexture.create({width: canvas.dimensions.width, height: canvas.dimensions.height, scaleMode: PIXI.SCALE_MODES.NEAREST, multisample: PIXI.MSAA_QUALITY.NONE});
-  canvas.app.renderer.render(vision.los, rt);
-  vision.mask.texture = rt;
+  log(`Rendering LOS Mask. texture valid? ${vision.mask.texture?.valid}`);
+  vision._renderLOS();
+//
+// //   canvas.app.renderer.render(vision.los, vision.mask.texture);
+  log(`Finished rendering LOS Mask. texture valid? ${vision.mask.texture?.valid}`);
 
   // Commit updates to the Fog of War texture
   if ( commitFog ) canvas.fog.commit();
