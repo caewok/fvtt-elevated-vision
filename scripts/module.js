@@ -1,6 +1,9 @@
 /* globals
 Hooks,
-game
+game,
+canvas,
+CONFIG,
+renderTemplate
 */
 "use strict";
 
@@ -21,7 +24,6 @@ import { ElevationGrid } from "./ElevationGrid.js";
 // Register methods, patches, settings
 import { registerPIXIPolygonMethods } from "./PIXIPolygon.js";
 import { registerAdditions, registerPatches } from "./patching.js";
-import { registerSettings } from "./settings.js";
 
 // For elevation layer registration and API
 import { ElevationLayer } from "./ElevationLayer.js";
@@ -34,7 +36,7 @@ import {
 } from "./controls.js";
 
 // Settings, to toggle whether to change elevation on token move
-import { SETTINGS, getSetting } from "./settings.js";
+import { SETTINGS, getSetting, registerSettings } from "./settings.js";
 
 Hooks.once("init", async function() {
   game.modules.get(MODULE_ID).api = {
@@ -46,7 +48,8 @@ Hooks.once("init", async function() {
     ElevationGrid,
     WallTracer,
     ShadowLOSFilter,
-    EVVisionContainer
+    EVVisionContainer,
+    FILOQueue
   };
 
   // These methods need to be registered early
@@ -82,7 +85,7 @@ Hooks.on("renderTerrainLayerToolBar", renderElevationLayerSubControls);
 
 
 function registerLayer() {
-  CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer }
+  CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
 
 Hooks.on("preUpdateToken", async function(token, update, options, userId) {
@@ -103,26 +106,19 @@ Hooks.on("preUpdateToken", async function(token, update, options, userId) {
 
   util.log(`preUpdateToken token with elevation ${token.elevation} ${token.x},${token.y} --> ${update.x},${update.y}`);
 
-  const currRect = canvas.grid.grid.getRect(token.width, token.height);
-  currRect.x = token.x;
-  currRect.y = token.y;
-  util.log(`Token Bounds ${currRect.x},${currRect.y} width ${currRect.width} height ${currRect.height}`);
-
-  const currTerrainElevation = canvas.elevation.averageElevation(currRect);
-  util.log(`Current terrain elevation ${currTerrainElevation} and current token elevation ${token.elevation}`, currRect);
-  if ( currTerrainElevation != token.elevation ) return;
-
+  const tokenShape = canvas.elevation._tokenShape(token.x, token.y, token.width, token.height);
+  const currTerrainElevation = canvas.elevation.averageElevationWithinShape(tokenShape);
+  util.log(`Current terrain elevation ${currTerrainElevation} and current token elevation ${token.elevation}`, tokenShape);
+  if ( currTerrainElevation !== token.elevation ) return;
 
   const newX = update.x ?? token.x;
   const newY = update.y ?? token.y;
   const newWidth = update.width ?? token.width;
   const newHeight = update.height ?? token.height;
-  const newRect = canvas.grid.grid.getRect(newWidth, newHeight);
-  newRect.x = newX;
-  newRect.y = newY;
-  util.log(`New token Bounds ${newRect.x},${newRect.y} width ${newRect.width} height ${newRect.height}`);
-  const newTerrainElevation = canvas.elevation.averageElevation(newRect);
-  util.log(`new terrain elevation ${newTerrainElevation}`, newRect);
+
+  const newTokenShape = canvas.elevation._tokenShape(newX, newY, newWidth, newHeight);
+  const newTerrainElevation = canvas.elevation.averageElevationWithinShape(newTokenShape);
+  util.log(`new terrain elevation ${newTerrainElevation}`, newTokenShape);
 
   update.elevation = newTerrainElevation;
 });
@@ -130,7 +126,7 @@ Hooks.on("preUpdateToken", async function(token, update, options, userId) {
 
 Hooks.on("renderSceneConfig", injectSceneConfiguration);
 async function injectSceneConfiguration(app, html, data) {
-  log("injectSceneConfig", app, html, data)
+  log("injectSceneConfig", app, html, data);
 
   if ( !app.object.getFlag(MODULE_ID, "elevationmin") ) app.object.setFlag(MODULE_ID, "elevationmin", 0);
   if ( !app.object.getFlag(MODULE_ID, "elevationstep") ) app.object.setFlag(MODULE_ID, "elevationstep", canvas.dimensions.distance);

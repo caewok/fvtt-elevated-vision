@@ -13,7 +13,9 @@ game,
 isEmpty,
 PolygonVertex,
 CONFIG,
-Ray
+Ray,
+WallHeight,
+PreciseText
 */
 "use strict";
 
@@ -260,7 +262,7 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number}
    */
   pixelValueToElevation(value) {
-    return (Math.round(value) * this.elevationStep) - this.elevationMin;
+    return Math.round(value * this.elevationStep) - this.elevationMin;
   }
 
   /**
@@ -549,33 +551,58 @@ export class ElevationLayer extends InteractionLayer {
    */
   elevationAt(x, y) {
     const gridRect = new PIXI.Rectangle(x, y, 1, 1);
-    return this.averageElevation(gridRect);
+    return this.pixelValueToElevation(this._averageValue(gridRect));
   }
 
   /**
    * Calculate the average elevation for a grid space.
    * @param {number} row    Grid row
    * @param {number} col    Grid column
+   * @param {object} [options]  Options that affect the calculation
+   * @param {boolean} [options.useHex]  Use a hex-shaped grid for the calculation.
+   *   Defaults to true if the canvas grid is hex.
    * @returns {number} Elevation value.
    */
-  averageElevationForGridSpace(row, col) {
+  averageElevationForGridSpace(row, col, { useHex = canvas.grid.isHex } = {}) {
     const [x, y] = canvas.grid.grid.getPixelsFromGridPosition(row, col);
-    return this.averageElevationForGridPoint(x, y);
+    return this.averageElevationAtGridPoint(x, y, { useHex });
   }
 
   /**
    * Retrieve the average elevation of the grid space that encloses these
-   * coordinates. Currently assumes a rectangular grid.
+   * coordinates.
    * @param {number} x
    * @param {number} y
    * @returns {number} Elevation value.
    */
-  averageElevationAtGridPoint(x, y) {
-    const { w, h } = canvas.grid.grid;
-    const [tlx, tly] = canvas.grid.grid.getTopLeft(x, y);
+  averageElevationAtGridPoint(x, y, { useHex = canvas.grid.isHex } = {}) {
+    let value;
 
-    const gridRect = new PIXI.Rectangle(tlx, tly, w, h);
-    return this.averageElevation(gridRect);
+    if ( useHex ) {
+      const hex = this._hexGridShape(x, y);
+      value = this._averageValueWithinShape(hex);
+    } else {
+      const gridRect = this._squareGridShape(x, y);
+      value = this._averageValue(gridRect);
+    }
+
+    return this.pixelValueToElevation(value);
+  }
+
+  /**
+   * Retrieve the average elevation for a given shape.
+   * @param {PIXI.Circle|PIXI.Polygon|PIXI.Rectangle|PIXI.Ellipse} shape
+   * @returns {number} Average of pixel values within the shape
+   */
+  averageElevationWithinShape(shape) {
+    let value;
+    if ( shape instanceof PIXI.Rectangle) {
+      value = this._averageValue(shape);
+    } else {
+      value = this._averageValueWithinShape(shape);
+    }
+
+    return this.pixelValueToElevation(value);
   }
 
   // To extract pixel values for debugging
@@ -599,41 +626,96 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
-   * Calculate the average elevation value underneath a given rectangle.
-   * @param {PIXI.Rectangle} rect
-   * @returns {number} Elevation value
+   * Calculate the average value of pixels within a given shape.
+   * For rectangles, averageValue will be faster.
+   * @param {PIXI.Circle|PIXI.Polygon|PIXI.Rectangle|PIXI.Ellipse} shape
+   * @returns {number} Average of pixel values within the shape
    */
-  averageElevation(rect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
-    return this.pixelValueToElevation(this._averageValue(rect));
-  }
+  _averageValueWithinShape(shape) {
+    const border = shape.getBounds(shape);
 
+    // Extraction should be from bottom-left corner, moving right, then up?
+    // https://stackoverflow.com/questions/47374367/in-what-order-does-webgl-readpixels-collapse-the-image-into-array
+    const arr = extractPixels(this._elevationTexture, border);
+    let sum = 0;
+    let denom = 0;
+
+    // Bottom left x and y;
+    const blx = border.x;
+    const bly = border.y + border.height;
+
+    const ln = arr.length;
+    for ( let i = 0; i < ln; i += 4 ) {
+      const pixelNum = i / 4;
+      const col = pixelNum % border.width;
+      const row = Math.floor(pixelNum / border.height);
+
+      if ( !shape.contains(blx + col, bly - row) ) continue;
+
+      denom += 1;
+      sum += arr[i];
+    }
+
+    return sum / denom;
+  }
 
   /**
    * Set the elevation for the grid space that contains the point.
+   * If this is a hex grid, it will fill in the hex grid space.
    * @param {Point} p             Point within the grid square/hex.
    * @param {number} elevation    Elevation to use to fill the grid space
    * @param {object}  [options]   Options that affect setting this elevation
    * @param {boolean} [options.temporary]   If true, don't immediately require a save.
    *   This setting does not prevent a save if the user further modifies the canvas.
+   * @param {boolean} [options.useHex]      If true, use a hex grid; if false use square.
+   *   Defaults to canvas.grid.isHex.
+   *
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
-  setElevationForGridSpace(p, elevation = 0, { temporary = false } = {}) {
-    // Get the top left corner, then fill in the values in the grid
-    const [tlx, tly] = canvas.grid.grid.getTopLeft(p.x, p.y);
-    const { w, h } = canvas.grid;
-
+  setElevationForGridSpace(p, elevation = 0, { temporary = false, useHex = canvas.grid.isHex } = {}) {
+    const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     graphics.beginFill(this.elevationHex(elevation), 1.0);
-    graphics.drawRect(tlx, tly, w, h);
+    graphics.drawShape(shape);
     graphics.endFill();
 
     this.renderElevation();
 
     this._requiresSave = !temporary;
-
     this.undoQueue.enqueue(graphics);
-
     return graphics;
+  }
+
+  _tokenShape(x, y, width, height) {
+    // For the moment, uneven width/height shapes must use rectangle border
+    if ( canvas.grid.isHex && width === height ) {
+      return this._hexGridShape({x, y}, { width, height });
+    }
+
+    return new PIXI.Rectangle(x, y, width, height);
+  }
+
+  _squareGridShape(p) {
+    // Get the top left corner
+    const [tlx, tly] = canvas.grid.grid.getTopLeft(p.x, p.y);
+    const { w, h } = canvas.grid;
+    return new PIXI.Rectangle(tlx, tly, w, h);
+  }
+
+  _hexGridShape(p, { width = 1, height = 1 } = {}) {
+    // canvas.grid.grid.getBorderPolygon will return null if width !== height.
+    if ( width !== height ) return null;
+
+    // Get the top left corner
+    const [tlx, tly] = canvas.grid.grid.getTopLeft(p.x, p.y);
+    const points = canvas.grid.grid.getBorderPolygon(width, height, CONFIG.Canvas.objectBorderThickness);
+    const pointsTranslated = [];
+    const ln = points.length;
+    for ( let i = 0; i < ln; i += 2) {
+      pointsTranslated.push(points[i] + tlx, points[i+1] + tly);
+    }
+
+    return new PIXI.Polygon(pointsTranslated);
   }
 
   /**
@@ -951,13 +1033,13 @@ export class ElevationLayer extends InteractionLayer {
    */
   _drawWallRange(wall) {
     const bounds = WallHeight.getWallBounds(wall);
-    if ( bounds.top == Infinity && bounds.bottom == -Infinity ) return;
+    if ( bounds.top === Infinity && bounds.bottom === -Infinity ) return;
 
     const style = CONFIG.canvasTextStyle.clone();
     style.fontSize /= 1.5;
     style.fill = wall._getWallColor();
-    if ( bounds.top == Infinity ) bounds.top = "Inf";
-    if ( bounds.bottom == -Infinity ) bounds.bottom = "-Inf";
+    if ( bounds.top === Infinity ) bounds.top = "Inf";
+    if ( bounds.bottom === -Infinity ) bounds.bottom = "-Inf";
     const range = `${bounds.top} / ${bounds.bottom}`;
 //     const oldText = wall.children.find(c => c.name === "wall-height-text");
 //     const text = oldText ?? new PreciseText(range, style);
@@ -965,7 +1047,7 @@ export class ElevationLayer extends InteractionLayer {
     text.text = range;
     text.name = "wall-height-text";
     let angle = (Math.atan2( wall.coords[3] - wall.coords[1], wall.coords[2] - wall.coords[0] ) * ( 180 / Math.PI ));
-    angle = (angle+90)%180 - 90;
+    angle = ((angle + 90 ) % 180) - 90;
     text.position.set(wall.center.x, wall.center.y);
     text.anchor.set(0.5, 0.5);
     text.angle = angle;
