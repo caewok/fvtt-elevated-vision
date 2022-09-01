@@ -7,7 +7,8 @@ import { log } from "./util.js";
 import { MODULE_ID } from "./const.js";
 
 export const SETTINGS = {
-  VISION_USE_SHADER: "vision-use-shader"
+  VISION_USE_SHADER: "vision-use-shader",
+  AUTO_ELEVATION: "auto-change-elevation",
 }
 
 export function getSetting(settingName) {
@@ -27,12 +28,22 @@ export function registerSettings() {
   log("Registering elevated vision settings");
 
   game.settings.register(MODULE_ID, SETTINGS.VISION_USE_SHADER, {
-    name: game.i18n.localize("elevatedvision.settings.vision-use-shader.Name"),
-    hint: game.i18n.localize("elevatedvision.settings.vision-use-shader.Hint"),
+    name: game.i18n.localize(`elevatedvision.settings.${SETTINGS.VISION_USE_SHADER}.Name`),
+    hint: game.i18n.localize(`elevatedvision.settings.${SETTINGS.VISION_USE_SHADER}.Hint`),
     scope: "world",
     config: true,
     default: true,
     type: Boolean,
     requiresReload: true
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.AUTO_ELEVATION, {
+    name: game.i18n.localize(`elevatedvision.settings.${SETTINGS.AUTO_ELEVATION}.Name`),
+    hint: game.i18n.localize(`elevatedvision.settings.${SETTINGS.AUTO_ELEVATION}.Hint`),
+    scope: "world",
+    config: true,
+    default: true,
+    type: Boolean,
+    requiresReload: false
   });
 }
