@@ -8,6 +8,7 @@
 export class FILOQueue {
   constructor(max = 50) {
     this.elements = [];
+    this.max = max;
   }
 
   get length() {
@@ -16,7 +17,7 @@ export class FILOQueue {
 
   enqueue(element) {
     this.elements.push(element);
-    if ( this.elements.length > 50 ) this.elements.shift();
+    if ( this.elements.length > this.max ) this.elements.shift();
   }
 
   dequeue() {

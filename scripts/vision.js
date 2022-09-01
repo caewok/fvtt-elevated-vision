@@ -7,89 +7,8 @@ PIXI
 */
 "use strict";
 
-import { log, drawPolygonWithHoles, perpendicularPoint, distanceBetweenPoints } from "./util.js";
+import { log, drawPolygonWithHoles } from "./util.js";
 import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
-
-const MAX_NUM_WALLS = 100;
-
-/** To test a token
-drawing = game.modules.get("elevatedvision").api.drawing
-drawing.clearDrawings()
-_token.vision.los._drawShadows()
-
-*/
-
-// AdaptiveVisionShader extends AdaptiveLightingShader, so need not repeat here.
-
-// _updateColorationUniforms basically same as LightSource
-// _updateIlluminationUniforms basically same as LightSource
-// _updateEVLightUniforms can be reused from LightSource
-
-/**
- * Wrap VisionSource.prototype._updateColorationUniforms.
- * Add uniforms needed for the shadow fragment shader.
- */
-export function _updateColorationUniformsVisionSource(wrapped) {
-  wrapped();
-  if ( this instanceof GlobalLightSource ) return;
-
-//   log(`_updateColorationUniformsVisionSource ${this.object.id}`);
-
-  // Not sure yet how to handle elevation with vision.
-  // Two components enter into this: vision and FOW (VisiblityFilter)
-//   this._updateEVVisionUniforms(this.coloration);
-//   this.coloration.shader.uniforms.EV_isVision = true;
-}
-
-/**
- * Wrap VisionSource.prototype._updateIlluminationUniforms.
- * Add uniforms needed for the shadow fragment shader.
- */
-export function _updateIlluminationUniformsVisionSource(wrapped) {
-  wrapped();
-  if ( this instanceof GlobalLightSource ) return;
-
-//   log(`_updateIlluminationUniformsVisionSource ${this.object.id}`);
-//   this._updateEVVisionUniforms(this.illumination);
-//   this.illumination.shader.uniforms.EV_isVision = true;
-}
-
-/**
- * Wrap VisionSource.prototype._updateBackgroundUniforms.
- * Add uniforms needed for the shadow fragment shader.
- */
-export function _updateBackgroundUniformsVisionSource(wrapped) {
-  wrapped();
-  if ( this instanceof GlobalLightSource ) return;
-
-//   log(`_updateBackgroundUniformsVisionSource ${this.object.id}`);
-//   this._updateEVVisionUniforms(this.background);
-//   this.background.shader.uniforms.EV_isVision = true;
-}
-
-
-
-
-// Currently no VisionSource.prototype._createLOS.
-// So must instead wrap initialize
-
-/**
- * Wrap VisionSource.prototype.initialize
- * Trigger an update to the illumination and coloration uniforms, so that
- * the light reflects the current shadow positions when dragged.
- */
-export function initializeVisionSource(wrapped) {
-  const out = wrapped();
-
-  // TO-DO: Only reset uniforms if:
-  // 1. there are shadows
-  // 2. there were previously shadows but are now none
-
-  out._resetUniforms.illumination = true;
-  out._resetUniforms.coloration = true;
-
-  return out;
-}
 
 /**
  * Override CanvasVisionMask.prototype.createVision
@@ -197,26 +116,6 @@ export class EVVisionContainer extends PIXI.Container {
     this.mask.texture = tex;
   }
 
-
-  // Failing for some reason; may revisit as alternative to explicitly calling
-  // _renderLOS. The latter is likely more performant, as it can be called outside the
-  // render loop.
-//   _render() {
-//    //  if ( this.los ) {
-// //       const tex = canvas.masks.vision._getEVTexture();
-// //       canvas.app.renderer.render(this.los, tex);
-// //
-// //       // Return reusable RenderTexture to the pool
-// // //     if ( this.mask.texture instanceof PIXI.RenderTexture ) canvas.masks.vision._EV_textures.push(this.mask.texture);
-// // //     else this.mask.texture?.destroy();
-// //       this.mask.texture = tex;
-// //       this.los.destroy(true);
-// //       this.los = undefined;
-// //     }
-//
-//     super._render();
-//   }
-
   destroy(options) {
     if ( this.los ) this.los.destroy(true);
     this.los = undefined;
@@ -226,10 +125,9 @@ export class EVVisionContainer extends PIXI.Container {
     else this.mask.texture?.destroy();
     this.mask.texture = undefined;
 
-    super.destroy(options)
+    super.destroy(options);
   }
 }
-
 
 /**
  * Override CanvasVisionMask.prototype.createVision
@@ -262,23 +160,6 @@ export function _getEVTexture() {
     scaleMode: PIXI.SCALE_MODES.NEAREST,
     multisample: PIXI.MSAA_QUALITY.NONE });
 }
-
-// export function _renderLOSMaskCanvasVisionMask() {
-//   // Create a staging texture and render the LOS container to it.
-//   const tex = this._getEVTexture();
-//   canvas.app.renderer.render(this.vision.los, tex);
-//
-//   // Return reusable RenderTexture to the pool
-//   if ( this._EV_sprite.texture instanceof PIXI.RenderTexture ) this._EV_textures.push(this._EV_sprite.texture);
-//   else this._EV_sprite.texture?.destroy();
-//   this._EV_sprite.texture = tex;
-//
-//   //
-//   this.vision.los.destroy(true);
-//   this.vision.los = undefined;
-//
-// }
-
 
 export function clearCanvasVisionMask(wrapped) {
   while ( this._EV_textures.length ) {
@@ -314,7 +195,7 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
   // Draw field-of-vision for lighting sources
   for ( let lightSource of canvas.effects.lightSources ) {
     if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
-    const g = vision.fov.addChild(new PIXI.LegacyGraphics())
+    const g = vision.fov.addChild(new PIXI.LegacyGraphics());
     g.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
 
     // At least for now, GlobalLightSource cannot provide vision.
@@ -355,11 +236,7 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
   }
 
   // Update the LOS mask sprite
-  log(`Rendering LOS Mask. texture valid? ${vision.mask.texture?.valid}`);
   vision._renderLOS();
-//
-// //   canvas.app.renderer.render(vision.los, vision.mask.texture);
-  log(`Finished rendering LOS Mask. texture valid? ${vision.mask.texture?.valid}`);
 
   // Commit updates to the Fog of War texture
   if ( commitFog ) canvas.fog.commit();
