@@ -200,8 +200,6 @@ export class ElevationLayer extends InteractionLayer {
    * Increment between elevation measurements. Should be a positive integer.
    * @type {number}
    */
-//   #elevationStep = undefined; // Undefined b/c canvas.scene could be null on first load.
-
   get elevationStep() {
     const step = canvas.scene.getFlag(MODULE_ID, "elevationstep");
     return step ?? canvas.scene.dimensions.distance;
@@ -222,8 +220,6 @@ export class ElevationLayer extends InteractionLayer {
    * Minimum elevation value for a scene.
    * @type {number}
    */
-//   #elevationMin = undefined;
-
   get elevationMin() {
     const min = canvas.scene.getFlag(MODULE_ID, "elevationmin");
     return min ?? 0;
@@ -703,7 +699,7 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   _hexGridShape(p, { width = 1, height = 1 } = {}) {
-    // canvas.grid.grid.getBorderPolygon will return null if width !== height.
+    // Canvas.grid.grid.getBorderPolygon will return null if width !== height.
     if ( width !== height ) return null;
 
     // Get the top left corner
@@ -1041,8 +1037,10 @@ export class ElevationLayer extends InteractionLayer {
     if ( bounds.top === Infinity ) bounds.top = "Inf";
     if ( bounds.bottom === -Infinity ) bounds.bottom = "-Inf";
     const range = `${bounds.top} / ${bounds.bottom}`;
-//     const oldText = wall.children.find(c => c.name === "wall-height-text");
-//     const text = oldText ?? new PreciseText(range, style);
+
+    // This would mess with the existing text used in walls layer, which may not be what we want.
+    // const oldText = wall.children.find(c => c.name === "wall-height-text");
+    // const text = oldText ?? new PreciseText(range, style);
     const text = new PreciseText(range, style);
     text.text = range;
     text.name = "wall-height-text";

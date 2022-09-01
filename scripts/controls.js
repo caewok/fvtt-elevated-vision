@@ -1,6 +1,8 @@
 /* globals
 game,
-canvas
+canvas,
+Dialog,
+FilePicker
 */
 "use strict";
 
@@ -42,12 +44,13 @@ export function addElevationLayerSceneControls(controls) {
         icon: "fas fa-eye"
       },
 
-//       {
-//         name: "fill-by-pixel",
-//         title: "Fill by Pixel",
-//         icon: "fas fa-paintbrush-fine"
-//       },
-//
+      /* TO-DO: How feasible would be a "painting" option with circle or square brush?
+      {
+        name: "fill-by-pixel",
+        title: "Fill by Pixel",
+        icon: "fas fa-paintbrush-fine"
+      },
+      */
       {
         name: "fill-space",
         title: game.i18n.localize(`${MODULE_ID}.controls.fill-space.name`),
@@ -74,14 +77,13 @@ export function addElevationLayerSceneControls(controls) {
         icon: "fas fa-file-arrow-up",
         button: true,
         onClick: () => {
-					//canvas.elevation.importDialog()
-					new FilePicker({
-              type: "image",
-              displayMode: "thumbs",
-              tileSize: false,
-              callback: canvas.elevation.importFromImageFile
-            }).render(true);
-				}
+          new FilePicker({
+            type: "image",
+            displayMode: "thumbs",
+            tileSize: false,
+            callback: canvas.elevation.importFromImageFile
+          }).render(true);
+        }
       },
 
       {
@@ -90,15 +92,14 @@ export function addElevationLayerSceneControls(controls) {
         icon: "fas fa-file-arrow-down",
         button: true,
         onClick: () => {
-					canvas.elevation.downloadElevationData({format: "image/webp"});
-				}
+          canvas.elevation.downloadElevationData({format: "image/webp"});
+        }
       },
 
       {
         name: "undo",
         title: game.i18n.localize(`${MODULE_ID}.controls.undo.name`),
         icon: "fas fa-rotate-left",
-//         visible: canvas?.elevation?.undoQueue?.length,
         button: true,
         onClick: () => {
           canvas.elevation.undo();

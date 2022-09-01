@@ -67,7 +67,7 @@ export class ElevationLayerToolBar extends Application {
     $("#el-curr-elevation", html).on("change", this._onHandleChange.bind(this));
   }
 
-  getData(options) {
+  getData(options) { // eslint-disable-line no-unused-vars
     return {
       elevationstep: this.elevationStep,
       elevationmax: this.elevationMax,

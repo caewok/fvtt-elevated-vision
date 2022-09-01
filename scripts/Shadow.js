@@ -6,7 +6,7 @@ ClipperLib
 */
 "use strict";
 
-import { perpendicularPoint, distanceBetweenPoints, log } from "./util.js";
+import { perpendicularPoint, distanceBetweenPoints } from "./util.js";
 import { COLORS, drawShape } from "./drawing.js";
 
 /* Rules for shadows and line-of-sight

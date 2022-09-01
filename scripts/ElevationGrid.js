@@ -1,5 +1,6 @@
 /* globals
-
+canvas,
+PIXI
 */
 "use strict";
 
@@ -11,68 +12,6 @@ export class ElevationGrid {
    * @private
    */
   #initialized = false;
-
-  /*
-
-width = 20
-height = 30
-data = new Uint8Array(width * height)
-tex = PIXI.Texture.fromBuffer(data, width, height, {
-  format: PIXI.FORMATS.ALPHA,
-  alphaMode: PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA
-});
-
-data2 = new Uint8Array(width * height)
-tex2 = PIXI.Texture.fromBuffer(data2, width, height, {
-  format: PIXI.FORMATS.DEPTH_COMPONENT
-});
-
-sprite = new PIXI.Sprite();
-sprite.texture = tex;
-
-sprite2 = new PIXI.Sprite();
-sprite2.texture = tex2
-
-
-function downloadPNG(sprite) {
-    canvas.app.renderer.extract.canvas(sprite).toBlob(function(b){
-      const a = document.createElement('a');
-      document.body.append(a);
-      a.download = "elevation.png";
-      a.href = URL.createObjectURL(b);
-      a.click();
-      a.remove();
-    }, 'image/png');
-}
-downloadPNG(sprite)
-downloadPNG(sprite2)
-
-for ( let i = 0; i < 100; i += 1 ) {
-  data[i] = i;
-  data2[i] = i;
-}
-
-downloadPNG(sprite)
-downloadPNG(sprite2)
-
-
-sm = new SpriteMesh()
-
-
-renderer = canvas.app.renderer;
-var stage = new PIXI.Container();
-let {width, height} = canvas.dimensions;
-logo = PIXI.Sprite.from("systems/dnd5e/icons/items/armor/halfplate.png")
-
-sm = new SpriteMesh(logo.texture)
-sm.position.set(canvas.dimensions.sceneX, canvas.dimensions.sceneY)
-
-sm.render(renderer)
-
-
-
-
-  */
 
   get data() {
     return this._data;
@@ -117,7 +56,7 @@ sm.render(renderer)
       format: PIXI.FORMATS.ALPHA,
       alphaMode: PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA,
       type: PIXI.TYPES.UNSIGNED_INT
-    }
+    };
   }
 
   /**
@@ -140,14 +79,10 @@ sm.render(renderer)
     // In the future, will load from database.
     // TO-DO: Also allow loading from an image file provided by user?
     this._data = new Uint8Array(this.area);
-//     this._texture = new PIXI.BaseTexture(new PIXI.BufferResource(this._data, { width: this.width, height: this.height }));
-
-   this._texture = PIXI.BaseTexture.fromBuffer(this.data, this.width, this.height, {
+    this._texture = PIXI.BaseTexture.fromBuffer(this.data, this.width, this.height, {
       scaleMode: PIXI.SCALE_MODES.NEAREST,
       format: PIXI.FORMATS.ALPHA
     });
-
-//     this._texture = PIXI.Texture.fromBuffer(this._data, this.width, this.height, this.#resolution);
     return this._texture;
   }
 
@@ -179,7 +114,7 @@ sm.render(renderer)
   averageElevationForGridSpace(gx, gy) {
     const { width, height } = canvas.grid.grid;
 
-    const sum = 0;
+    let sum = 0;
     const maxX = gx + width;
     const maxY = gy + height;
     for ( let x = gx; x < maxX; x += 1 ) {
@@ -200,7 +135,7 @@ sm.render(renderer)
 
   setGridSpaceToElevation(gx, gy, elevation = 0) {
     // Get the top left corner, then fill in the values in the grid
-    const [ tlx, tly ] = canvas.grid.grid.getPixelsFromGridPosition(gx, gy);
+    const [tlx, tly] = canvas.grid.grid.getPixelsFromGridPosition(gx, gy);
 
     const size = canvas.scene.dimensions.size;
 
@@ -216,13 +151,13 @@ sm.render(renderer)
 
   downloadPNG() {
     const sprite = new PIXI.Sprite(this._texture);
-    canvas.app.renderer.extract.canvas(sprite).toBlob(function(b){
-      const a = document.createElement('a');
+    canvas.app.renderer.extract.canvas(sprite).toBlob(function(b) {
+      const a = document.createElement("a");
       document.body.append(a);
       a.download = "elevation.png";
       a.href = URL.createObjectURL(b);
       a.click();
       a.remove();
-    }, 'image/png');
+    }, "image/png");
   }
 }

@@ -8,8 +8,8 @@ import { MODULE_ID } from "./const.js";
 
 export const SETTINGS = {
   VISION_USE_SHADER: "vision-use-shader",
-  AUTO_ELEVATION: "auto-change-elevation",
-}
+  AUTO_ELEVATION: "auto-change-elevation"
+};
 
 export function getSetting(settingName) {
   return game.settings.get(MODULE_ID, settingName);

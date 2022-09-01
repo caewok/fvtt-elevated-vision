@@ -1,12 +1,10 @@
 /* globals
 Token,
-Ray,
 CONFIG,
 ClockwiseSweepPolygon
 */
 "use strict";
 
-import { log } from "./util.js";
 import { Point3d } from "./Point3d.js";
 
 /*
@@ -60,7 +58,6 @@ function create3dTestPoints(tests, object) {
 
   tests.forEach(t => {
     const { x, y } = t.point;
-    const { hasLOS, hasFOV } = t;
 
     tests3d.push(buildTestObject(x, y, obj_center));
     if ( skip_top ) return;
@@ -107,8 +104,8 @@ export function testVisibilityDetectionMode(wrapper, visionSource, mode, {object
  * Use a 3-D range test if the test point is 3d.
  */
 export function _testRangeDetectionMode(wrapper, visionSource, mode, target, test) {
-  const res2d = wrapper(visionSource, mode, target, test)
-  if ( !res2d || !test.point.hasOwnProperty("z") ) return res2d;
+  const res2d = wrapper(visionSource, mode, target, test);
+  if ( !res2d || !Object.prototype.hasOwnProperty.call(test.point, "z") ) return res2d;
 
   const radius = visionSource.object.getLightRadius(mode.range);
   const dx = test.point.x - visionSource.x;
@@ -124,7 +121,7 @@ export function _testRangeDetectionMode(wrapper, visionSource, mode, target, tes
 export function _testLOSDetectionMode(wrapper, visionSource, test) {
   const res2d = wrapper(visionSource, test);
 
-  if ( !res2d || !test.point.hasOwnProperty("z") ) return res2d;
+  if ( !res2d || !Object.prototype.hasOwnProperty.call(test.point, "z") ) return res2d;
   if ( !this.walls ) return true;
 
   const hasLOS = testVisionSourceLOS(visionSource, test.point);

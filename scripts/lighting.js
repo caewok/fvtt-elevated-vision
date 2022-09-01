@@ -261,8 +261,6 @@ const FRAG_COLOR =
 export function _updateColorationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
-
-//   log(`_updateColorationUniformsLightSource ${this.object.id}`);
   this._updateEVLightUniforms(this.coloration);
 }
 
@@ -273,8 +271,6 @@ export function _updateColorationUniformsLightSource(wrapped) {
 export function _updateIlluminationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
-
-//   log(`_updateIlluminationUniformsLightSource ${this.object.id}`);
   this._updateEVLightUniforms(this.illumination);
 }
 
@@ -333,7 +329,6 @@ export function _updateEVLightUniformsLightSource(mesh) {
   u.EV_wallElevations = wallElevations;
   u.EV_wallDistances = wallDistances;
   u.EV_elevationSampler = canvas.elevation?._elevationTexture;
-//   u.EV_isVision = true;
 
   // Screen-space to local coords:
   // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010914586532261909
