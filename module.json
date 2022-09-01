@@ -32,7 +32,7 @@
     ]
   },
   "esmodules": [
-    "scripts/module.js"
+    "styles/module.js"
   ],
   "languages": [
     {
