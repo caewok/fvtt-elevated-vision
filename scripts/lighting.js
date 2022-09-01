@@ -92,7 +92,7 @@ uniform bool EV_hasElevationSampler;
 `;
 
 // Helper functions used to calculate shadow trapezoids.
-const FRAGMENT_FUNCTIONS =
+export const FRAGMENT_FUNCTIONS =
 `
 float orient2d(in vec2 a, in vec2 b, in vec2 c) {
   return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
@@ -119,6 +119,58 @@ vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c) {
 
   float u = ((deltaCA.x * deltaBA.x) + (deltaCA.y * deltaBA.y)) / dab;
   return vec2(a.x + (u * deltaBA.x), a.y + (u * deltaBA.y));
+}
+
+// Calculate the canvas elevation given a pixel value
+// Maps 0–1 to elevation in canvas coordinates.
+// EV_elevationResolution:
+// r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
+float canvasElevationFromPixel(in float pixel, in vec4 EV_elevationResolution) {
+  return ((pixel * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
+}
+
+// Determine if a given location from a wall is in shadow or not.
+bool locationInWallShadow(
+  in vec4 wall,
+  in float wallElevation,
+  in float wallDistance, // distance from source location to wall
+  in float sourceElevation,
+  in vec2 sourceLocation,
+  in float pixelElevation,
+  in vec2 pixelLocation,
+  out float percentDistanceFromWall) {
+
+  percentDistanceFromWall = 0.0; // Set a default value when returning early.
+
+  // If the wall is higher than the light, skip. Should not occur.
+  if ( sourceElevation <= wallElevation ) return false;
+
+  // If the pixel is above the wall, skip.
+  if ( pixelElevation >= wallElevation ) return false;
+
+  // If the wall does not intersect the line between the center and this point, no shadow here.
+  if ( !lineSegmentIntersects(pixelLocation, sourceLocation, wall.xy, wall.zw) ) return false;
+
+  // Distance from wall (as line) to this location
+  vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, pixelLocation);
+  float distWP = distance(pixelLocation, wallIxPoint);
+
+  // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
+  // atan(y, x) equivalent to JS Math.atan2(y, x)
+  float adjWe = wallElevation - pixelElevation;
+  float adjSourceElevation = sourceElevation - pixelElevation;
+  float theta = atan((adjSourceElevation - adjWe) /  wallDistance);
+
+  // Distance from center/origin to furthest part of shadow perpendicular to wall
+  float distOV = adjSourceElevation / tan(theta);
+  float maxDistWP = distOV - wallDistance;
+
+  if ( distWP < maxDistWP ) {
+    // Current location is within shadow of the wall
+    percentDistanceFromWall = distWP / maxDistWP;
+    return true;
+  }
+  return false;
 }
 `;
 
@@ -160,53 +212,38 @@ if ( EV_hasElevationSampler ) {
   backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
 }
 
+float percentDistanceFromWall;
 float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
 if ( pixelElevation > EV_lightElevation ) {
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
   if ( EV_isVision ) inShadow = true;
+
 } else if ( EV_numWalls > 0 ) {
-  float adjLightElevation = EV_lightElevation - pixelElevation;
 
   const vec2 center = vec2(0.5);
   const int maxWalls = ${MAX_NUM_WALLS};
   for ( int i = 0; i < maxWalls; i++ ) {
     if ( i >= EV_numWalls ) break;
 
-    // If the wall is higher than the light, skip. Should not currently occur.
-    float We = EV_wallElevations[i];
-    if ( EV_lightElevation <= We ) continue;
+    bool thisWallInShadow = locationInWallShadow(
+      EV_wallCoords[i],
+      EV_wallElevations[i],
+      EV_wallDistances[i],
+      EV_lightElevation,
+      center,
+      pixelElevation,
+      vUvs,
+      percentDistanceFromWall
+    );
 
-    // If the pixel is above the wall, skip.
-    if ( pixelElevation >= We ) continue;
 
-    // If the wall does not intersect the line between the center and this point, no shadow here.
-    vec4 wall = EV_wallCoords[i];
-    if ( !lineSegmentIntersects(vUvs, center, wall.xy, wall.zw) ) continue;
-
-    float distOW = EV_wallDistances[i];
-
-    // Distance from wall (as line) to this location
-    vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, vUvs);
-    float distWP = distance(vUvs, wallIxPoint);
-
-    float adjWe = We - pixelElevation;
-
-    // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
-    // atan(y, x) equivalent to JS Math.atan2(y, x)
-    float theta = atan((adjLightElevation - adjWe) /  distOW);
-
-    // Distance from center/origin to furthest part of shadow perpendicular to wall
-    float distOV = adjLightElevation / tan(theta);
-    float maxDistWP = distOV - distOW;
-
-    if ( distWP < maxDistWP ) {
-      // Current location is within shadow.
-      // Could be more than one wall casting shadow on this point, so don't break out of the loop.
-      // depth = 0.0; // For testing
+    if ( thisWallInShadow ) {
+      // Current location is within shadow of the wall
+      // Don't break out of loop; could be more than one wall casting shadow on this point.
+      // For now, use the closest shadow for depth.
       inShadow = true;
-
-      depth = distWP / maxDistWP;
+      depth = min(depth, percentDistanceFromWall);
     }
   }
 }
@@ -215,7 +252,6 @@ if ( pixelElevation > EV_lightElevation ) {
 const FRAG_COLOR =
 `
   if ( EV_isVision && inShadow ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-
 `;
 
 /**
@@ -267,7 +303,6 @@ export function _updateEVLightUniformsLightSource(mesh) {
   // Radius is .5 in the shader coordinates; adjust elevation accordingly
   const u = shader.uniforms;
   u.EV_lightElevation = elevationZ * 0.5 * r_inv;
-  u.EV_numWalls = walls.size;
 
   const center_shader = {x: 0.5, y: 0.5};
   let wallCoords = [];
@@ -287,6 +322,8 @@ export function _updateEVLightUniformsLightSource(mesh) {
 
     wallCoords.push(a.x, a.y, b.x, b.y);
   }
+
+  u.EV_numWalls = wallElevations.length;
 
   if ( !wallCoords.length ) wallCoords = new Float32Array(MAX_NUM_WALLS*4);
   if ( !wallElevations.length ) wallElevations = new Float32Array(MAX_NUM_WALLS);

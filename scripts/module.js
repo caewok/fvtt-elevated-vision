@@ -4,28 +4,36 @@ game
 */
 "use strict";
 
+import { MODULE_ID } from "./const.js";
+
+// API imports
 import * as drawing from "./drawing.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
 import * as util from "./util.js";
+import { EVVisionContainer } from "./vision.js";
+import { WallTracer } from "./WallTracer.js";
+import { FILOQueue } from "./FILOQueue.js";
+import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
+import { ElevationGrid } from "./ElevationGrid.js";
 
+// Register methods, patches, settings
 import { registerPIXIPolygonMethods } from "./PIXIPolygon.js";
-
-import { MODULE_ID } from "./const.js";
-
 import { registerAdditions, registerPatches } from "./patching.js";
+import { registerSettings } from "./settings.js";
 
+// For elevation layer registration and API
+import { ElevationLayer } from "./ElevationLayer.js";
+
+// Elevation Layer control tools
 import {
   addElevationLayerSceneControls,
   addElevationLayerSubControls,
   renderElevationLayerSubControls
 } from "./controls.js";
 
-import { ElevationLayer } from "./ElevationLayer.js";
-import { ElevationGrid } from "./ElevationGrid.js";
-import { WallTracer } from "./WallTracer.js";
-import { FILOQueue } from "./FILOQueue.js";
-
+// Settings, to toggle whether to change elevation on token move
+import { SETTINGS, getSetting } from "./settings.js";
 
 Hooks.once("init", async function() {
   game.modules.get(MODULE_ID).api = {
@@ -35,15 +43,23 @@ Hooks.once("init", async function() {
     Shadow,
     ElevationLayer,
     ElevationGrid,
-    WallTracer
+    WallTracer,
+    ShadowLOSFilter,
+    EVVisionContainer
   };
 
+  // These methods need to be registered early
+  registerSettings();
   registerPIXIPolygonMethods();
-  registerAdditions();
   registerLayer();
+  registerAdditions();
 });
 
-Hooks.once("libWrapper.Ready", async function() {
+// Hooks.once("libWrapper.Ready", async function() {
+//   registerPatches();
+// });
+
+Hooks.once("setup", async function() {
   registerPatches();
 });
 
@@ -77,6 +93,8 @@ Hooks.on("preUpdateToken", async function(token, update, options, userId) {
   // Token moves to 35' terrain. No auto update to elevation.
   // Token moves to 30' terrain. Token & terrain elevation now match.
   // Token moves to 35' terrain. Auto update, b/c previously at 30' (Token "landed.")
+
+  if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
 
   util.log("preUpdateToken", token, update, options, userId);
   if ( !("x" in update || "y" in update) ) return;

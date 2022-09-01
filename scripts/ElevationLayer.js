@@ -137,6 +137,14 @@ export class ElevationLayer extends InteractionLayer {
    */
   _graphicsContainer = new PIXI.Container();
 
+
+  /**
+   * The elevation layer data is rendered into this texture, which is then used for
+   * calculating elevation at given points.
+   * @type {PIXI.RenderTexture}
+   */
+  _elevationTexture;
+
   /**
    * Container representing the canvas
    * @type {FullCanvasContainer}

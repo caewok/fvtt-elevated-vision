@@ -17,6 +17,7 @@ Controls:
 */
 
 import { ElevationLayerToolBar } from "./ElevationLayerToolBar.js";
+import { MODULE_ID } from "./const.js";
 
 export function addElevationLayerSceneControls(controls) {
   const isGM = game.user.isGM;
@@ -31,13 +32,13 @@ export function addElevationLayerSceneControls(controls) {
     tools: [
       {
         name: "fill-by-grid",
-        title: "Fill by Grid",
+        title: game.i18n.localize(`${MODULE_ID}.controls.fill-by-grid.name`),
         icon: "fas fa-brush"
       },
 
       {
         name: "fill-by-los",
-        title: "Fill by Line-of-Sight",
+        title: game.i18n.localize(`${MODULE_ID}.controls.fill-by-los.name`),
         icon: "fas fa-eye"
       },
 
@@ -49,19 +50,19 @@ export function addElevationLayerSceneControls(controls) {
 //
       {
         name: "fill-space",
-        title: "Fill space enclosed by walls",
+        title: game.i18n.localize(`${MODULE_ID}.controls.fill-space.name`),
         icon: "fas fa-fill-drip"
       },
 
       {
         name: "clear",
-        title: "Clear all",
+        title: game.i18n.localize(`${MODULE_ID}.controls.clear.name`),
         icon: "fas fa-trash-can",
         button: true,
         onClick: () => {
           Dialog.confirm({
-            title: "Clear all elevation data",
-            content: "Are you sure you want to remove all elevation data from the scene?",
+            title: game.i18n.localize(`${MODULE_ID}.controls.clear.confirm.title`),
+            content: game.i18n.localize(`${MODULE_ID}.controls.clear.confirm.content`),
             yes: () => canvas.elevation.clearElevationData()
           });
         }
@@ -69,7 +70,7 @@ export function addElevationLayerSceneControls(controls) {
 
       {
         name: "upload",
-        title: "Upload elevation data and replace in scene",
+        title: game.i18n.localize(`${MODULE_ID}.controls.upload.name`),
         icon: "fas fa-file-arrow-up",
         button: true,
         onClick: () => {
@@ -85,7 +86,7 @@ export function addElevationLayerSceneControls(controls) {
 
       {
         name: "download",
-        title: "Download elevation data",
+        title: game.i18n.localize(`${MODULE_ID}.controls.download.name`),
         icon: "fas fa-file-arrow-down",
         button: true,
         onClick: () => {
@@ -95,7 +96,7 @@ export function addElevationLayerSceneControls(controls) {
 
       {
         name: "undo",
-        title: "Undo",
+        title: game.i18n.localize(`${MODULE_ID}.controls.undo.name`),
         icon: "fas fa-rotate-left",
 //         visible: canvas?.elevation?.undoQueue?.length,
         button: true,

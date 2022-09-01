@@ -1,7 +1,14 @@
-## 0.0.1.-alpha9
+## 0.0.1-alpha10
+Account for terrain elevation in fog-of-war/token vision.
+Add setting to switch between accounting for terrain elevation (shader) or not (polygons only) in token vision.
+Add setting to toggle automatic elevation changes for tokens.
+English localization.
+Attempted css to fix size of elevation number in control tools.
+
+## 0.0.1-alpha9
 Fixes for v10.279.
 
-## 0.0.1.-alpha8
+## 0.0.1-alpha8
 Working in v10.277. Will undoubtedly break in v10.279.
 
 - Elevation layer
@@ -24,7 +31,7 @@ Working in v10.277. Will undoubtedly break in v10.279.
   - Fog of war polygon modified by wall shadows
   - Does not currently account for terrain elevation
 
-## 0.0.1.-alpha7
+## 0.0.1-alpha7
 Updated module.json for installing in v10.
 
 ## 0.0.1-alpha6

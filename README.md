@@ -181,7 +181,7 @@ fill(origin, elevation)
 
 Suggestions or PRs welcome!
 
-- [ ] Adjust fog-of-war and vision based on elevation. Currently, fog-of-war is modified by the shadow cast by walls that have a height below that of the viewing token. But the token vision and fog-of-war should also account for elevation of the terrain. For example, a wall that is 20' high should not create shadows on terrain behind it that is also 20' high.
+- [x] Adjust fog-of-war and vision based on elevation. Currently, fog-of-war is modified by the shadow cast by walls that have a height below that of the viewing token. But the token vision and fog-of-war should also account for elevation of the terrain. For example, a wall that is 20' high should not create shadows on terrain behind it that is also 20' high.
 - [ ] Improved shadow rendering for lights.
 - [ ] Handle Hex grids.
 - [ ] Tie token vision to light shadows, with the option for light shadows to be considered dim light or no light from the perspective of the token.
@@ -194,6 +194,8 @@ Suggestions or PRs welcome!
 - [ ] Use mousewheel to adjust elevation setting.
 - [ ] Fix sizing of current elevation display.
 - [ ] Better display of elevation values by color on a scene. Possibly a red to blue gradient.
+- [ ] Make dependency on Wall Height module optional.
+- [ ] Display wall heights in elevation layer.
 - [x] Adjust shadows based on terrain elevation.
 - [x] Fix visual errors that can arise when moving tokens around with multiple shadows present.
 
