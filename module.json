@@ -43,6 +43,11 @@
       "description": "Modify Foundry VTT vision and lighting based on terrain, token, or wall elevations"
     }
   ],
+
+  "styles": [
+    "css/elevationlayer.css"
+  ],
+
   "url": "This is auto replaced",
   "manifest": "This is auto replaced",
   "download": "This is auto replaced",
