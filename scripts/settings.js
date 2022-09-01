@@ -28,8 +28,8 @@ export function registerSettings() {
   log("Registering elevated vision settings");
 
   game.settings.register(MODULE_ID, SETTINGS.VISION_USE_SHADER, {
-    name: game.i18n.localize(`elevatedvision.settings.${SETTINGS.VISION_USE_SHADER}.Name`),
-    hint: game.i18n.localize(`elevatedvision.settings.${SETTINGS.VISION_USE_SHADER}.Hint`),
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.VISION_USE_SHADER}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.VISION_USE_SHADER}.hint`),
     scope: "world",
     config: true,
     default: true,
@@ -38,8 +38,8 @@ export function registerSettings() {
   });
 
   game.settings.register(MODULE_ID, SETTINGS.AUTO_ELEVATION, {
-    name: game.i18n.localize(`elevatedvision.settings.${SETTINGS.AUTO_ELEVATION}.Name`),
-    hint: game.i18n.localize(`elevatedvision.settings.${SETTINGS.AUTO_ELEVATION}.Hint`),
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.AUTO_ELEVATION}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.AUTO_ELEVATION}.hint`),
     scope: "world",
     config: true,
     default: true,
