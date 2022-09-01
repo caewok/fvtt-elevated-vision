@@ -13,5 +13,11 @@
   "elevatedvision.controls.clear.confirm.content": "Are you sure you want to remove all elevation data from the scene?",
   "elevatedvision.controls.upload.name": "Upload elevation data and replace in scene",
   "elevatedvision.controls.download.name": "Download elevation data",
-  "elevatedvision.controls.undo.name": "Undo"
+  "elevatedvision.controls.undo.name": "Undo",
+
+  "elevatedvision.sceneconfig.elevationmin.name": "Minimum Elevation",
+  "elevatedvision.sceneconfig.elevationmin.hint": "Minimum elevation for this scene.",
+
+  "elevatedvision.sceneconfig.elevationstep.name": "Elevation Increment",
+  "elevatedvision.sceneconfig.elevationstep.hint": "Increments of elevation used in this scene"
 }

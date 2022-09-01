@@ -198,10 +198,11 @@ export class ElevationLayer extends InteractionLayer {
    * Increment between elevation measurements. Should be a positive integer.
    * @type {number}
    */
-  #elevationStep = undefined; // Undefined b/c canvas.scene could be null on first load.
+//   #elevationStep = undefined; // Undefined b/c canvas.scene could be null on first load.
 
   get elevationStep() {
-    return this.#elevationStep ?? canvas.scene.dimensions.distance;
+    const step = canvas.scene.getFlag(MODULE_ID, "elevationstep");
+    return step ?? canvas.scene.dimensions.distance;
   }
 
   set elevationStep(value) {
@@ -209,7 +210,8 @@ export class ElevationLayer extends InteractionLayer {
       console.warn("elevationStep should be a positive integer.");
       return;
     }
-    this.#elevationStep = value;
+
+    canvas.scene.setFlag(MODULE_ID, "elevationstep", value);
   }
 
   /* ------------------------ */
@@ -218,14 +220,20 @@ export class ElevationLayer extends InteractionLayer {
    * Minimum elevation value for a scene.
    * @type {number}
    */
-  #elevationMin = 0;
+//   #elevationMin = undefined;
 
   get elevationMin() {
-    return this.#elevationMin;
+    const min = canvas.scene.getFlag(MODULE_ID, "elevationmin");
+    return min ?? 0;
   }
 
   set elevationMin(value) {
-    this.#elevationMin = value;
+    if ( !Number.isInteger(value) ) {
+      console.warn("elevationMin should be an integer.");
+      return;
+    }
+
+    canvas.scene.setFlag(MODULE_ID, "elevationmin", value);
   }
 
   /* ------------------------ */
