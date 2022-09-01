@@ -32,7 +32,7 @@
     ]
   },
   "esmodules": [
-    "styles/module.js"
+    "scripts/module.js"
   ],
   "languages": [
     {
@@ -45,7 +45,7 @@
   ],
 
   "styles": [
-    "css/elevationlayer.css"
+    "styles/elevationlayer.css"
   ],
 
   "url": "This is auto replaced",
