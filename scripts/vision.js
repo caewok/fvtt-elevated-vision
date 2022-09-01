@@ -188,28 +188,34 @@ export class EVVisionContainer extends PIXI.Container {
   }
 
   _renderLOS() {
-    if ( this.los ) {
-      const tex = canvas.masks.vision._getEVTexture();
-      canvas.app.renderer.render(this.los, tex);
-      this.mask.texture = tex;
-    }
+    // Return reusable RenderTexture to the pool
+    if ( this.mask.texture instanceof PIXI.RenderTexture ) canvas.masks.vision._EV_textures.push(this.mask.texture);
+    else this.mask.texture?.destroy();
+
+    const tex = canvas.masks.vision._getEVTexture();
+    canvas.app.renderer.render(this.los, tex);
+    this.mask.texture = tex;
   }
 
-  _render() {
-   //  if ( this.los ) {
-//       const tex = canvas.masks.vision._getEVTexture();
-//       canvas.app.renderer.render(this.los, tex);
+
+  // Failing for some reason; may revisit as alternative to explicitly calling
+  // _renderLOS. The latter is likely more performant, as it can be called outside the
+  // render loop.
+//   _render() {
+//    //  if ( this.los ) {
+// //       const tex = canvas.masks.vision._getEVTexture();
+// //       canvas.app.renderer.render(this.los, tex);
+// //
+// //       // Return reusable RenderTexture to the pool
+// // //     if ( this.mask.texture instanceof PIXI.RenderTexture ) canvas.masks.vision._EV_textures.push(this.mask.texture);
+// // //     else this.mask.texture?.destroy();
+// //       this.mask.texture = tex;
+// //       this.los.destroy(true);
+// //       this.los = undefined;
+// //     }
 //
-//       // Return reusable RenderTexture to the pool
-// //     if ( this.mask.texture instanceof PIXI.RenderTexture ) canvas.masks.vision._EV_textures.push(this.mask.texture);
-// //     else this.mask.texture?.destroy();
-//       this.mask.texture = tex;
-//       this.los.destroy(true);
-//       this.los = undefined;
-//     }
-
-    super._render();
-  }
+//     super._render();
+//   }
 
   destroy(options) {
     if ( this.los ) this.los.destroy(true);
