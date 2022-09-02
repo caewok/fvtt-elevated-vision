@@ -88,7 +88,7 @@ function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
 
-Hooks.on("preUpdateToken", async function(token, update, options, userId) {
+Hooks.on("preUpdateToken", async function(tokenD, update, options, userId) {
   // Rule:
   // If token elevation currently equals the terrain elevation, then assume
   // moving the token should update the elevation.
@@ -100,26 +100,43 @@ Hooks.on("preUpdateToken", async function(token, update, options, userId) {
 
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
 
-  util.log("preUpdateToken", token, update, options, userId);
+  const useAveraging = getSetting(SETTINGS.AUTO_AVERAGING);
+
+  util.log("preUpdateToken", tokenD, update, options, userId);
   if ( !("x" in update || "y" in update) ) return;
   if ( "elevation" in update ) return;
 
-  util.log(`preUpdateToken token with elevation ${token.elevation} ${token.x},${token.y} --> ${update.x},${update.y}`);
+  util.log(`preUpdateToken token with elevation ${tokenD.elevation} ${tokenD.x},${tokenD.y} --> ${update.x},${update.y}`);
 
-  const tokenShape = canvas.elevation._tokenShape(token.x, token.y, token.width, token.height);
-  const currTerrainElevation = canvas.elevation.averageElevationWithinShape(tokenShape);
-  util.log(`Current terrain elevation ${currTerrainElevation} and current token elevation ${token.elevation}`, tokenShape);
-  if ( currTerrainElevation !== token.elevation ) return;
+  let currTerrainElevation = 0;
+  if ( useAveraging ) {
+    const w = tokenD.width * canvas.dimensions.size;
+    const h = tokenD.height * canvas.dimensions.size;
+    const tokenShape = canvas.elevation._tokenShape(tokenD.x, tokenD.y, w, h);
+    currTerrainElevation = canvas.elevation.averageElevationWithinShape(tokenShape);
+    util.log(`Current terrain elevation ${currTerrainElevation} and current token elevation ${tokenD.elevation}`, tokenShape);
+  } else {
+    const { x, y } = tokenD.object.center;
+    currTerrainElevation = canvas.elevation.elevationAt(x, y);
+    util.log(`Current terrain elevation ${currTerrainElevation} and current token elevation ${tokenD.elevation} at ${x},${y}`);
+  }
+  if ( currTerrainElevation !== tokenD.elevation ) return;
 
-  const newX = update.x ?? token.x;
-  const newY = update.y ?? token.y;
-  const newWidth = update.width ?? token.width;
-  const newHeight = update.height ?? token.height;
+  let newTerrainElevation = 0;
+  const newX = update.x ?? tokenD.x;
+  const newY = update.y ?? tokenD.y;
+  if ( useAveraging ) {
+    const newWidth = (update.width ?? tokenD.width) * canvas.dimensions.size;
+    const newHeight = (update.height ?? tokenD.height) * canvas.dimensions.size;
 
-  const newTokenShape = canvas.elevation._tokenShape(newX, newY, newWidth, newHeight);
-  const newTerrainElevation = canvas.elevation.averageElevationWithinShape(newTokenShape);
-  util.log(`new terrain elevation ${newTerrainElevation}`, newTokenShape);
-
+    const newTokenShape = canvas.elevation._tokenShape(newX, newY, newWidth, newHeight);
+    const newTerrainElevation = canvas.elevation.averageElevationWithinShape(newTokenShape);
+    util.log(`New terrain elevation ${newTerrainElevation}`, newTokenShape);
+  } else {
+    const { x, y } = tokenD.object.getCenter(newX, newY);
+    newTerrainElevation = canvas.elevation.elevationAt(x, y);
+    util.log(`New terrain elevation ${newTerrainElevation} at ${x},${y}`);
+  }
   update.elevation = newTerrainElevation;
 });
 
