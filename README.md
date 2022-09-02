@@ -17,6 +17,11 @@ This module relies in part on the [Wall Height](https://foundryvtt.com/packages/
 
 *This module is still in early development stages. Many things are likely to change, including the image download/upload format.*
 
+# Thanks
+Special thanks to:
+- dev7355608 ([Perfect Vision](https://github.com/dev7355608/perfect-vision)) author for answering my many random PIXIjs questions.
+- ironmonk88 ([Enhanced Terrain Layer](https://github.com/ironmonk88/enhanced-terrain-layer)) author, from whom I borrowed some of the control layout ideas and code.
+
 # Module compatibility
 
 ## Required modules
