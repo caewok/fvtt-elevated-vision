@@ -374,6 +374,10 @@ export class ElevationLayer extends InteractionLayer {
     const w = new FullCanvasContainer();
     this.container = this.addChild(w);
 
+    // Background elevation sprite should start at the upper left scene corner
+    const { sceneX, sceneY } = canvas.dimensions;
+    this._backgroundElevation.position = { x: sceneX, y: sceneY };
+
     // Add the render texture for displaying elevation information to the GM
     this._elevationTexture = PIXI.RenderTexture.create(this._resolution);
 
@@ -434,9 +438,15 @@ export class ElevationLayer extends InteractionLayer {
     const format = "image/webp";
     this.renderElevation();
 
+    // Store only the scene rectangle data
+    this._elevationTexture.frame = canvas.dimensions.sceneRect;
+
     // Depending on format, may need quality = 1 to avoid lossy compression
     const imageData = canvas.app.renderer.extract.base64(this._elevationTexture, format, 1);
     const saveObj = { imageData, format };
+
+    // Revert frame
+    this._elevationTexture.frame = canvas.dimensions.rect;
 
     await canvas.scene.setFlag(MODULE_ID, FLAG_ELEVATION_IMAGE, saveObj);
     this._requiresSave = false;
@@ -488,15 +498,20 @@ export class ElevationLayer extends InteractionLayer {
     log(`Loaded texture with dim ${texture.width},${texture.height}`, texture);
 
     // Adjust position for sprite if necessary; abort if no match found.
-    const { width, height, sceneWidth, sceneHeight, sceneRect } = canvas.dimensions;
-    if ( texture.width === sceneWidth && texture.height === sceneHeight ) {
-      texture.position = sceneRect;
-    } else if ( texture.width !== width && texture.height !== height ) {
-      ui.notifications.error("Image elevation file dimensions do not match the scene. Try resizing the image file to the scene size.");
-      return;
-    }
+//     const { width, height, sceneWidth, sceneHeight, sceneRect } = canvas.dimensions;
+//     if ( texture.width === sceneWidth && texture.height === sceneHeight ) {
+//       texture.position = sceneRect;
+//     } else if ( texture.width !== width && texture.height !== height ) {
+//       ui.notifications.error("Image elevation file dimensions do not match the scene. Try resizing the image file to the scene size.");
+//       return;
+//     }
 
-    log("rendering image file");
+//     log("rendering image file");
+
+    // Texture should be the scene size
+//     const { sceneWidth, sceneHeight } = canvas.dimensions;
+//     texture.width = sceneWidth;
+//     texture.height = sceneHeight;
 
     // Testing: let sprite = PIXI.Sprite.from("elevation/test_001.png");
     canvas.elevation._backgroundElevation.texture.destroy();
@@ -519,9 +534,15 @@ export class ElevationLayer extends InteractionLayer {
 
     this.renderElevation();
 
+    // Frame so that only the scene information is downloaded
+    this._elevationTexture.frame = canvas.dimensions.sceneRect;
+
     // Depending on format, may need quality = 1 to avoid lossy compression
     const image64 = canvas.app.renderer.extract.image(this._elevationTexture, format, 1);
     saveDataToFile(convertBase64ToImage(image64), format, fileName);
+
+    // Reset to original frame
+    this._elevationTexture.frame = canvas.dimensions.rect;
   }
 
   // TO-DO: Preferably download as alpha, possibly by constructing a new texture?
