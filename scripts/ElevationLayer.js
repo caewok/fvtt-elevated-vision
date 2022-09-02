@@ -775,6 +775,8 @@ export class ElevationLayer extends InteractionLayer {
 
     */
 
+    log(`Attempting fill at ${origin.x},${origin.y} with elevation ${elevation}`);
+
     let wallTracerMap = WallTracer.constructWallTracerMap(origin);
     let wallTracerSet = new Set(wallTracerMap.values());
 
@@ -790,6 +792,8 @@ export class ElevationLayer extends InteractionLayer {
     let candidateLn = candidateIxs.length;
     let closedBoundary;
     for ( let i = 0; i < candidateLn; i += 1 ) {
+      log(`Fill iteration ${i}`);
+
       let startingWall = wallTracerMap.get(candidateIxs[i].wall);
       let ccw = startingWall.orderedEndpoints.ccw;
       /* Debug
@@ -813,16 +817,19 @@ export class ElevationLayer extends InteractionLayer {
       return;
     }
 
+    log("closedBoundary", closedBoundary)
+
+
     // Test for holes
     // Holes must have walls entirely contained by the boundary.
     // (If the "hole" intersected the boundary, then the boundary would have included part
     //  of the "hole.")
     const holes = [];
-    const collisionTest = (o, rect) => rect.contains(o.t.A) && rect.contains(o.t.B);
+    const collisionTest = (o, rect) => closedBoundary.isSegmentEnclosed(o.t);
     const enclosingBounds = closedBoundary.getBounds();
-    const enclosedWallsArray = canvas.walls.quadtree.getObjects(enclosingBounds, collisionTest);
+    const enclosedWallsSet = canvas.walls.quadtree.getObjects(enclosingBounds, {collisionTest});
 
-    for ( const wall of enclosedWallsArray ) {
+    for ( const wall of enclosedWallsSet ) {
       const wt = wallTracerMap.get(wall);
       if ( !wallTracerSet.has(wt) ) continue;
 
@@ -842,9 +849,13 @@ export class ElevationLayer extends InteractionLayer {
       if ( holeBoundary ) holes.push(holeBoundary);
     }
 
+    log("holes", holes);
+
     // Clean the boundary and holes
     // Basically the same technique as constructing shadows
     const combinedFill = combineBoundaryPolygonWithHoles(closedBoundary, holes);
+
+    log("combinedFill", combinedFill);
 
     // Create the graphics representing the fill!
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
@@ -882,8 +893,8 @@ export class ElevationLayer extends InteractionLayer {
    * @param {WallTracer} startingWall
    * @param {PolygonVertex} startingEndpoint
    * @param {Map<Wall, WallTracer>} wallTracerMap
-   * @param {Set<WallTracer>} wallTracerSet   Walls encountered will be removed from this set.
-   * @param {Point} startingIx  Where to start on the starting wall.
+   * @param {Set<WallTracer>} wallTracerSet         Walls encountered will be removed from this set.
+   * @param {Point} startingIx                      Where to start on the starting wall.
    * @returns {PIXI.Polygon|false} Return the closed polygon or false if no closed polygon found.
    */
   _testForClosedBoundaryWalls(startingWall, startingEndpoint, wallTracerMap, wallTracerSet, startingIx) {
@@ -909,11 +920,10 @@ export class ElevationLayer extends InteractionLayer {
     let passedStartingPoint = false;
 
     while ( i < maxIter ) {
+      wallTracerSet.delete(currWall);
 
       // Determine ccw and cw endpoints
       // If origin --> A --> B is cw, then A is ccw, B is cw
-      wallTracerSet.delete(currWall);
-
       if ( currWall.numIntersections ) currWall.processIntersections(wallTracerMap);
       let next = currWall.nextFromStartingEndpoint(currEndpoint, currDistance2);
 
