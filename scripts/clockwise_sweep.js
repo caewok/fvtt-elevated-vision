@@ -1,8 +1,6 @@
 /* globals
-ClipperLib,
 canvas,
 CONST,
-PIXI,
 Ray
 */
 "use strict";

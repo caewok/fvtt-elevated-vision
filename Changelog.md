@@ -1,3 +1,15 @@
+## 0.0.1
+First public release!
+Fixes since alpha10:
+- Display wall ranges in elevation layer
+- Better sizing of elevation number control; css fixes.
+- Better handling of hex grid: fill grid by hex and measure token by hex size.
+- Allow GM to set the minimum elevation and elevation step size per scene.
+- Default setting to not account for terrain elevation for tokens until performance can be improved.
+- Default setting to use token centers for auto elevation; alternatively use token shape.
+- Store (and download/upload) only the scene-sized texture, not including canvas borders.
+- Fix for auto token measurement when calculating average over the token shape.
+
 ## 0.0.1-alpha10
 Account for terrain elevation in fog-of-war/token vision.
 Add setting to switch between accounting for terrain elevation (shader) or not (polygons only) in token vision.

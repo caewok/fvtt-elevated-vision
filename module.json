@@ -39,7 +39,7 @@
       "lang": "en",
       "name": "English",
       "path": "languages/en.json",
-      "title": "Token Visibility",
+      "title": "Elevated Vision",
       "description": "Modify Foundry VTT vision and lighting based on terrain, token, or wall elevations"
     }
   ],
@@ -47,6 +47,11 @@
   "styles": [
     "styles/elevationlayer.css"
   ],
+
+  "flags": {
+    "fvttdevleague": {
+        "package-jam": 2022
+    },
 
   "url": "This is auto replaced",
   "manifest": "This is auto replaced",

@@ -13,7 +13,9 @@ game,
 isEmpty,
 PolygonVertex,
 CONFIG,
-Ray
+Ray,
+WallHeight,
+PreciseText
 */
 "use strict";
 
@@ -122,6 +124,11 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
+   * Container to hold objects to display wall information on the canvas
+   */
+  _wallDataContainer = new PIXI.Container();
+
+  /**
    * Sprite that contains the elevation values from the saved elevation file.
    * This is added to the _graphicsContainer, along with any graphics representing
    * adjustments by the GM to the scene elevation.
@@ -193,10 +200,9 @@ export class ElevationLayer extends InteractionLayer {
    * Increment between elevation measurements. Should be a positive integer.
    * @type {number}
    */
-  #elevationStep = undefined; // Undefined b/c canvas.scene could be null on first load.
-
   get elevationStep() {
-    return this.#elevationStep ?? canvas.scene.dimensions.distance;
+    const step = canvas.scene.getFlag(MODULE_ID, "elevationstep");
+    return step ?? canvas.scene.dimensions.distance;
   }
 
   set elevationStep(value) {
@@ -204,7 +210,8 @@ export class ElevationLayer extends InteractionLayer {
       console.warn("elevationStep should be a positive integer.");
       return;
     }
-    this.#elevationStep = value;
+
+    canvas.scene.setFlag(MODULE_ID, "elevationstep", value);
   }
 
   /* ------------------------ */
@@ -213,14 +220,18 @@ export class ElevationLayer extends InteractionLayer {
    * Minimum elevation value for a scene.
    * @type {number}
    */
-  #elevationMin = 0;
-
   get elevationMin() {
-    return this.#elevationMin;
+    const min = canvas.scene.getFlag(MODULE_ID, "elevationmin");
+    return min ?? 0;
   }
 
   set elevationMin(value) {
-    this.#elevationMin = value;
+    if ( !Number.isInteger(value) ) {
+      console.warn("elevationMin should be an integer.");
+      return;
+    }
+
+    canvas.scene.setFlag(MODULE_ID, "elevationmin", value);
   }
 
   /* ------------------------ */
@@ -247,7 +258,7 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number}
    */
   pixelValueToElevation(value) {
-    return (Math.round(value) * this.elevationStep) - this.elevationMin;
+    return Math.round(value * this.elevationStep) - this.elevationMin;
   }
 
   /**
@@ -294,15 +305,30 @@ export class ElevationLayer extends InteractionLayer {
   /** @override */
   _activate() {
     log("Activating Elevation Layer.");
+
+    // Draw walls
+    for ( const wall of canvas.walls.placeables ) {
+      this._drawWallSegment(wall);
+      this._drawWallRange(wall);
+    }
+
     this.drawElevation();
     this.container.visible = true;
     canvas.stage.addChild(this.elevationLabel);
+    canvas.stage.addChild(this._wallDataContainer);
   }
 
   /** @override */
   _deactivate() {
     log("De-activating Elevation Layer.");
     if ( !this.container ) return;
+    canvas.stage.removeChild(this._wallDataContainer);
+
+    // TO-DO: keep the wall graphics and labels and just update as necessary.
+    // Destroy only in tearDown
+    const wallData = this._wallDataContainer.removeChildren();
+    wallData.forEach(d => d.destroy(true));
+
     canvas.stage.removeChild(this.elevationLabel);
     if ( this._requiresSave ) this.saveSceneElevationData();
     drawing.clearDrawings();
@@ -347,6 +373,10 @@ export class ElevationLayer extends InteractionLayer {
     // Initialize container to hold the elevation data and GM modifications
     const w = new FullCanvasContainer();
     this.container = this.addChild(w);
+
+    // Background elevation sprite should start at the upper left scene corner
+    const { sceneX, sceneY } = canvas.dimensions;
+    this._backgroundElevation.position = { x: sceneX, y: sceneY };
 
     // Add the render texture for displaying elevation information to the GM
     this._elevationTexture = PIXI.RenderTexture.create(this._resolution);
@@ -408,9 +438,15 @@ export class ElevationLayer extends InteractionLayer {
     const format = "image/webp";
     this.renderElevation();
 
+    // Store only the scene rectangle data
+    this._elevationTexture.frame = canvas.dimensions.sceneRect;
+
     // Depending on format, may need quality = 1 to avoid lossy compression
     const imageData = canvas.app.renderer.extract.base64(this._elevationTexture, format, 1);
     const saveObj = { imageData, format };
+
+    // Revert frame
+    this._elevationTexture.frame = canvas.dimensions.rect;
 
     await canvas.scene.setFlag(MODULE_ID, FLAG_ELEVATION_IMAGE, saveObj);
     this._requiresSave = false;
@@ -462,15 +498,20 @@ export class ElevationLayer extends InteractionLayer {
     log(`Loaded texture with dim ${texture.width},${texture.height}`, texture);
 
     // Adjust position for sprite if necessary; abort if no match found.
-    const { width, height, sceneWidth, sceneHeight, sceneRect } = canvas.dimensions;
-    if ( texture.width === sceneWidth && texture.height === sceneHeight ) {
-      texture.position = sceneRect;
-    } else if ( texture.width !== width && texture.height !== height ) {
-      ui.notifications.error("Image elevation file dimensions do not match the scene. Try resizing the image file to the scene size.");
-      return;
-    }
+//     const { width, height, sceneWidth, sceneHeight, sceneRect } = canvas.dimensions;
+//     if ( texture.width === sceneWidth && texture.height === sceneHeight ) {
+//       texture.position = sceneRect;
+//     } else if ( texture.width !== width && texture.height !== height ) {
+//       ui.notifications.error("Image elevation file dimensions do not match the scene. Try resizing the image file to the scene size.");
+//       return;
+//     }
 
-    log("rendering image file");
+//     log("rendering image file");
+
+    // Texture should be the scene size
+//     const { sceneWidth, sceneHeight } = canvas.dimensions;
+//     texture.width = sceneWidth;
+//     texture.height = sceneHeight;
 
     // Testing: let sprite = PIXI.Sprite.from("elevation/test_001.png");
     canvas.elevation._backgroundElevation.texture.destroy();
@@ -493,9 +534,15 @@ export class ElevationLayer extends InteractionLayer {
 
     this.renderElevation();
 
+    // Frame so that only the scene information is downloaded
+    this._elevationTexture.frame = canvas.dimensions.sceneRect;
+
     // Depending on format, may need quality = 1 to avoid lossy compression
     const image64 = canvas.app.renderer.extract.image(this._elevationTexture, format, 1);
     saveDataToFile(convertBase64ToImage(image64), format, fileName);
+
+    // Reset to original frame
+    this._elevationTexture.frame = canvas.dimensions.rect;
   }
 
   // TO-DO: Preferably download as alpha, possibly by constructing a new texture?
@@ -521,33 +568,58 @@ export class ElevationLayer extends InteractionLayer {
    */
   elevationAt(x, y) {
     const gridRect = new PIXI.Rectangle(x, y, 1, 1);
-    return this.averageElevation(gridRect);
+    return this.pixelValueToElevation(this._averageValue(gridRect));
   }
 
   /**
    * Calculate the average elevation for a grid space.
    * @param {number} row    Grid row
    * @param {number} col    Grid column
+   * @param {object} [options]  Options that affect the calculation
+   * @param {boolean} [options.useHex]  Use a hex-shaped grid for the calculation.
+   *   Defaults to true if the canvas grid is hex.
    * @returns {number} Elevation value.
    */
-  averageElevationForGridSpace(row, col) {
+  averageElevationForGridSpace(row, col, { useHex = canvas.grid.isHex } = {}) {
     const [x, y] = canvas.grid.grid.getPixelsFromGridPosition(row, col);
-    return this.averageElevationForGridPoint(x, y);
+    return this.averageElevationAtGridPoint(x, y, { useHex });
   }
 
   /**
    * Retrieve the average elevation of the grid space that encloses these
-   * coordinates. Currently assumes a rectangular grid.
+   * coordinates.
    * @param {number} x
    * @param {number} y
    * @returns {number} Elevation value.
    */
-  averageElevationAtGridPoint(x, y) {
-    const { w, h } = canvas.grid.grid;
-    const [tlx, tly] = canvas.grid.grid.getTopLeft(x, y);
+  averageElevationAtGridPoint(x, y, { useHex = canvas.grid.isHex } = {}) {
+    let value;
 
-    const gridRect = new PIXI.Rectangle(tlx, tly, w, h);
-    return this.averageElevation(gridRect);
+    if ( useHex ) {
+      const hex = this._hexGridShape(x, y);
+      value = this._averageValueWithinShape(hex);
+    } else {
+      const gridRect = this._squareGridShape(x, y);
+      value = this._averageValue(gridRect);
+    }
+
+    return this.pixelValueToElevation(value);
+  }
+
+  /**
+   * Retrieve the average elevation for a given shape.
+   * @param {PIXI.Circle|PIXI.Polygon|PIXI.Rectangle|PIXI.Ellipse} shape
+   * @returns {number} Average of pixel values within the shape
+   */
+  averageElevationWithinShape(shape) {
+    let value;
+    if ( shape instanceof PIXI.Rectangle) {
+      value = this._averageValue(shape);
+    } else {
+      value = this._averageValueWithinShape(shape);
+    }
+
+    return this.pixelValueToElevation(value);
   }
 
   // To extract pixel values for debugging
@@ -571,41 +643,96 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
-   * Calculate the average elevation value underneath a given rectangle.
-   * @param {PIXI.Rectangle} rect
-   * @returns {number} Elevation value
+   * Calculate the average value of pixels within a given shape.
+   * For rectangles, averageValue will be faster.
+   * @param {PIXI.Circle|PIXI.Polygon|PIXI.Rectangle|PIXI.Ellipse} shape
+   * @returns {number} Average of pixel values within the shape
    */
-  averageElevation(rect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
-    return this.pixelValueToElevation(this._averageValue(rect));
-  }
+  _averageValueWithinShape(shape) {
+    const border = shape.getBounds(shape);
 
+    // Extraction should be from bottom-left corner, moving right, then up?
+    // https://stackoverflow.com/questions/47374367/in-what-order-does-webgl-readpixels-collapse-the-image-into-array
+    const arr = extractPixels(this._elevationTexture, border);
+    let sum = 0;
+    let denom = 0;
+
+    // Bottom left x and y;
+    const blx = border.x;
+    const bly = border.y + border.height;
+
+    const ln = arr.length;
+    for ( let i = 0; i < ln; i += 4 ) {
+      const pixelNum = i / 4;
+      const col = pixelNum % border.width;
+      const row = Math.floor(pixelNum / border.height);
+
+      if ( !shape.contains(blx + col, bly - row) ) continue;
+
+      denom += 1;
+      sum += arr[i];
+    }
+
+    return sum / denom;
+  }
 
   /**
    * Set the elevation for the grid space that contains the point.
+   * If this is a hex grid, it will fill in the hex grid space.
    * @param {Point} p             Point within the grid square/hex.
    * @param {number} elevation    Elevation to use to fill the grid space
    * @param {object}  [options]   Options that affect setting this elevation
    * @param {boolean} [options.temporary]   If true, don't immediately require a save.
    *   This setting does not prevent a save if the user further modifies the canvas.
+   * @param {boolean} [options.useHex]      If true, use a hex grid; if false use square.
+   *   Defaults to canvas.grid.isHex.
+   *
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
-  setElevationForGridSpace(p, elevation = 0, { temporary = false } = {}) {
-    // Get the top left corner, then fill in the values in the grid
-    const [tlx, tly] = canvas.grid.grid.getTopLeft(p.x, p.y);
-    const { w, h } = canvas.grid;
-
+  setElevationForGridSpace(p, elevation = 0, { temporary = false, useHex = canvas.grid.isHex } = {}) {
+    const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     graphics.beginFill(this.elevationHex(elevation), 1.0);
-    graphics.drawRect(tlx, tly, w, h);
+    graphics.drawShape(shape);
     graphics.endFill();
 
     this.renderElevation();
 
     this._requiresSave = !temporary;
-
     this.undoQueue.enqueue(graphics);
-
     return graphics;
+  }
+
+  _tokenShape(x, y, width, height) {
+    // For the moment, uneven width/height shapes must use rectangle border
+    if ( canvas.grid.isHex && width === height ) {
+      return this._hexGridShape({x, y}, { width, height });
+    }
+
+    return new PIXI.Rectangle(x, y, width, height);
+  }
+
+  _squareGridShape(p) {
+    // Get the top left corner
+    const [tlx, tly] = canvas.grid.grid.getTopLeft(p.x, p.y);
+    const { w, h } = canvas.grid;
+    return new PIXI.Rectangle(tlx, tly, w, h);
+  }
+
+  _hexGridShape(p, { width = 1, height = 1 } = {}) {
+    // Canvas.grid.grid.getBorderPolygon will return null if width !== height.
+    if ( width !== height ) return null;
+
+    // Get the top left corner
+    const [tlx, tly] = canvas.grid.grid.getTopLeft(p.x, p.y);
+    const points = canvas.grid.grid.getBorderPolygon(width, height, 0); // TO-DO: Should a border be included to improve calc?
+    const pointsTranslated = [];
+    const ln = points.length;
+    for ( let i = 0; i < ln; i += 2) {
+      pointsTranslated.push(points[i] + tlx, points[i+1] + tly);
+    }
+
+    return new PIXI.Polygon(pointsTranslated);
   }
 
   /**
@@ -669,6 +796,8 @@ export class ElevationLayer extends InteractionLayer {
 
     */
 
+    log(`Attempting fill at ${origin.x},${origin.y} with elevation ${elevation}`);
+
     let wallTracerMap = WallTracer.constructWallTracerMap(origin);
     let wallTracerSet = new Set(wallTracerMap.values());
 
@@ -684,6 +813,8 @@ export class ElevationLayer extends InteractionLayer {
     let candidateLn = candidateIxs.length;
     let closedBoundary;
     for ( let i = 0; i < candidateLn; i += 1 ) {
+      log(`Fill iteration ${i}`);
+
       let startingWall = wallTracerMap.get(candidateIxs[i].wall);
       let ccw = startingWall.orderedEndpoints.ccw;
       /* Debug
@@ -707,16 +838,19 @@ export class ElevationLayer extends InteractionLayer {
       return;
     }
 
+    log("closedBoundary", closedBoundary)
+
+
     // Test for holes
     // Holes must have walls entirely contained by the boundary.
     // (If the "hole" intersected the boundary, then the boundary would have included part
     //  of the "hole.")
     const holes = [];
-    const collisionTest = (o, rect) => rect.contains(o.t.A) && rect.contains(o.t.B);
+    const collisionTest = (o, rect) => closedBoundary.isSegmentEnclosed(o.t);
     const enclosingBounds = closedBoundary.getBounds();
-    const enclosedWallsArray = canvas.walls.quadtree.getObjects(enclosingBounds, collisionTest);
+    const enclosedWallsSet = canvas.walls.quadtree.getObjects(enclosingBounds, {collisionTest});
 
-    for ( const wall of enclosedWallsArray ) {
+    for ( const wall of enclosedWallsSet ) {
       const wt = wallTracerMap.get(wall);
       if ( !wallTracerSet.has(wt) ) continue;
 
@@ -736,9 +870,13 @@ export class ElevationLayer extends InteractionLayer {
       if ( holeBoundary ) holes.push(holeBoundary);
     }
 
+    log("holes", holes);
+
     // Clean the boundary and holes
     // Basically the same technique as constructing shadows
     const combinedFill = combineBoundaryPolygonWithHoles(closedBoundary, holes);
+
+    log("combinedFill", combinedFill);
 
     // Create the graphics representing the fill!
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
@@ -776,8 +914,8 @@ export class ElevationLayer extends InteractionLayer {
    * @param {WallTracer} startingWall
    * @param {PolygonVertex} startingEndpoint
    * @param {Map<Wall, WallTracer>} wallTracerMap
-   * @param {Set<WallTracer>} wallTracerSet   Walls encountered will be removed from this set.
-   * @param {Point} startingIx  Where to start on the starting wall.
+   * @param {Set<WallTracer>} wallTracerSet         Walls encountered will be removed from this set.
+   * @param {Point} startingIx                      Where to start on the starting wall.
    * @returns {PIXI.Polygon|false} Return the closed polygon or false if no closed polygon found.
    */
   _testForClosedBoundaryWalls(startingWall, startingEndpoint, wallTracerMap, wallTracerSet, startingIx) {
@@ -803,11 +941,10 @@ export class ElevationLayer extends InteractionLayer {
     let passedStartingPoint = false;
 
     while ( i < maxIter ) {
+      wallTracerSet.delete(currWall);
 
       // Determine ccw and cw endpoints
       // If origin --> A --> B is cw, then A is ccw, B is cw
-      wallTracerSet.delete(currWall);
-
       if ( currWall.numIntersections ) currWall.processIntersections(wallTracerMap);
       let next = currWall.nextFromStartingEndpoint(currEndpoint, currDistance2);
 
@@ -895,24 +1032,56 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
-   * Draw the weather container.
-   * @returns {FullCanvasContainer|null}    The weather container, or null if no effect is present
+   * Draw the elevation container.
+   * @returns {FullCanvasContainer|null}    The elevation container
    */
   drawElevation() {
-
-    // Draw walls
-    // TO-DO: Add to the layer render using graphics instead of the debug display?
-    for ( const wall of canvas.walls.placeables ) {
-      drawing.drawSegment(wall, { color: drawing.COLORS.red });
-      drawing.drawPoint(wall.A, { color: drawing.COLORS.red });
-      drawing.drawPoint(wall.B, { color: drawing.COLORS.red });
-    }
-
     const elevationFilter = ElevationFilter.create({
       dimensions: [this._resolution.width, this._resolution.height],
       elevationSampler: this._elevationTexture
     });
     this.container.filters = [elevationFilter];
+  }
+
+  /**
+   * Draw wall segments
+   */
+  _drawWallSegment(wall) {
+    const g = new PIXI.Graphics();
+    drawing.drawSegment(wall, { graphics: g, color: drawing.COLORS.red });
+    drawing.drawPoint(wall.A, { graphics: g, color: drawing.COLORS.red });
+    drawing.drawPoint(wall.B, { graphics: g, color: drawing.COLORS.red });
+    this._wallDataContainer.addChild(g);
+  }
+
+  /**
+   * From https://github.com/theripper93/wall-height/blob/12c204b44e6acfa1e835464174ac1d80e77cec4a/scripts/patches.js#L318
+   * Draw the wall lower and upper heights on the canvas.
+   */
+  _drawWallRange(wall) {
+    const bounds = WallHeight.getWallBounds(wall);
+    if ( bounds.top === Infinity && bounds.bottom === -Infinity ) return;
+
+    const style = CONFIG.canvasTextStyle.clone();
+    style.fontSize /= 1.5;
+    style.fill = wall._getWallColor();
+    if ( bounds.top === Infinity ) bounds.top = "Inf";
+    if ( bounds.bottom === -Infinity ) bounds.bottom = "-Inf";
+    const range = `${bounds.top} / ${bounds.bottom}`;
+
+    // This would mess with the existing text used in walls layer, which may not be what we want.
+    // const oldText = wall.children.find(c => c.name === "wall-height-text");
+    // const text = oldText ?? new PreciseText(range, style);
+    const text = new PreciseText(range, style);
+    text.text = range;
+    text.name = "wall-height-text";
+    let angle = (Math.atan2( wall.coords[3] - wall.coords[1], wall.coords[2] - wall.coords[0] ) * ( 180 / Math.PI ));
+    angle = ((angle + 90 ) % 180) - 90;
+    text.position.set(wall.center.x, wall.center.y);
+    text.anchor.set(0.5, 0.5);
+    text.angle = angle;
+
+    this._wallDataContainer.addChild(text);
   }
 
   /* ----- Event Listeners and Handlers ----- /*

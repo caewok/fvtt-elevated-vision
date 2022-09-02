@@ -11,7 +11,7 @@
 }
 
 #elevationlayer-tools .control-btn {
-    width: 72px;
+    width: 36px;
     height: 36px;
     box-sizing: content-box;
     font-size: 24px;
@@ -55,9 +55,14 @@
     padding-left: 8px;
 }
 
+#elevationlayer-tools #el-curr-elevation {
+  color: #DCDCDC;
+}
+
 #elevationlayer-tools #el-elevation-number {
     cursor: default;
-    position: relative;
+    position: center;
+    width: 90%;
 }
 #elevationlayer-tools #el-elevation-number:hover {
     box-shadow: none;
@@ -65,9 +70,11 @@
     box-shadow: 0 0 10px var(--color-shadow-dark);
 }
 
+/*
 #elevationlayer-tools #el-elevation-number i {
     position: absolute;
     top: -5px;
     left: -5px;
     font-size: 14px;
 }
+ */

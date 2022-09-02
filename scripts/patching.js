@@ -6,7 +6,9 @@ SoundSource,
 MovementSource
 Token,
 libWrapper,
-ClockwiseSweepPolygon
+ClockwiseSweepPolygon,
+CanvasVisionMask,
+GlobalLightSource
 */
 
 "use strict";
@@ -37,11 +39,7 @@ import {
   refreshCanvasVisibilityShader,
   createVisionCanvasVisionMask,
   clearCanvasVisionMask,
-  _updateColorationUniformsVisionSource,
-  _updateIlluminationUniformsVisionSource,
-  _updateBackgroundUniformsVisionSource,
   _getEVTexture
-//   initializeVisionSource
 } from "./vision.js";
 
 import {
@@ -152,16 +150,8 @@ export function registerAdditions() {
       writable: true,
       configurable: true
     });
-
-//     Object.defineProperty(CanvasVisionMask.prototype, "_EV_sprite", {
-//       value: new PIXI.Sprite(PIXI.Texture.EMPTY),
-//       writable: true,
-//       configurable: true
-//     });
   }
 }
-
-
 
 export function registerPatches() {
   // ----- Locating edges that create shadows in the LOS ----- //
@@ -174,15 +164,6 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "LightSource.prototype._createPolygon", _createPolygonLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-
-  // ----- Drawing shadows for vision sources ----- //
-  libWrapper.register(MODULE_ID, "VisionSource.prototype._updateColorationUniforms", _updateColorationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "VisionSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "VisionSource.prototype._updateBackgroundUniforms", _updateBackgroundUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-
-  // This causes brightness to be NaN and basically breaks vision
-//   libWrapper.register(MODULE_ID, "VisionSource.prototype.initialize", initializeVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-
 
   // ----- Visibility testing ----- //
   libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.MIXED, {perf_mode: libWrapper.PERF_FAST});
