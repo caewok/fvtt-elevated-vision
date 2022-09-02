@@ -1,9 +1,12 @@
 {
-    "elevatedvision.settings.vision-use-shader.name": "Apply elevation data to token vision",
-    "elevatedvision.settings.vision-use-shader.hint": "If selected, will take into account elevation layer data when rendering token vision, meaning terrain above the token will not be visible and terrain in shadows may be visible if sufficiently high. Otherwise, only shadows for walls below the token will be rendered. Unchecking this may increase performance.",
+  "elevatedvision.settings.vision-use-shader.name": "Apply elevation data to token vision",
+  "elevatedvision.settings.vision-use-shader.hint": "If selected, will take into account elevation layer data when rendering token vision, meaning terrain above the token will not be visible and terrain in shadows may be visible if sufficiently high. Otherwise, only shadows for walls below the token will be rendered. Unchecking this may increase performance.",
 
-    "elevatedvision.settings.auto-change-elevation.name": "Change token elevation automatically when moving",
-    "elevatedvision.settings.auto-change-elevation.hint": "If selected, will automatically adjust token elevation based on elevation layer data. Token elevation is only adjusted if the token is currently 'on the ground.'",
+  "elevatedvision.settings.auto-change-elevation.name": "Change token elevation automatically when moving",
+  "elevatedvision.settings.auto-change-elevation.hint": "If selected, will automatically adjust token elevation based on elevation layer data. Token elevation is only adjusted if the token is currently 'on the ground.'",
+
+  "elevatedvision.settings.auto-change-elevation.averaging.name": "Average token elevation",
+  "elevatedvision.settings.auto-change-elevation.averaging.hint": "When auto-adjusting, use the average elevation under the token shape. If false, use the token center-point to determine elevation.",
 
   "elevatedvision.controls.fill-by-grid.name": "Fill by grid",
   "elevatedvision.controls.fill-by-los.name": "Fill by line-of-sight",

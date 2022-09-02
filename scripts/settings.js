@@ -8,7 +8,8 @@ import { MODULE_ID } from "./const.js";
 
 export const SETTINGS = {
   VISION_USE_SHADER: "vision-use-shader",
-  AUTO_ELEVATION: "auto-change-elevation"
+  AUTO_ELEVATION: "auto-change-elevation",
+  AUTO_AVERAGING: "auto-change-elevation.averaging"
 };
 
 export function getSetting(settingName) {
@@ -43,6 +44,16 @@ export function registerSettings() {
     scope: "world",
     config: true,
     default: true,
+    type: Boolean,
+    requiresReload: false
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.AUTO_AVERAGING, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.AUTO_AVERAGING}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.AUTO_AVERAGING}.hint`),
+    scope: "world",
+    config: true,
+    default: false,
     type: Boolean,
     requiresReload: false
   });
