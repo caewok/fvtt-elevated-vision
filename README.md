@@ -33,17 +33,34 @@ Special thanks to:
 ## Incompatible modules
 None known at this time, but it is likely that [Levels](https://foundryvtt.com/packages/levels) and [Perfect Vision](https://foundryvtt.com/packages/perfect-vision) will have issues. If you want real 3d, I recommend [Ripper's 3d Canvas](https://theripper93.com/). It probably goes without saying, but I will say it anyway, that mixing this module with 3d Canvas will likely result in serious errors.
 
+# Examples
+
+Elevated Vision allows you to designate terrain elevation height, which is then used to inform token elevation and vision.
+
+https://user-images.githubusercontent.com/1267134/188221018-fdb2fce8-157d-45cf-9a3a-bc11450f75d2.mov
+
+Elevated Vision also uses wall heights and terrain elevation to create shadows for lighting.
+
+https://user-images.githubusercontent.com/1267134/188221519-d2cca9c2-f665-411f-ab79-603ab2ee6245.mov
+
 # Elevation Layer
 Switch to the elevation layer in the controls to modify the elevation data in a given scene.
+
+<img src="https://raw.githubusercontent.com/caewok/fvtt-elevated-vision/feature/screenshots/screenshots/controls.webp" width="200" alt="Elevation layer controls" align="left">
 
 ## Setting elevation
 
 Currently three tools are provided to modify elevation in a scene.
-1. Fill by grid. Click a spot on the scene to set the elevation for that grid space.
-2. Fill by line-of-sight. Click a spot, and all portions of the map will be set to that elevation that have line of sight to that spot. This uses the same algorithm as token vision, so it is the equivalent of a token's 360º vision from that spot, assuming global illumination.
-3. Fill. Click a spot, and it will fill the space enclosed by walls. Note that if the walls are open, it may fill the entire scene. All wall types are treated as normal walls for this purpose. It **should** respect islands. Walls must be actually connected by endpoints, otherwise the fill will likely leak through.
+
+ - Fill by grid. Click a spot on the scene to set the elevation for that grid space.
+
+ - Fill by line-of-sight. Click a spot, and all portions of the map will be set to that elevation that have line of sight to that spot. This uses the same algorithm as token vision, so it is the equivalent of a token's 360º vision from that spot, assuming global illumination.
+
+ - Fill. Click a spot, and it will fill the space enclosed by walls. Note that if the walls are open, it may fill the entire scene. All wall types are treated as normal walls for this purpose. It **should** respect islands. Walls must be actually connected by endpoints, otherwise the fill will likely leak through.
 
 Hover over a spot on the canvas to see the current elevation value. Elevation values are currently represented as different alpha values of red.
+
+https://user-images.githubusercontent.com/1267134/188220188-c6081c54-ff81-428b-b5bd-24af3048e1ca.mov
 
 ## Saving and loading elevation data
 
@@ -51,7 +68,9 @@ You can download the current scene data as a png file using the download button.
 
 You can upload an image file and set it as the elevation data for the current scene using the upload button. Use `canvas.elevation.importFromImageFile` and provide the method a file location in the console to trigger the change manually. It is using [PIXI.Extract](https://pixijs.download/release/docs/PIXI.Extract.html), and so recognizes various image formats, such as "image/webp" or "image/png".
 
-Currently, image data is written to and read from the red channel, with values assumed to be integers between 0 and 255. Essentially, it is a "bump" map. These values are then scaled for a given scene's elevation settings. (Currently set manually but a future update should allow the GM to set the scene's elevation minimum and step size in scene settings.)  It is likely that the channel used will change in the future. Ultimately, I would like to allow for ["normal maps"](https://www.cgdirector.com/normal-vs-displacement-vs-bump-maps/). At the moment, however, Foundry lighting is not set up to take advantage of normals for a given map (outside of maybe [Ripper's 3d Canvas](https://theripper93.com/)).
+Currently, image data is written to and read from the red channel, with values assumed to be integers between 0 and 255. Essentially, it is a "bump" map. These values are then scaled for a given scene's elevation settings, configurable in the scene settings.
+
+It is likely that the channel used will change in the future. Using a depth map and integrating with Foundry's depth usage is a possibility. Ultimately, I would also like to allow for ["normal maps"](https://www.cgdirector.com/normal-vs-displacement-vs-bump-maps/). At the moment, however, Foundry lighting is not set up to take advantage of normals for a given map (outside of maybe [Ripper's 3d Canvas](https://theripper93.com/)).
 
 ## Undo and delete
 
@@ -60,11 +79,9 @@ Undo removes the previous action. This only works for recent actions—--exiting
 Scene elevation data save is triggered when leaving the canvas layer.
 
 # Token elevation
-A token is assumed to be "on the ground" if its current elevation is equal to that of the terrain. Elevation for this purpose is measured as the average of the elevation at each pixel underneath the token bounds. Elevation is always rounded to the nearest integer.
+A token is assumed to be "on the ground" if its current elevation is equal to that of the terrain. A setting allows the GM to decide if token elevation should be based on the average elevation under the token or on the point elevation at the token center. Elevation is always rounded to the nearest integer.
 
 If a token is "on the ground" and it moves to a new location, its elevation will be automatically adjusted to that of the new location. Tokens not "on the ground" will not have their elevation adjusted.
-
-Future improvements may add settings to allow the GM to toggle or adjust this behavior.
 
 # Token vision shadows
 Whenever a token is above a wall with a top height lower than the token vision elevation, the wall obscures the vision of the token for the area immediately next to the wall opposite the token. As the token approaches, that obscured area becomes smaller (think of approaching a cliff and being able to see more and more of what is directly below the cliff). A token whose vision is obscured by a wall can still view other tokens on the other side of the wall if those tokens are elevated to a point sufficiently high to be seen beyond the wall.
@@ -81,8 +98,6 @@ This token vision shadowing effect is easier to understand when using the Token 
 
 https://user-images.githubusercontent.com/1267134/173108532-2d8732d8-3632-432d-87dc-f2a51bc62def.mov
 
-Currently, token vision shadowing—--which is closely related to fog of war---does not account for terrain elevation. This will hopefully change in the future.
-
 # Lighting shadows
 Whenever a light's top elevation is above a wall's top elevation, the wall casts a shadow on the side of the wall opposite the light. Currently, this shadow is a visualization effect only (but see token shadows, above).
 
@@ -93,6 +108,22 @@ Note: This module assumes the light's top elevation is its actual elevation. Bot
 Lighting shadows account for terrain elevation. Thus, a wall that casts a shadow will cast less of a shadow---or none at all---over portions of the terrain that are higher than other portions.
 
 Long term, I would like to use a more sophisticated method to render the shadow effect itself, but my WebGL knowledge is quite limited. Suggestions and PRs are welcome!
+
+# Scene Settings
+
+In Scene settings, the GM can decide the minimum elevation for the scene and the elevation increment. Currently, elevation data is stored at the pixel level, with values between 0 and 255. Those values are then scaled given a minimum elevation and elevation increment.
+
+<img src="https://raw.githubusercontent.com/caewok/fvtt-elevated-vision/feature/screenshots/screenshots/scene_config.webp" width="400" alt="Single wall casting a shadow from a light">
+
+# Settings
+
+Selecting "apply token elevation to token vision" will take into account the scene elevation data for token vision and fog of war. This setting currently can be resource-intensive and so is off by default. If not selected, only the wall heights will be used when calculating token vision and fog of war.
+
+Select change token elevation automatically to have tokens change elevation when moving, based on the terrain elevation data. Tokens only change elevation if they are "on the ground" when the movement starts. Meaning, the token's elevation at the start of the move equals the underlying terrain elevation.
+
+GMs can also toggle whether to use the average elevation under a token, or a point measurement of the elevation at the token center. 
+
+<img src="https://raw.githubusercontent.com/caewok/fvtt-elevated-vision/feature/screenshots/screenshots/settings.webp" width="400" alt="Single wall casting a shadow from a light">
 
 # API
 
@@ -188,7 +219,7 @@ Suggestions or PRs welcome!
 
 - [x] Adjust fog-of-war and vision based on elevation. Currently, fog-of-war is modified by the shadow cast by walls that have a height below that of the viewing token. But the token vision and fog-of-war should also account for elevation of the terrain. For example, a wall that is 20' high should not create shadows on terrain behind it that is also 20' high.
 - [ ] Improved shadow rendering for lights.
-- [ ] Handle Hex grids.
+- [x] Handle Hex grids.
 - [ ] Tie token vision to light shadows, with the option for light shadows to be considered dim light or no light from the perspective of the token.
 - [ ] Modify terrain elevation values by "painting" using a circular or square brush
 - [ ] Allow import of normal data for better shadow and shading (using an RGBA import).
@@ -197,10 +228,10 @@ Suggestions or PRs welcome!
 - [ ] Save only the single channel internally if no normal data is used.
 - [ ] Token HUD to place the token "on the ground".
 - [ ] Use mousewheel to adjust elevation setting.
-- [ ] Fix sizing of current elevation display.
+- [x] Fix sizing of current elevation display.
 - [ ] Better display of elevation values by color on a scene. Possibly a red to blue gradient.
 - [ ] Make dependency on Wall Height module optional.
-- [ ] Display wall heights in elevation layer.
+- [x] Display wall heights in elevation layer.
 - [x] Adjust shadows based on terrain elevation.
 - [x] Fix visual errors that can arise when moving tokens around with multiple shadows present.
 
