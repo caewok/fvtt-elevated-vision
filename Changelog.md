@@ -1,3 +1,7 @@
+## 0.0.2
+Fix issue #1 (Error when selecting a token in v10.284.)
+Fix issue #2 (Allow decimal steps for elevation interval.)
+
 ## 0.0.1
 First public release!
 Fixes since alpha10:
