@@ -118,8 +118,8 @@ export function _testRangeDetectionMode(wrapper, visionSource, mode, target, tes
  * Wrap DetectionMode.prototype._testLOS
  * Tokens only.
  */
-export function _testLOSDetectionMode(wrapper, visionSource, test) {
-  const res2d = wrapper(visionSource, test);
+export function _testLOSDetectionMode(wrapper, visionSource, mode, target, test) {
+  const res2d = wrapper(visionSource, mode, target, test);
 
   if ( !res2d || !Object.prototype.hasOwnProperty.call(test.point, "z") ) return res2d;
   if ( !this.walls ) return true;
