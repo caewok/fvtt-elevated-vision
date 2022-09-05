@@ -82,12 +82,16 @@ export class ElevationLayer extends InteractionLayer {
    * of the canvas in the elevation layer.
    */
   _activateHoverListener() {
-    PIXI.BitmapFont.from("TitleFont", {
+    log("activatingHoverListener")
+    const textStyle = PreciseText.getTextStyle({
+      fontSize: 24,
       fill: "#333333",
-      fontSize: 24
+      strokeThickness: 2,
+      align: "right",
+      dropShadow: false
     });
 
-    this.elevationLabel = new PIXI.BitmapText("", { fontName: "TitleFont" });
+    this.elevationLabel = new PreciseText(undefined, textStyle);
     this.elevationLabel.anchor = {x: 0, y: 1};
     canvas.stage.addChild(this.elevationLabel);
 
@@ -117,9 +121,10 @@ export class ElevationLayer extends InteractionLayer {
    * @param {number} y
    */
   updateElevationLabel({x, y}) {
-    log(`Updating elevation label at ${x},${y}`);
     const value = this.elevationAt(x, y);
+
     this.elevationLabel.text = value.toString();
+    log(`Updating elevation label at ${x},${y} to ${this.elevationLabel.text}`);
     this.elevationLabel.position = {x, y};
   }
 
@@ -197,7 +202,7 @@ export class ElevationLayer extends InteractionLayer {
   /* ------------------------ */
 
   /**
-   * Increment between elevation measurements. Should be a positive integer.
+   * Increment between elevation measurements. Should be a positive integer or float of 1 decimal place.
    * @type {number}
    */
   get elevationStep() {
@@ -206,10 +211,12 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   set elevationStep(value) {
-    if ( value < 1 || !Number.isInteger(value) ) {
-      console.warn("elevationStep should be a positive integer.");
+    if ( value < 0.1 ) {
+      console.warn("elevationStep should be a positive integer or float, to be rounded to 1 decimal place.");
       return;
     }
+
+    this.elevationStep = Number.isInteger(value) ? value : Math.round((value * 10)) / 10;
 
     canvas.scene.setFlag(MODULE_ID, "elevationstep", value);
   }
@@ -258,7 +265,7 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number}
    */
   pixelValueToElevation(value) {
-    return Math.round(value * this.elevationStep) - this.elevationMin;
+    return (Math.round(value * this.elevationStep * 10) / 10) - this.elevationMin;
   }
 
   /**
@@ -287,7 +294,7 @@ export class ElevationLayer extends InteractionLayer {
    * and is between the min and max elevation values.
    * Required so that translation to an integer-based color texture works.
    * @param {number} e  Proposed elevation value
-   * @return {number}   The elevation integer between elevationMin and elevationMax.
+   * @return {number}   The elevation value between elevationMin and elevationMax.
    */
   clampElevation(e) {
     e = isNaN(e) ? 0 : e;
