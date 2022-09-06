@@ -130,7 +130,7 @@ Hooks.on("preUpdateToken", async function(tokenD, update, options, userId) {
     const newHeight = (update.height ?? tokenD.height) * canvas.dimensions.size;
 
     const newTokenShape = canvas.elevation._tokenShape(newX, newY, newWidth, newHeight);
-    const newTerrainElevation = canvas.elevation.averageElevationWithinShape(newTokenShape);
+    newTerrainElevation = canvas.elevation.averageElevationWithinShape(newTokenShape);
     util.log(`New terrain elevation ${newTerrainElevation}`, newTokenShape);
   } else {
     const { x, y } = tokenD.object.getCenter(newX, newY);
