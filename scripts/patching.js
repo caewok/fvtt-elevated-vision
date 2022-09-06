@@ -222,7 +222,7 @@ function soundSourceElevation() {
  */
 function tokenTop() {
   // From Wall Height but skip the extra test b/c we know it is a token.
-  return zValue(this.document.object.losHeight ?? 0);
+  return zValue(this.losHeight ?? 0);
 }
 
 /**
