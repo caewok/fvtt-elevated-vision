@@ -177,7 +177,7 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
     return this.restrictVisibility();
   }
 
-  log("refreshCanvasVisibilityShader");
+//   log("refreshCanvasVisibilityShader");
 
   // Stage the priorVision vision container to be saved to the FOW texture
   let commitFog = false;

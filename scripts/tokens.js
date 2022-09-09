@@ -6,6 +6,8 @@ ClockwiseSweepPolygon
 "use strict";
 
 import { Point3d } from "./Point3d.js";
+import { points2dAlmostEqual, log } from "./util.js";
+import { getSetting, SETTINGS } from "./settings.js";
 
 /*
 Adjustments for token visibility.
@@ -19,6 +21,109 @@ If not visible due to los/fov:
 - token may need to be within illuminated area or fov
 
 */
+
+export function _onUpdateToken(wrapper, data, options, userId) {
+  const keys = Object.keys(foundry.utils.flattenObject(data));
+    const changed = new Set(keys);
+    const positionChange = ["x", "y"].some(c => changed.has(c));
+  if ( positionChange && typeof this._EV_elevationOrigin !== "undefined" ) {
+    log(`_onUpdate`, data);
+    this.document.elevation = this._EV_elevationOrigin;
+    this._EV_elevationOrigin = undefined;
+  }
+  return wrapper(data, options, userId);
+}
+
+
+export function updatePositionToken(wrapper, options) {
+  log(`updatePosition ${this.document.x},${this.document.y} with change ${options.x},${options.y}`, options);
+
+//   const origin = this._animation ? this.position : {x: this.document.x, y: this.document.y};
+//   const destination = {x: this.document.x, y: this.document.y};
+//   const newElevation = autoElevationChangeForToken(this, origin, destination);
+//   log(`updatePosition ${origin.x},${origin.y} at ${this.document.elevation} -> ${destination.x},${destination.y} at ${newElevation}`);
+
+  wrapper(options);
+}
+
+
+export function cloneToken(wrapper) {
+  log(`cloneToken ${this.name} at elevation ${this.document.elevation}`);
+  const clone = wrapper();
+
+  this._EV_elevationOrigin = this.document.elevation;
+  clone.document.elevation = this.document.elevation;
+  return clone;
+}
+
+// Rule:
+// If token elevation currently equals the terrain elevation, then assume
+// moving the token should update the elevation.
+// E.g. Token is flying at 30' above terrain elevation of 0'
+// Token moves to 25' terrain. No auto update to elevation.
+// Token moves to 35' terrain. No auto update to elevation.
+// Token moves to 30' terrain. Token & terrain elevation now match.
+// Token moves to 35' terrain. Auto update, b/c previously at 30' (Token "landed.")
+
+export function _refreshToken(wrapper, options) {
+  if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return wrapper(options);
+
+  // Old position: this.position
+  // New position: this.document
+
+//   if ( points2dAlmostEqual(this.position, this.document) ) return wrapper(options);
+
+  // Drag starts with position set to 0, 0 (likely, not yet set).
+  log(`token _refresh at ${this.document.x},${this.document.y} with elevation ${this.document.elevation}`)
+  if ( !this.position.x && !this.position.y ) return wrapper(options);
+
+  const newElevation = autoElevationChangeForToken(this, this.position, this.document);
+  if ( newElevation === null ) return wrapper(options);
+
+  log(`token _refresh at ${this.document.x},${this.document.y} from ${this.position.x},${this.position.y}`, options, this);
+  log(`token _refresh newElevation ${newElevation}`)
+
+  this.document.elevation = newElevation;
+  return wrapper(options);
+}
+
+
+/**
+ * Determine if a token elevation should change provided a new destination point.
+ * @param {Token} token         Token
+ * @param {Point} newPosition   {x,y} coordinates of position token is moving to
+ * @param {object} [options]    Options that affect the token shape
+ * @param {number} [options.newWidth]   Width of the token after the move
+ * @param {number} [options.newHeight]  Height of the token after the move
+ * @returns {number|null} Elevation, in grid coordinates. Null if no change.
+ */
+export function autoElevationChangeForToken(token, oldPosition, newPosition, { newW = token.w, newH = token.h } = {}) {
+  if ( points2dAlmostEqual(oldPosition, newPosition) ) return null;
+
+  const useAveraging = getSetting(SETTINGS.AUTO_AVERAGING);
+  const oldCenter = token.getCenter(oldPosition.x, oldPosition.y);
+
+  const currTerrainElevation = useAveraging
+    ? averageElevationForToken(oldPosition.x, oldPosition.y, token.w, token.h)
+    : canvas.elevation.elevationAt(oldCenter.x, oldCenter.y);
+
+  // Token must be "on the ground" to start.
+  log(`token elevation ${token.document.elevation} at ${oldCenter.x},${oldCenter.y}; current terrain elevation ${currTerrainElevation} (averaging ${useAveraging})`)
+  if ( currTerrainElevation !== token.document.elevation ) return null;
+
+  const newCenter = token.getCenter(newPosition.x, newPosition.y)
+  const newTerrainElevation = useAveraging
+    ? averageElevationForToken(newPosition.x, newPosition.y, newWidth, newHeight)
+    : canvas.elevation.elevationAt(newCenter.x, newCenter.y);
+
+  log(`new terrain elevation ${newTerrainElevation} at ${newCenter.x},${newCenter.y}`)
+  return (currTerrainElevation === newTerrainElevation) ? null : newTerrainElevation;
+}
+
+function averageElevationForToken(x, y, w, h) {
+  const tokenShape = canvas.elevation._tokenShape(x, y, w, h);
+  return canvas.elevation.averageElevationWithinShape(tokenShape);
+}
 
 /**
  * Helper function to construct a test object for testVisiblity
