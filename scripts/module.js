@@ -8,7 +8,6 @@ renderTemplate
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { log } from "./util.js";
 
 // API imports
 import * as drawing from "./drawing.js";
@@ -83,67 +82,32 @@ Hooks.on("getSceneControlButtons", addElevationLayerSceneControls);
 Hooks.on("renderSceneControls", addElevationLayerSubControls);
 Hooks.on("renderTerrainLayerToolBar", renderElevationLayerSubControls);
 
-
 function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
 
-Hooks.on("preUpdateToken", async function(tokenD, update, options, userId) {
-  // Rule:
-  // If token elevation currently equals the terrain elevation, then assume
-  // moving the token should update the elevation.
-  // E.g. Token is flying at 30' above terrain elevation of 0'
-  // Token moves to 25' terrain. No auto update to elevation.
-  // Token moves to 35' terrain. No auto update to elevation.
-  // Token moves to 30' terrain. Token & terrain elevation now match.
-  // Token moves to 35' terrain. Auto update, b/c previously at 30' (Token "landed.")
-
+// Reset the token elevation when moving the token after a cloned drag operation.
+// Token.prototype._refresh is then used to update the elevation as the token is moved.
+Hooks.on("preUpdateToken", function(tokenD, update, options, userId) {
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
 
-  const useAveraging = getSetting(SETTINGS.AUTO_AVERAGING);
+  const token = tokenD.object;
+  if ( typeof token._EV_elevationOrigin === "undefined" ) return;
 
-  util.log("preUpdateToken", tokenD, update, options, userId);
-  if ( !("x" in update || "y" in update) ) return;
-  if ( "elevation" in update ) return;
+  const keys = Object.keys(foundry.utils.flattenObject(update));
+  const changed = new Set(keys);
+  const positionChange = ["x", "y"].some(c => changed.has(c));
+  if ( !positionChange ) return;
 
-  util.log(`preUpdateToken token with elevation ${tokenD.elevation} ${tokenD.x},${tokenD.y} --> ${update.x},${update.y}`);
-
-  let currTerrainElevation = 0;
-  if ( useAveraging ) {
-    const w = tokenD.width * canvas.dimensions.size;
-    const h = tokenD.height * canvas.dimensions.size;
-    const tokenShape = canvas.elevation._tokenShape(tokenD.x, tokenD.y, w, h);
-    currTerrainElevation = canvas.elevation.averageElevationWithinShape(tokenShape);
-    util.log(`Current terrain elevation ${currTerrainElevation} and current token elevation ${tokenD.elevation}`, tokenShape);
-  } else {
-    const { x, y } = tokenD.object.center;
-    currTerrainElevation = canvas.elevation.elevationAt(x, y);
-    util.log(`Current terrain elevation ${currTerrainElevation} and current token elevation ${tokenD.elevation} at ${x},${y}`);
-  }
-  if ( currTerrainElevation !== tokenD.elevation ) return;
-
-  let newTerrainElevation = 0;
-  const newX = update.x ?? tokenD.x;
-  const newY = update.y ?? tokenD.y;
-  if ( useAveraging ) {
-    const newWidth = (update.width ?? tokenD.width) * canvas.dimensions.size;
-    const newHeight = (update.height ?? tokenD.height) * canvas.dimensions.size;
-
-    const newTokenShape = canvas.elevation._tokenShape(newX, newY, newWidth, newHeight);
-    const newTerrainElevation = canvas.elevation.averageElevationWithinShape(newTokenShape);
-    util.log(`New terrain elevation ${newTerrainElevation}`, newTokenShape);
-  } else {
-    const { x, y } = tokenD.object.getCenter(newX, newY);
-    newTerrainElevation = canvas.elevation.elevationAt(x, y);
-    util.log(`New terrain elevation ${newTerrainElevation} at ${x},${y}`);
-  }
-  update.elevation = newTerrainElevation;
+  util.log("preUpdateToken", token, update, options, userId);
+  token.document.elevation = this._EV_elevationOrigin;
+  token._EV_elevationOrigin = undefined;
 });
 
-
+// Add settings for minimum and step elevation to the scene configuration.
 Hooks.on("renderSceneConfig", injectSceneConfiguration);
 async function injectSceneConfiguration(app, html, data) {
-  log("injectSceneConfig", app, html, data);
+  util.log("injectSceneConfig", app, html, data);
 
   if ( !app.object.getFlag(MODULE_ID, "elevationmin") ) app.object.setFlag(MODULE_ID, "elevationmin", 0);
   if ( !app.object.getFlag(MODULE_ID, "elevationstep") ) app.object.setFlag(MODULE_ID, "elevationstep", canvas.dimensions.distance);
