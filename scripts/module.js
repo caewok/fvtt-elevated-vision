@@ -11,9 +11,10 @@ import { MODULE_ID } from "./const.js";
 
 // API imports
 import * as drawing from "./drawing.js";
+import * as util from "./util.js";
+import * as extract from "./extract-pixels.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
-import * as util from "./util.js";
 import { EVVisionContainer } from "./vision.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
@@ -41,6 +42,7 @@ Hooks.once("init", async function() {
   game.modules.get(MODULE_ID).api = {
     drawing,
     util,
+    extract,
     Point3d,
     Shadow,
     ElevationLayer,

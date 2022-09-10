@@ -24,7 +24,6 @@ import {
   log,
   readDataURLFromFile,
   convertBase64ToImage,
-  extractPixels,
   distanceSquaredBetweenPoints,
   drawPolygonWithHoles,
   combineBoundaryPolygonWithHoles,
@@ -33,6 +32,7 @@ import * as drawing from "./drawing.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
+import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./extract-pixels.js";
 
 /* Elevation layer
 
@@ -631,7 +631,7 @@ export class ElevationLayer extends InteractionLayer {
 
   // To extract pixel values for debugging
   // api = game.modules.get("elevatedvision").api;
-  // api.util.extractPixels(canvas.elevation._elevationTexture, _token.bounds)
+  // api.util.extractPixels(canvas.app.renderer, canvas.elevation._elevationTexture, _token.bounds)
 
   /**
    * Calculate the average value of the pixels within a provided rectangle.
@@ -639,14 +639,14 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number} Average pixel values
    */
   _averageValue(rect = new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height)) {
-    const arr = extractPixels(this._elevationTexture, rect);
+    const { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, rect);
     let sum = 0;
-    const ln = arr.length;
+    const ln = pixels.length;
     for ( let i = 0; i < ln; i += 4 ) {
-      sum += arr[i];
+      sum += pixels[i];
     }
 
-    return sum / (rect.width * rect.height);
+    return sum / (width * height);
   }
 
   /**
@@ -660,24 +660,24 @@ export class ElevationLayer extends InteractionLayer {
 
     // Extraction should be from bottom-left corner, moving right, then up?
     // https://stackoverflow.com/questions/47374367/in-what-order-does-webgl-readpixels-collapse-the-image-into-array
-    const arr = extractPixels(this._elevationTexture, border);
+    const { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, border);
     let sum = 0;
     let denom = 0;
 
     // Bottom left x and y;
     const blx = border.x;
-    const bly = border.y + border.height;
+    const bly = border.y + height;
 
-    const ln = arr.length;
+    const ln = pixels.length;
     for ( let i = 0; i < ln; i += 4 ) {
       const pixelNum = i / 4;
-      const col = pixelNum % border.width;
-      const row = Math.floor(pixelNum / border.height);
+      const col = pixelNum % width;
+      const row = Math.floor(pixelNum / height);
 
       if ( !shape.contains(blx + col, bly - row) ) continue;
 
       denom += 1;
-      sum += arr[i];
+      sum += pixels[i];
     }
 
     return sum / denom;
