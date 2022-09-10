@@ -82,11 +82,12 @@ Hooks.on("getSceneControlButtons", addElevationLayerSceneControls);
 Hooks.on("renderSceneControls", addElevationLayerSubControls);
 Hooks.on("renderTerrainLayerToolBar", renderElevationLayerSubControls);
 
-
 function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
 
+// Reset the token elevation when moving the token after a cloned drag operation.
+// Token.prototype._refresh is then used to update the elevation as the token is moved.
 Hooks.on("preUpdateToken", function(tokenD, update, options, userId) {
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
 
@@ -103,6 +104,7 @@ Hooks.on("preUpdateToken", function(tokenD, update, options, userId) {
   token._EV_elevationOrigin = undefined;
 });
 
+// Add settings for minimum and step elevation to the scene configuration.
 Hooks.on("renderSceneConfig", injectSceneConfiguration);
 async function injectSceneConfiguration(app, html, data) {
   util.log("injectSceneConfig", app, html, data);

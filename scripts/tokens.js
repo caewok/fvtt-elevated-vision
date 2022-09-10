@@ -23,6 +23,10 @@ If not visible due to los/fov:
 
 */
 
+/**
+ * Wrap Token.prototype.clone
+ * Store the original elevation so it can be restored before moving the actual token.
+ */
 export function cloneToken(wrapper) {
   log(`cloneToken ${this.name} at elevation ${this.document.elevation}`);
   const clone = wrapper();

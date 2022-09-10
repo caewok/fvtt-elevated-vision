@@ -185,19 +185,10 @@ export function registerPatches() {
     libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
   }
 
-  // ----- Testing token animation
-//   libWrapper.register(MODULE_ID, "Token.prototype.updatePosition", updatePositionToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-//   libWrapper.register(MODULE_ID, "Token.prototype._onUpdate", _onUpdateToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-
-
+  // ----- Token animation and elevation change ---- //
   libWrapper.register(MODULE_ID, "Token.prototype.clone", cloneToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "Token.prototype._refresh", _refreshToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 }
-
-// function testFn(wrapper, options) {
-//   log(`token _refresh at ${this.document.x},${this.document.y} from ${this.position.x},${this.position.y}`, options, this);
-//   return wrapper(options);
-// }
 
 /**
  * For MovementSource objects, use the token's elevation
