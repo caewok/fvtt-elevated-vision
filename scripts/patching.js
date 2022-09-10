@@ -25,9 +25,9 @@ import {
   _testLOSDetectionMode,
   _testRangeDetectionMode,
   _refreshToken,
-  cloneToken,
-  updatePositionToken,
-  _onUpdateToken
+  cloneToken//,
+//   updatePositionToken//,
+//   _onUpdateToken
 } from "./tokens.js";
 
 import {
@@ -186,8 +186,8 @@ export function registerPatches() {
   }
 
   // ----- Testing token animation
-  libWrapper.register(MODULE_ID, "Token.prototype.updatePosition", updatePositionToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "Token.prototype._onUpdate", _onUpdateToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//   libWrapper.register(MODULE_ID, "Token.prototype.updatePosition", updatePositionToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//   libWrapper.register(MODULE_ID, "Token.prototype._onUpdate", _onUpdateToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
 
   libWrapper.register(MODULE_ID, "Token.prototype.clone", cloneToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});

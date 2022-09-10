@@ -9,8 +9,6 @@ renderTemplate
 
 import { MODULE_ID } from "./const.js";
 
-import { autoElevationChangeForToken } from "./tokens.js";
-
 // API imports
 import * as drawing from "./drawing.js";
 import { Shadow } from "./Shadow.js";
@@ -91,36 +89,19 @@ function registerLayer() {
 
 Hooks.on("preUpdateToken", function(tokenD, update, options, userId) {
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
-  if ( !("x" in update || "y" in update) ) return;
-  if ( "elevation" in update ) return;
 
   const token = tokenD.object;
+  if ( typeof token._EV_elevationOrigin === "undefined" ) return;
+
+  const keys = Object.keys(foundry.utils.flattenObject(update));
+  const changed = new Set(keys);
+  const positionChange = ["x", "y"].some(c => changed.has(c));
+  if ( !positionChange ) return;
 
   util.log("preUpdateToken", token, update, options, userId);
-
-//   const newX = update.x ?? token.x;
-//   const newY = update.y ?? token.y;
-//   const newWidth = (update.width ?? token.width);
-//   const newHeight = (update.height ?? token.height);
-//   const newElevation = autoElevationChangeForToken(tokenD, { x: newX, y: newY }, { newWidth, newHeight });
-//   if ( newElevation === null ) return;
-
-//   update.elevation = newTerrainElevation;
+  token.document.elevation = this._EV_elevationOrigin;
+  token._EV_elevationOrigin = undefined;
 });
-
-Hooks.on("refreshToken", function(token, options) {
-//   util.log("refreshToken", token, options, this);
-
-  if ( !options.border || !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
-
-  // Old position: this.position
-  // New position: this.document
-
-  if ( util.points2dAlmostEqual(token.position, token.document) ) return;
-
-//   const newElevation = autoElevationChangeForToken(token, token.document);
-});
-
 
 Hooks.on("renderSceneConfig", injectSceneConfiguration);
 async function injectSceneConfiguration(app, html, data) {
