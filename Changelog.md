@@ -1,11 +1,15 @@
 ## 0.0.3
-Fix issue #5 (Elevation layer tooltip localization.)
-Possible fix for issue #6 (Selecting tokens.)
+When dragging a token, elevation of the token updates automatically if parameters are met to do so. When moving, the token's vision matches the elevation it is at. (The elevation number indicator shows the destination elevation when moving after a drag, but the vision will be calculated based on elevation for the location.)
 
+Fix issue #5 (Elevation layer tooltip localization.)
+Fix issue #7 (Improvements to save.)
+Fix issue #8 (Adjust token elevation when dragging or moving.)
+Possible fix for issue #6 (Selecting tokens.)
 
 ## 0.0.2
 Fix issue #1 (Error when selecting a token in v10.284.)
-Fix issue #2 (Allow decimal steps for elevation interval.)
+Fix issue #2 (libWrapper error.)
+Fix issue #3 (Allow decimal steps for elevation interval.)
 
 ## 0.0.1
 First public release!
