@@ -387,6 +387,8 @@ export class ElevationLayer extends InteractionLayer {
 
     // Add the render texture for displaying elevation information to the GM
     this._elevationTexture = PIXI.RenderTexture.create(this._resolution);
+    // Set the clear color of the render texture to black. The texture needs to be opaque.
+    this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
 
     // Add the sprite that holds the default background elevation settings
     this._graphicsContainer.addChild(this._backgroundElevation);
@@ -443,20 +445,26 @@ export class ElevationLayer extends InteractionLayer {
    */
   async saveSceneElevationData() {
     const format = "image/webp";
-    this.renderElevation();
-
-    // Store only the scene rectangle data
-    this._elevationTexture.frame = canvas.dimensions.sceneRect;
-
-    // Depending on format, may need quality = 1 to avoid lossy compression
-    const imageData = canvas.app.renderer.extract.base64(this._elevationTexture, format, 1);
-    const saveObj = { imageData, format };
-
-    // Revert frame
-    this._elevationTexture.frame = canvas.dimensions.rect;
+    const imageData = await this._extractElevationImageData(format);
+    const saveObj = {
+      imageData,
+      format,
+      timestamp: Date.now(),
+      version: game.modules.get(MODULE_ID).version };
 
     await canvas.scene.setFlag(MODULE_ID, FLAG_ELEVATION_IMAGE, saveObj);
     this._requiresSave = false;
+  }
+
+  async _extractElevationImageData(format = "image/webp", quality = 1) {
+    this.renderElevation();
+    // Store only the scene rectangle data
+    // From https://github.com/dev7355608/perfect-vision/blob/3eb3c040dfc83a422fd88d4c7329c776742bef2f/patches/fog.js#L256
+    const { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, canvas.dimensions.sceneRect);
+    const canvasElement = pixelsToCanvas(pixels, width, height);
+
+    // Depending on format, may need quality = 1 to avoid lossy compression
+    return await canvasToBase64(canvasElement, format, 1);
   }
 
   /**
@@ -539,17 +547,8 @@ export class ElevationLayer extends InteractionLayer {
     const imageExtension = format.split("/")[1];
     fileName += `.${imageExtension}`;
 
-    this.renderElevation();
-
-    // Frame so that only the scene information is downloaded
-    this._elevationTexture.frame = canvas.dimensions.sceneRect;
-
-    // Depending on format, may need quality = 1 to avoid lossy compression
-    const image64 = canvas.app.renderer.extract.image(this._elevationTexture, format, 1);
+    const image64 = await this._extractElevationImageData(format);
     saveDataToFile(convertBase64ToImage(image64), format, fileName);
-
-    // Reset to original frame
-    this._elevationTexture.frame = canvas.dimensions.rect;
   }
 
   // TO-DO: Preferably download as alpha, possibly by constructing a new texture?

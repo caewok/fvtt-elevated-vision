@@ -156,7 +156,7 @@ export function readDataURLFromFile(file) {
  * @returns {ArrayBuffer} The raw image data.
  */
 export function convertBase64ToImage(image64) {
-  const byteString = atob(image64.src.split(",")[1]);
+  const byteString = atob(image64.split(",")[1]);
 
   // Write the bytes of the string to an ArrayBuffer
   const ln = byteString.length;
