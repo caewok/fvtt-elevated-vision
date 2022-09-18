@@ -38,12 +38,20 @@ const MAX_NUM_WALLS = 100;
 export function createAdaptiveLightingShader(wrapped, ...args) {
   log("createAdaptiveLightingShader");
 
-  if ( this.fragmentShader.includes(FRAGMENT_UNIFORMS) ) return wrapped(...args);
+  if ( this.fragmentShader.includes("EV_numWalls") ) return wrapped(...args);
 
   log("createAdaptiveLightingShader adding shadow shader code");
   const replaceFragUniformStr = "uniform sampler2D depthTexture;";
   const replaceFragStr = "float depth = smoothstep(0.0, 1.0, vDepth);";
   const replaceFragFnStr = "void main() {";
+
+  if ( !(this.fragmentShader.includes(replaceFragUniformStr)
+    && this.fragmentShader.includes(replaceFragStr)
+    && this.fragmentShader.includes(replaceFragFnStr)) ) {
+
+    log("createAdaptiveLightingShader skipped b/c marker code strings not found.");
+    return wrapped(...args);
+  }
 
   this.fragmentShader = this.fragmentShader.replace(
     replaceFragUniformStr, `${replaceFragUniformStr}\n${FRAGMENT_UNIFORMS}`);
