@@ -18,7 +18,6 @@ import { GraphicsStencilMask } from "./perfect-vision/graphics-stencil-mask.js";
 import { DepthStencilShader } from "./perfect-vision/depth-stencil-shader.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
-import { EVVisionContainer } from "./vision.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
@@ -52,7 +51,6 @@ Hooks.once("init", async function() {
     ElevationGrid,
     WallTracer,
     ShadowLOSFilter,
-    EVVisionContainer,
     FILOQueue,
     StencilMask,
     GraphicsStencilMask,
