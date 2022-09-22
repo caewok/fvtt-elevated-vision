@@ -40,7 +40,7 @@ import {
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, registerSettings } from "./settings.js";
 
-Hooks.once("init", async function() {
+Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
     drawing,
     util,

@@ -3,7 +3,10 @@ canvas,
 GlobalLightSource,
 FogManager,
 game,
-PIXI
+PIXI,
+PolygonMesher,
+PointSourceMesh,
+PointSource
 */
 "use strict";
 
@@ -117,31 +120,78 @@ export function createVisionCanvasVisionMask() {
   const vision = new PIXI.Container();
   vision.base = vision.addChild(new PIXI.LegacyGraphics());
   vision.fov = vision.addChild(new PIXI.LegacyGraphics());
-  vision.los = vision.addChild(new PIXI.LegacyGraphics())
+  vision.los = vision.addChild(new PIXI.LegacyGraphics());
   vision.mask = vision.los;
   vision._explored = false;
   return vision;
 }
 
 /**
- * Copy of PointSource.prototype._createMesh
- * Except this version does not take a filter class but instead passes the source to the
- * ShadowLOSFilter creation.
- * @returns {PIXI.Mesh}
+ * Wrap VisionSource.prototype._updateLosGeometry
+ * Add a _sourceGeometryLOS b/c the _sourceGeometry for vision uses the fov.
  */
-export function _createEVMeshLightSource(shaderCls) {
-  return createEVMesh.call(this, shaderCls, this._sourceGeometry);
+export function _updateLosGeometryVisionSource(wrapper, polygon) {
+  wrapper(polygon);
+
+  const polyMesherLOS = new PolygonMesher(this.los, {
+    normalize: true,
+    x: this.x,
+    y: this.y,
+    radius: this.radius,
+    offset: this._flags.renderSoftEdges ? PointSource.EDGE_OFFSET : 0
+  });
+
+  this._sourceGeometryLOS = polyMesherLOS.triangulate(this._sourceGeometryLOS);
 }
 
-export function _createEVMeshVisionSource(shaderCls, type = "los") {
-  let geometry;
+/**
+ * Wrap VisionSource.prototype._initializeMeshes
+ * Add meshes for FOV and LOS
+ */
+export function _createMeshes(wrapper) {
+  wrapper();
+  this._createEVMeshes();
+}
 
-  if ( type === "los" ) {
-    if ( !this._sourceGeometryLOS ) constructSourceGeometryLOS.call(this);
-    geometry = this._sourceGeometryLOS
-  } else geometry = this._sourceGeometry;
+export function _createEVMeshesVisionSource() {
+  if ( !this._sourceGeometryLOS || !this._sourceGeometry ) this._updateLosGeometry(this.fov);
 
-  return createEVMesh.call(this, shaderCls, geometry);
+  this._EV_mesh = {}; // TO-DO: Is it possible for _EV_mesh to be defined already, and need to destroy objects?
+  this._EV_mesh.los = this._createEVMesh(TestShader, this._sourceGeometryLOS);
+  this._EV_mesh.fov = this._createEVMesh(TestShader, this._sourceGeometry);
+
+  // ShadowLOSFilter
+  // TestShader
+}
+
+export function _createEVMeshesLightSource() {
+  if ( !this._sourceGeometry ) this._updateLosGeometry(this.los);
+
+  this._EV_mesh = {}; // TO-DO: Is it possible for _EV_mesh to be defined already, and need to destroy objects?
+  this._EV_mesh.los = this._createEVMesh(TestShader, this._sourceGeometry);
+}
+
+class TestShader extends AdaptiveLightingShader {
+  static fragmentShader = `
+  void main() {
+    gl_FragColor = vec4(1., 0., 0., 1.);
+  }
+  `;
+}
+
+
+/**
+ * Create an EV shadow mask of the LOS polygon.
+ * @returns {PIXI.Mesh}
+ */
+export function _createEVMask(type = "los") {
+  if ( !this._EV_mesh || this._EV_mesh[type].destroyed ) this._createEVMeshes();
+  const mesh = this._EV_mesh[type];
+  if ( mesh._destroyed || !mesh.position ) {
+    console.log("_createMask fails!");
+  }
+
+  return this._updateMesh(mesh);
 }
 
 /**
@@ -150,7 +200,7 @@ export function _createEVMeshVisionSource(shaderCls, type = "los") {
  * @param {Function} shaderCls  The subclass of AdaptiveLightingShader being used for this Mesh
  * @returns {PIXI.Mesh}         The created Mesh
  */
-function createEVMesh(shaderCls, geometry) {
+export function _createEVMesh(shaderCls, geometry) {
   const state = new PIXI.State();
   const mesh = new PointSourceMesh(geometry, shaderCls.create({}, this), state);
   mesh.drawMode = PIXI.DRAW_MODES.TRIANGLES;
@@ -158,35 +208,16 @@ function createEVMesh(shaderCls, geometry) {
   return mesh;
 }
 
-/**
- * Create an EV shadow mask of the LOS polygon.
- * @returns {PIXI.Mesh}
- */
-export function _createEVMask(type = "los") {
-  const mesh = this._createEVMesh(ShadowLOSFilter, type);
-  return this._updateMesh(mesh);
+export function destroyVisionSource(wrapper) {
+  wrapper();
+  this._sourceGeometryLOS?.destroy();
+  this._EV_mesh?.los.destroy();
+  this._EV_mesh?.fov.destroy();
 }
 
-/**
- * Wrap VisionSource.prototype.initialize
- * VisionSources use the fov for the mesh. Create a second mesh using los.
- */
-export function initializeVisionSource(wrapper, data={}) {
-  wrapper(data);
-
-  constructSourceGeometryLOS.call(this);
-}
-
-function constructSourceGeometryLOS() {
-  const polyMesherLOS = new PolygonMesher(this.los, {
-  normalize: true,
-      x: this.x,
-      y: this.y,
-      radius: this.radius,
-      offset: this._flags.renderSoftEdges ? PointSource.EDGE_OFFSET : 0
-    });
-
-  this._sourceGeometryLOS = polyMesherLOS.triangulate(null);
+export function destroyLightSource(wrapper) {
+  wrapper();
+  this._EV_mesh?.los.destroy();
 }
 
 export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
@@ -195,8 +226,6 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
     this.visible = false;
     return this.restrictVisibility();
   }
-
-//   log("refreshCanvasVisibilityShader");
 
   // Stage the priorVision vision container to be saved to the FOW texture
   let commitFog = false;

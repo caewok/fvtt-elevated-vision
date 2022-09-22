@@ -7,7 +7,6 @@ MovementSource
 Token,
 libWrapper,
 ClockwiseSweepPolygon,
-CanvasVisionMask,
 GlobalLightSource
 */
 
@@ -25,9 +24,7 @@ import {
   _testLOSDetectionMode,
   _testRangeDetectionMode,
   _refreshToken,
-  cloneToken//,
-//   updatePositionToken//,
-//   _onUpdateToken
+  cloneToken
 } from "./tokens.js";
 
 import {
@@ -41,11 +38,15 @@ import {
 import {
   refreshCanvasVisibilityPolygons,
   refreshCanvasVisibilityShader,
-  _createEVMeshLightSource,
-  _createEVMeshVisionSource,
   _createEVMask,
   createVisionCanvasVisionMask,
-  initializeVisionSource
+  _updateLosGeometryVisionSource,
+  _createMeshes,
+  _createEVMesh,
+  _createEVMeshesVisionSource,
+  _createEVMeshesLightSource,
+  destroyVisionSource,
+  destroyLightSource
 } from "./vision.js";
 
 import {
@@ -144,13 +145,25 @@ export function registerAdditions() {
 
   if ( getSetting(SETTINGS.VISION_USE_SHADER) ) {
     Object.defineProperty(VisionSource.prototype, "_createEVMesh", {
-      value: _createEVMeshVisionSource,
+      value: _createEVMesh,
       writable: true,
       configurable: true
     });
 
     Object.defineProperty(LightSource.prototype, "_createEVMesh", {
-      value: _createEVMeshLightSource,
+      value: _createEVMesh,
+      writable: true,
+      configurable: true
+    });
+
+    Object.defineProperty(VisionSource.prototype, "_createEVMeshes", {
+      value: _createEVMeshesVisionSource,
+      writable: true,
+      configurable: true
+    });
+
+    Object.defineProperty(LightSource.prototype, "_createEVMeshes", {
+      value: _createEVMeshesLightSource,
       writable: true,
       configurable: true
     });
@@ -190,11 +203,15 @@ export function registerPatches() {
   // ----- Drawing shadows for vision source LOS, fog  ----- //
   if ( getSetting(SETTINGS.VISION_USE_SHADER) ) {
     libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+//     libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMask, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "LightSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "VisionSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "LightSource.prototype.destroy", destroyLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "VisionSource.prototype.destroy", destroyVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
   } else {
     libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMask, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "VisionSource.prototype.initialize", initializeVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-
   }
 
   // ----- Token animation and elevation change ---- //
