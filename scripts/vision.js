@@ -13,6 +13,7 @@ PointSource
 import { log, drawPolygonWithHoles } from "./util.js";
 import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
 import { GraphicsStencilMask } from "./perfect-vision/graphics-stencil-mask.js";
+import { ShadowShader } from "./ShadowShader.js";
 
 /**
  * Override CanvasVisionMask.prototype.refresh
@@ -157,8 +158,8 @@ export function _createEVMeshesVisionSource() {
   if ( !this._sourceGeometryLOS || !this._sourceGeometry ) this._updateLosGeometry(this.fov);
 
   this._EV_mesh = {}; // TO-DO: Is it possible for _EV_mesh to be defined already, and need to destroy objects?
-  this._EV_mesh.los = this._createEVMesh(TestShader, this._sourceGeometryLOS);
-  this._EV_mesh.fov = this._createEVMesh(TestShader, this._sourceGeometry);
+  this._EV_mesh.los = this._createEVMesh(ShadowShader, this._sourceGeometryLOS);
+  this._EV_mesh.fov = this._createEVMesh(ShadowShader, this._sourceGeometry);
 
   // ShadowLOSFilter
   // TestShader
@@ -168,7 +169,7 @@ export function _createEVMeshesLightSource() {
   if ( !this._sourceGeometry ) this._updateLosGeometry(this.los);
 
   this._EV_mesh = {}; // TO-DO: Is it possible for _EV_mesh to be defined already, and need to destroy objects?
-  this._EV_mesh.los = this._createEVMesh(TestShader, this._sourceGeometry);
+  this._EV_mesh.los = this._createEVMesh(ShadowShader, this._sourceGeometry);
 }
 
 class TestShader extends AdaptiveLightingShader {

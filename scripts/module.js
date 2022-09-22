@@ -21,6 +21,7 @@ import { Point3d } from "./Point3d.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
+import { ShadowShader } from "./ShadowShader.js";
 import { ElevationGrid } from "./ElevationGrid.js";
 
 // Register methods, patches, settings
@@ -51,6 +52,7 @@ Hooks.once("init", function() {
     ElevationGrid,
     WallTracer,
     ShadowLOSFilter,
+    ShadowShader,
     FILOQueue,
     StencilMask,
     GraphicsStencilMask,
