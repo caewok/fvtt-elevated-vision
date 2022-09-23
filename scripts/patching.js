@@ -16,14 +16,18 @@ GlobalLightSource
 // Patches
 
 import { MODULE_ID } from "./const.js";
-import { zValue } from "./util.js";
+import { zValue, log } from "./util.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
 import {
   testVisibilityDetectionMode,
   testVisibilityLightSource,
   _testLOSDetectionMode,
-  _testRangeDetectionMode
+  _testRangeDetectionMode,
+  _refreshToken,
+  cloneToken//,
+//   updatePositionToken//,
+//   _onUpdateToken
 } from "./tokens.js";
 
 import {
@@ -180,6 +184,10 @@ export function registerPatches() {
   } else {
     libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
   }
+
+  // ----- Token animation and elevation change ---- //
+  libWrapper.register(MODULE_ID, "Token.prototype.clone", cloneToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "Token.prototype._refresh", _refreshToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 }
 
 /**
@@ -222,7 +230,7 @@ function soundSourceElevation() {
  */
 function tokenTop() {
   // From Wall Height but skip the extra test b/c we know it is a token.
-  return zValue(this.document.object.losHeight ?? 0);
+  return zValue(this.losHeight ?? 0);
 }
 
 /**

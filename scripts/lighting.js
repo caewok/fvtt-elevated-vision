@@ -424,7 +424,7 @@ function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-vars
  * @returns {ClockwiseSweepPolygon}
  */
 export function _createPolygonLightSource(wrapped) {
-  log(`_createPolygonLightSource ${this.object.id}`);
+//   log(`_createPolygonLightSource ${this.object.id}`);
   const los = wrapped();
 
   // TO-DO: Only reset uniforms if:

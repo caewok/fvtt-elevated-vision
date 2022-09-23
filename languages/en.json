@@ -1,4 +1,5 @@
 {
+  "elevatedvision.name": "Elevation",
   "elevatedvision.settings.vision-use-shader.name": "Apply elevation data to token vision",
   "elevatedvision.settings.vision-use-shader.hint": "If selected, will take into account elevation layer data when rendering token vision, meaning terrain above the token will not be visible and terrain in shadows may be visible if sufficiently high. Otherwise, only shadows for walls below the token will be rendered. Unchecking this may increase performance.",
 

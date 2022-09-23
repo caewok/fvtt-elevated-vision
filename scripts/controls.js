@@ -25,7 +25,7 @@ export function addElevationLayerSceneControls(controls) {
   const isGM = game.user.isGM;
   controls.push({
     name: "elevation",
-    title: "ElevationLayer.tool",
+    title: game.i18n.localize(`${MODULE_ID}.name`),
     icon: "fas fa-elevator",
     visible: isGM,
     layer: "elevation",

@@ -20,7 +20,7 @@ import { Point3d } from "./Point3d.js";
  */
 export function _computeClockwiseSweepPolygon(wrapped) {
   wrapped();
-  log("_computeClockwiseSweepPolygon");
+//   log("_computeClockwiseSweepPolygon");
 
   // Ignore lights set with default of positive infinity
   const sourceZ = this.config.source?.elevationZ;

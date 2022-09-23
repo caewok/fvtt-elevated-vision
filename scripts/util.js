@@ -108,77 +108,6 @@ export function points3dAlmostEqual(a, b, epsilon = 1e-08) {
 }
 
 /**
- * From https://pixijs.download/release/docs/packages_extract_src_Extract.ts.html
- * canvas.app.renderer.extract.pixels doesn't work in 6.4.2
- * Appears fixed in 6.5.0. https://github.com/pixijs/pixijs/pull/8388
- *
- * Will return a one-dimensional array containing the pixel data of the entire texture in RGBA
- * order, with integer values between 0 and 255 (included).
- * @param {DisplayObject|RenderTexture} target  A displayObject or renderTexture
- *   to convert. If left empty will use the main renderer
- * @param {PixelExtractOptions|PIXI.Rectangle} The frame the extraction is restricted to.
- * @returns {Uint8Array} One-dimensional array containing the pixel data of the entire texture
- */
-export function extractPixels(target, frame) {
-
-  const renderer = canvas.app.renderer;
-  let resolution;
-  let renderTexture;
-  let generated = false;
-  if (target)
-  {
-    if (target instanceof PIXI.RenderTexture)
-    {
-      renderTexture = target;
-    }
-    else
-    {
-      renderTexture = renderer.generateTexture(target);
-      generated = true;
-    }
-  }
-  if (renderTexture)
-  {
-    resolution = renderTexture.baseTexture.resolution;
-    frame = frame ?? renderTexture.frame;
-    renderer.renderTexture.bind(renderTexture);
-  }
-  else
-  {
-    resolution = renderer.resolution;
-    if (!frame)
-    {
-      frame = new PIXI.Rectangle();
-      frame.width = renderer.width;
-      frame.height = renderer.height;
-    }
-    renderer.renderTexture.bind(null);
-  }
-  const width = Math.round(frame.width * resolution);
-  const height = Math.round(frame.height * resolution);
-  const BYTES_PER_PIXEL = 4;
-
-  const webglPixels = new Uint8Array(BYTES_PER_PIXEL * width * height);
-  // Read pixels to the array
-  const gl = renderer.gl;
-  gl.readPixels(
-    Math.round(frame.x * resolution),
-    Math.round(frame.y * resolution),
-    width,
-    height,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    webglPixels
-  );
-  if (generated)
-  {
-    renderTexture.destroy(true);
-  }
-  PIXI.Extract.arrayPostDivide(webglPixels, webglPixels);
-  return webglPixels;
-}
-
-/**
  * Convert a grid units value to pixel units, for equivalency with x,y values.
  */
 export function zValue(value) {
@@ -227,7 +156,7 @@ export function readDataURLFromFile(file) {
  * @returns {ArrayBuffer} The raw image data.
  */
 export function convertBase64ToImage(image64) {
-  const byteString = atob(image64.src.split(",")[1]);
+  const byteString = atob(image64.split(",")[1]);
 
   // Write the bytes of the string to an ArrayBuffer
   const ln = byteString.length;
