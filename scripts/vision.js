@@ -157,7 +157,10 @@ export function _createMeshes(wrapper) {
 export function _createEVMeshesVisionSource() {
   if ( !this._sourceGeometryLOS || !this._sourceGeometry ) this._updateLosGeometry(this.fov);
 
-  this._EV_mesh = {}; // TO-DO: Is it possible for _EV_mesh to be defined already, and need to destroy objects?
+  if ( this._EV_mesh?.los ) this._EV_mesh.los.destroy();
+  if ( this._EV_mesh?.fov ) this._EV_mesh.fov.destroy();
+
+  this._EV_mesh = {};
   this._EV_mesh.los = this._createEVMesh(ShadowShader, this._sourceGeometryLOS);
   this._EV_mesh.fov = this._createEVMesh(ShadowShader, this._sourceGeometry);
 
@@ -167,8 +170,9 @@ export function _createEVMeshesVisionSource() {
 
 export function _createEVMeshesLightSource() {
   if ( !this._sourceGeometry ) this._updateLosGeometry(this.los);
+  if ( this._EV_mesh?.los ) this._EV_mesh.los.destroy();
 
-  this._EV_mesh = {}; // TO-DO: Is it possible for _EV_mesh to be defined already, and need to destroy objects?
+  this._EV_mesh = {};
   this._EV_mesh.los = this._createEVMesh(ShadowShader, this._sourceGeometry);
 }
 
@@ -189,7 +193,7 @@ export function _createEVMask(type = "los") {
   if ( !this._EV_mesh || this._EV_mesh[type].destroyed ) this._createEVMeshes();
   const mesh = this._EV_mesh[type];
   if ( mesh._destroyed || !mesh.position ) {
-    console.log("_createMask fails!");
+    log("_createMask fails!");
   }
 
   return this._updateMesh(mesh);

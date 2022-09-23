@@ -3,6 +3,9 @@ AdaptiveLightingShader,
 */
 "use strict";
 
+import { log } from "./util.js";
+
+
 export class ShadowShader extends AdaptiveLightingShader {
 
   static vertexShader = `
@@ -10,28 +13,38 @@ export class ShadowShader extends AdaptiveLightingShader {
   ${this.VERTEX_UNIFORMS}
   ${this.VERTEX_FRAGMENT_VARYINGS}
 
-  uniform mat3 canvasMatrix;
-  varying vec2 vCanvasCoord;
+  uniform vec4 EV_transform;
+  varying vec2 EV_textureCoord;
 
   void main() {
-//     vTextureCoord = aVertexPosition * (outputFrame.zw * inputSize.zw);
-//     vec2 position = aVertexPosition * max(outputFrame.zw, vec2(0.)) + outputFrame.xy;
-//     vCanvasCoord = (canvasMatrix * vec3(position, 1.0)).xy;
-
     vec3 tPos = translationMatrix * vec3(aVertexPosition, 1.0);
-    vCanvasCoord = (canvasMatrix * vec3(tPos.xy, 1.0)).xy;
-
     vUvs = aVertexPosition * 0.5 + 0.5;
     vDepth = aDepthValue;
     vSamplerUvs = tPos.xy / screenDimensions;
+
+    EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
+
     gl_Position = vec4((projectionMatrix * tPos).xy, 0.0, 1.0);
   }`;
 
   static fragmentShader = `
-  varying vec2 vCanvasCoord;
+  varying vec2 EV_textureCoord;
+
+  uniform sampler2D EV_elevationSampler;
+  uniform vec2 EV_canvasXY;
+
+  // Defined constants
+  vec4 visionColor = vec4(1., 0., 0., 1.);
+  vec4 shadowColor = vec4(0., 0., 0., 1.);
 
   void main() {
-    gl_FragColor = vec4(1., 0., 0., 1.);
+    vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+
+    if ( backgroundElevation.r > 0. ) {
+      gl_FragColor = shadowColor;
+    } else {
+      gl_FragColor = visionColor;
+    }
   }
   `;
 
@@ -44,8 +57,25 @@ export class ShadowShader extends AdaptiveLightingShader {
 }
 
 function updateShadowShaderUniforms(uniforms, source) {
-  uniforms.canvasMatrix ??= new PIXI.Matrix();
-  uniforms.canvasMatrix.copyFrom(source.illumination.worldTransform).invert();
+  // Screen-space to local coords:
+  // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010914586532261909
+  // shader.uniforms.EV_canvasMatrix ??= new PIXI.Matrix();
+  // shader.uniforms.EV_canvasMatrix
+  //   .copyFrom(canvas.stage.worldTransform)
+  //   .invert()
+  //   .append(mesh.transform.worldTransform);
+
+  // Alternative version using vUvs, given that light source mesh have no rotation
+  // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010999752030171136
+  const { width, height } = canvas.dimensions;
+  const { x, y, radius } = source;
+  uniforms.EV_transform = [
+    radius * 2 / width,
+    radius * 2 / height,
+    (x - radius) / width,
+    (y - radius) / height
+  ];
+  uniforms.EV_elevationSampler = canvas.elevation?._elevationTexture || PIXI.Texture.EMPTY;
 }
 
 /**
@@ -53,6 +83,11 @@ function updateShadowShaderUniforms(uniforms, source) {
  */
 export function _updateUniformsLightSource(wrapper) {
   wrapper();
+  if ( this._EV_mesh.los._destroyed ) {
+    log("_updateUniformsLightSource los mesh destroyed!");
+    this._createEVMeshes();
+  }
+
   updateShadowShaderUniforms(this._EV_mesh.los.shader.uniforms, this);
 }
 
@@ -61,6 +96,11 @@ export function _updateUniformsLightSource(wrapper) {
  */
 export function _updateUniformsVisionSource(wrapper) {
   wrapper();
+  if ( this._EV_mesh.los._destroyed || this._EV_mesh.fov._destroyed ) {
+    log("_updateUniformsLightSource los mesh destroyed!");
+    this._createEVMeshes();
+  }
+
   updateShadowShaderUniforms(this._EV_mesh.los.shader.uniforms, this);
   updateShadowShaderUniforms(this._EV_mesh.fov.shader.uniforms, this);
 }
