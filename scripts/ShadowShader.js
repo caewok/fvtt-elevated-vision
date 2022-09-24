@@ -43,8 +43,8 @@ export class ShadowShader extends AdaptiveLightingShader {
     vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
 
     if ( backgroundElevation.r > 0. ) {
-      gl_FragColor = shadowColor;
-//       discard;
+//       gl_FragColor = shadowColor;
+      discard; // Unclear whether discard is what we want here.
     } else {
 //       vec4 fg = texture2D(uSampler, vSamplerUvs);
 //        gl_FragColor = fg;
@@ -62,7 +62,7 @@ export class ShadowShader extends AdaptiveLightingShader {
 
 }
 
-function updateShadowShaderUniforms(uniforms, source) {
+export function updateShadowShaderUniforms(uniforms, source) {
   // Screen-space to local coords:
   // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010914586532261909
   // shader.uniforms.EV_canvasMatrix ??= new PIXI.Matrix();
@@ -88,6 +88,7 @@ function updateShadowShaderUniforms(uniforms, source) {
  * Wrap LightSource.prototype.updateUniforms
  */
 export function _updateUniformsLightSource(wrapper) {
+  log("_updateUniformsLightSource")
   wrapper();
   if ( this._EV_mesh.los._destroyed ) {
     log("_updateUniformsLightSource los mesh destroyed!");
@@ -101,6 +102,7 @@ export function _updateUniformsLightSource(wrapper) {
  * Wrap VisionSource.prototype.updateUniforms
  */
 export function _updateUniformsVisionSource(wrapper) {
+  log("_updateUniformsVisionSource")
   wrapper();
   if ( this._EV_mesh.los._destroyed || this._EV_mesh.fov._destroyed ) {
     log("_updateUniformsLightSource los mesh destroyed!");

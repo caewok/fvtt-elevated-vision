@@ -13,7 +13,8 @@ PointSource
 import { log, drawPolygonWithHoles } from "./util.js";
 import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
 import { GraphicsStencilMask } from "./perfect-vision/graphics-stencil-mask.js";
-import { ShadowShader } from "./ShadowShader.js";
+import { ShadowShader, updateShadowShaderUniforms } from "./ShadowShader.js";
+
 
 /**
  * Override CanvasVisionMask.prototype.refresh
@@ -196,6 +197,7 @@ export function _createEVMask(type = "los") {
     log("_createMask fails!");
   }
 
+  updateShadowShaderUniforms(this._EV_mesh[type].shader.uniforms, this);
   return this._updateMesh(mesh);
 }
 
