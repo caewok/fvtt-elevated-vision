@@ -221,7 +221,8 @@ if ( EV_hasElevationSampler ) {
 }
 
 float percentDistanceFromWall;
-float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
+float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
+//float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
 if ( pixelElevation > EV_lightElevation ) {
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
@@ -389,7 +390,7 @@ export function _updateEVLightUniformsLightSource(mesh) {
  * @param {number} r_inv  Inverse of the radius. Optional; for repeated calcs.
  * @returns {Point}
  */
-function pointCircleCoord(point, r, center, r_inv = 1 / r) {
+export function pointCircleCoord(point, r, center, r_inv = 1 / r) {
   return {
     x: circleCoord(point.x, r, center.x, r_inv),
     y: circleCoord(point.y, r, center.y, r_inv)
