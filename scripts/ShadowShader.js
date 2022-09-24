@@ -29,7 +29,9 @@ export class ShadowShader extends AdaptiveLightingShader {
 
   static fragmentShader = `
   varying vec2 EV_textureCoord;
+  varying vec2 vSamplerUvs;
 
+  uniform sampler2D uSampler;
   uniform sampler2D EV_elevationSampler;
   uniform vec2 EV_canvasXY;
 
@@ -42,8 +44,12 @@ export class ShadowShader extends AdaptiveLightingShader {
 
     if ( backgroundElevation.r > 0. ) {
       gl_FragColor = shadowColor;
+//       discard;
     } else {
+//       vec4 fg = texture2D(uSampler, vSamplerUvs);
+//        gl_FragColor = fg;
       gl_FragColor = visionColor;
+
     }
   }
   `;
