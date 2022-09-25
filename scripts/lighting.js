@@ -38,12 +38,20 @@ const MAX_NUM_WALLS = 100;
 export function createAdaptiveLightingShader(wrapped, ...args) {
   log("createAdaptiveLightingShader");
 
-  if ( this.fragmentShader.includes(FRAGMENT_UNIFORMS) ) return wrapped(...args);
+  if ( this.fragmentShader.includes("EV_numWalls") ) return wrapped(...args);
 
   log("createAdaptiveLightingShader adding shadow shader code");
   const replaceFragUniformStr = "uniform sampler2D depthTexture;";
   const replaceFragStr = "float depth = smoothstep(0.0, 1.0, vDepth);";
   const replaceFragFnStr = "void main() {";
+
+  if ( !(this.fragmentShader.includes(replaceFragUniformStr)
+    && this.fragmentShader.includes(replaceFragStr)
+    && this.fragmentShader.includes(replaceFragFnStr)) ) {
+
+    log("createAdaptiveLightingShader skipped b/c marker code strings not found.");
+    return wrapped(...args);
+  }
 
   this.fragmentShader = this.fragmentShader.replace(
     replaceFragUniformStr, `${replaceFragUniformStr}\n${FRAGMENT_UNIFORMS}`);
@@ -213,7 +221,8 @@ if ( EV_hasElevationSampler ) {
 }
 
 float percentDistanceFromWall;
-float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
+float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
+//float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
 if ( pixelElevation > EV_lightElevation ) {
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
@@ -381,7 +390,7 @@ export function _updateEVLightUniformsLightSource(mesh) {
  * @param {number} r_inv  Inverse of the radius. Optional; for repeated calcs.
  * @returns {Point}
  */
-function pointCircleCoord(point, r, center, r_inv = 1 / r) {
+export function pointCircleCoord(point, r, center, r_inv = 1 / r) {
   return {
     x: circleCoord(point.x, r, center.x, r_inv),
     y: circleCoord(point.y, r, center.y, r_inv)

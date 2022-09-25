@@ -7,7 +7,6 @@ MovementSource
 Token,
 libWrapper,
 ClockwiseSweepPolygon,
-CanvasVisionMask,
 GlobalLightSource
 */
 
@@ -25,9 +24,7 @@ import {
   _testLOSDetectionMode,
   _testRangeDetectionMode,
   _refreshToken,
-  cloneToken//,
-//   updatePositionToken//,
-//   _onUpdateToken
+  cloneToken
 } from "./tokens.js";
 
 import {
@@ -41,10 +38,22 @@ import {
 import {
   refreshCanvasVisibilityPolygons,
   refreshCanvasVisibilityShader,
+  _createEVMask,
   createVisionCanvasVisionMask,
-  clearCanvasVisionMask,
-  _getEVTexture
+  _updateLosGeometryVisionSource,
+  _createMeshes,
+  _createEVMesh,
+  _createEVMeshesVisionSource,
+  _createEVMeshesLightSource,
+  destroyVisionSource,
+  destroyLightSource
 } from "./vision.js";
+
+import {
+  _updateUniformsLightSource,
+  _updateUniformsVisionSource
+
+} from "./ShadowShader.js";
 
 import {
   _computeClockwiseSweepPolygon,
@@ -141,16 +150,38 @@ export function registerAdditions() {
   });
 
   if ( getSetting(SETTINGS.VISION_USE_SHADER) ) {
-    // Set up similar pool of RenderTexture objects as that of the FogManager
-    // Here, for CanvasVisionMask
-    Object.defineProperty(CanvasVisionMask.prototype, "_EV_textures", {
-      value: [],
+    Object.defineProperty(VisionSource.prototype, "_createEVMesh", {
+      value: _createEVMesh,
       writable: true,
       configurable: true
     });
 
-    Object.defineProperty(CanvasVisionMask.prototype, "_getEVTexture", {
-      value: _getEVTexture,
+    Object.defineProperty(LightSource.prototype, "_createEVMesh", {
+      value: _createEVMesh,
+      writable: true,
+      configurable: true
+    });
+
+    Object.defineProperty(VisionSource.prototype, "_createEVMeshes", {
+      value: _createEVMeshesVisionSource,
+      writable: true,
+      configurable: true
+    });
+
+    Object.defineProperty(LightSource.prototype, "_createEVMeshes", {
+      value: _createEVMeshesLightSource,
+      writable: true,
+      configurable: true
+    });
+
+    Object.defineProperty(VisionSource.prototype, "_createEVMask", {
+      value: _createEVMask,
+      writable: true,
+      configurable: true
+    });
+
+    Object.defineProperty(LightSource.prototype, "_createEVMask", {
+      value: _createEVMask,
       writable: true,
       configurable: true
     });
@@ -178,8 +209,14 @@ export function registerPatches() {
   // ----- Drawing shadows for vision source LOS, fog  ----- //
   if ( getSetting(SETTINGS.VISION_USE_SHADER) ) {
     libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMask, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.clear", clearCanvasVisionMask, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//     libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMask, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "LightSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "VisionSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "LightSource.prototype.destroy", destroyLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "VisionSource.prototype.destroy", destroyVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "LightSource.prototype._updateUniforms", _updateUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    libWrapper.register(MODULE_ID, "VisionSource.prototype._updateUniforms", _updateUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
   } else {
     libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});

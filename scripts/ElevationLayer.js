@@ -32,7 +32,7 @@ import * as drawing from "./drawing.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
-import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./extract-pixels.js";
+import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
 
 /* Elevation layer
 

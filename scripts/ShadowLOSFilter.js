@@ -75,16 +75,19 @@ export class ShadowLOSFilter extends AbstractBaseFilter {
     vec4 shadowColor = vec4(0., 0., 0., 0.);
 
     void main() {
+      gl_FragColor = visionColor;
+      return;
+
       vec4 fg = texture2D(uSampler, vTextureCoord);
 
-      if ( fg.a == 0. ) {
-//         discard;
-        gl_FragColor = fg;
-        return;
-      }
+//       if ( fg.a == 0. ) {
+//         gl_FragColor = fg;
+//         return;
+//       }
 
       if ( !EV_hasElevationSampler ) {
-        gl_FragColor = fg;
+//         gl_FragColor = fg;
+        gl_FragColor = visionColor;
         return;
       }
 
@@ -121,9 +124,11 @@ export class ShadowLOSFilter extends AbstractBaseFilter {
 
 
       if ( inShadow ) {
-        fg = shadowColor * fg.a;
+//         fg = shadowColor * fg.a;
+        fg = shadowColor;
       } else {
-        fg = visionColor * fg.a;
+//         fg = visionColor * fg.a;
+        fg = visionColor;
       }
 
       gl_FragColor = fg;
