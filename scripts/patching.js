@@ -38,6 +38,7 @@ import {
 import {
   refreshCanvasVisibilityPolygons,
   refreshCanvasVisibilityShader,
+  createVisionCanvasVisionMaskPV,
   _createEVMask,
   createVisionCanvasVisionMask,
   _updateLosGeometryVisionSource,
@@ -189,6 +190,8 @@ export function registerAdditions() {
 }
 
 export function registerPatches() {
+  const perfectVisionEnabled = game.modules.get("perfect-vision")?.active;
+
   // ----- Locating edges that create shadows in the LOS ----- //
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
@@ -208,18 +211,27 @@ export function registerPatches() {
 
   // ----- Drawing shadows for vision source LOS, fog  ----- //
   if ( getSetting(SETTINGS.VISION_USE_SHADER) ) {
-    libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
-//     libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMask, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "LightSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "VisionSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "LightSource.prototype.destroy", destroyLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "VisionSource.prototype.destroy", destroyVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "LightSource.prototype._updateUniforms", _updateUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "VisionSource.prototype._updateUniforms", _updateUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    if ( perfectVisionEnabled ) {
+
+    } else {
+
+      libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+  //     libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMask, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "LightSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "VisionSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "LightSource.prototype.destroy", destroyLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "VisionSource.prototype.destroy", destroyVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "LightSource.prototype._updateUniforms", _updateUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "VisionSource.prototype._updateUniforms", _updateUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    }
 
   } else {
-    libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+    if ( perfectVisionEnabled ) {
+      libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMaskPV, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+    } else {
+      libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+    }
   }
 
   // ----- Token animation and elevation change ---- //

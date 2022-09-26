@@ -10,7 +10,7 @@ PointSource
 */
 "use strict";
 
-import { log, drawPolygonWithHoles } from "./util.js";
+import { log, drawPolygonWithHoles, drawPolygonWithHolesPV } from "./util.js";
 import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
 import { GraphicsStencilMask } from "./perfect-vision/graphics-stencil-mask.js";
 import { ShadowShader, updateShadowShaderUniforms } from "./ShadowShader.js";
@@ -93,6 +93,40 @@ export function refreshCanvasVisibilityPolygons({forceUpdateFog=false}={}) {
 
   // Restrict the visibility of other canvas objects
   this.restrictVisibility();
+}
+
+
+/**
+ * Override for creating vision with polygon shadow holes, compatible with Perfect Vision.
+ * Add the holes directly when creating the vision object.
+ */
+export function createVisionCanvasVisionMaskPV(wrapper) {
+  const vision = wrapper();
+
+  for ( let lightSource of canvas.effects.lightSources ) {
+    if ( !canvas.effects.visionSources.size
+      || !lightSource.active
+      || lightSource.disabled
+      || lightSource instanceof GlobalLightSource ) continue;
+
+    const shadows = lightSource.los.combinedShadows || [];
+    if ( shadows.length ) {
+      drawPolygonWithHolesPV(shadows, { graphics: vision.fov });
+
+      if ( lightSource.data.vision ) {
+        drawPolygonWithHolesPV(shadows, { graphics: vision.los });
+      }
+    }
+  }
+
+  for ( let visionSource of canvas.effects.visionSources ) {
+    const shadows = visionSource.los.combinedShadows || [];
+    if ( shadows.length ) {
+      drawPolygonWithHolesPV(shadows, { graphics: vision.los });
+    }
+  }
+
+  return vision;
 }
 
 /**
