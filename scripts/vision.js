@@ -210,6 +210,12 @@ export function _createEVMask(type = "los") {
 export function _createEVMesh(shaderCls, geometry) {
   const state = new PIXI.State();
   const mesh = new PointSourceMesh(geometry, shaderCls.create({}, this), state);
+
+  const shader = mesh.shader;
+  shader.texture = this.texture ?? PIXI.Texture.WHITE;
+  shader.textureMatirx = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
+  shader.alphaThreshold = 0.75;
+
   mesh.drawMode = PIXI.DRAW_MODES.TRIANGLES;
   Object.defineProperty(mesh, "uniforms", {get: () => mesh.shader.uniforms});
   return mesh;

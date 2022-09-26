@@ -10,35 +10,44 @@ import { FRAGMENT_FUNCTIONS, pointCircleCoord } from "./lighting.js";
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
 const MAX_NUM_WALLS = 100;
 
-export class ShadowShader extends AdaptiveLightingShader {
-
+export class ShadowShader extends PIXI.Shader {
   static vertexShader = `
-  ${this.VERTEX_ATTRIBUTES}
-  ${this.VERTEX_UNIFORMS}
-  ${this.VERTEX_FRAGMENT_VARYINGS}
+  attribute vec2 aVertexPosition;
+  uniform mat3 projectionMatrix;
+  uniform mat3 translationMatrix;
+  uniform mat3 textureMatrix;
+  varying vec2 vTextureCoord;
 
+  // EV-specific variables
   uniform vec4 EV_transform;
+  varying vec2 vUvs;
+  varying vec2 vSamplerUvs;
   varying vec2 EV_textureCoord;
 
   void main() {
+    // EV-specific calcs
     vec3 tPos = translationMatrix * vec3(aVertexPosition, 1.0);
     vUvs = aVertexPosition * 0.5 + 0.5;
-    vDepth = aDepthValue;
-    vSamplerUvs = tPos.xy / screenDimensions;
-
     EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
+    // TO-DO: drop vUvs and just use aVertexPosition
 
-    gl_Position = vec4((projectionMatrix * tPos).xy, 0.0, 1.0);
-  }`;
+    vTextureCoord = (textureMatrix * vec3(aVertexPosition, 1.0)).xy;
+    gl_Position = vec4((projectionMatrix * (translationMatrix * vec3(aVertexPosition, 1.0))).xy, 0.0, 1.0);
+  }
+  `;
 
   static fragmentShader = `
-  varying vec2 EV_textureCoord;
-  varying vec2 vSamplerUvs;
-  varying vec2 vUvs;
+  varying vec2 vTextureCoord;
+  uniform sampler2D sampler;
+  uniform float alphaThreshold;
+  uniform float depthElevation;
 
-  uniform sampler2D uSampler;
+  ${FRAGMENT_FUNCTIONS}
+
+  // EV-specific variables
+  varying vec2 EV_textureCoord;
+  varying vec2 vUvs;
   uniform sampler2D EV_elevationSampler;
-  uniform vec2 EV_canvasXY;
   uniform vec4 EV_elevationResolution;
   uniform float EV_sourceElevation;
   uniform int EV_numWalls;
@@ -48,16 +57,15 @@ export class ShadowShader extends AdaptiveLightingShader {
   uniform float EV_wallElevations[${MAX_NUM_WALLS}];
   uniform float EV_wallDistances[${MAX_NUM_WALLS}];
 
-  // EV functions
-  ${FRAGMENT_FUNCTIONS}
-
   // Defined constants
-  vec4 visionColor = vec4(1., 0., 0., 1.);
-  vec4 shadowColor = vec4(0., 0., 0., 1.);
   vec2 center = vec2(0.5);
   const int maxWalls = ${MAX_NUM_WALLS};
 
   void main() {
+    if ( texture2D(sampler, vTextureCoord).a <= alphaThreshold ) {
+      discard;
+    }
+
     vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
     float pixelCanvasElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
     bool inShadow = false;
@@ -91,28 +99,83 @@ export class ShadowShader extends AdaptiveLightingShader {
     if ( inShadow ) {
       discard;
     } else {
-      gl_FragColor = visionColor;
+      gl_FragColor = vec4(0.0, 0.0, 0.0, depthElevation);
     }
-
-
-//     if ( backgroundElevation.r > 0. ) {
-// //       gl_FragColor = shadowColor;
-//       discard; // Unclear whether discard is what we want here.
-//     } else {
-// //       vec4 fg = texture2D(uSampler, vSamplerUvs);
-// //        gl_FragColor = fg;
-//       gl_FragColor = visionColor;
-//
-//     }
   }
   `;
 
-  /** @override */
-  static create(uniforms={}, source) {
+  static defaultUniforms = {
+    sampler: PIXI.Texture.WHITE,
+    textureMatrix: PIXI.Matrix.IDENTITY,
+    alphaThreshold: 0.75,
+    depthElevation: 0
+  };
+
+  static #program;
+
+  static create(defaultUniforms = {}, source) {
+    const program = ShadowShader.#program ??= PIXI.Program.from(
+        ShadowShader.vertexShader,
+        ShadowShader.fragmentShader
+    );
+    const uniforms = foundry.utils.mergeObject(
+        this.defaultUniforms,
+        defaultUniforms,
+        { inplace: false, insertKeys: false }
+    );
+
     updateShadowShaderUniforms(uniforms, source);
-    return super.create(uniforms);
+
+    return new this(program, uniforms);
   }
 
+  /**
+   * The texture.
+   * @type {PIXI.Texture}
+   */
+  get texture() {
+    return this.uniforms.sampler;
+  }
+
+  set texture(value) {
+    this.uniforms.sampler = value;
+  }
+
+  /**
+   * The texture matrix.
+   * @type {PIXI.Texture}
+   */
+  get textureMatrix() {
+    return this.uniforms.textureMatrix;
+  }
+
+  set textureMatrix(value) {
+    this.uniforms.textureMatrix = value;
+  }
+
+  /**
+   * The alpha threshold.
+   * @type {number}
+   */
+  get alphaThreshold() {
+    return this.uniforms.alphaThreshold;
+  }
+
+  set alphaThreshold(value) {
+    this.uniforms.alphaThreshold = value;
+  }
+
+  /**
+   * The depth elevation.
+   * @type {number}
+   */
+  get depthElevation() {
+    return this.uniforms.depthElevation;
+  }
+
+  set depthElevation(value) {
+    this.uniforms.depthElevation = value;
+  }
 }
 
 export function updateShadowShaderUniforms(uniforms, source) {
