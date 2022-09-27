@@ -111,10 +111,10 @@ const DEPTH_CALCULATION =
 `
 float depth = smoothstep(0.0, 1.0, vDepth);
 vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
-if ( EV_hasElevationSampler ) {
-  vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
-  backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
-}
+int wallsToProcess = EV_numWalls;
+vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
+backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+
 
 float percentDistanceFromWall;
 float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
@@ -122,34 +122,33 @@ float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevat
 if ( pixelElevation > EV_lightElevation ) {
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
-  if ( EV_isVision ) inShadow = true;
+  wallsToProcess = 0;
+  inShadow = EV_isVision;
+}
 
-} else if ( EV_numWalls > 0 ) {
+const vec2 center = vec2(0.5);
+const int maxWalls = ${MAX_NUM_WALLS};
+for ( int i = 0; i < maxWalls; i++ ) {
+  if ( i >= wallsToProcess ) break;
 
-  const vec2 center = vec2(0.5);
-  const int maxWalls = ${MAX_NUM_WALLS};
-  for ( int i = 0; i < maxWalls; i++ ) {
-    if ( i >= EV_numWalls ) break;
-
-    bool thisWallInShadow = locationInWallShadow(
-      EV_wallCoords[i],
-      EV_wallElevations[i],
-      EV_wallDistances[i],
-      EV_lightElevation,
-      center,
-      pixelElevation,
-      vUvs,
-      percentDistanceFromWall
-    );
+  bool thisWallInShadow = locationInWallShadow(
+    EV_wallCoords[i],
+    EV_wallElevations[i],
+    EV_wallDistances[i],
+    EV_lightElevation,
+    center,
+    pixelElevation,
+    vUvs,
+    percentDistanceFromWall
+  );
 
 
-    if ( thisWallInShadow ) {
-      // Current location is within shadow of the wall
-      // Don't break out of loop; could be more than one wall casting shadow on this point.
-      // For now, use the closest shadow for depth.
-      inShadow = true;
-      depth = min(depth, percentDistanceFromWall);
-    }
+  if ( thisWallInShadow ) {
+    // Current location is within shadow of the wall
+    // Don't break out of loop; could be more than one wall casting shadow on this point.
+    // For now, use the closest shadow for depth.
+    inShadow = true;
+    depth = min(depth, percentDistanceFromWall);
   }
 }
 `;
