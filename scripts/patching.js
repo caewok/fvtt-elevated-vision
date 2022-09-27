@@ -29,7 +29,6 @@ import {
 
 import {
   createAdaptiveLightingShader,
-  createAdaptiveLightingShaderPV,
   _updateColorationUniformsLightSource,
   _updateIlluminationUniformsLightSource,
   _updateEVLightUniformsLightSource,
@@ -198,7 +197,7 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
   // ----- Shader code for drawing shadows ----- //
-  libWrapper.register(MODULE_ID, "AdaptiveLightingShader.create", createAdaptiveLightingShaderPV, libWrapper.WRAPPER);
+  libWrapper.register(MODULE_ID, "AdaptiveLightingShader.create", createAdaptiveLightingShader, libWrapper.WRAPPER);
 
   // ----- Drawing shadows for light sources ----- //
   libWrapper.register(MODULE_ID, "LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});

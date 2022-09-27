@@ -37,6 +37,8 @@ export class ShadowShader extends PIXI.Shader {
   `;
 
   static fragmentShader = `
+  #define MAX_NUM_WALLS ${MAX_NUM_WALLS}
+
   varying vec2 vTextureCoord;
   uniform sampler2D sampler;
   uniform float alphaThreshold;
@@ -53,13 +55,12 @@ export class ShadowShader extends PIXI.Shader {
   uniform int EV_numWalls;
 
   // Wall data, in vUvs coordinate space
-  uniform vec4 EV_wallCoords[${MAX_NUM_WALLS}];
-  uniform float EV_wallElevations[${MAX_NUM_WALLS}];
-  uniform float EV_wallDistances[${MAX_NUM_WALLS}];
+  uniform vec4 EV_wallCoords[MAX_NUM_WALLS];
+  uniform float EV_wallElevations[MAX_NUM_WALLS];
+  uniform float EV_wallDistances[MAX_NUM_WALLS];
 
   // Defined constants
-  vec2 center = vec2(0.5);
-  const int maxWalls = ${MAX_NUM_WALLS};
+  const vec2 center = vec2(0.5);
 
   void main() {
     if ( texture2D(sampler, vTextureCoord).a <= alphaThreshold ) {
@@ -70,29 +71,31 @@ export class ShadowShader extends PIXI.Shader {
     float pixelCanvasElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
     bool inShadow = false;
     float percentDistanceFromWall;
+    int wallsToProcess = EV_numWalls;
 
     if ( pixelCanvasElevation > EV_sourceElevation ) {
         inShadow = true;
-    } else if ( EV_numWalls > 0 ){
-      for ( int i = 0; i < maxWalls; i++ ) {
-        if ( i >= EV_numWalls ) break;
+        wallsToProcess = 0;
+    }
 
-        bool thisWallInShadow = locationInWallShadow(
-          EV_wallCoords[i],
-          EV_wallElevations[i],
-          EV_wallDistances[i],
-          EV_sourceElevation,
-          center,
-          pixelCanvasElevation,
-          vUvs,
-          percentDistanceFromWall
-        );
+    for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
+      if ( i >= wallsToProcess ) break;
 
-        if ( thisWallInShadow ) {
-          // Current location is within shadow of this wall
-          inShadow = true;
-          break;
-        }
+      bool thisWallInShadow = locationInWallShadow(
+        EV_wallCoords[i],
+        EV_wallElevations[i],
+        EV_wallDistances[i],
+        EV_sourceElevation,
+        center,
+        pixelCanvasElevation,
+        vUvs,
+        percentDistanceFromWall
+      );
+
+      if ( thisWallInShadow ) {
+        // Current location is within shadow of this wall
+        inShadow = true;
+        break;
       }
     }
 
