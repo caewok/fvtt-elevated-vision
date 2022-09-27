@@ -6,11 +6,11 @@
 // From: https://github.com/dev7355608/perfect-vision/blob/498821468a50d4d446106969b00d2a1854b19481/scripts/core/point-source-shader.js#L479
 
 export function applyPatches(shaderClass, patchVertex, patchFrag) {
-    if (patchVertex && !shaderClass.vertexShader.includes("#define ELEVATED_VISION\n")) {
+    if (patchVertex && !shaderClass.vertexShader.includes("#define ELEVATED_VISION")) {
         shaderClass.vertexShader = patchVertex(shaderClass.vertexShader)
             + "\n\n#define ELEVATED_VISION\n";
     }
-    if (patchFrag && !shaderClass.fragmentShader.includes("#define ELEVATED_VISION\n")) {
+    if (patchFrag && !shaderClass.fragmentShader.includes("#define ELEVATED_VISION")) {
         shaderClass.fragmentShader = patchFrag(shaderClass.fragmentShader)
             + "\n\n#define ELEVATED_VISION\n";
     }

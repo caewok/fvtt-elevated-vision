@@ -109,8 +109,7 @@ const FN_LOCATION_IN_WALL_SHADOW =
 
 const DEPTH_CALCULATION =
 `
-depth = smoothstep(0.0, 1.0, vDepth);
-bool inShadow = false;
+float depth = smoothstep(0.0, 1.0, vDepth);
 vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
 if ( EV_hasElevationSampler ) {
   vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
@@ -210,15 +209,13 @@ function addShadowCode(source) {
         { qualifier: "in", type: "vec2", name: "c" }
       ])
 
-      // Add depth variable that can be seen by wrapped main
-      .addGlobal("depth", "float")
+      // Add variable that can be seen by wrapped main
+      .addGlobal("inShadow", "bool", "false")
 
-      .replace(/float depth = smoothstep[(]0.0, 1.0, vDepth[)];/, "depth = smoothstep(0.0, 1.0, depth);")
+      .replace(/float depth = smoothstep[(]0.0, 1.0, vDepth[)];/, DEPTH_CALCULATION)
 
       .wrapMain(`\
         void main() {
-          ${DEPTH_CALCULATION}
-
           @main();
 
           ${FRAG_COLOR}
