@@ -192,6 +192,7 @@ export function registerAdditions() {
 
 export function registerPatches() {
   const perfectVisionEnabled = game.modules.get("perfect-vision")?.active;
+  if ( perfectVisionEnabled ) PerfectVision.debug = true; // Turn off GLSL optimizer b/c it is buggy.
 
   // ----- Locating edges that create shadows in the LOS ----- //
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
