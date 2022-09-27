@@ -127,8 +127,7 @@ if ( pixelElevation > EV_lightElevation ) {
 }
 
 const vec2 center = vec2(0.5);
-const int maxWalls = ${MAX_NUM_WALLS};
-for ( int i = 0; i < maxWalls; i++ ) {
+for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
   if ( i >= wallsToProcess ) break;
 
   bool thisWallInShadow = locationInWallShadow(
@@ -166,9 +165,9 @@ function addShadowCode(source) {
       .setSource(source)
 
       .addUniform("EV_numWalls", "int")
-      .addUniform(`EV_wallCoords[${MAX_NUM_WALLS}]`, "vec4")
-      .addUniform(`EV_wallElevations[${MAX_NUM_WALLS}]`, "float")
-      .addUniform(`EV_wallDistances[${MAX_NUM_WALLS}]`, "float")
+      .addUniform(`EV_wallCoords[MAX_NUM_WALLS]`, "vec4")
+      .addUniform(`EV_wallElevations[MAX_NUM_WALLS]`, "float")
+      .addUniform(`EV_wallDistances[MAX_NUM_WALLS]`, "float")
       .addUniform("EV_lightElevation", "float")
       .addUniform("EV_isVision", "bool")
       .addUniform("EV_elevationSampler", "sampler2D")
@@ -210,6 +209,9 @@ function addShadowCode(source) {
 
       // Add variable that can be seen by wrapped main
       .addGlobal("inShadow", "bool", "false")
+
+      // Add define after so it appears near the top
+      .prependBlock(`#define MAX_NUM_WALLS ${MAX_NUM_WALLS}`)
 
       .replace(/float depth = smoothstep[(]0.0, 1.0, vDepth[)];/, DEPTH_CALCULATION)
 
