@@ -14,7 +14,6 @@ import { MODULE_ID } from "./const.js";
 import * as drawing from "./drawing.js";
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
-import { StencilMask } from "./perfect-vision/stencil-mask.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
 import { WallTracer } from "./WallTracer.js";
@@ -50,8 +49,7 @@ Hooks.once("init", function() {
     ElevationGrid,
     WallTracer,
     ShadowShader,
-    FILOQueue,
-    StencilMask
+    FILOQueue
   };
 
   // These methods need to be registered early
