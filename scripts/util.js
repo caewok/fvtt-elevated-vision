@@ -71,11 +71,11 @@ export function drawPolygonWithHolesPV(polygonArray, {
   fillColor = 0xFFFFFF,
   alpha = 1.0 } = {}) {
 
-  const c = new PIXI.Container();
-  graphics.addChild(c);
+//   const c = new PIXI.Container();
+//   graphics.addChild(c);
   for ( const poly of polygonArray ) {
     const g1 = new PIXI.LegacyGraphics();
-    c.addChild(g1);
+    graphics.addChild(g1);
     g1.beginFill(fillColor, alpha).drawShape(poly).endFill();
     g1._stencilHole = poly.isHole;
   }

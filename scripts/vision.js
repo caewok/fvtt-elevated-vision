@@ -130,39 +130,6 @@ export function createVisionCanvasVisionMaskPV(wrapper) {
 }
 
 /**
- * Override CanvasVisionMask.prototype.createVision
- * From Perfect Vision module.
- * So that the LOS mask can be applied using a mesh.
- */
-// export function createVisionCanvasVisionMask() {
-//   const vision = new PIXI.Container();
-//   const fill = vision.addChild(
-//     new PIXI.LegacyGraphics()
-//       .beginFill(0xFF0000)
-//       .drawShape(canvas.dimensions.rect.clone())
-//       .endFill()
-//     );
-//
-//     vision.fov = vision.addChild(new GraphicsStencilMask());
-//     vision.los = vision.addChild(new GraphicsStencilMask());
-//     vision.base = vision.fov.addChild(new PIXI.LegacyGraphics());
-//
-//     vision.mask = vision.los;
-//     vision._explored = false;
-//     return vision;
-// }
-
-export function createVisionCanvasVisionMask() {
-  const vision = new PIXI.Container();
-  vision.base = vision.addChild(new PIXI.LegacyGraphics());
-  vision.fov = vision.addChild(new PIXI.LegacyGraphics());
-  vision.los = vision.addChild(new PIXI.LegacyGraphics());
-  vision.mask = vision.los;
-  vision._explored = false;
-  return vision;
-}
-
-/**
  * Wrap VisionSource.prototype._updateLosGeometry
  * Add a _sourceGeometryLOS b/c the _sourceGeometry for vision uses the fov.
  */
@@ -180,58 +147,27 @@ export function _updateLosGeometryVisionSource(wrapper, polygon) {
   this._sourceGeometryLOS = polyMesherLOS.triangulate(this._sourceGeometryLOS);
 }
 
-/**
- * Wrap VisionSource.prototype._initializeMeshes
- * Add meshes for FOV and LOS
- */
-export function _createMeshes(wrapper) {
-  wrapper();
-  this._createEVMeshes();
-}
 
-export function _createEVMeshesVisionSource() {
+export function _createEVMeshesVisionSource(type = "los") {
   if ( !this._sourceGeometryLOS || !this._sourceGeometry ) this._updateLosGeometry(this.fov);
 
-  if ( this._EV_mesh?.los ) this._EV_mesh.los.destroy();
-  if ( this._EV_mesh?.fov ) this._EV_mesh.fov.destroy();
-
-  this._EV_mesh = {};
-  this._EV_mesh.los = this._createEVMesh(ShadowShader, this._sourceGeometryLOS);
-  this._EV_mesh.fov = this._createEVMesh(ShadowShader, this._sourceGeometry);
-
-  // ShadowLOSFilter
-  // TestShader
+  const mesh = this._createEVMesh(ShadowShader, this._sourceGeometry);
+  if ( type === "los" ) mesh.geometry = this._sourceGeometryLOS;
+  return mesh;
 }
 
 export function _createEVMeshesLightSource() {
   if ( !this._sourceGeometry ) this._updateLosGeometry(this.los);
-  if ( this._EV_mesh?.los ) this._EV_mesh.los.destroy();
-
-  this._EV_mesh = {};
-  this._EV_mesh.los = this._createEVMesh(ShadowShader, this._sourceGeometry);
+  return this._createEVMesh(ShadowShader, this._sourceGeometry);
 }
-
-class TestShader extends AdaptiveLightingShader {
-  static fragmentShader = `
-  void main() {
-    gl_FragColor = vec4(1., 0., 0., 1.);
-  }
-  `;
-}
-
 
 /**
  * Create an EV shadow mask of the LOS polygon.
  * @returns {PIXI.Mesh}
  */
 export function _createEVMask(type = "los") {
-  if ( !this._EV_mesh || this._EV_mesh[type].destroyed ) this._createEVMeshes();
-  const mesh = this._EV_mesh[type];
-  if ( mesh._destroyed || !mesh.position ) {
-    log("_createMask fails!");
-  }
-
-  updateShadowShaderUniforms(this._EV_mesh[type].shader.uniforms, this);
+  const mesh = this._createEVMeshes(type);
+  updateShadowShaderUniforms(mesh.shader.uniforms, this);
   return this._updateMesh(mesh);
 }
 
@@ -253,18 +189,6 @@ export function _createEVMesh(shaderCls, geometry) {
 //   mesh.drawMode = PIXI.DRAW_MODES.TRIANGLES;
   Object.defineProperty(mesh, "uniforms", {get: () => mesh.shader.uniforms});
   return mesh;
-}
-
-export function destroyVisionSource(wrapper) {
-  wrapper();
-  this._sourceGeometryLOS?.destroy();
-  this._EV_mesh?.los.destroy();
-  this._EV_mesh?.fov.destroy();
-}
-
-export function destroyLightSource(wrapper) {
-  wrapper();
-  this._EV_mesh?.los.destroy();
 }
 
 export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
