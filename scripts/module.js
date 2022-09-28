@@ -3,7 +3,8 @@ Hooks,
 game,
 canvas,
 CONFIG,
-renderTemplate
+renderTemplate,
+foundry
 */
 "use strict";
 

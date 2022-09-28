@@ -71,8 +71,6 @@ export function drawPolygonWithHolesPV(polygonArray, {
   fillColor = 0xFFFFFF,
   alpha = 1.0 } = {}) {
 
-//   const c = new PIXI.Container();
-//   graphics.addChild(c);
   for ( const poly of polygonArray ) {
     const g1 = new PIXI.LegacyGraphics();
     graphics.addChild(g1);
@@ -333,47 +331,6 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
 
   return ix;
 }
-
-
-/**
- * Get the intersection of a 3d line with a plane.
- * See https://stackoverflow.com/questions/5666222/3d-line-plane-intersection
- * @param {Point3d} rayPoint        Any point on the line
- * @param {Point3d} rayDirection    Line direction
- * @param {Point3d} planePoint      Any point on the plane
- * @param {Point3d} planeNormal  Plane normal
- * @return {Point3d|null}
- */
-// export function linePlane3dIntersection(rayPoint, rayDirection, planePoint, planeNormal, epsilon = 1e-8) {
-//   const ndotu = planeNormal.dot(rayDirection);
-//   if ( Math.abs(ndotu) < epsilon ) { return null; } // no intersection; line is parallel
-//   const w = rayPoint.sub(planePoint);
-//   const si = (-planeNormal.dot(w)) / ndotu;
-//   return rayDirection.mul(si).add(w).add(planePoint);
-// }
-//
-//
-// export function lineWall3dIntersection(a, b, wall, epsilon = 1e-8) {
-//   const rayPoint = a;
-//   const rayDirection = b.sub(a);
-//
-//   // 3 points on the wall to define the plane
-//   const q = new Point3d(wall.A.x, wall.A.y, wall.bottomZ);
-//   const r = new Point3d(wall.A.x, wall.A.y, wall.topZ);
-//   const s = new Point3d(wall.B.x, wall.B.y, wall.bottomZ);
-//
-//   // Take the cross-product of the vectors qr and qs
-//   const qr = r.sub(q);
-//   const qs = s.sub(q);
-//   const planeNormal = new Point3d(
-//     (qr.y * qs.z) - (qr.z * qs.y),
-//     -((qr.x * qs.z) - (qr.z * qs.x)),
-//     (qr.x * qs.y) - (qr.y * qs.x))
-//
-//   const planePoint = q;
-//
-//
-// }
 
 export function linePlane3dIntersection(a, b, c, d, epsilon = 1e-8) {
   const u = b.sub(a);

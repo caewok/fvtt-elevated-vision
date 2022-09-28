@@ -5,7 +5,7 @@ Ray
 */
 "use strict";
 
-import { log, lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles } from "./util.js";
+import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles } from "./util.js";
 import { COLORS, clearDrawings } from "./drawing.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
@@ -20,7 +20,6 @@ import { Point3d } from "./Point3d.js";
  */
 export function _computeClockwiseSweepPolygon(wrapped) {
   wrapped();
-//   log("_computeClockwiseSweepPolygon");
 
   // Ignore lights set with default of positive infinity
   const sourceZ = this.config.source?.elevationZ;

@@ -143,9 +143,7 @@ bool locationInWallShadow(
 
   ${FN_LOCATION_IN_WALL_SHADOW}
 }
-`
-
-
+`;
 
 const DEPTH_CALCULATION =
 `
@@ -194,17 +192,15 @@ const FRAG_COLOR =
   if ( EV_isVision && inShadow ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
 `;
 
-
-
 function addShadowCode(source) {
   try {
     source = new ShaderPatcher("frag")
       .setSource(source)
 
       .addUniform("EV_numWalls", "int")
-      .addUniform(`EV_wallCoords[MAX_NUM_WALLS]`, "vec4")
-      .addUniform(`EV_wallElevations[MAX_NUM_WALLS]`, "float")
-      .addUniform(`EV_wallDistances[MAX_NUM_WALLS]`, "float")
+      .addUniform("EV_wallCoords[MAX_NUM_WALLS]", "vec4")
+      .addUniform("EV_wallElevations[MAX_NUM_WALLS]", "float")
+      .addUniform("EV_wallDistances[MAX_NUM_WALLS]", "float")
       .addUniform("EV_lightElevation", "float")
       .addUniform("EV_isVision", "bool")
       .addUniform("EV_elevationSampler", "sampler2D")
@@ -269,8 +265,6 @@ function addShadowCode(source) {
 
 }
 
-
-
 /**
  * Wrap AdaptiveLightShader.prototype.create
  * Modify the code to add shadow depth based on background elevation and walls
@@ -331,8 +325,6 @@ Also need the height from the current position on the canvas for which the shado
 applies. That can be simplified by just shifting the elevations of the above diagram.
 So Oe becomes Oe - pixelE. We = We - pixelE.
 */
-
-
 
 /**
  * Wrap LightSource.prototype._updateColorationUniforms.
@@ -504,7 +496,6 @@ function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-vars
  * @returns {ClockwiseSweepPolygon}
  */
 export function _createPolygonLightSource(wrapped) {
-//   log(`_createPolygonLightSource ${this.object.id}`);
   const los = wrapped();
 
   // TO-DO: Only reset uniforms if:
