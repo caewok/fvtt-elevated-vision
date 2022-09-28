@@ -250,7 +250,7 @@ export function _createEVMesh(shaderCls, geometry) {
   shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
   shader.alphaThreshold = 0.75;
 
-  mesh.drawMode = PIXI.DRAW_MODES.TRIANGLES;
+//   mesh.drawMode = PIXI.DRAW_MODES.TRIANGLES;
   Object.defineProperty(mesh, "uniforms", {get: () => mesh.shader.uniforms});
   return mesh;
 }
@@ -340,20 +340,40 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
  * Override PointSource.prototype._createMask
  * Added by Perfect Vision.
  */
-export function _createMaskPointSourcePV() {
-  log("_createMaskPointSourcePV");
+// export function _createMaskPointSourcePV() {
+//
+//
+//   log("_createMaskPointSourcePV");
+//
+//   const mesh = this._updateMesh(this._createEVMesh(ShadowShader));
+//   const shader = mesh.shader;
+//
+//   shader.texture = this._texture ?? PIXI.Texture.WHITE;
+//   shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
+//   shader.alphaThreshold = 0.75;
+//
+//   updateShadowShaderUniforms(shader.uniforms, this);
+//
+//   return mesh;
+// }
 
-  const mesh = this._updateMesh(this._createEVMesh(ShadowShader));
-  const shader = mesh.shader;
-
-  shader.texture = this._texture ?? PIXI.Texture.WHITE;
-  shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
-  shader.alphaThreshold = 0.75;
-
-  updateShadowShaderUniforms(shader.uniforms, this);
-
-  return mesh;
+/**
+ * Override VisionSource.prototype._createMask
+ * Added by Perfect Vision.
+ */
+export function _createMaskVisionSourcePV(los = false) {
+  const type = los ? "los" : "fov";
+  return this._createEVMask(type);
 }
+
+/**
+ * Add LightSource.prototype._createMask
+ */
+export function _createMaskLightSourcePV() {
+  return this._createEVMask();
+}
+
+
 
 /**
  * New function based on _createMesh
@@ -361,9 +381,9 @@ export function _createMaskPointSourcePV() {
  * @param {Function} shaderCls  The subclass of AdaptiveLightingShader being used for this Mesh
  * @returns {PIXI.Mesh}         The created Mesh
  */
-export function _createEVMeshPV(shaderCls) {
-  const state = new PIXI.State();
-  const mesh = new PointSourceMesh(this._sourceGeometry, shaderCls.create({}, this), state);
-  mesh.source = this;
-  return mesh;
-}
+// export function _createEVMeshPV(shaderCls) {
+//   const state = new PIXI.State();
+//   const mesh = new PointSourceMesh(this._sourceGeometry, shaderCls.create({}, this), state);
+//   mesh.source = this;
+//   return mesh;
+// }

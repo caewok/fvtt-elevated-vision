@@ -48,8 +48,8 @@ import {
   _createEVMeshesLightSource,
   destroyVisionSource,
   destroyLightSource,
-  _createMaskPointSourcePV,
-  _createEVMeshPV
+  _createMaskVisionSourcePV,
+  _createMaskLightSourcePV
 } from "./vision.js";
 
 import {
@@ -156,17 +156,42 @@ export function registerAdditions() {
     const perfectVisionEnabled = game.modules.get("perfect-vision")?.active;
 
     if ( perfectVisionEnabled ) {
+      Object.defineProperty(VisionSource.prototype, "_createEVMeshes", {
+        value: _createEVMeshesVisionSource,
+        writable: true,
+        configurable: true
+      });
+
+      Object.defineProperty(LightSource.prototype, "_createEVMeshes", {
+        value: _createEVMeshesLightSource,
+        writable: true,
+        configurable: true
+      });
+
       Object.defineProperty(VisionSource.prototype, "_createEVMesh", {
-        value: _createEVMeshPV,
+        value: _createEVMesh,
         writable: true,
         configurable: true
       });
 
       Object.defineProperty(LightSource.prototype, "_createEVMesh", {
-        value: _createEVMeshPV,
+        value: _createEVMesh,
         writable: true,
         configurable: true
       });
+
+      Object.defineProperty(VisionSource.prototype, "_createEVMask", {
+        value: _createEVMask,
+        writable: true,
+        configurable: true
+      });
+
+      Object.defineProperty(LightSource.prototype, "_createEVMask", {
+        value: _createEVMask,
+        writable: true,
+        configurable: true
+      });
+
     } else {
        Object.defineProperty(VisionSource.prototype, "_createEVMesh", {
         value: _createEVMesh,
@@ -232,7 +257,16 @@ export function registerPatches() {
   if ( getSetting(SETTINGS.VISION_USE_SHADER) ) {
 
     if ( perfectVisionEnabled ) {
-      libWrapper.register(MODULE_ID, "PointSource.prototype._createMask", _createMaskPointSourcePV, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "VisionSource.prototype._createMask", _createMaskVisionSourcePV, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "LightSource.prototype._createMask", _createMaskLightSourcePV, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
+
+      libWrapper.register(MODULE_ID, "VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "LightSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "VisionSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "LightSource.prototype.destroy", destroyLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "VisionSource.prototype.destroy", destroyVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "LightSource.prototype._updateUniforms", _updateUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "VisionSource.prototype._updateUniforms", _updateUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
     } else {
       libWrapper.register(MODULE_ID, "VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
