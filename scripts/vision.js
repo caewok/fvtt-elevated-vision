@@ -148,17 +148,19 @@ export function _updateLosGeometryVisionSource(wrapper, polygon) {
 }
 
 
-export function _createEVMeshesVisionSource(type = "los") {
-  if ( !this._sourceGeometryLOS || !this._sourceGeometry ) this._updateLosGeometry(this.fov);
+export function _createEVMeshVisionSource(type = "los") {
+  const mesh = this._createMesh(ShadowShader);
+  if ( type === "los" ) {
+    if ( !this._sourceGeometryLOS ) this._updateLosGeometry(this.fov);
+    mesh.geometry = this._sourceGeometryLOS;
+  }
 
-  const mesh = this._createEVMesh(ShadowShader, this._sourceGeometry);
-  if ( type === "los" ) mesh.geometry = this._sourceGeometryLOS;
   return mesh;
 }
 
-export function _createEVMeshesLightSource() {
+export function _createEVMeshLightSource() {
   if ( !this._sourceGeometry ) this._updateLosGeometry(this.los);
-  return this._createEVMesh(ShadowShader, this._sourceGeometry);
+  return this._createMesh(ShadowShader);
 }
 
 /**
@@ -166,29 +168,15 @@ export function _createEVMeshesLightSource() {
  * @returns {PIXI.Mesh}
  */
 export function _createEVMask(type = "los") {
-  const mesh = this._createEVMeshes(type);
-  updateShadowShaderUniforms(mesh.shader.uniforms, this);
-  return this._updateMesh(mesh);
-}
-
-/**
- * New function based on _createMesh
- * Used to construct LOS mesh for VisionSources
- * @param {Function} shaderCls  The subclass of AdaptiveLightingShader being used for this Mesh
- * @returns {PIXI.Mesh}         The created Mesh
- */
-export function _createEVMesh(shaderCls, geometry) {
-  const state = new PIXI.State();
-  const mesh = new PointSourceMesh(geometry, shaderCls.create({}, this), state);
+  const mesh = this._createEVMesh(type);
 
   const shader = mesh.shader;
   shader.texture = this.texture ?? PIXI.Texture.WHITE;
   shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
   shader.alphaThreshold = 0.75;
 
-//   mesh.drawMode = PIXI.DRAW_MODES.TRIANGLES;
-  Object.defineProperty(mesh, "uniforms", {get: () => mesh.shader.uniforms});
-  return mesh;
+  updateShadowShaderUniforms(mesh.shader.uniforms, this);
+  return this._updateMesh(mesh);
 }
 
 export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
@@ -261,53 +249,38 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
 
 
 /**
- * Override PointSource.prototype._createMask
- * Added by Perfect Vision.
- */
-// export function _createMaskPointSourcePV() {
-//
-//
-//   log("_createMaskPointSourcePV");
-//
-//   const mesh = this._updateMesh(this._createEVMesh(ShadowShader));
-//   const shader = mesh.shader;
-//
-//   shader.texture = this._texture ?? PIXI.Texture.WHITE;
-//   shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
-//   shader.alphaThreshold = 0.75;
-//
-//   updateShadowShaderUniforms(shader.uniforms, this);
-//
-//   return mesh;
-// }
-
-/**
  * Override VisionSource.prototype._createMask
  * Added by Perfect Vision.
  */
 export function _createMaskVisionSourcePV(los = false) {
-  const type = los ? "los" : "fov";
-  return this._createEVMask(type);
+  const mesh = this._updateMesh(this._createMesh(ShadowShader));
+  const shader = mesh.shader;
+
+  shader.texture = this._texture ?? PIXI.Texture.WHITE;
+  shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
+  shader.alphaThreshold = 0.75;
+
+  if (los) {
+    mesh.geometry = this._sourceLosGeometry;
+  }
+
+  updateShadowShaderUniforms(mesh.shader.uniforms, this); // mesh.source would also work
+
+  return mesh;
 }
 
 /**
  * Add LightSource.prototype._createMask
  */
 export function _createMaskLightSourcePV() {
-  return this._createEVMask();
+  const mesh = this._updateMesh(this._createMesh(ShadowShader));
+  const shader = mesh.shader;
+
+  shader.texture = this._texture ?? PIXI.Texture.WHITE;
+  shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
+  shader.alphaThreshold = 0.75;
+
+  updateShadowShaderUniforms(mesh.shader.uniforms, this); // mesh.source would also work
+
+  return mesh;
 }
-
-
-
-/**
- * New function based on _createMesh
- * Used to construct LOS mesh for VisionSources
- * @param {Function} shaderCls  The subclass of AdaptiveLightingShader being used for this Mesh
- * @returns {PIXI.Mesh}         The created Mesh
- */
-// export function _createEVMeshPV(shaderCls) {
-//   const state = new PIXI.State();
-//   const mesh = new PointSourceMesh(this._sourceGeometry, shaderCls.create({}, this), state);
-//   mesh.source = this;
-//   return mesh;
-// }

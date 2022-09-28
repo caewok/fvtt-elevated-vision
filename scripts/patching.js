@@ -43,9 +43,8 @@ import {
   createVisionCanvasVisionMaskPV,
   _createEVMask,
   _updateLosGeometryVisionSource,
-  _createEVMesh,
-  _createEVMeshesVisionSource,
-  _createEVMeshesLightSource,
+  _createEVMeshVisionSource,
+  _createEVMeshLightSource,
   _createMaskVisionSourcePV,
   _createMaskLightSourcePV
 } from "./vision.js";
@@ -168,25 +167,13 @@ export function registerAdditions() {
 
 function shaderAdditions() {
   Object.defineProperty(VisionSource.prototype, "_createEVMesh", {
-    value: _createEVMesh,
+    value: _createEVMeshVisionSource,
     writable: true,
     configurable: true
   });
 
   Object.defineProperty(LightSource.prototype, "_createEVMesh", {
-    value: _createEVMesh,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(VisionSource.prototype, "_createEVMeshes", {
-    value: _createEVMeshesVisionSource,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(LightSource.prototype, "_createEVMeshes", {
-    value: _createEVMeshesLightSource,
+    value: _createEVMeshLightSource,
     writable: true,
     configurable: true
   });
@@ -206,26 +193,14 @@ function shaderAdditions() {
 }
 
 function shaderPVAdditions() {
-  Object.defineProperty(VisionSource.prototype, "_createEVMeshes", {
-    value: _createEVMeshesVisionSource,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(LightSource.prototype, "_createEVMeshes", {
-    value: _createEVMeshesLightSource,
-    writable: true,
-    configurable: true
-  });
-
   Object.defineProperty(VisionSource.prototype, "_createEVMesh", {
-    value: _createEVMesh,
+    value: _createEVMeshVisionSource,
     writable: true,
     configurable: true
   });
 
   Object.defineProperty(LightSource.prototype, "_createEVMesh", {
-    value: _createEVMesh,
+    value: _createEVMeshLightSource,
     writable: true,
     configurable: true
   });
@@ -287,7 +262,6 @@ export function registerPatches() {
     case SHADER_SWITCH.PV_SHADER:
       libWrapper.register(MODULE_ID, "VisionSource.prototype._createMask", _createMaskVisionSourcePV, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
       libWrapper.register(MODULE_ID, "LightSource.prototype._createMask", _createMaskLightSourcePV, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
       break;
   }
 }
