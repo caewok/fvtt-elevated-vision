@@ -40,23 +40,13 @@ import {
   refreshCanvasVisibilityShader,
   createVisionCanvasVisionMaskPV,
   _createEVMask,
-  createVisionCanvasVisionMask,
   _updateLosGeometryVisionSource,
-  _createMeshes,
   _createEVMesh,
   _createEVMeshesVisionSource,
   _createEVMeshesLightSource,
-  destroyVisionSource,
-  destroyLightSource,
   _createMaskVisionSourcePV,
   _createMaskLightSourcePV
 } from "./vision.js";
-
-import {
-  _updateUniformsLightSource,
-  _updateUniformsVisionSource
-
-} from "./ShadowShader.js";
 
 import {
   _computeClockwiseSweepPolygon,
@@ -261,24 +251,23 @@ export function registerPatches() {
       libWrapper.register(MODULE_ID, "LightSource.prototype._createMask", _createMaskLightSourcePV, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
 
       libWrapper.register(MODULE_ID, "VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "LightSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "VisionSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "LightSource.prototype.destroy", destroyLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "VisionSource.prototype.destroy", destroyVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "LightSource.prototype._updateUniforms", _updateUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "VisionSource.prototype._updateUniforms", _updateUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "LightSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "VisionSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "LightSource.prototype.destroy", destroyLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "VisionSource.prototype.destroy", destroyVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "LightSource.prototype._updateUniforms", _updateUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "VisionSource.prototype._updateUniforms", _updateUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
     } else {
       libWrapper.register(MODULE_ID, "VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "LightSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "VisionSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "LightSource.prototype.destroy", destroyLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "VisionSource.prototype.destroy", destroyVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "LightSource.prototype._updateUniforms", _updateUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "VisionSource.prototype._updateUniforms", _updateUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "LightSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "VisionSource.prototype._createMeshes", _createMeshes, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "LightSource.prototype.destroy", destroyLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "VisionSource.prototype.destroy", destroyVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "LightSource.prototype._updateUniforms", _updateUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+//       libWrapper.register(MODULE_ID, "VisionSource.prototype._updateUniforms", _updateUniformsVisionSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
       libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
-  //     libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMask, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
     }
 
   } else {

@@ -245,32 +245,3 @@ export function updateShadowShaderUniforms(uniforms, source) {
   uniforms.EV_wallElevations = wallElevations;
   uniforms.EV_wallDistances = wallDistances;
 }
-
-/**
- * Wrap LightSource.prototype.updateUniforms
- */
-export function _updateUniformsLightSource(wrapper) {
-  log("_updateUniformsLightSource")
-  wrapper();
-  if ( this._EV_mesh.los._destroyed ) {
-    log("_updateUniformsLightSource los mesh destroyed!");
-    this._createEVMeshes();
-  }
-
-  updateShadowShaderUniforms(this._EV_mesh.los.shader.uniforms, this);
-}
-
-/**
- * Wrap VisionSource.prototype.updateUniforms
- */
-export function _updateUniformsVisionSource(wrapper) {
-  log("_updateUniformsVisionSource")
-  wrapper();
-  if ( this._EV_mesh.los._destroyed || this._EV_mesh.fov._destroyed ) {
-    log("_updateUniformsLightSource los mesh destroyed!");
-    this._createEVMeshes();
-  }
-
-  updateShadowShaderUniforms(this._EV_mesh.los.shader.uniforms, this);
-  updateShadowShaderUniforms(this._EV_mesh.fov.shader.uniforms, this);
-}
