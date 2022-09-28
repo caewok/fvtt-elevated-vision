@@ -247,7 +247,7 @@ export function _createEVMesh(shaderCls, geometry) {
 
   const shader = mesh.shader;
   shader.texture = this.texture ?? PIXI.Texture.WHITE;
-  shader.textureMatirx = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
+  shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
   shader.alphaThreshold = 0.75;
 
   mesh.drawMode = PIXI.DRAW_MODES.TRIANGLES;
@@ -333,4 +333,37 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
 
   // Restrict the visibility of other canvas objects
   this.restrictVisibility();
+}
+
+
+/**
+ * Override PointSource.prototype._createMask
+ * Added by Perfect Vision.
+ */
+export function _createMaskPointSourcePV() {
+  log("_createMaskPointSourcePV");
+
+  const mesh = this._updateMesh(this._createEVMesh(ShadowShader));
+  const shader = mesh.shader;
+
+  shader.texture = this._texture ?? PIXI.Texture.WHITE;
+  shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
+  shader.alphaThreshold = 0.75;
+
+  updateShadowShaderUniforms(shader.uniforms, this);
+
+  return mesh;
+}
+
+/**
+ * New function based on _createMesh
+ * Used to construct LOS mesh for VisionSources
+ * @param {Function} shaderCls  The subclass of AdaptiveLightingShader being used for this Mesh
+ * @returns {PIXI.Mesh}         The created Mesh
+ */
+export function _createEVMeshPV(shaderCls) {
+  const state = new PIXI.State();
+  const mesh = new PointSourceMesh(this._sourceGeometry, shaderCls.create({}, this), state);
+  mesh.source = this;
+  return mesh;
 }
