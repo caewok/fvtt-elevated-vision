@@ -3,7 +3,8 @@ Hooks,
 game,
 canvas,
 CONFIG,
-renderTemplate
+renderTemplate,
+foundry
 */
 "use strict";
 
@@ -13,14 +14,10 @@ import { MODULE_ID } from "./const.js";
 import * as drawing from "./drawing.js";
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
-import { StencilMask } from "./perfect-vision/stencil-mask.js";
-import { GraphicsStencilMask } from "./perfect-vision/graphics-stencil-mask.js";
-import { DepthStencilShader } from "./perfect-vision/depth-stencil-shader.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
-import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
 import { ShadowShader } from "./ShadowShader.js";
 import { ElevationGrid } from "./ElevationGrid.js";
 
@@ -51,12 +48,8 @@ Hooks.once("init", function() {
     ElevationLayer,
     ElevationGrid,
     WallTracer,
-    ShadowLOSFilter,
     ShadowShader,
-    FILOQueue,
-    StencilMask,
-    GraphicsStencilMask,
-    DepthStencilShader
+    FILOQueue
   };
 
   // These methods need to be registered early

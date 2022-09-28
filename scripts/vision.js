@@ -5,14 +5,11 @@ FogManager,
 game,
 PIXI,
 PolygonMesher,
-PointSourceMesh,
 PointSource
 */
 "use strict";
 
-import { log, drawPolygonWithHoles, drawPolygonWithHolesPV } from "./util.js";
-import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
-import { GraphicsStencilMask } from "./perfect-vision/graphics-stencil-mask.js";
+import { drawPolygonWithHoles, drawPolygonWithHolesPV } from "./util.js";
 import { ShadowShader, updateShadowShaderUniforms } from "./ShadowShader.js";
 
 
@@ -264,7 +261,7 @@ export function _createMaskVisionSourcePV(los = false) {
     mesh.geometry = this._sourceLosGeometry;
   }
 
-  updateShadowShaderUniforms(mesh.shader.uniforms, this); // mesh.source would also work
+  updateShadowShaderUniforms(mesh.shader.uniforms, this); // Alt: mesh.source would work
 
   return mesh;
 }
@@ -280,7 +277,7 @@ export function _createMaskLightSourcePV() {
   shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
   shader.alphaThreshold = 0.75;
 
-  updateShadowShaderUniforms(mesh.shader.uniforms, this); // mesh.source would also work
+  updateShadowShaderUniforms(mesh.shader.uniforms, this); // Alt: mesh.source would work
 
   return mesh;
 }

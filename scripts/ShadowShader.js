@@ -1,9 +1,10 @@
 /* globals
-AdaptiveLightingShader,
+PIXI,
+canvas,
+foundry
 */
 "use strict";
 
-import { log } from "./util.js";
 import { perpendicularPoint, distanceBetweenPoints } from "./util.js";
 import { FRAGMENT_FUNCTIONS, pointCircleCoord } from "./lighting.js";
 
@@ -118,13 +119,13 @@ export class ShadowShader extends PIXI.Shader {
 
   static create(defaultUniforms = {}) {
     const program = ShadowShader.#program ??= PIXI.Program.from(
-        ShadowShader.vertexShader,
-        ShadowShader.fragmentShader
+      ShadowShader.vertexShader,
+      ShadowShader.fragmentShader
     );
     const uniforms = foundry.utils.mergeObject(
-        this.defaultUniforms,
-        defaultUniforms,
-        { inplace: false, insertKeys: false }
+      this.defaultUniforms,
+      defaultUniforms,
+      { inplace: false, insertKeys: false }
     );
 
     return new this(program, uniforms);
@@ -200,7 +201,7 @@ export function updateShadowShaderUniforms(uniforms, source) {
   uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
 
   // Uniforms based on source
-  uniforms.EV_sourceElevation = source.elevationZ * 0.5 * r_inv
+  uniforms.EV_sourceElevation = source.elevationZ * 0.5 * r_inv;
 
   // Alternative version using vUvs, given that light source mesh have no rotation
   // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010999752030171136
