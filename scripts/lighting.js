@@ -6,6 +6,7 @@ PIXI
 "use strict";
 
 import { log, perpendicularPoint, distanceBetweenPoints } from "./util.js";
+import { ShaderPatcher, applyPatches } from "./perfect-vision/shader-patcher.js";
 
 /** To test a light
 drawing = game.modules.get("elevatedvision").api.drawing
@@ -31,83 +32,14 @@ https://ptb.discord.com/channels/732325252788387980/734082399453052938/100695808
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
 const MAX_NUM_WALLS = 100;
 
-/**
- * Wrap AdaptiveLightingShader.prototype.create
- * Add uniforms used by the fragment shader to draw shadows in the color and illumination shaders.
- */
-export function createAdaptiveLightingShader(wrapped, ...args) {
-  log("createAdaptiveLightingShader");
-
-  if ( this.fragmentShader.includes("EV_numWalls") ) return wrapped(...args);
-
-  log("createAdaptiveLightingShader adding shadow shader code");
-  const replaceFragUniformStr = "uniform sampler2D depthTexture;";
-  const replaceFragStr = "float depth = smoothstep(0.0, 1.0, vDepth);";
-  const replaceFragFnStr = "void main() {";
-
-  if ( !(this.fragmentShader.includes(replaceFragUniformStr)
-    && this.fragmentShader.includes(replaceFragStr)
-    && this.fragmentShader.includes(replaceFragFnStr)) ) {
-
-    log("createAdaptiveLightingShader skipped b/c marker code strings not found.");
-    return wrapped(...args);
-  }
-
-  this.fragmentShader = this.fragmentShader.replace(
-    replaceFragUniformStr, `${replaceFragUniformStr}\n${FRAGMENT_UNIFORMS}`);
-
-  this.fragmentShader = this.fragmentShader.replace(
-    replaceFragFnStr, `${FRAGMENT_FUNCTIONS}\n${replaceFragFnStr}\n`);
-
-  this.fragmentShader = this.fragmentShader.replace(
-    replaceFragStr, `${replaceFragStr}\n${DEPTH_CALCULATION}`);
-
-  // Replace at the very end
-  this.fragmentShader = this.fragmentShader.replace(/}$/, `${FRAG_COLOR}\n }\n`);
-
-
-  const shader = wrapped(...args);
-  shader.uniforms.EV_numWalls = 0;
-  shader.uniforms.EV_wallElevations = new Float32Array(MAX_NUM_WALLS);
-  shader.uniforms.EV_wallCoords = new Float32Array(MAX_NUM_WALLS*4);
-  shader.uniforms.EV_lightElevation = 0.5;
-  shader.uniforms.EV_wallDistances = new Float32Array(MAX_NUM_WALLS);
-  shader.uniforms.EV_isVision = false;
-  shader.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture ?? PIXI.Texture.EMPTY;
-
-  shader.uniforms.EV_transform = [1, 1, 1, 1];
-  shader.uniforms.EV_hasElevationSampler = false;
-
-  // [min, step, maxPixelValue ]
-  shader.uniforms.EV_elevationResolution = [0, 1, 255, 1];
-
-  return shader;
-}
-
-// 4 coords per wall (A, B endpoints).
-const FRAGMENT_UNIFORMS =
+const FN_ORIENT2D =
 `
-uniform int EV_numWalls;
-uniform vec4 EV_wallCoords[${MAX_NUM_WALLS}];
-uniform float EV_wallElevations[${MAX_NUM_WALLS}];
-uniform float EV_wallDistances[${MAX_NUM_WALLS}];
-uniform float EV_lightElevation;
-uniform bool EV_isVision;
-uniform sampler2D EV_elevationSampler;
-uniform vec4 EV_transform;
-uniform vec4 EV_elevationResolution;
-uniform bool EV_hasElevationSampler;
+return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
 `;
 
-// Helper functions used to calculate shadow trapezoids.
-export const FRAGMENT_FUNCTIONS =
-`
-float orient2d(in vec2 a, in vec2 b, in vec2 c) {
-  return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
-}
-
 // Does segment AB intersect the segment CD?
-bool lineSegmentIntersects(in vec2 a, in vec2 b, in vec2 c, in vec2 d) {
+const FN_LINE_SEGMENT_INTERSECTS =
+`
   float xa = orient2d(a, b, c);
   float xb = orient2d(a, b, d);
   if ( xa == 0.0 && xb == 0.0 ) return false;
@@ -115,10 +47,11 @@ bool lineSegmentIntersects(in vec2 a, in vec2 b, in vec2 c, in vec2 d) {
   bool xab = (xa * xb) <= 0.0;
   bool xcd = (orient2d(c, d, a) * orient2d(c, d, b)) <= 0.0;
   return xab && xcd;
-}
+`;
 
 // Point on line AB that forms perpendicular point to C
-vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c) {
+const FN_PERPENDICULAR_POINT =
+`
   vec2 deltaBA = b - a;
 
   // dab might be 0 but only if a and b are equal
@@ -127,27 +60,20 @@ vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c) {
 
   float u = ((deltaCA.x * deltaBA.x) + (deltaCA.y * deltaBA.y)) / dab;
   return vec2(a.x + (u * deltaBA.x), a.y + (u * deltaBA.y));
-}
+`;
 
 // Calculate the canvas elevation given a pixel value
 // Maps 0–1 to elevation in canvas coordinates.
 // EV_elevationResolution:
 // r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
-float canvasElevationFromPixel(in float pixel, in vec4 EV_elevationResolution) {
+const FN_CANVAS_ELEVATION_FROM_PIXEL =
+`
   return ((pixel * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
-}
+`;
 
 // Determine if a given location from a wall is in shadow or not.
-bool locationInWallShadow(
-  in vec4 wall,
-  in float wallElevation,
-  in float wallDistance, // distance from source location to wall
-  in float sourceElevation,
-  in vec2 sourceLocation,
-  in float pixelElevation,
-  in vec2 pixelLocation,
-  out float percentDistanceFromWall) {
-
+const FN_LOCATION_IN_WALL_SHADOW =
+`
   percentDistanceFromWall = 0.0; // Set a default value when returning early.
 
   // If the wall is higher than the light, skip. Should not occur.
@@ -179,9 +105,204 @@ bool locationInWallShadow(
     return true;
   }
   return false;
+`;
+
+export const FRAGMENT_FUNCTIONS = `
+float orient2d(in vec2 a, in vec2 b, in vec2 c) {
+  ${FN_ORIENT2D}
+}
+
+// Does segment AB intersect the segment CD?
+bool lineSegmentIntersects(in vec2 a, in vec2 b, in vec2 c, in vec2 d) {
+  ${FN_LINE_SEGMENT_INTERSECTS}
+}
+
+// Point on line AB that forms perpendicular point to C
+vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c) {
+  ${FN_PERPENDICULAR_POINT}
+}
+
+// Calculate the canvas elevation given a pixel value
+// Maps 0–1 to elevation in canvas coordinates.
+// EV_elevationResolution:
+// r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
+float canvasElevationFromPixel(in float pixel, in vec4 EV_elevationResolution) {
+  ${FN_CANVAS_ELEVATION_FROM_PIXEL}
+}
+
+// Determine if a given location from a wall is in shadow or not.
+bool locationInWallShadow(
+  in vec4 wall,
+  in float wallElevation,
+  in float wallDistance, // distance from source location to wall
+  in float sourceElevation,
+  in vec2 sourceLocation,
+  in float pixelElevation,
+  in vec2 pixelLocation,
+  out float percentDistanceFromWall) {
+
+  ${FN_LOCATION_IN_WALL_SHADOW}
+}
+`
+
+
+
+const DEPTH_CALCULATION =
+`
+float depth = smoothstep(0.0, 1.0, vDepth);
+vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
+int wallsToProcess = EV_numWalls;
+vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
+backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+
+float percentDistanceFromWall;
+float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
+if ( pixelElevation > EV_lightElevation ) {
+  // If elevation at this point is above the light, then light cannot hit this pixel.
+  depth = 0.0;
+  wallsToProcess = 0;
+  inShadow = EV_isVision;
+}
+
+const vec2 center = vec2(0.5);
+for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
+  if ( i >= wallsToProcess ) break;
+
+  bool thisWallInShadow = locationInWallShadow(
+    EV_wallCoords[i],
+    EV_wallElevations[i],
+    EV_wallDistances[i],
+    EV_lightElevation,
+    center,
+    pixelElevation,
+    vUvs,
+    percentDistanceFromWall
+  );
+
+  if ( thisWallInShadow ) {
+    // Current location is within shadow of the wall
+    // Don't break out of loop; could be more than one wall casting shadow on this point.
+    // For now, use the closest shadow for depth.
+    inShadow = true;
+    depth = min(depth, percentDistanceFromWall);
+  }
 }
 `;
 
+const FRAG_COLOR =
+`
+  if ( EV_isVision && inShadow ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+`;
+
+
+
+function addShadowCode(source) {
+  try {
+    source = new ShaderPatcher("frag")
+      .setSource(source)
+
+      .addUniform("EV_numWalls", "int")
+      .addUniform(`EV_wallCoords[MAX_NUM_WALLS]`, "vec4")
+      .addUniform(`EV_wallElevations[MAX_NUM_WALLS]`, "float")
+      .addUniform(`EV_wallDistances[MAX_NUM_WALLS]`, "float")
+      .addUniform("EV_lightElevation", "float")
+      .addUniform("EV_isVision", "bool")
+      .addUniform("EV_elevationSampler", "sampler2D")
+      .addUniform("EV_transform", "vec4")
+      .addUniform("EV_elevationResolution", "vec4")
+      .addUniform("EV_hasElevationSampler", "bool")
+
+      // Functions must be in reverse-order of dependency.
+      .addFunction("locationInWallShadow", "bool", FN_LOCATION_IN_WALL_SHADOW, [
+        { qualifier: "in", type: "vec4", name: "wall" },
+        { qualifier: "in", type: "float", name: "wallElevation" },
+        { qualifier: "in", type: "float", name: "wallDistance" },
+        { qualifier: "in", type: "float", name: "sourceElevation" },
+        { qualifier: "in", type: "vec2", name: "sourceLocation" },
+        { qualifier: "in", type: "float", name: "pixelElevation" },
+        { qualifier: "in", type: "vec2", name: "pixelLocation" },
+        { qualifier: "out", type: "float", name: "percentDistanceFromWall" }
+      ])
+      .addFunction("canvasElevationFromPixel", "float", FN_CANVAS_ELEVATION_FROM_PIXEL, [
+        { qualifier: "in", type: "float", name: "pixel" },
+        { qualifier: "in", type: "vec4", name: "EV_elevationResolution" }
+      ])
+      .addFunction("perpendicularPoint", "vec2", FN_PERPENDICULAR_POINT, [
+        { qualifier: "in", type: "vec2", name: "a" },
+        { qualifier: "in", type: "vec2", name: "b" },
+        { qualifier: "in", type: "vec2", name: "c" }
+      ])
+      .addFunction("lineSegmentIntersects", "bool", FN_LINE_SEGMENT_INTERSECTS, [
+        { qualifier: "in", type: "vec2", name: "a" },
+        { qualifier: "in", type: "vec2", name: "b" },
+        { qualifier: "in", type: "vec2", name: "c" },
+        { qualifier: "in", type: "vec2", name: "d" }
+      ])
+      .addFunction("orient2d", "float", FN_ORIENT2D, [
+        { qualifier: "in", type: "vec2", name: "a" },
+        { qualifier: "in", type: "vec2", name: "b" },
+        { qualifier: "in", type: "vec2", name: "c" }
+      ])
+
+      // Add variable that can be seen by wrapped main
+      .addGlobal("inShadow", "bool", "false")
+
+      // Add define after so it appears near the top
+      .prependBlock(`#define MAX_NUM_WALLS ${MAX_NUM_WALLS}`)
+
+      .replace(/float depth = smoothstep[(]0.0, 1.0, vDepth[)];/, DEPTH_CALCULATION)
+
+      .wrapMain(`\
+        void main() {
+          @main();
+
+          ${FRAG_COLOR}
+        }
+
+      `)
+
+      .getSource();
+
+  } finally {
+    return source;
+  }
+
+}
+
+
+
+/**
+ * Wrap AdaptiveLightShader.prototype.create
+ * Modify the code to add shadow depth based on background elevation and walls
+ * Add uniforms used by the fragment shader to draw shadows in the color and illumination shaders.
+ */
+export function createAdaptiveLightingShader(wrapped, ...args) {
+  log("createAdaptiveLightingShaderPV");
+
+  applyPatches(this,
+    false,
+    source => {
+      source = addShadowCode(source);
+      return source;
+    });
+
+  const shader = wrapped(...args);
+  shader.uniforms.EV_numWalls = 0;
+  shader.uniforms.EV_wallElevations = new Float32Array(MAX_NUM_WALLS);
+  shader.uniforms.EV_wallCoords = new Float32Array(MAX_NUM_WALLS*4);
+  shader.uniforms.EV_lightElevation = 0.5;
+  shader.uniforms.EV_wallDistances = new Float32Array(MAX_NUM_WALLS);
+  shader.uniforms.EV_isVision = false;
+  shader.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture ?? PIXI.Texture.EMPTY;
+
+  shader.uniforms.EV_transform = [1, 1, 1, 1];
+  shader.uniforms.EV_hasElevationSampler = false;
+
+  // [min, step, maxPixelValue ]
+  shader.uniforms.EV_elevationResolution = [0, 1, 255, 1];
+
+  return shader;
+}
 
 /*
 
@@ -211,57 +332,7 @@ applies. That can be simplified by just shifting the elevations of the above dia
 So Oe becomes Oe - pixelE. We = We - pixelE.
 */
 
-const DEPTH_CALCULATION =
-`
-bool inShadow = false;
-vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
-if ( EV_hasElevationSampler ) {
-  vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
-  backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
-}
 
-float percentDistanceFromWall;
-float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
-//float pixelElevation = ((backgroundElevation.r * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
-if ( pixelElevation > EV_lightElevation ) {
-  // If elevation at this point is above the light, then light cannot hit this pixel.
-  depth = 0.0;
-  if ( EV_isVision ) inShadow = true;
-
-} else if ( EV_numWalls > 0 ) {
-
-  const vec2 center = vec2(0.5);
-  const int maxWalls = ${MAX_NUM_WALLS};
-  for ( int i = 0; i < maxWalls; i++ ) {
-    if ( i >= EV_numWalls ) break;
-
-    bool thisWallInShadow = locationInWallShadow(
-      EV_wallCoords[i],
-      EV_wallElevations[i],
-      EV_wallDistances[i],
-      EV_lightElevation,
-      center,
-      pixelElevation,
-      vUvs,
-      percentDistanceFromWall
-    );
-
-
-    if ( thisWallInShadow ) {
-      // Current location is within shadow of the wall
-      // Don't break out of loop; could be more than one wall casting shadow on this point.
-      // For now, use the closest shadow for depth.
-      inShadow = true;
-      depth = min(depth, percentDistanceFromWall);
-    }
-  }
-}
-`;
-
-const FRAG_COLOR =
-`
-  if ( EV_isVision && inShadow ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-`;
 
 /**
  * Wrap LightSource.prototype._updateColorationUniforms.
