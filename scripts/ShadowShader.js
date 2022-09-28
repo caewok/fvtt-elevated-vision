@@ -29,7 +29,7 @@ export class ShadowShader extends PIXI.Shader {
     vec3 tPos = translationMatrix * vec3(aVertexPosition, 1.0);
     vUvs = aVertexPosition * 0.5 + 0.5;
     EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
-    // TO-DO: drop vUvs and just use aVertexPosition
+    // TO-DO: drop vUvs and just use aVertexPosition?
 
     vTextureCoord = (textureMatrix * vec3(aVertexPosition, 1.0)).xy;
     gl_Position = vec4((projectionMatrix * (translationMatrix * vec3(aVertexPosition, 1.0))).xy, 0.0, 1.0);
@@ -116,7 +116,7 @@ export class ShadowShader extends PIXI.Shader {
 
   static #program;
 
-  static create(defaultUniforms = {}, source) {
+  static create(defaultUniforms = {}) {
     const program = ShadowShader.#program ??= PIXI.Program.from(
         ShadowShader.vertexShader,
         ShadowShader.fragmentShader
@@ -126,8 +126,6 @@ export class ShadowShader extends PIXI.Shader {
         defaultUniforms,
         { inplace: false, insertKeys: false }
     );
-
-    updateShadowShaderUniforms(uniforms, source);
 
     return new this(program, uniforms);
   }
