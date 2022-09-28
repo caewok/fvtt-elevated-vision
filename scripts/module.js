@@ -15,7 +15,6 @@ import * as drawing from "./drawing.js";
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
 import { StencilMask } from "./perfect-vision/stencil-mask.js";
-import { DepthStencilShader } from "./perfect-vision/depth-stencil-shader.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
 import { WallTracer } from "./WallTracer.js";
@@ -52,8 +51,7 @@ Hooks.once("init", function() {
     WallTracer,
     ShadowShader,
     FILOQueue,
-    StencilMask,
-    DepthStencilShader
+    StencilMask
   };
 
   // These methods need to be registered early
