@@ -186,7 +186,7 @@ export function _createEVMesh(shaderCls, geometry) {
   shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
   shader.alphaThreshold = 0.75;
 
-  mesh.drawMode = PIXI.DRAW_MODES.TRIANGLES;
+//   mesh.drawMode = PIXI.DRAW_MODES.TRIANGLES;
   Object.defineProperty(mesh, "uniforms", {get: () => mesh.shader.uniforms});
   return mesh;
 }
