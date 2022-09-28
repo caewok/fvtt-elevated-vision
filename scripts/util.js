@@ -75,7 +75,7 @@ export function drawPolygonWithHolesPV(polygonArray, {
   graphics.addChild(c);
   for ( const poly of polygonArray ) {
     const g1 = new PIXI.LegacyGraphics();
-    g0.addChild(g1);
+    c.addChild(g1);
     g1.beginFill(fillColor, alpha).drawShape(poly).endFill();
     g1._stencilHole = poly.isHole;
   }
