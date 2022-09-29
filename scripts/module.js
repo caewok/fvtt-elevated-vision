@@ -38,7 +38,7 @@ import {
 
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, registerSettings } from "./settings.js";
-import { autoElevationChangeForToken, tokenElevationAt } from "./tokens.js";
+import { tokenOnGround, tokenElevationAt } from "./tokens.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
@@ -96,7 +96,6 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {
   log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
   log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`)
 
-  const tokenOrigin = { x: tokenD.x, y: tokenD.y };
   tokenD.object._elevatedVision ??= {};
   tokenD.object._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
   tokenD.object._elevatedVision.tokenHasAnimated = false;
@@ -104,12 +103,12 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
   if ( typeof changes.x === "undefined" && typeof changes.y === "undefined" ) return;
 
-  const tokenDestination = { x: changes.x ? changes.x : tokenD.x, y: changes.y ? changes.y : tokenD.y };
-  const elevationChange = autoElevationChangeForToken(tokenD.object, tokenOrigin, tokenDestination);
-  if ( elevationChange === null ) return;
+  const tokenOrigin = { x: tokenD.x, y: tokenD.y };
+  if ( !tokenOnGround(tokenD.object, tokenOrigin) ) return;
 
+  const tokenDestination = { x: changes.x ? changes.x : tokenD.x, y: changes.y ? changes.y : tokenD.y };
+  changes.elevation = tokenElevationAt(tokenD.object, tokenDestination);
   tokenD.object._elevatedVision.tokenAdjustElevation = true;
-  changes.elevation = elevationChange.newTerrainElevation;
 });
 
 

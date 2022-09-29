@@ -25,7 +25,8 @@ import {
   testVisibilityLightSource,
   _testLOSDetectionMode,
   _testRangeDetectionMode,
-  _refreshToken
+  _refreshToken,
+  cloneToken
 } from "./tokens.js";
 
 import {
@@ -244,6 +245,7 @@ export function registerPatches() {
 
   // ----- Token animation and elevation change ---- //
   libWrapper.register(MODULE_ID, "Token.prototype._refresh", _refreshToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "Token.prototype.clone", cloneToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
   // ----- Drawing shadows for vision source LOS, fog  ----- //
   switch ( shader_choice ) {

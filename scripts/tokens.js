@@ -42,30 +42,48 @@ export function _refreshToken(wrapper, options) {
   log(`token _refresh at ${this.document.x},${this.document.y} with elevation ${this.document.elevation} animate: ${Boolean(this._animation)}`);
   if ( !this.position.x && !this.position.y ) return wrapper(options);
 
-  const token = this._original || this;
-  if ( !token._elevatedVision || !token._elevatedVision.tokenAdjustElevation ) return wrapper(options);
+  if ( !this._elevatedVision || !this._elevatedVision.tokenAdjustElevation ) return wrapper(options);
 
   if ( this._original ) {
     log(`token _refresh is clone`);
     // This token is a clone in a drag operation.
     // Adjust elevation of the clone
+
   } else {
     const hasAnimated = this._elevatedVision.tokenHasAnimated;
     if ( !this._animation && hasAnimated ) {
-      // Reset flag to prevent further elevation adjustments
+      // Reset flag on token to prevent further elevation adjustments
       this._elevatedVision.tokenAdjustElevation = false;
       return wrapper(options);
-    }
-
-    if ( !hasAnimated ) this._elevatedVision.tokenHasAnimated = true;
+    } else if ( !hasAnimated ) this._elevatedVision.tokenHasAnimated = true;
   }
 
   // Adjust the elevation
-  this.document.elevation = tokenElevationAt(this, this.document.x, this.document.y);
+  this.document.elevation = tokenElevationAt(this, this.document);
 
   log(`token _refresh at ${this.document.x},${this.document.y} from ${this.position.x},${this.position.y} to elevation ${this.document.elevation}`, options, this);
 
   return wrapper(options);
+}
+
+/**
+ * Wrap Token.prototype.clone
+ * Determine if the clone should adjust elevation
+ */
+export function cloneToken(wrapper) {
+  log(`cloneToken ${this.name} at elevation ${this.document?.elevation}`);
+  const clone = wrapper();
+
+  clone._elevatedVision ??= {};
+  clone._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
+
+  if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return clone;
+
+  const tokenOrigin = { x: this.x, y: this.y };
+  if ( !tokenOnGround(this, tokenOrigin) ) return clone;
+
+  clone._elevatedVision.tokenAdjustElevation = true;
+  return clone;
 }
 
 /**
@@ -75,25 +93,30 @@ export function _refreshToken(wrapper, options) {
  * @param {object} [options]    Options that affect the token shape
  * @returns {number|null} Elevation, in grid coordinates. Null if no change.
  */
-export function autoElevationChangeForToken(token, oldPosition, newPosition) {
-  if ( points2dAlmostEqual(oldPosition, newPosition) ) return null;
+// export function autoElevationChangeForToken(token, oldPosition, newPosition) {
+//   if ( points2dAlmostEqual(oldPosition, newPosition) ) return null;
+//
+//   const useAveraging = getSetting(SETTINGS.AUTO_AVERAGING);
+//   const currTerrainElevation = tokenElevationAt(token, oldPosition.x, oldPosition.y, { useAveraging });
+//
+//   // Token must be "on the ground" to start.
+//   log(`token elevation ${token.document?.elevation} at ${oldPosition.x},${oldPosition.y}; current terrain elevation ${currTerrainElevation} (averaging ${useAveraging})`);
+//   if ( currTerrainElevation !== token.document?.elevation ) return null;
+//
+//   const newTerrainElevation = tokenElevationAt(token, newPosition.x, newPosition.y, { useAveraging });
+//   log(`new terrain elevation ${newTerrainElevation} at ${newPosition.x},${newPosition.y}`);
+//   return { currTerrainElevation, newTerrainElevation };
+// }
 
-  const useAveraging = getSetting(SETTINGS.AUTO_AVERAGING);
-  const currTerrainElevation = tokenElevationAt(token, oldPosition.x, oldPosition.y, { useAveraging });
-
-  // Token must be "on the ground" to start.
-  log(`token elevation ${token.document?.elevation} at ${oldPosition.x},${oldPosition.y}; current terrain elevation ${currTerrainElevation} (averaging ${useAveraging})`);
-  if ( currTerrainElevation !== token.document?.elevation ) return null;
-
-  const newTerrainElevation = tokenElevationAt(token, newPosition.x, newPosition.y, { useAveraging });
-  log(`new terrain elevation ${newTerrainElevation} at ${newPosition.x},${newPosition.y}`);
-  return { currTerrainElevation, newTerrainElevation };
+export function tokenOnGround(token, position) {
+  const currTerrainElevation = tokenElevationAt(token, position);
+  return currTerrainElevation.almostEqual(token.document?.elevation);
 }
 
-export function tokenElevationAt(token, x, y, { useAveraging = getSetting(SETTINGS.AUTO_AVERAGING) } = {}) {
-  const center = token.getCenter(x, y);
+export function tokenElevationAt(token, position, { useAveraging = getSetting(SETTINGS.AUTO_AVERAGING) } = {}) {
+  const center = token.getCenter(position.x, position.y);
   return useAveraging
-    ? averageElevationForToken(x, y, token.w, token.h)
+    ? averageElevationForToken(position.x, position.y, token.w, token.h)
     : canvas.elevation.elevationAt(center.x, center.y);
 }
 
