@@ -1,3 +1,14 @@
+## 0.1.0
+Substantial performance improvement by using meshes instead of sprites for the vision los and fov. Partial compatibility with Perfect Vision---shadows in lighting is working but shadows in vision are not. Does not throw errors when initially loading Perfect Vision. Improvements to handling automated elevation changes.
+
+Fix issue #10 (moving between elevated areas.)
+Fix issue #9 (Performance)
+Possible fix for issue #6 (periodic error when selecting tokens)
+Partial fix for issue #4 (Perfect Vision compatibility)
+
+## 0.1.0-alpha
+Tentative fix for issue #9 (extreme performance hit). For CanvasVisibilityShader.prototype.refresh, use meshes instead of sprites for los and fov.
+
 ## 0.0.3
 When dragging a token, elevation of the token updates automatically if parameters are met to do so. When moving, the token's vision matches the elevation it is at. (The elevation number indicator shows the destination elevation when moving after a drag, but the vision will be calculated based on elevation for the location.)
 
