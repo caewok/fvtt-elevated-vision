@@ -9,6 +9,7 @@ foundry
 "use strict";
 
 import { MODULE_ID } from "./const.js";
+import { log } from "./util.js";
 
 // API imports
 import * as drawing from "./drawing.js";
@@ -37,6 +38,7 @@ import {
 
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, registerSettings } from "./settings.js";
+import { autoElevationChangeForToken, tokenElevationAt } from "./tokens.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
@@ -73,7 +75,6 @@ Hooks.on("canvasReady", async function() {
   canvas.elevation.initialize();
 });
 
-
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
 Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(MODULE_ID);
@@ -87,23 +88,53 @@ function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
 
+Hooks.on("refreshToken", function(token, options) {
+  log(`refreshToken hook ${token.document?.elevation}`, token, options);
+  log(`refreshToken hook at ${token.document.x},${token.document.y} with elevation ${token.document.elevation} animate: ${Boolean(token._animation)}`);
+
+//   if ( !token._elevatedVision || !token._elevatedVision.tokenAdjustElevation ) return;
+//   const hasAnimated = token._elevatedVision.tokenHasAnimated;
+//   if ( !token._animation && hasAnimated ) {
+//     // Reset flag to prevent further elevation adjustments
+//     token._elevatedVision.adjustElevation = false;
+//     return;
+//   }
+//
+//   if ( !hasAnimated ) token._elevatedVision.tokenHasAnimated = true;
+//
+//   // Adjust the elevation
+//   token.document.elevation = tokenElevationAt(token, token.document.x, token.document.y);
+//   log(`refreshToken hook setting elevation to ${token.document.elevation}\n`);
+});
+
 // Reset the token elevation when moving the token after a cloned drag operation.
 // Token.prototype._refresh is then used to update the elevation as the token is moved.
-Hooks.on("preUpdateToken", function(tokenD, update, options, userId) {
-  if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
-
+Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {
   const token = tokenD.object;
-  if ( typeof token._EV_elevationOrigin === "undefined" ) return;
+  log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
+  log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`)
 
-  const keys = Object.keys(foundry.utils.flattenObject(update));
-  const changed = new Set(keys);
-  const positionChange = ["x", "y"].some(c => changed.has(c));
-  if ( !positionChange ) return;
+  const tokenOrigin = { x: tokenD.x, y: tokenD.y };
+  tokenD.object._elevatedVision ??= {};
+  tokenD.object._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
+  tokenD.object._elevatedVision.tokenOrigin = tokenOrigin;
+  tokenD.object._elevatedVision.tokenHasAnimated = false;
 
-  util.log("preUpdateToken", token, update, options, userId);
-  token.document.elevation = this._EV_elevationOrigin;
-  token._EV_elevationOrigin = undefined;
+  if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
+  if ( typeof changes.x === "undefined" && typeof changes.y === "undefined" ) return;
+
+  const tokenDestination = { x: changes.x ? changes.x : tokenD.x, y: changes.y ? changes.y : tokenD.y };
+  const elevationChange = autoElevationChangeForToken(tokenD.object, tokenOrigin, tokenDestination);
+  if ( elevationChange === null ) return;
+
+  tokenD.object._elevatedVision.tokenAdjustElevation = true;
+  changes.elevation = elevationChange.newTerrainElevation;
 });
+
+Hooks.on("updateToken", function(tokenD, change, options, userId) {
+  const token = tokenD.object;
+  log(`updateToken hook ${change.x}, ${change.y}, ${change.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation} and tokenD ${tokenD.x},${tokenD.y} token ${tokenD.object.document?.x},${tokenD.object.document?.y} `, change);
+})
 
 // Add settings for minimum and step elevation to the scene configuration.
 Hooks.on("renderSceneConfig", injectSceneConfiguration);

@@ -28,12 +28,19 @@ If not visible due to los/fov:
  * Store the original elevation so it can be restored before moving the actual token.
  */
 export function cloneToken(wrapper) {
-  log(`cloneToken ${this.name} at elevation ${this.document.elevation}`);
+  log(`cloneToken ${this.name} at elevation ${this.document?.elevation}`);
   const clone = wrapper();
 
-  this._EV_elevationOrigin = this.document.elevation;
-  clone.document.elevation = this.document.elevation;
+//   clone._elevatedVision = this._elevatedVision;
+
+//   this._EV_elevationOrigin = this.document?.elevation;
+//   clone.document.elevation = this.document.elevation;
   return clone;
+}
+
+export function _getShiftedPositionToken(wrapper, dx, dy) {
+  log(`_getShiftedPosition ${dx}, ${dy}`);
+  return wrapper(dx, dy);
 }
 
 // Rule:
@@ -52,19 +59,46 @@ export function _refreshToken(wrapper, options) {
   // New position: this.document
 
   // Drag starts with position set to 0, 0 (likely, not yet set).
-  log(`token _refresh at ${this.document.x},${this.document.y} with elevation ${this.document.elevation}`);
+  log(`token _refresh at ${this.document.x},${this.document.y} with elevation ${this.document.elevation} animate: ${Boolean(this._animation)}`);
   if ( !this.position.x && !this.position.y ) return wrapper(options);
 
-  const newElevation = autoElevationChangeForToken(this, this.position, this.document);
-  if ( newElevation === null ) return wrapper(options);
+  const token = this._original || this;
+  if ( !token._elevatedVision || !token._elevatedVision.tokenAdjustElevation ) return wrapper(options);
 
-  log(`token _refresh at ${this.document.x},${this.document.y} from ${this.position.x},${this.position.y}`, options, this);
-  log(`token _refresh newElevation ${newElevation}`);
+  if ( this._original ) {
+    log(`token _refresh is clone`);
+    // This token is a clone in a drag operation.
+    // Adjust elevation of the clone
+  } else {
+    const hasAnimated = this._elevatedVision.tokenHasAnimated;
+    if ( !this._animation && hasAnimated ) {
+      // Reset flag to prevent further elevation adjustments
+      this._elevatedVision.adjustElevation = false;
+      return wrapper(options);
+    }
 
-  this.document.elevation = newElevation;
+    if ( !hasAnimated ) this._elevatedVision.tokenHasAnimated = true;
+  }
+
+  // Adjust the elevation
+  this.document.elevation = tokenElevationAt(this, this.document.x, this.document.y);
+
+  log(`token _refresh at ${this.document.x},${this.document.y} from ${this.position.x},${this.position.y} to elevation ${this.document.elevation}`, options, this);
+
   return wrapper(options);
 }
 
+export function updatePositionToken(wrapper, { recenter = true } = {}) {
+  log(`updatingTokenPosition ${this.position.x},${this.position.y} --> ${this.document.x},${this.document.y}`);
+
+  wrapper({ recenter });
+}
+
+export function _onUpdateToken(wrapper, data, options, userId) {
+  log(`_onUpdateToken ${data.x},${data.y} e ${data.elevation}`);
+
+  wrapper(data, options, userId);
+}
 
 /**
  * Determine if a token elevation should change provided a new destination point.
@@ -77,23 +111,22 @@ export function autoElevationChangeForToken(token, oldPosition, newPosition) {
   if ( points2dAlmostEqual(oldPosition, newPosition) ) return null;
 
   const useAveraging = getSetting(SETTINGS.AUTO_AVERAGING);
-  const oldCenter = token.getCenter(oldPosition.x, oldPosition.y);
-
-  const currTerrainElevation = useAveraging
-    ? averageElevationForToken(oldPosition.x, oldPosition.y, token.w, token.h)
-    : canvas.elevation.elevationAt(oldCenter.x, oldCenter.y);
+  const currTerrainElevation = tokenElevationAt(token, oldPosition.x, oldPosition.y, { useAveraging });
 
   // Token must be "on the ground" to start.
-  log(`token elevation ${token.document.elevation} at ${oldCenter.x},${oldCenter.y}; current terrain elevation ${currTerrainElevation} (averaging ${useAveraging})`);
-  if ( currTerrainElevation !== token.document.elevation ) return null;
+  log(`token elevation ${token.document?.elevation} at ${oldPosition.x},${oldPosition.y}; current terrain elevation ${currTerrainElevation} (averaging ${useAveraging})`);
+  if ( currTerrainElevation !== token.document?.elevation ) return null;
 
-  const newCenter = token.getCenter(newPosition.x, newPosition.y);
-  const newTerrainElevation = useAveraging
-    ? averageElevationForToken(newPosition.x, newPosition.y, token.w, token.h)
-    : canvas.elevation.elevationAt(newCenter.x, newCenter.y);
+  const newTerrainElevation = tokenElevationAt(token, newPosition.x, newPosition.y, { useAveraging });
+  log(`new terrain elevation ${newTerrainElevation} at ${newPosition.x},${newPosition.y}`);
+  return { currTerrainElevation, newTerrainElevation };
+}
 
-  log(`new terrain elevation ${newTerrainElevation} at ${newCenter.x},${newCenter.y}`);
-  return (currTerrainElevation === newTerrainElevation) ? null : newTerrainElevation;
+export function tokenElevationAt(token, x, y, { useAveraging = getSetting(SETTINGS.AUTO_AVERAGING) } = {}) {
+  const center = token.getCenter(x, y);
+  return useAveraging
+    ? averageElevationForToken(x, y, token.w, token.h)
+    : canvas.elevation.elevationAt(center.x, center.y);
 }
 
 function averageElevationForToken(x, y, w, h) {
