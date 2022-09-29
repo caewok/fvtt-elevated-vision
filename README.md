@@ -30,7 +30,8 @@ Special thanks to:
 - [Token Lean](https://foundryvtt.com/packages/token-lean). Token Lean is a great addition because it allows tokens to "peak" over the edge of a cliff.
 
 ## Incompatible modules
-None known at this time, but it is likely that [Levels](https://foundryvtt.com/packages/levels) and [Perfect Vision](https://foundryvtt.com/packages/perfect-vision) will have issues. If you want real 3d, I recommend [Ripper's 3d Canvas](https://theripper93.com/). It probably goes without saying, but I will say it anyway, that mixing this module with 3d Canvas will likely result in serious errors.
+- Only partially compatible with [Perfect Vision](https://foundryvtt.com/packages/perfect-vision). As of Elevated Vision v0.1.0, lighting shadows work but vision shadows do not. But Perfect Vision should load and possibly work without throwing errors.
+- [Levels](https://foundryvtt.com/packages/levels) likely will have issues. If you want real 3d, I recommend [Ripper's 3d Canvas](https://theripper93.com/). It probably goes without saying, but I will say it anyway, that mixing this module with 3d Canvas will likely result in serious errors.
 
 # Examples
 
@@ -120,7 +121,7 @@ Selecting "apply token elevation to token vision" will take into account the sce
 
 Select change token elevation automatically to have tokens change elevation when moving, based on the terrain elevation data. Tokens only change elevation if they are "on the ground" when the movement starts. Meaning, the token's elevation at the start of the move equals the underlying terrain elevation.
 
-GMs can also toggle whether to use the average elevation under a token, or a point measurement of the elevation at the token center. 
+GMs can also toggle whether to use the average elevation under a token, or a point measurement of the elevation at the token center.
 
 <img src="https://raw.githubusercontent.com/caewok/fvtt-elevated-vision/feature/screenshots/screenshots/settings.webp" width="400" alt="Single wall casting a shadow from a light">
 

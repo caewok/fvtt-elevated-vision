@@ -33,7 +33,7 @@ export function registerSettings() {
     hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.VISION_USE_SHADER}.hint`),
     scope: "world",
     config: true,
-    default: false,
+    default: true,
     type: Boolean,
     requiresReload: true
   });

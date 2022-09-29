@@ -3,15 +3,18 @@ canvas,
 GlobalLightSource,
 FogManager,
 game,
-PIXI
+PIXI,
+PolygonMesher,
+PointSource
 */
 "use strict";
 
-import { log, drawPolygonWithHoles } from "./util.js";
-import { ShadowLOSFilter } from "./ShadowLOSFilter.js";
+import { drawPolygonWithHoles, drawPolygonWithHolesPV } from "./util.js";
+import { ShadowShader, updateShadowShaderUniforms } from "./ShadowShader.js";
+
 
 /**
- * Override CanvasVisionMask.prototype.createVision
+ * Override CanvasVisionMask.prototype.refresh
  * This version draws the FOV and LOS polygons with holes, which creates shadows for
  * walls below the source, but does not (a) make higher terrain in the shadow visible or
  * (b) shadow terrain higher than the viewer.
@@ -90,84 +93,87 @@ export function refreshCanvasVisibilityPolygons({forceUpdateFog=false}={}) {
 }
 
 
-// VisionContainerClass so that certain properties can be overriden
-export class EVVisionContainer extends PIXI.Container {
-  constructor() {
-    super();
+/**
+ * Override for creating vision with polygon shadow holes, compatible with Perfect Vision.
+ * Add the holes directly when creating the vision object.
+ */
+export function createVisionCanvasVisionMaskPV(wrapper) {
+  const vision = wrapper();
 
-    this.base = this.addChild(new PIXI.LegacyGraphics());
-    this.fov = this.addChild(new PIXI.LegacyGraphics());
+  for ( let lightSource of canvas.effects.lightSources ) {
+    if ( !canvas.effects.visionSources.size
+      || !lightSource.active
+      || lightSource.disabled
+      || lightSource instanceof GlobalLightSource ) continue;
 
-    // Store the LOS separately from the container children
-    // Will use in _render to construct sprite mask
-    this.los = new PIXI.LegacyGraphics();
-    this.mask = this.addChild(new PIXI.Sprite());
+    const shadows = lightSource.los.combinedShadows || [];
+    if ( shadows.length ) {
+      drawPolygonWithHolesPV(shadows, { graphics: vision.fov });
 
-    this._explored = false;
+      if ( lightSource.data.vision ) {
+        drawPolygonWithHolesPV(shadows, { graphics: vision.los });
+      }
+    }
   }
 
-  _renderLOS() {
-    // Return reusable RenderTexture to the pool
-    if ( this.mask.texture instanceof PIXI.RenderTexture ) canvas.masks.vision._EV_textures.push(this.mask.texture);
-    else this.mask.texture?.destroy();
-
-    const tex = canvas.masks.vision._getEVTexture();
-    canvas.app.renderer.render(this.los, tex);
-    this.mask.texture = tex;
+  for ( let visionSource of canvas.effects.visionSources ) {
+    const shadows = visionSource.los.combinedShadows || [];
+    if ( shadows.length ) {
+      drawPolygonWithHolesPV(shadows, { graphics: vision.los });
+    }
   }
 
-  destroy(options) {
-    if ( this.los ) this.los.destroy(true);
-    this.los = undefined;
-
-    // Return reusable RenderTexture to the pool
-    if ( this.mask.texture instanceof PIXI.RenderTexture ) canvas.masks.vision._EV_textures.push(this.mask.texture);
-    else this.mask.texture?.destroy();
-    this.mask.texture = undefined;
-
-    super.destroy(options);
-  }
+  return vision;
 }
 
 /**
- * Override CanvasVisionMask.prototype.createVision
- * Only when combined with refreshCanvasVisibilityShader.
- * Need to be able to add graphics children so that ShadowLOSFilter can be applied
- * per light or vision source. Cannot filter the parent b/c cannot distinguish which
- * source is responsible for which graphic shape unless each source has its own PIXI.Graphics.
- *
- * - Masking only works with PIXI.Graphics or PIXI.Sprite. Unlikely to work with
- *    filters on graphics b/c they would likely be applied too late.
- * See https://ptb.discord.com/channels/732325252788387980/734082399453052938/1013856472419008593
- * for potential work-around.
- *
- * Using a switch in settings for now b/c of the high risk of breaking other stuff when
- * messing with the vision and vision mask.
+ * Wrap VisionSource.prototype._updateLosGeometry
+ * Add a _sourceGeometryLOS b/c the _sourceGeometry for vision uses the fov.
  */
-export function createVisionCanvasVisionMask() {
-  const vision = new EVVisionContainer();
-  return this.vision = this.addChild(vision);
+export function _updateLosGeometryVisionSource(wrapper, polygon) {
+  wrapper(polygon);
+
+  const polyMesherLOS = new PolygonMesher(this.los, {
+    normalize: true,
+    x: this.x,
+    y: this.y,
+    radius: this.radius,
+    offset: this._flags.renderSoftEdges ? PointSource.EDGE_OFFSET : 0
+  });
+
+  this._sourceGeometryLOS = polyMesherLOS.triangulate(this._sourceGeometryLOS);
 }
 
-export function _getEVTexture() {
-  if ( this._EV_textures.length ) {
-    const tex = this._EV_textures.pop();
-    if ( tex.valid ) return tex;
+
+export function _createEVMeshVisionSource(type = "los") {
+  const mesh = this._createMesh(ShadowShader);
+  if ( type === "los" ) {
+    if ( !this._sourceGeometryLOS ) this._updateLosGeometry(this.fov);
+    mesh.geometry = this._sourceGeometryLOS;
   }
-  return PIXI.RenderTexture.create({
-    width: canvas.dimensions.width,
-    height: canvas.dimensions.height,
-    scaleMode: PIXI.SCALE_MODES.NEAREST,
-    multisample: PIXI.MSAA_QUALITY.NONE });
+
+  return mesh;
 }
 
-export function clearCanvasVisionMask(wrapped) {
-  while ( this._EV_textures.length ) {
-    const t = this._EV_textures.pop();
-    t.destroy(true);
-  }
+export function _createEVMeshLightSource() {
+  if ( !this._sourceGeometry ) this._updateLosGeometry(this.los);
+  return this._createMesh(ShadowShader);
+}
 
-  wrapped();
+/**
+ * Create an EV shadow mask of the LOS polygon.
+ * @returns {PIXI.Mesh}
+ */
+export function _createEVMask(type = "los") {
+  const mesh = this._createEVMesh(type);
+
+  const shader = mesh.shader;
+  shader.texture = this.texture ?? PIXI.Texture.WHITE;
+  shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
+  shader.alphaThreshold = 0.75;
+
+  updateShadowShaderUniforms(mesh.shader.uniforms, this);
+  return this._updateMesh(mesh);
 }
 
 export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
@@ -176,8 +182,6 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
     this.visible = false;
     return this.restrictVisibility();
   }
-
-//   log("refreshCanvasVisibilityShader");
 
   // Stage the priorVision vision container to be saved to the FOW texture
   let commitFog = false;
@@ -192,51 +196,43 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
   const vision = canvas.masks.vision.createVision();
   const fillColor = 0xFF0000;
 
+
   // Draw field-of-vision for lighting sources
   for ( let lightSource of canvas.effects.lightSources ) {
     if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
-    const g = vision.fov.addChild(new PIXI.LegacyGraphics());
-    g.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
 
-    // At least for now, GlobalLightSource cannot provide vision.
-    // No shadows possible for the global light source
-    if ( lightSource instanceof GlobalLightSource ) continue;
+    if ( lightSource instanceof GlobalLightSource ) {
+      // No shadows possible for the global light source
+      const g = vision.fov.addChild(new PIXI.LegacyGraphics());
+      g.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
+      continue;
+    }
 
-    const shadowFilter = ShadowLOSFilter.create({}, lightSource);
-    g.filters = [shadowFilter];
+    const mask = lightSource._createEVMask();
+    vision.fov.addChild(mask);
 
     if ( lightSource.data.vision ) {
-      const g = vision.los.addChild(new PIXI.LegacyGraphics());
-      g.filters = [shadowFilter];
-      g.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
+      vision.los.addChild(mask);
     }
   }
 
   // Draw sight-based visibility for each vision source
   for ( let visionSource of canvas.effects.visionSources ) {
     visionSource.active = true;
-    const shadowFilter = ShadowLOSFilter.create({}, visionSource);
 
     // Draw FOV polygon or provide some baseline visibility of the token's space
     if ( visionSource.radius > 0 ) {
-      const g = vision.fov.addChild(new PIXI.LegacyGraphics());
-      g.beginFill(fillColor, 1.0).drawShape(visionSource.fov).endFill();
-      g.filters = [shadowFilter];
+      vision.fov.addChild(visionSource._createEVMask("fov"));
     } else {
       const baseR = canvas.dimensions.size / 2;
       vision.base.beginFill(fillColor, 1.0).drawCircle(visionSource.x, visionSource.y, baseR).endFill();
     }
 
-    const g = vision.los.addChild(new PIXI.LegacyGraphics());
-    g.beginFill(fillColor, 1.0).drawShape(visionSource.los).endFill();
-    g.filters = [shadowFilter];
+    vision.los.addChild(visionSource._createEVMask("los"));
 
     // Record Fog of war exploration
     if ( canvas.fog.update(visionSource, forceUpdateFog) ) vision._explored = true;
   }
-
-  // Update the LOS mask sprite
-  vision._renderLOS();
 
   // Commit updates to the Fog of War texture
   if ( commitFog ) canvas.fog.commit();
@@ -246,4 +242,42 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
 
   // Restrict the visibility of other canvas objects
   this.restrictVisibility();
+}
+
+
+/**
+ * Override VisionSource.prototype._createMask
+ * Added by Perfect Vision.
+ */
+export function _createMaskVisionSourcePV(los = false) {
+  const mesh = this._updateMesh(this._createMesh(ShadowShader));
+  const shader = mesh.shader;
+
+  shader.texture = this._texture ?? PIXI.Texture.WHITE;
+  shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
+  shader.alphaThreshold = 0.75;
+
+  if (los) {
+    mesh.geometry = this._sourceLosGeometry;
+  }
+
+  updateShadowShaderUniforms(mesh.shader.uniforms, this); // Alt: mesh.source would work
+
+  return mesh;
+}
+
+/**
+ * Add LightSource.prototype._createMask
+ */
+export function _createMaskLightSourcePV() {
+  const mesh = this._updateMesh(this._createMesh(ShadowShader));
+  const shader = mesh.shader;
+
+  shader.texture = this._texture ?? PIXI.Texture.WHITE;
+  shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
+  shader.alphaThreshold = 0.75;
+
+  updateShadowShaderUniforms(mesh.shader.uniforms, this); // Alt: mesh.source would work
+
+  return mesh;
 }

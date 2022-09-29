@@ -32,7 +32,7 @@ import * as drawing from "./drawing.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
-import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./extract-pixels.js";
+import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
 
 /* Elevation layer
 
@@ -82,7 +82,7 @@ export class ElevationLayer extends InteractionLayer {
    * of the canvas in the elevation layer.
    */
   _activateHoverListener() {
-    log("activatingHoverListener")
+    log("activatingHoverListener");
     const textStyle = PreciseText.getTextStyle({
       fontSize: 24,
       fill: "#333333",
@@ -460,11 +460,14 @@ export class ElevationLayer extends InteractionLayer {
     this.renderElevation();
     // Store only the scene rectangle data
     // From https://github.com/dev7355608/perfect-vision/blob/3eb3c040dfc83a422fd88d4c7329c776742bef2f/patches/fog.js#L256
-    const { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, canvas.dimensions.sceneRect);
+    const { pixels, width, height } = extractPixels(
+      canvas.app.renderer,
+      this._elevationTexture,
+      canvas.dimensions.sceneRect);
     const canvasElement = pixelsToCanvas(pixels, width, height);
 
     // Depending on format, may need quality = 1 to avoid lossy compression
-    return await canvasToBase64(canvasElement, format, 1);
+    return await canvasToBase64(canvasElement, format, quality);
   }
 
   /**
@@ -511,22 +514,6 @@ export class ElevationLayer extends InteractionLayer {
     // See https://stackoverflow.com/questions/41494623/pixijs-sprite-not-loading
     const texture = await PIXI.Texture.fromURL(file);
     log(`Loaded texture with dim ${texture.width},${texture.height}`, texture);
-
-    // Adjust position for sprite if necessary; abort if no match found.
-//     const { width, height, sceneWidth, sceneHeight, sceneRect } = canvas.dimensions;
-//     if ( texture.width === sceneWidth && texture.height === sceneHeight ) {
-//       texture.position = sceneRect;
-//     } else if ( texture.width !== width && texture.height !== height ) {
-//       ui.notifications.error("Image elevation file dimensions do not match the scene. Try resizing the image file to the scene size.");
-//       return;
-//     }
-
-//     log("rendering image file");
-
-    // Texture should be the scene size
-//     const { sceneWidth, sceneHeight } = canvas.dimensions;
-//     texture.width = sceneWidth;
-//     texture.height = sceneHeight;
 
     // Testing: let sprite = PIXI.Sprite.from("elevation/test_001.png");
     canvas.elevation._backgroundElevation.texture.destroy();
@@ -844,15 +831,14 @@ export class ElevationLayer extends InteractionLayer {
       return;
     }
 
-    log("closedBoundary", closedBoundary)
-
+    log("closedBoundary", closedBoundary);
 
     // Test for holes
     // Holes must have walls entirely contained by the boundary.
     // (If the "hole" intersected the boundary, then the boundary would have included part
     //  of the "hole.")
     const holes = [];
-    const collisionTest = (o, rect) => closedBoundary.isSegmentEnclosed(o.t);
+    const collisionTest = (o, rect) => closedBoundary.isSegmentEnclosed(o.t); // eslint-disable-line no-unused-vars
     const enclosingBounds = closedBoundary.getBounds();
     const enclosedWallsSet = canvas.walls.quadtree.getObjects(enclosingBounds, {collisionTest});
 
