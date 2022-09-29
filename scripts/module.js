@@ -3,8 +3,7 @@ Hooks,
 game,
 canvas,
 CONFIG,
-renderTemplate,
-foundry
+renderTemplate
 */
 "use strict";
 
@@ -91,10 +90,10 @@ function registerLayer() {
 
 // Reset the token elevation when moving the token after a cloned drag operation.
 // Token.prototype._refresh is then used to update the elevation as the token is moved.
-Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {
+Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // eslint-disable-line no-unused-vars
   const token = tokenD.object;
   log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
-  log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`)
+  log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
 
   tokenD.object._elevatedVision ??= {};
   tokenD.object._elevatedVision.tokenAdjustElevation = false; // Just a placeholder

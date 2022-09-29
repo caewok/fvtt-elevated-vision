@@ -7,7 +7,7 @@ canvas
 "use strict";
 
 import { Point3d } from "./Point3d.js";
-import { points2dAlmostEqual, log } from "./util.js";
+import { log } from "./util.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
 /*
@@ -45,7 +45,7 @@ export function _refreshToken(wrapper, options) {
   if ( !this._elevatedVision || !this._elevatedVision.tokenAdjustElevation ) return wrapper(options);
 
   if ( this._original ) {
-    log(`token _refresh is clone`);
+    log("token _refresh is clone");
     // This token is a clone in a drag operation.
     // Adjust elevation of the clone
 
@@ -85,28 +85,6 @@ export function cloneToken(wrapper) {
   clone._elevatedVision.tokenAdjustElevation = true;
   return clone;
 }
-
-/**
- * Determine if a token elevation should change provided a new destination point.
- * @param {Token} token         Token
- * @param {Point} newPosition   {x,y} coordinates of position token is moving to
- * @param {object} [options]    Options that affect the token shape
- * @returns {number|null} Elevation, in grid coordinates. Null if no change.
- */
-// export function autoElevationChangeForToken(token, oldPosition, newPosition) {
-//   if ( points2dAlmostEqual(oldPosition, newPosition) ) return null;
-//
-//   const useAveraging = getSetting(SETTINGS.AUTO_AVERAGING);
-//   const currTerrainElevation = tokenElevationAt(token, oldPosition.x, oldPosition.y, { useAveraging });
-//
-//   // Token must be "on the ground" to start.
-//   log(`token elevation ${token.document?.elevation} at ${oldPosition.x},${oldPosition.y}; current terrain elevation ${currTerrainElevation} (averaging ${useAveraging})`);
-//   if ( currTerrainElevation !== token.document?.elevation ) return null;
-//
-//   const newTerrainElevation = tokenElevationAt(token, newPosition.x, newPosition.y, { useAveraging });
-//   log(`new terrain elevation ${newTerrainElevation} at ${newPosition.x},${newPosition.y}`);
-//   return { currTerrainElevation, newTerrainElevation };
-// }
 
 export function tokenOnGround(token, position) {
   const currTerrainElevation = tokenElevationAt(token, position);
