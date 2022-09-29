@@ -88,24 +88,6 @@ function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
 
-Hooks.on("refreshToken", function(token, options) {
-  log(`refreshToken hook ${token.document?.elevation}`, token, options);
-  log(`refreshToken hook at ${token.document.x},${token.document.y} with elevation ${token.document.elevation} animate: ${Boolean(token._animation)}`);
-
-//   if ( !token._elevatedVision || !token._elevatedVision.tokenAdjustElevation ) return;
-//   const hasAnimated = token._elevatedVision.tokenHasAnimated;
-//   if ( !token._animation && hasAnimated ) {
-//     // Reset flag to prevent further elevation adjustments
-//     token._elevatedVision.adjustElevation = false;
-//     return;
-//   }
-//
-//   if ( !hasAnimated ) token._elevatedVision.tokenHasAnimated = true;
-//
-//   // Adjust the elevation
-//   token.document.elevation = tokenElevationAt(token, token.document.x, token.document.y);
-//   log(`refreshToken hook setting elevation to ${token.document.elevation}\n`);
-});
 
 // Reset the token elevation when moving the token after a cloned drag operation.
 // Token.prototype._refresh is then used to update the elevation as the token is moved.
@@ -117,7 +99,6 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {
   const tokenOrigin = { x: tokenD.x, y: tokenD.y };
   tokenD.object._elevatedVision ??= {};
   tokenD.object._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
-  tokenD.object._elevatedVision.tokenOrigin = tokenOrigin;
   tokenD.object._elevatedVision.tokenHasAnimated = false;
 
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
@@ -131,10 +112,6 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {
   changes.elevation = elevationChange.newTerrainElevation;
 });
 
-Hooks.on("updateToken", function(tokenD, change, options, userId) {
-  const token = tokenD.object;
-  log(`updateToken hook ${change.x}, ${change.y}, ${change.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation} and tokenD ${tokenD.x},${tokenD.y} token ${tokenD.object.document?.x},${tokenD.object.document?.y} `, change);
-})
 
 // Add settings for minimum and step elevation to the scene configuration.
 Hooks.on("renderSceneConfig", injectSceneConfiguration);

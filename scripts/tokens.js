@@ -23,26 +23,6 @@ If not visible due to los/fov:
 
 */
 
-/**
- * Wrap Token.prototype.clone
- * Store the original elevation so it can be restored before moving the actual token.
- */
-export function cloneToken(wrapper) {
-  log(`cloneToken ${this.name} at elevation ${this.document?.elevation}`);
-  const clone = wrapper();
-
-//   clone._elevatedVision = this._elevatedVision;
-
-//   this._EV_elevationOrigin = this.document?.elevation;
-//   clone.document.elevation = this.document.elevation;
-  return clone;
-}
-
-export function _getShiftedPositionToken(wrapper, dx, dy) {
-  log(`_getShiftedPosition ${dx}, ${dy}`);
-  return wrapper(dx, dy);
-}
-
 // Rule:
 // If token elevation currently equals the terrain elevation, then assume
 // moving the token should update the elevation.
@@ -73,7 +53,7 @@ export function _refreshToken(wrapper, options) {
     const hasAnimated = this._elevatedVision.tokenHasAnimated;
     if ( !this._animation && hasAnimated ) {
       // Reset flag to prevent further elevation adjustments
-      this._elevatedVision.adjustElevation = false;
+      this._elevatedVision.tokenAdjustElevation = false;
       return wrapper(options);
     }
 
@@ -86,18 +66,6 @@ export function _refreshToken(wrapper, options) {
   log(`token _refresh at ${this.document.x},${this.document.y} from ${this.position.x},${this.position.y} to elevation ${this.document.elevation}`, options, this);
 
   return wrapper(options);
-}
-
-export function updatePositionToken(wrapper, { recenter = true } = {}) {
-  log(`updatingTokenPosition ${this.position.x},${this.position.y} --> ${this.document.x},${this.document.y}`);
-
-  wrapper({ recenter });
-}
-
-export function _onUpdateToken(wrapper, data, options, userId) {
-  log(`_onUpdateToken ${data.x},${data.y} e ${data.elevation}`);
-
-  wrapper(data, options, userId);
 }
 
 /**
