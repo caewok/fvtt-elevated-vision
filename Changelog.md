@@ -1,3 +1,9 @@
+## 0.1.2
+Fix for testing detect range. This should fix functionality for detect tremor. Note that detection is using a 3d range, which affects detection when token or target is elevated. Tremor does not currently consider whether or not a token is "on the ground."
+
+Fix for issue #16 (negative elevation).
+
+
 ## 0.1.1
 Fix for issue #13 (applying elevation data to limited vision).
 
