@@ -103,7 +103,7 @@ export class ShadowShader extends PIXI.Shader {
     if ( inShadow ) {
       discard;
     } else {
-      gl_FragColor = vec4(0.0, 0.0, 0.0, depthElevation);
+      gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
     }
   }
   `;
