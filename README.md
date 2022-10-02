@@ -27,11 +27,12 @@ Special thanks to:
 - [Wall Height](https://foundryvtt.com/packages/wall-height/)
 
 ## Recommended modules
-- [Token Lean](https://foundryvtt.com/packages/token-lean). Token Lean is a great addition because it allows tokens to "peak" over the edge of a cliff.
+- [Token Lean](https://foundryvtt.com/packages/token-lean). Token Lean is a great addition because it allows tokens to "peak" over the edge of a cliff. For v10, I have created a fork: https://github.com/caewok/token-lean/releases.
 
-## Incompatible modules
-- Only partially compatible with [Perfect Vision](https://foundryvtt.com/packages/perfect-vision). As of Elevated Vision v0.1.0, lighting shadows work but vision shadows do not. But Perfect Vision should load and possibly work without throwing errors.
-- [Levels](https://foundryvtt.com/packages/levels) likely will have issues. If you want real 3d, I recommend [Ripper's 3d Canvas](https://theripper93.com/). It probably goes without saying, but I will say it anyway, that mixing this module with 3d Canvas will likely result in serious errors.
+## Problematic modules
+- Currently only partially compatible with [Perfect Vision](https://foundryvtt.com/packages/perfect-vision). As of Elevated Vision v0.1.0, lighting shadows work but vision shadows do not. But Perfect Vision should load and possibly work without throwing errors.
+- [Levels](https://foundryvtt.com/packages/levels) should now work. When Levels or Perfect Vision are present, Elevated Vision hands off visibility testing to those modules. In theory, visibility tests should be comparable using only Elevated Vision versus using Levels or Perfect Vision. Please report potential discrepancies in the Git issue tracker.
+- If you want real 3d, I recommend [Ripper's 3d Canvas](https://theripper93.com/). It probably goes without saying, but I will say it anyway, that mixing this module with 3d Canvas will likely result in serious errors.
 
 # Examples
 

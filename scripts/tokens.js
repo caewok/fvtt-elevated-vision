@@ -193,7 +193,7 @@ export function _testRangeDetectionMode(wrapper, visionSource, mode, target, tes
   const radius = visionSource.object.getLightRadius(mode.range);
   const dx = test.point.x - visionSource.x;
   const dy = test.point.y - visionSource.y;
-  const dz = test.point.z - visionSource.topZ;
+  const dz = test.point.z - visionSource.elevationZ;
   return ((dx * dx) + (dy * dy) + (dz * dz)) <= (radius * radius);
 }
 
