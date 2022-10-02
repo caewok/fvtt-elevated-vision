@@ -3,7 +3,7 @@ Fix for testing detect range. This should fix functionality for detect tremor. N
 
 Fix for issue #16 (negative elevation).
 Fix for issue #12 (levels compatibility) and #14 (_testRange check).
-
+Possible fix for issue #15.
 
 ## 0.1.1
 Fix for issue #13 (applying elevation data to limited vision).
