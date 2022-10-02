@@ -66,9 +66,11 @@ const FN_PERPENDICULAR_POINT =
 // Maps 0–1 to elevation in canvas coordinates.
 // EV_elevationResolution:
 // r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
+// u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+
 const FN_CANVAS_ELEVATION_FROM_PIXEL =
 `
-  return ((pixel * EV_elevationResolution.b * EV_elevationResolution.g) - EV_elevationResolution.r) * EV_elevationResolution.a;
+  return (EV_elevationResolution.r + (pixel * EV_elevationResolution.b * EV_elevationResolution.g)) * EV_elevationResolution.a;
 `;
 
 // Determine if a given location from a wall is in shadow or not.
