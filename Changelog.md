@@ -1,3 +1,6 @@
+## 0.1.1
+Fix for issue #13 (applying elevation data to limited vision).
+
 ## 0.1.0
 Substantial performance improvement by using meshes instead of sprites for the vision los and fov. Partial compatibility with Perfect Vision---shadows in lighting is working but shadows in vision are not. Does not throw errors when initially loading Perfect Vision. Improvements to handling automated elevation changes.
 
