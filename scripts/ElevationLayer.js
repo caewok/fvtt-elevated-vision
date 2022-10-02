@@ -248,7 +248,7 @@ export class ElevationLayer extends InteractionLayer {
    * @type {number}
    */
   get elevationMax() {
-    return (this.#maximumPixelValue * this.elevationStep) - this.elevationMin;
+    return this.elevationMin + (this.#maximumPixelValue * this.elevationStep);
   }
 
   /* ------------------------ */
@@ -265,17 +265,26 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number}
    */
   pixelValueToElevation(value) {
-    return (Math.round(value * this.elevationStep * 10) / 10) - this.elevationMin;
+    return this.elevationMin + (Math.round(value * this.elevationStep * 10) / 10);
+  }
+
+  /**
+   * Convert an elevation value to a pixel value between 0 and 255
+   * @param {number} value    Elevation
+   * @returns {number}
+   */
+  elevationToPixelValue(elevation) {
+    elevation = this.clampElevation(elevation);
+    return (elevation - this.elevationMin) / this.elevationStep;
   }
 
   /**
    * Color used to store this elevation value.
-   * @param {number} e  Proposed elevation value. May be corrected by clampElevation.
+   * @param {number} elevation  Proposed elevation value. May be corrected by clampElevation.
    * @return {Hex}
    */
-  elevationHex(e) {
-    e = this.clampElevation(e);
-    const value = (e + this.elevationMin) / this.elevationStep;
+  elevationHex(elevation) {
+    const value = this.elevationToPixelValue(elevation);
 
     // Gradient from red (255, 0, 0) to blue (0, 0, 255)
     // Flip at 128
@@ -284,7 +293,7 @@ export class ElevationLayer extends InteractionLayer {
     // const g = 0;
     // const b = value - 255;
 
-    log(`elevationHex elevation ${e}, value ${value}`);
+    log(`elevationHex elevation ${elevation}, value ${value}`);
 
     return PIXI.utils.rgb2hex([value / this.#maximumPixelValue, 0, 0]);
   }
