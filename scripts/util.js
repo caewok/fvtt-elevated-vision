@@ -33,7 +33,10 @@ export function combineBoundaryPolygonWithHoles(boundary, holes, { scalingFactor
     }
 
     // To avoid the checkerboard issue, use a positive fill type so any overlap is filled.
-    c1.Execute(ClipperLib.ClipType.ctUnion, combinedShadows, ClipperLib.PolyFillType.pftPositive, ClipperLib.PolyFillType.pftPositive);
+    c1.Execute(ClipperLib.ClipType.ctUnion,
+      combinedShadows,
+      ClipperLib.PolyFillType.pftPositive,
+      ClipperLib.PolyFillType.pftPositive);
 
     /* Testing
     api = game.modules.get("elevatedvision").api
