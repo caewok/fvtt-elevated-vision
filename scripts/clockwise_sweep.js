@@ -9,7 +9,7 @@ import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles } from "
 import { COLORS, clearDrawings } from "./drawing.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
-
+import { getSetting, SETTINGS } from "./settings.js";
 
 /**
  * Wrap ClockwisePolygonSweep.prototype._identifyEdges
