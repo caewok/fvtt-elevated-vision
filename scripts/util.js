@@ -32,6 +32,7 @@ export function combineBoundaryPolygonWithHoles(boundary, holes, { scalingFactor
       c1.AddPath(hole.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptClip, true);
     }
 
+    // To avoid the checkerboard issue, use a positive fill type so any overlap is filled.
     c1.Execute(ClipperLib.ClipType.ctUnion, combinedShadows, ClipperLib.PolyFillType.pftPositive, ClipperLib.PolyFillType.pftPositive);
 
     /* Testing
@@ -46,6 +47,7 @@ export function combineBoundaryPolygonWithHoles(boundary, holes, { scalingFactor
     shadow = tmp.map(p => new Shadow(p.points))
     */
 
+    // Then invert against the boundary (e.g., LOS) polygon
     ClipperLib.Clipper.CleanPolygons(combinedShadows, cleanDelta * scalingFactor);
     c.AddPath(boundary.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptSubject, true);
     c.AddPaths(combinedShadows, ClipperLib.PolyType.ptClip, true);
