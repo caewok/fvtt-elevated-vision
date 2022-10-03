@@ -30,21 +30,36 @@ export function combineBoundaryPolygonWithHoles(boundary, holes, { scalingFactor
     for ( let i = 1; i < ln; i += 1 ) {
       const hole = holes[i];
       c1.AddPath(hole.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptClip, true);
-      c1.Execute(ClipperLib.ClipType.ctUnion, combinedShadows);
-      c1.AddPaths(combinedShadows, ClipperLib.PolyType.ptSubject, true)
     }
-//     c1.Execute(ClipperLib.ClipType.ctUnion, combinedShadows);
 
-//     tmp = combinedShadows.map(pts => {
-//       const poly = PIXI.Polygon.fromClipperPoints(pts, scalingFactor);
-//       poly.isHole = !ClipperLib.Clipper.Orientation(pts);
-//       return poly;
-//     });
-  // tmp = tmp.map(p => new Shadow(p.points))
+    c1.Execute(ClipperLib.ClipType.ctUnion, combinedShadows, ClipperLib.PolyFillType.pftPositive, ClipperLib.PolyFillType.pftPositive);
+
+    /* Testing
+    api = game.modules.get("elevatedvision").api
+    Shadow = api.Shadow
+    tmp = combinedShadows.map(pts => {
+      const poly = PIXI.Polygon.fromClipperPoints(pts, scalingFactor);
+      poly.isHole = !ClipperLib.Clipper.Orientation(pts);
+      return poly;
+    });
+    tmp.map(t => t.isHole)
+    shadow = tmp.map(p => new Shadow(p.points))
+    */
+
     ClipperLib.Clipper.CleanPolygons(combinedShadows, cleanDelta * scalingFactor);
     c.AddPath(boundary.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptSubject, true);
     c.AddPaths(combinedShadows, ClipperLib.PolyType.ptClip, true);
     c.Execute(ClipperLib.ClipType.ctDifference, solution);
+
+    /* Testing
+    tmp = solution.map(pts => {
+      const poly = PIXI.Polygon.fromClipperPoints(pts, scalingFactor);
+      poly.isHole = !ClipperLib.Clipper.Orientation(pts);
+      return poly;
+    });
+    tmp.map(t => t.isHole)
+    shadow = tmp.map(p => new Shadow(p.points))
+    */
 
   } else if ( ln === 1 ) {
     c.AddPath(boundary.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptSubject, true);
