@@ -20,12 +20,57 @@ import { Point3d } from "./Point3d.js";
 export function combineBoundaryPolygonWithHoles(boundary, holes, { scalingFactor = 1, cleanDelta = 0.1 } = {}) {
   const c = new ClipperLib.Clipper();
   const solution = new ClipperLib.Paths();
-  if ( holes.length) {
-    c.AddPath(boundary.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptSubject, true);
-    for ( const hole of holes ) {
-      c.AddPath(hole.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptClip, true);
+  const ln = holes.length;
+
+  if ( ln > 1) {
+    // First, combine all the shadows. This avoids inversion issues. See issue #17.
+    const c1 = new ClipperLib.Clipper();
+    const combinedShadows = new ClipperLib.Paths();
+    c1.AddPath(holes[0].toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptSubject, true);
+    for ( let i = 1; i < ln; i += 1 ) {
+      const hole = holes[i];
+      c1.AddPath(hole.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptClip, true);
     }
+
+    // To avoid the checkerboard issue, use a positive fill type so any overlap is filled.
+    c1.Execute(ClipperLib.ClipType.ctUnion,
+      combinedShadows,
+      ClipperLib.PolyFillType.pftPositive,
+      ClipperLib.PolyFillType.pftPositive);
+
+    /* Testing
+    api = game.modules.get("elevatedvision").api
+    Shadow = api.Shadow
+    tmp = combinedShadows.map(pts => {
+      const poly = PIXI.Polygon.fromClipperPoints(pts, scalingFactor);
+      poly.isHole = !ClipperLib.Clipper.Orientation(pts);
+      return poly;
+    });
+    tmp.map(t => t.isHole)
+    shadow = tmp.map(p => new Shadow(p.points))
+    */
+
+    // Then invert against the boundary (e.g., LOS) polygon
+    ClipperLib.Clipper.CleanPolygons(combinedShadows, cleanDelta * scalingFactor);
+    c.AddPath(boundary.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptSubject, true);
+    c.AddPaths(combinedShadows, ClipperLib.PolyType.ptClip, true);
     c.Execute(ClipperLib.ClipType.ctDifference, solution);
+
+    /* Testing
+    tmp = solution.map(pts => {
+      const poly = PIXI.Polygon.fromClipperPoints(pts, scalingFactor);
+      poly.isHole = !ClipperLib.Clipper.Orientation(pts);
+      return poly;
+    });
+    tmp.map(t => t.isHole)
+    shadow = tmp.map(p => new Shadow(p.points))
+    */
+
+  } else if ( ln === 1 ) {
+    c.AddPath(boundary.toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptSubject, true);
+    c.AddPath(holes[0].toClipperPoints({scalingFactor}), ClipperLib.PolyType.ptClip, true);
+    c.Execute(ClipperLib.ClipType.ctDifference, solution);
+
   } else {
     solution.push(boundary.toClipperPoints({scalingFactor}));
   }

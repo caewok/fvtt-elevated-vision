@@ -1,3 +1,7 @@
+## 0.1.3
+Fix for issue #17 (inverted polygon shadows).
+Avoid combining shadows unless required for vision, which provides performance improvement when using the shader for vision shadows.
+
 ## 0.1.2
 Fix for testing detect range. This should fix functionality for detect tremor. Note that detection is using a 3d range, which affects detection when token or target is elevated. Tremor does not currently consider whether or not a token is "on the ground."
 

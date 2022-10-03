@@ -9,7 +9,7 @@ import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles } from "
 import { COLORS, clearDrawings } from "./drawing.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
-
+import { getSetting, SETTINGS } from "./settings.js";
 
 /**
  * Wrap ClockwisePolygonSweep.prototype._identifyEdges
@@ -32,8 +32,10 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   this.wallsBelowSource = new Set(walls); // Top of edge below source top
 
   // Construct shadows from the walls below the light source
+  // Only need to construct the combined shadows if using polygons for vision, not shader.
+  const combineShadows = !getSetting(SETTINGS.VISION_USE_SHADER);
   this.shadows = [];
-  this.combinedShadows = [];
+  this.combinedShadows = combineShadows ? [] : undefined;
   if ( !this.wallsBelowSource.size ) return;
 
   // Store each shadow individually
@@ -46,7 +48,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   // Combine the shadows and trim to be within the LOS
   // We want one or more LOS polygons along with non-overlapping holes.
-  this.combinedShadows = combineBoundaryPolygonWithHoles(this, this.shadows);
+  if ( combineShadows ) this.combinedShadows = combineBoundaryPolygonWithHoles(this, this.shadows);
 }
 
 /**
