@@ -133,11 +133,15 @@ export function createVisionCanvasVisionMaskPV(wrapper) {
 export function _updateLosGeometryVisionSource(wrapper, polygon) {
   wrapper(polygon);
 
+  this._sourceGeometryLOS ??= null;
+
+  // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
+  // based on radius, set radius to 1 if radius is 0.
   const polyMesherLOS = new PolygonMesher(this.los, {
     normalize: true,
     x: this.x,
     y: this.y,
-    radius: this.radius,
+    radius: this.radius || 1,
     offset: this._flags.renderSoftEdges ? PointSource.EDGE_OFFSET : 0
   });
 
@@ -173,7 +177,13 @@ export function _createEVMask(type = "los") {
   shader.alphaThreshold = 0.75;
 
   updateShadowShaderUniforms(mesh.shader.uniforms, this);
-  return this._updateMesh(mesh);
+  this._updateMesh(mesh);
+
+  // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
+  // based on radius, set radius to 1 if radius is 0.
+  if ( !this.radius ) mesh.scale.set(1);
+
+  return mesh;
 }
 
 export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {

@@ -191,7 +191,12 @@ export function updateShadowShaderUniforms(uniforms, source) {
 
   const { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
   const { size, distance, width, height } = canvas.dimensions;
-  const { x, y, radius } = source;
+  const { x, y } = source;
+
+  // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
+  // based on radius, set radius to 1 if radius is 0.
+  const radius = source.radius || 1;
+
   const r_inv = 1 / radius;
 
   uniforms.EV_elevationSampler = canvas.elevation?._elevationTexture || PIXI.Texture.EMPTY;
