@@ -1,3 +1,6 @@
+## 0.1.4
+Fix for issue #15 (no vision when sight.range = 0). To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry based on radius, set radius to 1 if radius is 0.
+
 ## 0.1.3
 Fix for issue #17 (inverted polygon shadows).
 Avoid combining shadows unless required for vision, which provides performance improvement when using the shader for vision shadows.
