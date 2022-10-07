@@ -10,8 +10,8 @@ PointSource
 "use strict";
 
 import { drawPolygonWithHoles, drawPolygonWithHolesPV } from "./util.js";
-import { ShadowShader, updateShadowShaderUniforms } from "./ShadowShader.js";
-
+import { ShadowShader } from "./ShadowShader.js";
+import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 
 /**
  * Override CanvasVisionMask.prototype.refresh
@@ -127,58 +127,39 @@ export function createVisionCanvasVisionMaskPV(wrapper) {
 }
 
 /**
- * Wrap VisionSource.prototype._updateLosGeometry
- * Add a _sourceGeometryLOS b/c the _sourceGeometry for vision uses the fov.
+ * Wrap VisionSource.prototype.initialize
+ * Add _sourceLosGeometry --- needed for vision los. vision._sourceGeometry uses fov.
+ * See equivalent version for Perfect Vision: https://github.com/dev7355608/perfect-vision/blob/90176cc99ea1663433f3d41b25f245da6d9da474/scripts/core/point-source-mesh.js#L95
  */
-export function _updateLosGeometryVisionSource(wrapper, polygon) {
-  wrapper(polygon);
+export function initializeVisionSource(wrapped, ...args) {
+  wrapped(...args);
 
-  this._sourceGeometryLOS ??= null;
+  const vertices = this.los.points;
+  const indices = PIXI.utils.earcut(vertices);
+  this._sourceLosGeometry = new PIXI.Geometry()
+    .addAttribute("aVertexPosition", vertices, 2)
+    .addAttribute("aTextureCoord", [], 2)
+    .addIndex(indices);
 
-  // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
-  // based on radius, set radius to 1 if radius is 0.
-  const polyMesherLOS = new PolygonMesher(this.los, {
-    normalize: true,
-    x: this.x,
-    y: this.y,
-    radius: this.radius || 1,
-    offset: this._flags.renderSoftEdges ? PointSource.EDGE_OFFSET : 0
-  });
-
-  this._sourceGeometryLOS = polyMesherLOS.triangulate(this._sourceGeometryLOS);
+  return this;
 }
-
-export function _updateLosGeometryVisionSourcePV(wrapper, polygon) {
-  wrapper(polygon);
-
-  this._sourceGeometryLOS ??= null;
-
-  // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
-  // based on radius, set radius to 1 if radius is 0.
-  const polyMesherLOS = new PolygonMesher(this.los, {
-    normalize: true,
-    x: this.x,
-    y: this.y,
-    radius: this.radius || 1,
-    offset: this._flags.renderSoftEdges ? PointSource.EDGE_OFFSET : 0
-  });
-
-  this._sourceGeometryLOS = polyMesherLOS.triangulate(this._sourceGeometryLOS);
-}
-
 
 export function _createEVMeshVisionSource(type = "los") {
-  const mesh = this._createMesh(ShadowShader);
+  let mesh;
+
   if ( type === "los" ) {
-    if ( !this._sourceGeometryLOS ) this._updateLosGeometry(this.fov);
-    mesh.geometry = this._sourceGeometryLOS;
+    mesh = this._createMesh(ShadowShaderNoRadius);
+    mesh.geometry = this._sourceLosGeometry;
+
+  } else {
+    mesh = this._createMesh(ShadowShader);
   }
 
   return mesh;
 }
 
 export function _createEVMeshLightSource() {
-  if ( !this._sourceGeometry ) this._updateLosGeometry(this.los);
+  // if ( !this._sourceGeometry ) this._updateLosGeometry(this.los);
   return this._createMesh(ShadowShader);
 }
 
@@ -194,7 +175,8 @@ export function _createEVMask(type = "los") {
   shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
   shader.alphaThreshold = 0.75;
 
-  updateShadowShaderUniforms(mesh.shader.uniforms, this);
+  mesh.shader.updateUniforms(this);
+
   this._updateMesh(mesh);
 
   // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
