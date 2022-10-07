@@ -148,6 +148,24 @@ export function _updateLosGeometryVisionSource(wrapper, polygon) {
   this._sourceGeometryLOS = polyMesherLOS.triangulate(this._sourceGeometryLOS);
 }
 
+export function _updateLosGeometryVisionSourcePV(wrapper, polygon) {
+  wrapper(polygon);
+
+  this._sourceGeometryLOS ??= null;
+
+  // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
+  // based on radius, set radius to 1 if radius is 0.
+  const polyMesherLOS = new PolygonMesher(this.los, {
+    normalize: true,
+    x: this.x,
+    y: this.y,
+    radius: this.radius || 1,
+    offset: this._flags.renderSoftEdges ? PointSource.EDGE_OFFSET : 0
+  });
+
+  this._sourceGeometryLOS = polyMesherLOS.triangulate(this._sourceGeometryLOS);
+}
+
 
 export function _createEVMeshVisionSource(type = "los") {
   const mesh = this._createMesh(ShadowShader);
@@ -260,34 +278,16 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
  * Added by Perfect Vision.
  */
 export function _createMaskVisionSourcePV(los = false) {
-  const mesh = this._updateMesh(this._createMesh(ShadowShader));
-  const shader = mesh.shader;
-
-  shader.texture = this._texture ?? PIXI.Texture.WHITE;
-  shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
-  shader.alphaThreshold = 0.75;
-
-  if (los) {
-    mesh.geometry = this._sourceLosGeometry;
-  }
-
-  updateShadowShaderUniforms(mesh.shader.uniforms, this); // Alt: mesh.source would work
-
-  return mesh;
+  return this._createEVMask(los ? "los" : "fov");
 }
 
 /**
- * Add LightSource.prototype._createMask
+ * Override LightSource.prototype._createMask
+ * Added by Perfect Vision
+ * Avoid creating a mask for LightingRegionSource (GlobalLightSource)
  */
-export function _createMaskLightSourcePV() {
-  const mesh = this._updateMesh(this._createMesh(ShadowShader));
-  const shader = mesh.shader;
-
-  shader.texture = this._texture ?? PIXI.Texture.WHITE;
-  shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
-  shader.alphaThreshold = 0.75;
-
-  updateShadowShaderUniforms(mesh.shader.uniforms, this); // Alt: mesh.source would work
-
-  return mesh;
+export function _createMaskLightSourcePV(wrapped) {
+  if ( this.constructor.name === "LightingRegionSource" ) return wrapped();
+  return this._createEVMask();
 }
+
