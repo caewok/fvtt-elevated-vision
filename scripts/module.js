@@ -19,6 +19,7 @@ import { Point3d } from "./Point3d.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { ShadowShader } from "./ShadowShader.js";
+import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { ElevationGrid } from "./ElevationGrid.js";
 
 // Register methods, patches, settings
@@ -50,6 +51,7 @@ Hooks.once("init", function() {
     ElevationGrid,
     WallTracer,
     ShadowShader,
+    ShadowShaderNoRadius,
     FILOQueue
   };
 
