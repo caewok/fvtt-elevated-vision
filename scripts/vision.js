@@ -127,18 +127,6 @@ export function createVisionCanvasVisionMaskPV(wrapper) {
   return vision;
 }
 
-/**
- * Wrap VisionSource.prototype.initialize
- * Add _sourceLosGeometry --- needed for vision los. vision._sourceGeometry uses fov.
- * See equivalent version for Perfect Vision: https://github.com/dev7355608/perfect-vision/blob/90176cc99ea1663433f3d41b25f245da6d9da474/scripts/core/point-source-mesh.js#L95
- */
-export function initializeVisionSource(wrapped, ...args) {
-  wrapped(...args);
-
-
-
-  return this;
-}
 
 /**
  * Wrap VisionSource.prototype._updateLosGeometry
@@ -184,38 +172,6 @@ export function _updateLosGeometryLightSource(wrapped, polygon) {
       .addIndex(los_indices);
 }
 
-export function _updateLosGeometryVisionSourcePV(wrapped, polygon) {
-  wrapped(polygon);
-
-  this._EV_geometry ??= {}
-
-  // LOS
-  if ( this._EV_geometry.los ) {
-    this._EV_geometry.los.update([this.los]);
-  } else {
-    this._EV_geometry.los = new SmoothGeometry([this.los]);
-  }
-
-  // FOV
-  if ( this._EV_geometry.fov ) {
-    this._EV_geometry.fov.update([this.fov]);
-  } else {
-    this._EV_geometry.fov = new SmoothGeometry([this.fov]);
-  }
-}
-
-export function _updateLosGeometryLightSourcePV(wrapped, polygon) {
-  wrapped(polygon);
-
-  this._EV_geometry ??= {}
-
-  // LOS
-  if ( this._EV_geometry.los ) {
-    this._EV_geometry.los.update([this.los]);
-  } else {
-    this._EV_geometry.los = new SmoothGeometry([this.los]);
-  }
-}
 
 export function _createEVMeshVisionSource(type = "los") {
   if ( type === "los" ) {
@@ -235,7 +191,6 @@ export function _createEVMeshLightSource() {
   return mesh;
 }
 
-
 /**
  * Create an EV shadow mask of the LOS polygon.
  * @returns {PIXI.Mesh}
@@ -249,12 +204,6 @@ export function _createEVMask(type = "los") {
 //   shader.alphaThreshold = 0.75;
 
   mesh.shader.updateUniforms(this);
-
-//   this._updateMesh(mesh);
-
-  // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
-  // based on radius, set radius to 1 if radius is 0.
-//   if ( !this.radius ) mesh.scale.set(1);
 
   return mesh;
 }

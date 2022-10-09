@@ -47,9 +47,7 @@ import {
   _createMaskVisionSourcePV,
   _createMaskLightSourcePV,
   _updateLosGeometryLightSource,
-  _updateLosGeometryVisionSource,
-  _updateLosGeometryVisionSourcePV,
-  _updateLosGeometryLightSourcePV
+  _updateLosGeometryVisionSource
 
 } from "./vision.js";
 
@@ -268,8 +266,6 @@ export function registerPatches() {
       libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMaskPV, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
       break;
     case SHADER_SWITCH.PV_SHADER:
-      libWrapper.register(MODULE_ID, "VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSourcePV, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "LightSource.prototype._updateLosGeometry", _updateLosGeometryLightSourcePV, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
       libWrapper.register(MODULE_ID, "VisionSource.prototype._createMask", _createMaskVisionSourcePV, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
       libWrapper.register(MODULE_ID, "LightSource.prototype._createMask", _createMaskLightSourcePV, libWrapper.MIXED, {perf_mode: libWrapper.PERF_FAST});
       break;
