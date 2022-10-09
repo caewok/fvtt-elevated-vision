@@ -21,6 +21,8 @@ import { FILOQueue } from "./FILOQueue.js";
 import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { ElevationGrid } from "./ElevationGrid.js";
+import { StencilMask } from "./perfect-vision/stencil-mask.js";
+import { GraphicsStencilMask } from "./perfect-vision/graphics-stencil-mask.js";
 
 // Register methods, patches, settings
 import { registerPIXIPolygonMethods } from "./PIXIPolygon.js";
@@ -52,7 +54,9 @@ Hooks.once("init", function() {
     WallTracer,
     ShadowShader,
     ShadowShaderNoRadius,
-    FILOQueue
+    FILOQueue,
+    StencilMask,
+    GraphicsStencilMask
   };
 
   // These methods need to be registered early

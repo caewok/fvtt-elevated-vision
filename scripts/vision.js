@@ -12,6 +12,7 @@ PointSource
 import { drawPolygonWithHoles, drawPolygonWithHolesPV } from "./util.js";
 import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
+import { SmoothGeometry } from "./perfect-vision/smooth-geometry.js";
 
 /**
  * Override CanvasVisionMask.prototype.refresh
@@ -139,44 +140,95 @@ export function initializeVisionSource(wrapped, ...args) {
   return this;
 }
 
-export function _createEVMeshVisionSource(type = "los") {
-  let mesh;
+/**
+ * Wrap VisionSource.prototype._updateLosGeometry
+ * Add simple geometry for using ShadowShader without a radius
+ */
+export function _updateLosGeometryVisionSource(wrapped, polygon) {
+  wrapped(polygon);
 
-  if ( type === "los" ) {
-    const vertices = this.los.points;
-    const indices = PIXI.utils.earcut(vertices);
-    this._sourceLosGeometry = new PIXI.Geometry()
-      .addAttribute("aVertexPosition", vertices, 2)
+  this._EV_geometry = {}
+
+  // LOS
+  const los_vertices = this.los.points;
+  const los_indices = PIXI.utils.earcut(los_vertices);
+  this._EV_geometry.los = new PIXI.Geometry()
+      .addAttribute("aVertexPosition", los_vertices, 2)
       .addAttribute("aTextureCoord", [], 2)
-      .addIndex(indices);
+      .addIndex(los_indices);
 
-    mesh = this._createMesh(ShadowShaderNoRadius);
-    mesh.geometry = this._sourceLosGeometry;
+  // FOV
+  const fov_vertices = this.fov.points;
+  const fov_indices = PIXI.utils.earcut(fov_vertices);
+  this._EV_geometry.fov = new PIXI.Geometry()
+      .addAttribute("aVertexPosition", fov_vertices, 2)
+      .addAttribute("aTextureCoord", [], 2)
+      .addIndex(fov_indices);
+}
 
+/**
+ * Wrap LightSource.prototype._updateLosGeometry
+ * Add simple geometry for using ShadowShader without a radius
+ */
+export function _updateLosGeometryLightSource(wrapped, polygon) {
+  wrapped(polygon);
+
+  this._EV_geometry = {}
+
+  // LOS
+  const los_vertices = this.los.points;
+  const los_indices = PIXI.utils.earcut(los_vertices);
+  this._EV_geometry.los = new PIXI.Geometry()
+      .addAttribute("aVertexPosition", los_vertices, 2)
+      .addAttribute("aTextureCoord", [], 2)
+      .addIndex(los_indices);
+}
+
+export function _updateLosGeometryVisionSourcePV(wrapped, polygon) {
+  wrapped(polygon);
+
+  this._EV_geometry ??= {}
+
+  // LOS
+  if ( this._EV_geometry.los ) {
+    this._EV_geometry.los.update([this.los]);
   } else {
-    mesh = this._createMesh(ShadowShader);
-    this._updateMesh(mesh);
-
-    // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
-    // based on radius, set radius to 1 if radius is 0.
-    if ( !this.radius ) mesh.scale.set(1);
+    this._EV_geometry.los = new SmoothGeometry([this.los]);
   }
 
+  // FOV
+  if ( this._EV_geometry.fov ) {
+    this._EV_geometry.fov.update([this.fov]);
+  } else {
+    this._EV_geometry.fov = new SmoothGeometry([this.fov]);
+  }
+}
+
+export function _updateLosGeometryLightSourcePV(wrapped, polygon) {
+  wrapped(polygon);
+
+  this._EV_geometry ??= {}
+
+  // LOS
+  if ( this._EV_geometry.los ) {
+    this._EV_geometry.los.update([this.los]);
+  } else {
+    this._EV_geometry.los = new SmoothGeometry([this.los]);
+  }
+}
+
+export function _createEVMeshVisionSource(type = "los") {
+  const mesh = this._createMesh(ShadowShaderNoRadius);
+  mesh.geometry = this._EV_geometry[type];
   return mesh;
 }
 
 export function _createEVMeshLightSource() {
-  // if ( !this._sourceGeometry ) this._updateLosGeometry(this.los);
-  const mesh = this._createMesh(ShadowShader);
-  this._updateMesh(mesh);
-
-  // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
-  // based on radius, set radius to 1 if radius is 0.
-  if ( !this.radius ) mesh.scale.set(1);
-
+  const mesh = this._createMesh(ShadowShaderNoRadius);
+  mesh.geometry = this._EV_geometry.los;
   return mesh;
-
 }
+
 
 /**
  * Create an EV shadow mask of the LOS polygon.
