@@ -171,8 +171,20 @@ export function _updateLosGeometryLightSource(wrapped, polygon) {
       .addIndex(los_indices);
 }
 
-
 export function _createEVMeshVisionSource(type = "los") {
+  const mesh = this._createMesh(ShadowShaderNoRadius);
+  mesh.geometry = this._EV_geometry[type];
+  return mesh;
+}
+
+export function _createEVMeshLightSource() {
+  const mesh = this._createMesh(ShadowShaderNoRadius);
+  mesh.geometry = this._EV_geometry.los;
+  return mesh;
+}
+
+
+export function _createEVMeshVisionSourcePV(type = "los") {
   if ( type === "los" ) {
     const mesh = this._createMesh(ShadowShaderNoRadius);
     mesh.geometry = this._sourceLosGeometry;
@@ -184,7 +196,7 @@ export function _createEVMeshVisionSource(type = "los") {
   return mesh;
 }
 
-export function _createEVMeshLightSource() {
+export function _createEVMeshLightSourcePV() {
   const mesh = this._createMesh(ShadowShader);
   mesh.geometry = this._sourceGeometry;
   return mesh;
