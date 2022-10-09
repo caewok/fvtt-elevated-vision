@@ -10,8 +10,8 @@ PointSource
 "use strict";
 
 import { drawPolygonWithHoles, drawPolygonWithHolesPV } from "./util.js";
-import { ShadowShader, updateShadowShaderUniforms } from "./ShadowShader.js";
-
+import { ShadowShader } from "./ShadowShader.js";
+import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 
 /**
  * Override CanvasVisionMask.prototype.refresh
@@ -126,60 +126,68 @@ export function createVisionCanvasVisionMaskPV(wrapper) {
   return vision;
 }
 
+
 /**
  * Wrap VisionSource.prototype._updateLosGeometry
- * Add a _sourceGeometryLOS b/c the _sourceGeometry for vision uses the fov.
+ * Add simple geometry for using ShadowShader without a radius
  */
-export function _updateLosGeometryVisionSource(wrapper, polygon) {
-  wrapper(polygon);
+export function _updateLosGeometryVisionSource(wrapped, polygon) {
+  wrapped(polygon);
 
-  this._sourceGeometryLOS ??= null;
+  this._EV_geometry = {}
 
-  // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
-  // based on radius, set radius to 1 if radius is 0.
-  const polyMesherLOS = new PolygonMesher(this.los, {
-    normalize: true,
-    x: this.x,
-    y: this.y,
-    radius: this.radius || 1,
-    offset: this._flags.renderSoftEdges ? PointSource.EDGE_OFFSET : 0
-  });
+  // LOS
+  const los_vertices = this.los.points;
+  const los_indices = PIXI.utils.earcut(los_vertices);
+  this._EV_geometry.los = new PIXI.Geometry()
+      .addAttribute("aVertexPosition", los_vertices, 2)
+      .addAttribute("aTextureCoord", [], 2)
+      .addIndex(los_indices);
 
-  this._sourceGeometryLOS = polyMesherLOS.triangulate(this._sourceGeometryLOS);
+  // FOV
+  const fov_vertices = this.fov.points;
+  const fov_indices = PIXI.utils.earcut(fov_vertices);
+  this._EV_geometry.fov = new PIXI.Geometry()
+      .addAttribute("aVertexPosition", fov_vertices, 2)
+      .addAttribute("aTextureCoord", [], 2)
+      .addIndex(fov_indices);
 }
 
-export function _updateLosGeometryVisionSourcePV(wrapper, polygon) {
-  wrapper(polygon);
+/**
+ * Wrap LightSource.prototype._updateLosGeometry
+ * Add simple geometry for using ShadowShader without a radius
+ */
+export function _updateLosGeometryLightSource(wrapped, polygon) {
+  wrapped(polygon);
 
-  this._sourceGeometryLOS ??= null;
+  this._EV_geometry = {}
 
-  // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
-  // based on radius, set radius to 1 if radius is 0.
-  const polyMesherLOS = new PolygonMesher(this.los, {
-    normalize: true,
-    x: this.x,
-    y: this.y,
-    radius: this.radius || 1,
-    offset: this._flags.renderSoftEdges ? PointSource.EDGE_OFFSET : 0
-  });
-
-  this._sourceGeometryLOS = polyMesherLOS.triangulate(this._sourceGeometryLOS);
+  // LOS
+  const los_vertices = this.los.points;
+  const los_indices = PIXI.utils.earcut(los_vertices);
+  this._EV_geometry.los = new PIXI.Geometry()
+      .addAttribute("aVertexPosition", los_vertices, 2)
+      .addAttribute("aTextureCoord", [], 2)
+      .addIndex(los_indices);
 }
 
 
 export function _createEVMeshVisionSource(type = "los") {
-  const mesh = this._createMesh(ShadowShader);
   if ( type === "los" ) {
-    if ( !this._sourceGeometryLOS ) this._updateLosGeometry(this.fov);
-    mesh.geometry = this._sourceGeometryLOS;
+    const mesh = this._createMesh(ShadowShaderNoRadius);
+    mesh.geometry = this._sourceLosGeometry;
+    return mesh;
   }
 
+  const mesh = this._createMesh(ShadowShader);
+  mesh.geometry = this._sourceGeometry;
   return mesh;
 }
 
 export function _createEVMeshLightSource() {
-  if ( !this._sourceGeometry ) this._updateLosGeometry(this.los);
-  return this._createMesh(ShadowShader);
+  const mesh = this._createMesh(ShadowShader);
+  mesh.geometry = this._sourceGeometry;
+  return mesh;
 }
 
 /**
@@ -189,17 +197,12 @@ export function _createEVMeshLightSource() {
 export function _createEVMask(type = "los") {
   const mesh = this._createEVMesh(type);
 
-  const shader = mesh.shader;
-  shader.texture = this.texture ?? PIXI.Texture.WHITE;
-  shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
-  shader.alphaThreshold = 0.75;
+//   const shader = mesh.shader;
+//   shader.texture = this.texture ?? PIXI.Texture.WHITE;
+//   shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
+//   shader.alphaThreshold = 0.75;
 
-  updateShadowShaderUniforms(mesh.shader.uniforms, this);
-  this._updateMesh(mesh);
-
-  // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
-  // based on radius, set radius to 1 if radius is 0.
-  if ( !this.radius ) mesh.scale.set(1);
+  mesh.shader.updateUniforms(this);
 
   return mesh;
 }
