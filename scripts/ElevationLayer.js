@@ -561,6 +561,51 @@ export class ElevationLayer extends InteractionLayer {
   //     const s = new PIXI.Sprite(texture);
   //     const png = canvas.app.renderer.extract.image(s, "image/png")
 
+  /**
+   * Change elevation of every pixel that currently is set to X value.
+   * @param {number} from   Pixels with this elevation will be changed.
+   * @param {number} to     Selected pixels will be changed to this elevation.
+   */
+  changePixelElevationValues(from, to) {
+    if ( from < this.elevationMin || from > this.elevationMax ) {
+      console.error(`changePixelElevationValues from value must be between ${this.elevationMin} and ${this.elevationMax}`);
+      return;
+    }
+
+    if ( to < this.elevationMin || to > this.elevationMax ) {
+      console.error(`changePixelElevationValues to value must be between ${this.elevationMin} and ${this.elevationMax}`);
+      return;
+    }
+
+    from = this.clampElevation(from);
+    to = this.clampElevation(to);
+
+    const fromPixelValue = this.elevationToPixelValue(from);
+    const toPixelValue = this.elevationToPixelValue(to);
+    const sceneRect = canvas.dimensions.sceneRect;
+
+    this.renderElevation(); // Just in case
+
+    // Extract pixels from the renderTexture (combined graphics + underlying sprite)
+    const { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, sceneRect);
+
+    const ln = pixels.length;
+    for ( let i = 0; i < ln; i += 4 ) {
+      if ( pixels[i] === fromPixelValue ) pixels[i] = toPixelValue;
+    }
+
+    // newTex = PIXI.Texture.fromBuffer(pixels, width, height) makes vertical lines
+    const br = new PIXI.BufferResource(pixels, {width, height});
+    const bt = new PIXI.BaseTexture(br)
+    const newTex = new PIXI.Texture(bt)
+
+    // Save to the background texture (used by the background sprite, like with saved images)
+    this._backgroundElevation.texture.destroy();
+    this._backgroundElevation.texture = newTex;
+
+    this.renderElevation();
+    this._requiresSave = true;
+   }
 
   /**
    * Retrieve the elevation at a single pixel location, using canvas coordinates.
