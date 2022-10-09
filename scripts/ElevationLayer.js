@@ -598,10 +598,10 @@ export class ElevationLayer extends InteractionLayer {
     let value;
 
     if ( useHex ) {
-      const hex = this._hexGridShape(x, y);
+      const hex = this._hexGridShape({x, y});
       value = this._averageValueWithinShape(hex);
     } else {
-      const gridRect = this._squareGridShape(x, y);
+      const gridRect = this._squareGridShape({x, y});
       value = this._averageValue(gridRect);
     }
 
