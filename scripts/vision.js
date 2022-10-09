@@ -12,7 +12,6 @@ PointSource
 import { drawPolygonWithHoles, drawPolygonWithHolesPV } from "./util.js";
 import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
-import { SmoothGeometry } from "./perfect-vision/smooth-geometry.js";
 
 /**
  * Override CanvasVisionMask.prototype.refresh
