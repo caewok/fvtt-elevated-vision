@@ -224,8 +224,8 @@ export function _createEVMeshVisionSource(type = "los") {
 }
 
 export function _createEVMeshLightSource() {
-  const mesh = this._createMesh(ShadowShaderNoRadius);
-  mesh.geometry = this._EV_geometry.los;
+  const mesh = this._createMesh(ShadowShader);
+  mesh.geometry = this._sourceGeometry;
   return mesh;
 }
 
