@@ -218,8 +218,14 @@ export function _updateLosGeometryLightSourcePV(wrapped, polygon) {
 }
 
 export function _createEVMeshVisionSource(type = "los") {
-  const mesh = this._createMesh(ShadowShaderNoRadius);
-  mesh.geometry = this._EV_geometry[type];
+  if ( type === "los" ) {
+    const mesh = this._createMesh(ShadowShaderNoRadius);
+    mesh.geometry = this._sourceLosGeometry;
+    return mesh;
+  }
+
+  const mesh = this._createMesh(ShadowShader);
+  mesh.geometry = this._sourceGeometry;
   return mesh;
 }
 
