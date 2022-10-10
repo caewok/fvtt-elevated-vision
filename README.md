@@ -30,7 +30,7 @@ Special thanks to:
 - [Token Lean](https://foundryvtt.com/packages/token-lean). Token Lean is a great addition because it allows tokens to "peak" over the edge of a cliff. For v10, I have created a fork: https://github.com/caewok/token-lean/releases.
 
 ## Problematic modules
-- Currently only partially compatible with [Perfect Vision](https://foundryvtt.com/packages/perfect-vision). As of Elevated Vision v0.1.0, lighting shadows work but vision shadows do not. But Perfect Vision should load and possibly work without throwing errors.
+- Should be compatible with [Perfect Vision](https://foundryvtt.com/packages/perfect-vision) as of Elevated Vision v0.1.5. Please report any issues to the Elevated Vision git issue tracker.
 - [Levels](https://foundryvtt.com/packages/levels) should now work. When Levels or Perfect Vision are present, Elevated Vision hands off visibility testing to those modules. In theory, visibility tests should be comparable using only Elevated Vision versus using Levels or Perfect Vision. Please report potential discrepancies in the Git issue tracker.
 - If you want real 3d, I recommend [Ripper's 3d Canvas](https://theripper93.com/). It probably goes without saying, but I will say it anyway, that mixing this module with 3d Canvas will likely result in serious errors.
 
@@ -62,6 +62,8 @@ Currently three tools are provided to modify elevation in a scene.
 Hover over a spot on the canvas to see the current elevation value. Elevation values are currently represented as different alpha values of red.
 
 https://user-images.githubusercontent.com/1267134/188220188-c6081c54-ff81-428b-b5bd-24af3048e1ca.mov
+
+A macro is also provided that allows the user to change every pixel that is currently at a specified elevation to a different elevation. The macro relies on method available in the console, `canvas.elevation.changePixelElevationValues`. For example, if the minimum elevation for a scene is set to -10, every pixel on the scene canvas will, by default, be set to -10. The macro will allow you to change every -10 value to, for example, 0.
 
 ## Saving and loading elevation data
 

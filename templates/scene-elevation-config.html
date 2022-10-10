@@ -1,15 +1,20 @@
 <fieldset>
-<legend>"Elevated Vision"</legend>
+
+<legend>Elevated Vision</legend>
   <div class="form-group">
-    <li class="flexrow">
-      <label>{{ localize "elevatedvision.sceneconfig.elevationmin.name"}}</label>
+    <label>{{ localize "elevatedvision.sceneconfig.elevationmin.name"}}</label>
+    <div class="form-fields">
       <input type="number" id="EVelevationmin" name="flags.elevatedvision.elevationmin" class="elevatedvision" step="1" value={{ data.flags.elevatedvision.elevationmin }}>
-      <p class="hint">{{ localize "elevatedvision.sceneconfig.elevationmin.hint" }}</p>
-    </li>
-     <li class="flexrow">
-      <label>{{ localize "elevatedvision.sceneconfig.elevationstep.name"}}</label>
-      <input type="number" id="EVelevationstep" name="flags.elevatedvision.elevationstep" class="elevatedvision" step="0.1" min="0.1" value={{ data.flags.elevatedvision.elevationstep }}>
-      <p class="hint">{{ localize "elevatedvision.sceneconfig.elevationstep.hint" }}</p>
-     </li>
+    </div>
+    <p class="notes">{{ localize "elevatedvision.sceneconfig.elevationmin.hint" }}</p>
   </div>
-</fieldset>`
+
+  <div class="form-group">
+    <label>{{ localize "elevatedvision.sceneconfig.elevationstep.name"}}</label>
+    <div class="form-fields">
+      <input type="number" id="EVelevationstep" name="flags.elevatedvision.elevationstep" class="elevatedvision" step="0.1" min="0.1" value={{ data.flags.elevatedvision.elevationstep }}>
+    </div>
+  </div>
+  <p class="notes">{{ localize "elevatedvision.sceneconfig.elevationstep.hint" }}</p>
+
+</fieldset>

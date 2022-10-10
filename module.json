@@ -44,6 +44,16 @@
     }
   ],
 
+  "packs": [
+    {
+      "name": "elevatedvisionmacros",
+      "label": "Elevated Vision Macros",
+      "path": "packs/macros.db",
+      "type": "Macro",
+      "private": false
+    }
+  ],
+
   "styles": [
     "styles/elevationlayer.css"
   ],
