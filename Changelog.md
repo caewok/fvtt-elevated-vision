@@ -1,3 +1,10 @@
+## 0.1.5
+Compatibility with Perfect Vision should be much improved (issues #4 and #18). Added an additional non-radius vision shader and simplified the shader geometry calculation. This also addresses issue #15 in a more comprehensive way.
+
+Fix for calculating averageElevationAtGridPoint.
+
+Fix issue #19 (default elevation). Added a method, changePixelElevationValues, that changes every pixel that is currently at a specified elevation to a different elevation. Also added a macro for easy access to this functionality. This allows, for example, the user to change the scene from the default value to some other value.
+
 ## 0.1.4
 Fix for issue #15 (no vision when sight.range = 0). To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry based on radius, set radius to 1 if radius is 0.
 
