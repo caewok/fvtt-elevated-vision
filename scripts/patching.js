@@ -229,8 +229,6 @@ export function registerPatches() {
   const levels_present = game.modules.get("levels")?.active;
   const shader_choice = use_shader | (pv_present << 1);
 
-  if ( pv_present ) PerfectVision.debug = true; // Turn off GLSL optimizer b/c it is buggy.
-
   // ----- Locating edges that create shadows in the LOS ----- //
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
