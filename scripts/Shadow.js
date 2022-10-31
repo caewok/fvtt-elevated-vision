@@ -86,7 +86,7 @@ export class Shadow extends PIXI.Polygon {
    * @param {LightSource} source
    * @return {Shadow}
    */
-  static constructShadow(wall, source) {
+  static constructShadow(wall, source, surfaceElevation = 0) {
     /*
      Looking at a cross-section:
       V----------T----O-----?
@@ -122,9 +122,9 @@ export class Shadow extends PIXI.Polygon {
     */
 
     // Note: elevation should already be in grid pixel units
-
+    let Oe = surfaceElevation;
     let Te = wall.topZ; // TO-DO: allow floating walls to let light through the bottom portion
-    let Oe = 0; // TO-DO: allow this to be modified by terrain elevation
+//     let Oe = 0; // TO-DO: allow this to be modified by terrain elevation
     let Ve = source.elevationZ;
     if ( Ve <= Te ) return null; // Vision object blocked completely by wall
 
