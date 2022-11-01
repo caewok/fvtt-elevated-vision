@@ -37,7 +37,7 @@ import {
 } from "./controls.js";
 
 // Settings, to toggle whether to change elevation on token move
-import { SETTINGS, getSetting, registerSettings } from "./settings.js";
+import { SETTINGS, getSetting, setSetting, registerSettings } from "./settings.js";
 import { tokenOnGround, tokenElevationAt } from "./tokens.js";
 
 Hooks.once("init", function() {
@@ -68,6 +68,38 @@ Hooks.once("init", function() {
 
 Hooks.once("setup", async function() {
   registerPatches();
+});
+
+
+Hooks.once("ready", async function() {
+  if ( !getSetting(SETTINGS.WELCOME_DIALOG.v020) ) {
+		Dialog.prompt({
+			title: 'Elevated Vision v0.2.0 Changes!',
+			content: `
+<p>
+As of version 0.2.0, Elevated Vision no longer adjusts token visibility. Thus, by default ...?
+</p>
+<p>
+You can install one or more of the following modules if you need more functionality:
+<ul>
+  <li><a href="https://github.com/caewok/fvtt-token-visibility">Alternative Token Visibility</a></li>
+  <li><a href="https://github.com/dev7355608/perfect-vision">Perfect Vision</a></li>
+  <li><a href="https://github.com/theripper93/Levels">Levels</a></li>
+</ul>
+
+These modules should work together; please report bugs to the relevant git issue page!
+
+</p>
+
+<p>
+Clicking the button below will make this message no longer display when FoundryVTT loads. If you
+want to keep seeing this message, please click the close button above.
+</p>
+`,
+			rejectClose: false,
+			callback: () => setSetting(SETTINGS.WELCOME_DIALOG.v020, true)
+		});
+	}
 });
 
 Hooks.on("canvasReady", async function() {
