@@ -1,11 +1,12 @@
 /* globals
 canvas,
 CONST,
-Ray
+Ray,
+PIXI
 */
 "use strict";
 
-import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles } from "./util.js";
+import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles, zValue } from "./util.js";
 import { COLORS, clearDrawings } from "./drawing.js";
 import { Shadow } from "./Shadow.js";
 import { Point3d } from "./Point3d.js";
@@ -22,13 +23,26 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   wrapped();
 
   // Ignore lights set with default of positive infinity
-  const sourceZ = this.config.source?.elevationZ;
+  const source = this.config.source;
+  const sourceZ = source?.elevationZ;
   if ( !isFinite(sourceZ) ) return;
 
   // From ClockwisePolygonSweep.prototype.getWalls
   const bounds = this._defineBoundingBox();
   const collisionTest = (o, rect) => this._testShadowWallInclusion(o.t, rect);
-  const walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+  let walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+
+  // Filter out walls that are below ground if the observer is above ground
+  // For now, treat the ground as 0.
+  // TODO: Measure ground as ground elevation directly below the source?
+  // Or measure as ground elevation directly above/under the wall?
+  const rect = new PIXI.Rectangle(source.x - 1, source.y - 1, 2, 2);
+  const tiles = canvas.tiles.quadtree.getObjects(rect);
+  walls = walls.filter(w => !isWallUnderneathTile(source, w, tiles));
+
+  if ( sourceZ >= 0 ) walls = walls.filter(w => w.topZ);
+  else walls = walls.filter(w => w.bottomZ <= 0); // Source below ground; drop tiles above
+
   this.wallsBelowSource = new Set(walls); // Top of edge below source top
 
   // Construct shadows from the walls below the light source
@@ -49,6 +63,29 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   // Combine the shadows and trim to be within the LOS
   // We want one or more LOS polygons along with non-overlapping holes.
   if ( combineShadows ) this.combinedShadows = combineBoundaryPolygonWithHoles(this, this.shadows);
+}
+
+/**
+ * From point of view of a source (light or vision observer), is the wall underneath the tile?
+ * Only source elevation and position, not perspective, taken into account.
+ * So if source is above tile and wall is below tile, that counts.
+ * @param {PointSource} observer
+ * @param {Wall} wall
+ * @param {Tile[]} tiles    Set of tiles; will default to all tiles under the observer
+ * @returns {boolean}
+ */
+function isWallUnderneathTile(observer, wall, tiles) {
+  if ( !tiles ) {
+    const rect = new PIXI.Rectangle(observer.x - 1, observer.y - 1, 2, 2);
+    tiles = canvas.tiles.quadtree.getObjects(rect);
+  }
+  const observerZ = observer.elevationZ;
+  for ( const tile of tiles ) {
+    const tileE = tile.document.flags?.levels.rangeBottom ?? tile.document.elevation;
+    const tileZ = zValue(tileE);
+    if ( observerZ > tileZ && wall.topZ < tileZ ) return true;
+  }
+  return false;
 }
 
 /**
