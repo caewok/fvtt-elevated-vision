@@ -1,6 +1,10 @@
 ## 0.1.6
 Incorporate update from Perfect Vision 4.0.34; no longer need to force PV into debug mode.
 
+Fix issue #23 (Avoid changing elevations when min or step elevation is changed).
+
+
+
 ## 0.1.5
 Compatibility with Perfect Vision should be much improved (issues #4 and #18). Added an additional non-radius vision shader and simplified the shader geometry calculation. This also addresses issue #15 in a more comprehensive way.
 
