@@ -86,16 +86,67 @@ export function cloneToken(wrapper) {
   return clone;
 }
 
+/**
+ * Determine whether a token is "on the ground", meaning that the token is in contact
+ * with the ground layer according to elevation of the background terrain.
+ * @param {Token} token
+ * @param {Point} position    Position to use for the token position.
+ *   Should be a grid position (a token x,y).
+ * @return {boolean}
+ */
 export function tokenOnGround(token, position) {
   const currTerrainElevation = tokenElevationAt(token, position);
   return currTerrainElevation.almostEqual(token.document?.elevation);
 }
 
-export function tokenElevationAt(token, position, { useAveraging = getSetting(SETTINGS.AUTO_AVERAGING) } = {}) {
+/**
+ * Determine whether a token is "on a tile", meaning the token is at the elevation of the
+ * bottom of a tile.
+ * @param {Token} token
+ * @param {Point} position    Position to use for the token position.
+ *   Should be a grid position (a token x,y). Defaults to current token position.
+ * @return {number|null} Return the tile elevation or null otherwise.
+ */
+export function tokenTileElevation(token, position = { x: token.x, y: token.y }) {
+  const tokenE = token.document.elevation;
+  const bounds = token.bounds;
+  bounds.x = position.x;
+  bounds.y = position.y;
+
+  const tiles = canvas.tiles.quadtree.getObjects(token.bounds);
+  if ( !tiles.size ) return null;
+
+  for ( const tile of tiles ) {
+    // If using Levels, prefer the bottom of the token range
+    const tileE = tile.document.flags?.levels?.rangeBottom ?? tile.document.elevation;
+    if ( tokenE.almostEqual(tileE) ) return tileE;
+  }
+  return null;
+}
+
+
+/**
+ * Determine token elevation for a give grid position.
+ * Will be either the tile elevation, if the token is on the tile, or the terrain elevation.
+ * @param {Token} token
+ * @param {Point} position     Position to use for the token position.
+ *   Should be a grid position (a token x,y).
+ * @param {object} [options]
+ * @param {boolean} [useAveraging]    Use averaging versus use the exact center point of the token at the position.
+ *   Defaults to the GM setting.
+ * @param {boolean} [considerTiles]   If false, skip testing tile elevations; return the underlying terrain elevation.
+ * @returns {number} Elevation in grid units.
+ */
+export function tokenElevationAt(token, position, { useAveraging = getSetting(SETTINGS.AUTO_AVERAGING), considerTiles = true } = {}) {
+  if ( considerTiles ) {
+    const tileE = tokenTileElevation(token, position);
+    if ( tileE !== null ) return tileE;
+  }
+
+  if ( useAveraging ) return averageElevationForToken(position.x, position.y, token.w, token.h);
+
   const center = token.getCenter(position.x, position.y);
-  return useAveraging
-    ? averageElevationForToken(position.x, position.y, token.w, token.h)
-    : canvas.elevation.elevationAt(center.x, center.y);
+  return canvas.elevation.elevationAt(center.x, center.y);
 }
 
 function averageElevationForToken(x, y, w, h) {
@@ -188,7 +239,7 @@ export function testVisibilityDetectionMode(wrapper, visionSource, mode, {object
  */
 export function _testRangeDetectionMode(wrapper, visionSource, mode, target, test) {
   const res2d = wrapper(visionSource, mode, target, test);
-  if ( !res2d || !Object.prototype.hasOwnProperty.call(test.point, "z") ) return res2d;
+  if ( !res2d || !Object.hasOwn(test.point, "z") ) return res2d;
 
   const radius = visionSource.object.getLightRadius(mode.range);
   const dx = test.point.x - visionSource.x;

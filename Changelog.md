@@ -1,3 +1,14 @@
+## 0.1.6
+Incorporate update from Perfect Vision 4.0.34; no longer need to force PV into debug mode.
+
+Fix issue #23 (Avoid changing elevations when min or step elevation is changed).
+
+Fix issue #20 (Check for elevated tiles before adjusting token elevation). EV now considers tokens on tiles to be "on the ground" if the token and tile elevation are the same. This should allow creation of "bridges" made of tiles and better functionality with Levels.
+
+Fix issue #26 (Vision broken when using Levels). EV will now set the scene minimum elevation to the minimum tile elevation. In addition, for basements, it is necessary that the terrain elevation around the basement be modified to equal the basement level. (E.g., if the basement is at -10, color all the elevation tiles around the basement to -10.)
+
+EV will now exclude from shadow calculations walls under tiles, or walls under elevation 0 if the vision or light source is above the tile. This avoids rendering shadows in unexpected places, such as in a building set up for Levels where the walls should only appear if the token is at the same level as the walls.
+
 ## 0.1.5
 Compatibility with Perfect Vision should be much improved (issues #4 and #18). Added an additional non-radius vision shader and simplified the shader geometry calculation. This also addresses issue #15 in a more comprehensive way.
 

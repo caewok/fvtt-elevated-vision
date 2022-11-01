@@ -33,6 +33,7 @@ import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
+import { tokenOnGround, tokenTileElevation, tokenElevationAt } from "./tokens.js";
 
 /* Elevation layer
 
@@ -70,6 +71,13 @@ export class ElevationLayer extends InteractionLayer {
     this.undoQueue = new FILOQueue();
     this._activateHoverListener();
   }
+
+  // Imported methods
+  tokens = {
+    tokenElevationAt,
+    tokenTileElevation,
+    tokenOnGround
+  };
 
   /**
    * Delay in milliseconds before displaying elevation value when mouse hovers.
@@ -210,15 +218,28 @@ export class ElevationLayer extends InteractionLayer {
     return step ?? canvas.scene.dimensions.distance;
   }
 
-  set elevationStep(value) {
-    if ( value < 0.1 ) {
+  set elevationStep(stepNew) {
+    if ( stepNew < 0.1 ) {
       console.warn("elevationStep should be a positive integer or float, to be rounded to 1 decimal place.");
       return;
     }
 
-    this.elevationStep = Number.isInteger(value) ? value : Math.round((value * 10)) / 10;
+    stepNew = Number.isInteger(stepNew) ? stepNew : Math.round((stepNew * 10)) / 10;
 
-    canvas.scene.setFlag(MODULE_ID, "elevationstep", value);
+    // Function to set the new pixel value such that elevation stays (mostly) the same.
+    // e = min + value * step.
+    // min + value * step = min + valueNew * stepNew
+    // valueNew * stepNew = min + value * step - min
+    // valueNew = value * step / stepNew
+    const step = this.elevationStep;
+    const mult = step / stepNew;
+    const stepAdjust = function(pixel) {
+      const out = Math.clamped(Math.round(mult * pixel), 0, 255);
+      return out || 0;
+    };
+
+    canvas.scene.setFlag(MODULE_ID, "elevationstep", stepNew);
+    this.changePixelValuesUsingFunction(stepAdjust);
   }
 
   /* ------------------------ */
@@ -232,13 +253,34 @@ export class ElevationLayer extends InteractionLayer {
     return min ?? 0;
   }
 
-  set elevationMin(value) {
-    if ( !Number.isInteger(value) ) {
+  set elevationMin(minNew) {
+    if ( !Number.isInteger(minNew) ) {
       console.warn("elevationMin should be an integer.");
       return;
     }
 
-    canvas.scene.setFlag(MODULE_ID, "elevationmin", value);
+    const min = this.elevationMin;
+    const step = this.elevationStep;
+    minNew = Math.round(minNew / step) * step;
+    if ( min === minNew ) return;
+
+    // Function to set the new pixel value such that elevation stays the same.
+    // e = min + value * step.
+    // min + value * step = minNew + valueNew * step
+    // valueNew * step = min + value * step - minNew
+    // valueNew = (min - minNew + value * step) / step
+    // valueNew = min / step - minNew / step  + value
+
+    const stepInv = 1 / step;
+    const adder = (min * stepInv) - (minNew * stepInv);
+
+    const minAdjust = function(pixel) {
+      const out = Math.clamped(Math.round(adder + pixel), 0, 255);
+      return out || 0; // In case of NaN, etc.
+    };
+
+    canvas.scene.setFlag(MODULE_ID, "elevationmin", minNew);
+    this.changePixelValuesUsingFunction(minAdjust);
   }
 
   /* ------------------------ */
@@ -276,6 +318,26 @@ export class ElevationLayer extends InteractionLayer {
   elevationToPixelValue(elevation) {
     elevation = this.clampElevation(elevation);
     return (elevation - this.elevationMin) / this.elevationStep;
+  }
+
+  /**
+   * Convert value such as elevation from grid units to x,y coordinate dimensions.
+   * @param {number} elevation
+   * @returns {number} Elevation in grid units.
+   */
+  gridUnitsToCoordinates(value) {
+    const { distance, size } = canvas.scene.grid;
+    return (value * size) / distance;
+  }
+
+  /**
+   * Convert a value such as elevation x,y coordinate dimensions to grid units.
+   * @param {number} gridUnit
+   * @returns {number} Elevation
+   */
+  coordinatesToGridUnits(value) {
+    const { distance, size } = canvas.scene.dimensions;
+    return (value * distance) / size;
   }
 
   /**
@@ -405,7 +467,28 @@ export class ElevationLayer extends InteractionLayer {
     await this.loadSceneElevationData();
     this.renderElevation();
 
+    this._updateMinimumElevationFromSceneTiles();
+
     this._initialized = true;
+  }
+
+  /**
+   * Update minimum elevation for the scene based on the Levels minimum tile elevation.
+   */
+  _updateMinimumElevationFromSceneTiles() {
+     const tiles = canvas.tiles.placeables;
+     const currMin = this.elevationMin;
+     let min = currMin;
+     for ( const tile of tiles ) {
+       const rangeBottom = tile.document.flags?.levels?.rangeBottom ?? currMin;
+       const rangeTop = tile.document.flags?.levels?.rangeTop ?? currMin;
+       min = Math.min(min, rangeBottom, rangeTop);
+     }
+
+     if ( min < currMin ) {
+       this.elevationMin = min;
+       ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on scene tiles' minimum elevation range.`)
+    }
   }
 
   /**
@@ -562,6 +645,40 @@ export class ElevationLayer extends InteractionLayer {
   //     const png = canvas.app.renderer.extract.image(s, "image/png")
 
   /**
+   * Apply a function to every pixel value.
+   * @param {function} fn   Function to use.
+   *  It should take a single elevation value and return a different elevation value.
+   *  Note that these are pixel values, not elevation values.
+   */
+  changePixelValuesUsingFunction(fn) {
+    this.renderElevation(); // Just in case
+
+    const sceneRect = canvas.dimensions.sceneRect;
+
+    // Extract pixels from the renderTexture (combined graphics + underlying sprite)
+    const { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, sceneRect);
+
+    const ln = pixels.length;
+    for ( let i = 0; i < ln; i += 4 ) {
+      pixels[i] = fn(pixels[i]);
+    }
+
+    // newTex = PIXI.Texture.fromBuffer(pixels, width, height) makes vertical lines
+    const br = new PIXI.BufferResource(pixels, {width, height});
+    const bt = new PIXI.BaseTexture(br);
+    const newTex = new PIXI.Texture(bt);
+
+    // Save to the background texture (used by the background sprite, like with saved images)
+    this._backgroundElevation.texture.destroy();
+    this._backgroundElevation.texture = newTex;
+
+    this.renderElevation();
+    this._requiresSave = true;
+
+
+  }
+
+  /**
    * Change elevation of every pixel that currently is set to X value.
    * @param {number} from   Pixels with this elevation will be changed.
    * @param {number} to     Selected pixels will be changed to this elevation.
@@ -594,10 +711,11 @@ export class ElevationLayer extends InteractionLayer {
       if ( pixels[i] === fromPixelValue ) pixels[i] = toPixelValue;
     }
 
-    // newTex = PIXI.Texture.fromBuffer(pixels, width, height) makes vertical lines
+    // Error Makes vertical lines:
+    // newTex = PIXI.Texture.fromBuffer(pixels, width, height)
     const br = new PIXI.BufferResource(pixels, {width, height});
-    const bt = new PIXI.BaseTexture(br)
-    const newTex = new PIXI.Texture(bt)
+    const bt = new PIXI.BaseTexture(br);
+    const newTex = new PIXI.Texture(bt);
 
     // Save to the background texture (used by the background sprite, like with saved images)
     this._backgroundElevation.texture.destroy();
@@ -605,7 +723,7 @@ export class ElevationLayer extends InteractionLayer {
 
     this.renderElevation();
     this._requiresSave = true;
-   }
+  }
 
   /**
    * Retrieve the elevation at a single pixel location, using canvas coordinates.
@@ -801,6 +919,7 @@ export class ElevationLayer extends InteractionLayer {
 
     this.renderElevation();
 
+    this._requiresSave = true;
     this.undoQueue.enqueue(graphics);
 
     return graphics;
@@ -930,6 +1049,7 @@ export class ElevationLayer extends InteractionLayer {
 
     this.renderElevation();
 
+    this._requiresSave = true;
     this.undoQueue.enqueue(graphics);
 
     return graphics;
