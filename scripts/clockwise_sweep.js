@@ -40,7 +40,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   const tiles = canvas.tiles.quadtree.getObjects(rect);
   walls = walls.filter(w => !isWallUnderneathTile(source, w, tiles));
 
-  if ( sourceZ >= 0 ) walls = walls.filter(w => w.topZ);
+  if ( sourceZ >= 0 ) walls = walls.filter(w => w.topZ >= 0);
   else walls = walls.filter(w => w.bottomZ <= 0); // Source below ground; drop tiles above
 
   this.wallsBelowSource = new Set(walls); // Top of edge below source top
