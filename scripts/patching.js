@@ -8,8 +8,7 @@ Token,
 libWrapper,
 ClockwiseSweepPolygon,
 GlobalLightSource,
-game,
-PerfectVision
+games
 */
 
 "use strict";
@@ -21,10 +20,6 @@ import { zValue } from "./util.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
 import {
-  testVisibilityDetectionMode,
-  testVisibilityLightSource,
-  _testLOSDetectionMode,
-  _testRangeDetectionMode,
   _refreshToken,
   cloneToken
 } from "./tokens.js";
@@ -226,7 +221,6 @@ function shaderPVAdditions() {
 export function registerPatches() {
   const use_shader = getSetting(SETTINGS.VISION_USE_SHADER);
   const pv_present = game.modules.get("perfect-vision")?.active;
-  const levels_present = game.modules.get("levels")?.active;
   const shader_choice = use_shader | (pv_present << 1);
 
   // ----- Locating edges that create shadows in the LOS ----- //
@@ -239,14 +233,6 @@ export function registerPatches() {
   libWrapper.register(MODULE_ID, "LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "LightSource.prototype._createPolygon", _createPolygonLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-
-  // ----- Visibility testing ----- //
-  if ( !pv_present && !levels_present ) {
-    libWrapper.register(MODULE_ID, "LightSource.prototype.testVisibility", testVisibilityLightSource, libWrapper.MIXED, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "DetectionMode.prototype.testVisibility", testVisibilityDetectionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "DetectionMode.prototype._testRange", _testRangeDetectionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-    libWrapper.register(MODULE_ID, "DetectionMode.prototype._testLOS", _testLOSDetectionMode, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-  }
 
   // ----- Token animation and elevation change ---- //
   libWrapper.register(MODULE_ID, "Token.prototype._refresh", _refreshToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
