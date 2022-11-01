@@ -4,7 +4,7 @@
 ![Latest Release Download Count](https://img.shields.io/github/downloads/caewok/fvtt-elevated-vision/latest/module.zip)
 ![Forge Installs](https://img.shields.io/badge/dynamic/json?label=Forge%20Installs&query=package.installs&suffix=%25&url=https%3A%2F%2Fforge-vtt.com%2Fapi%2Fbazaar%2Fpackage%2Felevatedvision&colorB=4aa94a)
 
-You can use this [Module JSON link](https://github.com/caewok/fvtt-elevated-vision/releases/latest/download/module.json) to install. Requires Foundry v10. 
+You can use this [Module JSON link](https://github.com/caewok/fvtt-elevated-vision/releases/latest/download/module.json) to install. Requires Foundry v10.
 
 This Foundry VTT module provides an elevation canvas layer that lets the GM modify elevation values for the scene. Elevation maps can be uploaded or downloaded for a scene. Tokens and lights are affected by the elevation settings:
 - Tokens that are currently at the height of the terrain ("on the ground") will change elevation if they move to a higher or lower terrain.
@@ -32,7 +32,7 @@ Special thanks to:
 ## Problematic modules
 - Should be compatible with [Perfect Vision](https://foundryvtt.com/packages/perfect-vision) as of Elevated Vision v0.1.5. Please report any issues to the Elevated Vision git issue tracker.
 - [Levels](https://foundryvtt.com/packages/levels) should now work. When Levels or Perfect Vision are present, Elevated Vision hands off visibility testing to those modules. In theory, visibility tests should be comparable using only Elevated Vision versus using Levels or Perfect Vision. Please report potential discrepancies in the Git issue tracker.
-- If you want real 3d, I recommend [Ripper's 3d Canvas](https://theripper93.com/). It probably goes without saying, but I will say it anyway, that mixing this module with 3d Canvas will likely result in serious errors.
+- If you want real 3d, I recommend [Ripper's 3d Canvas](https://theripper93.com/). Basic testing suggests Elevated Vision can work with 3d Canvas. It should also be possible, in theory, to use Elevated Vision's export function to export a 2d elevation map and use that as a basis to create a black-and-white heightmap, which 3d Canvas can use to warp the 3d geometry. If you figure out how to do this, or run across a bug for this, please open an issue in my Git to discuss and share with others.
 
 # Examples
 
