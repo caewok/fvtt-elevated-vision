@@ -77,18 +77,21 @@ Hooks.once("ready", async function() {
 			title: 'Elevated Vision v0.2.0 Changes!',
 			content: `
 <p>
-As of version 0.2.0, Elevated Vision no longer adjusts token visibility. Thus, by default ...?
+As of version 0.2.0, Elevated Vision no longer adjusts token visibility. Thus, by default, tokens in
+shadows (caused by looking down on walls with defined height) will remain visible. Tokens
+otherwise behind walls will be unseen, as expected by default Foundry. Basically, token visibility
+should be equivalent to what you get using the Wall Height module alone; shadows are added but do not
+affect the visibility calculation.
 </p>
+
 <p>
-You can install one or more of the following modules if you need more functionality:
+You can install one or more of the following modules if you need more functionality regarding 3d token visibility:
 <ul>
   <li><a href="https://github.com/caewok/fvtt-token-visibility">Alternative Token Visibility</a></li>
   <li><a href="https://github.com/dev7355608/perfect-vision">Perfect Vision</a></li>
   <li><a href="https://github.com/theripper93/Levels">Levels</a></li>
 </ul>
-
 These modules should work together; please report bugs to the relevant git issue page!
-
 </p>
 
 <p>
