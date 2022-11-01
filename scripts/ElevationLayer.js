@@ -919,6 +919,7 @@ export class ElevationLayer extends InteractionLayer {
 
     this.renderElevation();
 
+    this._requiresSave = true;
     this.undoQueue.enqueue(graphics);
 
     return graphics;
@@ -1048,6 +1049,7 @@ export class ElevationLayer extends InteractionLayer {
 
     this.renderElevation();
 
+    this._requiresSave = true;
     this.undoQueue.enqueue(graphics);
 
     return graphics;
