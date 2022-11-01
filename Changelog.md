@@ -1,6 +1,8 @@
 ## 0.1.6
 Incorporate update from Perfect Vision 4.0.34; no longer need to force PV into debug mode.
 
+Fix issue #27 (Elevation fill not getting saved to scene).
+
 Fix issue #23 (Avoid changing elevations when min or step elevation is changed).
 
 Fix issue #20 (Check for elevated tiles before adjusting token elevation). EV now considers tokens on tiles to be "on the ground" if the token and tile elevation are the same. This should allow creation of "bridges" made of tiles and better functionality with Levels.
