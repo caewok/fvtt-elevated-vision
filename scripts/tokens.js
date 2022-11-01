@@ -188,7 +188,7 @@ export function testVisibilityDetectionMode(wrapper, visionSource, mode, {object
  */
 export function _testRangeDetectionMode(wrapper, visionSource, mode, target, test) {
   const res2d = wrapper(visionSource, mode, target, test);
-  if ( !res2d || !Object.prototype.hasOwnProperty.call(test.point, "z") ) return res2d;
+  if ( !res2d || !Object.hasOwn(test.point, "z") ) return res2d;
 
   const radius = visionSource.object.getLightRadius(mode.range);
   const dx = test.point.x - visionSource.x;
