@@ -126,3 +126,36 @@ async function injectSceneConfiguration(app, html, data) {
   form.append(snippet);
   app.setPosition({ height: "auto" });
 }
+
+// Hook when a tile changes elevation.
+// Track for Levels, to ensure minimum elevation for the scene is met.
+Hooks.on("createTile", createTileHook);
+Hooks.on("updateTile", updateTileHook);
+
+function createTileHook(document, options, userId) {
+  if ( !canvas.elevation?._initialized ) return;
+
+  const elevationMin = canvas.elevation.elevationMin;
+  const rangeBottom = document.flags?.levels?.rangeBottom ?? document.elevation ?? elevationMin;
+  const rangeTop = document.flags?.levels?.rangeTop ?? document.elevation ?? elevationMin;
+  const min = Math.min(rangeBottom, rangeTop);
+
+  if ( min < elevationMin ) {
+    canvas.elevation.elevationMin = min;
+    ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on tile minimum elevation range.`);
+  }
+}
+
+function updateTileHook(document, change, options, userId) {
+  if ( !canvas.elevation?._initialized ) return;
+
+  const elevationMin = canvas.elevation.elevationMin;
+  const rangeBottom = change.flags?.levels?.rangeBottom ?? document.elevation ?? elevationMin;
+  const rangeTop = change.flags?.levels?.rangeTop ?? document.elevation ?? elevationMin;
+  const min = Math.min(rangeBottom, rangeTop);
+
+  if ( min < elevationMin ) {
+    canvas.elevation.elevationMin = min;
+    ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on tile minimum elevation range.`);
+  }
+}
