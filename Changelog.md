@@ -3,7 +3,9 @@ Incorporate update from Perfect Vision 4.0.34; no longer need to force PV into d
 
 Fix issue #23 (Avoid changing elevations when min or step elevation is changed).
 
+Fix issue #20 (Check for elevated tiles before adjusting token elevation).
 
+Fix issue #26 (Vision broken when using Levels). EV will now set the scene minimum elevation to the minimum tile elevation. In addition, for basements, it is necessary that the terrain elevation around the basement be modified to equal the basement level. (E.g., if the basement is at -10, color all the elevation tiles around the basement to -10.)
 
 ## 0.1.5
 Compatibility with Perfect Vision should be much improved (issues #4 and #18). Added an additional non-radius vision shader and simplified the shader geometry calculation. This also addresses issue #15 in a more comprehensive way.
