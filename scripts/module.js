@@ -95,8 +95,8 @@ These modules should work together; please report bugs to the relevant git issue
 </p>
 
 <p>
-Clicking the button below will make this message no longer display when FoundryVTT loads. If you
-want to keep seeing this message, please click the close button above.
+<em>Clicking the button below will make this message no longer display when FoundryVTT loads. If you
+want to keep seeing this message, please click the close button above.</em>
 </p>
 `,
 			rejectClose: false,
