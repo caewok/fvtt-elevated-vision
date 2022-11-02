@@ -17,6 +17,7 @@ This module relies in part on the [Wall Height](https://foundryvtt.com/packages/
 *This module is still in early development stages. Many things are likely to change, including the image download/upload format.*
 
 # Thanks
+
 Special thanks to:
 - dev7355608 ([Perfect Vision](https://github.com/dev7355608/perfect-vision)) author for answering my many random PIXIjs questions.
 - ironmonk88 ([Enhanced Terrain Layer](https://github.com/ironmonk88/enhanced-terrain-layer)) author, from whom I borrowed some of the control layout ideas and code.
@@ -24,10 +25,13 @@ Special thanks to:
 # Module compatibility
 
 ## Required modules
-- [Wall Height](https://foundryvtt.com/packages/wall-height/)
+- [libWrapper](https://github.com/ruipin/fvtt-lib-wrapper)
 
 ## Recommended modules
-- [Token Lean](https://foundryvtt.com/packages/token-lean). Token Lean is a great addition because it allows tokens to "peak" over the edge of a cliff. For v10, I have created a fork: https://github.com/caewok/token-lean/releases.
+
+- [Wall Height](https://github.com/theripper93/wall-height). Wall Height is highly recommended to improve your experience with Elevated Vision. With Wall Height, you can set walls and lights to have defined heights. Elevated Vision will create shadows for elevated lights cast on lower walls, block lower-elevation lights from illuminating the higher elevation, and create shadows when elevated tokens look down at lower-elevation walls.
+- [Token Lean](https://foundryvtt.com/packages/token-lean). Token Lean is a great addition because it allows tokens to "peak" over the edge of a cliff. Now updated for v10!
+
 
 ## Problematic modules
 - Should be compatible with [Perfect Vision](https://foundryvtt.com/packages/perfect-vision) as of Elevated Vision v0.1.5. Please report any issues to the Elevated Vision git issue tracker.

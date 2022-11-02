@@ -8,7 +8,7 @@
   "manifestPlusVersion": "1.0.0",
   "compatibility": {
     "minimum": "10.279",
-    "verified": "10.286"
+    "verified": "10.288"
   },
   "authors": [
     {
@@ -23,11 +23,6 @@
         "id": "lib-wrapper",
         "type": "module",
         "manifest": "https://raw.githubusercontent.com/ruipin/fvtt-lib-wrapper/master/module.json"
-      },
-      {
-        "id": "wall-height",
-        "type": "module",
-        "manifest": "https://github.com/theripper93/wall-height/blob/main/module.json"
       }
     ]
   },
