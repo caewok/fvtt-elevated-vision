@@ -1,3 +1,8 @@
+## 0.2.0
+Remove 3d visibility code. (Taken over by Alternative Token Visibility.)
+
+Remove dependency on Wall Height. (Still highly recommended.)
+
 ## 0.1.6
 Incorporate update from Perfect Vision 4.0.34; no longer need to force PV into debug mode.
 
