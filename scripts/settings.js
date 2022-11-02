@@ -9,7 +9,10 @@ import { MODULE_ID } from "./const.js";
 export const SETTINGS = {
   VISION_USE_SHADER: "vision-use-shader",
   AUTO_ELEVATION: "auto-change-elevation",
-  AUTO_AVERAGING: "auto-change-elevation.averaging"
+  AUTO_AVERAGING: "auto-change-elevation.averaging",
+  WELCOME_DIALOG: {
+    v020: "welcome-dialog-v0-20"
+  }
 };
 
 export function getSetting(settingName) {
@@ -56,5 +59,12 @@ export function registerSettings() {
     default: false,
     type: Boolean,
     requiresReload: false
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.WELCOME_DIALOG.v020, {
+    scope: "world",
+    config: false,
+    default: false,
+    type: Boolean
   });
 }

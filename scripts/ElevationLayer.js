@@ -14,7 +14,6 @@ isEmpty,
 PolygonVertex,
 CONFIG,
 Ray,
-WallHeight,
 PreciseText
 */
 "use strict";
@@ -1225,7 +1224,11 @@ export class ElevationLayer extends InteractionLayer {
    * Draw the wall lower and upper heights on the canvas.
    */
   _drawWallRange(wall) {
-    const bounds = WallHeight.getWallBounds(wall);
+    // Fill in for WallHeight.getWallBounds
+    const bounds = {
+      top: wall.document.flags?.["wall-height"]?.top ?? Number.POSITIVE_INFINITY,
+      bottom: wall.document.flags?.["wall-height"]?.bottom ?? Number.NEGATIVE_INFINITY
+    }
     if ( bounds.top === Infinity && bounds.bottom === -Infinity ) return;
 
     const style = CONFIG.canvasTextStyle.clone();
