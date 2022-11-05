@@ -1,3 +1,6 @@
+## 0.2.1
+Potential fix for issue #29 (canvas freeze re "rangeBottom")
+
 ## 0.2.0
 Remove 3d visibility code. (Taken over by Alternative Token Visibility.)
 
