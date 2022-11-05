@@ -81,7 +81,7 @@ function isWallUnderneathTile(observer, wall, tiles) {
   }
   const observerZ = observer.elevationZ;
   for ( const tile of tiles ) {
-    const tileE = tile.document.flags?.levels.rangeBottom ?? tile.document.elevation;
+    const tileE = tile.document.flags?.levels?.rangeBottom ?? tile.document?.elevation ?? 0;
     const tileZ = zValue(tileE);
     if ( observerZ > tileZ && wall.topZ < tileZ ) return true;
   }
