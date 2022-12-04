@@ -10,12 +10,11 @@ renderTemplate
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
 
+import { registerGeometry } from "./geometry/registration.js";
+
 // API imports
-import * as drawing from "./drawing.js";
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
-import { Shadow } from "./Shadow.js";
-import { Point3d } from "./Point3d.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { ShadowShader } from "./ShadowShader.js";
@@ -23,7 +22,6 @@ import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { ElevationGrid } from "./ElevationGrid.js";
 
 // Register methods, patches, settings
-import { registerPIXIPolygonMethods } from "./PIXIPolygon.js";
 import { registerAdditions, registerPatches } from "./patching.js";
 
 // For elevation layer registration and API
@@ -42,11 +40,8 @@ import { tokenOnGround, tokenElevationAt } from "./tokens.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
-    drawing,
     util,
     extract,
-    Point3d,
-    Shadow,
     ElevationLayer,
     ElevationGrid,
     WallTracer,
@@ -56,10 +51,11 @@ Hooks.once("init", function() {
   };
 
   // These methods need to be registered early
+  registerGeometry();
   registerSettings();
-  registerPIXIPolygonMethods();
   registerLayer();
   registerAdditions();
+
 });
 
 // Hooks.once("libWrapper.Ready", async function() {

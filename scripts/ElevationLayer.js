@@ -27,7 +27,8 @@ import {
   drawPolygonWithHoles,
   combineBoundaryPolygonWithHoles,
   points2dAlmostEqual } from "./util.js";
-import * as drawing from "./drawing.js";
+
+import { Draw } from "./geometry/Draw.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
@@ -408,7 +409,7 @@ export class ElevationLayer extends InteractionLayer {
 
     canvas.stage.removeChild(this.elevationLabel);
     if ( this._requiresSave ) this.saveSceneElevationData();
-    drawing.clearDrawings();
+    Draw.clearDrawings();
     this.container.visible = false;
   }
 
@@ -486,7 +487,7 @@ export class ElevationLayer extends InteractionLayer {
 
      if ( min < currMin ) {
        this.elevationMin = min;
-       ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on scene tiles' minimum elevation range.`)
+       ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on scene tiles' minimum elevation range.`);
     }
   }
 
@@ -1213,9 +1214,12 @@ export class ElevationLayer extends InteractionLayer {
    */
   _drawWallSegment(wall) {
     const g = new PIXI.Graphics();
-    drawing.drawSegment(wall, { graphics: g, color: drawing.COLORS.red });
-    drawing.drawPoint(wall.A, { graphics: g, color: drawing.COLORS.red });
-    drawing.drawPoint(wall.B, { graphics: g, color: drawing.COLORS.red });
+    const draw = new Draw(g);
+    const color = Draw.COLORS.red
+
+    draw.segment(wall, { color });
+    draw.point(wall.A, { color });
+    draw.point(wall.B, { color });
     this._wallDataContainer.addChild(g);
   }
 
@@ -1228,7 +1232,7 @@ export class ElevationLayer extends InteractionLayer {
     const bounds = {
       top: wall.document.flags?.["wall-height"]?.top ?? Number.POSITIVE_INFINITY,
       bottom: wall.document.flags?.["wall-height"]?.bottom ?? Number.NEGATIVE_INFINITY
-    }
+    };
     if ( bounds.top === Infinity && bounds.bottom === -Infinity ) return;
 
     const style = CONFIG.canvasTextStyle.clone();

@@ -8,7 +8,7 @@ PIXI
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { Point3d } from "./Point3d.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 
 /**
  * Combine a PIXI polygon with 1 or more holes contained within (or partially within) the boundary.
