@@ -16,7 +16,6 @@ games
 // Patches
 
 import { MODULE_ID } from "./const.js";
-import { zValue } from "./util.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
 import {
@@ -281,7 +280,7 @@ function visionSourceElevation() {
  */
 function lightSourceElevation() {
   if ( this instanceof GlobalLightSource ) return Number.POSITIVE_INFINITY;
-  return zValue(this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY);
+  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY);
 }
 
 /**
@@ -289,7 +288,7 @@ function lightSourceElevation() {
  * @type {number} Elevation, in grid units to match x,y coordinates.
  */
 function soundSourceElevation() {
-  return zValue(this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY);
+  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY);
 }
 
 /**
@@ -298,7 +297,7 @@ function soundSourceElevation() {
  */
 function tokenTop() {
   // From Wall Height but skip the extra test b/c we know it is a token.
-  return zValue(this.losHeight ?? 0);
+  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.losHeight ?? 0);
 }
 
 /**
@@ -307,7 +306,7 @@ function tokenTop() {
  */
 function tokenBottom() {
   // From Wall Height but skip the extra test b/c we know it is a token.
-  return zValue(this.document.elevation ?? 0);
+  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.document.elevation ?? 0);
 }
 
 /**
@@ -315,7 +314,7 @@ function tokenBottom() {
  * @type {number} Elevation, in grid units to match x,y coordinates.
  */
 function wallTop() {
-  return zValue(this.document.flags?.["wall-height"]?.top ?? Number.POSITIVE_INFINITY);
+  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.document.flags?.["wall-height"]?.top ?? Number.POSITIVE_INFINITY);
 }
 
 /**
@@ -323,6 +322,6 @@ function wallTop() {
  * @type {number} Elevation, in grid units to match x,y coordinates.
  */
 function wallBottom() {
-  return zValue(this.document.flags?.["wall-height"]?.bottom ?? Number.NEGATIVE_INFINITY);
+  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.document.flags?.["wall-height"]?.bottom ?? Number.NEGATIVE_INFINITY);
 }
 

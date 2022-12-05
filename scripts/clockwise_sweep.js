@@ -6,10 +6,10 @@ PIXI
 */
 "use strict";
 
-import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles, zValue } from "./util.js";
-import { COLORS, clearDrawings } from "./drawing.js";
-import { Shadow } from "./Shadow.js";
-import { Point3d } from "./Point3d.js";
+import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles } from "./util.js";
+import { Draw } from "./geometry/Draw.js";
+import { Shadow } from "./geometry/Shadow.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
 /**
@@ -82,7 +82,7 @@ function isWallUnderneathTile(observer, wall, tiles) {
   const observerZ = observer.elevationZ;
   for ( const tile of tiles ) {
     const tileE = tile.document.flags?.levels?.rangeBottom ?? tile.document?.elevation ?? 0;
-    const tileZ = zValue(tileE);
+    const tileZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(tileE);
     if ( observerZ > tileZ && wall.topZ < tileZ ) return true;
   }
   return false;
@@ -134,11 +134,11 @@ function originalTestWallInclusion(wall, bounds) {
  * For debugging: draw the shadows for this LOS object using the debug drawing tools.
  */
 export function _drawShadowsClockwiseSweepPolygon(
-  { color = COLORS.gray, width = 1, fill = COLORS.gray, alpha = 0.5 } = {}) {
+  { color = Draw.COLORS.gray, width = 1, fill = Draw.COLORS.gray, alpha = 0.5 } = {}) {
   const shadows = this.shadows;
   if ( !shadows || !shadows.length ) return;
 
-  clearDrawings();
+  Draw.clearDrawings();
   for ( const shadow of shadows ) {
     shadow.draw({color, width, fill, alpha});
   }
