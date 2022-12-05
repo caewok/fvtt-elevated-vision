@@ -358,21 +358,3 @@ export function lineWall3dIntersection(a, b, wall, epsilon = 1e-8) {
 
   return linePlane3dIntersection(a, b, c, d, epsilon);
 }
-
-
-/**
- * Key for 2d points
- */
-export function point2dKey(p) {
-  const x = Math.round(p.x);
-  const y = Math.round(p.y);
-  return (x << 16) ^ y;
-}
-
-/**
- * Key for 3d points
- */
-export function point3dKey(p) {
-  const z = Math.round(p.z);
-  return (BigInt(point2dKey(p)) << 32n) ^ BigInt(z);
-}
