@@ -340,7 +340,7 @@ export function lineWall3dIntersection(a, b, wall, epsilon = 1e-8) {
 }
 
 export function linePlane3dIntersection(a, b, c, d, epsilon = 1e-8) {
-  const u = b.sub(a);
+  const u = b.subtract(a);
   const dot = d.dot(u);
 
   if ( Math.abs(dot) > epsilon ) {
@@ -349,9 +349,9 @@ export function linePlane3dIntersection(a, b, c, d, epsilon = 1e-8) {
     // Otherwise:
     // < 0.0: behind a.
     // > 1.0: infront of b.
-    const w = a.sub(c);
+    const w = a.subtract(c);
     const fac = -d.dot(w) / dot;
-    const uFac = u.mul(fac);
+    const uFac = u.multiplyScalar(fac);
     return a.add(uFac);
   }
 
