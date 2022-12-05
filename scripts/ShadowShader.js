@@ -5,7 +5,7 @@ foundry
 */
 "use strict";
 
-import { perpendicularPoint, distanceBetweenPoints } from "./util.js";
+import { distanceBetweenPoints } from "./util.js";
 import { FRAGMENT_FUNCTIONS, pointCircleCoord } from "./lighting.js";
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
@@ -232,7 +232,7 @@ export class ShadowShader extends PIXI.Shader {
       const b = pointCircleCoord(w.B, radius, center, r_inv);
 
       // Point where line from light, perpendicular to wall, intersects
-      const wallIx = perpendicularPoint(a, b, center_shader);
+      const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center_shader);
       if ( !wallIx ) continue; // Likely a and b not proper wall.
 
       const wallOriginDist = distanceBetweenPoints(center_shader, wallIx);
