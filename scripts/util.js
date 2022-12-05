@@ -320,23 +320,3 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
 
   return ix;
 }
-
-export function linePlane3dIntersection(a, b, c, d, epsilon = 1e-8) {
-  const u = b.sub(a);
-  const dot = d.dot(u);
-
-  if ( Math.abs(dot) > epsilon ) {
-    // The factor of the point between a -> b (0 - 1)
-    // if 'fac' is between (0 - 1) the point intersects with the segment.
-    // Otherwise:
-    // < 0.0: behind a.
-    // > 1.0: infront of b.
-    const w = a.sub(c);
-    const fac = -d.dot(w) / dot;
-    const uFac = u.mul(fac);
-    return a.add(uFac);
-  }
-
-  // The segment is parallel to the plane.
-  return null;
-}
