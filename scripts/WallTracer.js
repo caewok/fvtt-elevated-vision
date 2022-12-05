@@ -14,9 +14,7 @@ Class with methods to link and trace walls
    at an intersection or the endpoint.
 */
 
-import {
-  angleBetweenPoints,
-  groupBy } from "./util.js";
+import { groupBy } from "./util.js";
 
 export class WallTracer {
   static #oppositeEndpoint = { A: "B", B: "A" };
@@ -170,10 +168,10 @@ export class WallTracer {
       return { wall: firstWall, startingEndpoint: firstWall.otherEndpoint(firstEndpoint) }
     }
 
-    let angle = angleBetweenPoints(startEndpoint, endEndpoint, firstEndpoint, { clockwiseAngle: true })
+    let angle = PIXI.Point.angleBetween(startEndpoint, endEndpoint, firstEndpoint, { clockwiseAngle: true })
     const nextWall = endpointWalls.reduce((prev, curr) => {
       const currEndpoint = endEndpoint.equals(curr.A) ? curr.B : curr.A;
-      const currAngle = angleBetweenPoints(startEndpoint, endEndpoint, currEndpoint, { clockwiseAngle: true });
+      const currAngle = PIXI.Point.angleBetween(startEndpoint, endEndpoint, currEndpoint, { clockwiseAngle: true });
       if ( currAngle < angle ) {
         angle = currAngle;
         return curr;
@@ -210,16 +208,16 @@ export class WallTracer {
         const currIx = new PIXI.Point(curr.ix.x, curr.ix.y); // TODO: Clean this up to use PIXI.Point throughout.
 
         let startingEndpoint = curr.wall.A;
-        let angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.B, { clockwiseAngle: true });
+        let angle = PIXI.Point.angleBetween(startEndpoint, curr.ix, curr.wall.B, { clockwiseAngle: true });
 
         if ( currIx.almostEqual(curr.wall.A) ) {
           // Aready set above; do nothing
 
         } else if ( currIx.almostEqual(curr.wall.B) ) {
-          angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.A, { clockwiseAngle: true });
+          angle = PIXI.Point.angleBetween(startEndpoint, curr.ix, curr.wall.A, { clockwiseAngle: true });
           startingEndpoint = curr.wall.B;
         } else {
-          const angleA = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.A, { clockwiseAngle: true });
+          const angleA = PIXI.Point.angleBetween(startEndpoint, curr.ix, curr.wall.A, { clockwiseAngle: true });
           const angleB = angle;
           angle = Math.min(angleA, angleB);
           startingEndpoint = angleA < angleB ? curr.wall.B : curr.wall.A;

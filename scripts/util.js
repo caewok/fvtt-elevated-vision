@@ -203,27 +203,6 @@ export function convertBase64ToImage(image64) {
 }
 
 /**
- * Get the angle between three points, A --> B --> C.
- * Assumes A|B and B|C have lengths > 0.
- * @param {Point} a   First point
- * @param {Point} b   Second point
- * @param {Point} c   Third point
- * @param {object} [options]  Options that affect the calculation
- * @param {boolean} [options.clockwiseAngle]  If true, return the clockwise angle.
- * @returns {number}  Angle, in radians
- */
-export function angleBetweenPoints(a, b, c, { clockwiseAngle = false } = {}) {
-  const ba = { x: a.x - b.x, y: a.y - b.y };
-  const bc = { x: c.x - b.x, y: c.y - b.y };
-  const dot = (ba.x * bc.x) + (ba.y * bc.y);
-  const denom = distanceBetweenPoints(a, b) * distanceBetweenPoints(b, c);
-
-  let angle = Math.acos(dot / denom);
-  if ( clockwiseAngle && foundry.utils.orient2dFast(a, b, c) > 0 ) angle = (Math.PI * 2) - angle;
-  return angle;
-}
-
-/**
  * Quickly test whether the line segment AB intersects with a wall in 3d.
  * Extension of lineSegmentPlaneIntersects where the plane is not infinite.
  * Takes advantage of the fact that 3d walls in Foundry move straight out of the canvas
