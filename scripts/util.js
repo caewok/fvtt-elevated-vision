@@ -235,29 +235,6 @@ export function orient3dFast(a, b, c, d) {
 }
 
 /**
- * Quickly test whether the line segment AB intersects with a plane.
- * This method does not determine the point of intersection, for that use lineLineIntersection.
- * Each Point3d should have {x, y, z} coordinates.
- *
- * @param {Point3d} a   The first endpoint of segment AB
- * @param {Point3d} b   The second endpoint of segment AB
- * @param {Point3d} c   The first point defining the plane
- * @param {Point3d} d   The second point defining the plane
- * @param {Point3d} e   The third point defining the plane.
- *                      Optional. Default is for the plane to go up in the z direction.
- *
- * @returns {boolean} Does the line segment intersect the plane?
- * Note that if the segment is part of the plane, this returns false.
- */
-export function lineSegment3dPlaneIntersects(a, b, c, d, e = {x: c.x, y: c.y, z: c.z + 1}) {
-  // A and b must be on opposite sides.
-  // Parallels the 2d case.
-  const xa = orient3dFast(a, c, d, e);
-  const xb = orient3dFast(b, c, d, e);
-  return xa * xb <= 0;
-}
-
-/**
  * Get the angle between three points, A --> B --> C.
  * Assumes A|B and B|C have lengths > 0.
  * @param {Point} a   First point
