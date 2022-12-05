@@ -340,21 +340,3 @@ export function linePlane3dIntersection(a, b, c, d, epsilon = 1e-8) {
   // The segment is parallel to the plane.
   return null;
 }
-
-/**
- * Get the intersection of a 3d line with a wall extended as a plane.
- * See https://stackoverflow.com/questions/5666222/3d-line-plane-intersection
- * @param {Point3d} a   First point on the line
- * @param {Point3d} b   Second point on the line
- * @param {Wall} wall   Wall to intersect
- */
-export function lineWall3dIntersection(a, b, wall, epsilon = 1e-8) {
-  const x = wall.A.x;
-  const y = wall.A.y;
-  const c = new Point3d(x, y, 0);
-
-  // Perpendicular vectors are (-dy, dx) and (dy, -dx)
-  const d = new Point3d(-(wall.B.y - y), (wall.B.x - x), 0);
-
-  return linePlane3dIntersection(a, b, c, d, epsilon);
-}
