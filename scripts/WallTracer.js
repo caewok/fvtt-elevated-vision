@@ -16,8 +16,7 @@ Class with methods to link and trace walls
 
 import {
   angleBetweenPoints,
-  groupBy,
-  points2dAlmostEqual } from "./util.js";
+  groupBy } from "./util.js";
 
 export class WallTracer {
   static #oppositeEndpoint = { A: "B", B: "A" };
@@ -208,13 +207,15 @@ export class WallTracer {
       if ( ignoreKey ) continue;
       const intersectingWalls = this._intersectionMap.get(key);
       const clockwise = intersectingWalls.reduce((prev, curr) => {
+        const currIx = new PIXI.Point(curr.ix.x, curr.ix.y); // TODO: Clean this up to use PIXI.Point throughout.
+
         let startingEndpoint = curr.wall.A;
         let angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.B, { clockwiseAngle: true });
 
-        if ( points2dAlmostEqual(curr.wall.A, curr.ix) ) {
+        if ( currIx.almostEqual(curr.wall.A) ) {
           // Aready set above; do nothing
 
-        } else if ( points2dAlmostEqual(curr.wall.B, curr.ix) ) {
+        } else if ( currIx.almostEqual(curr.wall.B) ) {
           angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.A, { clockwiseAngle: true });
           startingEndpoint = curr.wall.B;
         } else {

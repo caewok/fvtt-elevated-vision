@@ -24,8 +24,7 @@ import {
   readDataURLFromFile,
   convertBase64ToImage,
   drawPolygonWithHoles,
-  combineBoundaryPolygonWithHoles,
-  points2dAlmostEqual } from "./util.js";
+  combineBoundaryPolygonWithHoles } from "./util.js";
 
 import { Draw } from "./geometry/Draw.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
@@ -1145,7 +1144,8 @@ export class ElevationLayer extends InteractionLayer {
       //    Must pass the starting point after processing the intersection at end.
       if ( currWall === startingWall && currDistance2 <= startDistance2 ) passedStartingPoint = true;
 
-      if ( passedStartingPoint && points2dAlmostEqual(pointToAdd, {x: poly.points[0], y: poly.points[1]}) ) break;
+      const firstPoint = new PIXI.Point(poly.points[0], poly.points[1]);
+      if ( passedStartingPoint && firstPoint.almostEqual(pointToAdd) ) break;
 
       i += 1;
     }

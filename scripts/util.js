@@ -151,23 +151,6 @@ export function groupBy(list, keyGetter) {
 }
 
 /**
- * Test if two points are almost equal.
- * If points have keys, better to use p.equal
- * @param {Point} a   Point with 2 dimensions
- * @param {Point} b   Point with 2 dimensions
- * @returns {boolean}
- */
-export function points2dAlmostEqual(a, b, epsilon = 1e-08) {
-  return a.x.almostEqual(b.x, epsilon) && a.y.almostEqual(b.y, epsilon);
-}
-
-export function points3dAlmostEqual(a, b, epsilon = 1e-08) {
-  return a.x.almostEqual(b.x, epsilon)
-    && a.y.almostEqual(b.y, epsilon)
-    && a.z.almostEqual(b.z, epsilon);
-}
-
-/**
  * Log message only when debug flag is enabled from DevMode module.
  * @param {Object[]} args  Arguments passed to console.log.
  */
