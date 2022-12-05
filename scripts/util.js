@@ -227,14 +227,6 @@ export function convertBase64ToImage(image64) {
   return ab;
 }
 
-export function distanceBetweenPoints(a, b) {
-  return Math.hypot(b.x - a.x, b.y - a.y);
-}
-
-export function distanceSquaredBetweenPoints(a, b) {
-  return Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2);
-}
-
 /**
  * See https://github.com/mourner/robust-predicates
  * Each Point3d should have {x, y, z} coordinates.

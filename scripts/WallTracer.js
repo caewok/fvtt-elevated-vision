@@ -17,9 +17,7 @@ Class with methods to link and trace walls
 import {
   angleBetweenPoints,
   groupBy,
-  distanceSquaredBetweenPoints,
-  points2dAlmostEqual,
-  distanceBetweenPoints } from "./util.js";
+  points2dAlmostEqual } from "./util.js";
 
 export class WallTracer {
   static #oppositeEndpoint = { A: "B", B: "A" };
@@ -150,7 +148,7 @@ export class WallTracer {
       return {
         wall: wallTracerMap.get(wall),
         ix,
-        dist: Math.round(distanceSquaredBetweenPoints(A, ix)) };
+        dist: Math.round(PIXI.Point.distanceSquaredBetween(A, ix)) };
     });
 
     this._intersectionMap = groupBy(intersectingWallData, obj => obj.dist);
@@ -198,7 +196,7 @@ export class WallTracer {
     let flipKeys = start === "B";
     if ( flipKeys ) {
       keys.sort((a, b) => b - a);
-      startDistance2 = Math.pow(distanceBetweenPoints(this.A, this.B) - Math.sqrt(startDistance2), 2);
+      startDistance2 = Math.pow(PIXI.Point.distanceBetween(this.A, this.B) - Math.sqrt(startDistance2), 2);
     } else keys.sort((a, b) => a - b);
 
 

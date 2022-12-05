@@ -5,7 +5,7 @@ PIXI
 */
 "use strict";
 
-import { log, distanceBetweenPoints } from "./util.js";
+import { log } from "./util.js";
 import { ShaderPatcher, applyPatches } from "./perfect-vision/shader-patcher.js";
 
 /** To test a light
@@ -386,7 +386,7 @@ export function _updateEVLightUniformsLightSource(mesh) {
     // Point where line from light, perpendicular to wall, intersects
     const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center_shader);
     if ( !wallIx ) continue; // Likely a and b not proper wall
-    const wallOriginDist = distanceBetweenPoints(center_shader, wallIx);
+    const wallOriginDist = PIXI.Point.distanceBetween(center_shader, wallIx);
     wallDistances.push(wallOriginDist);
     wallElevations.push(w.topZ * 0.5 * r_inv);
 

@@ -23,7 +23,6 @@ import {
   log,
   readDataURLFromFile,
   convertBase64ToImage,
-  distanceSquaredBetweenPoints,
   drawPolygonWithHoles,
   combineBoundaryPolygonWithHoles,
   points2dAlmostEqual } from "./util.js";
@@ -957,8 +956,6 @@ export class ElevationLayer extends InteractionLayer {
     el = canvas.elevation
     api = game.modules.get("elevatedvision").api
     WallTracer = api.WallTracer
-    distanceSquaredBetweenPoints = api.util.distanceSquaredBetweenPoints;
-    angleBetweenPoints = api.util.angleBetweenPoints
 
     */
 
@@ -1099,7 +1096,7 @@ export class ElevationLayer extends InteractionLayer {
     let startDistance2 = 0;
 
     if ( startingIx ) {
-      startDistance2 = distanceSquaredBetweenPoints(startingEndpoint, startingIx);
+      startDistance2 = PIXI.Point.distanceSquaredBetween(startingEndpoint, startingIx);
     } else {
       poly.addPoint(startingEndpoint);
     }
@@ -1129,7 +1126,7 @@ export class ElevationLayer extends InteractionLayer {
         currWall = next.wall;
         currEndpoint = next.startingEndpoint;
         if ( next.ix ) {
-          currDistance2 = distanceSquaredBetweenPoints(currEndpoint, next.ix);
+          currDistance2 = PIXI.Point.distanceSquaredBetween(currEndpoint, next.ix);
           pointToAdd = next.ix;
         } else {
           currDistance2 = 0;
