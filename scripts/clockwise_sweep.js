@@ -6,7 +6,7 @@ PIXI
 */
 "use strict";
 
-import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles, zValue } from "./util.js";
+import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 import { Shadow } from "./geometry/Shadow.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
@@ -82,7 +82,7 @@ function isWallUnderneathTile(observer, wall, tiles) {
   const observerZ = observer.elevationZ;
   for ( const tile of tiles ) {
     const tileE = tile.document.flags?.levels?.rangeBottom ?? tile.document?.elevation ?? 0;
-    const tileZ = zValue(tileE);
+    const tileZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(tileE);
     if ( observerZ > tileZ && wall.topZ < tileZ ) return true;
   }
   return false;
