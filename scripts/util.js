@@ -203,38 +203,6 @@ export function convertBase64ToImage(image64) {
 }
 
 /**
- * See https://github.com/mourner/robust-predicates
- * Each Point3d should have {x, y, z} coordinates.
- * @param {Point3d} a
- * @param {Point3d} b
- * @param {Point3d} c
- * @param {Point3d} d
- * @return {number}
- * Returns a positive value if the point d lies above the plane passing through a, b, and c,
- *   meaning that a, b, and c appear in counterclockwise order when viewed from d.
- * Returns a negative value if d lies below the plane.
- * Returns zero if the points are coplanar.
- *
- * The result is also an approximation of six times the signed volume of the tetrahedron
- * defined by the four points.
- */
-export function orient3dFast(a, b, c, d) {
-  const adx = a.x - d.x;
-  const bdx = b.x - d.x;
-  const cdx = c.x - d.x;
-  const ady = a.y - d.y;
-  const bdy = b.y - d.y;
-  const cdy = c.y - d.y;
-  const adz = a.z - d.z;
-  const bdz = b.z - d.z;
-  const cdz = c.z - d.z;
-
-  return (adx * ((bdy * cdz) - (bdz * cdy)))
-    + (bdx * ((cdy * adz) - (cdz * ady)))
-    + (cdx * ((ady * bdz) - (adz * bdy)));
-}
-
-/**
  * Get the angle between three points, A --> B --> C.
  * Assumes A|B and B|C have lengths > 0.
  * @param {Point} a   First point
