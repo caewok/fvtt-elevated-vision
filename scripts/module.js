@@ -12,6 +12,9 @@ import { log } from "./util.js";
 
 import { registerGeometry } from "./geometry/registration.js";
 
+// Rendering configs
+import { renderAmbientLightConfigHook, renderAmbientSoundConfigHook } from "./renderAmbientConfig.js";
+
 // API imports
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
@@ -196,3 +199,6 @@ function updateTileHook(document, change, options, userId) {
     ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on tile minimum elevation range.`);
   }
 }
+
+Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
+Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
