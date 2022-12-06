@@ -10,7 +10,7 @@ renderTemplate
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
 
-import { registerGeometry } from "./geometry/registration.js";
+
 
 // Rendering configs
 import { renderAmbientLightConfigHook, renderAmbientSoundConfigHook } from "./renderAmbientConfig.js";
@@ -26,6 +26,8 @@ import { ElevationGrid } from "./ElevationGrid.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches } from "./patching.js";
+import { registerGeometry } from "./geometry/registration.js";
+import { registerElevationAdditions } from "./elevation.js";
 
 // For elevation layer registration and API
 import { ElevationLayer } from "./ElevationLayer.js";
@@ -55,10 +57,10 @@ Hooks.once("init", function() {
 
   // These methods need to be registered early
   registerGeometry();
+  registerElevationAdditions();
   registerSettings();
   registerLayer();
   registerAdditions();
-
 });
 
 // Hooks.once("libWrapper.Ready", async function() {

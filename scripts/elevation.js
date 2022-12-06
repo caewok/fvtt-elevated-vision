@@ -35,9 +35,8 @@ the display of the light object on the canvas. Eventually may want to patch this
 lights can display with varying canvas elevation.
 */
 
-const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
-
 export function registerElevationAdditions() {
+  const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
 
   // ----- TOKENS ----- //
   if ( !Object.hasOwn(Token.prototype, "topE") ) {
@@ -54,13 +53,13 @@ export function registerElevationAdditions() {
 
   if ( !Object.hasOwn(Token.prototype, "topZ") ) {
     Object.defineProperty(Token.prototype, "topZ", {
-      get: () => gridUnitsToPixels(this.topE)
+      get: zTop
     });
   }
 
   if ( !Object.hasOwn(Token.prototype, "bottomZ") ) {
     Object.defineProperty(Token.prototype, "bottomZ", {
-      get: () => gridUnitsToPixels(this.bottomE)
+      get: zBottom
     });
   }
 
@@ -79,13 +78,13 @@ export function registerElevationAdditions() {
 
   if ( !Object.hasOwn(Wall.prototype, "topZ") ) {
     Object.defineProperty(Wall.prototype, "topZ", {
-      get: () => gridUnitsToPixels(this.topE)
+      get: zTop
     });
   }
 
   if ( !Object.hasOwn(Wall.prototype, "bottomZ") ) {
     Object.defineProperty(Wall.prototype, "bottomZ", {
-      get: () => gridUnitsToPixels(this.bottomE)
+      get: zBottom
     });
   }
 
@@ -98,7 +97,7 @@ export function registerElevationAdditions() {
 
   if ( !Object.hasOwn(MovementSource.prototype, "elevationZ") ) {
     Object.defineProperty(MovementSource.prototype, "elevationZ", {
-      get: () => gridUnitsToPixels(this.elevationE)
+      get: zElevation
     });
   }
 
@@ -111,7 +110,7 @@ export function registerElevationAdditions() {
 
   if ( !Object.hasOwn(VisionSource.prototype, "elevationZ") ) {
     Object.defineProperty(VisionSource.prototype, "elevationZ", {
-      get: () => gridUnitsToPixels(this.elevationE)
+      get: zElevation
     });
   }
 
@@ -124,7 +123,7 @@ export function registerElevationAdditions() {
 
   if ( !Object.hasOwn(LightSource.prototype, "elevationZ") ) {
     Object.defineProperty(LightSource.prototype, "elevationZ", {
-      get: () => gridUnitsToPixels(this.elevationE)
+      get: zElevation
     });
   }
 
@@ -137,9 +136,30 @@ export function registerElevationAdditions() {
 
   if ( !Object.hasOwn(SoundSource.prototype, "elevationZ") ) {
     Object.defineProperty(SoundSource.prototype, "elevationZ", {
-      get: () => gridUnitsToPixels(this.elevationE)
+      get: zElevation
     });
   }
+}
+
+/**
+ * Helper to convert to Z value for a top elevation.
+ */
+function zTop() {
+  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.topE);
+}
+
+/**
+ * Helper to convert to Z value for a bottom elevation.
+ */
+function zBottom() {
+  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.bottomE);
+}
+
+/**
+ * Helper to convert to Z value for an elevationE.
+ */
+function zElevation() {
+  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.elevationE);
 }
 
 /**
