@@ -12,6 +12,8 @@ ClockwiseSweepPolygon
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
+import { defaultOptionsAmbientSoundConfig } from "./renderAmbientConfig.js";
+
 import {
   _refreshToken,
   cloneToken
@@ -199,4 +201,7 @@ export function registerPatches() {
       libWrapper.register(MODULE_ID, "LightSource.prototype._createMask", _createMaskLightSourcePV, libWrapper.MIXED, {perf_mode: libWrapper.PERF_FAST});
       break;
   }
+
+  // ----- Rendering configurations ----- //
+  libWrapper.register(MODULE_ID, "AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig, libWrapper.WRAPPER);
 }

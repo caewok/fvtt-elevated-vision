@@ -35,3 +35,17 @@ async function injectConfiguration(app, html, data, template, findString) {
   form.append(myHTML);
   app.setPosition(app.position);
 }
+
+/**
+ * Wrapper for AmbientSoundConfig.defaultOptions
+ * Make the sound config window resize height automatically, to accommodate
+ * the elevation config.
+ * @param {Function} wrapper
+ * @return {Object} See AmbientSoundConfig.defaultOptions.
+ */
+export function defaultOptionsAmbientSoundConfig(wrapper) {
+  const options = wrapper();
+  return foundry.utils.mergeObject(options, {
+    height: "auto"
+  });
+}
