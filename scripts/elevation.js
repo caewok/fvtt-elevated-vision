@@ -11,7 +11,7 @@ CONFIG
 */
 "use strict";
 
-import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
+import { MODULES_ACTIVE } from "./const.js";
 
 /* Elevation properties for Placeable Objects
 Generally:
@@ -36,8 +36,6 @@ lights can display with varying canvas elevation.
 */
 
 export function registerElevationAdditions() {
-  const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
-
   // ----- TOKENS ----- //
   if ( !Object.hasOwn(Token.prototype, "topE") ) {
     Object.defineProperty(Token.prototype, "topE", {
