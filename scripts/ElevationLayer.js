@@ -31,7 +31,7 @@ import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
-import { tokenOnGround, tokenTileElevation, tokenElevationAt } from "./tokens.js";
+import { isTokenOnGround, tokenTileElevation, tokenElevationAt } from "./tokens.js";
 
 /* Elevation layer
 
@@ -74,7 +74,8 @@ export class ElevationLayer extends InteractionLayer {
   tokens = {
     tokenElevationAt,
     tokenTileElevation,
-    tokenOnGround
+    isTokenOnGround,
+    tokenOnGround: isTokenOnGround // Backwards compatibility
   };
 
   /**
