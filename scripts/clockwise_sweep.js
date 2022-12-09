@@ -23,6 +23,9 @@ import { getSetting, SETTINGS } from "./settings.js";
 export function _computeClockwiseSweepPolygon(wrapped) {
   wrapped();
 
+  const shaderAlgorithm = getSetting(SETTINGS.SHADING.ALGORITHM);
+  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.NONE ) return;
+
   // Ignore lights set with default of positive infinity
   const source = this.config.source;
   const sourceZ = source?.elevationZ;
@@ -46,9 +49,13 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   this.wallsBelowSource = new Set(walls); // Top of edge below source top
 
+  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
+
+  // TODO: Fix below b/c POLYGONS is only algorithm left.
+
   // Construct shadows from the walls below the light source
   // Only need to construct the combined shadows if using polygons for vision, not shader.
-  const combineShadows = !getSetting(SETTINGS.VISION_USE_SHADER);
+  const combineShadows = shaderAlgorithm === SETTINGS.SHADING.TYPES.POLYGONS;
   this.shadows = [];
   this.combinedShadows = combineShadows ? [] : undefined;
   if ( !this.wallsBelowSource.size ) return;
@@ -146,48 +153,6 @@ export function _drawShadowsClockwiseSweepPolygon(
   for ( const shadow of shadows ) {
     shadow.draw({color, width, fill, alpha});
   }
-}
-
-/**
- * 3d version of ClockwiseSweepPolygon.testCollision
- * Test whether a Ray between the origin and destination points would collide with a boundary of this Polygon
- * @param {Point} origin                          An origin point
- * @param {Point} destination                     A destination point
- * @param {PointSourcePolygonConfig} config       The configuration that defines a certain Polygon type
- * @param {string} [config.mode]                  The collision mode to test: "any", "all", or "closest"
- * @returns {boolean|Point3d|Point3d[]|null} The collision result depends on the mode of the test:
- *                                                * any: returns a boolean for whether any collision occurred
- *                                                * all: returns a sorted array of Point3d instances
- *                                                * closest: returns a Point3d instance or null
- */
-export function testCollision3dClockwiseSweepPolygon(origin, destination, {mode="all", ...config}={}) {
-  const poly = new this();
-  const ray = new Ray(origin, destination);
-  config.boundaryShapes ||= [];
-  config.boundaryShapes.push(ray.bounds);
-  poly.initialize(origin, config);
-  return poly._testCollision3d(ray, mode);
-}
-
-/**
- * Check whether a given ray intersects with walls.
- * This version considers rays with a z element
- *
- * @param {PolygonRay} ray            The Ray being tested
- * @param {object} [options={}]       Options which customize how collision is tested
- * @param {string} [options.type=move]        Which collision type to check, a value in CONST.WALL_RESTRICTION_TYPES
- * @param {string} [options.mode=all]         Which type of collisions are returned: any, closest, all
- * @param {boolean} [options.debug=false]     Visualize some debugging data to help understand the collision test
- * @return {boolean|object[]|object}  Whether any collision occurred if mode is "any"
- *                                    An array of collisions, if mode is "all"
- *                                    The closest collision, if mode is "closest"
- */
-export function _testCollision3dClockwiseSweepPolygon(ray, mode) {
-  // Identify candidate edges
-  // Don't use this._identifyEdges b/c we need all edges, including those excluded by Wall Height
-  const collisionTest = (o, rect) => originalTestWallInclusion.call(this, o.t, rect);
-  const walls = canvas.walls.quadtree.getObjects(ray.bounds, { collisionTest });
-  return testWallsForIntersections(ray.A, ray.B, walls, mode, this.config.type);
 }
 
 export function testWallsForIntersections(origin, destination, walls, mode, type) {
