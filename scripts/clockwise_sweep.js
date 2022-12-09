@@ -8,8 +8,9 @@ PIXI
 
 import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
-import { Shadow } from "./geometry/Shadow.js";
+import { Shadow, ShadowProjection } from "./geometry/Shadow.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
+import { Plane } from "./geometry/3d/Plane.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
 /**
@@ -54,9 +55,12 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   // Store each shadow individually
   for ( const w of this.wallsBelowSource ) {
-    const shadow = Shadow.constructShadow(w, this.config.source);
-    if ( !shadow ) continue;
-    this.shadows.push(shadow);
+    const proj = this.config.source._shadowProjection
+      ?? (this.config.source._shadowProjection = new ShadowProjection(new Plane(), this.config.source));
+
+    const shadowPoints = proj.constructShadowPointsForWall(w);
+    if ( !shadowPoints.length ) continue;
+    this.shadows.push(new Shadow(shadowPoints));
   }
   if ( !this.shadows.length ) return;
 
