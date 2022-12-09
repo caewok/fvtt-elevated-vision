@@ -55,9 +55,8 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   // Construct shadows from the walls below the light source
   // Only need to construct the combined shadows if using polygons for vision, not shader.
-  const combineShadows = shaderAlgorithm === SETTINGS.SHADING.TYPES.POLYGONS;
   this.shadows = [];
-  this.combinedShadows = combineShadows ? [] : undefined;
+  this.combinedShadows = [];
   if ( !this.wallsBelowSource.size ) return;
 
   // Store each shadow individually
