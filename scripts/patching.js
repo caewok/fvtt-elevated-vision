@@ -46,9 +46,7 @@ import {
 import {
   _computeClockwiseSweepPolygon,
   _drawShadowsClockwiseSweepPolygon,
-  _testShadowWallInclusionClockwisePolygonSweep,
-  testCollision3dClockwiseSweepPolygon,
-  _testCollision3dClockwiseSweepPolygon
+  _testShadowWallInclusionClockwisePolygonSweep
 } from "./clockwise_sweep.js";
 
 // A: shader / not shader
@@ -62,7 +60,10 @@ const SHADER_SWITCH = {
 };
 
 export function registerAdditions() {
-  const use_shader = getSetting(SETTINGS.VISION_USE_SHADER);
+  const shaderAlgorithm = getSetting(SETTINGS.SHADING.ALGORITHM);
+  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.NONE ) return;
+
+  const use_shader = shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL;
   const shader_choice = use_shader | (MODULES_ACTIVE.PERFECT_VISION << 1);
 
   Object.defineProperty(LightSource.prototype, "_updateEVLightUniforms", {
@@ -85,18 +86,6 @@ export function registerAdditions() {
 
   Object.defineProperty(ClockwiseSweepPolygon.prototype, "_testShadowWallInclusion", {
     value: _testShadowWallInclusionClockwisePolygonSweep,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(ClockwiseSweepPolygon, "testCollision3d", {
-    value: testCollision3dClockwiseSweepPolygon,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_testCollision3d", {
-    value: _testCollision3dClockwiseSweepPolygon,
     writable: true,
     configurable: true
   });
@@ -165,25 +154,31 @@ function shaderPVAdditions() {
 
 
 export function registerPatches() {
-  const use_shader = getSetting(SETTINGS.VISION_USE_SHADER);
-  const shader_choice = use_shader | (MODULES_ACTIVE.PERFECT_VISION << 1);
-
+  const shaderAlgorithm = getSetting(SETTINGS.SHADING.ALGORITHM);
   // ----- Locating edges that create shadows in the LOS ----- //
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
   // ----- Shader code for drawing shadows ----- //
   libWrapper.register(MODULE_ID, "AdaptiveLightingShader.create", createAdaptiveLightingShader, libWrapper.WRAPPER);
 
-  // ----- Drawing shadows for light sources ----- //
-  libWrapper.register(MODULE_ID, "LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
-  libWrapper.register(MODULE_ID, "LightSource.prototype._createPolygon", _createPolygonLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
   // ----- Token animation and elevation change ---- //
   libWrapper.register(MODULE_ID, "Token.prototype._refresh", _refreshToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
   libWrapper.register(MODULE_ID, "Token.prototype.clone", cloneToken, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
 
+  // ----- Rendering configurations ----- //
+  libWrapper.register(MODULE_ID, "AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig, libWrapper.WRAPPER);
+
+  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.NONE ) return;
+
+  // ----- Drawing shadows for light sources ----- //
+  libWrapper.register(MODULE_ID, "LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  libWrapper.register(MODULE_ID, "LightSource.prototype._createPolygon", _createPolygonLightSource, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+
   // ----- Drawing shadows for vision source LOS, fog  ----- //
+  const use_shader = shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL;
+  const shader_choice = use_shader | (MODULES_ACTIVE.PERFECT_VISION << 1);
   switch ( shader_choice ) {
     case SHADER_SWITCH.NO_SHADER:
       libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
@@ -202,6 +197,4 @@ export function registerPatches() {
       break;
   }
 
-  // ----- Rendering configurations ----- //
-  libWrapper.register(MODULE_ID, "AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig, libWrapper.WRAPPER);
 }

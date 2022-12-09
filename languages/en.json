@@ -1,9 +1,14 @@
 {
   "elevatedvision.name": "Elevation",
-  "elevatedvision.settings.vision-use-shader.name": "Apply elevation data to token vision",
-  "elevatedvision.settings.vision-use-shader.hint": "If selected, will take into account elevation layer data when rendering token vision, meaning terrain above the token will not be visible and terrain in shadows may be visible if sufficiently high. Otherwise, only shadows for walls below the token will be rendered. Unchecking this may increase performance.",
 
-  "elevatedvision.settings.auto-change-elevation.name": "Change token elevation automatically when moving",
+  "elevatedvision.settings.shading-algorithm.name": "Display Elevation Shadows",
+  "elevatedvision.settings.shading-algorithm.hint": "Polygons: Represent shadows caused by limited-height walls using polygons for lights and token vision. WebGL: Use WebGL for the light shadows. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively.",
+
+  "elevatedvision.settings.shading-none": "None",
+  "elevatedvision.settings.shading-polygons": "Polygons",
+  "elevatedvision.settings.shading-webgl": "WebGL",
+
+  "elevatedvision.settings.auto-change-elevation.name": "Automatic token elevation",
   "elevatedvision.settings.auto-change-elevation.hint": "If selected, will automatically adjust token elevation based on elevation layer data. Token elevation is only adjusted if the token is currently 'on the ground.'",
 
   "elevatedvision.settings.auto-change-elevation.averaging.name": "Average token elevation",
