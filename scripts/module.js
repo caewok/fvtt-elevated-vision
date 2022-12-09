@@ -150,7 +150,8 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // esli
   if ( !tokenOnGround(tokenD.object, tokenOrigin) ) return;
 
   const tokenDestination = { x: changes.x ? changes.x : tokenD.x, y: changes.y ? changes.y : tokenD.y };
-  changes.elevation = tokenElevationAt(tokenD.object, tokenDestination);
+  const newTokenE = tokenElevationAt(tokenD.object, tokenDestination);
+  if ( tokenD.elevation !== newTokenE ) changes.elevation = tokenElevationAt(tokenD.object, tokenDestination);
   tokenD.object._elevatedVision.tokenAdjustElevation = true;
 });
 
