@@ -1,22 +1,18 @@
 /* globals
 LightSource,
-Wall,
 VisionSource,
-SoundSource,
-MovementSource
-Token,
 libWrapper,
-ClockwiseSweepPolygon,
-GlobalLightSource,
-games
+ClockwiseSweepPolygon
 */
 
 "use strict";
 
 // Patches
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
 import { getSetting, SETTINGS } from "./settings.js";
+
+import { defaultOptionsAmbientSoundConfig } from "./renderAmbientConfig.js";
 
 import {
   _refreshToken,
@@ -67,56 +63,7 @@ const SHADER_SWITCH = {
 
 export function registerAdditions() {
   const use_shader = getSetting(SETTINGS.VISION_USE_SHADER);
-  const pv_present = game.modules.get("perfect-vision")?.active;
-  const shader_choice = use_shader | (pv_present << 1);
-
-  if ( !Object.hasOwn(MovementSource.prototype, "elevationZ") ) {
-    Object.defineProperty(MovementSource.prototype, "elevationZ", {
-      get: movementSourceElevation
-    });
-  }
-
-  if ( !Object.hasOwn(VisionSource.prototype, "elevationZ") ) {
-    Object.defineProperty(VisionSource.prototype, "elevationZ", {
-      get: visionSourceElevation
-    });
-  }
-
-  if ( !Object.hasOwn(LightSource.prototype, "elevationZ") ) {
-    Object.defineProperty(LightSource.prototype, "elevationZ", {
-      get: lightSourceElevation
-    });
-  }
-
-  if ( !Object.hasOwn(SoundSource.prototype, "elevationZ") ) {
-    Object.defineProperty(SoundSource.prototype, "elevationZ", {
-      get: soundSourceElevation
-    });
-  }
-
-  if ( !Object.hasOwn(Wall.prototype, "topZ") ) {
-    Object.defineProperty(Wall.prototype, "topZ", {
-      get: wallTop
-    });
-  }
-
-  if ( !Object.hasOwn(Wall.prototype, "bottomZ") ) {
-    Object.defineProperty(Wall.prototype, "bottomZ", {
-      get: wallBottom
-    });
-  }
-
-  if ( !Object.hasOwn(Token.prototype, "topZ") ) {
-    Object.defineProperty(Token.prototype, "topZ", {
-      get: tokenTop
-    });
-  }
-
-  if ( !Object.hasOwn(Token.prototype, "bottomZ") ) {
-    Object.defineProperty(Token.prototype, "bottomZ", {
-      get: tokenBottom
-    });
-  }
+  const shader_choice = use_shader | (MODULES_ACTIVE.PERFECT_VISION << 1);
 
   Object.defineProperty(LightSource.prototype, "_updateEVLightUniforms", {
     value: _updateEVLightUniformsLightSource,
@@ -219,8 +166,7 @@ function shaderPVAdditions() {
 
 export function registerPatches() {
   const use_shader = getSetting(SETTINGS.VISION_USE_SHADER);
-  const pv_present = game.modules.get("perfect-vision")?.active;
-  const shader_choice = use_shader | (pv_present << 1);
+  const shader_choice = use_shader | (MODULES_ACTIVE.PERFECT_VISION << 1);
 
   // ----- Locating edges that create shadows in the LOS ----- //
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
@@ -255,73 +201,7 @@ export function registerPatches() {
       libWrapper.register(MODULE_ID, "LightSource.prototype._createMask", _createMaskLightSourcePV, libWrapper.MIXED, {perf_mode: libWrapper.PERF_FAST});
       break;
   }
-}
 
-/**
- * For MovementSource objects, use the token's elevation
- * @type {number} Elevation, in grid units to match x,y coordinates.
- */
-function movementSourceElevation() {
-  return this.object.topZ;
+  // ----- Rendering configurations ----- //
+  libWrapper.register(MODULE_ID, "AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig, libWrapper.WRAPPER);
 }
-
-/**
- * For VisionSource objects, use the token's elevation.
- * @type {number} Elevation, in grid units to match x,y coordinates.
- */
-function visionSourceElevation() {
-  return this.object.topZ;
-}
-
-/**
- * For LightSource objects, default to infinite elevation.
- * This is to identify lights that should be treated like in default Foundry.
- * @type {number} Elevation, in grid units to match x,y coordinates.
- */
-function lightSourceElevation() {
-  if ( this instanceof GlobalLightSource ) return Number.POSITIVE_INFINITY;
-  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY);
-}
-
-/**
- * For SoundSource objects, default to 0 elevation.
- * @type {number} Elevation, in grid units to match x,y coordinates.
- */
-function soundSourceElevation() {
-  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.object.document.flags?.levels?.rangeTop ?? Number.POSITIVE_INFINITY);
-}
-
-/**
- * For Token objects, default to 0 elevation.
- * @type {number} Elevation, in grid units to match x,y coordinates.
- */
-function tokenTop() {
-  // From Wall Height but skip the extra test b/c we know it is a token.
-  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.losHeight ?? 0);
-}
-
-/**
- * For Token objects, default to 0 elevation.
- * @type {number} Elevation, in grid units to match x,y coordinates.
- */
-function tokenBottom() {
-  // From Wall Height but skip the extra test b/c we know it is a token.
-  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.document.elevation ?? 0);
-}
-
-/**
- * For Wall objects, default to infinite top/bottom elevation.
- * @type {number} Elevation, in grid units to match x,y coordinates.
- */
-function wallTop() {
-  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.document.flags?.["wall-height"]?.top ?? Number.POSITIVE_INFINITY);
-}
-
-/**
- * For Wall objects, default to infinite top/bottom elevation.
- * @type {number} Elevation, in grid units to match x,y coordinates.
- */
-function wallBottom() {
-  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.document.flags?.["wall-height"]?.bottom ?? Number.NEGATIVE_INFINITY);
-}
-

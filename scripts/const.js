@@ -9,3 +9,14 @@ export const FLAG_ELEVATION_IMAGE = "elevationImage";
 
 // Minimum absolute difference of floats before they are considered equal
 export const EPSILON = 1e-08;
+
+export const MODULES_ACTIVE = {
+  WALL_HEIGHT: false,
+  PERFECT_VISION: false
+};
+
+// Hook init b/c game.modules is not initialized at start.
+Hooks.once("init", function() {
+  MODULES_ACTIVE.WALL_HEIGHT = game.modules.get("wall-height")?.active;
+  MODULES_ACTIVE.PERFECT_VISION = game.modules.get("perfect-vision")?.active;
+});

@@ -23,5 +23,9 @@
   "elevatedvision.sceneconfig.elevationmin.hint": "Minimum elevation for this scene.",
 
   "elevatedvision.sceneconfig.elevationstep.name": "Elevation Increment",
-  "elevatedvision.sceneconfig.elevationstep.hint": "Elevation steps (increments) permitted in this scene. Maximum elevation for a scene equals minimum + 255 * increment."
+  "elevatedvision.sceneconfig.elevationstep.hint": "Elevation steps (increments) permitted in this scene. Maximum elevation for a scene equals minimum + 255 * increment.",
+
+  "elevatedvision.ambientconfig.legendtitle": "Elevated Vision",
+  "elevatedvision.ambientconfig.elevation.name": "Elevation",
+  "elevatedvision.ambientconfig.elevation.hint": "Elevation of this source."
 }
