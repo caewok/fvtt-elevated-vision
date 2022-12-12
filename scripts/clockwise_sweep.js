@@ -72,7 +72,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   // Combine the shadows and trim to be within the LOS
   // We want one or more LOS polygons along with non-overlapping holes.
-  if ( combineShadows ) this.combinedShadows = combineBoundaryPolygonWithHoles(this, this.shadows);
+  this.combinedShadows = combineBoundaryPolygonWithHoles(this, this.shadows);
 }
 
 /**
