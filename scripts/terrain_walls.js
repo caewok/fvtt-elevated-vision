@@ -42,6 +42,9 @@ function drawWalls(source = _token.vision) {
   })
 }
 
+source = _token.vision
+ev = _token.vision.los._elevatedvision
+proj = source._elevatedvision.ShadowProjection;
 
 
 wallsBelowSource = l.source.los.wallsBelowSource
