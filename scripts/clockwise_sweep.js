@@ -48,41 +48,57 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   if ( sourceZ >= 0 ) walls = walls.filter(w => w.topZ >= 0);
   else walls = walls.filter(w => w.bottomZ < 0); // Source below ground; drop tiles above
 
-  /*
-  1. Terrain walls
-  If a limited-height wall is blocking a terrain wall of any height,
-  that will not be recorded by the LOS sweep b/c the limited-height wall is removed by Wall Height.
-
-  But if the terrain wall is completely above the source, we don't care about it.
-  Terrain walls completely below 0 can be ignored if the source is above 0.
-
-  2. Limited-height walls
-  Limited-height walls are removed by Wall Height and shadows must be constructed separately.
-  But if the limited-height wall is completely above the source, we don't care about it.
-  Limited-height walls completely below 0 can be ignored if the source is above 0.
-
+  /* Ignoring walls
+    Limited-height walls removed by Wall Height; shadows must be separate.
+    If the limited-height wall is completely above the source, we don't care about it.
+    Limited-height walls completely below 0 can be ignored if the source is above 0 and vice-versa
+      (b/c ground assumed to block)
   */
 
-  const terrainWalls = [];
-  const heightWalls = [];
-  walls.forEach(w => {
-    // Keep all terrain walls
-    if ( isLimitedWallForSource(w, source) ) terrainWalls.push(w);
 
-    // Only keep limited-height walls
-    else if ( isFinite(w.bottomZ) || isFinite(w.topZ) ) heightWalls.push(w);
-  });
+  /* Terrain wall shadows
+    If a limited-height wall is blocking a terrain wall of any height,
+    that will not be recorded by the LOS sweep b/c the limited-height wall is removed by Wall Height.
+
+    Non-terrain walls will create shadows that entirely overlap whatever shadow would
+    be caused by the terrain wall behind.
+
+    Thus, we only need to care about terrain walls that are behind other terrain walls.
+    For those, we need to find the portion of the terrain wall blocked by the other from
+    point of view of the source.
+
+    Unfortunately, in 3d, the resulting smaller blocked terrain wall can have 3–8 points,
+    depending on how the shadow trapezoid from the front wall intersects the back wall.
+    It may also intersect only at an edge or corner, causing the terrain wall to
+    degenerate to 1–2 points. Degenerate cases should be caught and removed.
+
+    For WebGL, we will compute shadows from walls differently. We only need to know what
+    terrain walls are potentially blocking or shadow-causing.
+  */
 
   this._elevatedvision ??= {};
   this._elevatedvision.shadows = [];
   this._elevatedvision.combinedShadows = [];
-  this._elevatedvision.wallPointsBelowSource = [];
-  this._elevatedvision.terrainWallsBelowSource = terrainWalls;
-  this._elevatedvision.heightWallsBelowSource = heightWalls;
 
-  const terrainWallPoints = [];
-  for ( const terrainWall of terrainWalls ) {
-    const ptsArr = replaceTerrainWall(terrainWall, source);
+  const terrainWallPointsArr = this._elevatedvision.terrainWallPointsArr = [];
+  const heightWallPointsArr = this._elevatedvision.heightWallPointsArr = [];
+  walls.forEach(w => {
+    const isTerrain = isLimitedWallForSource(w, source)
+
+    // Only keep limited-height walls. (Infinite-height walls incorporated into LOS polygon.)
+    if ( !isTerrain && !isFinite(w.bottomZ) && !isFinite(w.topZ) ) return;
+
+    const ptsArr = isTerrain ? terrainWallPointsArr : heightWallPointsArr;
+    const pts = Point3d.fromWall(w, { finite: true });
+    pts.wall = w;
+    ptsArr.push(pts);
+  });
+
+  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
+
+  const blockedTerrainWallPointsArr = this._elevatedvision.blockedTerrainWallPointsArr = [];
+  for ( const terrainWallPoints of terrainWallPointsArr ) {
+    const ptsArr = replaceTerrainWall(terrainWallPoints, terrainWallPointsArr, source);
     if ( !ptsArr.length ) continue;
 
     for ( const pts of ptsArr ) {
@@ -91,21 +107,19 @@ export function _computeClockwiseSweepPolygon(wrapped) {
         ? pts.some(pt => pt.z > 0)
         : pts.some(pt => pt.z < 0);
 
-      if ( keepPoints ) terrainWallPoints.push(pts);
+      if ( keepPoints ) blockedTerrainWallPointsArr.push(pts);
     }
   }
 
   // Add in the height wall points
-  this._elevatedvision.wallPointsBelowSource = terrainWallPoints;
-  for ( const heightWall of heightWalls ) {
-    const pts = Point3d.fromWall(heightWall);
-    const out = [pts.A.top, pts.B.top, pts.B.bottom, pts.A.bottom];
-    out.wall = heightWall;
-    this._elevatedvision.wallPointsBelowSource.push(out);
+  this._elevatedvision.wallPointArrays = blockedTerrainWallPointsArr;
+  for ( const heightWallPts of heightWallPointsArr ) {
+    const out = [heightWallPts.A.top, heightWallPts.B.top, heightWallPts.B.bottom, heightWallPts.A.bottom];
+    out.wall = heightWallPts.wall;
+    this._elevatedvision.wallPointArrays.push(out);
   }
 
-  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL
-    || !this._elevatedvision.wallPointsBelowSource.length ) return;
+  if ( !this._elevatedvision.wallPointArrays.length ) return;
 
   // Construct shadows from the walls below the light source
   // Store each shadow individually
@@ -113,9 +127,9 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   this.config.source._elevatedvision.ShadowProjection ??= new ShadowProjection(new Plane(), this.config.source);
   const proj = this.config.source._elevatedvision.ShadowProjection;
 
-  for ( const wallPoints of this._elevatedvision.wallPointsBelowSource ) {
+  for ( const wallPointsArr of this._elevatedvision.wallPointArrays ) {
     // Convert to 2d points; we can simply drop z b/c we are projecting to z=0 plane.
-    const shadowPoints = proj._shadowPointsForPoints(wallPoints).map(pt => pt.to2d());
+    const shadowPoints = proj._shadowPointsForPoints(wallPointsArr).map(pt => pt.to2d());
     if ( !shadowPoints.length ) continue;
 
     this._elevatedvision.shadows.push(new Shadow(shadowPoints));

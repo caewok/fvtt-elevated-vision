@@ -149,28 +149,53 @@ export function isLimitedWallForSource(wall, source) {
  * For a given terrain/limited wall, get shadows on the wall where walls between the terrain
  * and the source cause light to be blocked
  */
-export function replaceTerrainWall(terrainWall, source) {
+export function replaceTerrainWall(terrainWallPoints, terrainWallPointsArr, source) {
   const sourceOrigin = Point3d.fromPointSource(source);
   // Debug:
   // draw.point(sourceOrigin, { color: COLORS.yellow })
 
-  const blockingWalls = getPotentialBlockingWalls(terrainWall, sourceOrigin);
-  if ( !blockingWalls.size ) return [];
+  const blockingWallPointsArr = filterPotentialBlockingWalls(terrainWallPoints, terrainWallPointsArr, sourceOrigin);
+  if ( !blockingWallPointsArr.length ) return [];
 
-  const terrainWallPoints = Point3d.fromWall(terrainWall, { finite: true });
-  const planeTW = Plane.fromWall(terrainWall);
+  const planeTW = Plane.fromWall(terrainWallPoints.wall);
   const proj = new ShadowProjection(planeTW, source);
 
   const replacements= [];
-  for ( const blockingWall of blockingWalls ) {
-    const newWallPoints = trimTerrainWall(terrainWallPoints, blockingWall, proj);
+  for ( const blockingWallPoints of blockingWallPointsArr ) {
+    const newWallPoints = trimTerrainWall2(terrainWallPoints, blockingWallPoints, proj);
     if ( newWallPoints.length ) {
-      newWallPoints.wall = blockingWall;
+      newWallPoints.wall = blockingWallPoints.wall;
       replacements.push(newWallPoints);
     }
   }
 
   return replacements;
+}
+
+/**
+ * Filter an array of wall points to only include those between the given wall points and source.
+ * Use triangle
+ * WallPoints struct: { A: top: Point3d, bottom: Point3d, B: top: Point3d, bottom: Point3d }, wall
+ * @param {WallPoints} wallPoints
+ * @param {wallPoints[]} wallPointsArr
+ * @param {Point3d} sourceOrigin
+ * @returns {wallPoints[]}
+ */
+function filterPotentialBlockingWalls(wallPoints, wallPointsArr, sourceOrigin) {
+  const viewableTriangle = new PIXI.Polygon([
+    sourceOrigin.to2d(),
+    wallPoints.A.top.to2d(),
+    wallPoints.B.top.to2d()]);
+
+  // Filter by the precise triangle cone.
+  const edges = [...viewableTriangle.iterateEdges()];
+  const id = wallPoints.wall.id;
+  const blockingWallPoints = wallPointsArr.filter(w => {
+    if ( w.wall.id === id ) return false;
+    if ( viewableTriangle.contains(w.A.top.x, w.A.top.y) || viewableTriangle.contains(w.B.top.x, w.B.top.y) ) return true;
+    return edges.some(e => foundry.utils.lineSegmentIntersects(w.A.top, w.B.top, e.A, e.B));
+  });
+  return blockingWallPoints;
 }
 
 /**
@@ -184,6 +209,63 @@ function ccw(a, b, c) {
   return Math.sign(foundry.utils.orient2dFast(a, b, c));
 }
 
+
+/**
+ * Trim Terrain Wall alt version
+ * Walk edges, test if point is in front
+ */
+function trimTerrainWall2(terrainWallPoints, blockingWallPoints, proj) {
+  const sourceOrigin = proj.sourceOrigin;
+  const sourceSide = proj.sourceSide;
+
+  const ptsArr = [
+    blockingWallPoints.A.top,
+    blockingWallPoints.B.top,
+    blockingWallPoints.B.bottom,
+    blockingWallPoints.A.bottom
+  ];
+
+  const ixPts = [];
+  let A = ptsArr[3];
+  let isASourceSide = proj.plane.whichSide(A) * sourceSide > 0;
+  for ( let i = 0; i < 4; i += 1 ) {
+    const B = ptsArr[i];
+    const isBSourceSide = proj.plane.whichSide(B) * sourceSide > 0;
+
+    if ( isASourceSide ^ isBSourceSide ) {
+      // add the plane intersection point
+      const ix = proj.plane.lineSegmentIntersection(A, B);
+      ixPts.push(ix);
+    }
+
+    if ( isBSourceSide ) {
+      const ix = proj._intersectionWith(B);
+      ixPts.push(ix);
+    }
+
+    A = B;
+    isASourceSide = isBSourceSide;
+  }
+
+  // Round before getting the intersection
+  const PLACES = 4;
+  ixPts.forEach(pt => pt.roundDecimals(PLACES));
+
+  const out = constrainWallPoints3(proj.plane, terrainWallPoints, ixPts);
+
+  // Round to avoid numeric inconsistencies and to match endpoints when possible
+  out.forEach(pt => pt.roundDecimals(PLACES));
+  return out;
+}
+
+/*
+N = 10000
+await foundry.utils.benchmark(trimTerrainWall, N, terrainWallPoints, blockingWallPoints, proj);
+await foundry.utils.benchmark(trimTerrainWall2, N, terrainWallPoints, blockingWallPoints, proj)
+
+*/
+
+
 /**
  * Given a terrain wall and a potentially blocking wall, determine
  * the shadow cast from the source by the blocking wall on the terrain wall's plane.
@@ -193,25 +275,9 @@ function ccw(a, b, c) {
  * @param {ShadowProjection} proj       Shadow projection of the terrain wall given a point source.
  * @returns {object|null} The four Point3d for the shadow or null if none
  */
-function trimTerrainWall(terrainWallPoints, blockingWall, proj) {
-  const blockingWallPoints = Point3d.fromWall(blockingWall, { finite: true });
-
-  // TODO: Can we lose these tests?
-  if ( terrainWallPoints.A.top.z !== terrainWallPoints.B.top.z ) {
-    console.error("trimTerrainWall terrainWallPoints top elevations differ.");
-  }
-
-  if ( terrainWallPoints.A.bottom.z !== terrainWallPoints.B.bottom.z ) {
-    console.error("trimTerrainWall terrainWallPoints bottom elevations differ.");
-  }
-
-  if ( blockingWallPoints.A.top.z !== blockingWallPoints.B.top.z ) {
-    console.error("trimTerrainWall blockingWallPoints top elevations differ.");
-  }
-
-  if ( blockingWallPoints.A.bottom.z !== blockingWallPoints.B.bottom.z ) {
-    console.error("trimTerrainWall blockingWallPoints bottom elevations differ.");
-  }
+function trimTerrainWall(terrainWallPoints, blockingWallPoints, proj) {
+  // Because these are vertical walls, we can focus on the 2d overhead view
+  // Trim the blocking wall to the portion in front of the terrain wall
 
   // Test if the two cross or share an endpoint.
   // Can assume walls are vertical, so just test A|B cross
@@ -233,6 +299,21 @@ function trimTerrainWall(terrainWallPoints, blockingWall, proj) {
   const DInFront = ccwABV === ccwABD;
 
   if ( !(CInFront || DInFront) ) return []; // Blocking wall completely behind terrain wall from source
+
+  // Clone to avoid changing the blocking points
+  blockingWallPoints = {
+    A: {
+      top: blockingWallPoints.A.top.clone(),
+      bottom: blockingWallPoints.A.bottom.clone()
+    },
+
+    B: {
+      top: blockingWallPoints.B.top.clone(),
+      bottom: blockingWallPoints.B.bottom.clone()
+    },
+
+    wall: blockingWallPoints.wall
+  }
 
   if ( (!CInFront && ccwABC !== 0)
     || (!DInFront && ccwABD !== 0) ) {
@@ -372,6 +453,29 @@ function constrainWallPoints(plane, boundaryPoints, otherPoints) {
   const pts3d = [];
   for ( const pt of ixPoly.iteratePoints({ close: false }) ) {
     pts3d.push(Minv.multiplyPoint3d(pt.to3d()))
+  }
+
+  return pts3d;
+}
+
+function constrainWallPoints3(plane, boundaryPoints, otherPoints) {
+  // Convert the points to the 2d plane
+  const bPts = [
+    plane.to2d(boundaryPoints.A.top),
+    plane.to2d(boundaryPoints.B.top),
+    plane.to2d(boundaryPoints.B.bottom),
+    plane.to2d(boundaryPoints.A.bottom)
+  ];
+
+  const oPts = otherPoints.map(pt => plane.to2d(pt));
+
+  const boundaryPoly = new PIXI.Polygon(bPts);
+  const otherPoly = new PIXI.Polygon(oPts);
+
+  const ixPoly = boundaryPoly.intersectPolygon(otherPoly, { scalingFactor: 1000 })
+  const pts3d = [];
+  for ( const pt of ixPoly.iteratePoints({ close: false }) ) {
+    pts3d.push(plane.to3d(pt));
   }
 
   return pts3d;
