@@ -37,7 +37,15 @@ const FN_ORIENT2D =
 return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
 `;
 
-// Does segment AB intersect the segment CD?
+/**
+ * GLSL
+ * Does segment AB intersect the segment CD?
+ * @in {vec2} a
+ * @in {vec2} b
+ * @in {vec2} c
+ * @in {vec2} d
+ * @returns {boolean}
+ */
 const FN_LINE_SEGMENT_INTERSECTS =
 `
   float xa = orient2d(a, b, c);
@@ -49,7 +57,14 @@ const FN_LINE_SEGMENT_INTERSECTS =
   return xab && xcd;
 `;
 
-// Point on line AB that forms perpendicular point to C
+/**
+ * GLSL
+ * Point on line AB that forms perpendicular point to C
+ * @in {vec2} a
+ * @in {vec2} b
+ * @in {vec2} c
+ * @returns {vec2}
+ */
 const FN_PERPENDICULAR_POINT =
 `
   vec2 deltaBA = b - a;
@@ -62,39 +77,56 @@ const FN_PERPENDICULAR_POINT =
   return vec2(a.x + (u * deltaBA.x), a.y + (u * deltaBA.y));
 `;
 
-// Calculate the canvas elevation given a pixel value
-// Maps 0–1 to elevation in canvas coordinates.
-// EV_elevationResolution:
-// r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
-// u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
-
+/**
+ * GLSL
+ * Calculate the canvas elevation given a pixel value
+ * Maps 0–1 to elevation in canvas coordinates.
+ * @in {float} pixel
+ * @in {vec4} EV_elevationResolution
+ * @returns {float}
+ *
+ * EV_elevationResolution:
+ * - r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
+ * - u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+ */
 const FN_CANVAS_ELEVATION_FROM_PIXEL =
 `
   return (EV_elevationResolution.r + (pixel * EV_elevationResolution.b * EV_elevationResolution.g)) * EV_elevationResolution.a;
 `;
 
-// Determine if a given location from a wall is in shadow or not.
+
+/**
+ * GLSL
+ * Determine if a given location from a wall is in shadow or not.
+ * @in {vec4} wall
+ * @in {float} wallElevation
+ * @in {float} wallDistance
+ * @in {vec3} sourceLocation
+ * @in {vec3} pixelLocation
+ * @out {float} percentDistanceFromWall
+ * @returns {boolean} True if location is in shadow of this wall
+ */
 const FN_LOCATION_IN_WALL_SHADOW =
 `
   percentDistanceFromWall = 0.0; // Set a default value when returning early.
 
   // If the wall is higher than the light, skip. Should not occur.
-  if ( sourceElevation <= wallElevation ) return false;
+  if ( sourceLocation.z <= wallElevation ) return false;
 
   // If the pixel is above the wall, skip.
-  if ( pixelElevation >= wallElevation ) return false;
+  if ( pixelLocation.z >= wallElevation ) return false;
 
   // If the wall does not intersect the line between the center and this point, no shadow here.
-  if ( !lineSegmentIntersects(pixelLocation, sourceLocation, wall.xy, wall.zw) ) return false;
+  if ( !lineSegmentIntersects(pixelLocation.xy, sourceLocation.xy, wall.xy, wall.zw) ) return false;
 
   // Distance from wall (as line) to this location
-  vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, pixelLocation);
-  float distWP = distance(pixelLocation, wallIxPoint);
+  vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, pixelLocation.xy);
+  float distWP = distance(pixelLocation.xy, wallIxPoint);
 
   // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
   // atan(y, x) equivalent to JS Math.atan2(y, x)
-  float adjWe = wallElevation - pixelElevation;
-  float adjSourceElevation = sourceElevation - pixelElevation;
+  float adjWe = wallElevation - pixelLocation.z;
+  float adjSourceElevation = sourceLocation.z - pixelLocation.z;
   float theta = atan((adjSourceElevation - adjWe) /  wallDistance);
 
   // Distance from center/origin to furthest part of shadow perpendicular to wall
@@ -109,6 +141,20 @@ const FN_LOCATION_IN_WALL_SHADOW =
   return false;
 `;
 
+/**
+ * GLSL
+ * Determine the relative orientation of three points in two-dimensional space.
+ * The result is also an approximation of twice the signed area of the triangle defined by the three points.
+ * This method is fast - but not robust against issues of floating point precision. Best used with integer coordinates.
+ * Same as Foundry utils version
+ * @in {vec2} a An endpoint of segment AB, relative to which point C is tested
+ * @in {vec2} b An endpoint of segment AB, relative to which point C is tested
+ * @in {vec2} c A point that is tested relative to segment AB
+ * @returns {float} The relative orientation of points A, B, and C
+ *                  A positive value if the points are in counter-clockwise order (C lies to the left of AB)
+ *                  A negative value if the points are in clockwise order (C lies to the right of AB)
+ *                  Zero if the points A, B, and C are collinear.
+ */
 export const FRAGMENT_FUNCTIONS = `
 float orient2d(in vec2 a, in vec2 b, in vec2 c) {
   ${FN_ORIENT2D}
@@ -164,7 +210,9 @@ if ( pixelElevation > EV_lightElevation ) {
   inShadow = EV_isVision;
 }
 
-const vec2 center = vec2(0.5);
+vec3 sourceLoc = vec3(0.5, 0.5, EV_lightElevation);
+vec3 pixelLoc = vec3(vUvs.x, vUvs.y, pixelElevation);
+
 for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
   if ( i >= wallsToProcess ) break;
 
@@ -172,10 +220,8 @@ for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
     EV_wallCoords[i],
     EV_wallElevations[i],
     EV_wallDistances[i],
-    EV_lightElevation,
-    center,
-    pixelElevation,
-    vUvs,
+    sourceLoc,
+    pixelLoc,
     percentDistanceFromWall
   );
 
@@ -215,10 +261,8 @@ function addShadowCode(source) {
         { qualifier: "in", type: "vec4", name: "wall" },
         { qualifier: "in", type: "float", name: "wallElevation" },
         { qualifier: "in", type: "float", name: "wallDistance" },
-        { qualifier: "in", type: "float", name: "sourceElevation" },
-        { qualifier: "in", type: "vec2", name: "sourceLocation" },
-        { qualifier: "in", type: "float", name: "pixelElevation" },
-        { qualifier: "in", type: "vec2", name: "pixelLocation" },
+        { qualifier: "in", type: "vec3", name: "sourceLocation" },
+        { qualifier: "in", type: "vec3", name: "pixelLocation" },
         { qualifier: "out", type: "float", name: "percentDistanceFromWall" }
       ])
       .addFunction("canvasElevationFromPixel", "float", FN_CANVAS_ELEVATION_FROM_PIXEL, [

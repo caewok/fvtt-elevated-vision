@@ -60,7 +60,7 @@ export class ShadowShader extends PIXI.Shader {
   uniform float EV_wallDistances[MAX_NUM_WALLS];
 
   // Defined constants
-  const vec2 center = vec2(0.5);
+  const vec3 center = vec2(0.5);
 
   void main() {
     if ( texture2D(sampler, vTextureCoord).a <= alphaThreshold ) {
@@ -78,6 +78,8 @@ export class ShadowShader extends PIXI.Shader {
         wallsToProcess = 0;
     }
 
+    vec3 sourceLoc = vec3(center.x, center.y, EV_sourceElevation);
+    vec3 pixelLoc = vec3(vUvs.x, vUvs.y, pixelCanvasElevation);
     for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
       if ( i >= wallsToProcess ) break;
 
@@ -85,10 +87,8 @@ export class ShadowShader extends PIXI.Shader {
         EV_wallCoords[i],
         EV_wallElevations[i],
         EV_wallDistances[i],
-        EV_sourceElevation,
-        center,
-        pixelCanvasElevation,
-        vUvs,
+        sourceLoc,
+        pixelLoc,
         percentDistanceFromWall
       );
 
