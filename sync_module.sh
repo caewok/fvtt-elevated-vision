@@ -3,4 +3,4 @@
 rsync -avzh --delete \
 	--exclude "*.sh" \
 	--exclude "module.json" \
-	* /Users/rhead/FoundryV10/foundrydata/Data/modules/elevatedvision/ 
+	* /Users/rhead/foundrydata/Data/modules/elevatedvision/ 

@@ -1,8 +1,8 @@
 /* globals
 canvas,
 CONST,
-Ray,
-PIXI
+PIXI,
+CONFIG
 */
 "use strict";
 
@@ -12,6 +12,7 @@ import { Shadow, ShadowProjection } from "./geometry/Shadow.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Plane } from "./geometry/3d/Plane.js";
 import { getSetting, SETTINGS } from "./settings.js";
+import { isLimitedWallForSource, replaceTerrainWall } from "./terrain_walls.js";
 
 /**
  * Wrap ClockwisePolygonSweep.prototype._identifyEdges
@@ -33,7 +34,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   // From ClockwisePolygonSweep.prototype.getWalls
   const bounds = this._defineBoundingBox();
-  const collisionTest = (o, rect) => this._testShadowWallInclusion(o.t, rect);
+  const collisionTest = (o, rect) => originalTestWallInclusion.call(this, o.t, rect);
   let walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
 
   // Filter out walls that are below ground if the observer is above ground
@@ -42,37 +43,88 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   // Or measure as ground elevation directly above/under the wall?
   const rect = new PIXI.Rectangle(source.x - 1, source.y - 1, 2, 2);
   const tiles = canvas.tiles.quadtree.getObjects(rect);
-  walls = walls.filter(w => !isWallUnderneathTile(source, w, tiles));
+  walls = walls.filter(w => w.bottomZ <= sourceZ && !isWallUnderneathTile(source, w, tiles) );
 
   if ( sourceZ >= 0 ) walls = walls.filter(w => w.topZ >= 0);
-  else walls = walls.filter(w => w.bottomZ <= 0); // Source below ground; drop tiles above
+  else walls = walls.filter(w => w.bottomZ < 0); // Source below ground; drop tiles above
 
-  this.wallsBelowSource = new Set(walls); // Top of edge below source top
+  /*
+  1. Terrain walls
+  If a limited-height wall is blocking a terrain wall of any height,
+  that will not be recorded by the LOS sweep b/c the limited-height wall is removed by Wall Height.
 
-  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
+  But if the terrain wall is completely above the source, we don't care about it.
+  Terrain walls completely below 0 can be ignored if the source is above 0.
 
-  // TODO: Fix below b/c POLYGONS is only algorithm left.
+  2. Limited-height walls
+  Limited-height walls are removed by Wall Height and shadows must be constructed separately.
+  But if the limited-height wall is completely above the source, we don't care about it.
+  Limited-height walls completely below 0 can be ignored if the source is above 0.
+
+  */
+
+  const terrainWalls = [];
+  const heightWalls = [];
+  walls.forEach(w => {
+    // Keep all terrain walls
+    if ( isLimitedWallForSource(w, source) ) terrainWalls.push(w);
+
+    // Only keep limited-height walls
+    else if ( isFinite(w.bottomZ) || isFinite(w.topZ) ) heightWalls.push(w);
+  });
+
+  this._elevatedvision ??= {};
+  this._elevatedvision.shadows = [];
+  this._elevatedvision.combinedShadows = [];
+  this._elevatedvision.wallPointsBelowSource = [];
+  this._elevatedvision.terrainWallsBelowSource = terrainWalls;
+  this._elevatedvision.heightWallsBelowSource = heightWalls;
+
+  const terrainWallPoints = [];
+  for ( const terrainWall of terrainWalls ) {
+    const ptsArr = replaceTerrainWall(terrainWall, source);
+    if ( !ptsArr.length ) continue;
+
+    for ( const pts of ptsArr ) {
+      // At least one point must be below the source and above 0 if source is above 0
+      const keepPoints = pts.some(pt => pt.z < sourceZ) && sourceZ > 0
+        ? pts.some(pt => pt.z > 0)
+        : pts.some(pt => pt.z < 0);
+
+      if ( keepPoints ) terrainWallPoints.push(pts);
+    }
+  }
+
+  // Add in the height wall points
+  this._elevatedvision.wallPointsBelowSource = terrainWallPoints;
+  for ( const heightWall of heightWalls ) {
+    const pts = Point3d.fromWall(heightWall);
+    const out = [pts.A.top, pts.B.top, pts.B.bottom, pts.A.bottom];
+    out.wall = heightWall;
+    this._elevatedvision.wallPointsBelowSource.push(out);
+  }
+
+  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL
+    || !this._elevatedvision.wallPointsBelowSource.length ) return;
 
   // Construct shadows from the walls below the light source
-  // Only need to construct the combined shadows if using polygons for vision, not shader.
-  this.shadows = [];
-  this.combinedShadows = [];
-  if ( !this.wallsBelowSource.size ) return;
-
   // Store each shadow individually
-  for ( const w of this.wallsBelowSource ) {
-    const proj = this.config.source._shadowProjection
-      ?? (this.config.source._shadowProjection = new ShadowProjection(new Plane(), this.config.source));
+  this.config.source._elevatedvision ??= {};
+  this.config.source._elevatedvision.ShadowProjection ??= new ShadowProjection(new Plane(), this.config.source);
+  const proj = this.config.source._elevatedvision.ShadowProjection;
 
-    const shadowPoints = proj.constructShadowPointsForWall(w);
+  for ( const wallPoints of this._elevatedvision.wallPointsBelowSource ) {
+    // Convert to 2d points; we can simply drop z b/c we are projecting to z=0 plane.
+    const shadowPoints = proj._shadowPointsForPoints(wallPoints).map(pt => pt.to2d());
     if ( !shadowPoints.length ) continue;
-    this.shadows.push(new Shadow(shadowPoints));
+
+    this._elevatedvision.shadows.push(new Shadow(shadowPoints));
   }
-  if ( !this.shadows.length ) return;
+  if ( !this._elevatedvision.shadows.length ) return;
 
   // Combine the shadows and trim to be within the LOS
   // We want one or more LOS polygons along with non-overlapping holes.
-  this.combinedShadows = combineBoundaryPolygonWithHoles(this, this.shadows);
+  this._elevatedvision.combinedShadows = combineBoundaryPolygonWithHoles(this, this._elevatedvision.shadows);
 }
 
 /**
@@ -110,8 +162,12 @@ function isWallUnderneathTile(observer, wall, tiles) {
  * @returns {Wall[]}
  */
 export function _testShadowWallInclusionClockwisePolygonSweep(wall, bounds) {
-  // Only keep the wall if it is below the source elevation
-  if ( this.config.source.elevationZ <= wall.topZ ) return false;
+  // Only keep the wall if:
+  // - bottom is above 0 but below source elevation or
+  // - top is below source elevation
+  const elevationZ = this.config.source.elevationZ;
+  const keep = (wall.bottomZ > 0 && wall.bottomZ < elevationZ) || wall.topZ < elevationZ;
+  if ( !keep ) return false;
   return originalTestWallInclusion.call(this, wall, bounds);
 }
 

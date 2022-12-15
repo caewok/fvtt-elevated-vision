@@ -365,7 +365,7 @@ export function _updateEVLightUniformsLightSource(mesh) {
   const { x, y, radius, elevationZ } = this;
   const { width, height } = canvas.dimensions;
 
-  const walls = this.los.wallsBelowSource || new Set();
+  const walls = this.los.wallPointsBelowSource || [];
 
   const center = {x, y};
   const r_inv = 1 / radius;
@@ -380,15 +380,15 @@ export function _updateEVLightUniformsLightSource(mesh) {
   let wallDistances = [];
 
   for ( const w of walls ) {
-    const a = pointCircleCoord(w.A, radius, center, r_inv);
-    const b = pointCircleCoord(w.B, radius, center, r_inv);
+    const a = pointCircleCoord(w.A.top, radius, center, r_inv);
+    const b = pointCircleCoord(w.B.top, radius, center, r_inv);
 
     // Point where line from light, perpendicular to wall, intersects
     const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center_shader);
     if ( !wallIx ) continue; // Likely a and b not proper wall
     const wallOriginDist = PIXI.Point.distanceBetween(center_shader, wallIx);
     wallDistances.push(wallOriginDist);
-    wallElevations.push(w.topZ * 0.5 * r_inv);
+    wallElevations.push(w.A.top.z * 0.5 * r_inv);
 
     wallCoords.push(a.x, a.y, b.x, b.y);
   }

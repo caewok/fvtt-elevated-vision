@@ -41,7 +41,7 @@ export function refreshCanvasVisibilityPolygons({forceUpdateFog=false}={}) {
   // Draw field-of-vision for lighting sources
   for ( let lightSource of canvas.effects.lightSources ) {
     if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
-    const shadows = lightSource.los.combinedShadows || [];
+    const shadows = lightSource.los._elevatedvision.combinedShadows || [];
     if ( shadows.length ) {
       drawPolygonWithHoles(shadows, { graphics: vision.fov });
     } else {
@@ -60,7 +60,7 @@ export function refreshCanvasVisibilityPolygons({forceUpdateFog=false}={}) {
   // Draw sight-based visibility for each vision source
   for ( let visionSource of canvas.effects.visionSources ) {
     visionSource.active = true;
-    const shadows = visionSource.los.combinedShadows || [];
+    const shadows = visionSource.los._elevatedvision.combinedShadows || [];
 
     // Draw FOV polygon or provide some baseline visibility of the token's space
     if ( visionSource.radius > 0 ) {
@@ -106,7 +106,7 @@ export function createVisionCanvasVisionMaskPV(wrapper) {
       || lightSource.disabled
       || lightSource instanceof GlobalLightSource ) continue;
 
-    const shadows = lightSource.los.combinedShadows || [];
+    const shadows = lightSource.los._elevatedvision.combinedShadows || [];
     if ( shadows.length ) {
       drawPolygonWithHolesPV(shadows, { graphics: vision.fov });
 
@@ -117,7 +117,7 @@ export function createVisionCanvasVisionMaskPV(wrapper) {
   }
 
   for ( let visionSource of canvas.effects.visionSources ) {
-    const shadows = visionSource.los.combinedShadows || [];
+    const shadows = visionSource.los._elevatedvision.combinedShadows || [];
     if ( shadows.length ) {
       drawPolygonWithHolesPV(shadows, { graphics: vision.los });
     }

@@ -1,3 +1,12 @@
+## 0.3.0
+Use a shared geometry submodule.
+
+Fix for Flying Tokens spamming the chat log when a token move does not result in an elevation change (issue #32).
+
+Create a setting option to disable all light and token vision shadows (issue #30). Improvements to the WebGL shadow setting to avoid unnecessary polygon shadow computation.
+
+
+
 ## 0.2.1
 Potential fix for issue #29 (canvas freeze re "rangeBottom")
 

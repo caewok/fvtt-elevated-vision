@@ -196,13 +196,13 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
 
     // Construct wall data
     const center = {x, y};
-    const walls = source.los.wallsBelowSource || new Set();
+    const walls = source.los.wallPointsBelowSource || [];
     let wallCoords = [];
     let wallElevations = [];
     let wallDistances = [];
     for ( const w of walls ) {
-      const a = w.A;
-      const b = w.B;
+      const a = w.A.top;
+      const b = w.B.top;
 
       // Point where line from light, perpendicular to wall, intersects
       const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center);
@@ -210,7 +210,7 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
 
       const wallOriginDist = PIXI.Point.distanceBetween(center, wallIx);
       wallDistances.push(wallOriginDist);
-      wallElevations.push(w.topZ);
+      wallElevations.push(w.A.top.z);
       wallCoords.push(a.x, a.y, b.x, b.y);
     }
 
