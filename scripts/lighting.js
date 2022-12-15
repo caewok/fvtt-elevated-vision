@@ -409,7 +409,7 @@ export function _updateEVLightUniformsLightSource(mesh) {
   const { x, y, radius, elevationZ } = this;
   const { width, height } = canvas.dimensions;
 
-  const walls = this.los.wallPointsBelowSource || [];
+  const wallPointsArr = this.los._elevatedvision.wallPointsBelowSource || [];
 
   const center = {x, y};
   const r_inv = 1 / radius;
@@ -423,7 +423,24 @@ export function _updateEVLightUniformsLightSource(mesh) {
   let wallElevations = [];
   let wallDistances = [];
 
-  for ( const w of walls ) {
+  for ( const wallPoints of wallPointsArr ) {
+    if ( wallPoints.length !== 4 ) {
+      console.warn(`_updateEVLightUniformsLightSource|${wallPoints.length} wallPoints from wall ${wallPoints.wall.id}`);
+    }
+
+    // Point where line from light, perpendicular to wall, intersects
+    // (Can either use the wallPoints.wall, and then transform coordinates, or
+    // create a plane from transformed wall coordinates)
+
+    const wallPlane = Plane.fromWall(wall);
+    const wallIx = wallPlane.lineIntersection(center, wallPlane.normal);
+    if ( !wallIx ) continue; // Should not happen
+
+    const wallOriginDist = PIXI.Point.distanceBetween(center, wallIx);
+    wallDistances.push(circleCoord(wallOriginDist, radius, center, r_inv))
+
+
+
     const a = pointCircleCoord(w.A.top, radius, center, r_inv);
     const b = pointCircleCoord(w.B.top, radius, center, r_inv);
 
