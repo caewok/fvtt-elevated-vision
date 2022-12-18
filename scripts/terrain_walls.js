@@ -158,11 +158,11 @@ export function replaceTerrainWall(terrainWallPoints, terrainWallPointsArr, sour
   if ( !blockingWallPointsArr.length ) return [];
 
   const planeTW = Plane.fromWall(terrainWallPoints.wall);
-  const proj = new ShadowProjection(planeTW, source);
+  const projTW = new ShadowProjection(planeTW, source);
 
   const replacements= [];
   for ( const blockingWallPoints of blockingWallPointsArr ) {
-    const newWallPoints = trimTerrainWall2(terrainWallPoints, blockingWallPoints, proj);
+    const newWallPoints = trimTerrainWall2(terrainWallPoints, blockingWallPoints, projTW);
     if ( newWallPoints.length ) {
       newWallPoints.wall = blockingWallPoints.wall;
       replacements.push(newWallPoints);
@@ -235,17 +235,19 @@ function trimTerrainWall2(terrainWallPoints, blockingWallPoints, proj) {
     if ( isASourceSide ^ isBSourceSide ) {
       // add the plane intersection point
       const ix = proj.plane.lineSegmentIntersection(A, B);
-      ixPts.push(ix);
+      if ( ix ) ixPts.push(ix);
     }
 
     if ( isBSourceSide ) {
       const ix = proj._intersectionWith(B);
-      ixPts.push(ix);
+      if ( ix ) ixPts.push(ix);
     }
 
     A = B;
     isASourceSide = isBSourceSide;
   }
+
+  if ( ixPts.length < 3 ) return [];
 
   // Round before getting the intersection
   const PLACES = 4;

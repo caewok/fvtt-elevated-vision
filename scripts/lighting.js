@@ -30,7 +30,7 @@ https://ptb.discord.com/channels/732325252788387980/734082399453052938/100695808
 */
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
-const MAX_NUM_WALLS = 100;
+const MAX_NUM_WALLS = 200; // Now actually number of wall endpoints, where each wall has 2
 
 const FN_ORIENT2D =
 `
@@ -79,6 +79,115 @@ const FN_PERPENDICULAR_POINT =
 
 /**
  * GLSL
+ * Adapted from https://github.com/mourner/robust-predicates/blob/main/src/orient3d.js
+ * @in {vec3} a   Point in the plane
+ * @in {vec3} b   Point in the plane
+ * @in {vec3} c   Point in the plane
+ * @in {vec3} d   Point to test
+ * @out {float}
+ *   - Returns a positive value if the point d lies above the plane passing through a, b, and c,
+ *     meaning that a, b, and c appear in counterclockwise order when viewed from d.
+ *   - Returns a negative value if d lies below the plane.
+ *   - Returns zero if the points are coplanar.
+ */
+const FN_ORIENT3D =
+`
+  vec3 ad = a - d;
+  vec3 bd = b - d;
+  vec3 cd = c - d;
+
+  return (ad.x * ((bd.y * cd.z) - (bd.z * cd.y)))
+    + (bd.x * ((cd.y * ad.z) - (cd.z * ad.y)))
+    + (cd.x * ((ad.y * bd.z) - (ad.z * bd.y)));
+`;
+
+/**
+ * GLSL
+ * Quickly test whether the line segment AB intersects with a plane.
+ * This method does not determine the point of intersection, for that use lineLineIntersection.
+ * Each Point3d should have {x, y, z} coordinates.
+ *
+ * @in {vec3} a   The first endpoint of segment AB
+ * @in {vec3} b   The second endpoint of segment AB
+ * @in {vec3} c   The first point defining the plane
+ * @in {vec3} d   The second point defining the plane
+ * @in {vec3} e   The third point defining the plane.
+ *
+ * @out {bool} Does the line segment intersect the plane?
+ * Note that if the segment is part of the plane, this returns false.
+ */
+const FN_PLANE_LINE_SEGMENT_INTERSECTS =
+`
+  float xa = orient3d(a, c, d, e);
+  float xb = orient3d(b, c, d, e);
+  return (xa * xb) <= 0.0;
+`;
+
+/**
+ * GLSL
+ * Line segment-plane intersection
+ * @in {vec3} a  First point on plane
+ * @in {vec3} b  Second point on plane
+ * @in {vec3} c  Third point on plane
+ * @in {vec3} p0   First endpoint of line segment
+ * @in {vec3} p1   Second endpoint of line segment
+ * @inout {bool} intersects  Does the line intersect the plane?
+ * @out {vec3}
+ */
+const FN_PLANE_LINE_INTERSECTION =
+`
+  vec3 vAB = b - a;
+  vec3 vAC = c - a;
+  vec3 n = normalize(cross(vAB, vAC));
+  vec3 vLine = p1 - p0;
+
+  float dotNL = dot(n, vLine);
+  if ( dotNL == 0.0 ) {
+    intersects = false;
+    return vec3(0.0);
+  }
+
+  intersects = true;
+
+  vec3 w = p0 - a;
+  float fac = dot(-n, w) / dotNL;
+  vec3 u = vLine * fac;
+  return p0 + u;
+`;
+
+/**
+ * GLSL
+ * Matrix to project points onto plane as a shadow
+ * // http://www.it.hiof.no/~borres/j3d/explain/shadow/p-shadow.html
+ * Same as Shadow._calculateShadowMatrix
+ * @in {vec3} p0  First point on plane
+ * @in {vec3} p1  Second point on plane
+ * @in {vec3} p2  Third point on plane
+ * @in {vec3} s   The viewer origin(light, vision, etc.)
+ * @out {mat4}
+ */
+const FN_CALCULATE_SHADOW_MATRIX =
+`
+  // First, get the plane equation
+  vec3 vAB = b - a;
+  vec3 vAC = c - a;
+  vec3 n = normalize(cross(vAB, vAC));
+  vec4 P = vec4(n.xyz, -dot(n, a));
+
+  float dot = dot(P.xyz, s.xyz) + P.w
+
+  // Defined by columns
+  return mat4(
+    dot - (s.x * P.x), -(s.x * P.y), -(s.x * P.z), -(s.x * P.w), // First column
+    -(s.y * P.x), dot - (s.y * P.y), -(s.y * P.z), -(s.y * P.w), // Second column
+    -(s.z * P.x), -(s.z * P.y), dot - (s.z * P.z), -(s.z * P.w), // Third column
+    -P.x, -P.y, -P.z, dot - P.w
+  );
+`;
+
+
+/**
+ * GLSL
  * Calculate the canvas elevation given a pixel value
  * Maps 0–1 to elevation in canvas coordinates.
  * @in {float} pixel
@@ -98,47 +207,63 @@ const FN_CANVAS_ELEVATION_FROM_PIXEL =
 /**
  * GLSL
  * Determine if a given location from a wall is in shadow or not.
- * @in {vec4} wall
- * @in {float} wallElevation
- * @in {float} wallDistance
+ * @in {vec3} wallTL
+ * @in {vec3} wallBR
  * @in {vec3} sourceLocation
  * @in {vec3} pixelLocation
- * @out {float} percentDistanceFromWall
- * @returns {boolean} True if location is in shadow of this wall
+ * @out {boolean} True if location is in shadow of this wall
  */
+
+/* Methodology:
+A point is in shadow if the line between it and the source intersects:
+- Any wall or
+- 2 terrain walls.
+
+Note: Must ensure that the intersection point lies between the source and the point.
+
+Moving from the point toward the source, the first wall (or 2nd terrain wall) is "blocking."
+The distance from the blocking wall to the point is the distance from the wall.
+The furthest shadow point is the part of the shadow furthest from the wall.
+Percent distance is how far a given point is from the wall, divided by the maximum distance
+it could be if it were at the edge of the shadow.
+*/
 const FN_LOCATION_IN_WALL_SHADOW =
 `
-  percentDistanceFromWall = 0.0; // Set a default value when returning early.
-
   // If the wall is higher than the light, skip. Should not occur.
-  if ( sourceLocation.z <= wallElevation ) return false;
+  if ( sourceLocation.z <= wallBR.z ) return false;
 
   // If the pixel is above the wall, skip.
-  if ( pixelLocation.z >= wallElevation ) return false;
+  if ( pixelLocation.z >= wallTL.z ) return false;
 
-  // If the wall does not intersect the line between the center and this point, no shadow here.
-  if ( !lineSegmentIntersects(pixelLocation.xy, sourceLocation.xy, wall.xy, wall.zw) ) return false;
+  vec3 Atop = wallTL;
+  vec3 Abottom = vec3(wallTL.xy, wallBR.z);
+  vec3 Btop = vec3(wallBR.xy, wallTL.z);
+  vec3 Bbottom = wallBR;
 
-  // Distance from wall (as line) to this location
-  vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, pixelLocation.xy);
-  float distWP = distance(pixelLocation.xy, wallIxPoint);
-
-  // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
-  // atan(y, x) equivalent to JS Math.atan2(y, x)
-  float adjWe = wallElevation - pixelLocation.z;
-  float adjSourceElevation = sourceLocation.z - pixelLocation.z;
-  float theta = atan((adjSourceElevation - adjWe) /  wallDistance);
-
-  // Distance from center/origin to furthest part of shadow perpendicular to wall
-  float distOV = adjSourceElevation / tan(theta);
-  float maxDistWP = distOV - wallDistance;
-
-  if ( distWP < maxDistWP ) {
-    // Current location is within shadow of the wall
-    percentDistanceFromWall = distWP / maxDistWP;
-    return true;
+  // If point and source on same side of plane, then no intersection
+  if ( !planeLineSegmentIntersects(sourceLocation, pixelLocation, Atop, Abottom, Btop) ) {
+    return false;
   }
-  return false;
+
+  // Locate the intersection point with this wall.
+  bool ixIntersects = false;
+  vec3 ix = planeLineIntersection(Atop, Abottom, Btop, sourceLocation, pixelLocation, ixIntersects);
+  if ( !ixIntersects ) return false; // Just in case
+
+  // Confirm the intersection is within the wall bounds.
+  // Because walls are vertical rectangles, first do an easy check that ix is within height
+  if ( ix.z < Bbottom.z || ix.z > Btop.z ) return false;
+
+  // check that ix.xy is within the line segment XY of the wall
+  // See https://lucidar.me/en/mathematics/check-if-a-point-belongs-on-a-line-segment
+  vec2 vAB = Btop.xy - Atop.xy;
+  vec2 vAC = ix.xy - Atop.xy;
+
+  float dotABAC = dot(vAB, vAC);
+  float dotABAB = dot(vAB, vAB);
+  if ( dotABAC < 0.0 || dotABAC > dotABAB ) return false;
+
+  return true;
 `;
 
 /**
@@ -180,7 +305,8 @@ float canvasElevationFromPixel(in float pixel, in vec4 EV_elevationResolution) {
 
 // Determine if a given location from a wall is in shadow or not.
 bool locationInWallShadow(
-  in vec4 wall,
+  in vec3 wallA,
+  in vec3 wallB,
   in float wallElevation,
   in float wallDistance, // distance from source location to wall
   in float sourceElevation,
@@ -197,42 +323,84 @@ const DEPTH_CALCULATION =
 `
 float depth = smoothstep(0.0, 1.0, vDepth);
 vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
-int wallsToProcess = EV_numWalls;
+int numWallEndpoints = EV_numWalls * 2;
+int numHeightWallEndpoints = (EV_numWalls - EV_numTerrainWalls) * 2;
 vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
 
-float percentDistanceFromWall;
 float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
 if ( pixelElevation > EV_lightElevation ) {
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
-  wallsToProcess = 0;
-  inShadow = EV_isVision;
+  numWallEndpoints = 0;
+  inShadow = EV_isVision; // inShadow is a global
 }
 
 vec3 sourceLoc = vec3(0.5, 0.5, EV_lightElevation);
 vec3 pixelLoc = vec3(vUvs.x, vUvs.y, pixelElevation);
 
-for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
-  if ( i >= wallsToProcess ) break;
+for ( int i = 0; i < MAX_NUM_WALLS; i += 2 ) {
+  if ( i >= numWallEndpoints ) break;
 
-  bool thisWallInShadow = locationInWallShadow(
-    EV_wallCoords[i],
-    EV_wallElevations[i],
-    EV_wallDistances[i],
+  vec3 wallTL = EV_wallCoords[i];
+  vec3 wallBR = EV_wallCoords[i + 1];
+
+  bool thisWallShadows = locationInWallShadow(
+    wallTL,
+    wallBR,
     sourceLoc,
-    pixelLoc,
-    percentDistanceFromWall
+    pixelLoc
   );
 
-  if ( thisWallInShadow ) {
-    // Current location is within shadow of the wall
-    // Don't break out of loop; could be more than one wall casting shadow on this point.
-    // For now, use the closest shadow for depth.
+//   if ( distance(pixelLoc.xy, wallBR.xy) < 0.1 && thisWallShadows ) {
+//     inShadow = true;
+//     break;
+//   }
+
+  if ( !thisWallShadows ) continue;
+
+  bool isTerrainWall = i >= numHeightWallEndpoints;
+
+
+
+  if ( isTerrainWall ) {
+    // Check each terrain wall for a shadow.
+    // We can ignore the height walls, b/c shadows from height wall --> terrain wall --> pt
+    // are covered by the height wall.
+    thisWallShadows = false; // Assume none shadow until proven otherwise
+
+    for ( int j = 0; j < MAX_NUM_WALLS; j += 2 ) {
+      if ( j >= numWallEndpoints ) break;
+      if ( j < numHeightWallEndpoints ) continue;
+      vec3 terrainTL = EV_wallCoords[j];
+      vec3 terrainBR = EV_wallCoords[j + 1];
+
+      if ( terrainTL == wallTL && terrainBR == wallBR ) continue;
+
+      bool thisSecondaryWallShadows = locationInWallShadow(
+        terrainTL,
+        terrainBR,
+        sourceLoc,
+        pixelLoc
+      );
+
+      if ( thisSecondaryWallShadows ) {
+        thisWallShadows = true;
+        break;
+      }
+    }
+  }
+
+  if ( thisWallShadows ) {
     inShadow = true;
-    depth = min(depth, percentDistanceFromWall);
+    break;
   }
 }
+
+if ( inShadow ) {
+  depth = min(depth, 0.1);
+}
+
 `;
 
 const FRAG_COLOR =
@@ -246,9 +414,8 @@ function addShadowCode(source) {
       .setSource(source)
 
       .addUniform("EV_numWalls", "int")
-      .addUniform("EV_wallCoords[MAX_NUM_WALLS]", "vec4")
-      .addUniform("EV_wallElevations[MAX_NUM_WALLS]", "float")
-      .addUniform("EV_wallDistances[MAX_NUM_WALLS]", "float")
+      .addUniform("EV_numTerrainWalls", "int")
+      .addUniform("EV_wallCoords[MAX_NUM_WALLS]", "vec3")
       .addUniform("EV_lightElevation", "float")
       .addUniform("EV_isVision", "bool")
       .addUniform("EV_elevationSampler", "sampler2D")
@@ -258,12 +425,25 @@ function addShadowCode(source) {
 
       // Functions must be in reverse-order of dependency.
       .addFunction("locationInWallShadow", "bool", FN_LOCATION_IN_WALL_SHADOW, [
-        { qualifier: "in", type: "vec4", name: "wall" },
-        { qualifier: "in", type: "float", name: "wallElevation" },
-        { qualifier: "in", type: "float", name: "wallDistance" },
+        { qualifier: "in", type: "vec3", name: "wallTL" },
+        { qualifier: "in", type: "vec3", name: "wallBR" },
         { qualifier: "in", type: "vec3", name: "sourceLocation" },
-        { qualifier: "in", type: "vec3", name: "pixelLocation" },
-        { qualifier: "out", type: "float", name: "percentDistanceFromWall" }
+        { qualifier: "in", type: "vec3", name: "pixelLocation" }
+      ])
+      .addFunction("planeLineIntersection", "vec3", FN_PLANE_LINE_INTERSECTION, [
+        { qualifier: "in", type: "vec3", name: "a" },
+        { qualifier: "in", type: "vec3", name: "b" },
+        { qualifier: "in", type: "vec3", name: "c" },
+        { qualifier: "in", type: "vec3", name: "p0" },
+        { qualifier: "in", type: "vec3", name: "p1" },
+        { qualifier: "out", type: "bool", name: "intersects" }
+      ])
+      .addFunction("planeLineSegmentIntersects", "bool", FN_PLANE_LINE_SEGMENT_INTERSECTS, [
+        { qualifier: "in", type: "vec3", name: "a" },
+        { qualifier: "in", type: "vec3", name: "b" },
+        { qualifier: "in", type: "vec3", name: "c" },
+        { qualifier: "in", type: "vec3", name: "d" },
+        { qualifier: "in", type: "vec3", name: "e" }
       ])
       .addFunction("canvasElevationFromPixel", "float", FN_CANVAS_ELEVATION_FROM_PIXEL, [
         { qualifier: "in", type: "float", name: "pixel" },
@@ -279,6 +459,12 @@ function addShadowCode(source) {
         { qualifier: "in", type: "vec2", name: "b" },
         { qualifier: "in", type: "vec2", name: "c" },
         { qualifier: "in", type: "vec2", name: "d" }
+      ])
+      .addFunction("orient3d", "float", FN_ORIENT3D, [
+        { qualifier: "in", type: "vec3", name: "a" },
+        { qualifier: "in", type: "vec3", name: "b" },
+        { qualifier: "in", type: "vec3", name: "c" },
+        { qualifier: "in", type: "vec3", name: "d" }
       ])
       .addFunction("orient2d", "float", FN_ORIENT2D, [
         { qualifier: "in", type: "vec2", name: "a" },
@@ -328,10 +514,9 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
 
   const shader = wrapped(...args);
   shader.uniforms.EV_numWalls = 0;
-  shader.uniforms.EV_wallElevations = new Float32Array(MAX_NUM_WALLS);
-  shader.uniforms.EV_wallCoords = new Float32Array(MAX_NUM_WALLS*4);
+  shader.uniforms.EV_numTerrainWalls = 0;
+  shader.uniforms.EV_wallCoords = new Float32Array(MAX_NUM_WALLS*6);
   shader.uniforms.EV_lightElevation = 0.5;
-  shader.uniforms.EV_wallDistances = new Float32Array(MAX_NUM_WALLS);
   shader.uniforms.EV_isVision = false;
   shader.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture ?? PIXI.Texture.EMPTY;
 
@@ -409,7 +594,8 @@ export function _updateEVLightUniformsLightSource(mesh) {
   const { x, y, radius, elevationZ } = this;
   const { width, height } = canvas.dimensions;
 
-  const wallPointsArr = this.los._elevatedvision.wallPointsBelowSource || [];
+  const terrainWallPointsArr = this.los._elevatedvision?.terrainWallPointsArr ?? [];
+  const heightWallPointsArr = this.los._elevatedvision?.heightWallPointsArr ?? [];
 
   const center = {x, y};
   const r_inv = 1 / radius;
@@ -418,51 +604,28 @@ export function _updateEVLightUniformsLightSource(mesh) {
   const u = shader.uniforms;
   u.EV_lightElevation = elevationZ * 0.5 * r_inv;
 
-  const center_shader = {x: 0.5, y: 0.5};
   let wallCoords = [];
-  let wallElevations = [];
-  let wallDistances = [];
 
+  // Important: height walls go first!
+  // (b/c the shader may never need to test terrain walls for some points)
+  const wallPointsArr = [...heightWallPointsArr, ...terrainWallPointsArr];
   for ( const wallPoints of wallPointsArr ) {
-    if ( wallPoints.length !== 4 ) {
-      console.warn(`_updateEVLightUniformsLightSource|${wallPoints.length} wallPoints from wall ${wallPoints.wall.id}`);
-    }
+    // Because walls are rectangular, we can pass the top-left and bottom-right corners
+    const tl = pointCircleCoord(wallPoints.A.top, radius, center, r_inv);
+    const br = pointCircleCoord(wallPoints.B.bottom, radius, center, r_inv);
 
-    // Point where line from light, perpendicular to wall, intersects
-    // (Can either use the wallPoints.wall, and then transform coordinates, or
-    // create a plane from transformed wall coordinates)
-
-    const wallPlane = Plane.fromWall(wall);
-    const wallIx = wallPlane.lineIntersection(center, wallPlane.normal);
-    if ( !wallIx ) continue; // Should not happen
-
-    const wallOriginDist = PIXI.Point.distanceBetween(center, wallIx);
-    wallDistances.push(circleCoord(wallOriginDist, radius, center, r_inv))
-
-
-
-    const a = pointCircleCoord(w.A.top, radius, center, r_inv);
-    const b = pointCircleCoord(w.B.top, radius, center, r_inv);
-
-    // Point where line from light, perpendicular to wall, intersects
-    const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center_shader);
-    if ( !wallIx ) continue; // Likely a and b not proper wall
-    const wallOriginDist = PIXI.Point.distanceBetween(center_shader, wallIx);
-    wallDistances.push(wallOriginDist);
-    wallElevations.push(w.A.top.z * 0.5 * r_inv);
-
-    wallCoords.push(a.x, a.y, b.x, b.y);
+    wallCoords.push(
+      tl.x, tl.y, tl.z,
+      br.x, br.y, br.z
+    );
   }
 
-  u.EV_numWalls = wallElevations.length;
+  u.EV_numWalls = wallPointsArr.length;
+  u.EV_numTerrainWalls = terrainWallPointsArr.length;
 
-  if ( !wallCoords.length ) wallCoords = new Float32Array(MAX_NUM_WALLS*4);
-  if ( !wallElevations.length ) wallElevations = new Float32Array(MAX_NUM_WALLS);
-  if ( !wallDistances.length ) wallDistances = new Float32Array(MAX_NUM_WALLS);
+  if ( !wallCoords.length ) wallCoords = new Float32Array(MAX_NUM_WALLS*6);
 
   u.EV_wallCoords = wallCoords;
-  u.EV_wallElevations = wallElevations;
-  u.EV_wallDistances = wallDistances;
   u.EV_elevationSampler = canvas.elevation?._elevationTexture;
 
   // Screen-space to local coords:
@@ -516,10 +679,12 @@ export function _updateEVLightUniformsLightSource(mesh) {
  * @param {number} r_inv  Inverse of the radius. Optional; for repeated calcs.
  * @returns {Point}
  */
-export function pointCircleCoord(point, r, center, r_inv = 1 / r) {
+export function pointCircleCoord(point, r, center = {}, r_inv = 1 / r) {
+
   return {
     x: circleCoord(point.x, r, center.x, r_inv),
-    y: circleCoord(point.y, r, center.y, r_inv)
+    y: circleCoord(point.y, r, center.y, r_inv),
+    z: point.z * 0.5 * r_inv
   };
 }
 
