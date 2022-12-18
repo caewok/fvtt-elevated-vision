@@ -13,8 +13,8 @@ for ( const fn of GLSL.FUNCTIONS ) {
 
 export let UNIFORMS = "";
 for ( const uniform of GLSL.UNIFORMS ) {
-  const { name, type } = uniform;
-  UNIFORMS += `uniform ${type} ${name};\n`;
+  const { name, type, array } = uniform;
+  UNIFORMS += `uniform ${type} ${name}${array};\n`;
 }
 
 
@@ -65,18 +65,24 @@ export class ShadowShader extends PIXI.Shader {
       discard;
     }
 
+    bool inShadow = false;
+
     // Pull the pixel elevation from the Elevated Vision elevation texture
     vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
     float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
     vec3 pixelLocation = vec3(EV_pixelXY.x, EV_pixelXY.y, pixelElevation);
 
-    bool inShadow = pixelInShadow(
-      pixelLocation,
-      EV_sourceLocation,
-      EV_wallCoords,
-      EV_numWalls,
-      EV_numTerrainWalls
-    );
+    if ( pixelElevation > EV_sourceLocation.z ) {
+      inShadow = true;
+    } else {
+      inShadow = pixelInShadow(
+        pixelLocation,
+        EV_sourceLocation,
+        EV_wallCoords,
+        EV_numWalls,
+        EV_numTerrainWalls
+      );
+    }
 
     if ( inShadow ) {
       discard;
@@ -93,12 +99,12 @@ export class ShadowShader extends PIXI.Shader {
     depthElevation: 0
   };
 
-  static _program;
+  static #program;
 
   static create(defaultUniforms = {}) {
-    const program = this._program ??= PIXI.Program.from(
-      this.vertexShader,
-      this.fragmentShader
+    const program = this.#program ??= PIXI.Program.from(
+      ShadowShader.vertexShader,
+      ShadowShader.fragmentShader
     );
 
     for ( const uniform of GLSL.UNIFORMS ) {

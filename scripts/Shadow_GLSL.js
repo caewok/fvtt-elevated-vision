@@ -41,7 +41,8 @@ export const GLSL = {
 GLSL.UNIFORMS.push({
   name: "EV_numWalls",
   type: "int",
-  initial: 0
+  initial: 0,
+  array: ""
 });
 
 // Number of terrain walls passed to the shader
@@ -49,56 +50,64 @@ GLSL.UNIFORMS.push({
 GLSL.UNIFORMS.push({
   name: "EV_numTerrainWalls",
   type: "int",
-  initial: 0
+  initial: 0,
+  array: ""
 });
 
 // Top left and bottom right 3d wall coordinates
 GLSL.UNIFORMS.push({
   name: "EV_wallCoords",
-  type: `vec3[${MAX_NUM_WALL_ENDPOINTS}]`,
-  initial: new Float32Array(MAX_NUM_WALL_ENDPOINTS*6)
+  type: `vec3`,
+  initial: new Float32Array(MAX_NUM_WALL_ENDPOINTS*6),
+  array: `[${MAX_NUM_WALL_ENDPOINTS}]` // To avoid first-class array not supported errors
 });
 
 // Location of the light/vision source in 3d
 GLSL.UNIFORMS.push({
   name: "EV_sourceLocation",
   type: "vec3",
-  initial: [0.5, 0.5, 0.5]
+  initial: [0.5, 0.5, 0.5],
+  array: ""
 });
 
 // Whether this is a vision source
 GLSL.UNIFORMS.push({
   name: "EV_isVision",
   type: "bool",
-  initial: false
+  initial: false,
+  array: ""
 });
 
 // Texture of elevation values, set on the red channel
 GLSL.UNIFORMS.push({
   name: "EV_elevationSampler",
   type: "sampler2D",
-  initial: PIXI.Texture.EMPTY
+  initial: PIXI.Texture.EMPTY,
+  array: ""
 });
 
 // Transform from global to light space
 GLSL.UNIFORMS.push({
   name: "EV_transform",
   type: "vec4",
-  initial: [1, 1, 1, 1]
+  initial: [1, 1, 1, 1],
+  array: ""
 });
 
 // Parameters to transform elevation pixel values to an elevation
 GLSL.UNIFORMS.push({
   name: "EV_elevationResolution",
   type: "vec4",
-  initial: [0, 1, 255, 1]
+  initial: [0, 1, 255, 1],
+  array: ""
 });
 
 // Whether an elevation sampler is present
 GLSL.UNIFORMS.push({
   name: "EV_hasElevationSampler",
   type: "bool",
-  initial: false
+  initial: false,
+  array: ""
 });
 
 // MARK: GLSL FUNCTIONS ---- //
@@ -492,7 +501,7 @@ fn = {};
 GLSL.FUNCTIONS.push(fn);
 
 fn.body = `
-  if ( pixelLocation.z > sourceLocation.z ) return false;
+//   if ( pixelLocation.z > sourceLocation.z ) return false;
     // If elevation at this point is above the light, then light cannot hit this pixel.
 //     depth = 0.0;
 //     numWallEndpoints = 0;

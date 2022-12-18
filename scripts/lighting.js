@@ -12,85 +12,25 @@ const DEPTH_CALCULATION =
 `
 float depth = smoothstep(0.0, 1.0, vDepth);
 vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
-int numWallEndpoints = EV_numWalls * 2;
-int numHeightWallEndpoints = (EV_numWalls - EV_numTerrainWalls) * 2;
 vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
 
 float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
+vec3 pixelLocation = vec3(vUvs.x, vUvs.y, pixelElevation);
 
-vec3 sourceLoc = EV_sourceLocation;
-vec3 pixelLoc = vec3(vUvs.x, vUvs.y, pixelElevation);
-
-if ( pixelElevation > sourceLoc.z ) {
+if ( pixelElevation > EV_sourceLocation.z ) {
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
   inShadow = EV_isVision; // isShadow is global
+
 } else {
-
-  for ( int i = 0; i < ${MAX_NUM_WALL_ENDPOINTS}; i += 2 ) {
-    if ( i >= numWallEndpoints ) break;
-
-    vec3 wallTL = EV_wallCoords[i];
-    vec3 wallBR = EV_wallCoords[i + 1];
-
-    bool thisWallShadows = locationInWallShadow(
-      wallTL,
-      wallBR,
-      sourceLoc,
-      pixelLoc
-    );
-
-  //   if ( distance(pixelLoc.xy, wallBR.xy) < 0.1 && thisWallShadows ) {
-  //     inShadow = true;
-  //     break;
-  //   }
-
-    if ( !thisWallShadows ) continue;
-
-    bool isTerrainWall = i >= numHeightWallEndpoints;
-
-    if ( isTerrainWall ) {
-      // Check each terrain wall for a shadow.
-      // We can ignore the height walls, b/c shadows from height wall --> terrain wall --> pt
-      // are covered by the height wall.
-      thisWallShadows = false; // Assume none shadow until proven otherwise
-
-      for ( int j = 0; j < ${MAX_NUM_WALL_ENDPOINTS}; j += 2 ) {
-        if ( j >= numWallEndpoints ) break;
-        if ( j < numHeightWallEndpoints ) continue;
-        vec3 terrainTL = EV_wallCoords[j];
-        vec3 terrainBR = EV_wallCoords[j + 1];
-
-        if ( terrainTL == wallTL && terrainBR == wallBR ) continue;
-
-        bool thisSecondaryWallShadows = locationInWallShadow(
-          terrainTL,
-          terrainBR,
-          sourceLoc,
-          pixelLoc
-        );
-
-        if ( thisSecondaryWallShadows ) {
-          thisWallShadows = true;
-          break;
-        }
-      }
-    }
-
-    if ( thisWallShadows ) {
-      inShadow = true;
-      break;
-    }
-  }
-
-//   inShadow = pixelInShadow(
-//     pixelLocation,
-//     EV_sourceLocation,
-//     EV_wallCoords,
-//     EV_numWalls,
-//     EV_numTerrainWalls
-//   );
+  inShadow = pixelInShadow(
+    pixelLocation,
+    EV_sourceLocation,
+    EV_wallCoords,
+    EV_numWalls,
+    EV_numTerrainWalls
+  );
 }
 if ( inShadow ) {
   depth = min(depth, 0.1);
@@ -107,12 +47,8 @@ function addShadowCode(source) {
     source = new ShaderPatcher("frag").setSource(source);
 
     for ( const uniform of GLSL.UNIFORMS ) {
-      const { name, type } = uniform;
-      if ( name === "EV_wallCoords" ) {
-        source = source.addUniform("EV_wallCoords[200]", "vec3");
-      } else {
-        source = source.addUniform(name, type);
-      }
+      const { name, type, array } = uniform;
+      source = source.addUniform(`${name}${array}`, type); // Array usually empty, sometimes, e.g. "[200]"
     }
 
     // Reverse to preserve dependency order for the functions (each new function added before)

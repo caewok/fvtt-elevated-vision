@@ -28,6 +28,28 @@ export class ShadowShaderNoRadius extends ShadowShader {
     }
   `;
 
+  static #program;
+
+  static create(defaultUniforms = {}) {
+    const program = this.#program ??= PIXI.Program.from(
+      ShadowShaderNoRadius.vertexShader,
+      ShadowShaderNoRadius.fragmentShader
+    );
+
+    for ( const uniform of UNIFORMS ) {
+      const { name, initial } = uniform;
+      defaultUniforms[name] = initial;
+    }
+
+    const uniforms = foundry.utils.mergeObject(
+      this.defaultUniforms,
+      defaultUniforms,
+      { inplace: false, insertKeys: false }
+    );
+
+    return new this(program, uniforms);
+  }
+
   updateUniforms(source) {
     updateUniformsForSource(this.uniforms, source, { useRadius: false });
   }
