@@ -12,6 +12,7 @@ import { Shadow, ShadowProjection } from "./geometry/Shadow.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Plane } from "./geometry/3d/Plane.js";
 import { getSetting, SETTINGS } from "./settings.js";
+import { isLimitedWallForSource } from "./terrain_walls.js";
 
 /**
  * Wrap ClockwisePolygonSweep.prototype._identifyEdges
@@ -51,6 +52,20 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   this._elevatedvision ??= {};
   this._elevatedvision.shadows = [];
   this._elevatedvision.combinedShadows = [];
+
+  const terrainWallPointsArr = this._elevatedvision.terrainWallPointsArr = [];
+  const heightWallPointsArr = this._elevatedvision.heightWallPointsArr = [];
+  walls.forEach(w => {
+    const isTerrain = isLimitedWallForSource(w, source)
+
+    // Only keep limited-height walls. (Infinite-height walls incorporated into LOS polygon.)
+    if ( !isTerrain && !isFinite(w.bottomZ) && !isFinite(w.topZ) ) return;
+
+    const ptsArr = isTerrain ? terrainWallPointsArr : heightWallPointsArr;
+    const pts = Point3d.fromWall(w, { finite: true });
+    pts.wall = w;
+    ptsArr.push(pts);
+  });
 
   this._elevatedvision.wallsBelowSource = new Set(walls); // Top of edge below source top
 
