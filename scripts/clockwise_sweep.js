@@ -52,14 +52,14 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   this._elevatedvision.shadows = [];
   this._elevatedvision.combinedShadows = [];
 
-  this.wallsBelowSource = new Set(walls); // Top of edge below source top
+  this._elevatedvision.wallsBelowSource = new Set(walls); // Top of edge below source top
 
   if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
 
-  if ( !this.wallsBelowSource.size ) return;
+  if ( !this._elevatedvision.wallsBelowSource.size ) return;
 
   // Store each shadow individually
-  for ( const w of this.wallsBelowSource ) {
+  for ( const w of this._elevatedvision.wallsBelowSource ) {
     const proj = this.config.source._shadowProjection
       ?? (this.config.source._shadowProjection = new ShadowProjection(new Plane(), this.config.source));
 
