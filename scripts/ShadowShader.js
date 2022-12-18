@@ -1,14 +1,22 @@
 /* globals
 PIXI,
-canvas,
 foundry
 */
 "use strict";
 
-import { FRAGMENT_FUNCTIONS, pointCircleCoord } from "./lighting.js";
+import { GLSL, updateUniformsForSource } from "./Shadow_GLSL.js";
 
-// In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
-const MAX_NUM_WALLS = 100;
+export let FRAGMENT_FUNCTIONS = "";
+for ( const fn of GLSL.FUNCTIONS ) {
+  FRAGMENT_FUNCTIONS += fn.string;
+}
+
+export let UNIFORMS = "";
+for ( const uniform of GLSL.UNIFORMS ) {
+  const { name, type } = uniform;
+  UNIFORMS += `uniform ${type} ${name};\n`;
+}
+
 
 export class ShadowShader extends PIXI.Shader {
   static vertexShader = `
@@ -18,18 +26,19 @@ export class ShadowShader extends PIXI.Shader {
   uniform mat3 textureMatrix;
   varying vec2 vTextureCoord;
 
+  ${UNIFORMS}
   // EV-specific variables
-  uniform vec4 EV_transform;
-  varying vec2 vUvs;
-  varying vec2 vSamplerUvs;
   varying vec2 EV_textureCoord;
+  varying vec2 EV_pixelXY;
 
   void main() {
     // EV-specific calcs
     vec3 tPos = translationMatrix * vec3(aVertexPosition, 1.0);
-    vUvs = aVertexPosition * 0.5 + 0.5;
+    vec2 vUvs = aVertexPosition * 0.5 + 0.5;
     EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
     // TO-DO: drop vUvs and just use aVertexPosition?
+
+    EV_pixelXY = vec2(vUvs.xy);
 
     vTextureCoord = (textureMatrix * vec3(aVertexPosition, 1.0)).xy;
     gl_Position = vec4((projectionMatrix * (translationMatrix * vec3(aVertexPosition, 1.0))).xy, 0.0, 1.0);
@@ -37,7 +46,6 @@ export class ShadowShader extends PIXI.Shader {
   `;
 
   static fragmentShader = `
-  #define MAX_NUM_WALLS ${MAX_NUM_WALLS}
 
   varying vec2 vTextureCoord;
   uniform sampler2D sampler;
@@ -48,56 +56,27 @@ export class ShadowShader extends PIXI.Shader {
 
   // EV-specific variables
   varying vec2 EV_textureCoord;
-  varying vec2 vUvs;
-  uniform sampler2D EV_elevationSampler;
-  uniform vec4 EV_elevationResolution;
-  uniform float EV_sourceElevation;
-  uniform int EV_numWalls;
+  varying vec2 EV_pixelXY;
 
-  // Wall data, in vUvs coordinate space
-  uniform vec4 EV_wallCoords[MAX_NUM_WALLS];
-  uniform float EV_wallElevations[MAX_NUM_WALLS];
-  uniform float EV_wallDistances[MAX_NUM_WALLS];
-
-  // Defined constants
-  const vec3 center = vec2(0.5);
+  ${UNIFORMS}
 
   void main() {
     if ( texture2D(sampler, vTextureCoord).a <= alphaThreshold ) {
       discard;
     }
 
+    // Pull the pixel elevation from the Elevated Vision elevation texture
     vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
-    float pixelCanvasElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
-    bool inShadow = false;
-    float percentDistanceFromWall;
-    int wallsToProcess = EV_numWalls;
+    float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
+    vec3 pixelLocation = vec3(EV_pixelXY.x, EV_pixelXY.y, pixelElevation);
 
-    if ( pixelCanvasElevation > EV_sourceElevation ) {
-        inShadow = true;
-        wallsToProcess = 0;
-    }
-
-    vec3 sourceLoc = vec3(center.x, center.y, EV_sourceElevation);
-    vec3 pixelLoc = vec3(vUvs.x, vUvs.y, pixelCanvasElevation);
-    for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
-      if ( i >= wallsToProcess ) break;
-
-      bool thisWallInShadow = locationInWallShadow(
-        EV_wallCoords[i],
-        EV_wallElevations[i],
-        EV_wallDistances[i],
-        sourceLoc,
-        pixelLoc,
-        percentDistanceFromWall
-      );
-
-      if ( thisWallInShadow ) {
-        // Current location is within shadow of this wall
-        inShadow = true;
-        break;
-      }
-    }
+    bool inShadow = pixelInShadow(
+      pixelLocation,
+      EV_sourceLocation,
+      EV_wallCoords,
+      EV_numWalls,
+      EV_numTerrainWalls
+    );
 
     if ( inShadow ) {
       discard;
@@ -114,13 +93,19 @@ export class ShadowShader extends PIXI.Shader {
     depthElevation: 0
   };
 
-  static #program;
+  static _program;
 
   static create(defaultUniforms = {}) {
-    const program = ShadowShader.#program ??= PIXI.Program.from(
-      ShadowShader.vertexShader,
-      ShadowShader.fragmentShader
+    const program = this._program ??= PIXI.Program.from(
+      this.vertexShader,
+      this.fragmentShader
     );
+
+    for ( const uniform of GLSL.UNIFORMS ) {
+      const { name, initial } = uniform;
+      defaultUniforms[name] = initial;
+    }
+
     const uniforms = foundry.utils.mergeObject(
       this.defaultUniforms,
       defaultUniforms,
@@ -179,75 +164,6 @@ export class ShadowShader extends PIXI.Shader {
   }
 
   updateUniforms(source) {
-
-    const uniforms = this.uniforms;
-
-    // Screen-space to local coords:
-    // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010914586532261909
-    // shader.uniforms.EV_canvasMatrix ??= new PIXI.Matrix();
-    // shader.uniforms.EV_canvasMatrix
-    //   .copyFrom(canvas.stage.worldTransform)
-    //   .invert()
-    //   .append(mesh.transform.worldTransform);
-
-    const { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
-    const { size, distance, width, height } = canvas.dimensions;
-    const { x, y } = source;
-
-    // To avoid a bug in PolygonMesher and because ShadowShader assumes normalized geometry
-    // based on radius, set radius to 1 if radius is 0.
-    const radius = source.radius || 1;
-
-    const r_inv = 1 / radius;
-
-    uniforms.EV_elevationSampler = canvas.elevation?._elevationTexture || PIXI.Texture.EMPTY;
-
-    // [min, step, maxPixValue, canvasMult]
-    const elevationMult = size * (1 / distance) * 0.5 * r_inv;
-    uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
-
-    // Uniforms based on source
-    uniforms.EV_sourceElevation = source.elevationZ * 0.5 * r_inv;
-
-    // Alternative version using vUvs, given that light source mesh have no rotation
-    // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010999752030171136
-
-    uniforms.EV_transform = [
-      radius * 2 / width,
-      radius * 2 / height,
-      (x - radius) / width,
-      (y - radius) / height
-    ];
-
-    // Construct wall data
-    const center = {x, y};
-    const center_shader = {x: 0.5, y: 0.5};
-    const walls = source.los.wallPointsBelowSource || [];
-    let wallCoords = [];
-    let wallElevations = [];
-    let wallDistances = [];
-    for ( const w of walls ) {
-      const a = pointCircleCoord(w.A.top, radius, center, r_inv);
-      const b = pointCircleCoord(w.B.top, radius, center, r_inv);
-
-      // Point where line from light, perpendicular to wall, intersects
-      const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center_shader);
-      if ( !wallIx ) continue; // Likely a and b not proper wall.
-
-      const wallOriginDist = PIXI.Point.distanceBetween(center_shader, wallIx);
-      wallDistances.push(wallOriginDist);
-      wallElevations.push(w.A.top.z * 0.5 * r_inv);
-      wallCoords.push(a.x, a.y, b.x, b.y);
-    }
-
-    uniforms.EV_numWalls = wallElevations.length;
-
-    if ( !wallCoords.length ) wallCoords = new Float32Array(MAX_NUM_WALLS*4);
-    if ( !wallElevations.length ) wallElevations = new Float32Array(MAX_NUM_WALLS);
-    if ( !wallDistances.length ) wallDistances = new Float32Array(MAX_NUM_WALLS);
-
-    uniforms.EV_wallCoords = wallCoords;
-    uniforms.EV_wallElevations = wallElevations;
-    uniforms.EV_wallDistances = wallDistances;
+    updateUniformsForSource(this.uniforms, source, { useRadius: true });
   }
 }
