@@ -17,14 +17,19 @@ float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevat
 
 vec3 pixelLocation = vec3(vUvs.x, vUvs.y, pixelElevation);
 
-bool inShadow = pixelInShadow(
-  pixelLocation,
-  EV_sourceLocation,
-  EV_wallCoords,
-  EV_numWalls,
-  EV_numTerrainWalls
-);
-
+if ( pixelElevation > EV_sourceLocation.z ) {
+  // If elevation at this point is above the light, then light cannot hit this pixel.
+  depth = 0.0;
+  inShadow = EV_isVision; // isShadow is global
+} else {
+  inShadow = pixelInShadow(
+    pixelLocation,
+    EV_sourceLocation,
+    EV_wallCoords,
+    EV_numWalls,
+    EV_numTerrainWalls
+  );
+}
 if ( inShadow ) {
   depth = min(depth, 0.1);
 }
@@ -40,7 +45,12 @@ function addShadowCode(source) {
     source = new ShaderPatcher("frag").setSource(source);
 
     for ( const uniform of GLSL.UNIFORMS ) {
-      source = source.addUniform(uniform.name, uniform.type);
+      const { name, type } = uniform;
+      if ( name === "EV_wallCoords" ) {
+        source = source.addUniform("EV_wallCoords[200]", "vec3");
+      } else {
+        source = source.addUniform(name, type);
+      }
     }
 
     // Reverse to preserve dependency order for the functions (each new function added before)
