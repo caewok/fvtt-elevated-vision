@@ -28,7 +28,7 @@ shader.uniforms.EV_canvasMatrix
 
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
-const MAX_NUM_WALL_ENDPOINTS = 200;
+export const MAX_NUM_WALL_ENDPOINTS = 200;
 
 export const GLSL = {
   UNIFORMS: [],
@@ -158,6 +158,43 @@ fn.definition = {
 
 fn.string = buildGLSLFunction(fn.definition);
 
+// MARK: line segment intersects
+/**
+ * GLSL
+ * Does segment AB intersect the segment CD?
+ * @in {vec2} a
+ * @in {vec2} b
+ * @in {vec2} c
+ * @in {vec2} d
+ * @returns {boolean}
+ */
+fn = {};
+GLSL.FUNCTIONS.push(fn);
+
+fn.body = `
+  float xa = orient2d(a, b, c);
+  float xb = orient2d(a, b, d);
+  if ( xa == 0.0 && xb == 0.0 ) return false;
+
+  bool xab = (xa * xb) <= 0.0;
+  bool xcd = (orient2d(c, d, a) * orient2d(c, d, b)) <= 0.0;
+  return xab && xcd;
+`;
+
+fn.definition = {
+  name: "lineSegmentIntersects",
+  body: fn.body,
+  returnType: "bool",
+  params: [
+    { qualifier: "in", type: "vec2", name: "a" },
+    { qualifier: "in", type: "vec2", name: "b" },
+    { qualifier: "in", type: "vec2", name: "c" },
+    { qualifier: "in", type: "vec2", name: "d" }
+  ]
+};
+
+fn.string = buildGLSLFunction(fn.definition);
+
 // MARK: perpendicular point
 /**
  * GLSL
@@ -275,47 +312,10 @@ fn.definition = {
 
 fn.string = buildGLSLFunction(fn.definition);
 
-// MARK: line segment intersects
+// MARK: Line-plane intersection
 /**
  * GLSL
- * Does segment AB intersect the segment CD?
- * @in {vec2} a
- * @in {vec2} b
- * @in {vec2} c
- * @in {vec2} d
- * @returns {boolean}
- */
-fn = {};
-GLSL.FUNCTIONS.push(fn);
-
-fn.body = `
-  float xa = orient2d(a, b, c);
-  float xb = orient2d(a, b, d);
-  if ( xa == 0.0 && xb == 0.0 ) return false;
-
-  bool xab = (xa * xb) <= 0.0;
-  bool xcd = (orient2d(c, d, a) * orient2d(c, d, b)) <= 0.0;
-  return xab && xcd;
-`;
-
-fn.definition = {
-  name: "lineSegmentIntersects",
-  body: fn.body,
-  returnType: "bool",
-  params: [
-    { qualifier: "in", type: "vec2", name: "a" },
-    { qualifier: "in", type: "vec2", name: "b" },
-    { qualifier: "in", type: "vec2", name: "c" },
-    { qualifier: "in", type: "vec2", name: "d" }
-  ]
-};
-
-fn.string = buildGLSLFunction(fn.definition);
-
-// MARK: Line segment-plane intersection
-/**
- * GLSL
- * Line segment-plane intersection
+ * Line-plane intersection
  * @in {vec3} a  First point on plane
  * @in {vec3} b  Second point on plane
  * @in {vec3} c  Third point on plane
@@ -438,7 +438,7 @@ fn.body = `
   vec3 Bbottom = wallBR;
 
   // If point and source on same side of plane, then no intersection
-  if ( !planeLineSegmentIntersects(sourceLocation, pixelLocation, Atop, Abottom, Btop) ) {
+  if ( !planeLineSegmentIntersects(Atop, Abottom, Btop, sourceLocation, pixelLocation) ) {
     return false;
   }
 
