@@ -51,10 +51,6 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
 
-  // TODO: Fix below b/c POLYGONS is only algorithm left.
-
-  // Construct shadows from the walls below the light source
-  // Only need to construct the combined shadows if using polygons for vision, not shader.
   this.shadows = [];
   this.combinedShadows = [];
   if ( !this.wallsBelowSource.size ) return;
@@ -72,7 +68,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   // Combine the shadows and trim to be within the LOS
   // We want one or more LOS polygons along with non-overlapping holes.
-  if ( combineShadows ) this.combinedShadows = combineBoundaryPolygonWithHoles(this, this.shadows);
+  this.combinedShadows = combineBoundaryPolygonWithHoles(this, this.shadows);
 }
 
 /**
