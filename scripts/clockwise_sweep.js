@@ -47,12 +47,15 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   if ( sourceZ >= 0 ) walls = walls.filter(w => w.topZ >= 0);
   else walls = walls.filter(w => w.bottomZ <= 0); // Source below ground; drop tiles above
 
+
+  this._elevatedvision ??= {};
+  this._elevatedvision.shadows = [];
+  this._elevatedvision.combinedShadows = [];
+
   this.wallsBelowSource = new Set(walls); // Top of edge below source top
 
   if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
 
-  this.shadows = [];
-  this.combinedShadows = [];
   if ( !this.wallsBelowSource.size ) return;
 
   // Store each shadow individually
@@ -62,13 +65,13 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
     const shadowPoints = proj.constructShadowPointsForWall(w);
     if ( !shadowPoints.length ) continue;
-    this.shadows.push(new Shadow(shadowPoints));
+    this._elevatedvision.shadows.push(new Shadow(shadowPoints));
   }
-  if ( !this.shadows.length ) return;
+  if ( !this._elevatedvision.shadows.length ) return;
 
   // Combine the shadows and trim to be within the LOS
   // We want one or more LOS polygons along with non-overlapping holes.
-  this.combinedShadows = combineBoundaryPolygonWithHoles(this, this.shadows);
+  this._elevatedvision.combinedShadows = combineBoundaryPolygonWithHoles(this, this._elevatedvision.shadows);
 }
 
 /**
@@ -141,7 +144,7 @@ function originalTestWallInclusion(wall, bounds) {
  */
 export function _drawShadowsClockwiseSweepPolygon(
   { color = Draw.COLORS.gray, width = 1, fill = Draw.COLORS.gray, alpha = 0.5 } = {}) {
-  const shadows = this.shadows;
+  const shadows = this._elevatedvision.shadows;
   if ( !shadows || !shadows.length ) return;
 
   Draw.clearDrawings();
