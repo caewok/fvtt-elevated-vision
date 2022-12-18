@@ -58,11 +58,13 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   if ( !this._elevatedvision.wallsBelowSource.size ) return;
 
+  // Construct shadows from the walls below the light source
   // Store each shadow individually
-  for ( const w of this._elevatedvision.wallsBelowSource ) {
-    const proj = this.config.source._shadowProjection
-      ?? (this.config.source._shadowProjection = new ShadowProjection(new Plane(), this.config.source));
+  this.config.source._elevatedvision ??= {};
+  this.config.source._elevatedvision.ShadowProjection ??= new ShadowProjection(new Plane(), this.config.source);
+  const proj = this.config.source._elevatedvision.ShadowProjection;
 
+  for ( const w of this._elevatedvision.wallsBelowSource ) {
     const shadowPoints = proj.constructShadowPointsForWall(w);
     if ( !shadowPoints.length ) continue;
     this._elevatedvision.shadows.push(new Shadow(shadowPoints));
