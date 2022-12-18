@@ -54,8 +54,8 @@ GLSL.UNIFORMS.push({
 
 // Top left and bottom right 3d wall coordinates
 GLSL.UNIFORMS.push({
-  name: `EV_wallCoords[${MAX_NUM_WALL_ENDPOINTS}]`,
-  type: "vec3",
+  name: "EV_wallCoords",
+  type: `vec3[${MAX_NUM_WALL_ENDPOINTS}]`,
   initial: new Float32Array(MAX_NUM_WALL_ENDPOINTS*6)
 });
 
@@ -492,7 +492,7 @@ fn = {};
 GLSL.FUNCTIONS.push(fn);
 
 fn.body = `
-  if ( pixelLocation.z >= sourceLocation.z ) return false;
+  if ( pixelLocation.z > sourceLocation.z ) return false;
     // If elevation at this point is above the light, then light cannot hit this pixel.
 //     depth = 0.0;
 //     numWallEndpoints = 0;
@@ -594,6 +594,27 @@ export function updateUniformsForSource(u, source, { useRadius = true } = {}) {
   const radius = source.radius || 1;
   const r_inv = 1 / radius;
 
+  if ( canvas.elevation ) {
+    /*
+    Elevation of a given pixel from the texture value:
+    texture value in the shader is between 0 and 1. Represents value / maximumPixelValue where
+    maximumPixelValue is currently 255.
+
+    To get to elevation in the light vUvs space:
+    elevationCanvasUnits = (((value * maximumPixelValue * elevationStep) - elevationMin) * size) / distance;
+    elevationLightUnits = elevationCanvasUnits * 0.5 * r_inv;
+    = (((value * maximumPixelValue * elevationStep) - elevationMin) * size) * inv_distance * 0.5 * r_inv;
+    */
+    const { elevationMin, elevationStep, maximumPixelValue, _elevationTexture} = canvas.elevation;
+    const { distance, size } = canvas.scene.grid;
+    const elevationMult = useRadius ? size * (1 / distance) * 0.5 * r_inv : size * (1 / distance);
+    u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+    u.EV_elevationSampler = _elevationTexture ?? PIXI.Texture.EMPTY;
+    u.EV_hasElevationSampler = true;
+  } else {
+    u.EV_hasElevationSampler = false;
+  }
+
   const terrainWallPointsArr = source.los._elevatedvision?.terrainWallPointsArr ?? [];
   const heightWallPointsArr = source.los._elevatedvision?.heightWallPointsArr ?? [];
 
@@ -643,35 +664,12 @@ export function updateUniformsForSource(u, source, { useRadius = true } = {}) {
       (x - radius) / width,
       (y - radius) / height];
 
-    // Same as default: u.EV_center = [0.5, 0.5];
   } else {
     u.EV_sourceLocation = [center.x, center.y, elevationZ];
 
     // Same as default: u.EV_transform = [1, 1, 1, 1]
   }
 
-  /*
-  Elevation of a given pixel from the texture value:
-  texture value in the shader is between 0 and 1. Represents value / maximumPixelValue where
-  maximumPixelValue is currently 255.
-
-  To get to elevation in the light vUvs space:
-  elevationCanvasUnits = (((value * maximumPixelValue * elevationStep) - elevationMin) * size) / distance;
-  elevationLightUnits = elevationCanvasUnits * 0.5 * r_inv;
-  = (((value * maximumPixelValue * elevationStep) - elevationMin) * size) * inv_distance * 0.5 * r_inv;
-  */
-
-  // [min, step, maxPixelValue ]
-  if ( !u.EV_elevationSampler ) {
-    u.EV_elevationSampler = PIXI.Texture.EMPTY;
-    u.EV_hasElevationSampler = false;
-  } else {
-    const { elevationMin, elevationStep, maximumPixelValue} = canvas.elevation;
-    const { distance, size } = canvas.scene.grid;
-    const elevationMult = size * (1 / distance) * 0.5 * r_inv;
-    u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
-    u.EV_hasElevationSampler = true;
-  }
 }
 
 /**
