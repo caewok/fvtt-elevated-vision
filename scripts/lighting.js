@@ -193,10 +193,7 @@ const FN_LOCATION_IN_WALL_SHADOW_NEW =
 const FN_PIXEL_IN_SHADOW =
 `
 
-  int numWallEndpoints = numWalls * 2;
-  int numHeightWallEndpoints = (numWalls - numTerrainWalls) * 2;
   int numHeightWalls = numWalls - numTerrainWalls;
-
   for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
     if ( i >= numWalls ) break;
 
@@ -210,21 +207,9 @@ const FN_PIXEL_IN_SHADOW =
       pixelLocation
     );
 
-//     float percentDistanceFromWall;
-//     bool thisWallShadows = locationInWallShadow(
-//       EV_wallCoords[i],
-//       EV_wallElevations[i],
-//       EV_wallDistances[i],
-//       sourceLocation.z,
-//       sourceLocation.xy,
-//       pixelLocation.z,
-//       pixelLocation.xy,
-//       percentDistanceFromWall
-//     );
-
     if ( !thisWallShadows ) continue;
 
-    bool isTerrainWall = i >= numHeightWallEndpoints;
+    bool isTerrainWall = i >= numHeightWalls;
 
     if ( isTerrainWall ) {
       // Check each terrain wall for a shadow.
@@ -310,7 +295,7 @@ bool locationInWallShadowNew(in vec3 wallTL, in vec3 wallBR, in vec3 sourceLocat
   ${FN_LOCATION_IN_WALL_SHADOW_NEW}
 }
 
-bool pixelInShadow(in vec3 sourceLocation, in vec3 pixelLocation, in vec3 wallCoords[${MAX_NUM_WALL_ENDPOINTS}], in int numWalls, in int numTerrainWalls, in float EV_wallDistances[MAX_NUM_WALLS], in float EV_wallElevations[MAX_NUM_WALLS], in vec4 EV_wallCoords[MAX_NUM_WALLS]) {
+bool pixelInShadow(in vec3 sourceLocation, in vec3 pixelLocation, in vec3 wallCoords[${MAX_NUM_WALL_ENDPOINTS}], in int numWalls, in int numTerrainWalls) {
   ${FN_PIXEL_IN_SHADOW}
 }
 `;
@@ -378,13 +363,9 @@ if ( pixelElevation > EVNew_sourceLocation.z ) {
     pixelLocation,
     EVNew_wallCoords,
     EVNew_numWalls,
-    EVNew_numTerrainWalls,
-    EV_wallDistances,
-    EV_wallElevations,
-    EV_wallCoords
+    EVNew_numTerrainWalls
   );
 }
-
 
 if ( inShadow ) {
   depth = min(depth, 0.1);
@@ -428,11 +409,7 @@ function addShadowCode(source) {
         { qualifier: "in", type: "vec3", name: "pixelLocation" },
         { qualifier: "in", type: "vec3", name: "wallCoords[MAX_NUM_WALL_ENDPOINTS]" },
         { qualifier: "in", type: "int", name: "numWalls" },
-        { qualifier: "in", type: "int", name: "numTerrainWalls" },
-        { qualifier: "in", type: "float", name: "EV_wallDistances[MAX_NUM_WALLS]" },
-        { qualifier: "in", type: "float", name: "EV_wallElevations[MAX_NUM_WALLS]" },
-        { qualifier: "in", type: "vec4", name: "EV_wallCoords[MAX_NUM_WALLS]" }
-
+        { qualifier: "in", type: "int", name: "numTerrainWalls" }
       ])
       .addFunction("locationInWallShadowNew", "bool", FN_LOCATION_IN_WALL_SHADOW_NEW, [
         { qualifier: "in", type: "vec3", name: "wallTL" },
