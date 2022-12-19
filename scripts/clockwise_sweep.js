@@ -1,8 +1,8 @@
 /* globals
 canvas,
 CONST,
-Ray,
-PIXI
+PIXI,
+CONFIG
 */
 "use strict";
 
@@ -12,7 +12,7 @@ import { Shadow, ShadowProjection } from "./geometry/Shadow.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Plane } from "./geometry/3d/Plane.js";
 import { getSetting, SETTINGS } from "./settings.js";
-import { isLimitedWallForSource } from "./terrain_walls.js";
+import { isLimitedWallForSource, replaceTerrainWall } from "./terrain_walls.js";
 
 /**
  * Wrap ClockwisePolygonSweep.prototype._identifyEdges
@@ -34,7 +34,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   // From ClockwisePolygonSweep.prototype.getWalls
   const bounds = this._defineBoundingBox();
-  const collisionTest = (o, rect) => this._testShadowWallInclusion(o.t, rect);
+  const collisionTest = (o, rect) => originalTestWallInclusion.call(this, o.t, rect);
   let walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
 
   // Filter out walls that are below ground if the observer is above ground
@@ -43,11 +43,38 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   // Or measure as ground elevation directly above/under the wall?
   const rect = new PIXI.Rectangle(source.x - 1, source.y - 1, 2, 2);
   const tiles = canvas.tiles.quadtree.getObjects(rect);
-  walls = walls.filter(w => !isWallUnderneathTile(source, w, tiles));
+  walls = walls.filter(w => w.bottomZ <= sourceZ && !isWallUnderneathTile(source, w, tiles));
 
   if ( sourceZ >= 0 ) walls = walls.filter(w => w.topZ >= 0);
   else walls = walls.filter(w => w.bottomZ <= 0); // Source below ground; drop tiles above
 
+  /* Ignoring walls
+    Limited-height walls removed by Wall Height; shadows must be separate.
+    If the limited-height wall is completely above the source, we don't care about it.
+    Limited-height walls completely below 0 can be ignored if the source is above 0 and vice-versa
+      (b/c ground assumed to block)
+  */
+
+
+  /* Terrain wall shadows
+    If a limited-height wall is blocking a terrain wall of any height,
+    that will not be recorded by the LOS sweep b/c the limited-height wall is removed by Wall Height.
+
+    Non-terrain walls will create shadows that entirely overlap whatever shadow would
+    be caused by the terrain wall behind.
+
+    Thus, we only need to care about terrain walls that are behind other terrain walls.
+    For those, we need to find the portion of the terrain wall blocked by the other from
+    point of view of the source.
+
+    Unfortunately, in 3d, the resulting smaller blocked terrain wall can have 3–8 points,
+    depending on how the shadow trapezoid from the front wall intersects the back wall.
+    It may also intersect only at an edge or corner, causing the terrain wall to
+    degenerate to 1–2 points. Degenerate cases should be caught and removed.
+
+    For WebGL, we will compute shadows from walls differently. We only need to know what
+    terrain walls are potentially blocking or shadow-causing.
+  */
 
   this._elevatedvision ??= {};
   this._elevatedvision.shadows = [];
@@ -56,7 +83,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   const terrainWallPointsArr = this._elevatedvision.terrainWallPointsArr = [];
   const heightWallPointsArr = this._elevatedvision.heightWallPointsArr = [];
   walls.forEach(w => {
-    const isTerrain = isLimitedWallForSource(w, source)
+    const isTerrain = isLimitedWallForSource(w, source);
 
     // Only keep limited-height walls. (Infinite-height walls incorporated into LOS polygon.)
     if ( !isTerrain && !isFinite(w.bottomZ) && !isFinite(w.topZ) ) return;
@@ -71,7 +98,30 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
 
-  if ( !this._elevatedvision.wallsBelowSource.size ) return;
+  const blockedTerrainWallPointsArr = this._elevatedvision.blockedTerrainWallPointsArr = [];
+  for ( const terrainWallPoints of terrainWallPointsArr ) {
+    const ptsArr = replaceTerrainWall(terrainWallPoints, terrainWallPointsArr, source);
+    if ( !ptsArr.length ) continue;
+
+    for ( const pts of ptsArr ) {
+      // At least one point must be below the source and above 0 if source is above 0
+      const keepPoints = pts.some(pt => pt.z < sourceZ) && sourceZ > 0
+        ? pts.some(pt => pt.z > 0)
+        : pts.some(pt => pt.z < 0);
+
+      if ( keepPoints ) blockedTerrainWallPointsArr.push(pts);
+    }
+  }
+
+  // Add in the height wall points
+  this._elevatedvision.wallPointArrays = blockedTerrainWallPointsArr;
+  for ( const heightWallPts of heightWallPointsArr ) {
+    const out = [heightWallPts.A.top, heightWallPts.B.top, heightWallPts.B.bottom, heightWallPts.A.bottom];
+    out.wall = heightWallPts.wall;
+    this._elevatedvision.wallPointArrays.push(out);
+  }
+
+  if ( !this._elevatedvision.wallPointArrays.length ) return;
 
   // Construct shadows from the walls below the light source
   // Store each shadow individually
@@ -79,9 +129,11 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   this.config.source._elevatedvision.ShadowProjection ??= new ShadowProjection(new Plane(), this.config.source);
   const proj = this.config.source._elevatedvision.ShadowProjection;
 
-  for ( const w of this._elevatedvision.wallsBelowSource ) {
-    const shadowPoints = proj.constructShadowPointsForWall(w);
+  for ( const wallPointsArr of this._elevatedvision.wallPointArrays ) {
+    // Convert to 2d points; we can simply drop z b/c we are projecting to z=0 plane.
+    const shadowPoints = proj._shadowPointsForPoints(wallPointsArr).map(pt => pt.to2d());
     if ( !shadowPoints.length ) continue;
+
     this._elevatedvision.shadows.push(new Shadow(shadowPoints));
   }
   if ( !this._elevatedvision.shadows.length ) return;
@@ -115,22 +167,9 @@ function isWallUnderneathTile(observer, wall, tiles) {
 }
 
 /**
- * Taken from ClockwisePolygonSweep.prototype._testWallInclusion but
- * adds test for the wall height.
- * @param {Wall} wall
- * @param {PIXI.Rectangle} bounds
- * @param {Point} origin
- * @param {string} type
- * @param {object[]} boundaryShapes
- * @param {number} sourceZ
- * @returns {Wall[]}
+ * Taken from ClockwisePolygonSweep.prototype._testWallInclusion
+ * Avoid Wall Height changing this.
  */
-export function _testShadowWallInclusionClockwisePolygonSweep(wall, bounds) {
-  // Only keep the wall if it is below the source elevation
-  if ( this.config.source.elevationZ <= wall.topZ ) return false;
-  return originalTestWallInclusion.call(this, wall, bounds);
-}
-
 function originalTestWallInclusion(wall, bounds) {
   const {type, boundaryShapes} = this.config;
 
