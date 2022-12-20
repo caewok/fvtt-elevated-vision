@@ -5,10 +5,11 @@ foundry
 */
 "use strict";
 
-import { FRAGMENT_FUNCTIONS, pointCircleCoord } from "./lighting.js";
+import { FRAGMENT_FUNCTIONS, pointCircleCoord, pointCircleCoordNew } from "./lighting.js";
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
 const MAX_NUM_WALLS = 100;
+const MAX_NUM_WALL_ENDPOINTS = MAX_NUM_WALLS * 2;
 
 export class ShadowShader extends PIXI.Shader {
   static vertexShader = `
@@ -38,6 +39,7 @@ export class ShadowShader extends PIXI.Shader {
 
   static fragmentShader = `
   #define MAX_NUM_WALLS ${MAX_NUM_WALLS}
+  #define MAX_NUM_WALL_ENDPOINTS ${MAX_NUM_WALL_ENDPOINTS}
 
   varying vec2 vTextureCoord;
   uniform sampler2D sampler;
@@ -51,52 +53,52 @@ export class ShadowShader extends PIXI.Shader {
   varying vec2 vUvs;
   uniform sampler2D EV_elevationSampler;
   uniform vec4 EV_elevationResolution;
-  uniform float EV_sourceElevation;
-  uniform int EV_numWalls;
+  uniform vec3 EVNew_sourceLocation;
+  uniform int EVNew_numWalls;
+  uniform int EVNew_numTerrainWalls;
 
-  // Wall data, in vUvs coordinate space
   uniform vec4 EV_wallCoords[MAX_NUM_WALLS];
   uniform float EV_wallElevations[MAX_NUM_WALLS];
   uniform float EV_wallDistances[MAX_NUM_WALLS];
+  uniform int EV_numWalls;
 
-  // Defined constants
-  const vec2 center = vec2(0.5);
+  // Wall data, in vUvs coordinate space
+  uniform vec3 EVNew_wallCoords[MAX_NUM_WALL_ENDPOINTS];
 
   void main() {
     if ( texture2D(sampler, vTextureCoord).a <= alphaThreshold ) {
       discard;
     }
 
-    vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
-    float pixelCanvasElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
     bool inShadow = false;
-    float percentDistanceFromWall;
-    int wallsToProcess = EV_numWalls;
 
-    if ( pixelCanvasElevation > EV_sourceElevation ) {
-        inShadow = true;
-        wallsToProcess = 0;
-    }
+    vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+    float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
+    vec3 pixelLocation = vec3(vUvs.x, vUvs.y, pixelElevation);
 
-    for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
-      if ( i >= wallsToProcess ) break;
+    if ( pixelElevation > EVNew_sourceLocation.z ) {
+      inShadow = true;
+    } else {
+      float percentDistanceFromWall;
 
-      bool thisWallInShadow = locationInWallShadow(
-        EV_wallCoords[i],
-        EV_wallElevations[i],
-        EV_wallDistances[i],
-        EV_sourceElevation,
-        center,
-        pixelCanvasElevation,
-        vUvs,
+      inShadow = pixelInShadow(
+        EVNew_sourceLocation,
+        pixelLocation,
+        EV_wallCoords,
+        EV_wallElevations,
+        EV_wallDistances,
+        EV_numWalls,
         percentDistanceFromWall
       );
 
-      if ( thisWallInShadow ) {
-        // Current location is within shadow of this wall
-        inShadow = true;
-        break;
-      }
+
+//       inShadow =  pixelInShadowNew(
+//         EVNew_sourceLocation,
+//         pixelLocation,
+//         EVNew_wallCoords,
+//         EVNew_numWalls,
+//         EVNew_numTerrainWalls
+//       );
     }
 
     if ( inShadow ) {
@@ -249,5 +251,27 @@ export class ShadowShader extends PIXI.Shader {
     uniforms.EV_wallCoords = wallCoords;
     uniforms.EV_wallElevations = wallElevations;
     uniforms.EV_wallDistances = wallDistances;
+
+    const terrainWallPointsArr = source.los._elevatedvision?.terrainWallPointsArr ?? [];
+    const heightWallPointsArr = source.los._elevatedvision?.heightWallPointsArr ?? [];
+    const wallPointsArr = [...heightWallPointsArr, ...terrainWallPointsArr];
+    const EVNew_wallCoords = uniforms.EVNew_wallCoords = [];
+    for ( const wallPoints of wallPointsArr ) {
+      // Because walls are rectangular, we can pass the top-left and bottom-right corners
+      const tl = pointCircleCoordNew(wallPoints.A.top, radius, center, r_inv);
+      const br = pointCircleCoordNew(wallPoints.B.bottom, radius, center, r_inv);
+
+      EVNew_wallCoords.push(
+        tl.x, tl.y, tl.z,
+        br.x, br.y, br.z
+      );
+    }
+    uniforms.EVNew_numWalls = wallPointsArr.length;
+    uniforms.EVNew_numTerrainWalls = terrainWallPointsArr.length;
+    uniforms.EVNew_sourceLocation = [0.5, 0.5, source.elevationZ * 0.5 * r_inv];
+
+    if ( !uniforms.EVNew_wallCoords.length ) uniforms.EVNew_wallCoords = [0, 0, 0];
+
+
   }
 }
