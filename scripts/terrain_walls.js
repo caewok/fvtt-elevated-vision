@@ -44,10 +44,55 @@ function drawWalls(source = _token.vision) {
 
 
 
+// Test planar object intersection
+sourceOrigin = Point3d.fromPointSource(l.source);
+blockingWallPoints = Point3d.fromWall(w, { finite: true })
+testPoint = Point3d.fromToken(_token).bottom
+
+// Triangle
+rayDirection = testPoint.subtract(sourceOrigin)
+
+rayOrigin = sourceOrigin
+v0 = blockingWallPoints.A.top
+v1 = blockingWallPoints.B.top
+v2 = blockingWallPoints.B.bottom
+v3 = blockingWallPoints.A.bottom
+
+t = Plane.rayIntersectionTriangle3d(sourceOrigin, rayDirection, v2, v1, v0)
+
+ix = rayOrigin.add(rayVector.multiplyScalar(t))
+
+Plane.rayIntersectionTriangle3d(sourceOrigin, rayVector, blockingWallPoints.A.top, blockingWallPoints.A.bottom, blockingWallPoints.B.bottom)
+Plane.rayIntersectionTriangle3d(sourceOrigin, rayVector, blockingWallPoints.B.bottom, blockingWallPoints.A.bottom, blockingWallPoints.A.top)
+Plane.rayIntersectionTriangle3d(sourceOrigin, rayVector, blockingWallPoints.A.bottom, blockingWallPoints.A.top, blockingWallPoints.B.top)
+Plane.rayIntersectionTriangle3d(sourceOrigin, rayVector, blockingWallPoints.B.top, blockingWallPoints.A.top, blockingWallPoints.A.bottom)
 
 
+t = Plane.rayIntersectionQuad3d(sourceOrigin, rayDirection, v0, v1, v2, v3)
+t = Plane.rayIntersectionQuad3dLD(sourceOrigin, rayDirection, v0, v1, v2, v3)
+t = Plane.rayIntersectionPolygon3d(sourceOrigin, rayDirection, [v0, v1, v2, v3])
+
+t = Plane.rayIntersectionQuad3d(sourceOrigin, rayDirection, v3, v2, v1, v0)
+t = Plane.rayIntersectionQuad3dLD(sourceOrigin, rayDirection, v3, v2, v1, v0)
+t = Plane.rayIntersectionPolygon3d(sourceOrigin, rayDirection, [v3, v2, v1, v0])
 
 
+N = 10000
+await foundry.utils.benchmark(Plane.rayIntersectionTriangle3d, N, sourceOrigin, rayDirection, v2, v1, v0)
+await foundry.utils.benchmark(Plane.rayIntersectionQuad3d, N, sourceOrigin, rayDirection, v3, v2, v1, v0)
+await foundry.utils.benchmark(Plane.rayIntersectionQuad3dLD, N, sourceOrigin, rayDirection, v3, v2, v1, v0)
+await foundry.utils.benchmark(Plane.rayIntersectionPolygon3d, N, sourceOrigin, rayDirection, [v3, v2, v1, v0])
+
+await foundry.utils.benchmark(Plane.rayIntersectionTriangle3d, N, sourceOrigin, rayDirection, v0, v1, v2)
+await foundry.utils.benchmark(Plane.rayIntersectionQuad3d, N, sourceOrigin, rayDirection,  v0, v1, v2, v3)
+await foundry.utils.benchmark(Plane.rayIntersectionQuad3dLD, N, sourceOrigin, rayDirection,  v0, v1, v2, v3)
+await foundry.utils.benchmark(Plane.rayIntersectionPolygon3d, N, sourceOrigin, rayDirection, [ v0, v1, v2, v3])
+
+
+await QBenchmarkLoopFn(N, Plane.rayIntersectionTriangle3d, "triangle", sourceOrigin, rayDirection, v2, v1, v0)
+await QBenchmarkLoopFn(N, Plane.rayIntersectionRectangle3d, "rectangle", sourceOrigin, rayDirection, v2, v1, v0)
+await QBenchmarkLoopFn(N, Plane.rayIntersectionQuad3d, "quad", sourceOrigin, rayDirection, v3, v2, v1, v0)
+await QBenchmarkLoopFn(N, Plane.rayIntersectionPolygon3d, "polygon", sourceOrigin, rayDirection, [v3, v2, v1, v0])
 
 
 source = _token.vision
