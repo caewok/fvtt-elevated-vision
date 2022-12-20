@@ -366,10 +366,10 @@ if ( pixelElevation > EVNew_sourceLocation.z ) {
     EVNew_numWalls,
     EVNew_numTerrainWalls
   );
-}
 
-if ( inShadow ) {
-  depth = min(depth, 0.1);
+  if ( inShadow ) {
+    depth = min(depth, 0.1);
+  }
 }
 `;
 
