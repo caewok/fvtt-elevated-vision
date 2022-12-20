@@ -42,6 +42,14 @@ function drawWalls(source = _token.vision) {
   })
 }
 
+
+
+
+
+
+
+
+
 source = _token.vision
 ev = _token.vision.los._elevatedvision
 proj = source._elevatedvision.ShadowProjection;
@@ -66,11 +74,27 @@ planePts = proj._shadowPointsForWallPoints(blockingWallPoints)
 // On ground 0
 blockingWallPoints = Point3d.fromWall(w)
 
-
 proj = new ShadowProjection(new Plane(), l.source)
-M = proj.shadowMatrix()
+M = proj.shadowMatrix
 tmp = M.multiplyPoint3d(blockingWallPoints.A.top)
 draw.point(tmp)
+
+// raise to elevation = 200
+M200 = proj._changeShadowMatrixByZ(200);
+tmp200 = M200.multiplyPoint3d(blockingWallPoints.A.top)
+draw.point(tmp200)
+
+proj200 = new ShadowProjection(new Plane(new Point3d(0, 0, 200)), l.source)
+Mproj200 = proj200.shadowMatrix
+tmpProj200 = Mproj200.multiplyPoint3d(blockingWallPoints.A.top)
+draw.point(tmpProj200)
+
+tmpShift = proj.shiftShadowPointAlongZ(tmp, 200)
+
+
+// ground + 400
+
+
 
 // ground -200
 proj = new ShadowProjection(new Plane(new Point3d(0, 0, -200)), l.source)
