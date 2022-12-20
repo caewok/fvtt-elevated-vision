@@ -103,6 +103,48 @@ const FN_PLANE_LINE_INTERSECTION =
   return sA + u;
 `;
 
+const FN_RAY_QUAD_INTERSECTION =
+`
+  // Reject rays using the barycentric coordinates of the intersection point with respect to T
+  vec3 E01 = v1 - v0;
+  vec3 E03 = v3 - v0;
+  vec3 P = cross(rayDirection, E03);
+  float det = dot(E01, P);
+  if (abs(det) < 1e-6) return -1.0;
+
+  vec3 T = rayOrigin - v0;
+  float alpha = dot(T, P) / det;
+  if (alpha < 0.0) return -1.0;
+  if (alpha > 1.0) return -1.0;
+
+  vec3 Q = cross(T, E01);
+  float beta = dot(rayDirection, Q) / det;
+  if (beta < 0.0) return -1.0;
+  if (beta > 1.0) return -1.0;
+
+  // Reject rays using the barycentric coordinates of the intersection point with respect to T'
+  if ((alpha + beta) > 1.0) {
+    vec3 E23 = v3 - v2;
+    vec3 E21 = v1 - v2;
+    vec3 Pprime = cross(rayDirection, E21);
+    float detprime = dot(E23, Pprime);
+    if (abs(detprime) < 1e-6) return -1.0;
+
+    vec3 Tprime = rayOrigin - v2;
+    float alphaprime = dot(Tprime, Pprime) / detprime;
+    if (alphaprime < 0.0) return -1.0;
+    vec3 Qprime = cross(Tprime, E23);
+    float betaprime = dot(rayDirection, Qprime) / detprime;
+    if (betaprime < 0.0) return -1.0;
+  }
+
+  // Compute the ray parameter of the intersection point
+  float t = dot(E03, Q) / det;
+  //if (t < 0.0) return -1.0;
+
+  return t;
+`
+
 // Calculate the canvas elevation given a pixel value
 // Maps 0–1 to elevation in canvas coordinates.
 // EV_elevationResolution:
@@ -163,37 +205,15 @@ const FN_LOCATION_IN_WALL_SHADOW_NEW =
   vec3 Btop = vec3(wallBR.xy, wallTL.z);
   vec3 Bbottom = wallBR;
 
-  // If point and source on same side of plane, then no intersection
-  if ( !planeLineSegmentIntersects(Atop, Abottom, Btop, sourceLocation, pixelLocation) ) {
-    return false;
-  }
-
-  // Locate the intersection point with this wall.
-  bool ixIntersects = false;
-  vec3 ix = planeLineIntersection(Atop, Abottom, Btop, sourceLocation, pixelLocation, ixIntersects);
-  if ( !ixIntersects ) return false; // Just in case
-
-  // Confirm the intersection is within the wall bounds.
-  // Because walls are vertical rectangles, first do an easy check that ix is within height
-  if ( ix.z < Bbottom.z || ix.z > Btop.z ) return false;
-
-  // check that ix.xy is within the line segment XY of the wall
-  // See https://lucidar.me/en/mathematics/check-if-a-point-belongs-on-a-line-segment
-  vec2 vAB = Btop.xy - Atop.xy;
-  vec2 vAC = ix.xy - Atop.xy;
-
-  float dotABAC = dot(vAB, vAC);
-  float dotABAB = dot(vAB, vAB);
-  if ( dotABAC < 0.0 || dotABAC > dotABAB ) return false;
-
-  return true;
-
+  vec3 rayDirection = sourceLocation - pixelLocation;
+  float t = rayQuadIntersection(pixelLocation, rayDirection, Atop, Abottom, Bbottom, Btop);
+  return t >= 0.0 && t <= 1.0;
 `;
 
 const FN_PIXEL_IN_SHADOW =
 `
-
   int numHeightWalls = numWalls - numTerrainWalls;
+  bool terrainWallShadows = false;
   for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
     if ( i >= numWalls ) break;
 
@@ -207,33 +227,10 @@ const FN_PIXEL_IN_SHADOW =
       pixelLocation
     );
 
-    if ( !thisWallShadows ) continue;
-
     bool isTerrainWall = i >= numHeightWalls;
-
-    if ( isTerrainWall ) {
-      // Check each terrain wall for a shadow.
-      // We can ignore the height walls, b/c shadows from height wall --> terrain wall --> pt
-      // are covered by the height wall.
-      thisWallShadows = false; // Assume none shadow until proven otherwise
-
-      for ( int j = 0; j < MAX_NUM_WALLS; j++ ) {
-        if ( j >= numWalls ) break;
-        if ( j < numHeightWalls ) continue;
-        vec3 terrainTL = wallCoords[j * 2];
-        vec3 terrainBR = wallCoords[(j * 2)+ 1];
-
-        if ( terrainTL == wallTL && terrainBR == wallBR ) continue;
-
-        bool thisSecondaryWallShadows = locationInWallShadowNew(
-          terrainTL,
-          terrainBR,
-          sourceLocation,
-          pixelLocation
-        );
-
-        if ( thisSecondaryWallShadows ) return true;
-      }
+    if ( thisWallShadows && isTerrainWall && !terrainWallShadows ) {
+      thisWallShadows = false;
+      terrainWallShadows = true;
     }
 
     if ( thisWallShadows ) return true;
@@ -281,6 +278,10 @@ bool locationInWallShadow(
 
 float orient3d(in vec3 a, in vec3 b, in vec3 c, in vec3 d) {
   ${FN_ORIENT3D}
+}
+
+float rayQuadIntersection(in vec3 rayOrigin, in vec3 rayDirection, in vec3 v0, in vec3 v1, in vec3 v2, in vec3 v3) {
+  ${FN_RAY_QUAD_INTERSECTION}
 }
 
 bool planeLineSegmentIntersects(in vec3 a, in vec3 b, in vec3 c, in vec3 sA, in vec3 sB) {
@@ -376,9 +377,9 @@ const FRAG_COLOR =
 `
   if ( EV_isVision && inShadow ) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
 
-  if ( EVNew_numWalls != EV_numWalls ) {
-    gl_FragColor.x = 1.0;
-  }
+//   if ( EVNew_numWalls != EV_numWalls ) {
+//     gl_FragColor.x = 1.0;
+//   }
 
 `;
 
@@ -445,6 +446,14 @@ function addShadowCode(source) {
         { qualifier: "in", type: "vec3", name: "c" },
         { qualifier: "in", type: "vec3", name: "sA" },
         { qualifier: "in", type: "vec3", name: "sB" }
+      ])
+      .addFunction("rayQuadIntersection", "float", FN_RAY_QUAD_INTERSECTION, [
+        { qualifier: "in", type: "vec3", name: "rayOrigin" },
+        { qualifier: "in", type: "vec3", name: "rayDirection" },
+        { qualifier: "in", type: "vec3", name: "v0" },
+        { qualifier: "in", type: "vec3", name: "v1" },
+        { qualifier: "in", type: "vec3", name: "v2" },
+        { qualifier: "in", type: "vec3", name: "v3" }
       ])
       .addFunction("orient3d", "float", FN_ORIENT3D, [
         { qualifier: "in", type: "vec3", name: "a" },
