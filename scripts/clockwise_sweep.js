@@ -70,9 +70,8 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   this._elevatedvision ??= {};
   this._elevatedvision.shadows = [];
-  this._elevatedvision.terrainShadows = []; // debugging
+//   this._elevatedvision.terrainShadows = []; // debugging
   this._elevatedvision.combinedShadows = [];
-  this._elevatedvision.wallsBelowSource = new Set(walls); // Top of edge below source top
   this._elevatedvision.terrainWalls = new Set();
   this._elevatedvision.heightWalls = new Set();
 
@@ -94,7 +93,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   // Construct shadows from the walls below the light source
   // Only need to construct the combined shadows if using polygons for vision, not shader.
-  if ( !this._elevatedvision.wallsBelowSource.size ) return;
+  if ( !this._elevatedvision.terrainWalls.size && !this._elevatedvision.heightWalls.size ) return;
 
   // Store each shadow individually
   source._elevatedvision ??= {};
@@ -128,7 +127,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
           const shadowIX = shadowW.intersectPolygon(shadowBW)[0];
           if ( shadowIX && shadowIX.points.length > 5 ) {
             this._elevatedvision.shadows.push(shadowIX);
-            this._elevatedvision.terrainShadows.push(shadowIX);
+//             this._elevatedvision.terrainShadows.push(shadowIX);
           }
         }
       }
