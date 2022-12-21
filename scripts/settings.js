@@ -7,7 +7,16 @@ import { log } from "./util.js";
 import { MODULE_ID } from "./const.js";
 
 export const SETTINGS = {
-  VISION_USE_SHADER: "vision-use-shader",
+  SHADING: {
+    ALGORITHM: "shading-algorithm",
+    TYPES: {
+      NONE: "shading-none",
+      POLYGONS: "shading-polygons",
+      WEBGL: "shading-webgl"
+    }
+  },
+
+  VISION_USE_SHADER: "vision-use-shader",  // Deprecated
   AUTO_ELEVATION: "auto-change-elevation",
   AUTO_AVERAGING: "auto-change-elevation.averaging",
   WELCOME_DIALOG: {
@@ -31,14 +40,26 @@ export async function setSetting(settingName, value) {
 export function registerSettings() {
   log("Registering elevated vision settings");
 
-  game.settings.register(MODULE_ID, SETTINGS.VISION_USE_SHADER, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.VISION_USE_SHADER}.name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.VISION_USE_SHADER}.hint`),
+  const STYPES = SETTINGS.SHADING.TYPES;
+
+  // The old value was a boolean to turn on WebGL.
+  // New default should be polygons unless WebGL is expressly turned on.
+  const prior_setting = [...game.settings.storage.get("world").values()].find(v => v.key === `${MODULE_ID}.${SETTINGS.VISION_USE_SHADER}`);
+  const prior_default = prior_setting?.value ? STYPES.WEBGL : STYPES.POLYGONS;
+
+  game.settings.register(MODULE_ID, SETTINGS.SHADING.ALGORITHM, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.SHADING.ALGORITHM}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.SHADING.ALGORITHM}.hint`),
     scope: "world",
     config: true,
-    default: true,
-    type: Boolean,
-    requiresReload: true
+    default: prior_default,
+    type: String,
+    requiresReload: true,
+    choices: {
+      [STYPES.NONE]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.NONE}`),
+      [STYPES.POLYGONS]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.POLYGONS}`),
+      [STYPES.WEBGL]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.WEBGL}`)
+    }
   });
 
   game.settings.register(MODULE_ID, SETTINGS.AUTO_ELEVATION, {

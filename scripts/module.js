@@ -10,12 +10,14 @@ renderTemplate
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
 
+
+
+// Rendering configs
+import { renderAmbientLightConfigHook, renderAmbientSoundConfigHook } from "./renderAmbientConfig.js";
+
 // API imports
-import * as drawing from "./drawing.js";
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
-import { Shadow } from "./Shadow.js";
-import { Point3d } from "./Point3d.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { ShadowShader } from "./ShadowShader.js";
@@ -23,8 +25,9 @@ import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { ElevationGrid } from "./ElevationGrid.js";
 
 // Register methods, patches, settings
-import { registerPIXIPolygonMethods } from "./PIXIPolygon.js";
 import { registerAdditions, registerPatches } from "./patching.js";
+import { registerGeometry } from "./geometry/registration.js";
+import { registerElevationAdditions } from "./elevation.js";
 
 // For elevation layer registration and API
 import { ElevationLayer } from "./ElevationLayer.js";
@@ -38,15 +41,12 @@ import {
 
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, setSetting, registerSettings } from "./settings.js";
-import { tokenOnGround, tokenElevationAt } from "./tokens.js";
+import { isTokenOnGround, tokenElevationAt } from "./tokens.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
-    drawing,
     util,
     extract,
-    Point3d,
-    Shadow,
     ElevationLayer,
     ElevationGrid,
     WallTracer,
@@ -56,8 +56,9 @@ Hooks.once("init", function() {
   };
 
   // These methods need to be registered early
+  registerGeometry();
+  registerElevationAdditions();
   registerSettings();
-  registerPIXIPolygonMethods();
   registerLayer();
   registerAdditions();
 });
@@ -146,10 +147,11 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // esli
   if ( typeof changes.x === "undefined" && typeof changes.y === "undefined" ) return;
 
   const tokenOrigin = { x: tokenD.x, y: tokenD.y };
-  if ( !tokenOnGround(tokenD.object, tokenOrigin) ) return;
+  if ( !isTokenOnGround(tokenD.object, tokenOrigin) ) return;
 
   const tokenDestination = { x: changes.x ? changes.x : tokenD.x, y: changes.y ? changes.y : tokenD.y };
-  changes.elevation = tokenElevationAt(tokenD.object, tokenDestination);
+  const newTokenE = tokenElevationAt(tokenD.object, tokenDestination);
+  if ( tokenD.elevation !== newTokenE ) changes.elevation = tokenElevationAt(tokenD.object, tokenDestination);
   tokenD.object._elevatedVision.tokenAdjustElevation = true;
 });
 
@@ -200,3 +202,6 @@ function updateTileHook(document, change, options, userId) {
     ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on tile minimum elevation range.`);
   }
 }
+
+Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
+Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);

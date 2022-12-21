@@ -23,16 +23,15 @@ import {
   log,
   readDataURLFromFile,
   convertBase64ToImage,
-  distanceSquaredBetweenPoints,
   drawPolygonWithHoles,
-  combineBoundaryPolygonWithHoles,
-  points2dAlmostEqual } from "./util.js";
-import * as drawing from "./drawing.js";
+  combineBoundaryPolygonWithHoles } from "./util.js";
+
+import { Draw } from "./geometry/Draw.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
-import { tokenOnGround, tokenTileElevation, tokenElevationAt } from "./tokens.js";
+import { isTokenOnGround, tokenTileElevation, tokenElevationAt } from "./tokens.js";
 
 /* Elevation layer
 
@@ -75,7 +74,8 @@ export class ElevationLayer extends InteractionLayer {
   tokens = {
     tokenElevationAt,
     tokenTileElevation,
-    tokenOnGround
+    isTokenOnGround,
+    tokenOnGround: isTokenOnGround // Backwards compatibility
   };
 
   /**
@@ -408,7 +408,7 @@ export class ElevationLayer extends InteractionLayer {
 
     canvas.stage.removeChild(this.elevationLabel);
     if ( this._requiresSave ) this.saveSceneElevationData();
-    drawing.clearDrawings();
+    Draw.clearDrawings();
     this.container.visible = false;
   }
 
@@ -486,7 +486,7 @@ export class ElevationLayer extends InteractionLayer {
 
      if ( min < currMin ) {
        this.elevationMin = min;
-       ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on scene tiles' minimum elevation range.`)
+       ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on scene tiles' minimum elevation range.`);
     }
   }
 
@@ -956,8 +956,6 @@ export class ElevationLayer extends InteractionLayer {
     el = canvas.elevation
     api = game.modules.get("elevatedvision").api
     WallTracer = api.WallTracer
-    distanceSquaredBetweenPoints = api.util.distanceSquaredBetweenPoints;
-    angleBetweenPoints = api.util.angleBetweenPoints
 
     */
 
@@ -1098,7 +1096,7 @@ export class ElevationLayer extends InteractionLayer {
     let startDistance2 = 0;
 
     if ( startingIx ) {
-      startDistance2 = distanceSquaredBetweenPoints(startingEndpoint, startingIx);
+      startDistance2 = PIXI.Point.distanceSquaredBetween(startingEndpoint, startingIx);
     } else {
       poly.addPoint(startingEndpoint);
     }
@@ -1128,7 +1126,7 @@ export class ElevationLayer extends InteractionLayer {
         currWall = next.wall;
         currEndpoint = next.startingEndpoint;
         if ( next.ix ) {
-          currDistance2 = distanceSquaredBetweenPoints(currEndpoint, next.ix);
+          currDistance2 = PIXI.Point.distanceSquaredBetween(currEndpoint, next.ix);
           pointToAdd = next.ix;
         } else {
           currDistance2 = 0;
@@ -1147,7 +1145,8 @@ export class ElevationLayer extends InteractionLayer {
       //    Must pass the starting point after processing the intersection at end.
       if ( currWall === startingWall && currDistance2 <= startDistance2 ) passedStartingPoint = true;
 
-      if ( passedStartingPoint && points2dAlmostEqual(pointToAdd, {x: poly.points[0], y: poly.points[1]}) ) break;
+      const firstPoint = new PIXI.Point(poly.points[0], poly.points[1]);
+      if ( passedStartingPoint && firstPoint.almostEqual(pointToAdd) ) break;
 
       i += 1;
     }
@@ -1213,9 +1212,12 @@ export class ElevationLayer extends InteractionLayer {
    */
   _drawWallSegment(wall) {
     const g = new PIXI.Graphics();
-    drawing.drawSegment(wall, { graphics: g, color: drawing.COLORS.red });
-    drawing.drawPoint(wall.A, { graphics: g, color: drawing.COLORS.red });
-    drawing.drawPoint(wall.B, { graphics: g, color: drawing.COLORS.red });
+    const draw = new Draw(g);
+    const color = Draw.COLORS.red
+
+    draw.segment(wall, { color });
+    draw.point(wall.A, { color });
+    draw.point(wall.B, { color });
     this._wallDataContainer.addChild(g);
   }
 
@@ -1228,7 +1230,7 @@ export class ElevationLayer extends InteractionLayer {
     const bounds = {
       top: wall.document.flags?.["wall-height"]?.top ?? Number.POSITIVE_INFINITY,
       bottom: wall.document.flags?.["wall-height"]?.bottom ?? Number.NEGATIVE_INFINITY
-    }
+    };
     if ( bounds.top === Infinity && bounds.bottom === -Infinity ) return;
 
     const style = CONFIG.canvasTextStyle.clone();

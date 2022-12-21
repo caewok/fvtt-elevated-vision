@@ -14,12 +14,7 @@ Class with methods to link and trace walls
    at an intersection or the endpoint.
 */
 
-import {
-  angleBetweenPoints,
-  groupBy,
-  distanceSquaredBetweenPoints,
-  points2dAlmostEqual,
-  distanceBetweenPoints } from "./util.js";
+import { groupBy } from "./util.js";
 
 export class WallTracer {
   static #oppositeEndpoint = { A: "B", B: "A" };
@@ -150,7 +145,7 @@ export class WallTracer {
       return {
         wall: wallTracerMap.get(wall),
         ix,
-        dist: Math.round(distanceSquaredBetweenPoints(A, ix)) };
+        dist: Math.round(PIXI.Point.distanceSquaredBetween(A, ix)) };
     });
 
     this._intersectionMap = groupBy(intersectingWallData, obj => obj.dist);
@@ -173,10 +168,10 @@ export class WallTracer {
       return { wall: firstWall, startingEndpoint: firstWall.otherEndpoint(firstEndpoint) }
     }
 
-    let angle = angleBetweenPoints(startEndpoint, endEndpoint, firstEndpoint, { clockwiseAngle: true })
+    let angle = PIXI.Point.angleBetween(startEndpoint, endEndpoint, firstEndpoint, { clockwiseAngle: true })
     const nextWall = endpointWalls.reduce((prev, curr) => {
       const currEndpoint = endEndpoint.equals(curr.A) ? curr.B : curr.A;
-      const currAngle = angleBetweenPoints(startEndpoint, endEndpoint, currEndpoint, { clockwiseAngle: true });
+      const currAngle = PIXI.Point.angleBetween(startEndpoint, endEndpoint, currEndpoint, { clockwiseAngle: true });
       if ( currAngle < angle ) {
         angle = currAngle;
         return curr;
@@ -198,7 +193,7 @@ export class WallTracer {
     let flipKeys = start === "B";
     if ( flipKeys ) {
       keys.sort((a, b) => b - a);
-      startDistance2 = Math.pow(distanceBetweenPoints(this.A, this.B) - Math.sqrt(startDistance2), 2);
+      startDistance2 = Math.pow(PIXI.Point.distanceBetween(this.A, this.B) - Math.sqrt(startDistance2), 2);
     } else keys.sort((a, b) => a - b);
 
 
@@ -210,17 +205,19 @@ export class WallTracer {
       if ( ignoreKey ) continue;
       const intersectingWalls = this._intersectionMap.get(key);
       const clockwise = intersectingWalls.reduce((prev, curr) => {
-        let startingEndpoint = curr.wall.A;
-        let angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.B, { clockwiseAngle: true });
+        const currIx = new PIXI.Point(curr.ix.x, curr.ix.y); // TODO: Clean this up to use PIXI.Point throughout.
 
-        if ( points2dAlmostEqual(curr.wall.A, curr.ix) ) {
+        let startingEndpoint = curr.wall.A;
+        let angle = PIXI.Point.angleBetween(startEndpoint, curr.ix, curr.wall.B, { clockwiseAngle: true });
+
+        if ( currIx.almostEqual(curr.wall.A) ) {
           // Aready set above; do nothing
 
-        } else if ( points2dAlmostEqual(curr.wall.B, curr.ix) ) {
-          angle = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.A, { clockwiseAngle: true });
+        } else if ( currIx.almostEqual(curr.wall.B) ) {
+          angle = PIXI.Point.angleBetween(startEndpoint, curr.ix, curr.wall.A, { clockwiseAngle: true });
           startingEndpoint = curr.wall.B;
         } else {
-          const angleA = angleBetweenPoints(startEndpoint, curr.ix, curr.wall.A, { clockwiseAngle: true });
+          const angleA = PIXI.Point.angleBetween(startEndpoint, curr.ix, curr.wall.A, { clockwiseAngle: true });
           const angleB = angle;
           angle = Math.min(angleA, angleB);
           startingEndpoint = angleA < angleB ? curr.wall.B : curr.wall.A;

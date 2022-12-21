@@ -76,7 +76,7 @@ export function cloneToken(wrapper) {
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return clone;
 
   const tokenOrigin = { x: this.x, y: this.y };
-  if ( !tokenOnGround(this, tokenOrigin) ) return clone;
+  if ( !isTokenOnGround(this, tokenOrigin) ) return clone;
 
   clone._elevatedVision.tokenAdjustElevation = true;
   return clone;
@@ -90,7 +90,7 @@ export function cloneToken(wrapper) {
  *   Should be a grid position (a token x,y).
  * @return {boolean}
  */
-export function tokenOnGround(token, position) {
+export function isTokenOnGround(token, position) {
   const currTerrainElevation = tokenElevationAt(token, position);
   return currTerrainElevation.almostEqual(token.document?.elevation);
 }
