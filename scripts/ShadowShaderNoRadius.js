@@ -9,6 +9,7 @@ import { FRAGMENT_FUNCTIONS } from "./lighting.js";
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
 const MAX_NUM_WALLS = 100;
+const MAX_NUM_WALL_ENDPOINTS = MAX_NUM_WALLS * 2;
 
 export class ShadowShaderNoRadius extends PIXI.Shader {
   static vertexShader = `
@@ -29,6 +30,7 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
 
   static fragmentShader = `
   #define MAX_NUM_WALLS ${MAX_NUM_WALLS}
+  #define MAX_NUM_WALL_ENDPOINTS ${MAX_NUM_WALL_ENDPOINTS}
 
   varying vec2 vTextureCoord;
   uniform sampler2D sampler;
@@ -40,14 +42,12 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
   // EV-specific variables
   uniform sampler2D EV_elevationSampler;
   uniform vec4 EV_elevationResolution;
-  uniform float EV_sourceElevation;
+  uniform vec3 EV_sourceLocation;
   uniform int EV_numWalls;
-  uniform vec2 EV_center;
   varying vec2 vEVTextureCoord;
 
   // Wall data, in coordinate space
-  uniform vec4 EV_wallCoords[MAX_NUM_WALLS];
-  uniform float EV_wallElevations[MAX_NUM_WALLS];
+  uniform vec3 EV_wallCoords[MAX_NUM_WALL_ENDPOINTS];
   uniform float EV_wallDistances[MAX_NUM_WALLS];
 
   void main() {
@@ -56,28 +56,30 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
     }
 
     vec4 backgroundElevation = texture2D(EV_elevationSampler, vEVTextureCoord);
-    float pixelCanvasElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
+    float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
 
     bool inShadow = false;
     float percentDistanceFromWall;
     int wallsToProcess = EV_numWalls;
 
-    if ( pixelCanvasElevation > EV_sourceElevation ) {
+    if ( pixelElevation > EV_sourceLocation.z ) {
         inShadow = true;
         wallsToProcess = 0;
     }
 
+    vec3 pixelLocation = vec3(vTextureCoord.xy, pixelElevation);
     for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
       if ( i >= wallsToProcess ) break;
 
+      vec3 wallTL = EV_wallCoords[i * 2];
+      vec3 wallBR = EV_wallCoords[(i * 2) + 1];
+
       bool thisWallInShadow = locationInWallShadow(
-        EV_wallCoords[i],
-        EV_wallElevations[i],
+        wallTL,
+        wallBR,
         EV_wallDistances[i],
-        EV_sourceElevation,
-        EV_center,
-        pixelCanvasElevation,
-        vTextureCoord,
+        EV_sourceLocation,
+        pixelLocation,
         percentDistanceFromWall
       );
 
@@ -191,16 +193,20 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
     uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
 
     // Uniforms based on source
-    uniforms.EV_sourceElevation = source.elevationZ;
-
+    uniforms.EV_sourceLocation = [x, y, source.elevationZ];
 
     // Construct wall data
     const center = {x, y};
     const walls = source.los.wallsBelowSource || new Set();
     let wallCoords = [];
-    let wallElevations = [];
     let wallDistances = [];
     for ( const w of walls ) {
+      // Because walls are rectangular, we can pass the top-left and bottom-right corners
+      const wallA = { x: w.A.x, y: w.A.y, z: w.topZ };
+      const wallB = { x: w.B.x, y: w.B.y, z: w.bottomZ };
+      if ( !isFinite(wallA.z) ) wallA.z = 10000;
+      if ( !isFinite(wallB.z) ) wallB.z = -10000;
+
       const a = w.A;
       const b = w.B;
 
@@ -210,18 +216,15 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
 
       const wallOriginDist = PIXI.Point.distanceBetween(center, wallIx);
       wallDistances.push(wallOriginDist);
-      wallElevations.push(w.topZ);
-      wallCoords.push(a.x, a.y, b.x, b.y);
+      wallCoords.push(wallA.x, wallA.y, wallA.z, wallA.z, wallB.x, wallB.y, wallB.z);
     }
 
-    uniforms.EV_numWalls = wallElevations.length;
+    uniforms.EV_numWalls = wallDistances.length;
 
-    if ( !wallCoords.length ) wallCoords = new Float32Array(MAX_NUM_WALLS*4);
-    if ( !wallElevations.length ) wallElevations = new Float32Array(MAX_NUM_WALLS);
-    if ( !wallDistances.length ) wallDistances = new Float32Array(MAX_NUM_WALLS);
+    if ( !wallCoords.length ) wallCoords = [0, 0, 0, 0, 0, 0];
+    if ( !wallDistances.length ) wallDistances = [0];
 
     uniforms.EV_wallCoords = wallCoords;
-    uniforms.EV_wallElevations = wallElevations;
     uniforms.EV_wallDistances = wallDistances;
     uniforms.EV_center = [center.x, center.y];
     uniforms.EV_canvasDims = [width, height];
