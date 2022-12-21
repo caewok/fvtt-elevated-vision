@@ -124,11 +124,10 @@ const FN_LOCATION_IN_WALL_SHADOW =
   vec3 Btop = vec3(wall.zw, wallElevation);
   vec3 Abottom = vec3(wall.xy, -10000);
   vec3 Bbottom = vec3(wall.xy, -10000);
-  vec3 pixelLoc = vec3(pixelLocation.xy, pixelElevation);
 
   // Shoot a ray from the pixel toward the source to see if it intersects the wall
-  vec3 rayDirection = sourceLocation - pixelLoc;
-  float t = rayQuadIntersection(pixelLoc, rayDirection, Atop, Abottom, Bbottom, Btop);
+  vec3 rayDirection = sourceLocation - pixelLocation;
+  float t = rayQuadIntersection(pixelLocation, rayDirection, Atop, Abottom, Bbottom, Btop);
   if ( t < 0.0 || t > 1.0 ) return false;
 
   // Distance from the wall to this pixel
@@ -136,8 +135,8 @@ const FN_LOCATION_IN_WALL_SHADOW =
 
   // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
   // atan(y, x) equivalent to JS Math.atan2(y, x)
-  float adjWe = wallElevation - pixelElevation;
-  float adjSourceElevation = sourceLocation.z - pixelElevation;
+  float adjWe = wallElevation - pixelLocation.z;
+  float adjSourceElevation = sourceLocation.z - pixelLocation.z;
   float theta = atan((adjSourceElevation - adjWe) /  wallDistance);
 
   // Distance from center/origin to furthest part of shadow perpendicular to wall
@@ -181,8 +180,7 @@ bool locationInWallShadow(
   in float wallElevation,
   in float wallDistance, // distance from source location to wall
   in vec3 sourceLocation,
-  in float pixelElevation,
-  in vec2 pixelLocation,
+  in vec3 pixelLocation,
   out float percentDistanceFromWall) {
 
   ${FN_LOCATION_IN_WALL_SHADOW}
@@ -206,7 +204,7 @@ if ( pixelElevation > EV_sourceLocation.z ) {
   inShadow = EV_isVision;
 }
 
-const vec2 center = vec2(0.5);
+vec3 pixelLocation = vec3(vUvs.xy, pixelElevation);
 for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
   if ( i >= wallsToProcess ) break;
 
@@ -215,8 +213,7 @@ for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
     EV_wallElevations[i],
     EV_wallDistances[i],
     EV_sourceLocation,
-    pixelElevation,
-    vUvs,
+    pixelLocation,
     percentDistanceFromWall
   );
 
@@ -257,8 +254,7 @@ function addShadowCode(source) {
         { qualifier: "in", type: "float", name: "wallElevation" },
         { qualifier: "in", type: "float", name: "wallDistance" },
         { qualifier: "in", type: "vec3", name: "sourceLocation" },
-        { qualifier: "in", type: "float", name: "pixelElevation" },
-        { qualifier: "in", type: "vec2", name: "pixelLocation" },
+        { qualifier: "in", type: "vec3", name: "pixelLocation" },
         { qualifier: "out", type: "float", name: "percentDistanceFromWall" }
       ])
       .addFunction("canvasElevationFromPixel", "float", FN_CANVAS_ELEVATION_FROM_PIXEL, [

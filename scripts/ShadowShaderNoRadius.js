@@ -55,17 +55,18 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
     }
 
     vec4 backgroundElevation = texture2D(EV_elevationSampler, vEVTextureCoord);
-    float pixelCanvasElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
+    float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
 
     bool inShadow = false;
     float percentDistanceFromWall;
     int wallsToProcess = EV_numWalls;
 
-    if ( pixelCanvasElevation > EV_sourceLocation.z ) {
+    if ( pixelElevation > EV_sourceLocation.z ) {
         inShadow = true;
         wallsToProcess = 0;
     }
 
+    vec3 pixelLocation = vec3(vTextureCoord.xy, pixelElevation);
     for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
       if ( i >= wallsToProcess ) break;
 
@@ -74,8 +75,7 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
         EV_wallElevations[i],
         EV_wallDistances[i],
         EV_sourceLocation,
-        pixelCanvasElevation,
-        vTextureCoord,
+        pixelLocation,
         percentDistanceFromWall
       );
 
