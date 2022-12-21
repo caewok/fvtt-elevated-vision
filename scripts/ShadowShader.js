@@ -51,16 +51,13 @@ export class ShadowShader extends PIXI.Shader {
   varying vec2 vUvs;
   uniform sampler2D EV_elevationSampler;
   uniform vec4 EV_elevationResolution;
-  uniform float EV_sourceElevation;
+  uniform vec3 EV_sourceLocation;
   uniform int EV_numWalls;
 
   // Wall data, in vUvs coordinate space
   uniform vec4 EV_wallCoords[MAX_NUM_WALLS];
   uniform float EV_wallElevations[MAX_NUM_WALLS];
   uniform float EV_wallDistances[MAX_NUM_WALLS];
-
-  // Defined constants
-  const vec2 center = vec2(0.5);
 
   void main() {
     if ( texture2D(sampler, vTextureCoord).a <= alphaThreshold ) {
@@ -73,7 +70,7 @@ export class ShadowShader extends PIXI.Shader {
     float percentDistanceFromWall;
     int wallsToProcess = EV_numWalls;
 
-    if ( pixelCanvasElevation > EV_sourceElevation ) {
+    if ( pixelCanvasElevation > EV_sourceLocation.z ) {
         inShadow = true;
         wallsToProcess = 0;
     }
@@ -85,8 +82,7 @@ export class ShadowShader extends PIXI.Shader {
         EV_wallCoords[i],
         EV_wallElevations[i],
         EV_wallDistances[i],
-        EV_sourceElevation,
-        center,
+        EV_sourceLocation,
         pixelCanvasElevation,
         vUvs,
         percentDistanceFromWall
@@ -207,7 +203,7 @@ export class ShadowShader extends PIXI.Shader {
     uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
 
     // Uniforms based on source
-    uniforms.EV_sourceElevation = source.elevationZ * 0.5 * r_inv;
+    uniforms.EV_sourceLocation = [0.5, 0.5, source.elevationZ * 0.5 * r_inv];
 
     // Alternative version using vUvs, given that light source mesh have no rotation
     // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010999752030171136

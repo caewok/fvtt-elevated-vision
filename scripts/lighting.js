@@ -124,11 +124,10 @@ const FN_LOCATION_IN_WALL_SHADOW =
   vec3 Btop = vec3(wall.zw, wallElevation);
   vec3 Abottom = vec3(wall.xy, -10000);
   vec3 Bbottom = vec3(wall.xy, -10000);
-  vec3 sourceLoc = vec3(sourceLocation.xy, sourceElevation);
   vec3 pixelLoc = vec3(pixelLocation.xy, pixelElevation);
 
   // Shoot a ray from the pixel toward the source to see if it intersects the wall
-  vec3 rayDirection = sourceLoc - pixelLoc;
+  vec3 rayDirection = sourceLocation - pixelLoc;
   float t = rayQuadIntersection(pixelLoc, rayDirection, Atop, Abottom, Bbottom, Btop);
   if ( t < 0.0 || t > 1.0 ) return false;
 
@@ -138,7 +137,7 @@ const FN_LOCATION_IN_WALL_SHADOW =
   // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
   // atan(y, x) equivalent to JS Math.atan2(y, x)
   float adjWe = wallElevation - pixelElevation;
-  float adjSourceElevation = sourceElevation - pixelElevation;
+  float adjSourceElevation = sourceLocation.z - pixelElevation;
   float theta = atan((adjSourceElevation - adjWe) /  wallDistance);
 
   // Distance from center/origin to furthest part of shadow perpendicular to wall
@@ -181,8 +180,7 @@ bool locationInWallShadow(
   in vec4 wall,
   in float wallElevation,
   in float wallDistance, // distance from source location to wall
-  in float sourceElevation,
-  in vec2 sourceLocation,
+  in vec3 sourceLocation,
   in float pixelElevation,
   in vec2 pixelLocation,
   out float percentDistanceFromWall) {
@@ -201,7 +199,7 @@ backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
 
 float percentDistanceFromWall;
 float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
-if ( pixelElevation > EV_lightElevation ) {
+if ( pixelElevation > EV_sourceLocation.z ) {
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
   wallsToProcess = 0;
@@ -216,8 +214,7 @@ for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
     EV_wallCoords[i],
     EV_wallElevations[i],
     EV_wallDistances[i],
-    EV_lightElevation,
-    center,
+    EV_sourceLocation,
     pixelElevation,
     vUvs,
     percentDistanceFromWall
@@ -247,7 +244,7 @@ function addShadowCode(source) {
       .addUniform("EV_wallCoords[MAX_NUM_WALLS]", "vec4")
       .addUniform("EV_wallElevations[MAX_NUM_WALLS]", "float")
       .addUniform("EV_wallDistances[MAX_NUM_WALLS]", "float")
-      .addUniform("EV_lightElevation", "float")
+      .addUniform("EV_sourceLocation", "vec3")
       .addUniform("EV_isVision", "bool")
       .addUniform("EV_elevationSampler", "sampler2D")
       .addUniform("EV_transform", "vec4")
@@ -259,8 +256,7 @@ function addShadowCode(source) {
         { qualifier: "in", type: "vec4", name: "wall" },
         { qualifier: "in", type: "float", name: "wallElevation" },
         { qualifier: "in", type: "float", name: "wallDistance" },
-        { qualifier: "in", type: "float", name: "sourceElevation" },
-        { qualifier: "in", type: "vec2", name: "sourceLocation" },
+        { qualifier: "in", type: "vec3", name: "sourceLocation" },
         { qualifier: "in", type: "float", name: "pixelElevation" },
         { qualifier: "in", type: "vec2", name: "pixelLocation" },
         { qualifier: "out", type: "float", name: "percentDistanceFromWall" }
@@ -338,7 +334,7 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   shader.uniforms.EV_numWalls = 0;
   shader.uniforms.EV_wallElevations = new Float32Array(MAX_NUM_WALLS);
   shader.uniforms.EV_wallCoords = new Float32Array(MAX_NUM_WALLS*4);
-  shader.uniforms.EV_lightElevation = 0.5;
+  shader.uniforms.EV_sourceLocation = [0.5, 0.5, 0.5];
   shader.uniforms.EV_wallDistances = new Float32Array(MAX_NUM_WALLS);
   shader.uniforms.EV_isVision = false;
   shader.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture ?? PIXI.Texture.EMPTY;
@@ -424,7 +420,7 @@ export function _updateEVLightUniformsLightSource(mesh) {
 
   // Radius is .5 in the shader coordinates; adjust elevation accordingly
   const u = shader.uniforms;
-  u.EV_lightElevation = elevationZ * 0.5 * r_inv;
+  u.EV_sourceLocation = [0.5, 0.5, elevationZ * 0.5 * r_inv];
 
   const center_shader = {x: 0.5, y: 0.5};
   let wallCoords = [];

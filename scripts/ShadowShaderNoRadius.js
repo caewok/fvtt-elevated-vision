@@ -40,9 +40,8 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
   // EV-specific variables
   uniform sampler2D EV_elevationSampler;
   uniform vec4 EV_elevationResolution;
-  uniform float EV_sourceElevation;
+  uniform vec3 EV_sourceLocation;
   uniform int EV_numWalls;
-  uniform vec2 EV_center;
   varying vec2 vEVTextureCoord;
 
   // Wall data, in coordinate space
@@ -62,7 +61,7 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
     float percentDistanceFromWall;
     int wallsToProcess = EV_numWalls;
 
-    if ( pixelCanvasElevation > EV_sourceElevation ) {
+    if ( pixelCanvasElevation > EV_sourceLocation.z ) {
         inShadow = true;
         wallsToProcess = 0;
     }
@@ -74,8 +73,7 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
         EV_wallCoords[i],
         EV_wallElevations[i],
         EV_wallDistances[i],
-        EV_sourceElevation,
-        EV_center,
+        EV_sourceLocation,
         pixelCanvasElevation,
         vTextureCoord,
         percentDistanceFromWall
@@ -191,8 +189,7 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
     uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
 
     // Uniforms based on source
-    uniforms.EV_sourceElevation = source.elevationZ;
-
+    uniforms.EV_sourceLocation = [x, y, source.elevationZ];
 
     // Construct wall data
     const center = {x, y};
