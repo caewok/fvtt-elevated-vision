@@ -191,8 +191,9 @@ bool locationInWallShadow(
 const DEPTH_CALCULATION =
 `
 float depth = smoothstep(0.0, 1.0, vDepth);
-vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
 int wallsToProcess = EV_numWalls;
+int terrainWallsToProcess = EV_numTerrainWalls;
+vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
 vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
 
@@ -202,6 +203,7 @@ if ( pixelElevation > EV_sourceLocation.z ) {
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
   wallsToProcess = 0;
+  terrainWallsToProcess = 0;
   inShadow = EV_isVision;
 }
 
@@ -229,6 +231,40 @@ for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
     depth = min(depth, percentDistanceFromWall);
   }
 }
+
+// If terrain walls are present, see if at least 2 walls block this pixel from the light.
+if ( !inShadow && terrainWallsToProcess > 1 ) {
+  bool terrainWallShadows = false;
+  float percentDistanceFromTerrainWall = 1.0;
+  for ( int j = 0; j < MAX_NUM_WALLS; j++ ) {
+    if ( j >= terrainWallsToProcess ) break;
+
+    vec3 terrainWallTL = EV_terrainWallCoords[j * 2];
+    vec3 terrainWallBR = EV_terrainWallCoords[(j * 2) + 1];
+
+    bool thisTerrainWallInShadow = locationInWallShadow(
+      terrainWallTL,
+      terrainWallBR,
+      EV_terrainWallDistances[j],
+      EV_sourceLocation,
+      pixelLocation,
+      percentDistanceFromWall
+    );
+
+    if ( thisTerrainWallInShadow && terrainWallShadows ) {
+      inShadow = true;
+    }
+
+    if ( thisTerrainWallInShadow ) {
+      percentDistanceFromTerrainWall = min(percentDistanceFromTerrainWall, percentDistanceFromWall);
+      terrainWallShadows = true;
+    }
+  }
+
+  if ( inShadow ) {
+    depth = min(depth, percentDistanceFromTerrainWall);
+  }
+}
 `;
 
 const FRAG_COLOR =
@@ -242,6 +278,9 @@ function addShadowCode(source) {
       .setSource(source)
 
       .addUniform("EV_numWalls", "int")
+      .addUniform("EV_numTerrainWalls", "int")
+      .addUniform("EV_terrainWallDistances[MAX_NUM_WALLS]", "float")
+      .addUniform("EV_terrainWallCoords[MAX_NUM_WALL_ENDPOINTS]", "vec3")
       .addUniform("EV_wallCoords[MAX_NUM_WALL_ENDPOINTS]", "vec3")
       .addUniform("EV_wallDistances[MAX_NUM_WALLS]", "float")
       .addUniform("EV_sourceLocation", "vec3")
@@ -332,7 +371,11 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
 
   const shader = wrapped(...args);
   shader.uniforms.EV_numWalls = 0;
+  shader.uniforms.EV_numTerrainWalls = 0;
   shader.uniforms.EV_wallCoords = [0, 0, 0, 0, 0, 0];
+  shader.uniforms.EV_terrainWallCoords = [0, 0, 0, 0, 0, 0];
+  shader.uniforms.EV_terrainWallDistances = [0];
+
   shader.uniforms.EV_sourceLocation = [0.5, 0.5, 0.5];
   shader.uniforms.EV_wallDistances = [0];
   shader.uniforms.EV_isVision = false;
@@ -410,6 +453,7 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
 export function _updateEVLightUniformsLightSource(mesh) {
   const shader = mesh.shader;
   const { x, y, radius, elevationZ } = this;
+  const source = this;
   const { width, height } = canvas.dimensions;
 
   const walls = this.los._elevatedvision.wallsBelowSource || new Set();
@@ -424,26 +468,24 @@ export function _updateEVLightUniformsLightSource(mesh) {
   u.EV_sourceLocation = [0.5, 0.5, elevationZ * 0.5 * r_inv];
 
   const center_shader = {x: 0.5, y: 0.5};
+
+  let terrainWallCoords = [];
+  let terrainWallDistances = [];
+  for ( const w of terrainWalls ) {
+    addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source, r_inv)
+  }
+  u.EV_numTerrainWalls = terrainWallDistances.length;
+
+  if ( !terrainWallCoords.length ) terrainWallCoords = [0, 0, 0, 0, 0, 0];
+  if ( !terrainWallDistances.length ) terrainWallDistances = [0];
+
+  u.EV_terrainWallCoords = terrainWallCoords;
+  u.EV_terrainWallDistances = terrainWallDistances;
+
   let wallCoords = [];
   let wallDistances = [];
-
-  for ( const w of walls ) {
-    // Because walls are rectangular, we can pass the top-left and bottom-right corners
-    const wallA = { x: w.A.x, y: w.A.y, z: w.topZ };
-    const wallB = { x: w.B.x, y: w.B.y, z: w.bottomZ };
-    if ( !isFinite(wallA.z) ) wallA.z = 10000;
-    if ( !isFinite(wallB.z) ) wallB.z = -10000;
-
-    const a = pointCircleCoord(wallA, radius, center, r_inv);
-    const b = pointCircleCoord(wallB, radius, center, r_inv);
-
-    // Point where line from light, perpendicular to wall, intersects
-    const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center_shader);
-    if ( !wallIx ) continue; // Likely a and b not proper wall
-    const wallOriginDist = PIXI.Point.distanceBetween(center_shader, wallIx);
-    wallDistances.push(wallOriginDist);
-
-    wallCoords.push(a.x, a.y, a.z, b.x, b.y, b.z);
+  for ( const w of heightWalls ) {
+    addWallDataToShaderArrays(w, wallDistances, wallCoords, source, r_inv);
   }
 
   u.EV_numWalls = wallDistances.length;
@@ -493,6 +535,28 @@ export function _updateEVLightUniformsLightSource(mesh) {
     u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
     u.EV_hasElevationSampler = true;
   }
+}
+
+function addWallDataToShaderArrays(w, wallDistances, wallCoords, source, r_inv = 1 / source.radius) {
+  // Because walls are rectangular, we can pass the top-left and bottom-right corners
+  const { x, y, radius } = source;
+  const center = {x, y};
+  const wallA = { x: w.A.x, y: w.A.y, z: w.topZ };
+  const wallB = { x: w.B.x, y: w.B.y, z: w.bottomZ };
+  if ( !isFinite(wallA.z) ) wallA.z = 10000;
+  if ( !isFinite(wallB.z) ) wallB.z = -10000;
+
+  const a = pointCircleCoord(wallA, radius, center, r_inv);
+  const b = pointCircleCoord(wallB, radius, center, r_inv);
+
+  // Point where line from light, perpendicular to wall, intersects
+  const center_shader = {x: 0.5, y: 0.5};
+  const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center_shader);
+  if ( !wallIx ) return; // Likely a and b not proper wall
+  const wallOriginDist = PIXI.Point.distanceBetween(center_shader, wallIx);
+  wallDistances.push(wallOriginDist);
+
+  wallCoords.push(a.x, a.y, a.z, b.x, b.y, b.z);
 }
 
 /**

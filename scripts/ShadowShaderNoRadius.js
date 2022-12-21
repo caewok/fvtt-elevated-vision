@@ -44,11 +44,15 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
   uniform vec4 EV_elevationResolution;
   uniform vec3 EV_sourceLocation;
   uniform int EV_numWalls;
+  uniform int EV_numTerrainWalls;
+
   varying vec2 vEVTextureCoord;
 
   // Wall data, in coordinate space
   uniform vec3 EV_wallCoords[MAX_NUM_WALL_ENDPOINTS];
   uniform float EV_wallDistances[MAX_NUM_WALLS];
+  uniform vec3 EV_terrainWallCoords[MAX_NUM_WALL_ENDPOINTS];
+  uniform float EV_terrainWallDistances[MAX_NUM_WALLS];
 
   void main() {
     if ( texture2D(sampler, vTextureCoord).a <= alphaThreshold ) {
@@ -201,25 +205,23 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
     const heightWalls = source.los._elevatedvision.heightWalls || new Set();
     const terrainWalls = source.los._elevatedvision.terrainWalls || new Set();
 
+    let terrainWallCoords = [];
+    let terrainWallDistances = [];
+    for ( const w of terrainWalls ) {
+      addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source)
+    }
+    uniforms.EV_numTerrainWalls = terrainWallDistances.length;
+
+    if ( !terrainWallCoords.length ) terrainWallCoords = [0, 0, 0, 0, 0, 0];
+    if ( !terrainWallDistances.length ) terrainWallDistances = [0];
+
+    uniforms.EV_terrainWallCoords = terrainWallCoords;
+    uniforms.EV_terrainWallDistances = terrainWallDistances;
+
     let wallCoords = [];
     let wallDistances = [];
-    for ( const w of walls ) {
-      // Because walls are rectangular, we can pass the top-left and bottom-right corners
-      const wallA = { x: w.A.x, y: w.A.y, z: w.topZ };
-      const wallB = { x: w.B.x, y: w.B.y, z: w.bottomZ };
-      if ( !isFinite(wallA.z) ) wallA.z = 10000;
-      if ( !isFinite(wallB.z) ) wallB.z = -10000;
-
-      const a = w.A;
-      const b = w.B;
-
-      // Point where line from light, perpendicular to wall, intersects
-      const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center);
-      if ( !wallIx ) continue; // Likely a and b not proper wall.
-
-      const wallOriginDist = PIXI.Point.distanceBetween(center, wallIx);
-      wallDistances.push(wallOriginDist);
-      wallCoords.push(wallA.x, wallA.y, wallA.z, wallA.z, wallB.x, wallB.y, wallB.z);
+    for ( const w of heightWalls ) {
+      addWallDataToShaderArrays(w, wallDistances, wallCoords, source);
     }
 
     uniforms.EV_numWalls = wallDistances.length;
@@ -232,4 +234,26 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
     uniforms.EV_center = [center.x, center.y];
     uniforms.EV_canvasDims = [width, height];
   }
+}
+
+function addWallDataToShaderArrays(w, wallDistances, wallCoords, source) {
+  // Because walls are rectangular, we can pass the top-left and bottom-right corners
+  const { x, y } = source;
+  const center = {x, y};
+  const wallA = { x: w.A.x, y: w.A.y, z: w.topZ };
+  const wallB = { x: w.B.x, y: w.B.y, z: w.bottomZ };
+  if ( !isFinite(wallA.z) ) wallA.z = 10000;
+  if ( !isFinite(wallB.z) ) wallB.z = -10000;
+
+  const a = wallA;
+  const b = wallB;
+
+  // Point where line from light, perpendicular to wall, intersects
+  const center_shader = {x: 0.5, y: 0.5};
+  const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center);
+  if ( !wallIx ) return; // Likely a and b not proper wall
+  const wallOriginDist = PIXI.Point.distanceBetween(center, wallIx);
+  wallDistances.push(wallOriginDist);
+
+  wallCoords.push(a.x, a.y, a.z, b.x, b.y, b.z);
 }
