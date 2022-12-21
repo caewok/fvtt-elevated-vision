@@ -412,7 +412,9 @@ export function _updateEVLightUniformsLightSource(mesh) {
   const { x, y, radius, elevationZ } = this;
   const { width, height } = canvas.dimensions;
 
-  const walls = this.los.wallsBelowSource || new Set();
+  const walls = this.los._elevatedvision.wallsBelowSource || new Set();
+  const heightWalls = this.los._elevatedvision.heightWalls || new Set();
+  const terrainWalls = this.los._elevatedvision.terrainWalls || new Set();
 
   const center = {x, y};
   const r_inv = 1 / radius;
