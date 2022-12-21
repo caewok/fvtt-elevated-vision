@@ -5,6 +5,7 @@ Add setting to disable shadows altogether (issue #30).
 Handle limited-sight (terrain) walls in both Polygons and WebGL settings (issue #21).
 Handle shadows for walls whose bottom elevation is above the canvas (issue #33).
 Fix for conflict with Flying Tokens Module (issue #32).
+Add an elevation setting for light configuration.
 
 ## 0.2.1
 Potential fix for issue #29 (canvas freeze re "rangeBottom")
