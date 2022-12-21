@@ -73,23 +73,67 @@ const FN_CANVAS_ELEVATION_FROM_PIXEL =
   return (EV_elevationResolution.r + (pixel * EV_elevationResolution.b * EV_elevationResolution.g)) * EV_elevationResolution.a;
 `;
 
+const FN_RAY_QUAD_INTERSECTION =
+`
+  // Reject rays using the barycentric coordinates of the intersection point with respect to T
+  vec3 E01 = v1 - v0;
+  vec3 E03 = v3 - v0;
+  vec3 P = cross(rayDirection, E03);
+  float det = dot(E01, P);
+  if (abs(det) < 1e-6) return -1.0;
+
+  vec3 T = rayOrigin - v0;
+  float alpha = dot(T, P) / det;
+  if (alpha < 0.0) return -1.0;
+  if (alpha > 1.0) return -1.0;
+
+  vec3 Q = cross(T, E01);
+  float beta = dot(rayDirection, Q) / det;
+  if (beta < 0.0) return -1.0;
+  if (beta > 1.0) return -1.0;
+
+  // Reject rays using the barycentric coordinates of the intersection point with respect to T'
+  if ((alpha + beta) > 1.0) {
+    vec3 E23 = v3 - v2;
+    vec3 E21 = v1 - v2;
+    vec3 Pprime = cross(rayDirection, E21);
+    float detprime = dot(E23, Pprime);
+    if (abs(detprime) < 1e-6) return -1.0;
+
+    vec3 Tprime = rayOrigin - v2;
+    float alphaprime = dot(Tprime, Pprime) / detprime;
+    if (alphaprime < 0.0) return -1.0;
+
+    vec3 Qprime = cross(Tprime, E23);
+    float betaprime = dot(rayDirection, Qprime) / detprime;
+    if (betaprime < 0.0) return -1.0;
+  }
+
+  // Compute the ray parameter of the intersection point
+  float t = dot(E03, Q) / det;
+  //if (t < 0.0) return -1.0;
+  return t;
+`;
+
 // Determine if a given location from a wall is in shadow or not.
 const FN_LOCATION_IN_WALL_SHADOW =
 `
   percentDistanceFromWall = 0.0; // Set a default value when returning early.
 
-  // If the wall is higher than the light, skip. Should not occur.
-  if ( sourceElevation <= wallElevation ) return false;
+  vec3 Atop = vec3(wall.xy, wallElevation);
+  vec3 Btop = vec3(wall.zw, wallElevation);
+  vec3 Abottom = vec3(wall.xy, -10000);
+  vec3 Bbottom = vec3(wall.xy, -10000);
+  vec3 sourceLoc = vec3(sourceLocation.xy, sourceElevation);
+  vec3 pixelLoc = vec3(pixelLocation.xy, pixelElevation);
 
-  // If the pixel is above the wall, skip.
-  if ( pixelElevation >= wallElevation ) return false;
+  // Shoot a ray from the pixel toward the source to see if it intersects the wall
+  vec3 rayDirection = sourceLoc - pixelLoc;
+  float t = rayQuadIntersection(pixelLoc, rayDirection, Atop, Abottom, Bbottom, Btop);
+  if ( t < 0.0 || t > 1.0 ) return false;
 
-  // If the wall does not intersect the line between the center and this point, no shadow here.
-  if ( !lineSegmentIntersects(pixelLocation, sourceLocation, wall.xy, wall.zw) ) return false;
-
-  // Distance from wall (as line) to this location
-  vec2 wallIxPoint = perpendicularPoint(wall.xy, wall.zw, pixelLocation);
-  float distWP = distance(pixelLocation, wallIxPoint);
+  // Distance from the wall to this pixel
+  float distWP = length(rayDirection * t);
 
   // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
   // atan(y, x) equivalent to JS Math.atan2(y, x)
@@ -101,12 +145,8 @@ const FN_LOCATION_IN_WALL_SHADOW =
   float distOV = adjSourceElevation / tan(theta);
   float maxDistWP = distOV - wallDistance;
 
-  if ( distWP < maxDistWP ) {
-    // Current location is within shadow of the wall
-    percentDistanceFromWall = distWP / maxDistWP;
-    return true;
-  }
-  return false;
+  percentDistanceFromWall = distWP / maxDistWP;
+  return true;
 `;
 
 export const FRAGMENT_FUNCTIONS = `
@@ -122,6 +162,10 @@ bool lineSegmentIntersects(in vec2 a, in vec2 b, in vec2 c, in vec2 d) {
 // Point on line AB that forms perpendicular point to C
 vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c) {
   ${FN_PERPENDICULAR_POINT}
+}
+
+float rayQuadIntersection(in vec3 rayOrigin, in vec3 rayDirection, in vec3 v0, in vec3 v1, in vec3 v2, in vec3 v3) {
+  ${FN_RAY_QUAD_INTERSECTION}
 }
 
 // Calculate the canvas elevation given a pixel value
@@ -224,6 +268,14 @@ function addShadowCode(source) {
       .addFunction("canvasElevationFromPixel", "float", FN_CANVAS_ELEVATION_FROM_PIXEL, [
         { qualifier: "in", type: "float", name: "pixel" },
         { qualifier: "in", type: "vec4", name: "EV_elevationResolution" }
+      ])
+      .addFunction("rayQuadIntersection", "float", FN_RAY_QUAD_INTERSECTION, [
+        { qualifier: "in", type: "vec3", name: "rayOrigin" },
+        { qualifier: "in", type: "vec3", name: "rayDirection" },
+        { qualifier: "in", type: "vec3", name: "v0" },
+        { qualifier: "in", type: "vec3", name: "v1" },
+        { qualifier: "in", type: "vec3", name: "v2" },
+        { qualifier: "in", type: "vec3", name: "v3" }
       ])
       .addFunction("perpendicularPoint", "vec2", FN_PERPENDICULAR_POINT, [
         { qualifier: "in", type: "vec2", name: "a" },
