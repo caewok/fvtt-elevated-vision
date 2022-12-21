@@ -332,7 +332,6 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
 
   const shader = wrapped(...args);
   shader.uniforms.EV_numWalls = 0;
-  shader.uniforms.EV_wallElevations = [0];
   shader.uniforms.EV_wallCoords = [0, 0, 0, 0, 0, 0];
   shader.uniforms.EV_sourceLocation = [0.5, 0.5, 0.5];
   shader.uniforms.EV_wallDistances = [0];
@@ -424,7 +423,6 @@ export function _updateEVLightUniformsLightSource(mesh) {
 
   const center_shader = {x: 0.5, y: 0.5};
   let wallCoords = [];
-  let wallElevations = [];
   let wallDistances = [];
 
   for ( const w of walls ) {
@@ -442,19 +440,16 @@ export function _updateEVLightUniformsLightSource(mesh) {
     if ( !wallIx ) continue; // Likely a and b not proper wall
     const wallOriginDist = PIXI.Point.distanceBetween(center_shader, wallIx);
     wallDistances.push(wallOriginDist);
-    wallElevations.push(w.topZ * 0.5 * r_inv);
 
     wallCoords.push(a.x, a.y, a.z, b.x, b.y, b.z);
   }
 
-  u.EV_numWalls = wallElevations.length;
+  u.EV_numWalls = wallDistances.length;
 
   if ( !wallCoords.length ) wallCoords = [0, 0, 0, 0, 0, 0];
-  if ( !wallElevations.length ) wallElevations = [0];
   if ( !wallDistances.length ) wallDistances = [0];
 
   u.EV_wallCoords = wallCoords;
-  u.EV_wallElevations = wallElevations;
   u.EV_wallDistances = wallDistances;
   u.EV_elevationSampler = canvas.elevation?._elevationTexture;
 
