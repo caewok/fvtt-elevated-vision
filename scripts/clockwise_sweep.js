@@ -1,8 +1,8 @@
 /* globals
 canvas,
 CONST,
-Ray,
-PIXI
+PIXI,
+CONFIG
 */
 "use strict";
 
@@ -47,7 +47,11 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   if ( sourceZ >= 0 ) walls = walls.filter(w => w.topZ >= 0);
   else walls = walls.filter(w => w.bottomZ <= 0); // Source below ground; drop tiles above
 
-  this.wallsBelowSource = new Set(walls); // Top of edge below source top
+
+  this._elevatedvision ??= {};
+  this._elevatedvision.shadows = [];
+  this._elevatedvision.combinedShadows = [];
+  this._elevatedvision.wallsBelowSource = new Set(walls); // Top of edge below source top
 
   if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
 
@@ -55,24 +59,25 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   // Construct shadows from the walls below the light source
   // Only need to construct the combined shadows if using polygons for vision, not shader.
-  this.shadows = [];
-  this.combinedShadows = [];
-  if ( !this.wallsBelowSource.size ) return;
+  if ( !this._elevatedvision.wallsBelowSource.size ) return;
 
   // Store each shadow individually
-  for ( const w of this.wallsBelowSource ) {
-    const proj = this.config.source._shadowProjection
-      ?? (this.config.source._shadowProjection = new ShadowProjection(new Plane(), this.config.source));
+  this.config.source._elevatedvision ??= {};
+  this.config.source._elevatedvision.ShadowProjection ??= new ShadowProjection(new Plane(), this.config.source);
+  const proj = this.config.source._elevatedvision.ShadowProjection;
+
+  for ( const w of this._elevatedvision.wallsBelowSource ) {
 
     const shadowPoints = proj.constructShadowPointsForWall(w);
     if ( !shadowPoints.length ) continue;
-    this.shadows.push(new Shadow(shadowPoints));
+    this._elevatedvision.shadows.push(new Shadow(shadowPoints));
   }
-  if ( !this.shadows.length ) return;
+  if ( !this._elevatedvision.shadows.length ) return;
 
   // Combine the shadows and trim to be within the LOS
   // We want one or more LOS polygons along with non-overlapping holes.
-  if ( combineShadows ) this.combinedShadows = combineBoundaryPolygonWithHoles(this, this.shadows);
+  this._elevatedvision.combinedShadows = combineBoundaryPolygonWithHoles(this, this._elevatedvision.shadows);
+
 }
 
 /**
