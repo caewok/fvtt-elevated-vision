@@ -73,10 +73,12 @@ export class ShadowShader extends PIXI.Shader {
     bool inShadow = false;
     float percentDistanceFromWall;
     int wallsToProcess = EV_numWalls;
+    int terrainWallsToProcess = EV_numTerrainWalls;
 
     if ( pixelElevation > EV_sourceLocation.z ) {
-        inShadow = true;
-        wallsToProcess = 0;
+      inShadow = true;
+      wallsToProcess = 0;
+      terrainWallsToProcess = 0;
     }
 
     vec3 pixelLocation = vec3(vUvs.xy, pixelElevation);
@@ -99,6 +101,34 @@ export class ShadowShader extends PIXI.Shader {
         // Current location is within shadow of this wall
         inShadow = true;
         break;
+      }
+    }
+
+    // If terrain walls are present, see if at least 2 walls block this pixel from the light.
+    if ( !inShadow && terrainWallsToProcess > 1 ) {
+      bool terrainWallShadows = false;
+      for ( int j = 0; j < MAX_NUM_WALLS; j++ ) {
+        if ( j >= terrainWallsToProcess ) break;
+
+        vec3 terrainWallTL = EV_terrainWallCoords[j * 2];
+        vec3 terrainWallBR = EV_terrainWallCoords[(j * 2) + 1];
+
+        bool thisTerrainWallInShadow = locationInWallShadow(
+          terrainWallTL,
+          terrainWallBR,
+          EV_terrainWallDistances[j],
+          EV_sourceLocation,
+          pixelLocation,
+          percentDistanceFromWall
+        );
+
+        if ( thisTerrainWallInShadow && terrainWallShadows ) {
+          inShadow = true;
+        }
+
+        if ( thisTerrainWallInShadow ) {
+          terrainWallShadows = true;
+        }
       }
     }
 
