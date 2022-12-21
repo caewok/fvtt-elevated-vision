@@ -1,3 +1,11 @@
+## 0.3.0
+Add a shared geometry git submodule.
+Clearly differentiate WebGL vs non-WebGL (Polygons) shadows in settings.
+Add setting to disable shadows altogether (issue #30).
+Handle limited-sight (terrain) walls in both Polygons and WebGL settings (issue #21).
+Handle shadows for walls whose bottom elevation is above the canvas (issue #33).
+Fix for conflict with Flying Tokens Module (issue #32).
+
 ## 0.2.1
 Potential fix for issue #29 (canvas freeze re "rangeBottom")
 
