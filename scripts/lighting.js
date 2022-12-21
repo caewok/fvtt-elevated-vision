@@ -7,6 +7,7 @@ PIXI
 
 import { log } from "./util.js";
 import { ShaderPatcher, applyPatches } from "./perfect-vision/shader-patcher.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 
 /** To test a light
 drawing = game.modules.get("elevatedvision").api.drawing
@@ -540,13 +541,11 @@ function addWallDataToShaderArrays(w, wallDistances, wallCoords, source, r_inv =
   // Because walls are rectangular, we can pass the top-left and bottom-right corners
   const { x, y, radius } = source;
   const center = {x, y};
-  const wallA = { x: w.A.x, y: w.A.y, z: w.topZ };
-  const wallB = { x: w.B.x, y: w.B.y, z: w.bottomZ };
-  if ( !isFinite(wallA.z) ) wallA.z = 10000;
-  if ( !isFinite(wallB.z) ) wallB.z = -10000;
 
-  const a = pointCircleCoord(wallA, radius, center, r_inv);
-  const b = pointCircleCoord(wallB, radius, center, r_inv);
+  const wallPoints = Point3d.fromWall(w, { finite: true });
+
+  const a = pointCircleCoord(wallPoints.A.top, radius, center, r_inv);
+  const b = pointCircleCoord(wallPoints.B.bottom, radius, center, r_inv);
 
   // Point where line from light, perpendicular to wall, intersects
   const center_shader = {x: 0.5, y: 0.5};
