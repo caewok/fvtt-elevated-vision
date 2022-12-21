@@ -31,6 +31,7 @@ https://ptb.discord.com/channels/732325252788387980/734082399453052938/100695808
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
 const MAX_NUM_WALLS = 100;
+const MAX_NUM_WALL_ENDPOINTS = MAX_NUM_WALLS * 2;
 
 const FN_ORIENT2D =
 `
@@ -120,10 +121,10 @@ const FN_LOCATION_IN_WALL_SHADOW =
 `
   percentDistanceFromWall = 0.0; // Set a default value when returning early.
 
-  vec3 Atop = vec3(wall.xy, wallElevation);
-  vec3 Btop = vec3(wall.zw, wallElevation);
-  vec3 Abottom = vec3(wall.xy, -10000);
-  vec3 Bbottom = vec3(wall.xy, -10000);
+  vec3 Atop = wallTL;
+  vec3 Abottom = vec3(wallTL.xy, wallBR.z);
+  vec3 Btop = vec3(wallBR.xy, wallTL.z);
+  vec3 Bbottom = wallBR;
 
   // Shoot a ray from the pixel toward the source to see if it intersects the wall
   vec3 rayDirection = sourceLocation - pixelLocation;
@@ -135,7 +136,7 @@ const FN_LOCATION_IN_WALL_SHADOW =
 
   // atan(opp/adj) equivalent to JS Math.atan(opp/adj)
   // atan(y, x) equivalent to JS Math.atan2(y, x)
-  float adjWe = wallElevation - pixelLocation.z;
+  float adjWe = wallTL.z - pixelLocation.z;
   float adjSourceElevation = sourceLocation.z - pixelLocation.z;
   float theta = atan((adjSourceElevation - adjWe) /  wallDistance);
 
@@ -176,8 +177,8 @@ float canvasElevationFromPixel(in float pixel, in vec4 EV_elevationResolution) {
 
 // Determine if a given location from a wall is in shadow or not.
 bool locationInWallShadow(
-  in vec4 wall,
-  in float wallElevation,
+  in vec3 wallTL,
+  in vec3 wallBR,
   in float wallDistance, // distance from source location to wall
   in vec3 sourceLocation,
   in vec3 pixelLocation,
@@ -208,9 +209,12 @@ vec3 pixelLocation = vec3(vUvs.xy, pixelElevation);
 for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
   if ( i >= wallsToProcess ) break;
 
+  vec3 wallTL = EV_wallCoords[i * 2];
+  vec3 wallBR = EV_wallCoords[(i * 2) + 1];
+
   bool thisWallInShadow = locationInWallShadow(
-    EV_wallCoords[i],
-    EV_wallElevations[i],
+    wallTL,
+    wallBR,
     EV_wallDistances[i],
     EV_sourceLocation,
     pixelLocation,
@@ -238,8 +242,7 @@ function addShadowCode(source) {
       .setSource(source)
 
       .addUniform("EV_numWalls", "int")
-      .addUniform("EV_wallCoords[MAX_NUM_WALLS]", "vec4")
-      .addUniform("EV_wallElevations[MAX_NUM_WALLS]", "float")
+      .addUniform("EV_wallCoords[MAX_NUM_WALL_ENDPOINTS]", "vec3")
       .addUniform("EV_wallDistances[MAX_NUM_WALLS]", "float")
       .addUniform("EV_sourceLocation", "vec3")
       .addUniform("EV_isVision", "bool")
@@ -250,8 +253,8 @@ function addShadowCode(source) {
 
       // Functions must be in reverse-order of dependency.
       .addFunction("locationInWallShadow", "bool", FN_LOCATION_IN_WALL_SHADOW, [
-        { qualifier: "in", type: "vec4", name: "wall" },
-        { qualifier: "in", type: "float", name: "wallElevation" },
+        { qualifier: "in", type: "vec3", name: "wallTL" },
+        { qualifier: "in", type: "vec3", name: "wallBR" },
         { qualifier: "in", type: "float", name: "wallDistance" },
         { qualifier: "in", type: "vec3", name: "sourceLocation" },
         { qualifier: "in", type: "vec3", name: "pixelLocation" },
@@ -291,6 +294,7 @@ function addShadowCode(source) {
 
       // Add define after so it appears near the top
       .prependBlock(`#define MAX_NUM_WALLS ${MAX_NUM_WALLS}`)
+      .prependBlock(`#define MAX_NUM_WALL_ENDPOINTS ${MAX_NUM_WALL_ENDPOINTS}`)
 
       .replace(/float depth = smoothstep[(]0.0, 1.0, vDepth[)];/, DEPTH_CALCULATION)
 
@@ -328,10 +332,10 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
 
   const shader = wrapped(...args);
   shader.uniforms.EV_numWalls = 0;
-  shader.uniforms.EV_wallElevations = new Float32Array(MAX_NUM_WALLS);
-  shader.uniforms.EV_wallCoords = new Float32Array(MAX_NUM_WALLS*4);
+  shader.uniforms.EV_wallElevations = [0];
+  shader.uniforms.EV_wallCoords = [0, 0, 0, 0, 0, 0];
   shader.uniforms.EV_sourceLocation = [0.5, 0.5, 0.5];
-  shader.uniforms.EV_wallDistances = new Float32Array(MAX_NUM_WALLS);
+  shader.uniforms.EV_wallDistances = [0];
   shader.uniforms.EV_isVision = false;
   shader.uniforms.EV_elevationSampler = canvas.elevation._elevationTexture ?? PIXI.Texture.EMPTY;
 
@@ -424,8 +428,14 @@ export function _updateEVLightUniformsLightSource(mesh) {
   let wallDistances = [];
 
   for ( const w of walls ) {
-    const a = pointCircleCoord(w.A, radius, center, r_inv);
-    const b = pointCircleCoord(w.B, radius, center, r_inv);
+    // Because walls are rectangular, we can pass the top-left and bottom-right corners
+    const wallA = { x: w.A.x, y: w.A.y, z: w.topZ };
+    const wallB = { x: w.B.x, y: w.B.y, z: w.bottomZ };
+    if ( !isFinite(wallA.z) ) wallA.z = 10000;
+    if ( !isFinite(wallB.z) ) wallB.z = -10000;
+
+    const a = pointCircleCoord(wallA, radius, center, r_inv);
+    const b = pointCircleCoord(wallB, radius, center, r_inv);
 
     // Point where line from light, perpendicular to wall, intersects
     const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center_shader);
@@ -434,14 +444,14 @@ export function _updateEVLightUniformsLightSource(mesh) {
     wallDistances.push(wallOriginDist);
     wallElevations.push(w.topZ * 0.5 * r_inv);
 
-    wallCoords.push(a.x, a.y, b.x, b.y);
+    wallCoords.push(a.x, a.y, a.z, b.x, b.y, b.z);
   }
 
   u.EV_numWalls = wallElevations.length;
 
-  if ( !wallCoords.length ) wallCoords = new Float32Array(MAX_NUM_WALLS*4);
-  if ( !wallElevations.length ) wallElevations = new Float32Array(MAX_NUM_WALLS);
-  if ( !wallDistances.length ) wallDistances = new Float32Array(MAX_NUM_WALLS);
+  if ( !wallCoords.length ) wallCoords = [0, 0, 0, 0, 0, 0];
+  if ( !wallElevations.length ) wallElevations = [0];
+  if ( !wallDistances.length ) wallDistances = [0];
 
   u.EV_wallCoords = wallCoords;
   u.EV_wallElevations = wallElevations;
@@ -502,7 +512,8 @@ export function _updateEVLightUniformsLightSource(mesh) {
 export function pointCircleCoord(point, r, center, r_inv = 1 / r) {
   return {
     x: circleCoord(point.x, r, center.x, r_inv),
-    y: circleCoord(point.y, r, center.y, r_inv)
+    y: circleCoord(point.y, r, center.y, r_inv),
+    z: point.z * 0.5 * r_inv
   };
 }
 

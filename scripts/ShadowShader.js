@@ -9,6 +9,7 @@ import { FRAGMENT_FUNCTIONS, pointCircleCoord } from "./lighting.js";
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
 const MAX_NUM_WALLS = 100;
+const MAX_NUM_WALL_ENDPOINTS = MAX_NUM_WALLS * 2;
 
 export class ShadowShader extends PIXI.Shader {
   static vertexShader = `
@@ -38,6 +39,7 @@ export class ShadowShader extends PIXI.Shader {
 
   static fragmentShader = `
   #define MAX_NUM_WALLS ${MAX_NUM_WALLS}
+  #define MAX_NUM_WALL_ENDPOINTS ${MAX_NUM_WALL_ENDPOINTS}
 
   varying vec2 vTextureCoord;
   uniform sampler2D sampler;
@@ -55,8 +57,7 @@ export class ShadowShader extends PIXI.Shader {
   uniform int EV_numWalls;
 
   // Wall data, in vUvs coordinate space
-  uniform vec4 EV_wallCoords[MAX_NUM_WALLS];
-  uniform float EV_wallElevations[MAX_NUM_WALLS];
+  uniform vec3 EV_wallCoords[MAX_NUM_WALL_ENDPOINTS];
   uniform float EV_wallDistances[MAX_NUM_WALLS];
 
   void main() {
@@ -79,9 +80,12 @@ export class ShadowShader extends PIXI.Shader {
     for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
       if ( i >= wallsToProcess ) break;
 
+      vec3 wallTL = EV_wallCoords[i * 2];
+      vec3 wallBR = EV_wallCoords[(i * 2) + 1];
+
       bool thisWallInShadow = locationInWallShadow(
-        EV_wallCoords[i],
-        EV_wallElevations[i],
+        wallTL,
+        wallBR,
         EV_wallDistances[i],
         EV_sourceLocation,
         pixelLocation,
@@ -220,11 +224,16 @@ export class ShadowShader extends PIXI.Shader {
     const center_shader = {x: 0.5, y: 0.5};
     const walls = source.los.wallsBelowSource || new Set();
     let wallCoords = [];
-    let wallElevations = [];
     let wallDistances = [];
     for ( const w of walls ) {
-      const a = pointCircleCoord(w.A, radius, center, r_inv);
-      const b = pointCircleCoord(w.B, radius, center, r_inv);
+      // Because walls are rectangular, we can pass the top-left and bottom-right corners
+      const wallA = { x: w.A.x, y: w.A.y, z: w.topZ };
+      const wallB = { x: w.B.x, y: w.B.y, z: w.bottomZ };
+      if ( !isFinite(wallA.z) ) wallA.z = 10000;
+      if ( !isFinite(wallB.z) ) wallB.z = -10000;
+
+      const a = pointCircleCoord(wallA, radius, center, r_inv);
+      const b = pointCircleCoord(wallB, radius, center, r_inv);
 
       // Point where line from light, perpendicular to wall, intersects
       const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center_shader);
@@ -232,18 +241,15 @@ export class ShadowShader extends PIXI.Shader {
 
       const wallOriginDist = PIXI.Point.distanceBetween(center_shader, wallIx);
       wallDistances.push(wallOriginDist);
-      wallElevations.push(w.topZ * 0.5 * r_inv);
-      wallCoords.push(a.x, a.y, b.x, b.y);
+      wallCoords.push(a.x, a.y, a.z, b.x, b.y, b.z);
     }
 
-    uniforms.EV_numWalls = wallElevations.length;
+    uniforms.EV_numWalls = wallDistances.length;
 
     if ( !wallCoords.length ) wallCoords = new Float32Array(MAX_NUM_WALLS*4);
-    if ( !wallElevations.length ) wallElevations = new Float32Array(MAX_NUM_WALLS);
     if ( !wallDistances.length ) wallDistances = new Float32Array(MAX_NUM_WALLS);
 
     uniforms.EV_wallCoords = wallCoords;
-    uniforms.EV_wallElevations = wallElevations;
     uniforms.EV_wallDistances = wallDistances;
   }
 }
