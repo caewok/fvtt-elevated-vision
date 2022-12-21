@@ -223,6 +223,9 @@ export class ShadowShader extends PIXI.Shader {
     const center = {x, y};
     const center_shader = {x: 0.5, y: 0.5};
     const walls = source.los._elevatedvision.wallsBelowSource || new Set();
+    const heightWalls = source.los._elevatedvision.heightWalls || new Set();
+    const terrainWalls = source.los._elevatedvision.terrainWalls || new Set();
+
     let wallCoords = [];
     let wallDistances = [];
     for ( const w of walls ) {

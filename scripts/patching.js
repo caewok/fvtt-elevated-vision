@@ -45,8 +45,7 @@ import {
 
 import {
   _computeClockwiseSweepPolygon,
-  _drawShadowsClockwiseSweepPolygon,
-  _testShadowWallInclusionClockwisePolygonSweep
+  _drawShadowsClockwiseSweepPolygon
 } from "./clockwise_sweep.js";
 
 // A: shader / not shader
@@ -80,12 +79,6 @@ export function registerAdditions() {
 
   Object.defineProperty(ClockwiseSweepPolygon.prototype, "_drawShadows", {
     value: _drawShadowsClockwiseSweepPolygon,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_testShadowWallInclusion", {
-    value: _testShadowWallInclusionClockwisePolygonSweep,
     writable: true,
     configurable: true
   });
