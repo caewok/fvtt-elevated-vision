@@ -6,6 +6,7 @@ foundry
 "use strict";
 
 import { FRAGMENT_FUNCTIONS } from "./lighting.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
 const MAX_NUM_WALLS = 100;
@@ -269,13 +270,11 @@ function addWallDataToShaderArrays(w, wallDistances, wallCoords, source) {
   // Because walls are rectangular, we can pass the top-left and bottom-right corners
   const { x, y } = source;
   const center = {x, y};
-  const wallA = { x: w.A.x, y: w.A.y, z: w.topZ };
-  const wallB = { x: w.B.x, y: w.B.y, z: w.bottomZ };
-  if ( !isFinite(wallA.z) ) wallA.z = 10000;
-  if ( !isFinite(wallB.z) ) wallB.z = -10000;
 
-  const a = wallA;
-  const b = wallB;
+  const wallPoints = Point3d.fromWall(w, { finite: true });
+
+  const a = wallPoints.A.top;
+  const b = wallPoints.B.bottom;
 
   // Point where line from light, perpendicular to wall, intersects
   const center_shader = {x: 0.5, y: 0.5};
