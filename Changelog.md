@@ -1,3 +1,6 @@
+## 0.3.1
+Fix scene failing to load for scenes with existing sources (issue #34).
+
 ## 0.3.0
 Add a shared geometry git submodule.
 Clearly differentiate WebGL vs non-WebGL (Polygons) shadows in settings.
