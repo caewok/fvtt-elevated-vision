@@ -232,8 +232,8 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
 
     // Construct wall data
     const center = {x, y};
-    const heightWalls = source.los._elevatedvision.heightWalls || new Set();
-    const terrainWalls = source.los._elevatedvision.terrainWalls || new Set();
+    const heightWalls = source.los._elevatedvision?.heightWalls || new Set();
+    const terrainWalls = source.los._elevatedvision?.terrainWalls || new Set();
 
     let terrainWallCoords = [];
     let terrainWallDistances = [];
