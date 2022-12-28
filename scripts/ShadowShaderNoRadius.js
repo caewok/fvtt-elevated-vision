@@ -17,14 +17,13 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
   attribute vec2 aVertexPosition;
   uniform mat3 projectionMatrix;
   uniform mat3 translationMatrix;
-  uniform mat3 textureMatrix;
   uniform vec2 EV_canvasDims;
-  varying vec2 vTextureCoord;
+  varying vec2 vEVCanvasCoord;
   varying vec2 vEVTextureCoord;
 
   void main() {
-    vTextureCoord = (textureMatrix * vec3(aVertexPosition, 1.0)).xy;
-    vEVTextureCoord = vTextureCoord / EV_canvasDims;
+    vEVCanvasCoord = aVertexPosition;
+    vEVTextureCoord = aVertexPosition / EV_canvasDims;
     gl_Position = vec4((projectionMatrix * (translationMatrix * vec3(aVertexPosition, 1.0))).xy, 0.0, 1.0);
   }
   `;
@@ -32,11 +31,6 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
   static fragmentShader = `
   #define MAX_NUM_WALLS ${MAX_NUM_WALLS}
   #define MAX_NUM_WALL_ENDPOINTS ${MAX_NUM_WALL_ENDPOINTS}
-
-  varying vec2 vTextureCoord;
-  uniform sampler2D sampler;
-  uniform float alphaThreshold;
-  uniform float depthElevation;
 
   ${FRAGMENT_FUNCTIONS}
 
@@ -47,6 +41,7 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
   uniform int EV_numWalls;
   uniform int EV_numTerrainWalls;
 
+  varying vec2 vEVCanvasCoord;
   varying vec2 vEVTextureCoord;
 
   // Wall data, in coordinate space
@@ -56,10 +51,6 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
   uniform float EV_terrainWallDistances[MAX_NUM_WALLS];
 
   void main() {
-    if ( texture2D(sampler, vTextureCoord).a <= alphaThreshold ) {
-      discard;
-    }
-
     vec4 backgroundElevation = texture2D(EV_elevationSampler, vEVTextureCoord);
     float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
 
@@ -74,7 +65,7 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
       terrainWallsToProcess = 0;
     }
 
-    vec3 pixelLocation = vec3(vTextureCoord.xy, pixelElevation);
+    vec3 pixelLocation = vec3(vEVCanvasCoord, pixelElevation);
     for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
       if ( i >= wallsToProcess ) break;
 
@@ -133,12 +124,7 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
   }
   `;
 
-  static defaultUniforms = {
-    sampler: PIXI.Texture.WHITE,
-    textureMatrix: PIXI.Matrix.IDENTITY,
-    alphaThreshold: 0.75,
-    depthElevation: 0
-  };
+  static defaultUniforms = {};
 
   static #program;
 
@@ -155,55 +141,6 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
 
     return new this(program, uniforms);
   }
-
-  /**
-   * The texture.
-   * @type {PIXI.Texture}
-   */
-  get texture() {
-    return this.uniforms.sampler;
-  }
-
-  set texture(value) {
-    this.uniforms.sampler = value;
-  }
-
-  /**
-   * The texture matrix.
-   * @type {PIXI.Texture}
-   */
-  get textureMatrix() {
-    return this.uniforms.textureMatrix;
-  }
-
-  set textureMatrix(value) {
-    this.uniforms.textureMatrix = value;
-  }
-
-  /**
-   * The alpha threshold.
-   * @type {number}
-   */
-  get alphaThreshold() {
-    return this.uniforms.alphaThreshold;
-  }
-
-  set alphaThreshold(value) {
-    this.uniforms.alphaThreshold = value;
-  }
-
-  /**
-   * The depth elevation.
-   * @type {number}
-   */
-  get depthElevation() {
-    return this.uniforms.depthElevation;
-  }
-
-  set depthElevation(value) {
-    this.uniforms.depthElevation = value;
-  }
-
 
   updateUniforms(source) {
     const uniforms = this.uniforms;

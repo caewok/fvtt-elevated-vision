@@ -13,6 +13,7 @@ import { Shadow, ShadowProjection } from "./geometry/Shadow.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Plane } from "./geometry/3d/Plane.js";
 import { getSetting, SETTINGS } from "./settings.js";
+import { MODULES_ACTIVE } from "./const.js";
 
 /**
  * Wrap ClockwisePolygonSweep.prototype._identifyEdges
@@ -139,7 +140,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
     if ( !shadowPoints.length ) continue;
     this._elevatedvision.shadows.push(new Shadow(shadowPoints));
   }
-  if ( !this._elevatedvision.shadows.length ) return;
+  if ( !this._elevatedvision.shadows.length || MODULES_ACTIVE.PERFECT_VISION ) return;
 
   // Combine the shadows and trim to be within the LOS
   // We want one or more LOS polygons along with non-overlapping holes.

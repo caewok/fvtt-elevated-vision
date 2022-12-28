@@ -17,23 +17,19 @@ export class ShadowShader extends PIXI.Shader {
   attribute vec2 aVertexPosition;
   uniform mat3 projectionMatrix;
   uniform mat3 translationMatrix;
-  uniform mat3 textureMatrix;
-  varying vec2 vTextureCoord;
 
   // EV-specific variables
   uniform vec4 EV_transform;
-  varying vec2 vUvs;
-  varying vec2 vSamplerUvs;
   varying vec2 EV_textureCoord;
 
+  varying vec2 vUvs;
+  varying vec2 vSamplerUvs;
+
   void main() {
-    // EV-specific calcs
-    vec3 tPos = translationMatrix * vec3(aVertexPosition, 1.0);
     vUvs = aVertexPosition * 0.5 + 0.5;
+    // EV-specific calcs
     EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
     // TO-DO: drop vUvs and just use aVertexPosition?
-
-    vTextureCoord = (textureMatrix * vec3(aVertexPosition, 1.0)).xy;
     gl_Position = vec4((projectionMatrix * (translationMatrix * vec3(aVertexPosition, 1.0))).xy, 0.0, 1.0);
   }
   `;
@@ -41,11 +37,6 @@ export class ShadowShader extends PIXI.Shader {
   static fragmentShader = `
   #define MAX_NUM_WALLS ${MAX_NUM_WALLS}
   #define MAX_NUM_WALL_ENDPOINTS ${MAX_NUM_WALL_ENDPOINTS}
-
-  varying vec2 vTextureCoord;
-  uniform sampler2D sampler;
-  uniform float alphaThreshold;
-  uniform float depthElevation;
 
   ${FRAGMENT_FUNCTIONS}
 
@@ -65,10 +56,6 @@ export class ShadowShader extends PIXI.Shader {
   uniform float EV_terrainWallDistances[MAX_NUM_WALLS];
 
   void main() {
-    if ( texture2D(sampler, vTextureCoord).a <= alphaThreshold ) {
-      discard;
-    }
-
     vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
     float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
     bool inShadow = false;
@@ -141,12 +128,7 @@ export class ShadowShader extends PIXI.Shader {
   }
   `;
 
-  static defaultUniforms = {
-    sampler: PIXI.Texture.WHITE,
-    textureMatrix: PIXI.Matrix.IDENTITY,
-    alphaThreshold: 0.75,
-    depthElevation: 0
-  };
+  static defaultUniforms = {};
 
   static #program;
 
@@ -162,54 +144,6 @@ export class ShadowShader extends PIXI.Shader {
     );
 
     return new this(program, uniforms);
-  }
-
-  /**
-   * The texture.
-   * @type {PIXI.Texture}
-   */
-  get texture() {
-    return this.uniforms.sampler;
-  }
-
-  set texture(value) {
-    this.uniforms.sampler = value;
-  }
-
-  /**
-   * The texture matrix.
-   * @type {PIXI.Texture}
-   */
-  get textureMatrix() {
-    return this.uniforms.textureMatrix;
-  }
-
-  set textureMatrix(value) {
-    this.uniforms.textureMatrix = value;
-  }
-
-  /**
-   * The alpha threshold.
-   * @type {number}
-   */
-  get alphaThreshold() {
-    return this.uniforms.alphaThreshold;
-  }
-
-  set alphaThreshold(value) {
-    this.uniforms.alphaThreshold = value;
-  }
-
-  /**
-   * The depth elevation.
-   * @type {number}
-   */
-  get depthElevation() {
-    return this.uniforms.depthElevation;
-  }
-
-  set depthElevation(value) {
-    this.uniforms.depthElevation = value;
   }
 
   updateUniforms(source) {

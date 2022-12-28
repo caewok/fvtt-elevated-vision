@@ -111,21 +111,6 @@ export function drawPolygonWithHoles(polygonArray, {
   graphics.endFill();
 }
 
-export function drawPolygonWithHolesPV(polygonArray, {
-  graphics,
-  fillColor = 0xFFFFFF,
-  alpha = 1.0 } = {}) {
-
-  for ( const poly of polygonArray ) {
-    const g1 = new PIXI.LegacyGraphics();
-    graphics.addChild(g1);
-    g1.beginFill(fillColor, alpha).drawShape(poly).endFill();
-    g1._stencilHole = poly.isHole;
-  }
-  return graphics;
-}
-
-
 /**
  * From https://stackoverflow.com/questions/14446511/most-efficient-method-to-groupby-on-an-array-of-objects
  * Takes an Array<V>, and a grouping function,

@@ -9,7 +9,7 @@ PointSource
 */
 "use strict";
 
-import { drawPolygonWithHoles, drawPolygonWithHolesPV } from "./util.js";
+import { drawPolygonWithHoles } from "./util.js";
 import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 
@@ -92,41 +92,6 @@ export function refreshCanvasVisibilityPolygons({forceUpdateFog=false}={}) {
   this.restrictVisibility();
 }
 
-
-/**
- * Override for creating vision with polygon shadow holes, compatible with Perfect Vision.
- * Add the holes directly when creating the vision object.
- */
-export function createVisionCanvasVisionMaskPV(wrapper) {
-  const vision = wrapper();
-
-  for ( let lightSource of canvas.effects.lightSources ) {
-    if ( !canvas.effects.visionSources.size
-      || !lightSource.active
-      || lightSource.disabled
-      || lightSource instanceof GlobalLightSource ) continue;
-
-    const shadows = lightSource.los._elevatedvision?.combinedShadows || [];
-    if ( shadows.length ) {
-      drawPolygonWithHolesPV(shadows, { graphics: vision.fov });
-
-      if ( lightSource.data.vision ) {
-        drawPolygonWithHolesPV(shadows, { graphics: vision.los });
-      }
-    }
-  }
-
-  for ( let visionSource of canvas.effects.visionSources ) {
-    const shadows = visionSource.los._elevatedvision?.combinedShadows || [];
-    if ( shadows.length ) {
-      drawPolygonWithHolesPV(shadows, { graphics: vision.los });
-    }
-  }
-
-  return vision;
-}
-
-
 /**
  * Wrap VisionSource.prototype._updateLosGeometry
  * Add simple geometry for using ShadowShader without a radius
@@ -183,39 +148,13 @@ export function _createEVMeshLightSource() {
   return mesh;
 }
 
-
-export function _createEVMeshVisionSourcePV(type = "los") {
-  if ( type === "los" ) {
-    const mesh = this._createMesh(ShadowShaderNoRadius);
-    mesh.geometry = this._sourceLosGeometry;
-    return mesh;
-  }
-
-  const mesh = this._createMesh(ShadowShader);
-  mesh.geometry = this._sourceGeometry;
-  return mesh;
-}
-
-export function _createEVMeshLightSourcePV() {
-  const mesh = this._createMesh(ShadowShader);
-  mesh.geometry = this._sourceGeometry;
-  return mesh;
-}
-
 /**
  * Create an EV shadow mask of the LOS polygon.
  * @returns {PIXI.Mesh}
  */
 export function _createEVMask(type = "los") {
   const mesh = this._createEVMesh(type);
-
-//   const shader = mesh.shader;
-//   shader.texture = this.texture ?? PIXI.Texture.WHITE;
-//   shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
-//   shader.alphaThreshold = 0.75;
-
   mesh.shader.updateUniforms(this);
-
   return mesh;
 }
 
@@ -289,20 +228,46 @@ export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
 
 
 /**
- * Override VisionSource.prototype._createMask
- * Added by Perfect Vision.
+ * Override LightSource/VisionSource.prototype._createMask
+ * Added by Perfect Vision
  */
-export function _createMaskVisionSourcePV(los = false) {
-  return this._createEVMask(los ? "los" : "fov");
+export function _createMaskPolygons(wrapped, ...args) {
+  const mesh = wrapped(...args);
+  const shadows = this.los._elevatedvision?.shadows;
+  if ( shadows?.length ) {
+    const graphics = mesh.addChild(new PIXI.LegacyGraphics());
+    graphics.beginFill();
+    for ( const shadow of shadows ) {
+      graphics.drawShape(shadow);
+    }
+    graphics.endFill();
+    graphics.renderable = false;
+    graphics._stencilHole = true;
+    mesh._stencilMasks = [mesh, graphics];
+  }
+  return mesh;
+}
+
+/**
+ * Override VisionSource.prototype._createMask
+ * Added by Perfect Vision
+ */
+export function _createMaskVisionSourceShader(wrapped, los = false) {
+  const mesh = wrapped(los);
+  mesh.shader = (los ? ShadowShaderNoRadius : ShadowShader).create();
+  mesh.shader.updateUniforms(this);
+  return mesh;
 }
 
 /**
  * Override LightSource.prototype._createMask
  * Added by Perfect Vision
- * Avoid creating a mask for LightingRegionSource (GlobalLightSource)
  */
-export function _createMaskLightSourcePV(wrapped) {
-  if ( this.constructor.name === "LightingRegionSource" ) return wrapped();
-  return this._createEVMask();
+export function _createMaskLightSourceShader(wrapped) {
+  const mesh = wrapped();
+  if ( !(this instanceof GlobalLightSource) ) {
+    mesh.shader = ShadowShader.create();
+    mesh.shader.updateUniforms(this);
+  }
+  return mesh;
 }
-

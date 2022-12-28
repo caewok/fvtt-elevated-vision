@@ -30,16 +30,14 @@ import {
 import {
   refreshCanvasVisibilityPolygons,
   refreshCanvasVisibilityShader,
-  createVisionCanvasVisionMaskPV,
   _createEVMask,
   _createEVMeshVisionSource,
   _createEVMeshLightSource,
-  _createMaskVisionSourcePV,
-  _createMaskLightSourcePV,
+  _createMaskPolygons,
+  _createMaskVisionSourceShader,
+  _createMaskLightSourceShader,
   _updateLosGeometryLightSource,
-  _updateLosGeometryVisionSource,
-  _createEVMeshVisionSourcePV,
-  _createEVMeshLightSourcePV
+  _updateLosGeometryVisionSource
 
 } from "./vision.js";
 
@@ -89,7 +87,7 @@ export function registerAdditions() {
     case SHADER_SWITCH.NO_SHADER: break;
     case SHADER_SWITCH.SHADER: shaderAdditions(); break;
     case SHADER_SWITCH.PV_NO_SHADER: break;
-    case SHADER_SWITCH.PV_SHADER: shaderPVAdditions(); break;
+    case SHADER_SWITCH.PV_SHADER: break;
   }
 
 }
@@ -120,33 +118,6 @@ function shaderAdditions() {
   });
 
 }
-
-function shaderPVAdditions() {
-  Object.defineProperty(VisionSource.prototype, "_createEVMesh", {
-    value: _createEVMeshVisionSourcePV,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(LightSource.prototype, "_createEVMesh", {
-    value: _createEVMeshLightSourcePV,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(VisionSource.prototype, "_createEVMask", {
-    value: _createEVMask,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(LightSource.prototype, "_createEVMask", {
-    value: _createEVMask,
-    writable: true,
-    configurable: true
-  });
-}
-
 
 export function registerPatches() {
   const shaderAlgorithm = getSetting(SETTINGS.SHADING.ALGORITHM);
@@ -186,11 +157,12 @@ export function registerPatches() {
       libWrapper.register(MODULE_ID, "CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
       break;
     case SHADER_SWITCH.PV_NO_SHADER:
-      libWrapper.register(MODULE_ID, "CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMaskPV, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "VisionSource.prototype._createMask", _createMaskPolygons, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "LightSource.prototype._createMask", _createMaskPolygons, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
       break;
     case SHADER_SWITCH.PV_SHADER:
-      libWrapper.register(MODULE_ID, "VisionSource.prototype._createMask", _createMaskVisionSourcePV, libWrapper.OVERRIDE, {perf_mode: libWrapper.PERF_FAST});
-      libWrapper.register(MODULE_ID, "LightSource.prototype._createMask", _createMaskLightSourcePV, libWrapper.MIXED, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "VisionSource.prototype._createMask", _createMaskVisionSourceShader, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+      libWrapper.register(MODULE_ID, "LightSource.prototype._createMask", _createMaskLightSourceShader, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
       break;
   }
 
