@@ -1,3 +1,6 @@
+## 0.3.2
+Update to geometry lib v0.1.1.
+
 ## 0.3.1
 Fix scene failing to load for scenes with existing sources (issue #34).
 
