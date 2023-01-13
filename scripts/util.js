@@ -245,6 +245,8 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
   return ix;
 }
 
+
+
 /**
  * Get the intersection of a 3d line with a wall extended as a plane.
  * See https://stackoverflow.com/questions/5666222/3d-line-plane-intersection
