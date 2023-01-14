@@ -69,7 +69,7 @@ export class WallTracerEdge {
    * @param {WallTracerEdge} item   WallTracerEdge with a t0 property.
    * @returns {number} The t0 property, rounded.
    */
-  static _keyGetter(item) { return Math.roundDecimals(item.t0, WallTracerEdge.PLACES); }
+  static _keyGetter(item) { return Math.roundDecimals(item._, WallTracerEdge.PLACES); }
 
   /** @type {string} */
   get id() { return this.wall.id; }
@@ -89,7 +89,9 @@ export class WallTracerEdge {
   get collisionsMap() {
     if ( this._collisionsMap ) return this._collisionsMap;
     const collisions = this.collisions;
-    this._collisionsMap = groupBy(collisions, WallTracerEdge._keyGetter);
+    const wallCollisionMap = this._wallCollisionMap;
+    const keyGetter = item => Math.roundDecimals(wallCollisionMap.get(item.wall).t, WallTracerEdge.PLACES);
+    this._collisionsMap = groupBy(collisions, keyGetter);
     return this._collisionsMap;
   }
 
@@ -98,8 +100,24 @@ export class WallTracerEdge {
     if ( this._reverseCollisionsMap ) return this._reverseCollisionsMap;
     const collisions = this.collisions;
     const revCollisions = [...collisions].reverse(); // Don't modify the original array.
-    this._reverseCollisionsMap = groupBy(revCollisions, WallTracerEdge._keyGetter);
+    const wallCollisionMap = this._wallCollisionMap;
+    const keyGetter = item => Math.roundDecimals(wallCollisionMap.get(item.wall).t, WallTracerEdge.PLACES);
+    this._reverseCollisionsMap = groupBy(revCollisions, keyGetter);
     return this._reverseCollisionsMap;
+  }
+
+  /**
+   * Get the collision point for a wall that collides with this edge, along with the ratio along the wall.
+   * @param {Wall} wall
+   * @returns {PIXI.Point} Point with an additional property t indicating the ratio along this wall.
+   */
+  collisionLocationForWall(wall) {
+    this.collisions; // Trigger collision detection
+    const obj = this._wallCollisionMap.get(wall);
+    if ( !obj ) return null;
+    const out = new PIXI.Point(obj.pt.x, obj.pt.y);
+    out.t = obj.t;
+    return out;
   }
 
   /**
@@ -125,7 +143,7 @@ export class WallTracerEdge {
    * @param {boolean} [options.cw]      If true, search for cw edges; if false, ccw.
    * @returns {WallTracerEdge|null}
    */
-  nextEdgeFromIx(t = 0, { AtoB = true, cw = true } = {}) {
+  nextEdgeFromRatio(t = 0, { AtoB = true, cw = true } = {}) {
     t = Math.clamped(t, 0, 1);
     const { A, B } = this;
 
@@ -239,22 +257,28 @@ export class WallTracerEdge {
       // Identify:
       // t0: location of the intersection on A|B
       // t1: location of the intersection on eA|eB
-      if ( wall.wallKeys.has(eA.key) || wall.wallKeys.has(eB.key) ) {
-        // Edges share an endpoint.
-        const sharesA = A.almostEqual(eA);
-        this._wallCollisionMap.set(w, { t: sharesA || A.almostEqual(eB) ? 0 : 1, pt: sharesA ? A : B });
-        edge._wallCollisionMap.set(wall, {t: sharesA || eA.almostEqual(B) ? 0 : 1, pt: sharesA ? A : B });
+      if ( A.key === eA.key ) {
+        this._wallCollisionMap.set(w, { t: 0, pt: A });
+        edge._wallCollisionMap.set(wall, { t: 0, pt: A });
+
+      } else if ( A.key === eB.key ) {
+        this._wallCollisionMap.set(w, { t: 0, pt: A });
+        edge._wallCollisionMap.set(wall, { t: 1, pt: A });
+
+      } else if ( B.key === eA.key ) {
+        this._wallCollisionMap.set(w, { t: 1, pt: B });
+        edge._wallCollisionMap.set(wall, { t: 0, pt: B });
+
+      } else if ( B.key === eB.key ) {
+        this._wallCollisionMap.set(w, { t: 1, pt: B });
+        edge._wallCollisionMap.set(wall, { t: 1, pt: B });
 
       } else if ( foundry.utils.lineSegmentIntersects(A, B, eA, eB) ) {
         // Intersects the wall or shares an endpoint or endpoint hits the wall
         const ix = foundry.utils.lineLineIntersection(A, B, eA, eB, { t1: true });
-
         this._wallCollisionMap.set(w, { t: ix.t0, pt: ix });
         edge._wallCollisionMap.set(wall, {t: ix.t1, pt: ix });
 
-
-        edge.t0 = ix.t0;
-        edge.t1 = ix.t1;
       } else {
         // Edge is either completely collinear or does not actually intersect
         const ratioA = segmentRatio(A, B, eA);
@@ -283,21 +307,19 @@ export class WallTracerEdge {
             this._wallCollisionMap.set(w, { t: 0, pt: A });
             edge._wallCollisionMap.set(wall, { t: segmentRatio(eA, eB, A), A });
 
-            edge.t0 = 0;
-            edge.t1 = segmentRatio(eA, eB, A);
           } else if ( ratioB > 1 ) {
             // Segments: A -- eA -- B -- eB
-            edge.t0 = 1;
-            edge.t1 = segmentRatio(eA, eB, B);
+            this._wallCollisionMap.set(w, { t: 1, pt: B });
+            edge._wallCollisionMap.set(wall, { t: segmentRatio(eA, eB, B), B });
           }
         } else if ( bInside ) {
           if ( ratioA < 0 ) {
             // Segments: eA -- A -- eB -- B
-            edge.t0 = 0;
-            edge.t1 = segmentRatio(eA, eB, A);
+            this._wallCollisionMap.set(w, { t: 0, pt: A });
+            edge._wallCollisionMap.set(wall, { t: segmentRatio(eA, eB, A), A });
           } else if ( ratioB > 1 ) {
-            edge.t0 = 1;
-            edge.t1 = segmentRatio(eA, eB, B);
+            this._wallCollisionMap.set(w, { t: 1, pt: B });
+            edge._wallCollisionMap.set(wall, { t: segmentRatio(eA, eB, B), B });
           }
         }
       }
@@ -305,7 +327,7 @@ export class WallTracerEdge {
       collisions.push(edge);
     }
 
-    collisions.sort((a, b) => a.t0 - b.t0);
+    collisions.sort((a, b) => this._wallCollisionMap.get(a.wall).t - this._wallCollisionMap.get(b.wall).t);
     return collisions;
   }
 
@@ -452,7 +474,7 @@ export class WallTracer {
 
     // Add west border walls
     const innerLeft = canvas.walls.innerBounds.find(w => w.id.includes("Left"));
-    const outerLeft = canvas.walls.outerBounds.find(w => w.id.includes("Left"))
+    const outerLeft = canvas.walls.outerBounds.find(w => w.id.includes("Left"));
     westWalls.add(innerLeft);
     westWalls.add(outerLeft);
 
@@ -604,34 +626,40 @@ export class WallTracer {
     // E.g. A -- ix --> B. First point is ix.
     //             \---> A --> ix --> ix1/B. Second point is ix1/B. Etc.
     let currEdge = startingEdge;
-    let currIx = 0;
+    let t = 0;
     let currIter = 0;
-    let nextEdge = currEdge.nextEdgeFromIx(currIx, { AtoB, cw });
+    let nextEdge = currEdge.nextEdgeFromRatio(t, { AtoB, cw });
     while ( nextEdge ) {
+      // Avoid infinite loops and flag errors
       if ( currIter > MAX_ITER ) {
-        console.log("traceWallInDirection exceeded MAX_ITER");
+        console.warn("traceWallInDirection exceeded MAX_ITER");
         break;
       }
       currIter += 1;
 
-      currIx = nextEdge.t1;
-      const pt = nextEdge.pointAtRatio(currIx);
+      // Add the intersection point between currEdge and nextEdge
+      const pt = nextEdge.collisionLocationForWall(currEdge.wall);
       pt.edge = currEdge;
       points.push(pt);
 
-      if ( seenWalls.has(nextEdge.wall) ) {
-        console.log("traceWallInDirection already saw this wall.");
-        break;
-      }
+      // If we have looped back to a wall already seen, we have a closed polygon.
+      if ( seenWalls.has(nextEdge.wall) ) break;
       seenWalls.add(nextEdge.wall);
 
-      // We need to determine which way along the next edge we are tracing: ix --> B or ix --> A
-      const [currA, currB] = AtoB ? [currEdge.A, currEdge.B] : [currEdge.B, currEdge.A];
-      AtoB = currIx === 0 ? true
-        : currIx === 1 ? false
-          : (foundry.utils.orient2dFast(currA, currB, nextEdge.A) < 0 ) ^ cw;
+      // Determine which way along the next edge we are tracing: ix --> B or ix --> A
+      t = pt.t;
+      if ( t === 0 ) AtoB = true;
+      else if ( t === 1 ) AtoB = false;
+      else {
+        // Based on the direction we are currently tracing, find the orientation of the next edge.
+        const [currA, currB] = AtoB ? [currEdge.A, currEdge.B] : [currEdge.B, currEdge.A];
+        AtoB = (foundry.utils.orient2dFast(currA, currB, nextEdge.A) < 0 ) ^ cw;
+      }
+
+      // Cycle to the next edge. Start tracing from t --> endpoint for this edge to find the
+      // next intersection.
       currEdge = nextEdge;
-      nextEdge = currEdge.nextEdgeFromIx(currIx, { AtoB, cw });
+      nextEdge = currEdge.nextEdgeFromRatio(t, { AtoB, cw });
     }
 
     // We only want closed polygons. If there is no next edge, we have hit a dead-end.
