@@ -4,7 +4,10 @@ canvas,
 Ray,
 foundry,
 Quadtree,
-CONFIG
+CONFIG,
+Hooks,
+game,
+Wall
 */
 "use strict";
 
@@ -12,9 +15,10 @@ CONFIG
 
 // WallTracer3
 
-import { groupBy } from "./util.js";
+import { groupBy, log } from "./util.js";
 import { ClipperPaths } from "./geometry/ClipperPaths.js";
 import { Draw } from "./geometry/Draw.js";
+import { MODULE_ID } from "./const.js";
 
 /* WallTracerVertex
 
@@ -94,6 +98,50 @@ So northern hemisphere is negative, southern is positive.
 0 --> -π moves from east to west counterclockwise.
 */
 
+// Track wall creation, update, and deletion, constructing WallTracerEdges as we go.
+Hooks.on("createWall", function(document, _options, _userId) {
+  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+  log(`createWall ${document.id}`);
+
+  // Build the edges for this wall.
+  WallTracerEdge.addWall(document.object);
+  if ( debug ) WallTracerEdge.verifyConnectedEdges();
+});
+
+Hooks.on("updateWall", function(document, changes, _options, _userId) {
+  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+  log("updateWall");
+
+  // Only update the edges if the coordinates have changed.
+  if ( !Object.hasOwn(changes, "c") ) return;
+
+  // Easiest approach is to trash the edges for the wall and re-create them.
+  WallTracerEdge.removeWall(document.id);
+  WallTracerEdge.addWall(document.object);
+  if ( debug ) WallTracerEdge.verifyConnectedEdges();
+});
+
+Hooks.on("deleteWall", function(document, _options, _userId) {
+  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+  log(`deleteWall ${document.id}`);
+
+  // The document.object is now null; use the id to remove the wall.
+  WallTracerEdge.removeWall(document.id);
+  if ( debug ) WallTracerEdge.verifyConnectedEdges();
+});
+
+Hooks.on("canvasReady", function() {
+  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+  log(`canvasReady`);
+
+  // When canvas is ready, the existing walls are not created, so must re-do here.
+  const walls = canvas.walls.placeables;
+  walls.push(...canvas.walls.outerBounds);
+  walls.push(...canvas.walls.innerBounds);
+  for ( const wall of walls ) WallTracerEdge.addWall(wall);
+  if ( debug ) WallTracerEdge.verifyConnectedEdges();
+});
+
 export class WallTracerVertex extends PIXI.Point {
 
   /** @type {Map<number, WallTracerVertex>} */
@@ -159,7 +207,7 @@ export class WallTracerEdge {
    */
   static PLACES = 8;
 
-  /** @type {Map<Wall, WallTracerEdge[]>} */
+  /** @type {Map<string, WallTracerEdge[]>} */
   static _cachedEdges = new Map();
 
   /** @type {Quadtree} */
@@ -226,11 +274,11 @@ export class WallTracerEdge {
     this.delta = new PIXI.Point();
     this.B.subtract(this.A, this.delta);
 
-    // TODO: Should this cache also store a map of intersection keys?
-    if ( !WallTracerEdge._cachedEdges.has(wall) ) WallTracerEdge._cachedEdges.set(wall, new Set([this]));
-    else WallTracerEdge._cachedEdges.get(wall).add(this);
+    if ( !WallTracerEdge._cachedEdges.has(wall.id) ) WallTracerEdge._cachedEdges.set(wall.id, new Set([this]));
+    else WallTracerEdge._cachedEdges.get(wall.id).add(this);
 
-    WallTracerEdge.quadtree.insert({ r: this.bounds, t: this });
+    const bounds = this.bounds;
+    WallTracerEdge.quadtree.insert({ r: bounds, t: this });
     WallTracerEdge.addConnectedEdge(this);
   }
 
@@ -342,35 +390,6 @@ export class WallTracerEdge {
   }
 
   /**
-   * Test all edges connected to this one to see if it belongs in the set.
-   */
-//   static testConnectedEdge(edge, seenEdges = new Set()) {
-//     if ( !edge.A._edges.size || !edge.B._edges.size ) return false;
-//
-//     // If we have circled back to the starting edge, then we have a cycle.
-//     if ( seenEdges.has(edge) ) return true;
-//     seenEdges.add(edge);
-//
-//     let keepA = false;
-//     for ( const connectedEdge of edge.A._edges ) {
-//       if ( connectedEdge === edge ) continue;
-//       keepA ||= this.testConnectedEdge(connectedEdge, seenEdges);
-//       if ( keepA ) break;
-//     }
-//
-//     let keepB = false;
-//     if ( keepA ) {
-//       for ( const connectedEdge of edge.B._edges ) {
-//         if ( connectedEdge === edge ) continue;
-//         keepB ||= this.testConnectedEdge(connectedEdge, seenEdges);
-//         if ( keepB ) break;
-//       }
-//     }
-//
-//     return keepA && keepB;
-//   }
-
-  /**
    * Used when something has changed in the connected edge set.
    * Test all edges connected to the one that changed to see if they still belong in the set.
    */
@@ -411,14 +430,14 @@ export class WallTracerEdge {
    * @returns {Set<WallTracerEdge>}
    */
   static addWall(wall) {
-    if ( WallTracerEdge._cachedEdges.has(wall) ) return WallTracerEdge._cachedEdges.get(wall);
+    if ( WallTracerEdge._cachedEdges.has(wall.id) ) return WallTracerEdge._cachedEdges.get(wall.id);
 
     // Locate collision points for any edges that collide with this wall.
     // If no collisions, then a single edge can represent this wall.
     const collisions = WallTracerEdge.findWallCollisions(wall);
     if ( !collisions.size ) {
       new WallTracerEdge(wall);
-      return WallTracerEdge._cachedEdges.get(wall);
+      return WallTracerEdge._cachedEdges.get(wall.id);
     }
 
     // Sort the keys so we can progress from A --> B along the wall.
@@ -442,15 +461,17 @@ export class WallTracerEdge {
       priorT = t;
     }
 
-    return WallTracerEdge._cachedEdges.get(wall);
+    return WallTracerEdge._cachedEdges.get(wall.id);
   }
 
   /**
    * Remove all associated edges with this wall.
-   * @param {Wall} wall
+   * @param {string|Wall} wallId    Id of the wall to remove, or the wall itself.
    */
-  static removeWall(wall) {
-    const edges = this._cachedEdges.get(wall);
+  static removeWall(wallId) {
+    if ( wallId instanceof Wall ) wallId = wallId.id;
+
+    const edges = this._cachedEdges.get(wallId);
     if ( !edges || !edges.size ) return;
 
     // Shallow copy the edges b/c they will be removed from the set with destroy.
@@ -636,13 +657,12 @@ export class WallTracerEdge {
   destroy({ removeCachedWall = true, removeConnected = true } = {}) {
     // Remove cached values
     WallTracerEdge.quadtree.remove(this);
-    WallTracerEdge._cachedEdges.delete(this);
 
     // Remove the old edge from the set of edges for this wall.
-    const wall = this.wall;
-    const s = WallTracerEdge._cachedEdges.get(wall);
+    const wallId = this.wall.id;
+    const s = WallTracerEdge._cachedEdges.get(wallId);
     s.delete(this);
-    if ( removeCachedWall && !s.size ) WallTracerEdge._cachedEdges.delete(wall);
+    if ( removeCachedWall && !s.size ) WallTracerEdge._cachedEdges.delete(wallId);
 
     // Remove this edge from its vertices.
     this.A.removeEdge(this);
