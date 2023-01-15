@@ -3,7 +3,8 @@ PIXI,
 canvas,
 Ray,
 foundry,
-Quadtree
+Quadtree,
+CONFIG
 */
 "use strict";
 
@@ -116,7 +117,7 @@ export class WallTracerVertex extends PIXI.Point {
     const key = this.key;
 
     const cache = WallTracerVertex._cachedVertices;
-    if ( cache.has(key) ) return cache.get(key);
+    if ( cache.has(key) ) return cache.get(key); // eslint-disable-line no-constructor-return
 
     WallTracerVertex._cachedVertices.set(key, this);
   }
@@ -297,12 +298,12 @@ export class WallTracerEdge {
     for ( const edge of edges ) {
       for ( const connectedEdge of edge.A._edges ) {
         if ( connectedEdge === edge ) continue;
-        this.testAndRemoveConnectedEdge(connectedEdge);
+        this.testConnectedEdge(connectedEdge, { remove: true });
       }
 
       for ( const connectedEdge of edge.B._edges ) {
         if ( connectedEdge === edge ) continue;
-        this.testAndRemoveConnectedEdge(connectedEdge);
+        this.testConnectedEdge(connectedEdge, { remove: true });
       }
     }
   }
@@ -314,15 +315,15 @@ export class WallTracerEdge {
     // First, are the edges in the connected set in the edge cache?
     const cachedEdges = this.allEdges();
     const connectedEdges = this.connectedEdges;
-    const diffConnected = connnectedEdges.difference(cachedEdges);
+    const diffConnected = connectedEdges.difference(cachedEdges);
     if ( diffConnected.size ) {
       console.warn(`Connected set has ${diffConnected.size} edges not in cached set.`);
       return false;
     }
 
     // Second, should the edges in the connected set be there?
-    for ( const connectedEdge of connnectedEdges) {
-      if ( !testConnectedEdge(connectedEdge) ) {
+    for ( const connectedEdge of connectedEdges) {
+      if ( !this.testConnectedEdge(connectedEdge) ) {
         console.warn(`Connected edge ${connectedEdge.id} should not be in the connected set.`);
         return false;
       }
@@ -331,7 +332,7 @@ export class WallTracerEdge {
     // Third, should other edges in the cached set be there?
     for ( const cachedEdge of cachedEdges ) {
       if ( connectedEdges.has(cachedEdge) ) continue;
-       if ( testConnectedEdge(cachedEdge) ) {
+      if ( this.testConnectedEdge(cachedEdge) ) {
         console.warn(`Cached edge ${cachedEdge.id} should be in the connected set.`);
         return false;
       }
@@ -341,52 +342,52 @@ export class WallTracerEdge {
   }
 
   /**
-   * Test all edges connected tot this one to see if it belongs in the set.
+   * Test all edges connected to this one to see if it belongs in the set.
    */
-  static testConnectedEdge(edge, startingEdge) {
-    if ( !edge.A._edges.size || !edge.B._edges.size ) return false;
-
-    // If we have circled back to the starting edge, then we have a cycle.
-    if ( edge === startingEdge ) return true;
-    startingEdge ??= edge;
-
-    let keepA = false;
-    for ( const connectedEdge of edge.A._edges ) {
-      if ( connectedEdge === edge ) continue;
-      keepA ||= this.testConnectedEdge(connectedEdge, startingEdge);
-      if ( keepA ) break;
-    }
-
-    let keepB = false;
-    if ( keepA ) {
-      for ( const connectedEdge of edge.B._edges ) {
-        if ( connectedEdge === edge ) continue;
-        keepB ||= this.testConnectedEdge(connectedEdge, startingEdge);
-        if ( keepB ) break;
-      }
-    }
-
-    return keepA && keepB;
-  }
+//   static testConnectedEdge(edge, seenEdges = new Set()) {
+//     if ( !edge.A._edges.size || !edge.B._edges.size ) return false;
+//
+//     // If we have circled back to the starting edge, then we have a cycle.
+//     if ( seenEdges.has(edge) ) return true;
+//     seenEdges.add(edge);
+//
+//     let keepA = false;
+//     for ( const connectedEdge of edge.A._edges ) {
+//       if ( connectedEdge === edge ) continue;
+//       keepA ||= this.testConnectedEdge(connectedEdge, seenEdges);
+//       if ( keepA ) break;
+//     }
+//
+//     let keepB = false;
+//     if ( keepA ) {
+//       for ( const connectedEdge of edge.B._edges ) {
+//         if ( connectedEdge === edge ) continue;
+//         keepB ||= this.testConnectedEdge(connectedEdge, seenEdges);
+//         if ( keepB ) break;
+//       }
+//     }
+//
+//     return keepA && keepB;
+//   }
 
   /**
    * Used when something has changed in the connected edge set.
    * Test all edges connected to the one that changed to see if they still belong in the set.
    */
-  static testAndRemoveConnectedEdge(edge, startingEdge) {
+  static testConnectedEdge(edge, { seenEdges = new Set(), remove = false } = {}) {
     if ( !edge.A._edges.size || !edge.B._edges.size ) {
-      this.removeConnectedEdges([edge]);
+      if ( remove ) this.removeConnectedEdges([edge]);
       return false;
     }
 
-    // If we have circled back to the starting edge, then we have a cycle.
-    if ( edge === startingEdge ) return true;
-    startingEdge ??= edge;
+    // If we have circled back to an already-seen edge, then we have a cycle.
+    if ( seenEdges.has(edge) ) return true;
+    seenEdges.add(edge);
 
     let keepA = false;
     for ( const connectedEdge of edge.A._edges ) {
       if ( connectedEdge === edge ) continue;
-      keepA ||= this.testAndRemoveConnectedEdge(connectedEdge, startingEdge);
+      keepA ||= this.testConnectedEdge(connectedEdge, { seenEdges, remove });
       if ( keepA ) break;
     }
 
@@ -394,13 +395,13 @@ export class WallTracerEdge {
     if ( keepA ) {
       for ( const connectedEdge of edge.B._edges ) {
         if ( connectedEdge === edge ) continue;
-        keepB ||= this.testAndRemoveConnectedEdge(connectedEdge, startingEdge);
+        keepB ||= this.testConnectedEdge(connectedEdge, { seenEdges, remove });
         if ( keepB ) break;
       }
     }
 
     if ( keepA && keepB ) return true;
-    this.removeConnectedEdges([edge]);
+    if ( remove ) this.removeConnectedEdges([edge]);
     return false;
   }
 
@@ -451,8 +452,11 @@ export class WallTracerEdge {
   static removeWall(wall) {
     const edges = this._cachedEdges.get(wall);
     if ( !edges || !edges.size ) return;
-    for ( const edge of edges ) edge.destroy({ removeCachedWall: true, removeConnected: false });
-    this.removeConnectedEdges(edges);
+
+    // Shallow copy the edges b/c they will be removed from the set with destroy.
+    const edgesArr = [...edges];
+    for ( const edge of edgesArr ) edge.destroy({ removeCachedWall: true, removeConnected: false });
+    this.removeConnectedEdges(edgesArr);
   }
 
   /**
@@ -924,7 +928,8 @@ function findStartingEdges(origin) {
   // Sort by distance from origin
   // Conver to WallTracerEdge to avoid screwing up the wall object
   const startingEdges = [...westWalls.map(w => WallTracerEdge.addWall(w))];
-  startingEdges.forEach(edge => edge._ix = CONFIG.GeometryLib.utils.lineLineIntersection(westRay.A, westRay.B, edge.A, edge.B));
+  startingEdges.forEach(edge =>
+    edge._ix = CONFIG.GeometryLib.utils.lineLineIntersection(westRay.A, westRay.B, edge.A, edge.B));
   startingEdges.sort((a, b) => a._ix.t0 - b._ix.t0);
   return startingEdges;
 }
