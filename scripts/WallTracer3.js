@@ -287,27 +287,21 @@ export class WallTracerEdge {
     return false;
   }
 
-  static removeConnectedEdges(edges) {
+  static removeConnectedEdge(edge) {
     // If not in the connected edges set, nothing need be removed.
-    // See removeWall, where it first removes all connected edges then calls destroy.
-    edges = edges.filter(e => this.connectedEdges.has(e));
-
-    // Remove all edges first, because that affects the results of the for loop after.
-    // Faster than removing and testing one at a time.
-    for ( const edge of edges ) this.connectedEdges.delete(edge);
+    if ( !this.connectedEdges.has(edge) ) return;
+    this.connectedEdges.delete(edge);
 
     // The implication is that other edges in the set are now suspect if they connect
     // to this edge. This can quickly cascade.
-    for ( const edge of edges ) {
-      for ( const connectedEdge of edge.A._edges ) {
-        if ( connectedEdge === edge ) continue;
-        this.testAndRemoveConnectedEdge(connectedEdge);
-      }
+    for ( const connectedEdge of edge.A._edges ) {
+      if ( connectedEdge === edge ) continue;
+      this.testAndRemoveConnectedEdge(connectedEdge);
+    }
 
-      for ( const connectedEdge of edge.B._edges ) {
-        if ( connectedEdge === edge ) continue;
-        this.testAndRemoveConnectedEdge(connectedEdge);
-      }
+    for ( const connectedEdge of edge.B._edges ) {
+      if ( connectedEdge === edge ) continue;
+      this.testAndRemoveConnectedEdge(connectedEdge);
     }
   }
 
@@ -317,13 +311,13 @@ export class WallTracerEdge {
    */
   static testAndRemoveConnectedEdge(edge, startingEdge) {
     if ( !edge.A._edges.size || !edge.B._edges.size ) {
-      this.connectedEdges.removeConnectedEdges([edge]);
+      this.removeConnectedEdge(edge);
       return false;
     }
 
     // If we have circled back to the starting edge, then we have a cycle.
     if ( edge === startingEdge ) return true;
-    startingEdge = edge;
+    startingEdge ??= edge;
 
     let keepA = false;
     for ( const connectedEdge of edge.A._edges ) {
@@ -342,7 +336,7 @@ export class WallTracerEdge {
     }
 
     if ( keepA && keepB ) return true;
-    this.connectedEdges.removeConnectedEdges([edge]);
+    this.removeConnectedEdge(edge);
     return false;
   }
 
@@ -392,8 +386,6 @@ export class WallTracerEdge {
    */
   static removeWall(wall) {
     const edges = this._cachedEdges.get(wall);
-    this.removeConnectedEdges(edges);
-
     for ( const edge of edges ) edge.destroy()
   }
 
@@ -573,7 +565,6 @@ export class WallTracerEdge {
     // Remove cached values
     WallTracerEdge.quadtree.remove(this);
     WallTracerEdge._cachedEdges.delete(this);
-    WallTracerEdge.removeConnectedEdges([this]);
 
     // Remove the old edge from the set of edges for this wall.
     const wall = this.wall;
@@ -584,6 +575,9 @@ export class WallTracerEdge {
     // Remove this edge from its vertices.
     this.A.removeEdge(this);
     this.B.removeEdge(this);
+
+    // Remove from connected set
+    WallTracerEdge.removeConnectedEdge(this);
   }
 
   /**
