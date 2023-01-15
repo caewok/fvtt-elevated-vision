@@ -287,18 +287,27 @@ export class WallTracerEdge {
     return false;
   }
 
-  static removeConnectedEdge(edge) {
-    this.connectedEdges.delete(edge);
+  static removeConnectedEdges(edges) {
+    // If not in the connected edges set, nothing need be removed.
+    // See removeWall, where it first removes all connected edges then calls destroy.
+    edges = edges.filter(e => this.connectedEdges.has(e));
+
+    // Remove all edges first, because that affects the results of the for loop after.
+    // Faster than removing and testing one at a time.
+    for ( const edge of edges ) this.connectedEdges.delete(edge);
 
     // The implication is that other edges in the set are now suspect if they connect
     // to this edge. This can quickly cascade.
-    for ( const connectedEdge of edge.A._edges ) {
-      if ( connectedEdge === edge ) continue;
-      this.testAndRemoveConnectedEdge(connectedEdge);
-    }
-    for ( const connectedEdge of edge.B._edges ) {
-      if ( connectedEdge === edge ) continue;
-      this.testAndRemoveConnectedEdge(connectedEdge);
+    for ( const edge of edges ) {
+      for ( const connectedEdge of edge.A._edges ) {
+        if ( connectedEdge === edge ) continue;
+        this.testAndRemoveConnectedEdge(connectedEdge);
+      }
+
+      for ( const connectedEdge of edge.B._edges ) {
+        if ( connectedEdge === edge ) continue;
+        this.testAndRemoveConnectedEdge(connectedEdge);
+      }
     }
   }
 
@@ -308,7 +317,7 @@ export class WallTracerEdge {
    */
   static testAndRemoveConnectedEdge(edge, startingEdge) {
     if ( !edge.A._edges.size || !edge.B._edges.size ) {
-      this.connectedEdges.removeConnectedEdge(edge);
+      this.connectedEdges.removeConnectedEdges([edge]);
       return false;
     }
 
@@ -333,7 +342,7 @@ export class WallTracerEdge {
     }
 
     if ( keepA && keepB ) return true;
-    this.connectedEdges.removeConnectedEdge(edge);
+    this.connectedEdges.removeConnectedEdges([edge]);
     return false;
   }
 
@@ -342,7 +351,7 @@ export class WallTracerEdge {
    * @param {Wall} wall   Wall to convert to wall edge(s)
    * @returns {Set<WallTracerEdge>}
    */
-  static forWall(wall) {
+  static addWall(wall) {
     if ( WallTracerEdge._cachedEdges.has(wall) ) return WallTracerEdge._cachedEdges.get(wall);
 
     // Locate collision points for any edges that collide with this wall.
@@ -375,6 +384,17 @@ export class WallTracerEdge {
     }
 
     return WallTracerEdge._cachedEdges.get(wall);
+  }
+
+  /**
+   * Remove all associated edges with this wall.
+   * @param {Wall} wall
+   */
+  static removeWall(wall) {
+    const edges = this._cachedEdges.get(wall);
+    this.removeConnectedEdges(edges);
+
+    for ( const edge of edges ) edge.destroy()
   }
 
   /**
@@ -549,11 +569,11 @@ export class WallTracerEdge {
    * @param {boolean} [options.removeCachedWall]  If true, remove this edge's wall from
    *   the cache if the wall is not associated with any other edges.
    */
-  destroy({ removeCachedWall = false } = {}) {
+  destroy({ removeCachedWall = true } = {}) {
     // Remove cached values
     WallTracerEdge.quadtree.remove(this);
     WallTracerEdge._cachedEdges.delete(this);
-    WallTracerEdge.removeConnectedEdge(this);
+    WallTracerEdge.removeConnectedEdges([this]);
 
     // Remove the old edge from the set of edges for this wall.
     const wall = this.wall;
@@ -666,7 +686,7 @@ export class WallTracerEdge3 {
    * @param {Wall} wall   Wall to convert to a wall edge
    * @returns {WallTracerEdge}
    */
-  static forWall(wall) {
+  static addWall(wall) {
     if ( WallTracerEdge._cachedEdges.has(wall) ) return WallTracerEdge._cachedEdges.get(wall);
     return new WallTracerEdge(wall);
   }
@@ -739,8 +759,8 @@ export class WallTracerEdge3 {
     const boundaryWalls = WallTracerEdge.segmentBoundaryCollisions(wall);
 
     // Convert to wall edges and add to set
-    for ( const wall of out ) this._collidingEdges.add(WallTracerEdge.forWall(wall));
-    for ( const wall of boundaryWalls ) this._collidingEdges.add(WallTracerEdge.forWall(wall));
+    for ( const wall of out ) this._collidingEdges.add(WallTracerEdge.addWall(wall));
+    for ( const wall of boundaryWalls ) this._collidingEdges.add(WallTracerEdge.addWall(wall));
   }
 
   /**
@@ -841,7 +861,7 @@ function findStartingEdges(origin) {
 
   // Sort by distance from origin
   // Conver to WallTracerEdge to avoid screwing up the wall object
-  const startingEdges = [...westWalls.map(w => WallTracerEdge.forWall(w))];
+  const startingEdges = [...westWalls.map(w => WallTracerEdge.addWall(w))];
   startingEdges.forEach(edge => edge._ix = CONFIG.GeometryLib.utils.lineLineIntersection(westRay.A, westRay.B, edge.A, edge.B));
   startingEdges.sort((a, b) => a._ix.t0 - b._ix.t0);
   return startingEdges;
