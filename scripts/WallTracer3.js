@@ -274,10 +274,12 @@ export class WallTracerEdge {
     }
 
     let canAddB = false;
-    for ( const connectedEdge of edge.B._edges ) {
-      if ( connectedEdge === edge ) continue;
-      canAddB ||= this.addConnectedEdge(connectedEdge);
-      if ( canAddB ) break;
+    if ( canAddA ) {
+      for ( const connectedEdge of edge.B._edges ) {
+        if ( connectedEdge === edge ) continue;
+        canAddB ||= this.addConnectedEdge(connectedEdge);
+        if ( canAddB ) break;
+      }
     }
 
     if ( canAddA && canAddB ) return true; // Already added above
@@ -322,10 +324,12 @@ export class WallTracerEdge {
     }
 
     let keepB = false;
-    for ( const connectedEdge of edge.B._edges ) {
-      if ( connectedEdge === edge ) continue;
-      keepB ||= this.testAndRemoveConnectedEdge(connectedEdge, startingEdge);
-      if ( keepB ) break;
+    if ( keepA ) {
+      for ( const connectedEdge of edge.B._edges ) {
+        if ( connectedEdge === edge ) continue;
+        keepB ||= this.testAndRemoveConnectedEdge(connectedEdge, startingEdge);
+        if ( keepB ) break;
+      }
     }
 
     if ( keepA && keepB ) return true;
