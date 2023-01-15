@@ -308,6 +308,68 @@ export class WallTracerEdge {
   }
 
   /**
+   * For debugging. Verify the connected edges
+   */
+  static verifyConnectedEdges() {
+    // First, are the edges in the connected set in the edge cache?
+    const cachedEdges = this.allEdges();
+    const connectedEdges = this.connectedEdges;
+    const diffConnected = connnectedEdges.difference(cachedEdges);
+    if ( diffConnected.size ) {
+      console.warn(`Connected set has ${diffConnected.size} edges not in cached set.`);
+      return false;
+    }
+
+    // Second, should the edges in the connected set be there?
+    for ( const connectedEdge of connnectedEdges) {
+      if ( !testConnectedEdge(connectedEdge) ) {
+        console.warn(`Connected edge ${connectedEdge.id} should not be in the connected set.`);
+        return false;
+      }
+    }
+
+    // Third, should other edges in the cached set be there?
+    for ( const cachedEdge of cachedEdges ) {
+      if ( connectedEdges.has(cachedEdge) ) continue;
+       if ( testConnectedEdge(cachedEdge) ) {
+        console.warn(`Cached edge ${cachedEdge.id} should be in the connected set.`);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Test all edges connected tot this one to see if it belongs in the set.
+   */
+  static testConnectedEdge(edge, startingEdge) {
+    if ( !edge.A._edges.size || !edge.B._edges.size ) return false;
+
+    // If we have circled back to the starting edge, then we have a cycle.
+    if ( edge === startingEdge ) return true;
+    startingEdge ??= edge;
+
+    let keepA = false;
+    for ( const connectedEdge of edge.A._edges ) {
+      if ( connectedEdge === edge ) continue;
+      keepA ||= this.testConnectedEdge(connectedEdge, startingEdge);
+      if ( keepA ) break;
+    }
+
+    let keepB = false;
+    if ( keepA ) {
+      for ( const connectedEdge of edge.B._edges ) {
+        if ( connectedEdge === edge ) continue;
+        keepB ||= this.testConnectedEdge(connectedEdge, startingEdge);
+        if ( keepB ) break;
+      }
+    }
+
+    return keepA && keepB;
+  }
+
+  /**
    * Used when something has changed in the connected edge set.
    * Test all edges connected to the one that changed to see if they still belong in the set.
    */
