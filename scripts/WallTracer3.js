@@ -128,14 +128,15 @@ Hooks.on("deleteWall", function(document, _options, _userId) {
   // The document.object is now null; use the id to remove the wall.
   WallTracerEdge.removeWall(document.id);
   if ( debug ) WallTracerEdge.verifyConnectedEdges();
+  return true;
 });
 
-Hooks.on("canvasReady", function() {
+Hooks.on("canvasReady", async function() {
   const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
   log(`canvasReady`);
 
   // When canvas is ready, the existing walls are not created, so must re-do here.
-  const walls = canvas.walls.placeables;
+  const walls = [...canvas.walls.placeables] ?? [];
   walls.push(...canvas.walls.outerBounds);
   walls.push(...canvas.walls.innerBounds);
   for ( const wall of walls ) WallTracerEdge.addWall(wall);
@@ -454,7 +455,7 @@ export class WallTracerEdge {
       if ( t ) new WallTracerEdge(wall, priorT, t);
 
       // One or more edges may be split at this collision point.
-      const cObjs = collisions.has(t) ? collisions.get(t) : [];
+      const cObjs = collisions.get(t) ?? [];
       for ( const cObj of cObjs ) cObj.edge.splitAtT(cObj.edgeT);
 
       // Cycle to next.
