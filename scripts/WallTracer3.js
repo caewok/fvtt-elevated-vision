@@ -147,7 +147,7 @@ export class WallTracerVertex extends PIXI.Point {
    * Remove the vertex from the cache if it has no associated edges.
    */
   removeFromCache() {
-    if ( !this._edges.size ) this._cachedVertices.delete(this.key);
+    if ( !this._edges.size ) WallTracerVertex._cachedVertices.delete(this.key);
   }
 }
 
