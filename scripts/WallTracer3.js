@@ -211,7 +211,7 @@ export class WallTracerEdge {
   static _cachedEdges = new Map();
 
   /** @type {Quadtree} */
-  static quadtree = new Quadtree();
+  static quadtree = new CanvasQuadtree();
 
   /** @type {Set<WallTracerEdge>} */
   static connectedEdges = new Set();
