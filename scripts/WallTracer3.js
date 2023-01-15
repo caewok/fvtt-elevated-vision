@@ -222,7 +222,8 @@ export class WallTracerEdge {
     this.A.addEdge(this);
     this.B.addEdge(this);
 
-    this.delta = this.B.subtract(this.A);
+    this.delta = new PIXI.Point();
+    this.B.subtract(this.A, this.delta);
 
     // TODO: Should this cache also store a map of intersection keys?
     if ( !WallTracerEdge._cachedEdges.has(wall) ) WallTracerEdge._cachedEdges.set(wall, new Set([this]));
