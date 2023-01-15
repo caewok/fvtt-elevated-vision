@@ -275,7 +275,7 @@ export class WallTracerEdge {
 
       } else if ( foundry.utils.lineSegmentIntersects(A, B, eA, eB) ) {
         // Intersects the wall or shares an endpoint or endpoint hits the wall
-        const ix = foundry.utils.lineLineIntersection(A, B, eA, eB, { t1: true });
+        const ix = CONFIG.GeometryLib.utils.lineLineIntersection(A, B, eA, eB, { t1: true });
         this._wallCollisionMap.set(w, { t: ix.t0, pt: ix });
         edge._wallCollisionMap.set(wall, {t: ix.t1, pt: ix });
 
@@ -653,7 +653,7 @@ export class WallTracer {
       else {
         // Based on the direction we are currently tracing, find the orientation of the next edge.
         const [currA, currB] = AtoB ? [currEdge.A, currEdge.B] : [currEdge.B, currEdge.A];
-        AtoB = (foundry.utils.orient2dFast(currA, currB, nextEdge.A) < 0 ) ^ cw;
+        AtoB = (foundry.utils.orient2dFast(currA, currB, nextEdge.A) > 0 ) ^ cw;
       }
 
       // Cycle to the next edge. Start tracing from t --> endpoint for this edge to find the
