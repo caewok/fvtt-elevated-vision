@@ -682,6 +682,14 @@ export class WallTracerEdge {
     Draw.point(this.A, drawingOptions);
     Draw.point(this.B, drawingOptions);
   }
+
+  /**
+   * Draw all edges from the cache.
+   * Primarily for debugging.
+   */
+  static drawAllEdges(drawingOptions = {}) {
+    WallTracerEdge.allEdges().forEach(e => e.draw(drawingOptions));
+  }
 }
 
 /* Algorithm
