@@ -558,13 +558,13 @@ export class WallTracerEdge {
 
   /**
    * Find the angle starting at the given vertex and moving to the opposite vertex.
+   * A --> B is the default angle; B --> A would be that angle turned 180º
    * @param {WallTracerVertex} vertex
    * @returns {number}    Angle or its mirror opposite
    */
   angleFromEndpoint(vertex) {
-    return this.B === vertex ? this.angle : Math.normalizeRadians(this.angle + Math.PI);
+    return this.A === vertex ? this.angle : Math.normalizeRadians(this.angle + Math.PI);
   }
-
 
   /**
    * Boundary rectangle that encompasses this edge.
