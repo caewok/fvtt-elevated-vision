@@ -20,7 +20,7 @@ import { FILOQueue } from "./FILOQueue.js";
 import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { ElevationGrid } from "./ElevationGrid.js";
-import { WallTracerEdge, WallTracerVertex, WallTracer } from "./WallTracer3.js";
+import { WallTracerEdge, WallTracerVertex, WallTracer } from "./WallTracer.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches } from "./patching.js";

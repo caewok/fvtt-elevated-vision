@@ -1,22 +1,206 @@
 /* globals
 PIXI,
-foundry,
 canvas,
-Ray
+Ray,
+foundry,
+CanvasQuadtree,
+CONFIG,
+Hooks,
+game,
+Wall
 */
 "use strict";
 
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
-// WallTracer2
+// WallTracer3
 
-
-import { groupBy } from "./util.js";
+import { groupBy, log } from "./util.js";
 import { ClipperPaths } from "./geometry/ClipperPaths.js";
 import { Draw } from "./geometry/Draw.js";
+import { MODULE_ID } from "./const.js";
+
+/* WallTracerVertex
+
+Represents the endpoint of a WallTracerEdge.
+Like with Walls, these vertices use integer values and keys.
+
+The vertex provides links to connected WallTracerEdges.
+
+*/
+
+/* WallTracerEdge
+
+Represents a portion of a Wall between two collisions:
+- endpoint -- endpoint
+- endpoint -- intersection
+- intersection -- intersection
+
+Properties include:
+- wall
+- A and B, where each store the t ratio corresponding to a point on the wall
+- Array? of WallTracerEdge that share an endpoint, organized from cw --> ccw angle
+
+If the wall overlaps a collinear wall?
+- single edge should represent both
+
+Wall type: currently ignored
+
+*/
+
+/* Connected WallTracerEdge identification
+
+A closed polygon formed from WallTracerEdge can only be formed from edges that have
+connecting edges at both A and B endpoints.
+
+Store the set of connected WallTracerEdges. For a given set of edges, one can find the
+set of connected edges by repeatedly removing edges with zero or 1 connected endpoints,
+then updating the remainder and repeating until no more edges are removed.
+
+The connected edges remaining must form 1+ closed polygons. All dangling lines will have
+been removed.
+
+*/
+
+/* Wall updating
+
+1. Wall creation
+- Locate collision walls (edges) using QuadTree.
+- Split wall into edges.
+- Split colliding edges.
+- Update the set of connected edges.
+
+2. Wall update
+- A changed: redo as in wall creation (1)
+- B changed: change B endpoint. Possibly drop edges if shrinking (use t values).
+
+3. Wall deletion
+- remove from set of edges
+- remove from set of connected edges
+- remove from shared endpoint edges
+- redo set of connected edges
+
+*/
+
+/* Angles
+Foundry canvas angles using Ray:
+--> e: 0
+--> se: π / 4
+--> s: π / 2
+--> sw: π * 3/4
+--> w: π
+--> nw: -π * 3/4
+--> n: -π / 2
+--> ne: -π / 4
+
+So northern hemisphere is negative, southern is positive.
+0 --> π moves from east to west clockwise.
+0 --> -π moves from east to west counterclockwise.
+*/
+
+// Track wall creation, update, and deletion, constructing WallTracerEdges as we go.
+Hooks.on("createWall", function(document, _options, _userId) {
+  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+  log(`createWall ${document.id}`);
+
+  // Build the edges for this wall.
+  WallTracerEdge.addWall(document.object);
+  if ( debug ) WallTracerEdge.verifyConnectedEdges();
+});
+
+Hooks.on("updateWall", function(document, changes, _options, _userId) {
+  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+  log("updateWall");
+
+  // Only update the edges if the coordinates have changed.
+  if ( !Object.hasOwn(changes, "c") ) return;
+
+  // Easiest approach is to trash the edges for the wall and re-create them.
+  WallTracerEdge.removeWall(document.id);
+  WallTracerEdge.addWall(document.object);
+  if ( debug ) WallTracerEdge.verifyConnectedEdges();
+});
+
+Hooks.on("deleteWall", function(document, _options, _userId) {
+  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+  log(`deleteWall ${document.id}`);
+
+  // The document.object is now null; use the id to remove the wall.
+  WallTracerEdge.removeWall(document.id);
+  if ( debug ) WallTracerEdge.verifyConnectedEdges();
+  return true;
+});
+
+Hooks.on("canvasReady", async function() {
+  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+  log("canvasReady");
+
+  // When canvas is ready, the existing walls are not created, so must re-do here.
+  const walls = [...canvas.walls.placeables] ?? [];
+  walls.push(...canvas.walls.outerBounds);
+  walls.push(...canvas.walls.innerBounds);
+  for ( const wall of walls ) WallTracerEdge.addWall(wall);
+  if ( debug ) WallTracerEdge.verifyConnectedEdges();
+});
+
+export class WallTracerVertex extends PIXI.Point {
+
+  /** @type {Map<number, WallTracerVertex>} */
+  static _cachedVertices = new Map();
+
+  /**
+   * Clear cached properties
+   */
+  static clear() { this._cachedVertices.clear(); }
+
+  /** @type {Set<WallTracerEdge>} */
+  _edges = new Set();
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  constructor(x, y) {
+    super(x, y);
+    this.roundDecimals();
+    const key = this.key;
+
+    const cache = WallTracerVertex._cachedVertices;
+    if ( cache.has(key) ) return cache.get(key); // eslint-disable-line no-constructor-return
+
+    WallTracerVertex._cachedVertices.set(key, this);
+  }
+
+  /**
+   * Add an edge, only if it shares this vertex.
+   * @param {WallTracerEdge}
+   */
+  addEdge(edge) {
+    const key = this.key;
+    if ( edge.A.key !== key && edge.B.key !== key ) return;
+    this._edges.add(edge);
+  }
+
+  /**
+   * Remove the edge and if possible, the associated vertices.
+   * @param {WallTracerEdge}
+   */
+  removeEdge(edge) {
+    const key = this.key;
+    if ( edge.A.key !== key && edge.B.key !== key ) return;
+    this._edges.delete(edge);
+    this.removeFromCache();
+  }
+
+  /**
+   * Remove the vertex from the cache if it has no associated edges.
+   */
+  removeFromCache() {
+    if ( !this._edges.size ) WallTracerVertex._cachedVertices.delete(this.key);
+  }
+}
 
 export class WallTracerEdge {
-
   /**
    * Number of places to round the ratio for wall collisions, in order to treat
    * close collisions as equal.
@@ -24,211 +208,735 @@ export class WallTracerEdge {
    */
   static PLACES = 8;
 
-  // TODO: Use WeakMap to cache walls with edges.
+  /** @type {Map<string, WallTracerEdge[]>} */
+  static _cachedEdges = new Map();
 
-  /**
-   * @typedef {object} WallTracerEdgeEndpoints
-   * @property {Set<WallTracerEdge>} A
-   * @property {Set<WallTracerEdge>} B
-   */
+  /** @type {Quadtree} */
+  static quadtree = new CanvasQuadtree();
 
-  /**
-   * Internal intersections with this wall, sorted from distance from A.
-   * Each has a t0 property, where 0 is at A and 1 is at B.
-   * @type {WallTracerEdge[]}
-   */
-  _collisions;
-
-  /**
-   * Map of walls that collide with this edge.
-   * The value is the point of collision on this edge, between 0 and 1.
-   */
-  _wallCollisionMap = new Map();
-
-  /**
-   * Map of grouped collisions by the rounded t0 property.
-   * @type {Map<WallTracerEdge[]>}
-   */
-  _collisionsMap;
-
-  /**
-   * Same as _collisionsMap, but the map is reversed.
-   * @type {Map<WallTracerEdge[]>}
-   */
-  _reverseCollisionsMap;
-
-  /** @type {Wall} */
-  wall;
-
-  constructor(wall) {
-    this.wall = wall;
-  }
+  /** @type {Set<WallTracerEdge>} */
+  static connectedEdges = new Set();
 
   /**
    * Helper function used to group collisions into the collision map.
-   * @param {WallTracerEdge} item   WallTracerEdge with a t0 property.
+   * @param {WallTracerCollision} c   Collision to group
    * @returns {number} The t0 property, rounded.
    */
-  static _keyGetter(item) { return Math.roundDecimals(item._, WallTracerEdge.PLACES); }
+  static _keyGetter(c) { return Math.roundDecimals(c.wallT, WallTracerEdge.PLACES); }
+
+  /**
+   * Wall represented by this edge.
+   * The edge may represent the entire wall or just a portion (see tA and tB).
+   * @type {Wall}
+   */
+  wall;
+
+  /** @type {number} */
+  tA = 0;
+
+  /** @type {number} */
+  tB = 1;
+
+  /** @type {WallTracerVertex} */
+  A;
+
+  /** @type {WallTracerVertex} */
+  B;
+
+  /** @type {number} */
+  _angle = undefined;
+
+  /**
+   * Constructor method to be used by internal methods, because
+   * it does not return a cached value for the wall and does not attempt to subdivide the wall.
+   * @param {Wall} wall   Wall represented by this edge
+   * @param {number} tA   Where the A endpoint of this edge falls on the wall
+   * @param {number} tB   Where the B endpoint of this edge falls on the wall
+   */
+  constructor(wall, tA = 0, tB = 1 ) {
+    this.wall = wall;
+    this.tA = Math.clamped(tA, 0, 1);
+    this.tB = Math.clamped(tB, 0, 1);
+
+    if ( tB < tA ) {
+      console.warn("WallTracerEdge constructor: tA must be less than tB");
+      [tA, tB] = [tB, tA];
+    }
+
+    const eA = this.pointAtWallRatio(this.tA);
+    const eB = this.pointAtWallRatio(this.tB);
+
+    this.A = new WallTracerVertex(eA.x, eA.y);
+    this.B = new WallTracerVertex(eB.x, eB.y);
+
+    this.A.addEdge(this);
+    this.B.addEdge(this);
+
+    this.delta = new PIXI.Point();
+    this.B.subtract(this.A, this.delta);
+
+    if ( !WallTracerEdge._cachedEdges.has(wall.id) ) WallTracerEdge._cachedEdges.set(wall.id, new Set([this]));
+    else WallTracerEdge._cachedEdges.get(wall.id).add(this);
+
+    const bounds = this.bounds;
+    WallTracerEdge.quadtree.insert({ r: bounds, t: this });
+    WallTracerEdge.addConnectedEdge(this);
+  }
+
+  static clear() {
+    this._cachedEdges.clear();
+    this.quadtree.clear();
+    this.connectedEdges.clear();
+  }
+
+  static allEdges() {
+    // Could also use quadtree.all to get this
+    // Each edge in the wall cache is a set with multiple entries.
+    const s = new Set();
+    const edgeSets = this._cachedEdges.values();
+    for ( const edgeSet of edgeSets ) {
+      for ( const edge of edgeSet ) s.add(edge);
+    }
+    return s;
+  }
+
+  /**
+   * Add an edge to the set of connected edges.
+   * The edge will be added if one of its connected edges can be added.
+   * An edge that has no A or B connections cannot be added.
+   * @param {WallTracerEdge}
+   * @returns {boolean}   True if this edge can be added.
+   */
+  static addConnectedEdge(edge) {
+    if ( this.connectedEdges.has(edge) ) return true;
+    if ( !edge.A._edges.size || !edge.B._edges.size ) return false;
+
+    // Temporarily add the edge to avoid infinite recursion.
+    // If we return back to this edge, then we have formed a loop and so it can be added.
+    this.connectedEdges.add(edge);
+
+    // Only added if one of its connected edges at each end can be added
+    let canAddA = false;
+    for ( const connectedEdge of edge.A._edges ) {
+      if ( connectedEdge === edge ) continue;
+      canAddA ||= this.addConnectedEdge(connectedEdge);
+      if ( canAddA ) break;
+    }
+
+    let canAddB = false;
+    if ( canAddA ) {
+      for ( const connectedEdge of edge.B._edges ) {
+        if ( connectedEdge === edge ) continue;
+        canAddB ||= this.addConnectedEdge(connectedEdge);
+        if ( canAddB ) break;
+      }
+    }
+
+    if ( canAddA && canAddB ) return true; // Already added above
+    this.connectedEdges.delete(edge);
+    return false;
+  }
+
+  static removeConnectedEdges(edges) {
+    // If not in the connected edges set, nothing need be removed.
+    edges = edges.filter(e => this.connectedEdges.has(e));
+    for ( const edge of edges ) this.connectedEdges.delete(edge);
+
+    // The implication is that other edges in the set are now suspect if they connect
+    // to this edge. This can quickly cascade.
+    for ( const edge of edges ) {
+      for ( const connectedEdge of edge.A._edges ) {
+        if ( connectedEdge === edge ) continue;
+        this.testConnectedEdge(connectedEdge, { remove: true });
+      }
+
+      for ( const connectedEdge of edge.B._edges ) {
+        if ( connectedEdge === edge ) continue;
+        this.testConnectedEdge(connectedEdge, { remove: true });
+      }
+    }
+  }
+
+  /**
+   * For debugging. Verify the connected edges
+   */
+  static verifyConnectedEdges() {
+    // First, are the edges in the connected set in the edge cache?
+    const cachedEdges = this.allEdges();
+    const connectedEdges = this.connectedEdges;
+    const diffConnected = connectedEdges.difference(cachedEdges);
+    if ( diffConnected.size ) {
+      console.warn(`Connected set has ${diffConnected.size} edges not in cached set.`);
+      return false;
+    }
+
+    // Second, should the edges in the connected set be there?
+    for ( const connectedEdge of connectedEdges) {
+      if ( !this.testConnectedEdge(connectedEdge) ) {
+        console.warn(`Connected edge ${connectedEdge.id} should not be in the connected set.`);
+        return false;
+      }
+    }
+
+    // Third, should other edges in the cached set be there?
+    for ( const cachedEdge of cachedEdges ) {
+      if ( connectedEdges.has(cachedEdge) ) continue;
+      if ( this.testConnectedEdge(cachedEdge) ) {
+        console.warn(`Cached edge ${cachedEdge.id} should be in the connected set.`);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Used when something has changed in the connected edge set.
+   * Test all edges connected to the one that changed to see if they still belong in the set.
+   */
+  static testConnectedEdge(edge, { seenEdges = new Set(), remove = false } = {}) {
+    if ( !edge.A._edges.size || !edge.B._edges.size ) {
+      if ( remove ) this.removeConnectedEdges([edge]);
+      return false;
+    }
+
+    // If we have circled back to an already-seen edge, then we have a cycle.
+    if ( seenEdges.has(edge) ) return true;
+    seenEdges.add(edge);
+
+    let keepA = false;
+    for ( const connectedEdge of edge.A._edges ) {
+      if ( connectedEdge === edge ) continue;
+      keepA ||= this.testConnectedEdge(connectedEdge, { seenEdges, remove });
+      if ( keepA ) break;
+    }
+
+    let keepB = false;
+    if ( keepA ) {
+      for ( const connectedEdge of edge.B._edges ) {
+        if ( connectedEdge === edge ) continue;
+        keepB ||= this.testConnectedEdge(connectedEdge, { seenEdges, remove });
+        if ( keepB ) break;
+      }
+    }
+
+    if ( keepA && keepB ) return true;
+    if ( remove ) this.removeConnectedEdges([edge]);
+    return false;
+  }
+
+  /**
+   * Return either a new wall tracer edge or a cached edge, if available.
+   * @param {Wall} wall   Wall to convert to wall edge(s)
+   * @returns {Set<WallTracerEdge>}
+   */
+  static addWall(wall) {
+    if ( WallTracerEdge._cachedEdges.has(wall.id) ) return WallTracerEdge._cachedEdges.get(wall.id);
+
+    // Locate collision points for any edges that collide with this wall.
+    // If no collisions, then a single edge can represent this wall.
+    const collisions = WallTracerEdge.findWallCollisions(wall);
+    if ( !collisions.size ) {
+      new WallTracerEdge(wall);
+      return WallTracerEdge._cachedEdges.get(wall.id);
+    }
+
+    // Sort the keys so we can progress from A --> B along the wall.
+    const tArr = [...collisions.keys()];
+    tArr.sort((a, b) => a - b);
+
+    // For each collision, ordered along this wall from A --> B
+    // - construct a new edge for this wall portion
+    // - update the collision links for the colliding edge and this new edge
+    if ( !collisions.has(1) ) tArr.push(1);
+    let priorT = 0;
+    for ( const t of tArr ) {
+      // Build edge for portion of wall between priorT and t, skipping when t === 0
+      if ( t ) new WallTracerEdge(wall, priorT, t);
+
+      // One or more edges may be split at this collision point.
+      const cObjs = collisions.get(t) ?? [];
+      for ( const cObj of cObjs ) cObj.edge.splitAtT(cObj.edgeT);
+
+      // Cycle to next.
+      priorT = t;
+    }
+
+    return WallTracerEdge._cachedEdges.get(wall.id);
+  }
+
+  /**
+   * Remove all associated edges with this wall.
+   * @param {string|Wall} wallId    Id of the wall to remove, or the wall itself.
+   */
+  static removeWall(wallId) {
+    if ( wallId instanceof Wall ) wallId = wallId.id;
+
+    const edges = this._cachedEdges.get(wallId);
+    if ( !edges || !edges.size ) return;
+
+    // Shallow copy the edges b/c they will be removed from the set with destroy.
+    const edgesArr = [...edges];
+    for ( const edge of edgesArr ) edge.destroy({ removeCachedWall: true, removeConnected: false });
+    this.removeConnectedEdges(edgesArr);
+  }
+
+  /**
+   * Locate collision points for any edges that collide with this wall.
+   * @param {Wall} wall
+   * @returns {Map<number, WallTracerCollision[]>} Map of locations of the collisions
+   */
+  static findWallCollisions(wall) {
+    const { A, B } = wall;
+    const collisions = [];
+    const collisionTest = (o, _rect) => segmentsOverlap(A, B, o.t.A, o.t.B);
+    const collidingEdges = WallTracerEdge.quadtree.getObjects(wall.bounds, { collisionTest });
+    for ( const edge of collidingEdges ) {
+      const collision = WallTracerEdge._findWallEdgeCollision(wall, edge);
+      if ( collision ) collisions.push(collision);
+    }
+    return groupBy(collisions, WallTracerEdge._keyGetter);
+  }
+
+  /**
+   * @typedef {object} WallTracerCollision
+   * @property {number} wallT   Location of collision on the wall, where A = 0 and B = 1
+   * @property {number} edgeT   Location of collision on the edge, where A = 0 and B = 1
+   * @property {Point} pt       Intersection point.
+   * @property {WallTracerEdge} edge    Edge associated with this collision
+   * @property {Wall} wall              Wall associated with this collision
+   */
+
+  /**
+   * Find the collision, if any, between a wall and an edge.
+   * @param {Wall} wall               Foundry wall object to test
+   * @param {WallTracerEdge}  edge    Edge to test
+   * @returns {WallTracerCollision}
+   */
+  static _findWallEdgeCollision(wall, edge) {
+    const { A, B } = wall;
+    const { A: eA, B: eB } = edge;
+
+    let out;
+    if ( A.key === eA.key || eA.almostEqual(A) ) out = { wallT: 0, edgeT: 0, pt: A };
+    else if ( A.key === eB.key || eB.almostEqual(A) ) out = { wallT: 0, edgeT: 1, pt: A };
+    else if ( B.key === eA.key || eA.almostEqual(B) ) out = { wallT: 1, edgeT: 0, pt: B };
+    else if ( B.key === eB.key || eB.almostEqual(B) ) out = { wallT: 1, edgeT: 1, pt: B };
+    else if ( foundry.utils.lineSegmentIntersects(A, B, eA, eB) ) {
+      const ix = CONFIG.GeometryLib.utils.lineLineIntersection(A, B, eA, eB, { t1: true });
+      out = {
+        wallT: Math.roundDecimals(ix.t0, WallTracerEdge.PLACES),
+        edgeT: Math.roundDecimals(ix.t1, WallTracerEdge.PLACES),
+        pt: ix };
+
+    } else {
+      // Edge is either completely collinear or does not intersect.
+      return null;
+    }
+
+    out.pt = new PIXI.Point(out.pt.x, out.pt.y);
+    out.edge = edge;
+    out.wall = wall;
+    return out;
+  }
 
   /** @type {string} */
   get id() { return this.wall.id; }
 
-  /** @type {PolygonVertex} */
-  get A() { return new PIXI.Point(this.wall.A.x, this.wall.A.y); }
-
-  /** @type {PolygonVertex} */
-  get B() { return new PIXI.Point(this.wall.B.x, this.wall.B.y); }
-
-  /** @type {WallTracerEdge} */
-  get collisions() {
-    return this._collisions || (this._collisions = this._organizeCollidingWalls());
-  }
-
-  /** @type {Map<WallTracerEdge[]>} */
-  get collisionsMap() {
-    if ( this._collisionsMap ) return this._collisionsMap;
-    const collisions = this.collisions;
-    const wallCollisionMap = this._wallCollisionMap;
-    const keyGetter = item => Math.roundDecimals(wallCollisionMap.get(item.wall).t, WallTracerEdge.PLACES);
-    this._collisionsMap = groupBy(collisions, keyGetter);
-    return this._collisionsMap;
-  }
-
-  /** @type {Map<WallTracerEdge[]>} */
-  get reverseCollisionsMap() {
-    if ( this._reverseCollisionsMap ) return this._reverseCollisionsMap;
-    const collisions = this.collisions;
-    const revCollisions = [...collisions].reverse(); // Don't modify the original array.
-    const wallCollisionMap = this._wallCollisionMap;
-    const keyGetter = item => Math.roundDecimals(wallCollisionMap.get(item.wall).t, WallTracerEdge.PLACES);
-    this._reverseCollisionsMap = groupBy(revCollisions, keyGetter);
-    return this._reverseCollisionsMap;
-  }
-
   /**
-   * Get the collision point for a wall that collides with this edge, along with the ratio along the wall.
-   * @param {Wall} wall
-   * @returns {PIXI.Point} Point with an additional property t indicating the ratio along this wall.
+   * Determine angle of this edge using same method as Ray
+   * @returns { number }
    */
-  collisionLocationForWall(wall) {
-    this.collisions; // Trigger collision detection
-    const obj = this._wallCollisionMap.get(wall);
-    if ( !obj ) return null;
-    const out = new PIXI.Point(obj.pt.x, obj.pt.y);
-    out.t = obj.t;
-    return out;
+  get angle() {
+    if ( typeof this._angle === "undefined" ) this._angle = Math.atan2(this.delta.y, this.delta.x);
+    return this._angle;
+  }
+
+  set angle(value) {
+    this._angle = Number(value);
   }
 
   /**
-   * Calculate the point at a ratio t0
-   * @param {number} t
+   * Find the angle starting at the given vertex and moving to the opposite vertex.
+   * A --> B is the default angle; B --> A would be that angle turned 180º
+   * @param {WallTracerVertex} vertex
+   * @returns {number}    Angle or its mirror opposite
+   */
+  angleFromEndpoint(vertex) {
+    return this.A === vertex ? this.angle : Math.normalizeRadians(this.angle + Math.PI);
+  }
+
+  /**
+   * Boundary rectangle that encompasses this edge.
+   * @type {PIXI.Rectangle}
+   */
+  get bounds() {
+    const { A, delta } = this;
+    return new PIXI.Rectangle(A.x, A.y, delta.x, delta.y).normalize();
+  }
+
+  /**
+   * @param {Point} vertex
+   * @returns {PIXI.Point}
+   */
+  otherEndpoint(vertex) { return this.A.almostEqual(vertex) ? this.B : this.A; }
+
+  /**
+   * @param {Point} vertex
+   * @returns {PIXI.Point}
+   */
+  matchingEndpoint(vertex) { return this.A.almostEqual(vertex) ? this.A : this.B; }
+
+  /**
+   * Calculate the point given a ratio representing distance from Wall endpoint A
+   * @param {number} wallT
    * @returns {Point}
    */
-  pointAtRatio(t) {
-    if ( t.almostEqual(0) ) return this.A;
-    if ( t.almostEqual(1) ) return this.B;
+  pointAtWallRatio(wallT) {
+    const wall = this.wall;
+    const A = new PIXI.Point(wall.A.x, wall.A.y);
+    if ( wallT.almostEqual(0) ) return A;
 
+    const B = new PIXI.Point(wall.B.x, wall.B.y);
+    if ( wallT.almostEqual(1) ) return B;
+
+    wallT = Math.roundDecimals(wallT, WallTracerEdge.PLACES);
     const outPoint = new PIXI.Point();
-    this.A.projectToward(this.B, t, outPoint);
+    A.projectToward(B, wallT, outPoint);
     return outPoint;
   }
 
   /**
-   * Move along this wall, starting at ratio t0. Find the next colliding wall that is cw (or ccw).
-   * If the endpoint is reached, return the most cw wall that connects at the endpoint.
-   * @param {number} t         Ratio between 0 and 1, indicating position on A|B. 0 mean A; 1 means B.
-   * @param {object} [options]  Options affecting how the wall is traced.
-   * @param {boolean} [options.AtoB]    If true, move A --> B. If false, move B --> A.
-   * @param {boolean} [options.cw]      If true, search for cw edges; if false, ccw.
-   * @returns {WallTracerEdge|null}
+   * Calculate the point given a ratio representing distance from edge endpointA
+   * @param {number} edgeT
+   * @returns {PIXI.Point}
    */
-  nextEdgeFromRatio(t = 0, { AtoB = true, cw = true } = {}) {
-    t = Math.clamped(t, 0, 1);
-    const { A, B } = this;
+  pointAtEdgeRatio(edgeT) {
+    if ( edgeT.almostEqual(0) ) return this.A;
+    if ( edgeT.almostEqual(1) ) return this.B;
 
-    const defaultAngle = cw ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
-    const collisionsMap = AtoB ? this.collisionsMap : this.reverseCollisionsMap;
-    const iter = collisionsMap.entries();
-    for ( const [t0, cArr] of iter ) {
-      if ( t0.almostEqual(t) ) continue;
-      if ( AtoB && t0 < t ) continue;
-      if ( !AtoB && t0 > t ) continue;
+    edgeT = Math.roundDecimals(edgeT, WallTracerEdge.PLACES);
+    const outPoint = new PIXI.Point();
+    this.A.projectToward(this.B, edgeT, outPoint);
+    return outPoint;
+  }
 
-      // Characterize the angles
-      // A --> B --> endpoint
-      // If endpoint is inside A|B or before A, angle is 0.
-      // If endpoint is after B, angle is π
-      // CW angles are between 0 and π
-      // Tighter CW angles are closer to 0
-      // Tighter CCW angles are closer to 2*π
-      const chosen = cArr.reduce((acc, curr) => {
-        curr.angleA ??= PIXI.Point.angleBetween(A, B, curr.A, { clockwiseAngle: true });
-        curr.angleB ??= PIXI.Point.angleBetween(A, B, curr.B, { clockwiseAngle: true });
+  /**
+   * For a given t ratio for this edge, what is the equivalent wall ratio?
+   * @param {number} t
+   * @returns {number}
+   */
+  _tRatioToWallRatio(t) {
+    if ( t.almostEqual(0) ) return this.tA;
+    if ( t.almostEqual(1) ) return this.tB;
 
-        const angleA = Number.isNaN(curr.angleA) ? defaultAngle
-          : AtoB ? curr.angleA
-            : curr.angleA > Math.PI ? curr.angleA - Math.PI
-              : curr.angleA + Math.PI;
-        const angleB = Number.isNaN(curr.angleA) ? defaultAngle
-          : AtoB ? curr.angleB
-            : curr.angleB - Math.PI ? curr.angleB - Math.PI
-              : curr.angleB + Math.PI;
+    // Linear mapping where wallT === 0 --> tA, wallT === 1 --> tB
+    const dT = this.tB - this.tA;
+    return this.tA + (dT * t);
+  }
 
-        if ( cw ) {
-          acc.angle = Math.min(acc.angle, angleA, angleB);
-          acc.edge = acc.angle < angleA && acc.angle < angleB ? acc.edge : curr;
-        } else {
-          acc.angle = Math.max(acc.angle, angleA, angleB);
-          acc.edge = acc.angle > angleA && acc.angle > angleB ? acc.edge : curr;
-        }
-        return acc;
-      }, { angle: defaultAngle });
+  /**
+   * Split this edge at some t value.
+   * @param {number} edgeT  The portion on this *edge* that designates a point.
+   * @returns {WallTracerEdge[]} Array of two wall tracer edges that share t endpoint.
+   */
+  splitAtT(edgeT) {
+    edgeT = Math.clamped(edgeT, 0, 1);
+    if ( edgeT.almostEqual(0) || edgeT.almostEqual(1) ) return [this];
 
-      if ( AtoB && t0 === 1 ) return chosen.edge;
-      if ( !AtoB && t0 === 0 ) return chosen.edge;
-      if ( cw && chosen.angle < Math.PI ) return chosen.edge;
-      if ( !cw && chosen.angle > Math.PI ) return chosen.edge;
+    // Dispose of this old edge, to be replaced by a pair of edges.
+    // Do not remove the wall b/c it will be re-used for the edges, below.
+    this.destroy({ removeCachedWall: false });
+
+    // Construct two new edges, divided at the edgeT location.
+    const wall = this.wall;
+    const wallT = this._tRatioToWallRatio(edgeT);
+    const edge1 = new WallTracerEdge(wall, this.tA, wallT);
+    const edge2 = new WallTracerEdge(wall, wallT, this.tB);
+
+    return [edge1, edge2];
+  }
+
+  /**
+   * Destroy all connections to this edge.
+   * @param {object} [options]  Optional arguments that affect what is destroyed
+   * @param {boolean} [options.removeCachedWall]  If true, remove this edge's wall from
+   *   the cache if the wall is not associated with any other edges.
+   * @param {boolean} [options.removeConnected]   If true, remove this edge from the connected set.
+   *   Set to false if destroying several edges; call removeConnectedEdges manually after.
+   */
+  destroy({ removeCachedWall = true, removeConnected = true } = {}) {
+    // Remove cached values
+    WallTracerEdge.quadtree.remove(this);
+
+    // Remove the old edge from the set of edges for this wall.
+    const wallId = this.wall.id;
+    const s = WallTracerEdge._cachedEdges.get(wallId);
+    s.delete(this);
+    if ( removeCachedWall && !s.size ) WallTracerEdge._cachedEdges.delete(wallId);
+
+    // Remove this edge from its vertices.
+    this.A.removeEdge(this);
+    this.B.removeEdge(this);
+
+    // Remove from connected set
+    if ( removeConnected ) WallTracerEdge.removeConnectedEdges([this]);
+  }
+
+  /**
+   * Draw this edge on the canvas.
+   * Primarily for debugging.
+   */
+  draw(drawingOptions = {}) {
+    Draw.segment(this, drawingOptions);
+    Draw.point(this.A, drawingOptions);
+    Draw.point(this.B, drawingOptions);
+  }
+
+  /**
+   * Draw all edges from the cache.
+   * Primarily for debugging.
+   */
+  static drawAllEdges(drawingOptions = {}) {
+    WallTracerEdge.allEdges().forEach(e => e.draw(drawingOptions));
+  }
+}
+
+export class WallTracer {
+  origin;
+
+  constructor(origin) {
+    this.origin = new PIXI.Point(origin.x, origin.y);
+
+    // If not dynamically tracking walls, this is where to do the initial tracking.
+    // Clear any old data.
+
+  }
+
+  clear() {
+    // If not dynamically tracking walls, can reset here.
+  }
+
+  /**
+   * For a given origin point, locate walls that encompass the origin.
+   * Return the polygon shape for those walls, with any holes included.
+   * @param {PIXI.Point} origin
+   * @returns {PIXI.Polygon[]}
+   */
+  encompassingShapeWithHoles() {
+    const encompassingPoly = this.encompassingShape();
+    if ( !encompassingPoly ) return [];
+
+    const encompassingHoles = this.encompassingHoles(encompassingPoly);
+    if ( !encompassingHoles.length ) return [encompassingPoly];
+
+    // Union the "holes"
+    const paths = ClipperPaths.fromPolygons(encompassingHoles);
+    const combined = paths.combine();
+
+    // Diff the encompassing polygon against the "holes"
+    const diffPath = combined.diffPolygon(encompassingPoly);
+    return diffPath.toPolygons();
+  }
+
+  /**
+   * From an origin point, locate vertices and edges that encompass the origin.
+   * Return the resulting polygon.
+   * If tracing A-->B and B-->A resulted in two polygons, return the smaller in area.
+   * @returns {WallTracerPolygon|null}
+   */
+  encompassingShape() {
+    const startingEdges = this.locateStartingEdges();
+    for ( const startingEdge of startingEdges ) {
+      const { polyAB, polyBA } = WallTracer.traceClosedCWPath(startingEdge, this.origin);
+      if ( polyAB && polyBA ) return polyBA.area > polyAB.area ? polyBA : polyAB;
+      else if ( polyAB ) return polyAB;
+      else if ( polyBA ) return polyBA;
     }
     return null;
   }
 
-  /** @returns {PolygonVertex} */
-  otherEndpoint(vertex) { return vertex.equals(this.A) ? this.B : this.A; }
-
-  /** @returns {PolygonVertex} */
-  matchingEndpoint(vertex) { return vertex.equals(this.A) ? this.A : this.B; }
-
   /**
-   * Get walls that collide with this wall
-   * @returns {Set<Wall>}
+   * Given an encompassing shape, locate all edges within that shape.
+   * Excluding edges used in that shape, locate any edges that form a closed loop.
+   * These form potential holes to the encompassing shape.
+   * @param {WallTracerPolygon} encompassingShape
    */
-  collidingWalls() {
-    const { wall, A, B, id } = this;
-    const collisionTest = (o, rect) => o.t.id !== id && segmentsOverlap(A, B, o.t.A, o.t.B); // eslint-disable-line no-unused-vars
-    const out = canvas.walls.quadtree.getObjects(wall.bounds, { collisionTest });
+  encompassingHoles(encompassingShape) {
+    const encompassingShapeEdges = encompassingShape._wallTracer.edges;
+    if ( !encompassingShapeEdges || encompassingShapeEdges.size < 3 ) {
+      console.warn("encompassingShapeEdges not valid.");
+      return [];
+    }
 
-    // Add the inner and outer walls if applicable
-    const boundaryWalls = WallTracerEdge.segmentBoundaryCollisions(wall);
-    return new Set([...out, ...boundaryWalls]);
+    const collisionTest = (o, _rect) => WallTracerEdge.connectedEdges.has(o.t)
+      && !encompassingShapeEdges.has(o.t)
+      && encompassingShape.lineSegmentIntersects(o.t.A, o.t.B, { inside: true });
+    const potentialHoleEdges = WallTracerEdge.quadtree.getObjects(encompassingShape.getBounds(), { collisionTest });
 
+    if ( !potentialHoleEdges.size ) return [];
+
+    const holes = [];
+    for ( const potentialHoleEdge of potentialHoleEdges ) {
+      const { polyAB, polyBA } = WallTracer.traceClosedCWPath(potentialHoleEdge);
+      if ( polyAB ) holes.push(polyAB);
+      if ( polyBA ) holes.push(polyBA);
+    }
+    return holes;
   }
 
   /**
-   * Test if segment intersects boundary walls, and return any that do.
-   * @param {Wall} ray   Wall, or other segment with A and B properties with A.key and B.key
-   * @returns {Wall[]}
+   * @typedef {PIXI.Polygon} WallTracerPolygon
+   * @property {object} [_wallTracer]
+   * @property {WallTracerVertex[]} [_wallTracer.vertices]
+   * @property {Set<WallTracerEdge>} [_wallTracer.edges]
    */
-  static segmentBoundaryCollisions(segment) {
-    const { A, B } = segment;
-    const boundaryWalls = [...canvas.walls.innerBounds, ...canvas.walls.outerBounds];
-    const out = new Set();
-    for ( const wall of boundaryWalls ) {
-      if ( wall.wallKeys.has(A.key)
-        || wall.wallKeys.has(B.key)
-        || segmentsOverlap(A, B, wall.A, wall.B)) out.add(wall);
+
+  /**
+   * @typedef {object} TracedPolygonResults
+   * @property {WallTracerPolygon|null} polyAB
+   * @property {WallTracerPolygon|null} polyBA
+   */
+
+  /**
+   * Trace an edge CW, first attempting A --> B and then B --> A.
+   * @returns {TracedPolygonResults}  The resulting polygons in both directions, if any found.
+   */
+  static traceClosedCWPath(edge, origin) {
+    const verticesAB = WallTracer._turnCW(edge, edge.A);
+    const polyAB = this._buildPolygonFromTracedVertices(verticesAB, origin);
+
+    const verticesBA = WallTracer._turnCW(edge, edge.B);
+    const polyBA = this._buildPolygonFromTracedVertices(verticesBA, origin);
+
+    return { polyAB, polyBA };
+  }
+
+  /**
+   * Build polygon from set of vertices
+   * @param {WallTracerVertex[]} vertices   Vertices to test and use to build the polygon
+   * @param {Point} origin                  Optional origin to test for containment
+   * @returns {WallTracerPolygon|null}
+   */
+  static _buildPolygonFromTracedVertices(vertices, origin) {
+    if ( !vertices ) return null;
+    const nVertices = vertices.length;
+    if ( nVertices < 3 ) return null;
+
+    // It is possible for the trace to create a shape like a "6", where it starts
+    // in the top part of the 6.
+    // The vertices are in reverse, so the circle of the "6" would come first.
+    // Remove the "tail" by checking if the vertices start to repeat.
+    // (This will also remove closing vertex.)
+    const seenVertices = new Set();
+    let i = 0;
+    for ( ; i < nVertices; i += 1 ) {
+      const v = vertices[i];
+      if ( seenVertices.has(v) ) break;
+      seenVertices.add(v);
     }
-    return out;
+    vertices.splice(i);
+    if ( vertices.length < 3 ) return null;
+
+    // Build the polygon
+    const poly = new PIXI.Polygon(vertices);
+
+    // For testing, check for self-intersecting polygons.
+    const polyEdges = [...poly.iterateEdges({closed: true})];
+    const nEdges = polyEdges.length;
+    for ( let i = 0; i < nEdges; i += 1 ) {
+      const edgeI = polyEdges[i];
+      const keySet = new Set([edgeI.A.key, edgeI.B.key]);
+
+      for ( let j = i + 1; j < nEdges; j += 1 ) {
+        const edgeJ = polyEdges[j];
+        if ( keySet.has(edgeJ.A.key) || keySet.has(edgeJ.B.key) ) continue;
+
+        if ( foundry.utils.lineSegmentIntersects(edgeI.A, edgeI.B, edgeJ.A, edgeJ.B) ) {
+          console.warn("_buildPolygonFromTracedVertices found a self-intersecting polygon.");
+//           return poly;
+        }
+      }
+    }
+
+    // Confirm containment of the origin
+    if ( origin && !poly.contains(origin.x, origin.y) ) return false;
+
+    // Add in links to the original vertices and edges set
+    const edges = new Set();
+    vertices.forEach(v => edges.add(v._cwEdge));
+    poly._wallTracer = { vertices, edges };
+
+    return poly;
+  }
+
+  /*
+   * Trace a set of linked edges recursively, turning clockwise at each vertex.
+   * Given edge, follow A --> B or B --> A. Turn cw by examining angles of endpoint edges. Trace that edge.
+   * If that edge returns false, try the next-most cw option.
+   * Ignore any edges that are not in the connecting set.
+   * If we revisit an edge, we have a closed cycle.
+   * @param {WallTracerEdge} edge             Current edge
+   * @param {WallTracerVertex} vertex         Optional current (starting) vertex of this edge.
+   *                                          The opposite vertex will be used to find the next edge.
+   * @param {Set<WallTracerEdge>} seenEdges   Set of all edges visited by this recursion.
+   * @returns {WallTracerVertex[]|false}
+   */
+  static _turnCW(edge, vertex = edge.A, seenEdges = new Set()) {
+    // Associate the vertex with this edge, so we can later find all the edges of the polygon.
+    vertex._cwEdge = edge;
+
+    // If we have encountered this edge before, we have a cycle.
+    if ( seenEdges.has(edge) ) return [vertex];
+    seenEdges.add(edge);
+
+    // Find the edges connected to this next endpoint. If no more edges, then we are at a dead-end.
+    const nextVertex = edge.otherEndpoint(vertex);
+    const potentialEdgesSet = nextVertex._edges.filter(e => e !== edge && WallTracerEdge.connectedEdges.has(e));
+    if ( !potentialEdgesSet.size ) return false;
+
+    // If only one choice, that is easy! No angle math required.
+    if ( potentialEdgesSet.size === 1 ) {
+      const [potentialEdge] = potentialEdgesSet;
+      const res = WallTracer._turnCW(potentialEdge, nextVertex, seenEdges);
+      if ( !res ) return false;
+      res.push(vertex);
+      return res;
+    }
+
+    // Add this edge to the seen set and attempt to follow to next edge.
+    // Prioritize the CW-most edge.
+    // If edge.angle === 0, then the potential edge angles go from highest (most CW turn) to lowest (least CW turn)
+    // To ensure edge.angle === 0 when calculating angles:
+    // 1. Make sure edge.angle represents A --> B. If we are moving B --> A, flip 180º.
+    // 2. Subtract the edge.angle to rotate it (and other angles) CCW. This zeroes out the edge.angle, and
+    //    rotates other angles accordingly.
+    // 3. b - a will sort highest first.
+    const potentialEdges = [...potentialEdgesSet].sort((a, b) =>
+      b.angleFromEndpoint(nextVertex) - a.angleFromEndpoint(nextVertex));
+    for ( const potentialEdge of potentialEdges ) {
+      const res = WallTracer._turnCW(potentialEdge, nextVertex, seenEdges);
+      if ( !res ) continue;
+      res.push(vertex);
+      return res;
+    }
+    return false;
+  }
+
+  /**
+   * Locate the edges that may contain an encompassing polygon by shooting a ray due west.
+   * @returns {WallTracerEdge[]}
+   */
+  locateStartingEdges() {
+    const westRay = new Ray(this.origin, new PIXI.Point(0, this.origin.y));
+    const westWalls = [...WallTracer.connectingWallsForRay(westRay)];
+
+    // Calculate and sort by distance from the origin
+    westWalls.forEach(edge => {
+      edge._ix = CONFIG.GeometryLib.utils.lineLineIntersection(westRay.A, westRay.B, edge.A, edge.B);
+    });
+    westWalls.sort((a, b) => a._ix.t0 - b._ix.t0);
+    return westWalls;
   }
 
   /**
@@ -236,112 +944,12 @@ export class WallTracerEdge {
    * @param {Ray} ray   Ray, or other segment with A and B and bounds properties.
    * @returns {Wall[]}
    */
-  static collidingWallsForRay(ray) {
+  static connectingWallsForRay(ray) {
     const { A, B } = ray;
-    const collisionTest = (o, rect) => segmentsOverlap(A, B, o.t.A, o.t.B); // eslint-disable-line no-unused-vars
-    return canvas.walls.quadtree.getObjects(ray.bounds, { collisionTest });
-  }
-
-  /**
-   * Organize colliding walls into shared endpoints or intersections
-   */
-  _organizeCollidingWalls() {
-    const { wall, A, B } = this;
-    const collisions = [];
-    const walls = this.collidingWalls();
-    for ( const w of walls ) {
-      const edge = new WallTracerEdge(w);
-      const { A: eA, B: eB } = edge;
-      edge.prev = this; // Currently just for debugging
-
-      // Identify:
-      // t0: location of the intersection on A|B
-      // t1: location of the intersection on eA|eB
-      if ( A.key === eA.key ) {
-        this._wallCollisionMap.set(w, { t: 0, pt: A });
-        edge._wallCollisionMap.set(wall, { t: 0, pt: A });
-
-      } else if ( A.key === eB.key ) {
-        this._wallCollisionMap.set(w, { t: 0, pt: A });
-        edge._wallCollisionMap.set(wall, { t: 1, pt: A });
-
-      } else if ( B.key === eA.key ) {
-        this._wallCollisionMap.set(w, { t: 1, pt: B });
-        edge._wallCollisionMap.set(wall, { t: 0, pt: B });
-
-      } else if ( B.key === eB.key ) {
-        this._wallCollisionMap.set(w, { t: 1, pt: B });
-        edge._wallCollisionMap.set(wall, { t: 1, pt: B });
-
-      } else if ( foundry.utils.lineSegmentIntersects(A, B, eA, eB) ) {
-        // Intersects the wall or shares an endpoint or endpoint hits the wall
-        const ix = CONFIG.GeometryLib.utils.lineLineIntersection(A, B, eA, eB, { t1: true });
-        this._wallCollisionMap.set(w, { t: ix.t0, pt: ix });
-        edge._wallCollisionMap.set(wall, {t: ix.t1, pt: ix });
-
-      } else {
-        // Edge is either completely collinear or does not actually intersect
-        const ratioA = segmentRatio(A, B, eA);
-        const ratioB = segmentRatio(A, B, eB);
-
-        if ( ratioA === null || ratioB === null ) continue; // Not collinear
-
-        if ( ratioA > 1 && ratioB > 1 ) continue; // Edge completely after A|B
-        if ( ratioA < 0 && ratioB < 0 ) continue; // Edge completely before A|B
-
-        const aInside = ratioA.between(0, 1);
-        const bInside = ratioB.between(0, 1);
-
-        if ( aInside && bInside ) continue; // Edge completely contained within A|B
-        if ( !aInside && !bInside ) {
-          // Edge contains A|B
-          // Replace this wall entirely with edge
-          this.wall = w;
-          return this._organizeCollidingWalls();
-        }
-
-        // Either eA or eB are inside
-        if ( aInside ) {
-          if ( ratioB < 0 ) {
-            // Segments: eB -- A -- eA -- B
-            this._wallCollisionMap.set(w, { t: 0, pt: A });
-            edge._wallCollisionMap.set(wall, { t: segmentRatio(eA, eB, A), A });
-
-          } else if ( ratioB > 1 ) {
-            // Segments: A -- eA -- B -- eB
-            this._wallCollisionMap.set(w, { t: 1, pt: B });
-            edge._wallCollisionMap.set(wall, { t: segmentRatio(eA, eB, B), B });
-          }
-        } else if ( bInside ) {
-          if ( ratioA < 0 ) {
-            // Segments: eA -- A -- eB -- B
-            this._wallCollisionMap.set(w, { t: 0, pt: A });
-            edge._wallCollisionMap.set(wall, { t: segmentRatio(eA, eB, A), A });
-          } else if ( ratioB > 1 ) {
-            this._wallCollisionMap.set(w, { t: 1, pt: B });
-            edge._wallCollisionMap.set(wall, { t: segmentRatio(eA, eB, B), B });
-          }
-        }
-      }
-
-      collisions.push(edge);
-    }
-
-    collisions.sort((a, b) => this._wallCollisionMap.get(a.wall).t - this._wallCollisionMap.get(b.wall).t);
-    return collisions;
-  }
-
-  draw(drawingOptions = {}) {
-    Draw.segment(this, drawingOptions);
-    const ixIndices = this.collisionsMap.keys();
-    for ( const idx of ixIndices ) {
-      const ix = this.pointAtRatio(idx);
-      Draw.point(ix, { color: Draw.COLORS.red, radius: 2 });
-    }
+    const collisionTest = (o, _rect) => WallTracerEdge.connectedEdges.has(o.t) && segmentsOverlap(A, B, o.t.A, o.t.B);
+    return WallTracerEdge.quadtree.getObjects(ray.bounds, { collisionTest });
   }
 }
-
-// ----- Utility Functions ----- //
 
 /**
  * Do two segments overlap?
@@ -418,303 +1026,4 @@ function findOverlappingPoints(a, b, c, d) {
   || (p0.x < p1.x && p0.y < p1.y)) return [p0, p1];
 
   return [];
-}
-
-export class WallTracer {
-
-  /** @type {PIXI.Point} */
-  origin = new PIXI.Point();
-
-  /** @type {WallTracerEdge[]} */
-  _startingEdges;
-
-  /** @type {Set<Wall>} */
-  _encompassingWalls;
-
-  /** @type {PIXI.Polygon} */
-  _encompassingPolygon;
-
-  /** @type {PIXI.Polygon[]} */
-  _encompassingHoles;
-
-  constructor(origin) {
-    if ( !(origin instanceof PIXI.Point) ) origin = new PIXI.Point(origin.x, origin.y);
-    this.origin = origin;
-  }
-
-  /** @type {WallTracerEdge[]} */
-  get startingEdges() {
-    return this._startingEdges || (this._startingEdges = this.findStartingEdges());
-  }
-
-  /** @type {Set<Wall>} */
-  get encompassingWalls() {
-    if ( typeof this._encompassingWalls === "undefined" ) this.findEncompassingPolygon();
-    return this._encompassingWalls;
-  }
-
-  /** @type {PIXI.Polygon} */
-  get encompassingPolygon() {
-    if ( typeof this._encompassingPolygon === "undefined" ) this.findEncompassingPolygon();
-    return this._encompassingPolygon;
-  }
-
-  /** @type {PIXI.Polygon[]} */
-  get encompassingHoles() {
-    return this._encompassingHoles || (this._encompassingHoles = this.findEncompassingHoles());
-  }
-
-  /**
-   * Locate the edges that may contain an encompassing polygon by shooting a ray due west.
-   * @returns {WallTracerEdge[]}
-   */
-  findStartingEdges() {
-    const westRay = new Ray(this.origin, new PIXI.Point(0, this.origin.y));
-    let westWalls = WallTracerEdge.collidingWallsForRay(westRay);
-
-    // Add west border walls
-    const innerLeft = canvas.walls.innerBounds.find(w => w.id.includes("Left"));
-    const outerLeft = canvas.walls.outerBounds.find(w => w.id.includes("Left"));
-    westWalls.add(innerLeft);
-    westWalls.add(outerLeft);
-
-    // Sort by distance from origin
-    // Conver to WallTracerEdge to avoid screwing up the wall object
-    const startingEdges = [...westWalls.map(w => new WallTracerEdge(w))];
-    startingEdges.forEach(edge => edge._ix = foundry.utils.lineLineIntersection(westRay.A, westRay.B, edge.A, edge.B));
-    startingEdges.sort((a, b) => a._ix.t0 - b._ix.t0);
-    return startingEdges;
-  }
-
-  /**
-   * For a given origin point, locate walls that encompass the origin.
-   * Return the polygon shape for those walls, with any holes included.
-   * @param {PIXI.Point} origin
-   * @returns {PIXI.Polygon[]}
-   */
-  static encompassingShapeWithHoles(origin) {
-    const wt = new WallTracer(origin);
-    const encompassingPolygon = wt.encompassingPolygon;
-    if ( !encompassingPolygon ) return [];
-    if ( !wt.encompassingHoles.length ) return [encompassingPolygon];
-
-    // Union the "holes"
-    const paths = ClipperPaths.fromPolygons(wt.encompassingHoles);
-    const combined = paths.combine();
-
-    // Diff the encompassing polygon against the "holes"
-    const diffPath = combined.diffPolygon(encompassingPolygon);
-    return diffPath.toPolygons();
-  }
-
-  // TODO: Make more generic, so it can get a set of holes for any polygon,
-  // not just ones from walls.
-
-  /**
-   * Test each starting edge until we find an encompassing polygon for the origin.
-   * @returns {PIXI.Polygon|null}
-   */
-  findEncompassingPolygon() {
-    const { origin, startingEdges } = this;
-    let res;
-    for ( const startingEdge of startingEdges ) {
-      res = WallTracer.traceWall(startingEdge, origin);
-      if ( res ) break;
-    }
-    if ( !res ) return null;
-
-    this._encompassingPolygon = res.poly;
-    this._encompassingWalls = res.polyWalls;
-    return res.poly;
-  }
-
-  /**
-   * Locate all walls within the encompassing polygon.
-   * If tracing the wall forms a polygon, add to array of potential holes for the
-   * encompassing polygon.
-   * @returns {PIXI.Polygon[]} Array of all polygons that form potential holes for the
-   *   encompassing polygon.
-   */
-  findEncompassingHoles() {
-    const encompassingPolygon = this.encompassingPolygon;
-    if ( !encompassingPolygon ) return [];
-    const encompassingWalls = this.encompassingWalls;
-
-    // Find walls contained by the encompassingPolygon.
-    // Drop any walls used by the encompassing polygon.
-    const collisionTest = (o, _rect) => encompassingPolygon.lineSegmentIntersects(o.t.A, o.t.B, { inside: true });
-    const holeWalls = canvas.walls.quadtree.getObjects(encompassingPolygon.getBounds(), { collisionTest })
-      .difference(encompassingWalls);
-    if ( !holeWalls.size ) return [];
-
-    // For each potential hole wall, see if tracing will form a polygon. Keep the hole if it does.
-    const holePolys = [];
-    let seenHoleWalls = new Set();
-    for ( const holeWall of holeWalls ) {
-      if ( seenHoleWalls.has(holeWall) ) continue; // If we traced this wall previously, skip.
-      const holeEdge = new WallTracerEdge(holeWall);
-      const holeRes = WallTracer.traceWall(holeEdge);
-      if ( holeRes ) {
-        holePolys.push(holeRes.poly);
-        seenHoleWalls = new Set([...seenHoleWalls, ...holeRes.polyWalls]);
-      }
-      seenHoleWalls.add(holeWall);
-    }
-
-    return holePolys;
-  }
-
-  /**
-   * Determine whether walls connected to a starting wall contain an origin.
-   * Four possible directions:
-   * 1. A --> B clockwise
-   * 2. A --> B counterclockwise
-   * 3. B --> A clockwise
-   * 4. B --> A counterclockwise
-   *
-   * For each direction, looking to close a polygon around origin.
-   * Polygon formed if we intersect the starting wall or if we run out of edges
-   * and the shape can be closed without intersecting intervening edges.
-   * If the formed polygon contains the origin, we are done.
-   *
-   * @param {Wall} startingWall     Wall to start tracing from.
-   * @param {Point} origin          Optional. If provided, the polygon must contain this point.
-   * @returns {PIXI.Polygon|null}
-   */
-  static traceWall(startingEdge, origin) {
-    const AtoB = true;
-    let poly;
-    let allPoints;
-    for ( const cw of [true, false] ) {
-      const points = WallTracer.traceWallInDirection(startingEdge, { AtoB, cw });
-      allPoints = points;
-      poly = WallTracer.checkPoints(points, startingEdge, origin);
-      if ( poly ) break;
-
-      // Try adding in the points moving the opposite direction
-      // const points2 = traceWallInDirection(startingEdge, { AtoB: !AtoB, cw: !cw });
-      // allPoints = [...points2, points];
-      // poly = checkPoints(allPoints, startingEdge, origin);
-      // if ( poly ) break;
-    }
-    if ( !poly ) return null;
-
-    // Need the walls that make up the poly later.
-    const polyWalls = new Set();
-    allPoints.forEach(pt => polyWalls.add(pt.edge.wall));
-    return { poly, polyWalls };
-  }
-
-  /**
-   * From a starting edge, walk along the edge and any intersecting or connecting edges.
-   * Start in the indicated direction, such as A --> B, and turn in the indicated direction,
-   * i.e., clockwise, at each intersecting wall.
-   * Stop when no walls remain or repeating a wall previously encountered.
-   * @param {WallTracerEdge} startingEdge
-   * @param {object} [options]    Options that affect the choice of next edge.
-   * @param {boolean} [options.AtoB]    If true, start by moving A --> B along the edge.
-   *                                    If false, move B --> A.
-   * @param {boolean} [options.cw]      Turn clockwise if true; counterclockwise if false.
-   * @returns {Point[]}
-   */
-  static traceWallInDirection(startingEdge, { AtoB = true, cw = true } = {}) {
-    const seenWalls = new Set([startingEdge.wall]);
-    const MAX_ITER = 1000; // Avoid endless loop due to errors.
-    const points = [];
-
-    // Beginning with starting edge, trace a path of colliding walls for the given direction.
-    // E.g. A -- ix --> B. First point is ix.
-    //             \---> A --> ix --> ix1/B. Second point is ix1/B. Etc.
-    let currEdge = startingEdge;
-    let t = 0;
-    let currIter = 0;
-    let nextEdge = currEdge.nextEdgeFromRatio(t, { AtoB, cw });
-    while ( nextEdge ) {
-      // Avoid infinite loops and flag errors
-      if ( currIter > MAX_ITER ) {
-        console.warn("traceWallInDirection exceeded MAX_ITER");
-        break;
-      }
-      currIter += 1;
-
-      // Add the intersection point between currEdge and nextEdge
-      const pt = nextEdge.collisionLocationForWall(currEdge.wall);
-      pt.edge = currEdge;
-      points.push(pt);
-
-      // If we have looped back to a wall already seen, we have a closed polygon.
-      if ( seenWalls.has(nextEdge.wall) ) break;
-      seenWalls.add(nextEdge.wall);
-
-      // Determine which way along the next edge we are tracing: ix --> B or ix --> A
-      t = pt.t;
-      if ( t === 0 ) AtoB = true;
-      else if ( t === 1 ) AtoB = false;
-      else {
-        // Based on the direction we are currently tracing, find the orientation of the next edge.
-        const [currA, currB] = AtoB ? [currEdge.A, currEdge.B] : [currEdge.B, currEdge.A];
-        AtoB = (foundry.utils.orient2dFast(currA, currB, nextEdge.A) > 0 ) ^ cw;
-      }
-
-      // Cycle to the next edge. Start tracing from t --> endpoint for this edge to find the
-      // next intersection.
-      currEdge = nextEdge;
-      nextEdge = currEdge.nextEdgeFromRatio(t, { AtoB, cw });
-    }
-
-    // We only want closed polygons. If there is no next edge, we have hit a dead-end.
-    if ( !nextEdge ) return [];
-
-    // We may have looped back to the starting wall or we have hit an intervening wall.
-    // E.g, created a "6".
-    // Drop any points before the last edge.
-    const sliceIdx = points.findIndex(pt => pt.edge.wall === nextEdge.wall);
-    points.splice(0, sliceIdx);
-    return points;
-  }
-
-  /**
-   * Confirm the starting points create an acceptable polygon.
-   * 1. There are sufficient points to form a polygon.
-   * 2. The end point to starting point forms a line that does not intersect other polygon edges.
-   * 3. The polygon contains the origin.
-   * @param {Point[]} points                Array of {x, y} points that will make up the polygon.
-   * @param {WallTracerEdge} startingEdge   Used to shortcut the first test.
-   * @param {Point} origin                  Optional. If provided, the polygon must contain this point.
-   * @returns {PIXI.Polygon|boolean}  False if not an acceptable polygon.
-   */
-  static checkPoints(points, startingEdge, origin) {
-    // Polygon should not be already closed (this is unlikely).
-    if ( points.length > 2 && points[0].equals(points[points.length - 1]) ) points.pop();
-
-    // Must be able to at least form a triangle.
-    const ln = points.length;
-    if ( ln < 3 ) return false;
-
-    // Confirm the polygon is not self intersecting
-    const poly = new PIXI.Polygon(points);
-
-    // If the connecting edge is the starting edge, then we know it will not intersect itself.
-    //     const testSelfIntersection = !(startingEdge.wall.wallKeys.has(points[0])
-    //       && startingEdge.wall.wallKeys.has(points[ln - 1]));
-
-    // Otherwise, test each edge
-    //     if ( testSelfIntersection ) {
-    const connectingEdge = { A: points[ln - 1], B: points[0] };
-    const keys = new Set([connectingEdge.A.key, connectingEdge.B.key]);
-    const edges = poly.iterateEdges({close: false});
-    // TODO: Could test contains in this same loop.
-    for ( const edge of edges ) {
-      if ( keys.has(edge.A.key) || keys.has(edge.B.key) ) continue;
-      if ( foundry.utils.lineSegmentIntersects(connectingEdge.A, connectingEdge.B, edge.A, edge.B) ) {
-        console.log("checkPoints found self-intersecting polygon");
-        return false;
-      }
-    }
-    //     }
-
-    // Confirm containment
-    if ( origin && !poly.contains(origin.x, origin.y) ) return false;
-    return poly;
-  }
 }
