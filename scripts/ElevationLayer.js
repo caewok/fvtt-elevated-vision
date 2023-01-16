@@ -959,11 +959,13 @@ export class ElevationLayer extends InteractionLayer {
 
     */
 
-    log(`Attempting fill at ${origin.x},${origin.y} with elevation ${elevation}`);
-    const polys = WallTracer.encompassingShapeWithHoles(origin);
+    log(`Attempting fill at { x: ${origin.x}, y: ${origin.y} } with elevation ${elevation}`);
+    const wt = new WallTracer(origin);
+    const polys = wt.encompassingPolygonWithHoles(origin);
     if ( !polys.length ) {
       // Shouldn't happen, but...
-      ui.notifications.warn(`Sorry; cannot locate a closed boundary for the requested fill at ${origin.x},${origin.y}!`);
+      ui.notifications.warn(`Sorry; cannot locate a closed boundary for the requested fill at { x: ${origin.x}, y: ${origin.y} }!`);
+      return;
     }
 
     // Create the graphics representing the fill!
