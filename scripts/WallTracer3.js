@@ -3,7 +3,7 @@ PIXI,
 canvas,
 Ray,
 foundry,
-Quadtree,
+CanvasQuadtree,
 CONFIG,
 Hooks,
 game,
@@ -133,7 +133,7 @@ Hooks.on("deleteWall", function(document, _options, _userId) {
 
 Hooks.on("canvasReady", async function() {
   const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
-  log(`canvasReady`);
+  log("canvasReady");
 
   // When canvas is ready, the existing walls are not created, so must re-do here.
   const walls = [...canvas.walls.placeables] ?? [];
@@ -557,6 +557,16 @@ export class WallTracerEdge {
   }
 
   /**
+   * Find the angle starting at the given vertex and moving to the opposite vertex.
+   * @param {WallTracerVertex} vertex
+   * @returns {number}    Angle or its mirror opposite
+   */
+  angleFromEndpoint(vertex) {
+    return this.B === vertex ? this.angle : Math.normalizeRadians(this.angle + Math.PI);
+  }
+
+
+  /**
    * Boundary rectangle that encompasses this edge.
    * @type {PIXI.Rectangle}
    */
@@ -689,6 +699,255 @@ export class WallTracerEdge {
    */
   static drawAllEdges(drawingOptions = {}) {
     WallTracerEdge.allEdges().forEach(e => e.draw(drawingOptions));
+  }
+}
+
+export class WallTracer {
+  origin;
+
+  constructor(origin) {
+    this.origin = new PIXI.Point(origin.x, origin.y);
+
+    // If not dynamically tracking walls, this is where to do the initial tracking.
+    // Clear any old data.
+
+  }
+
+  clear() {
+    // If not dynamically tracking walls, can reset here.
+  }
+
+  /**
+   * For a given origin point, locate walls that encompass the origin.
+   * Return the polygon shape for those walls, with any holes included.
+   * @param {PIXI.Point} origin
+   * @returns {PIXI.Polygon[]}
+   */
+  encompassingShapeWithHoles() {
+    const encompassingPoly = this.encompassingShape();
+    if ( !encompassingPoly ) return [];
+
+    const encompassingHoles = this.encompassingHoles(encompassingPoly);
+    if ( !encompassingHoles.length ) return [encompassingPoly];
+
+    // Union the "holes"
+    const paths = ClipperPaths.fromPolygons(encompassingHoles);
+    const combined = paths.combine();
+
+    // Diff the encompassing polygon against the "holes"
+    const diffPath = combined.diffPolygon(encompassingPoly);
+    return diffPath.toPolygons();
+  }
+
+  /**
+   * From an origin point, locate vertices and edges that encompass the origin.
+   * Return the resulting polygon.
+   * If tracing A-->B and B-->A resulted in two polygons, return the smaller in area.
+   * @returns {WallTracerPolygon|null}
+   */
+  encompassingShape() {
+    const startingEdges = this.locateStartingEdges();
+    for ( const startingEdge of startingEdges ) {
+      const { polyAB, polyBA } = WallTracer.traceClosedCWPath(startingEdge, this.origin);
+      if ( polyAB && polyBA ) return polyBA.area > polyAB.area ? polyBA : polyAB;
+      else if ( polyAB ) return polyAB;
+      else if ( polyBA ) return polyBA;
+    }
+    return null;
+  }
+
+  /**
+   * Given an encompassing shape, locate all edges within that shape.
+   * Excluding edges used in that shape, locate any edges that form a closed loop.
+   * These form potential holes to the encompassing shape.
+   * @param {WallTracerPolygon} encompassingShape
+   */
+  encompassingHoles(encompassingShape) {
+    const encompassingShapeEdges = encompassingShape._wallTracer.edges;
+    if ( !encompassingShapeEdges || encompassingShapeEdges.size < 3 ) {
+      console.warn("encompassingShapeEdges not valid.");
+      return [];
+    }
+
+    const collisionTest = (o, _rect) => WallTracerEdge.connectedEdges.has(o.t)
+      && !encompassingShapeEdges.has(o.t)
+      && encompassingShape.lineSegmentIntersects(o.t.A, o.t.B, { inside: true });
+    const potentialHoleEdges = WallTracerEdge.quadtree.getObjects(encompassingShape.getBounds(), { collisionTest });
+
+    if ( !potentialHoleEdges.size ) return [];
+
+    const holes = [];
+    for ( const potentialHoleEdge of potentialHoleEdges ) {
+      const { polyAB, polyBA } = WallTracer.traceClosedCWPath(potentialHoleEdge);
+      if ( polyAB ) holes.push(polyAB);
+      if ( polyBA ) holes.push(polyBA);
+    }
+    return holes;
+  }
+
+  /**
+   * @typedef {PIXI.Polygon} WallTracerPolygon
+   * @property {object} [_wallTracer]
+   * @property {WallTracerVertex[]} [_wallTracer.vertices]
+   * @property {Set<WallTracerEdge>} [_wallTracer.edges]
+   */
+
+  /**
+   * @typedef {object} TracedPolygonResults
+   * @property {WallTracerPolygon|null} polyAB
+   * @property {WallTracerPolygon|null} polyBA
+   */
+
+  /**
+   * Trace an edge CW, first attempting A --> B and then B --> A.
+   * @returns {TracedPolygonResults}  The resulting polygons in both directions, if any found.
+   */
+  static traceClosedCWPath(edge, origin) {
+    const verticesAB = WallTracer._turnCW(edge, edge.A);
+    const polyAB = this._buildPolygonFromTracedVertices(verticesAB, origin);
+
+    const verticesBA = WallTracer._turnCW(edge, edge.B);
+    const polyBA = this._buildPolygonFromTracedVertices(verticesBA, origin);
+
+    return { polyAB, polyBA };
+  }
+
+  /**
+   * Build polygon from set of vertices
+   * @param {WallTracerVertex[]} vertices   Vertices to test and use to build the polygon
+   * @param {Point} origin                  Optional origin to test for containment
+   * @returns {WallTracerPolygon|null}
+   */
+  static _buildPolygonFromTracedVertices(vertices, origin) {
+    if ( !vertices ) return null;
+    const nVertices = vertices.length;
+    if ( nVertices < 3 ) return null;
+
+    // It is possible for the trace to create a shape like a "6", where it starts
+    // in the top part of the 6.
+    // The vertices are in reverse, so the circle of the "6" would come first.
+    // Remove the "tail" by checking if the vertices start to repeat.
+    // (This will also remove closing vertex.)
+    const seenVertices = new Set();
+    let i = 0;
+    for ( ; i < nVertices; i += 1 ) {
+      const v = vertices[i];
+      if ( seenVertices.has(v) ) break;
+      seenVertices.add(v);
+    }
+    vertices.splice(i);
+    if ( vertices.length < 3 ) return null;
+
+    // Build the polygon
+    const poly = new PIXI.Polygon(vertices);
+
+    // For testing, check for self-intersecting polygons.
+    const polyEdges = [...poly.iterateEdges({closed: true})];
+    const nEdges = polyEdges.length;
+    for ( let i = 0; i < nEdges; i += 1 ) {
+      const edgeI = polyEdges[i];
+      const keySet = new Set([edgeI.A.key, edgeI.B.key]);
+
+      for ( let j = i + 1; j < nEdges; j += 1 ) {
+        const edgeJ = polyEdges[j];
+        if ( keySet.has(edgeJ.A.key) || keySet.has(edgeJ.B.key) ) continue;
+
+        if ( foundry.utils.lineSegmentIntersects(edgeI.A, edgeI.B, edgeJ.A, edgeJ.B) ) {
+          console.warn("_buildPolygonFromTracedVertices found a self-intersecting polygon.");
+//           return poly;
+        }
+      }
+    }
+
+    // Confirm containment of the origin
+    if ( origin && !poly.contains(origin.x, origin.y) ) return false;
+
+    // Add in links to the original vertices and edges set
+    const edges = new Set();
+    vertices.forEach(v => edges.add(v._cwEdge));
+    poly._wallTracer = { vertices, edges };
+
+    return poly;
+  }
+
+  /*
+   * Trace a set of linked edges recursively, turning clockwise at each vertex.
+   * Given edge, follow A --> B or B --> A. Turn cw by examining angles of endpoint edges. Trace that edge.
+   * If that edge returns false, try the next-most cw option.
+   * Ignore any edges that are not in the connecting set.
+   * If we revisit an edge, we have a closed cycle.
+   * @param {WallTracerEdge} edge             Current edge
+   * @param {WallTracerVertex} vertex         Optional current (starting) vertex of this edge.
+   *                                          The opposite vertex will be used to find the next edge.
+   * @param {Set<WallTracerEdge>} seenEdges   Set of all edges visited by this recursion.
+   * @returns {WallTracerVertex[]|false}
+   */
+  static _turnCW(edge, vertex = edge.A, seenEdges = new Set()) {
+    // Associate the vertex with this edge, so we can later find all the edges of the polygon.
+    vertex._cwEdge = edge;
+
+    // If we have encountered this edge before, we have a cycle.
+    if ( seenEdges.has(edge) ) return [vertex];
+    seenEdges.add(edge);
+
+    // Find the edges connected to this next endpoint. If no more edges, then we are at a dead-end.
+    const nextVertex = edge.otherEndpoint(vertex);
+    const potentialEdgesSet = nextVertex._edges.filter(e => e !== edge && WallTracerEdge.connectedEdges.has(e));
+    if ( !potentialEdgesSet.size ) return false;
+
+    // If only one choice, that is easy! No angle math required.
+    if ( potentialEdgesSet.size === 1 ) {
+      const [potentialEdge] = potentialEdgesSet;
+      const res = WallTracer._turnCW(potentialEdge, nextVertex, seenEdges);
+      if ( !res ) return false;
+      res.push(vertex);
+      return res;
+    }
+
+    // Add this edge to the seen set and attempt to follow to next edge.
+    // Prioritize the CW-most edge.
+    // If edge.angle === 0, then the potential edge angles go from highest (most CW turn) to lowest (least CW turn)
+    // To ensure edge.angle === 0 when calculating angles:
+    // 1. Make sure edge.angle represents A --> B. If we are moving B --> A, flip 180º.
+    // 2. Subtract the edge.angle to rotate it (and other angles) CCW. This zeroes out the edge.angle, and
+    //    rotates other angles accordingly.
+    // 3. b - a will sort highest first.
+    const potentialEdges = [...potentialEdgesSet].sort((a, b) =>
+      b.angleFromEndpoint(nextVertex) - a.angleFromEndpoint(nextVertex));
+    for ( const potentialEdge of potentialEdges ) {
+      const res = WallTracer._turnCW(potentialEdge, nextVertex, seenEdges);
+      if ( !res ) continue;
+      res.push(vertex);
+      return res;
+    }
+    return false;
+  }
+
+  /**
+   * Locate the edges that may contain an encompassing polygon by shooting a ray due west.
+   * @returns {WallTracerEdge[]}
+   */
+  locateStartingEdges() {
+    const westRay = new Ray(this.origin, new PIXI.Point(0, this.origin.y));
+    const westWalls = [...WallTracer.connectingWallsForRay(westRay)];
+
+    // Calculate and sort by distance from the origin
+    westWalls.forEach(edge => {
+      edge._ix = CONFIG.GeometryLib.utils.lineLineIntersection(westRay.A, westRay.B, edge.A, edge.B);
+    });
+    westWalls.sort((a, b) => a._ix.t0 - b._ix.t0);
+    return westWalls;
+  }
+
+  /**
+   * Find walls that collide with the given ray
+   * @param {Ray} ray   Ray, or other segment with A and B and bounds properties.
+   * @returns {Wall[]}
+   */
+  static connectingWallsForRay(ray) {
+    const { A, B } = ray;
+    const collisionTest = (o, _rect) => WallTracerEdge.connectedEdges.has(o.t) && segmentsOverlap(A, B, o.t.A, o.t.B);
+    return WallTracerEdge.quadtree.getObjects(ray.bounds, { collisionTest });
   }
 }
 
