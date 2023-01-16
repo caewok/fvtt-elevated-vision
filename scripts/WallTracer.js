@@ -143,7 +143,7 @@ Hooks.on("canvasReady", async function() {
   if ( debug ) WallTracerEdge.verifyConnectedEdges();
 });
 
-export class WallTracerVertex extends PIXI.Point {
+export class WallTracerVertex {
 
   /** @type {Map<number, WallTracerVertex>} */
   static _cachedVertices = new Map();
@@ -153,6 +153,12 @@ export class WallTracerVertex extends PIXI.Point {
    */
   static clear() { this._cachedVertices.clear(); }
 
+  /** @type {PIXI.Point} */
+  #vertex = new PIXI.Point();
+
+  /** @type {number} */
+  key = 0;
+
   /** @type {Set<WallTracerEdge>} */
   _edges = new Set();
 
@@ -161,14 +167,30 @@ export class WallTracerVertex extends PIXI.Point {
    * @param {number} y
    */
   constructor(x, y) {
-    super(x, y);
-    this.roundDecimals();
-    const key = this.key;
+    this.#vertex = new PIXI.Point(x, y);
+    this.#vertex.roundDecimals();
+    const key = this.key = this.#vertex.key;
 
+    // Return either a new vertex object or the cached object for this key.
     const cache = WallTracerVertex._cachedVertices;
     if ( cache.has(key) ) return cache.get(key); // eslint-disable-line no-constructor-return
+    cache.set(this.key, this);
+  }
 
-    WallTracerVertex._cachedVertices.set(key, this);
+  /** @type {number} */
+  get x() { return this.#vertex.x; }
+
+  /** @type {number} */
+  get y() { return this.#vertex.y; }
+
+  /** @type {PIXI.Point} */
+  get point() { return this.#vertex.clone(); } // Clone to avoid internal modification.
+
+  /**
+   * Test for equality against another vertex
+   */
+  almostEqual(other, epsilon = 1e-08) {
+    return this.#vertex.almostEqual(other);
   }
 
   /**
@@ -272,8 +294,7 @@ export class WallTracerEdge {
     this.A.addEdge(this);
     this.B.addEdge(this);
 
-    this.delta = new PIXI.Point();
-    this.B.subtract(this.A, this.delta);
+    this.delta = this.B.point.subtract(this.A.point);
 
     if ( !WallTracerEdge._cachedEdges.has(wall.id) ) WallTracerEdge._cachedEdges.set(wall.id, new Set([this]));
     else WallTracerEdge._cachedEdges.get(wall.id).add(this);
@@ -689,7 +710,11 @@ export class WallTracerEdge {
    */
   draw(drawingOptions = {}) {
     Draw.segment(this, drawingOptions);
+
+    drawingOptions.color = Draw.COLORS.red;
     Draw.point(this.A, drawingOptions);
+
+    drawingOptions.color = Draw.COLORS.blue;
     Draw.point(this.B, drawingOptions);
   }
 
@@ -723,8 +748,8 @@ export class WallTracer {
    * @param {PIXI.Point} origin
    * @returns {PIXI.Polygon[]}
    */
-  encompassingShapeWithHoles() {
-    const encompassingPoly = this.encompassingShape();
+  encompassingPolygonWithHoles() {
+    const encompassingPoly = this.encompassingPolygon();
     if ( !encompassingPoly ) return [];
 
     const encompassingHoles = this.encompassingHoles(encompassingPoly);
@@ -745,11 +770,11 @@ export class WallTracer {
    * If tracing A-->B and B-->A resulted in two polygons, return the smaller in area.
    * @returns {WallTracerPolygon|null}
    */
-  encompassingShape() {
+  encompassingPolygon() {
     const startingEdges = this.locateStartingEdges();
     for ( const startingEdge of startingEdges ) {
       const { polyAB, polyBA } = WallTracer.traceClosedCWPath(startingEdge, this.origin);
-      if ( polyAB && polyBA ) return polyBA.area > polyAB.area ? polyBA : polyAB;
+      if ( polyAB && polyBA ) return polyBA.area < polyAB.area ? polyBA : polyAB;
       else if ( polyAB ) return polyAB;
       else if ( polyBA ) return polyBA;
     }
@@ -762,20 +787,29 @@ export class WallTracer {
    * These form potential holes to the encompassing shape.
    * @param {WallTracerPolygon} encompassingShape
    */
-  encompassingHoles(encompassingShape) {
-    const encompassingShapeEdges = encompassingShape._wallTracer.edges;
-    if ( !encompassingShapeEdges || encompassingShapeEdges.size < 3 ) {
-      console.warn("encompassingShapeEdges not valid.");
+  encompassingHoles(encompassingPoly) {
+    const encompassingPolyEdges = encompassingPoly._wallTracer.edges;
+    if ( !encompassingPolyEdges || encompassingPolyEdges.size < 3 ) {
+      console.warn("encompassingPolyEdges not valid.");
       return [];
     }
 
-    const collisionTest = (o, _rect) => WallTracerEdge.connectedEdges.has(o.t)
-      && !encompassingShapeEdges.has(o.t)
-      && encompassingShape.lineSegmentIntersects(o.t.A, o.t.B, { inside: true });
-    const potentialHoleEdges = WallTracerEdge.quadtree.getObjects(encompassingShape.getBounds(), { collisionTest });
-
+    // Looking for edges that are:
+    // 1. connected (b/c only connected edges can form polygons)
+    // 2. not part of the encompassing polygon
+    // 3. has an endpoint within the polygon or spans the polygon.
+    //    Because we are using edges, an edge that crosses a polygon edge necessarily terminates
+    //    at the edge. Therefore, the midpoint of an edge contained by the polygon must be w/in the polygon.
+    const collisionTest = (o, _rect) => {
+      if ( !WallTracerEdge.connectedEdges.has(o.t) || !encompassingPolyEdges.has(o.t) ) return false;
+      const mid = PIXI.Point.midPoint(o.t.A.point, o.t.B.point);
+      return encompassingPoly.contains(mid.x, mid.y);
+    };
+    const potentialHoleEdges = WallTracerEdge.quadtree.getObjects(encompassingPoly.getBounds(), { collisionTest });
     if ( !potentialHoleEdges.size ) return [];
 
+    // Each hole edge can be traced in the A-->B and B--A directions.
+    // Add any polygons generated from the trace.
     const holes = [];
     for ( const potentialHoleEdge of potentialHoleEdges ) {
       const { polyAB, polyBA } = WallTracer.traceClosedCWPath(potentialHoleEdge);
@@ -854,7 +888,6 @@ export class WallTracer {
 
         if ( foundry.utils.lineSegmentIntersects(edgeI.A, edgeI.B, edgeJ.A, edgeJ.B) ) {
           console.warn("_buildPolygonFromTracedVertices found a self-intersecting polygon.");
-//           return poly;
         }
       }
     }
@@ -912,8 +945,10 @@ export class WallTracer {
     // 2. Subtract the edge.angle to rotate it (and other angles) CCW. This zeroes out the edge.angle, and
     //    rotates other angles accordingly.
     // 3. b - a will sort highest first.
+    const angle = edge.angleFromEndpoint(vertex);
     const potentialEdges = [...potentialEdgesSet].sort((a, b) =>
-      b.angleFromEndpoint(nextVertex) - a.angleFromEndpoint(nextVertex));
+      Math.normalizeRadians(b.angleFromEndpoint(nextVertex) - angle)
+      - Math.normalizeRadians(a.angleFromEndpoint(nextVertex) - angle));
     for ( const potentialEdge of potentialEdges ) {
       const res = WallTracer._turnCW(potentialEdge, nextVertex, seenEdges);
       if ( !res ) continue;
@@ -966,26 +1001,6 @@ function segmentsOverlap(a, b, c, d) {
   // If collinear, B is within A|B or D is within A|B
   const pts = findOverlappingPoints(a, b, c, d);
   return pts.length;
-}
-
-/**
- * Get ratio indicating where c lies on segment A|B
- * @param {PIXI.Point} a   Endpoint of segment A|B
- * @param {PIXI.Point} b   Endpoint of segment A|B
- * @param {PIXI.Point} c   Point that may or may not be collinear with A|B
- * @returns {number|null}   Null if c is not collinear; ratio otherwise.
- *   Ratio is between 0 and 1 if c lies on A|B.
- *   Ratio is negative if c lies before A.
- *   Ratio is positive if c lies after B.
- */
-function segmentRatio(a, b, c) {
-  if ( !foundry.utils.orient2dFast(a, b, c).almostEqual(0) ) return null;
-
-  const dAB = b.subtract(a);
-  const dAC = c.subtract(a);
-  const dot = dAB.dot(dAC);
-  const dist2 = dAB.magnitudeSquared();
-  return dot / dist2;
 }
 
 /**
