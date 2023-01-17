@@ -194,7 +194,7 @@ export class WallTracerVertex {
    * Test for equality against another vertex
    */
   almostEqual(other, epsilon = 1e-08) {
-    return this.#vertex.almostEqual(other);
+    return this.#vertex.almostEqual(other, epsilon);
   }
 
   /**
