@@ -1,3 +1,6 @@
+## 0.3.3
+Much improved fill algorithm.
+
 ## 0.3.2
 Update to geometry lib v0.1.1.
 
