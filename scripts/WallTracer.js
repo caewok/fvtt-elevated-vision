@@ -136,6 +136,10 @@ Hooks.on("canvasReady", async function() {
   log("canvasReady");
 
   // When canvas is ready, the existing walls are not created, so must re-do here.
+  // Also clear any existing data that may have been saved when switching scenes.
+  WallTracerVertex.clear();
+  WallTracerEdge.clear();
+
   const walls = [...canvas.walls.placeables] ?? [];
   walls.push(...canvas.walls.outerBounds);
   walls.push(...canvas.walls.innerBounds);
