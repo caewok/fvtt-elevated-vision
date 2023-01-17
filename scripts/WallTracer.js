@@ -805,7 +805,7 @@ export class WallTracer {
     //    Because we are using edges, an edge that crosses a polygon edge necessarily terminates
     //    at the edge. Therefore, the midpoint of an edge contained by the polygon must be w/in the polygon.
     const collisionTest = (o, _rect) => {
-      if ( !WallTracerEdge.connectedEdges.has(o.t) || !encompassingPolyEdges.has(o.t) ) return false;
+      if ( !WallTracerEdge.connectedEdges.has(o.t) || encompassingPolyEdges.has(o.t) ) return false;
       const mid = PIXI.Point.midPoint(o.t.A.point, o.t.B.point);
       return encompassingPoly.contains(mid.x, mid.y);
     };
@@ -815,10 +815,20 @@ export class WallTracer {
     // Each hole edge can be traced in the A-->B and B--A directions.
     // Add any polygons generated from the trace.
     const holes = [];
+    const seenEdges = new Set();
     for ( const potentialHoleEdge of potentialHoleEdges ) {
+      if ( seenEdges.has(potentialHoleEdge) ) continue;
+
       const { polyAB, polyBA } = WallTracer.traceClosedCWPath(potentialHoleEdge);
-      if ( polyAB ) holes.push(polyAB);
-      if ( polyBA ) holes.push(polyBA);
+      if ( polyAB ) {
+        holes.push(polyAB);
+        polyAB._wallTracer.edges.forEach(e => seenEdges.add(e));
+      }
+
+      if ( !polyAB.equals(polyBA) ) {
+        holes.push(polyBA);
+        polyBA._wallTracer.edges.forEach(e => seenEdges.add(e));
+      }
     }
     return holes;
   }
@@ -878,6 +888,7 @@ export class WallTracer {
 
     // Build the polygon
     const poly = new PIXI.Polygon(vertices);
+    poly.clean();
 
     // For testing, check for self-intersecting polygons.
     const polyEdges = [...poly.iterateEdges({closed: true})];
