@@ -219,6 +219,9 @@ export class WallTracerVertex {
     const key = this.key;
     if ( edge.A.key !== key && edge.B.key !== key ) return;
     this._edges.add(edge);
+
+    // Reset the cached sort for any attached edges.
+    this._edges.forEach(e => e.clearSortedEdgesForVertex(this));
   }
 
   /**
@@ -230,6 +233,10 @@ export class WallTracerVertex {
     if ( edge.A.key !== key && edge.B.key !== key ) return;
     this._edges.delete(edge);
     this.removeFromCache();
+
+    // Reset the cached sort for any attached edges.
+    edge.clearSortedEdgesForVertex(this);
+    this._edges.forEach(e => e.clearSortedEdgesForVertex(this));
   }
 
   /**
@@ -283,8 +290,15 @@ export class WallTracerEdge {
   /** @type {WallTracerVertex} */
   B;
 
+  // Because walls seldom change during scene, angle and clockwise edges are cached.
   /** @type {number} */
   _angle = undefined;
+
+  /** @type {WallTracerEdge[]} */
+  _sortedEdgesA;
+
+  /** @type {WallTracerEdge[]} */
+  _sortedEdgesB;
 
   /**
    * Constructor method to be used by internal methods, because
@@ -353,6 +367,51 @@ export class WallTracerEdge {
 
   /** @type {string} */
   get key() { return WallTracerEdge.key(this.A, this.B); }
+
+  get sortedEdgesA() {
+    return this._sortedEdgesA || (this._sortedEdgesA = this.sortEdgesA());
+  }
+
+  get sortedEdgesB() {
+    return this._sortedEdgesB || (this._sortedEdgesB = this.sortEdgesB());
+  }
+
+  sortedEdgesForVertex(vertex) {
+    if ( this.A === vertex ) return this.sortedEdgesA;
+    else if ( this.B === vertex ) return this.sortedEdgesB;
+    return [];
+  }
+
+  clearSortedEdgesForVertex(vertex) {
+    if ( this.A === vertex ) this._sortedEdgesA = undefined;
+    else if ( this.B === vertex ) this._sortedEdgesB = undefined;
+  }
+
+  /**
+   * Sort edges at the A vertex such that the most clockwise edge is first, viewed from B --> A.
+   * @returns {WallTracerEdge[]}
+   */
+  sortEdgesA() {
+    const { A, B } = this;
+    const angle = this.angleFromEndpoint(B);
+    const potentialEdges = [...this.A._edges].filter(e => e !== this);
+    return potentialEdges.sort((a, b) =>
+      Math.normalizeRadians(b.angleFromEndpoint(A) - angle)
+      - Math.normalizeRadians(a.angleFromEndpoint(A) - angle));
+  }
+
+  /**
+   * Sort edges at the B vertex such that the most clockwise edge is first, viewed from A --> B.
+   * @returns {WallTracerEdge[]}
+   */
+  sortEdgesB() {
+    const { A, B } = this;
+    const angle = this.angleFromEndpoint(A);
+    const potentialEdges = [...this.B._edges].filter(e => e !== this);
+    return potentialEdges.sort((a, b) =>
+      Math.normalizeRadians(b.angleFromEndpoint(B) - angle)
+      - Math.normalizeRadians(a.angleFromEndpoint(B) - angle));
+  }
 
   /**
    * Add an edge to the set of connected edges.
@@ -1013,13 +1072,14 @@ export class WallTracer {
     seenEdges.add(key);
 
     // Find the edges connected to this next endpoint. If no more edges, then we are at a dead-end.
-    const potentialEdgesSet = nextVertex._edges.filter(e => e !== edge && WallTracerEdge.connectedEdges.has(e));
-    if ( !potentialEdgesSet.size ) return null;
+    if ( nextVertex._edges.size < 2 ) return null; // Should always contain this linked edge.
+    const potentialEdges = edge.sortedEdgesForVertex(nextVertex).filter(e => WallTracerEdge.connectedEdges.has(e));
+    const nPotentialEdges = potentialEdges.length;
+    if ( !nPotentialEdges ) return null;
 
     // If only one choice, that is easy! No angle math required.
-    if ( potentialEdgesSet.size === 1 ) {
-      const [potentialEdge] = potentialEdgesSet;
-      const res = WallTracer._turnCW(potentialEdge, nextVertex, seenEdges);
+    if ( nPotentialEdges === 1 ) {
+      const res = WallTracer._turnCW(potentialEdges[0], nextVertex, seenEdges);
       if ( !res ) return null;
       res.vertices.push(vertex);
       res.edges.add(edge);
@@ -1035,10 +1095,6 @@ export class WallTracer {
     // 2. Subtract the edge.angle to rotate it (and other angles) CCW. This zeroes out the edge.angle, and
     //    rotates other angles accordingly.
     // 3. b - a will sort highest first.
-    const angle = edge.angleFromEndpoint(vertex);
-    const potentialEdges = [...potentialEdgesSet].sort((a, b) =>
-      Math.normalizeRadians(b.angleFromEndpoint(nextVertex) - angle)
-      - Math.normalizeRadians(a.angleFromEndpoint(nextVertex) - angle));
     for ( const potentialEdge of potentialEdges ) {
       const res = WallTracer._turnCW(potentialEdge, nextVertex, seenEdges);
       if ( !res ) continue;
