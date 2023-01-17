@@ -135,6 +135,8 @@ Hooks.on("canvasReady", async function() {
   const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
   log("canvasReady");
 
+  const t0 = performance.now();
+
   // When canvas is ready, the existing walls are not created, so must re-do here.
   // Also clear any existing data that may have been saved when switching scenes.
   WallTracerVertex.clear();
@@ -144,7 +146,12 @@ Hooks.on("canvasReady", async function() {
   walls.push(...canvas.walls.outerBounds);
   walls.push(...canvas.walls.innerBounds);
   for ( const wall of walls ) WallTracerEdge.addWall(wall);
-  if ( debug ) WallTracerEdge.verifyConnectedEdges();
+  const t1 = performance.now();
+  if ( debug ) {
+    WallTracerEdge.verifyConnectedEdges();
+    const t2 = performance.now();
+    log(`Tracked ${walls.length} walls in ${t1 - t0} ms. Verified in ${t2 - t1} ms.`);
+  }
 });
 
 export class WallTracerVertex {
