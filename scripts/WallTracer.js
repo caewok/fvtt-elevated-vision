@@ -193,6 +193,13 @@ export class WallTracerVertex {
   /**
    * Test for equality against another vertex
    */
+  equals(other) {
+    return this.#vertex.equals(other);
+  }
+
+  /**
+   * Test for near equality against another vertex
+   */
   almostEqual(other, epsilon = 1e-08) {
     return this.#vertex.almostEqual(other, epsilon);
   }
@@ -324,6 +331,21 @@ export class WallTracerEdge {
     }
     return s;
   }
+
+  /**
+   * Key for segment given two vertices
+   * @param {PIXI.Point} A    Point with key property
+   * @param {PIXI.Point} B    Point with key property
+   * @returns {string} Returns string b/c that is the fastest without using BigInt or angles.
+   *   BigInt saves very little time, so probably not worth it.
+   *   Key is unique such that key(A, B) ≠ key(B, A)
+   */
+  static key(A, B) {
+    return `${A.key},${B.key}`;
+  }
+
+  /** @type {string} */
+  get key() { return WallTracerEdge.key(this.A, this.B); }
 
   /**
    * Add an edge to the set of connected edges.
@@ -487,6 +509,15 @@ export class WallTracerEdge {
       priorT = t;
     }
 
+    return WallTracerEdge._cachedEdges.get(wall.id);
+  }
+
+  /**
+   * Get edges for a wall, if available. Use addWall to actually define the edges.
+   * @param {Wall} wall   Wall to check for an edge set.
+   * @returns {Set<WallTracerEdge>}
+   */
+  static edgeSetForWall(wall) {
     return WallTracerEdge._cachedEdges.get(wall.id);
   }
 
@@ -792,6 +823,7 @@ export class WallTracer {
    * @param {WallTracerPolygon} encompassingShape
    */
   encompassingHoles(encompassingPoly) {
+
     const encompassingPolyEdges = encompassingPoly._wallTracer.edges;
     if ( !encompassingPolyEdges || encompassingPolyEdges.size < 3 ) {
       console.warn("encompassingPolyEdges not valid.");
@@ -816,18 +848,42 @@ export class WallTracer {
     // Add any polygons generated from the trace.
     const holes = [];
     const seenEdges = new Set();
+    const seenPolys = new Set([encompassingPoly.key]);
+    const origin = this.origin;
     for ( const potentialHoleEdge of potentialHoleEdges ) {
       if ( seenEdges.has(potentialHoleEdge) ) continue;
 
-      const { polyAB, polyBA } = WallTracer.traceClosedCWPath(potentialHoleEdge);
+      // Find closed shapes that are within, or share edge with, the encompassing polygon.
+      // In some situations, a shared edge results in the hole being the encompassing polygon. Reject.
+      // Reject all duplicate polygons
+
+      let { polyAB, polyBA } = WallTracer.traceClosedCWPath(potentialHoleEdge);
+      /*
+      // In some situations (crossing polygons) it is possible for one of the holes
+      // to enclose the origin area.
+      // Either use contains to test or take the smaller area
+        if ( !origin && polyAB && polyBA ) {
+          polyAB = polyBA.area < polyAB.area ? polyBA : polyAB;
+          polyBA = null;
+        }
+      */
+
       if ( polyAB ) {
-        holes.push(polyAB);
-        polyAB._wallTracer.edges.forEach(e => seenEdges.add(e));
+        const key = polyAB.key;
+        if ( !seenPolys.has(key) && (!origin || !polyAB.contains(origin.x, origin.y)) ) {
+          holes.push(polyAB);
+          polyAB._wallTracer.edges.forEach(e => seenEdges.add(e));
+          seenPolys.add(key);
+        }
       }
 
-      if ( !polyAB.equals(polyBA) ) {
-        holes.push(polyBA);
-        polyBA._wallTracer.edges.forEach(e => seenEdges.add(e));
+      if ( polyBA ) {
+        const key = polyBA.key;
+        if ( !seenPolys.has(key) && (!origin || !polyBA.contains(origin.x, origin.y)) ) {
+          holes.push(polyBA);
+          polyBA._wallTracer.edges.forEach(e => seenEdges.add(e));
+          seenPolys.add(key);
+        }
       }
     }
     return holes;
@@ -851,11 +907,11 @@ export class WallTracer {
    * @returns {TracedPolygonResults}  The resulting polygons in both directions, if any found.
    */
   static traceClosedCWPath(edge, origin) {
-    const verticesAB = WallTracer._turnCW(edge, edge.A);
-    const polyAB = this._buildPolygonFromTracedVertices(verticesAB, origin);
+    const resAB = WallTracer._turnCW(edge, edge.A);
+    const polyAB = resAB ? this._buildPolygonFromTracedVertices(resAB.vertices, resAB.edges, origin) : null;
 
-    const verticesBA = WallTracer._turnCW(edge, edge.B);
-    const polyBA = this._buildPolygonFromTracedVertices(verticesBA, origin);
+    const resBA = WallTracer._turnCW(edge, edge.B);
+    const polyBA = resBA ? this._buildPolygonFromTracedVertices(resBA.vertices, resBA.edges, origin) : null;
 
     return { polyAB, polyBA };
   }
@@ -866,7 +922,7 @@ export class WallTracer {
    * @param {Point} origin                  Optional origin to test for containment
    * @returns {WallTracerPolygon|null}
    */
-  static _buildPolygonFromTracedVertices(vertices, origin) {
+  static _buildPolygonFromTracedVertices(vertices, edges, origin) {
     if ( !vertices ) return null;
     const nVertices = vertices.length;
     if ( nVertices < 3 ) return null;
@@ -908,15 +964,19 @@ export class WallTracer {
     }
 
     // Confirm containment of the origin
-    if ( origin && !poly.contains(origin.x, origin.y) ) return false;
+    if ( origin && !poly.contains(origin.x, origin.y) ) return null;
 
     // Add in links to the original vertices and edges set
-    const edges = new Set();
-    vertices.forEach(v => edges.add(v._cwEdge));
     poly._wallTracer = { vertices, edges };
 
     return poly;
   }
+
+  /**
+   * @typedef {object} TracedEdgeResults
+   * @property {Set<WallTracerEdge>} edges    All edges encountered for this trace
+   * @property {WallTracerVertex[]} vertices  All vertices encountered, in order
+   */
 
   /*
    * Trace a set of linked edges recursively, turning clockwise at each vertex.
@@ -928,27 +988,35 @@ export class WallTracer {
    * @param {WallTracerVertex} vertex         Optional current (starting) vertex of this edge.
    *                                          The opposite vertex will be used to find the next edge.
    * @param {Set<WallTracerEdge>} seenEdges   Set of all edges visited by this recursion.
-   * @returns {WallTracerVertex[]|false}
+   *                                          Keys are WallTracerEdge.key()
+   * @returns {TracedEdgeResults|null}
    */
   static _turnCW(edge, vertex = edge.A, seenEdges = new Set()) {
-    // Associate the vertex with this edge, so we can later find all the edges of the polygon.
-    vertex._cwEdge = edge;
+    // Direction matters.
+    // If we encountered this edge going the opposite direction, we should reject.
+    // Otherwise, we would walk along the back of the polygon, creating a self-intersecting polygon.
+    // Self-intersecting polygons may or may not contain points, but they are too complex and cause issues.
+    const nextVertex = edge.otherEndpoint(vertex);
+    const oppositeKey = WallTracerEdge.key(nextVertex, vertex); // Use instead of edge.key to account for directionality.
+    if ( seenEdges.has(oppositeKey) ) return null;
 
     // If we have encountered this edge before, we have a cycle.
-    if ( seenEdges.has(edge) ) return [vertex];
-    seenEdges.add(edge);
+    const key = WallTracerEdge.key(vertex, nextVertex);
+    if ( seenEdges.has(key) ) return { edges: new Set([edge]), edgesArr: [edge], vertices: [vertex] }; // TODO: Drop Set or Array edges?
+    seenEdges.add(key);
 
     // Find the edges connected to this next endpoint. If no more edges, then we are at a dead-end.
-    const nextVertex = edge.otherEndpoint(vertex);
     const potentialEdgesSet = nextVertex._edges.filter(e => e !== edge && WallTracerEdge.connectedEdges.has(e));
-    if ( !potentialEdgesSet.size ) return false;
+    if ( !potentialEdgesSet.size ) return null;
 
     // If only one choice, that is easy! No angle math required.
     if ( potentialEdgesSet.size === 1 ) {
       const [potentialEdge] = potentialEdgesSet;
       const res = WallTracer._turnCW(potentialEdge, nextVertex, seenEdges);
-      if ( !res ) return false;
-      res.push(vertex);
+      if ( !res ) return null;
+      res.vertices.push(vertex);
+      res.edges.add(edge);
+      res.edgesArr.push(edge);
       return res;
     }
 
@@ -967,10 +1035,12 @@ export class WallTracer {
     for ( const potentialEdge of potentialEdges ) {
       const res = WallTracer._turnCW(potentialEdge, nextVertex, seenEdges);
       if ( !res ) continue;
-      res.push(vertex);
+      res.vertices.push(vertex);
+      res.edges.add(edge);
+      res.edgesArr.push(edge);
       return res;
     }
-    return false;
+    return null;
   }
 
   /**
