@@ -45,7 +45,8 @@ import {
 
 import {
   _computeClockwiseSweepPolygon,
-  _drawShadowsClockwiseSweepPolygon
+  _drawShadowsClockwiseSweepPolygon,
+  initializeClockwiseSweepPolygon
 } from "./clockwise_sweep.js";
 
 // A: shader / not shader
@@ -194,4 +195,8 @@ export function registerPatches() {
       break;
   }
 
+  // ----- Clockwise sweep enhancements ----- //
+  if ( getSetting(SETTINGS.CLOCKWISE_SWEEP) ) {
+    libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype.initialize", initializeClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  }
 }

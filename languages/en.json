@@ -14,6 +14,9 @@
   "elevatedvision.settings.auto-change-elevation.averaging.name": "Average token elevation",
   "elevatedvision.settings.auto-change-elevation.averaging.hint": "When auto-adjusting, use the average elevation under the token shape. If false, use the token center-point to determine elevation.",
 
+  "elevatedvision.settings.enhance-cw-sweep.name": "Enhance LOS calculation",
+  "elevatedvision.settings.enhance-cw-sweep.hint": "Experimental. Uses the fill algorithm to provide a potential speed-up to the line-of-sight calculation used by vision, sound, and lighting. When the token or source is completely enclosed by a set of walls, this allows sweep to shortcut various calculations. Requires additional calculations when walls are created, updated, or destroyed. May be useful for very large dungeon scenes.",
+
   "elevatedvision.controls.fill-by-grid.name": "Fill by grid",
   "elevatedvision.controls.fill-by-los.name": "Fill by line-of-sight",
   "elevatedvision.controls.fill-space.name": "Fill space enclosed by walls",

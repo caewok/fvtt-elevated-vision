@@ -7,7 +7,8 @@ CanvasQuadtree,
 CONFIG,
 Hooks,
 game,
-Wall
+Wall,
+CONST
 */
 "use strict";
 
@@ -19,6 +20,7 @@ import { groupBy, log } from "./util.js";
 import { ClipperPaths } from "./geometry/ClipperPaths.js";
 import { Draw } from "./geometry/Draw.js";
 import { MODULE_ID } from "./const.js";
+import { getSetting, SETTINGS } from "./settings.js";
 
 /* WallTracerVertex
 
@@ -100,6 +102,8 @@ So northern hemisphere is negative, southern is positive.
 
 // Track wall creation, update, and deletion, constructing WallTracerEdges as we go.
 Hooks.on("createWall", function(document, _options, _userId) {
+  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
+
   const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
   log(`createWall ${document.id}`);
 
@@ -109,6 +113,8 @@ Hooks.on("createWall", function(document, _options, _userId) {
 });
 
 Hooks.on("updateWall", function(document, changes, _options, _userId) {
+  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
+
   const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
   log("updateWall");
 
@@ -122,6 +128,8 @@ Hooks.on("updateWall", function(document, changes, _options, _userId) {
 });
 
 Hooks.on("deleteWall", function(document, _options, _userId) {
+  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
+
   const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
   log(`deleteWall ${document.id}`);
 
@@ -132,8 +140,12 @@ Hooks.on("deleteWall", function(document, _options, _userId) {
 });
 
 Hooks.on("canvasReady", async function() {
+  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
+
   const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
   log("canvasReady");
+
+  const t0 = performance.now();
 
   // When canvas is ready, the existing walls are not created, so must re-do here.
   // Also clear any existing data that may have been saved when switching scenes.
@@ -144,7 +156,12 @@ Hooks.on("canvasReady", async function() {
   walls.push(...canvas.walls.outerBounds);
   walls.push(...canvas.walls.innerBounds);
   for ( const wall of walls ) WallTracerEdge.addWall(wall);
-  if ( debug ) WallTracerEdge.verifyConnectedEdges();
+  const t1 = performance.now();
+  if ( debug ) {
+    WallTracerEdge.verifyConnectedEdges();
+    const t2 = performance.now();
+    log(`Tracked ${walls.length} walls in ${t1 - t0} ms. Verified in ${t2 - t1} ms.`);
+  }
 });
 
 export class WallTracerVertex {
@@ -179,6 +196,7 @@ export class WallTracerVertex {
     const cache = WallTracerVertex._cachedVertices;
     if ( cache.has(key) ) return cache.get(key); // eslint-disable-line no-constructor-return
     cache.set(this.key, this);
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   /** @type {number} */
@@ -212,6 +230,7 @@ export class WallTracerVertex {
     const key = this.key;
     if ( edge.A.key !== key && edge.B.key !== key ) return;
     this._edges.add(edge);
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   /**
@@ -223,6 +242,7 @@ export class WallTracerVertex {
     if ( edge.A.key !== key && edge.B.key !== key ) return;
     this._edges.delete(edge);
     this.removeFromCache();
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   /**
@@ -313,12 +333,14 @@ export class WallTracerEdge {
     const bounds = this.bounds;
     WallTracerEdge.quadtree.insert({ r: bounds, t: this });
     WallTracerEdge.addConnectedEdge(this);
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   static clear() {
     this._cachedEdges.clear();
     this.quadtree.clear();
     this.connectedEdges.clear();
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   static allEdges() {
@@ -535,6 +557,7 @@ export class WallTracerEdge {
     const edgesArr = [...edges];
     for ( const edge of edgesArr ) edge.destroy({ removeCachedWall: true, removeConnected: false });
     this.removeConnectedEdges(edgesArr);
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   /**
@@ -596,8 +619,32 @@ export class WallTracerEdge {
     return out;
   }
 
+  // Methods to trick Foundry into thinking this edge is basically a wall.
+
   /** @type {string} */
   get id() { return this.wall.id; }
+
+  /** @type {object} */
+  get document() { return this.wall.document; }
+
+  /** @type {boolean} */
+  get hasActiveRoof() { return this.wall.hasActiveRoof; }
+
+  /** @type {boolean} */
+  get isOpen() { return this.wall.isOpen; }
+
+  /**
+   * Determine the orientation of this edge with respect to a reference point
+   * @param {Point} point       Some reference point, relative to which orientation is determined
+   * @returns {number}          An orientation in CONST.WALL_DIRECTIONS which indicates whether the Point is left,
+   *                            right, or collinear (both) with the Wall
+   */
+  orientPoint(point) {
+    const orientation = foundry.utils.orient2dFast(this.A, this.B, point);
+    if ( orientation === 0 ) return CONST.WALL_DIRECTIONS.BOTH;
+    return orientation < 0 ? CONST.WALL_DIRECTIONS.LEFT : CONST.WALL_DIRECTIONS.RIGHT;
+  }
+
 
   /**
    * Determine angle of this edge using same method as Ray
@@ -737,6 +784,8 @@ export class WallTracerEdge {
 
     // Remove from connected set
     if ( removeConnected ) WallTracerEdge.removeConnectedEdges([this]);
+
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   /**
@@ -765,12 +814,29 @@ export class WallTracerEdge {
 export class WallTracer {
   origin;
 
+  static _cachedEdgeTraces = new Map();
+
   constructor(origin) {
     this.origin = new PIXI.Point(origin.x, origin.y);
 
     // If not dynamically tracking walls, this is where to do the initial tracking.
     // Clear any old data.
-
+    if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) {
+      const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+      const t0 = performance.now();
+      WallTracerVertex.clear();
+      WallTracerEdge.clear();
+      const walls = [...canvas.walls.placeables] ?? [];
+      walls.push(...canvas.walls.outerBounds);
+      walls.push(...canvas.walls.innerBounds);
+      for ( const wall of walls ) WallTracerEdge.addWall(wall);
+      const t1 = performance.now();
+      if ( debug ) {
+        WallTracerEdge.verifyConnectedEdges();
+        const t2 = performance.now();
+        log(`Tracked ${walls.length} walls in ${t1 - t0} ms. Verified in ${t2 - t1} ms.`);
+      }
+    }
   }
 
   clear() {
@@ -812,6 +878,25 @@ export class WallTracer {
       if ( polyAB && polyBA ) return polyBA.area < polyAB.area ? polyBA : polyAB;
       else if ( polyAB ) return polyAB;
       else if ( polyBA ) return polyBA;
+    }
+    return null;
+  }
+
+  /**
+   * Same as encompassingPolygon but rejects the polygon if it fails a function test
+   * @param {Function} testInclusion    Inclusion function to use.
+   *                                    Takes a wall or edge
+   */
+  encompassingPolygonWithTest(testInclusion, ...args) {
+    const startingEdges = this.locateStartingEdges();
+    for ( const startingEdge of startingEdges ) {
+      const { polyAB, polyBA } = WallTracer.traceClosedCWPath(startingEdge, this.origin);
+      const poly = polyAB && polyBA ? (polyBA.area < polyAB.area ? polyBA : polyAB)
+        : polyAB ? polyAB
+          : polyBA ? polyBA
+            : null;
+      if ( !poly ) continue;
+      if ( [...poly._wallTracer.edges].every(e => testInclusion(e, ...args)) ) return poly;
     }
     return null;
   }
@@ -907,13 +992,28 @@ export class WallTracer {
    * @returns {TracedPolygonResults}  The resulting polygons in both directions, if any found.
    */
   static traceClosedCWPath(edge, origin) {
-    const resAB = WallTracer._turnCW(edge, edge.A);
+    const resAB = WallTracer._turnCWCached(edge, edge.A);
     const polyAB = resAB ? this._buildPolygonFromTracedVertices(resAB.vertices, resAB.edges, origin) : null;
 
-    const resBA = WallTracer._turnCW(edge, edge.B);
+    const resBA = WallTracer._turnCWCached(edge, edge.B);
     const polyBA = resBA ? this._buildPolygonFromTracedVertices(resBA.vertices, resBA.edges, origin) : null;
 
     return { polyAB, polyBA };
+  }
+
+  static _turnCWCached(edge, vertex = edge.A) {
+    let trace = this._cachedEdgeTraces.get(edge);
+    if ( trace ) {
+      const res = trace.get(vertex);
+      if ( res ) return res;
+    } else {
+      trace = new Map();
+      this._cachedEdgeTraces.set(edge, trace);
+    }
+
+    const res = this._turnCW(edge, vertex);
+    trace.set(vertex, res);
+    return res;
   }
 
   /**
@@ -947,21 +1047,21 @@ export class WallTracer {
     poly.clean();
 
     // For testing, check for self-intersecting polygons.
-    const polyEdges = [...poly.iterateEdges({closed: true})];
-    const nEdges = polyEdges.length;
-    for ( let i = 0; i < nEdges; i += 1 ) {
-      const edgeI = polyEdges[i];
-      const keySet = new Set([edgeI.A.key, edgeI.B.key]);
-
-      for ( let j = i + 1; j < nEdges; j += 1 ) {
-        const edgeJ = polyEdges[j];
-        if ( keySet.has(edgeJ.A.key) || keySet.has(edgeJ.B.key) ) continue;
-
-        if ( foundry.utils.lineSegmentIntersects(edgeI.A, edgeI.B, edgeJ.A, edgeJ.B) ) {
-          console.warn("_buildPolygonFromTracedVertices found a self-intersecting polygon.");
-        }
-      }
-    }
+//     const polyEdges = [...poly.iterateEdges({closed: true})];
+//     const nEdges = polyEdges.length;
+//     for ( let i = 0; i < nEdges; i += 1 ) {
+//       const edgeI = polyEdges[i];
+//       const keySet = new Set([edgeI.A.key, edgeI.B.key]);
+//
+//       for ( let j = i + 1; j < nEdges; j += 1 ) {
+//         const edgeJ = polyEdges[j];
+//         if ( keySet.has(edgeJ.A.key) || keySet.has(edgeJ.B.key) ) continue;
+//
+//         if ( foundry.utils.lineSegmentIntersects(edgeI.A, edgeI.B, edgeJ.A, edgeJ.B) ) {
+//           console.warn("_buildPolygonFromTracedVertices found a self-intersecting polygon.");
+//         }
+//       }
+//     }
 
     // Confirm containment of the origin
     if ( origin && !poly.contains(origin.x, origin.y) ) return null;
@@ -992,31 +1092,52 @@ export class WallTracer {
    * @returns {TracedEdgeResults|null}
    */
   static _turnCW(edge, vertex = edge.A, seenEdges = new Set()) {
+//     let trace = this._cachedEdgeTraces.get(edge);
+//     if ( trace ) {
+//       const res = trace.get(vertex);
+//       if ( res ) return res;
+//     } else {
+//       trace = new Map();
+//       this._cachedEdgeTraces.set(edge, trace);
+//     }
+
     // Direction matters.
     // If we encountered this edge going the opposite direction, we should reject.
     // Otherwise, we would walk along the back of the polygon, creating a self-intersecting polygon.
     // Self-intersecting polygons may or may not contain points, but they are too complex and cause issues.
     const nextVertex = edge.otherEndpoint(vertex);
     const oppositeKey = WallTracerEdge.key(nextVertex, vertex); // Use instead of edge.key to account for directionality.
-    if ( seenEdges.has(oppositeKey) ) return null;
+    if ( seenEdges.has(oppositeKey) ) {
+//       trace.set(vertex, null);
+      return null;
+    }
 
     // If we have encountered this edge before, we have a cycle.
     const key = WallTracerEdge.key(vertex, nextVertex);
-    if ( seenEdges.has(key) ) return { edges: new Set([edge]), edgesArr: [edge], vertices: [vertex] }; // TODO: Drop Set or Array edges?
+    if ( seenEdges.has(key) ) {
+      const res = { edges: new Set([edge]), edgesArr: [edge], vertices: [vertex] }; // TODO: Drop Set or Array edges?
+//       trace.set(vertex, res);
+      return res;
+    }
     seenEdges.add(key);
 
     // Find the edges connected to this next endpoint. If no more edges, then we are at a dead-end.
     const potentialEdgesSet = nextVertex._edges.filter(e => e !== edge && WallTracerEdge.connectedEdges.has(e));
-    if ( !potentialEdgesSet.size ) return null;
+    if ( !potentialEdgesSet.size ) {
+//       trace.set(vertex, null);
+      return null;
+    }
 
     // If only one choice, that is easy! No angle math required.
     if ( potentialEdgesSet.size === 1 ) {
       const [potentialEdge] = potentialEdgesSet;
       const res = WallTracer._turnCW(potentialEdge, nextVertex, seenEdges);
-      if ( !res ) return null;
-      res.vertices.push(vertex);
-      res.edges.add(edge);
-      res.edgesArr.push(edge);
+      if ( res ) {
+        res.vertices.push(vertex);
+        res.edges.add(edge);
+        res.edgesArr.push(edge);
+      }
+//       trace.set(vertex, res);
       return res;
     }
 
@@ -1038,8 +1159,10 @@ export class WallTracer {
       res.vertices.push(vertex);
       res.edges.add(edge);
       res.edgesArr.push(edge);
+//       trace.set(vertex, res);
       return res;
     }
+//     trace.set(vertex, null);
     return null;
   }
 
@@ -1054,6 +1177,14 @@ export class WallTracer {
     // Calculate and sort by distance from the origin
     westWalls.forEach(edge => {
       edge._ix = CONFIG.GeometryLib.utils.lineLineIntersection(westRay.A, westRay.B, edge.A, edge.B);
+
+      // If no intersection, then edge is collinear.
+      // Use the closest endpoint.
+      if ( !edge._ix ) {
+        const tA = (origin.x - edge.A.x) / origin.x;
+        const tB = (origin.x - edge.B.x) / origin.x;
+        edge._ix = { t0: tA < tB ? tA : tB };
+      }
     });
     westWalls.sort((a, b) => a._ix.t0 - b._ix.t0);
     return westWalls;
