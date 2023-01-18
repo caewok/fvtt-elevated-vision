@@ -186,6 +186,7 @@ export class WallTracerVertex {
     const cache = WallTracerVertex._cachedVertices;
     if ( cache.has(key) ) return cache.get(key); // eslint-disable-line no-constructor-return
     cache.set(this.key, this);
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   /** @type {number} */
@@ -219,6 +220,7 @@ export class WallTracerVertex {
     const key = this.key;
     if ( edge.A.key !== key && edge.B.key !== key ) return;
     this._edges.add(edge);
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   /**
@@ -230,6 +232,7 @@ export class WallTracerVertex {
     if ( edge.A.key !== key && edge.B.key !== key ) return;
     this._edges.delete(edge);
     this.removeFromCache();
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   /**
@@ -320,12 +323,14 @@ export class WallTracerEdge {
     const bounds = this.bounds;
     WallTracerEdge.quadtree.insert({ r: bounds, t: this });
     WallTracerEdge.addConnectedEdge(this);
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   static clear() {
     this._cachedEdges.clear();
     this.quadtree.clear();
     this.connectedEdges.clear();
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   static allEdges() {
@@ -542,6 +547,7 @@ export class WallTracerEdge {
     const edgesArr = [...edges];
     for ( const edge of edgesArr ) edge.destroy({ removeCachedWall: true, removeConnected: false });
     this.removeConnectedEdges(edgesArr);
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   /**
@@ -744,6 +750,8 @@ export class WallTracerEdge {
 
     // Remove from connected set
     if ( removeConnected ) WallTracerEdge.removeConnectedEdges([this]);
+
+    WallTracer._cachedEdgeTraces.clear();
   }
 
   /**
@@ -771,6 +779,8 @@ export class WallTracerEdge {
 
 export class WallTracer {
   origin;
+
+  static _cachedEdgeTraces = new Map();
 
   constructor(origin) {
     this.origin = new PIXI.Point(origin.x, origin.y);
@@ -914,13 +924,28 @@ export class WallTracer {
    * @returns {TracedPolygonResults}  The resulting polygons in both directions, if any found.
    */
   static traceClosedCWPath(edge, origin) {
-    const resAB = WallTracer._turnCW(edge, edge.A);
+    const resAB = WallTracer._turnCWCached(edge, edge.A);
     const polyAB = resAB ? this._buildPolygonFromTracedVertices(resAB.vertices, resAB.edges, origin) : null;
 
-    const resBA = WallTracer._turnCW(edge, edge.B);
+    const resBA = WallTracer._turnCWCached(edge, edge.B);
     const polyBA = resBA ? this._buildPolygonFromTracedVertices(resBA.vertices, resBA.edges, origin) : null;
 
     return { polyAB, polyBA };
+  }
+
+  static _turnCWCached(edge, vertex = edge.A) {
+    let trace = this._cachedEdgeTraces.get(edge);
+    if ( trace ) {
+      const res = trace.get(vertex);
+      if ( res ) return res;
+    } else {
+      trace = new Map();
+      this._cachedEdgeTraces.set(edge, trace);
+    }
+
+    const res = this._turnCW(edge, vertex);
+    trace.set(vertex, res);
+    return res;
   }
 
   /**
@@ -999,31 +1024,52 @@ export class WallTracer {
    * @returns {TracedEdgeResults|null}
    */
   static _turnCW(edge, vertex = edge.A, seenEdges = new Set()) {
+//     let trace = this._cachedEdgeTraces.get(edge);
+//     if ( trace ) {
+//       const res = trace.get(vertex);
+//       if ( res ) return res;
+//     } else {
+//       trace = new Map();
+//       this._cachedEdgeTraces.set(edge, trace);
+//     }
+
     // Direction matters.
     // If we encountered this edge going the opposite direction, we should reject.
     // Otherwise, we would walk along the back of the polygon, creating a self-intersecting polygon.
     // Self-intersecting polygons may or may not contain points, but they are too complex and cause issues.
     const nextVertex = edge.otherEndpoint(vertex);
     const oppositeKey = WallTracerEdge.key(nextVertex, vertex); // Use instead of edge.key to account for directionality.
-    if ( seenEdges.has(oppositeKey) ) return null;
+    if ( seenEdges.has(oppositeKey) ) {
+//       trace.set(vertex, null);
+      return null;
+    }
 
     // If we have encountered this edge before, we have a cycle.
     const key = WallTracerEdge.key(vertex, nextVertex);
-    if ( seenEdges.has(key) ) return { edges: new Set([edge]), edgesArr: [edge], vertices: [vertex] }; // TODO: Drop Set or Array edges?
+    if ( seenEdges.has(key) ) {
+      const res = { edges: new Set([edge]), edgesArr: [edge], vertices: [vertex] }; // TODO: Drop Set or Array edges?
+//       trace.set(vertex, res);
+      return res;
+    }
     seenEdges.add(key);
 
     // Find the edges connected to this next endpoint. If no more edges, then we are at a dead-end.
     const potentialEdgesSet = nextVertex._edges.filter(e => e !== edge && WallTracerEdge.connectedEdges.has(e));
-    if ( !potentialEdgesSet.size ) return null;
+    if ( !potentialEdgesSet.size ) {
+//       trace.set(vertex, null);
+      return null;
+    }
 
     // If only one choice, that is easy! No angle math required.
     if ( potentialEdgesSet.size === 1 ) {
       const [potentialEdge] = potentialEdgesSet;
       const res = WallTracer._turnCW(potentialEdge, nextVertex, seenEdges);
-      if ( !res ) return null;
-      res.vertices.push(vertex);
-      res.edges.add(edge);
-      res.edgesArr.push(edge);
+      if ( res ) {
+        res.vertices.push(vertex);
+        res.edges.add(edge);
+        res.edgesArr.push(edge);
+      }
+//       trace.set(vertex, res);
       return res;
     }
 
@@ -1045,8 +1091,10 @@ export class WallTracer {
       res.vertices.push(vertex);
       res.edges.add(edge);
       res.edgesArr.push(edge);
+//       trace.set(vertex, res);
       return res;
     }
+//     trace.set(vertex, null);
     return null;
   }
 
