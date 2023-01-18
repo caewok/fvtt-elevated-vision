@@ -320,10 +320,25 @@ function filterPotentialBlockingWalls(wallPoints, wallArr, sourceOrigin) {
  */
 export function initializeClockwiseSweepPolygon(wrapper, origin, config) {
   const wt = new WallTracer(origin)
-  const encompassingPoly = wt.encompassingPolygon();
+  const encompassingPoly = wt.encompassingPolygonWithTest(testWallInclusion, this.config.type);
   if ( encompassingPoly ) {
     config.boundaryShapes ||= [];
     config.boundaryShapes.push(encompassingPoly);
   }
   wrapper(origin, config);
+}
+
+
+function testWallInclusion(wall, type) {
+  // Ignore limited walls for this type
+  if ( wall.document[type] !== CONST.WALL_SENSE_TYPES.NORMAL ) return false;
+
+  // Always include interior walls underneath active roof tiles
+  if ( (type === "sight") && wall.hasActiveRoof ) return true;
+
+  // Otherwise, ignore walls that are not blocking for this polygon type
+  else if ( wall.isOpen ) return false;
+
+  // Ignore one-directional walls which are facing away from the origin
+  return !wall.document.dir || (side !== wall.document.dir);
 }

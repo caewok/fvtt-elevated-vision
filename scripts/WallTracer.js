@@ -7,7 +7,8 @@ CanvasQuadtree,
 CONFIG,
 Hooks,
 game,
-Wall
+Wall,
+CONST
 */
 "use strict";
 
@@ -19,6 +20,7 @@ import { groupBy, log } from "./util.js";
 import { ClipperPaths } from "./geometry/ClipperPaths.js";
 import { Draw } from "./geometry/Draw.js";
 import { MODULE_ID } from "./const.js";
+import { getSetting, SETTINGS } from "./settings.js";
 
 /* WallTracerVertex
 
@@ -100,6 +102,8 @@ So northern hemisphere is negative, southern is positive.
 
 // Track wall creation, update, and deletion, constructing WallTracerEdges as we go.
 Hooks.on("createWall", function(document, _options, _userId) {
+  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
+
   const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
   log(`createWall ${document.id}`);
 
@@ -109,6 +113,8 @@ Hooks.on("createWall", function(document, _options, _userId) {
 });
 
 Hooks.on("updateWall", function(document, changes, _options, _userId) {
+  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
+
   const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
   log("updateWall");
 
@@ -122,6 +128,8 @@ Hooks.on("updateWall", function(document, changes, _options, _userId) {
 });
 
 Hooks.on("deleteWall", function(document, _options, _userId) {
+  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
+
   const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
   log(`deleteWall ${document.id}`);
 
@@ -132,6 +140,8 @@ Hooks.on("deleteWall", function(document, _options, _userId) {
 });
 
 Hooks.on("canvasReady", async function() {
+  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
+
   const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
   log("canvasReady");
 
@@ -609,8 +619,32 @@ export class WallTracerEdge {
     return out;
   }
 
+  // Methods to trick Foundry into thinking this edge is basically a wall.
+
   /** @type {string} */
   get id() { return this.wall.id; }
+
+  /** @type {object} */
+  get document() { return this.wall.document; }
+
+  /** @type {boolean} */
+  get hasActiveRoof() { return this.wall.hasActiveRoof; }
+
+  /** @type {boolean} */
+  get isOpen() { return this.wall.isOpen; }
+
+  /**
+   * Determine the orientation of this edge with respect to a reference point
+   * @param {Point} point       Some reference point, relative to which orientation is determined
+   * @returns {number}          An orientation in CONST.WALL_DIRECTIONS which indicates whether the Point is left,
+   *                            right, or collinear (both) with the Wall
+   */
+  orientPoint(point) {
+    const orientation = foundry.utils.orient2dFast(this.A, this.B, point);
+    if ( orientation === 0 ) return CONST.WALL_DIRECTIONS.BOTH;
+    return orientation < 0 ? CONST.WALL_DIRECTIONS.LEFT : CONST.WALL_DIRECTIONS.RIGHT;
+  }
+
 
   /**
    * Determine angle of this edge using same method as Ray
@@ -787,7 +821,22 @@ export class WallTracer {
 
     // If not dynamically tracking walls, this is where to do the initial tracking.
     // Clear any old data.
-
+    if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) {
+      const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+      const t0 = performance.now();
+      WallTracerVertex.clear();
+      WallTracerEdge.clear();
+      const walls = [...canvas.walls.placeables] ?? [];
+      walls.push(...canvas.walls.outerBounds);
+      walls.push(...canvas.walls.innerBounds);
+      for ( const wall of walls ) WallTracerEdge.addWall(wall);
+      const t1 = performance.now();
+      if ( debug ) {
+        WallTracerEdge.verifyConnectedEdges();
+        const t2 = performance.now();
+        log(`Tracked ${walls.length} walls in ${t1 - t0} ms. Verified in ${t2 - t1} ms.`);
+      }
+    }
   }
 
   clear() {
@@ -829,6 +878,25 @@ export class WallTracer {
       if ( polyAB && polyBA ) return polyBA.area < polyAB.area ? polyBA : polyAB;
       else if ( polyAB ) return polyAB;
       else if ( polyBA ) return polyBA;
+    }
+    return null;
+  }
+
+  /**
+   * Same as encompassingPolygon but rejects the polygon if it fails a function test
+   * @param {Function} testInclusion    Inclusion function to use.
+   *                                    Takes a wall or edge
+   */
+  encompassingPolygonWithTest(testInclusion, ...args) {
+    const startingEdges = this.locateStartingEdges();
+    for ( const startingEdge of startingEdges ) {
+      const { polyAB, polyBA } = WallTracer.traceClosedCWPath(startingEdge, this.origin);
+      const poly = polyAB && polyBA ? (polyBA.area < polyAB.area ? polyBA : polyAB)
+        : polyAB ? polyAB
+          : polyBA ? polyBA
+            : null;
+      if ( !poly ) continue;
+      if ( [...poly._wallTracer.edges].every(e => testInclusion(e, ...args)) ) return poly;
     }
     return null;
   }
@@ -979,21 +1047,21 @@ export class WallTracer {
     poly.clean();
 
     // For testing, check for self-intersecting polygons.
-    const polyEdges = [...poly.iterateEdges({closed: true})];
-    const nEdges = polyEdges.length;
-    for ( let i = 0; i < nEdges; i += 1 ) {
-      const edgeI = polyEdges[i];
-      const keySet = new Set([edgeI.A.key, edgeI.B.key]);
-
-      for ( let j = i + 1; j < nEdges; j += 1 ) {
-        const edgeJ = polyEdges[j];
-        if ( keySet.has(edgeJ.A.key) || keySet.has(edgeJ.B.key) ) continue;
-
-        if ( foundry.utils.lineSegmentIntersects(edgeI.A, edgeI.B, edgeJ.A, edgeJ.B) ) {
-          console.warn("_buildPolygonFromTracedVertices found a self-intersecting polygon.");
-        }
-      }
-    }
+//     const polyEdges = [...poly.iterateEdges({closed: true})];
+//     const nEdges = polyEdges.length;
+//     for ( let i = 0; i < nEdges; i += 1 ) {
+//       const edgeI = polyEdges[i];
+//       const keySet = new Set([edgeI.A.key, edgeI.B.key]);
+//
+//       for ( let j = i + 1; j < nEdges; j += 1 ) {
+//         const edgeJ = polyEdges[j];
+//         if ( keySet.has(edgeJ.A.key) || keySet.has(edgeJ.B.key) ) continue;
+//
+//         if ( foundry.utils.lineSegmentIntersects(edgeI.A, edgeI.B, edgeJ.A, edgeJ.B) ) {
+//           console.warn("_buildPolygonFromTracedVertices found a self-intersecting polygon.");
+//         }
+//       }
+//     }
 
     // Confirm containment of the origin
     if ( origin && !poly.contains(origin.x, origin.y) ) return null;
