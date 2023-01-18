@@ -1109,6 +1109,14 @@ export class WallTracer {
     // Calculate and sort by distance from the origin
     westWalls.forEach(edge => {
       edge._ix = CONFIG.GeometryLib.utils.lineLineIntersection(westRay.A, westRay.B, edge.A, edge.B);
+
+      // If no intersection, then edge is collinear.
+      // Use the closest endpoint.
+      if ( !edge._ix ) {
+        const tA = (origin.x - edge.A.x) / origin.x;
+        const tB = (origin.x - edge.B.x) / origin.x;
+        edge._ix = { t0: tA < tB ? tA : tB };
+      }
     });
     westWalls.sort((a, b) => a._ix.t0 - b._ix.t0);
     return westWalls;
