@@ -5,6 +5,9 @@
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 
+// GraphVertex, GraphEdge, and Graph initially based on
+// https://github.com/trekhleb/javascript-algorithms/tree/master/src/data-structures/graph
+
 /**
  * Vertex of an undirected graph.
  */
