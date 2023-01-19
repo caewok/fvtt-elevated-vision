@@ -503,8 +503,8 @@ class Graph {
 
           // If not all vertices provided, then the spanning tree may not contain vertex or neighbor.
           const spanningNeighbor = spanningTree.get(neighbor.getKey());
-          if ( spanningVertex ) spanningVertex.add(neighbor)
-          if ( spanningNeighbor ) spanningNeighbor.add(v);
+          if ( spanningVertex ) spanningVertex.add(neighbor)  // TODO: Faster if we could drop this test when we know we have all vertices.
+          if ( spanningNeighbor ) spanningNeighbor.add(v); // TODO: Faster if we could drop this test when we know we have all vertices.
         }
       });
     });
@@ -548,7 +548,7 @@ class Graph {
       const start = ends[0];
       const end = ends[1];
       const cycle = findCycle(start, end, spanningTree);
-      if ( !!cycle ) cycles.push(cycle);
+      if ( cycle && cycle.length > 2 ) cycles.push(cycle);
     });
 
     return cycles;
