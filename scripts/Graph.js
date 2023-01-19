@@ -43,27 +43,19 @@ class GraphVertex {
   }
 
   /**
-   * @returns {GraphVertex[]}
+   * @type {GraphVertex[]}
    */
-  getNeighbors() {
+  get neighbors() {
     const edges = [...this.#edges];
     const neighborsConverter = edge => edge.otherVertex(this);
     return edges.map(neighborsConverter);
   }
 
-  /**
-   * @return {GraphEdge[]}
-   */
-  getEdges() {
-    return [...this.#edges];
-  }
+  /** @type {GraphEdge[]} */
+  get edges() { return [...this.#edges]; }
 
-  /**
-   * @return {number}
-   */
-  getDegree() {
-    return this.#edges.size;
-  }
+  /** @type {number} */
+  get degree() { return this.#edges.size; }
 
   /**
    * @param {GraphEdge} requiredEdge
@@ -89,13 +81,9 @@ class GraphVertex {
     return this.#edges.find(edge => edge.A === vertex || edge.B === vertex);
   }
 
-  /**
-   * @returns {*}
-   */
-  // TODO: Fix this so the key is consistently object or string?
-  getKey() {
-    return this.value.toString();
-  }
+  // TODO: Change this to use integers or object index when available?
+  /** @type {string} */
+  get key() {  return this.value.toString(); }
 
   /**
    * @return {GraphVertex}
@@ -141,11 +129,7 @@ class GraphEdge {
   /**
    * @return {string}
    */
-  getKey() {
-    const keyA = this.A.getKey();
-    const keyB = this.B.getKey();
-    return `${keyA}_${keyB}`;
-  }
+  get key() { return `${this.A.key}_${this.B.key}`; }
 
   /**
    * Get the other vertex of this edge
@@ -153,7 +137,7 @@ class GraphEdge {
    * @returns {GraphVertex}   One of the vertices of this edge. If vertex matches neither, B is returned.
    */
   otherVertex(vertex) {
-    return vertex.getKey() === this.B.getKey() ? this.A : this.B;
+    return vertex.key === this.B.key ? this.A : this.B;
   }
 
   // TODO: Do we need reverse? Would upset the cache.
@@ -162,7 +146,7 @@ class GraphEdge {
    * @return {string}
    */
   toString() {
-    return this.getKey();
+    return this.key;
   }
 
 }
@@ -182,7 +166,7 @@ class Graph {
    * @returns {Graph}
    */
   addVertex(newVertex) {
-    this.vertices.set(newVertex.getKey(), newVertex);
+    this.vertices.set(newVertex.key, newVertex);
     return this;
   }
 
@@ -192,15 +176,6 @@ class Graph {
    */
   getVertexByKey(vertexKey) {
     return this.vertices.get(vertexKey);
-  }
-
-  /**
-   * @param {GraphVertex} vertex
-   * @returns {GraphVertex[]}
-   */
-  // TODO: Is this needed?
-  getNeighbors(vertex) {
-    return vertex.getNeighbors();
   }
 
   /**
@@ -223,26 +198,26 @@ class Graph {
    */
   addEdge(edge) {
     // Try to find the start and end vertices.
-    let A = this.getVertexByKey(edge.A.getKey());
-    let B = this.getVertexByKey(edge.B.getKey());
+    let A = this.getVertexByKey(edge.A.key);
+    let B = this.getVertexByKey(edge.B.key);
 
     // Insert start vertex if not already inserted.
     if ( !A ) {
       this.addVertex(edge.A);
-      A = this.getVertexByKey(edge.A.getKey());
+      A = this.getVertexByKey(edge.A.key);
     }
 
     // Insert end vertex if not already inserted.
     if ( !B ) {
       this.addVertex(edge.B);
-      B = this.getVertexByKey(edge.B.getKey());
+      B = this.getVertexByKey(edge.B.key);
     }
 
     // Check if edge already added.
-    if ( this.edges.has(edge.getKey()) ) {
+    if ( this.edges.has(edge.key) ) {
       console.error("Edge has already been added before");
       return this;
-    } else this.edges.set(edge.getKey(), edge);
+    } else this.edges.set(edge.key, edge);
 
     // Add edge to the vertices.
     // Undirected, so add to both.
@@ -256,13 +231,13 @@ class Graph {
    * @param {GraphEdge} edge
    */
   deleteEdge(edge) {
-    if ( this.edges.has(edge.getKey()) ) this.edges.delete(edge.getKey());
+    if ( this.edges.has(edge.key) ) this.edges.delete(edge.key);
     else throw new Error("Edge not found in graph.");
 
     // TODO: This is probably unnecessary.
     // Locate vertices and delete the associated edge.
-    const A = this.getVertexByKey(edge.A.getKey());
-    const B = this.getVertexByKey(edge.B.getKey());
+    const A = this.getVertexByKey(edge.A.key);
+    const B = this.getVertexByKey(edge.B.key);
 
     A.deleteEdge(edge);
     B.deleteEdge(edge);
@@ -274,7 +249,7 @@ class Graph {
    * @return {GraphEdge|null}
    */
   findEdge(A, B) {
-    const vertex = this.getVertexByKey(A.getKey());
+    const vertex = this.getVertexByKey(A.key);
     if ( !vertex ) return null;
     return vertex.findEdge(B);
   }
@@ -296,7 +271,7 @@ class Graph {
   getVerticesIndices() {
     const verticesIndices = new Map();
     this.getAllVertices().forEach((vertex, index) => {
-      verticesIndices.set(vertex.getKey(), index);
+      verticesIndices.set(vertex.key, index);
     });
     return verticesIndices;
   }
@@ -315,8 +290,8 @@ class Graph {
 
     // Fill the columns.
     vertices.forEach((vertex, vertexIndex) => {
-      vertex.getNeighbors().forEach(neighbor => {
-        const neighborIndex = verticesIndices.get(neighbor.getKey());
+      vertex.neighbors.forEach(neighbor => {
+        const neighborIndex = verticesIndices.get(neighbor.key);
         adjacencyMatrix[vertexIndex][neighborIndex] = this.findEdge(vertex, neighbor).weight;
       });
     });
@@ -363,7 +338,7 @@ class Graph {
   #depthFirstSearchRecursive(currentVertex, previousVertex, callbacks) {
     callbacks.enterVertex({ currentVertex, previousVertex });
 
-    this.getNeighbors(currentVertex).forEach(nextVertex => {
+    currentVertex.neighbors.forEach(nextVertex => {
       if (callbacks.allowTraversal({ previousVertex, currentVertex, nextVertex })) {
         this.#depthFirstSearchRecursive(nextVertex, currentVertex, callbacks);
       }
@@ -385,8 +360,8 @@ class Graph {
       () => {
         const seen = {};
         return ({ nextVertex }) => {
-          if (!seen[nextVertex.getKey()]) {
-            seen[nextVertex.getKey()] = true;
+          if (!seen[nextVertex.key]) {
+            seen[nextVertex.key] = true;
             return true;
           }
           return false;
@@ -424,30 +399,30 @@ class Graph {
         }
 
         // Don't allow traversal from child back to its parent.
-        const currentVertexParent = parents[currentVertex.getKey()];
-        const currentVertexParentKey = currentVertexParent ? currentVertexParent.getKey() : null;
+        const currentVertexParent = parents[currentVertex.key];
+        const currentVertexParentKey = currentVertexParent ? currentVertexParent.key : null;
 
-        return currentVertexParentKey !== nextVertex.getKey();
+        return currentVertexParentKey !== nextVertex.key;
       },
       enterVertex: ({ currentVertex, previousVertex }) => {
-        if (visitedVertices[currentVertex.getKey()]) {
+        if (visitedVertices[currentVertex.key]) {
           // Compile cycle path based on parents of previous vertices.
           cycle = {};
 
           let currentCycleVertex = currentVertex;
           let previousCycleVertex = previousVertex;
 
-          while (previousCycleVertex.getKey() !== currentVertex.getKey()) {
-            cycle[currentCycleVertex.getKey()] = previousCycleVertex;
+          while (previousCycleVertex.key !== currentVertex.key) {
+            cycle[currentCycleVertex.key] = previousCycleVertex;
             currentCycleVertex = previousCycleVertex;
-            previousCycleVertex = parents[previousCycleVertex.getKey()];
+            previousCycleVertex = parents[previousCycleVertex.key];
           }
 
-          cycle[currentCycleVertex.getKey()] = previousCycleVertex;
+          cycle[currentCycleVertex.key] = previousCycleVertex;
         } else {
           // Add next vertex to visited set.
-          visitedVertices[currentVertex.getKey()] = currentVertex;
-          parents[currentVertex.getKey()] = previousVertex;
+          visitedVertices[currentVertex.key] = currentVertex;
+          parents[currentVertex.key] = previousVertex;
         }
       }
     };
@@ -477,8 +452,8 @@ class Graph {
   getSortedVertices({ sortType = Graph.VERTEX_SORT.LEAST } = {}) {
     switch ( sortType ) {
       case Graph.VERTEX_SORT.NONE: return this.getAllVertices();
-      case Graph.VERTEX_SORT.LEAST: return this.getAllVertices().sort((a, b) => b.getDegree() - a.getDegree()); // least overlap
-      case Graph.VERTEX_SORT.MOST: return this.getAllVertices().sort((a, b) => a.getDegree() - b.getDegree()); // most overlap
+      case Graph.VERTEX_SORT.LEAST: return this.getAllVertices().sort((a, b) => b.degree - a.degree); // least overlap
+      case Graph.VERTEX_SORT.MOST: return this.getAllVertices().sort((a, b) => a.degree - b.degree); // most overlap
     }
   }
 
@@ -491,18 +466,18 @@ class Graph {
     const spanningTree = new Map();
 
     // Add a key for each vertex to the tree.
-    vertices.forEach(v => spanningTree.set(v.getKey(), new Set()));
+    vertices.forEach(v => spanningTree.set(v.key, new Set()));
 
     // Add the vertex neighbors
     const visitedVertices = new Set();
     vertices.forEach(v => {
-      const spanningVertex = spanningTree.get(v.getKey());
-      v.getNeighbors().forEach(neighbor => {
-        if ( !visitedVertices.has(neighbor.getKey()) ) {
-          visitedVertices.add(neighbor.getKey()); // TODO: Should be able to use neighbor directly
+      const spanningVertex = spanningTree.get(v.key);
+      v.neighbors.forEach(neighbor => {
+        if ( !visitedVertices.has(neighbor.key) ) {
+          visitedVertices.add(neighbor.key); // TODO: Should be able to use neighbor directly
 
           // If not all vertices provided, then the spanning tree may not contain vertex or neighbor.
-          const spanningNeighbor = spanningTree.get(neighbor.getKey());
+          const spanningNeighbor = spanningTree.get(neighbor.key);
           if ( spanningVertex ) spanningVertex.add(neighbor)  // TODO: Faster if we could drop this test when we know we have all vertices.
           if ( spanningNeighbor ) spanningNeighbor.add(v); // TODO: Faster if we could drop this test when we know we have all vertices.
         }
@@ -563,9 +538,9 @@ class Graph {
     const rejectedEdges = new Set();
     const vertices = this.getAllVertices();
     vertices.forEach(v => {
-      if ( spanningTree.has(v.getKey()) ) {
-        v.getNeighbors().forEach(neighbor => {
-          if ( !spanningTree.get(v.getKey()).has(neighbor) ) {
+      if ( spanningTree.has(v.key) ) {
+        v.neighbors.forEach(neighbor => {
+          if ( !spanningTree.get(v.key).has(neighbor) ) {
             if ( !rejectedEdges.has(`${neighbor.toString()}-${v.toString()}`) ) {
               rejectedEdges.add(`${v.toString()}-${neighbor.toString()}`);
             }
@@ -606,7 +581,7 @@ function findCycle(
   if ( !destinations ) return cycle; // If less than all vertices in spanningTree.
 
   for ( const destination of destinations ) {
-    const destinationKey = destination.getKey();
+    const destinationKey = destination.key;
     if ( destinationKey === end ) {
       cycle = getCyclePath(start, end, current_node, parents);
       return cycle;
@@ -733,7 +708,7 @@ graph.addEdge(edgeCD)
 graph.getAllVertices().map(v => v.toString())
 graph.getAllEdges().map(e => e.toString())
 edgeAB.otherVertex(B)
-graph.getNeighbors(A)
+A.neighbors
 
 graph.getAdjacencyMatrix()
 graph.detectCycle()
@@ -851,37 +826,8 @@ cycles1 = graph.getCyclesForVertices([v1]);
 cycles2 = graph.getCyclesForVertices([v2]);
 cycles12 = graph.getCyclesForVertices([v1, v2]);
 
-vertices = [v1, v2]
-spanningTree = new Map();
-
-// Add a key for each vertex to the tree.
-vertices.forEach(v => spanningTree.set(v.getKey(), new Set()));
-
-// Add the vertex neighbors
-visitedVertices = new Set();
-vertices.forEach(v => {
-  v.getNeighbors().forEach(neighbor => {
-    if ( !visitedVertices.has(neighbor.getKey()) ) {
-      visitedVertices.add(neighbor.getKey()); // TODO: Should be able to use neighbor directly
-
-      // If we cut back on vertices, these could be undefined
-      if ( spanningTree.has(v.getKey()) ) spanningTree.get(v.getKey()).add(neighbor);
-      if ( spanningTree.has(neighbor.getKey()) ) spanningTree.get(neighbor.getKey()).add(v);
-    }
-  });
-});
 
 
-
-cycles = [];
-rejectedEdges = graph._getRejectedEdges(spanningTree);
-rejectedEdges.forEach(edge => {
-  ends = edge.split("-");
-  start = ends[0];
-  end = ends[1];
-  cycle = findCycle(start, end, spanningTree);
-  if ( !!cycle ) cycles.push(cycle);
-});
 
 
 
