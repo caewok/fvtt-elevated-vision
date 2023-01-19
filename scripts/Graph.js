@@ -496,14 +496,13 @@ class Graph {
     // Add the vertex neighbors
     const visitedVertices = new Set();
     vertices.forEach(v => {
-
+      const spanningVertex = spanningTree.get(v.getKey());
       v.getNeighbors().forEach(neighbor => {
         if ( !visitedVertices.has(neighbor.getKey()) ) {
           visitedVertices.add(neighbor.getKey()); // TODO: Should be able to use neighbor directly
 
           // If not all vertices provided, then the spanning tree may not contain vertex or neighbor.
           const spanningNeighbor = spanningTree.get(neighbor.getKey());
-          const spanningVertex = spanningTree.get(v.getKey());
           if ( spanningVertex ) spanningVertex.add(neighbor)
           if ( spanningNeighbor ) spanningNeighbor.add(v);
         }
