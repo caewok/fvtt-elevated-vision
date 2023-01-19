@@ -94,7 +94,7 @@ class GraphVertex {
    */
   // TODO: Fix this so the key is consistently object or string?
   getKey() {
-    return this.value;
+    return this.value.toString();
   }
 
   /**
@@ -238,7 +238,7 @@ class Graph {
       B = this.getVertexByKey(edge.B.getKey());
     }
 
-    // Check fi edge already added.
+    // Check if edge already added.
     if ( this.edges.has(edge.getKey()) ) throw new Error("Edge has already been added before");
     else this.edges.set(edge.getKey(), edge);
 
@@ -460,20 +460,31 @@ class Graph {
   // ----- All Simple Cycles ---- //
   // https://javascript.plainenglish.io/finding-simple-cycles-in-an-undirected-graph-a-javascript-approach-1fa84d2f3218
 
+  // how to sort the vertices for getAllCycles
+  static VERTEX_SORT = {
+    NONE: 0,   // no sort
+    LEAST: 1,  // least overlap (smallest degree first)
+    MOST: 2    // most overlap (highest degree first)
+  };
+
   /**
    * Get all vertices in the graph sorted by decreasing degree (number of edges).
    * @returns {GraphVertex[]}
    */
-  getSortedVertices() {
-    return this.getAllVertices().sort((a, b) => b.getDegree() - a.getDegree());
+  getSortedVertices({ sortType = Graph.VERTEX_SORT.LEAST } = {}) {
+    switch ( sortType ) {
+      case Graph.VERTEX_SORT.NONE: return this.getAllVertices();
+      case Graph.VERTEX_SORT.LEAST: return this.getAllVertices().sort((a, b) => b.getDegree() - a.getDegree()); // least overlap
+      case Graph.VERTEX_SORT.MOST: return this.getAllVertices().sort((a, b) => a.getDegree() - b.getDegree()); // most overlap
+    }
   }
 
   /**
    * Construct a spanning tree, meaning a map of vertex keys with values of neighboring vertices.
    * @returns {Map<string, Set<GraphVertex>}
    */
-  getSpanningTree() {
-    const vertices = this.getSortedVertices();
+  getSpanningTree({ sortType = Graph.VERTEX_SORT.LEAST } = {}) {
+    const vertices = this.getSortedVertices({sortType});
     const spanningTree = new Map();
 
     // Add a key for each vertex to the tree.
@@ -497,8 +508,8 @@ class Graph {
   /**
    * Perform DFS traversal on the spanning tree.
    */
-  getAllCycles() {
-    const spanningTree = this.getSpanningTree();
+  getAllCycles({ sortType = Graph.VERTEX_SORT.LEAST } = {}) {
+    const spanningTree = this.getSpanningTree({sortType});
     const cycles = [];
     const rejectedEdges = this._getRejectedEdges(spanningTree);
     rejectedEdges.forEach(edge => {
@@ -609,6 +620,54 @@ function getCyclePath(start, end, current, parents) {
 
 
 
+// For testing with WallTracer
+function updateWallTracer() {
+  const t0 = performance.now();
+  WallTracerVertex.clear();
+  WallTracerEdge.clear();
+  const walls = [...canvas.walls.placeables] ?? [];
+//   walls.push(...canvas.walls.outerBounds);
+  walls.push(...canvas.walls.innerBounds);
+  for ( const wall of walls ) WallTracerEdge.addWall(wall);
+  const t1 = performance.now();
+  WallTracerEdge.verifyConnectedEdges();
+  const t2 = performance.now();
+  console.log(`Tracked ${walls.length} walls in ${t1 - t0} ms. Verified in ${t2 - t1} ms.`);
+}
+
+function benchCycle(tracerEdgesSet) {
+  const t0 = performance.now();
+  const graph = new Graph();
+  for ( let tracerEdge of tracerEdgesSet ) {
+    const aKey = tracerEdge.A.key;
+    const bKey = tracerEdge.B.key;
+    let A = new GraphVertex(aKey);
+    let B = new GraphVertex(bKey);
+    edgeAB = new GraphEdge(A, B);
+    graph.addEdge(edgeAB);
+  }
+
+  const t1 = performance.now();
+  let cycles = graph.getAllCycles()
+
+  const t2 = performance.now();
+  cycles = cycles.filter(c => c.length > 2);
+  const cycleVertices = cycles.map(c => c.map(key => tracerVerticesMap.get(Number.fromString(key))));
+  const cyclePolygons = cycleVertices.map(vArr => new PIXI.Polygon(vArr))
+  const t3 = performance.now();
+
+  console.log(
+`
+${t1 - t0} ms: build graph
+${t2 - t1} ms: find cycles
+${t3 - t2} ms: convert to polygons
+${t3 - t0} ms: total
+`);
+
+  return { graph, cyclePolygons };
+}
+
+
 // Testing
 
 /*
@@ -654,4 +713,101 @@ spanningTree = graph.getSpanningTree()
 graph._getRejectedEdges(spanningTree)
 graph.getAllCycles()
 
+
+// Test on scene with WallTracerEdges
+api = game.modules.get("elevatedvision").api
+WallTracerEdge = api.WallTracerEdge
+WallTracerVertex = api.WallTracerVertex
+WallTracer = api.WallTracer
+ClipperPaths = CONFIG.GeometryLib.ClipperPaths
+Draw = CONFIG.GeometryLib.Draw
+draw = new Draw
+updateWallTracer()
+
+
+
+
+tracerVerticesMap = WallTracerVertex._cachedVertices;
+tracerEdgesSet = WallTracerEdge.allEdges();
+
+tracerEdgesSet.forEach(e => e.draw())
+
+graph = new Graph();
+for ( let tracerEdge of tracerEdgesSet ) {
+  const aKey = tracerEdge.A.key;
+  const bKey = tracerEdge.B.key;
+  let A = new GraphVertex(aKey);
+  let B = new GraphVertex(bKey);
+  edgeAB = new GraphEdge(A, B);
+  graph.addEdge(edgeAB);
+}
+
+tracerEdgesSet = WallTracerEdge.allEdges();
+let { graph, cyclePolygons } = benchCycle(tracerEdgesSet)
+
+
+cyclesNone = graph.getAllCycles({ sortType: Graph.VERTEX_SORT.NONE })
+cyclesLeast = graph.getAllCycles({ sortType: Graph.VERTEX_SORT.LEAST })
+cyclesMost = graph.getAllCycles({ sortType: Graph.VERTEX_SORT.MOST })
+
+cyclesNone = cyclesNone.filter(c => c.length > 2);
+cyclesLeast = cyclesLeast.filter(c => c.length > 2);
+cyclesMost = cyclesMost.filter(c => c.length > 2);
+
+cycleVerticesNone = cyclesNone.map(c => c.map(key => tracerVerticesMap.get(Number.fromString(key))));
+cycleVerticesLeast = cyclesLeast.map(c => c.map(key => tracerVerticesMap.get(Number.fromString(key))));
+cycleVerticesMost = cyclesMost.map(c => c.map(key => tracerVerticesMap.get(Number.fromString(key))));
+
+cyclePolygons = cycleVerticesNone.map(vArr => new PIXI.Polygon(vArr))
+cyclePolygons = cycleVerticesLeast.map(vArr => new PIXI.Polygon(vArr))
+cyclePolygons = cycleVerticesMost.map(vArr => new PIXI.Polygon(vArr))
+
+
+N = 1000
+benchFn = function(graph) { return graph.getAllCycles() }
+await foundry.utils.benchmark(benchFn, N, graph)
+
+cycles = graph.getAllCycles()
+cycles = cycles.filter(c => c.length > 2);
+cycleVertices = cycles.map(c => c.map(key => tracerVerticesMap.get(Number.fromString(key))));
+cyclePolygons = cycleVertices.map(vArr => new PIXI.Polygon(vArr))
+cyclePolygons.forEach((poly, i) => {
+  let color;
+  switch ( i % 3 ) {
+    case 0: color = Draw.COLORS.blue; break;
+    case 1: color = Draw.COLORS.red; break;
+    case 2: color = Draw.COLORS.green; break;
+  }
+  draw.shape(poly, { color })
+})
+
+
+for ( const key of WallTracerVertex._cachedVertices.keys() ) {
+  console.log(`Spanning tree ${spanningTree.has(key.toString()) ? "has" : "does not have"} key ${key}`);
+}
+
+// are keys and sortKeys equivalent? Yes.
+tracerVerticesMap = WallTracerVertex._cachedVertices;
+for ( const v of tracerVerticesMap.values() ) {
+  const pt = v.point;
+
+  if ( pt.key !== pt.sortKey ) {
+    console.log(`vertex { x: ${v.x}, y: ${v.y} } has key ${pt.key} and sortKey ${pt.sortKey}`)
+  }
+}
+
+
+
 */
+
+// For reversing a sort key
+MAX_TEXTURE_SIZE = Math.pow(2, 16);
+
+/**
+ * Sort key, arranging points from north-west to south-east
+ * @returns {number}
+ */
+function sortKey(x, y) {
+  return (MAX_TEXTURE_SIZE * Math.roundFast(x)) + Math.roundFast(y);
+}
+
