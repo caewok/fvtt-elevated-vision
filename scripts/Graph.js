@@ -239,8 +239,10 @@ class Graph {
     }
 
     // Check if edge already added.
-    if ( this.edges.has(edge.getKey()) ) throw new Error("Edge has already been added before");
-    else this.edges.set(edge.getKey(), edge);
+    if ( this.edges.has(edge.getKey()) ) {
+      console.error("Edge has already been added before");
+      return this;
+    } else this.edges.set(edge.getKey(), edge);
 
     // Add edge to the vertices.
     // Undirected, so add to both.
@@ -461,6 +463,7 @@ class Graph {
   // https://javascript.plainenglish.io/finding-simple-cycles-in-an-undirected-graph-a-javascript-approach-1fa84d2f3218
 
   // how to sort the vertices for getAllCycles
+  /** @enum */
   static VERTEX_SORT = {
     NONE: 0,   // no sort
     LEAST: 1,  // least overlap (smallest degree first)
@@ -481,10 +484,10 @@ class Graph {
 
   /**
    * Construct a spanning tree, meaning a map of vertex keys with values of neighboring vertices.
+   * @param {GraphVertex[]} vertices    Array of vertices, possibly sorted from getSortedVertices
    * @returns {Map<string, Set<GraphVertex>}
    */
-  getSpanningTree({ sortType = Graph.VERTEX_SORT.LEAST } = {}) {
-    const vertices = this.getSortedVertices({sortType});
+  getSpanningTree(vertices) {
     const spanningTree = new Map();
 
     // Add a key for each vertex to the tree.
@@ -493,11 +496,16 @@ class Graph {
     // Add the vertex neighbors
     const visitedVertices = new Set();
     vertices.forEach(v => {
+
       v.getNeighbors().forEach(neighbor => {
         if ( !visitedVertices.has(neighbor.getKey()) ) {
           visitedVertices.add(neighbor.getKey()); // TODO: Should be able to use neighbor directly
-          spanningTree.get(v.getKey()).add(neighbor);
-          spanningTree.get(neighbor.getKey()).add(v);
+
+          // If not all vertices provided, then the spanning tree may not contain vertex or neighbor.
+          const spanningNeighbor = spanningTree.get(neighbor.getKey());
+          const spanningVertex = spanningTree.get(v.getKey());
+          if ( spanningVertex ) spanningVertex.add(neighbor)
+          if ( spanningNeighbor ) spanningNeighbor.add(v);
         }
       });
     });
@@ -506,10 +514,34 @@ class Graph {
   }
 
   /**
-   * Perform DFS traversal on the spanning tree.
+   * Get cycles for a specified vertex or vertices.
+   * @param {GraphVertex[]} vertices
+   * @returns {string[][]}  Keys of vertices in arrays. Each array represents a cycle.
+   */
+  getCyclesForVertices(vertices) {
+    const spanningTree = this.getSpanningTree(vertices);
+    return this._getCyclesForSpanningTree(spanningTree);
+  }
+
+  /**
+   * Get cycles for all vertices in the graph.
+   * @param {object} [options]
+   * @param {VERTEX_SORT} [options.sortType]    How to sort the vertices used to detect cycles.
+   *                                            Least will prioritize least overlap between edges.
+   * @returns {string[][]}  Keys of vertices in arrays. Each array represents a cycle.
    */
   getAllCycles({ sortType = Graph.VERTEX_SORT.LEAST } = {}) {
-    const spanningTree = this.getSpanningTree({sortType});
+    const vertices = this.getSortedVertices({sortType});
+    const spanningTree = this.getSpanningTree(vertices);
+    return this._getCyclesForSpanningTree(spanningTree);
+  }
+
+  /**
+   * Perform DFS traversal on the spanning tree.
+   * @param {Map<string, Set<GraphVertex>} spanningTree
+   * @returns {string[][]}  Keys of vertices in arrays. Each array represents a cycle.
+   */
+  _getCyclesForSpanningTree(spanningTree) {
     const cycles = [];
     const rejectedEdges = this._getRejectedEdges(spanningTree);
     rejectedEdges.forEach(edge => {
@@ -572,6 +604,8 @@ function findCycle(
   visited.add(current_node);
   parents.set(current_node, parent_node);
   const destinations = spanningTree.get(current_node);
+  if ( !destinations ) return cycle; // If less than all vertices in spanningTree.
+
   for ( const destination of destinations ) {
     const destinationKey = destination.getKey();
     if ( destinationKey === end ) {
@@ -722,11 +756,11 @@ WallTracer = api.WallTracer
 ClipperPaths = CONFIG.GeometryLib.ClipperPaths
 Draw = CONFIG.GeometryLib.Draw
 draw = new Draw
+
+
+
+
 updateWallTracer()
-
-
-
-
 tracerVerticesMap = WallTracerVertex._cachedVertices;
 tracerEdgesSet = WallTracerEdge.allEdges();
 
@@ -765,7 +799,15 @@ cyclePolygons = cycleVerticesMost.map(vArr => new PIXI.Polygon(vArr))
 
 N = 1000
 benchFn = function(graph) { return graph.getAllCycles() }
-await foundry.utils.benchmark(benchFn, N, graph)
+await foundry.utils.benchmark(benchFn, N, graph, { sortType: Graph.VERTEX_SORT.NONE })
+await foundry.utils.benchmark(benchFn, N, graph, { sortType: Graph.VERTEX_SORT.LEAST })
+await foundry.utils.benchmark(benchFn, N, graph, { sortType: Graph.VERTEX_SORT.MOST })
+
+This is the End: ~ .77 ms per for each
+Hunter's Ravine: ~ .33 ms per for each
+Delicious Palace: ~ 10.6 ms per for each (ouch!)
+
+
 
 cycles = graph.getAllCycles()
 cycles = cycles.filter(c => c.length > 2);
@@ -796,18 +838,54 @@ for ( const v of tracerVerticesMap.values() ) {
   }
 }
 
+// Can we force the cycle to prioritize a certain edge?
+// (Exclusively or force that cycle to be found along with others?)
+let [w] = canvas.walls.controlled
+edgeSet = WallTracerEdge.edgeSetForWall(w)
+let [edge] = edgeSet
+
+v1 = graph.getVertexByKey(edge.A.key.toString())
+v2 = graph.getVertexByKey(edge.B.key.toString())
+
+// Apparently we need at least two vertices to get a result.
+cycles1 = graph.getCyclesForVertices([v1]);
+cycles2 = graph.getCyclesForVertices([v2]);
+cycles12 = graph.getCyclesForVertices([v1, v2]);
+
+vertices = [v1, v2]
+spanningTree = new Map();
+
+// Add a key for each vertex to the tree.
+vertices.forEach(v => spanningTree.set(v.getKey(), new Set()));
+
+// Add the vertex neighbors
+visitedVertices = new Set();
+vertices.forEach(v => {
+  v.getNeighbors().forEach(neighbor => {
+    if ( !visitedVertices.has(neighbor.getKey()) ) {
+      visitedVertices.add(neighbor.getKey()); // TODO: Should be able to use neighbor directly
+
+      // If we cut back on vertices, these could be undefined
+      if ( spanningTree.has(v.getKey()) ) spanningTree.get(v.getKey()).add(neighbor);
+      if ( spanningTree.has(neighbor.getKey()) ) spanningTree.get(neighbor.getKey()).add(v);
+    }
+  });
+});
+
+
+
+cycles = [];
+rejectedEdges = graph._getRejectedEdges(spanningTree);
+rejectedEdges.forEach(edge => {
+  ends = edge.split("-");
+  start = ends[0];
+  end = ends[1];
+  cycle = findCycle(start, end, spanningTree);
+  if ( !!cycle ) cycles.push(cycle);
+});
+
 
 
 */
 
-// For reversing a sort key
-MAX_TEXTURE_SIZE = Math.pow(2, 16);
-
-/**
- * Sort key, arranging points from north-west to south-east
- * @returns {number}
- */
-function sortKey(x, y) {
-  return (MAX_TEXTURE_SIZE * Math.roundFast(x)) + Math.roundFast(y);
-}
 
