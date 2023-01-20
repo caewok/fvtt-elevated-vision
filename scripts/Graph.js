@@ -11,7 +11,7 @@
 /**
  * Vertex of an undirected graph.
  */
-class GraphVertex {
+export class GraphVertex {
   #edges = new Set();
 
   /** @type {*} */
@@ -91,7 +91,7 @@ class GraphVertex {
 
   // TODO: Change this to use integers or object index when available?
   /** @type {string} */
-  get key() {  return this.value; }
+  get key() { return this.value; }
 
   /**
    * Remove all edges linked to this vertex.
@@ -115,7 +115,7 @@ class GraphVertex {
 /**
  * Edge of an undirected graph.
  */
-class GraphEdge {
+export class GraphEdge {
   /** @type {GraphVertex} */
   A;
 
@@ -170,7 +170,7 @@ class GraphEdge {
 /**
  * Undirected graph that holds vertices and edges.
  */
-class Graph {
+export class Graph {
   /** @type {Map<GraphVertex>} */
   vertices = new Map();
 
@@ -299,42 +299,6 @@ class Graph {
     }, 0);
   }
 
-  // TODO: Do we need reverse?
-
-  /**
-   * @return {Map<string, number>}
-   */
-  getVerticesIndices() {
-    const verticesIndices = new Map();
-    this.getAllVertices().forEach((vertex, index) => {
-      verticesIndices.set(vertex.key, index);
-    });
-    return verticesIndices;
-  }
-
-  /**
-   * @return {*[][]}
-   */
-  getAdjacencyMatrix() {
-    const vertices = this.getAllVertices();
-    const verticesIndices = this.getVerticesIndices();
-
-    // Init matrix with infinities meaning that there is no way of getting from one vertex to another
-    const adjacencyMatrix = Array(vertices.length).fill(null).map(() => {
-      return Array(vertices.length).fill(Infinity);
-    });
-
-    // Fill the columns.
-    vertices.forEach((vertex, vertexIndex) => {
-      vertex.neighbors.forEach(neighbor => {
-        const neighborIndex = verticesIndices.get(neighbor.key);
-        adjacencyMatrix[vertexIndex][neighborIndex] = this.findEdge(vertex, neighbor).weight;
-      });
-    });
-
-    return adjacencyMatrix;
-  }
-
   /**
    * @return {string}
    */
@@ -343,143 +307,15 @@ class Graph {
     return "".concat([...vStrings]);
   }
 
-  // ----- Depth-first search ----- //
-
-  /**
-   * @typedef {Object} Callbacks
-   *
-   * @property {function(vertices: Object): boolean} [allowTraversal] -
-   *  Determines whether DFS should traverse from the vertex to its neighbor
-   *  (along the edge). By default prohibits visiting the same vertex again.
-   *
-   * @property {function(vertices: Object)} [enterVertex] - Called when DFS enters the vertex.
-   *
-   * @property {function(vertices: Object)} [leaveVertex] - Called when DFS leaves the vertex.
-   */
-
-  /**
-   * @param {Graph} graph
-   * @param {GraphVertex} startVertex
-   * @param {Callbacks} [callbacks]
-   */
-  depthFirstSearch(startVertex, callbacks) {
-    const previousVertex = null;
-    this.#depthFirstSearchRecursive(startVertex, previousVertex, this.#initCallbacks(callbacks));
-  }
-
-  /**
-   * @param {GraphVertex} currentVertex
-   * @param {GraphVertex} previousVertex
-   * @param {Callbacks} callbacks
-   */
-  #depthFirstSearchRecursive(currentVertex, previousVertex, callbacks) {
-    callbacks.enterVertex({ currentVertex, previousVertex });
-
-    currentVertex.neighbors.forEach(nextVertex => {
-      if (callbacks.allowTraversal({ previousVertex, currentVertex, nextVertex })) {
-        this.#depthFirstSearchRecursive(nextVertex, currentVertex, callbacks);
-      }
-    });
-
-    callbacks.leaveVertex({ currentVertex, previousVertex });
-  }
-
-  /**
-   * @param {Callbacks} [callbacks]
-   * @returns {Callbacks}
-   */
-  #initCallbacks(callbacks = {}) {
-    const initiatedCallback = callbacks;
-
-    const stubCallback = () => {};
-
-    const allowTraversalCallback = (
-      () => {
-        const seen = {};
-        return ({ nextVertex }) => {
-          if (!seen[nextVertex.key]) {
-            seen[nextVertex.key] = true;
-            return true;
-          }
-          return false;
-        };
-      }
-    )();
-
-    initiatedCallback.allowTraversal = callbacks.allowTraversal || allowTraversalCallback;
-    initiatedCallback.enterVertex = callbacks.enterVertex || stubCallback;
-    initiatedCallback.leaveVertex = callbacks.leaveVertex || stubCallback;
-
-    return initiatedCallback;
-  }
-
-  // ----- Detect cycles ----- //
-
-  /**
-   * Detect cycle in undirected graph using Depth First Search.
-   */
-  detectCycle(startIndex = 0) {
-    let cycle = null;
-
-    // List of vertices that we have visited.
-    const visitedVertices = {};
-
-    // List of parents vertices for every visited vertex.
-    const parents = {};
-
-    // Callbacks for DFS traversing.
-    const callbacks = {
-      allowTraversal: ({ currentVertex, nextVertex }) => {
-        // Don't allow further traversal in case if cycle has been detected.
-        if (cycle) {
-          return false;
-        }
-
-        // Don't allow traversal from child back to its parent.
-        const currentVertexParent = parents[currentVertex.key];
-        const currentVertexParentKey = currentVertexParent ? currentVertexParent.key : null;
-
-        return currentVertexParentKey !== nextVertex.key;
-      },
-      enterVertex: ({ currentVertex, previousVertex }) => {
-        if (visitedVertices[currentVertex.key]) {
-          // Compile cycle path based on parents of previous vertices.
-          cycle = {};
-
-          let currentCycleVertex = currentVertex;
-          let previousCycleVertex = previousVertex;
-
-          while (previousCycleVertex.key !== currentVertex.key) {
-            cycle[currentCycleVertex.key] = previousCycleVertex;
-            currentCycleVertex = previousCycleVertex;
-            previousCycleVertex = parents[previousCycleVertex.key];
-          }
-
-          cycle[currentCycleVertex.key] = previousCycleVertex;
-        } else {
-          // Add next vertex to visited set.
-          visitedVertices[currentVertex.key] = currentVertex;
-          parents[currentVertex.key] = previousVertex;
-        }
-      }
-    };
-
-    // Start DFS traversing.
-    const startVertex = this.getAllVertices()[startIndex];
-    this.depthFirstSearch(startVertex, callbacks);
-
-    return cycle;
-  }
-
   // ----- All Simple Cycles ---- //
   // https://javascript.plainenglish.io/finding-simple-cycles-in-an-undirected-graph-a-javascript-approach-1fa84d2f3218
 
   // how to sort the vertices for getAllCycles
   /** @enum */
   static VERTEX_SORT = {
-    NONE: 0,   // no sort
-    LEAST: 1,  // least overlap (smallest degree first)
-    MOST: 2    // most overlap (highest degree first)
+    NONE: 0,   // No sort
+    LEAST: 1,  // Least overlap (smallest degree first)
+    MOST: 2    // Most overlap (highest degree first)
   };
 
   /**
@@ -489,8 +325,8 @@ class Graph {
   getSortedVertices({ sortType = Graph.VERTEX_SORT.LEAST } = {}) {
     switch ( sortType ) {
       case Graph.VERTEX_SORT.NONE: return this.getAllVertices();
-      case Graph.VERTEX_SORT.LEAST: return this.getAllVertices().sort((a, b) => b.degree - a.degree); // least overlap
-      case Graph.VERTEX_SORT.MOST: return this.getAllVertices().sort((a, b) => a.degree - b.degree); // most overlap
+      case Graph.VERTEX_SORT.LEAST: return this.getAllVertices().sort((a, b) => b.degree - a.degree); // Least overlap
+      case Graph.VERTEX_SORT.MOST: return this.getAllVertices().sort((a, b) => a.degree - b.degree); // Most overlap
     }
   }
 
@@ -559,9 +395,6 @@ class Graph {
     for ( const edge of rejectedEdges.values() ) {
       const start = edge.A;
       const end = edge.B;
-//       const ends = edge.split("-");
-//       const start = ends[0];
-//       const end = ends[1];
       const cycle = findCycle(start, end, spanningTree);
       if ( cycle && cycle.length > 2 ) cycles.push(cycle);
     }
@@ -583,8 +416,6 @@ class Graph {
       for ( const edge of v._edgeSet ) {
         // Opposite vertex for edge is the neighbor. Test whether neighbor is in span for this vertex.
         const neighbor = edge.otherVertex(v);
-
-
         if ( spanningTree.get(v.key).has(neighbor.key) ) continue;
         // Add v --> neighbor edge to rejected set. But only if rejected set does not have neighbor --> v.
         const [edgeVN, edgeNV] = edge.A.key === v.key ? [edge, edge.reverse()] : [edge.reverse(), edge];
@@ -642,7 +473,6 @@ function findCycle(
   if ( !destinationMap ) return cycle; // If less than all vertices in spanningTree.
 
   for ( const [destinationKey, destinationVertex] of destinationMap ) {
-//     const destinationKey = destination.key;
     if ( destinationKey === end.key ) {
       cycle = getCyclePath(start, end, current_node, parents);
       return cycle;
@@ -688,7 +518,17 @@ function getCyclePath(start, end, current, parents) {
   return cycle;
 }
 
+// Testing
 
+/*
+A -- B -- C
+ \   |   /
+   \ |  /
+     D
+
+*/
+
+/*
 
 // For testing with WallTracer
 function updateWallTracer() {
@@ -738,17 +578,6 @@ ${t3 - t0} ms: total
 }
 
 
-// Testing
-
-/*
-A -- B -- C
- \   |   /
-   \ |  /
-     D
-
-*/
-
-/*
 graph = new Graph();
 A = new GraphVertex("A")
 B = new GraphVertex("B")
@@ -795,9 +624,6 @@ WallTracer = api.WallTracer
 ClipperPaths = CONFIG.GeometryLib.ClipperPaths
 Draw = CONFIG.GeometryLib.Draw
 draw = new Draw
-
-
-
 
 updateWallTracer()
 tracerVerticesMap = WallTracerVertex._cachedVertices;
@@ -846,8 +672,6 @@ This is the End: ~ .77 ms per for each  Using Map and object/integer keys: ~ .23
 Hunter's Ravine: ~ .33 ms per for each  Using Map and object/integer keys: ~ .12 ms
 Delicious Palace: ~ 10.6 ms per for each (ouch!) using Map and object/integer keys: ~ 1 ms
 
-
-
 cycles = graph.getAllCycles()
 cycles = cycles.filter(c => c.length > 2);
 cycleVertices = cycles.map(c => c.map(key => tracerVerticesMap.get(Number.fromString(key))));
@@ -891,106 +715,6 @@ cycles1 = graph.getCyclesForVertices([v1]);
 cycles2 = graph.getCyclesForVertices([v2]);
 cycles12 = graph.getCyclesForVertices([v1, v2]);
 
-
-
-
-
-
 */
-
-function getSpanningTreeOrig(vertices) {
-    const spanningTreeOrig = new Map();
-
-    // Add a key for each vertex to the tree.
-    // Each key points to a set of keys.
-    vertices.forEach(v => spanningTreeOrig.set(v.key.toString(), new Set()));
-
-    // Add the vertex neighbors
-    const visitedVerticesOrig = new Set();
-    vertices.forEach(v => {
-      const spanningVertexOrig = spanningTreeOrig.get(v.key.toString());
-
-      v.neighbors.forEach(neighbor => {
-        if ( !visitedVerticesOrig.has(neighbor.key.toString()) ) {
-          visitedVerticesOrig.add(neighbor.key.toString()); // TODO: Should be able to use neighbor directly
-
-          // If not all vertices provided, then the spanning tree may not contain vertex or neighbor.
-          const spanningNeighborOrig = spanningTreeOrig.get(neighbor.key.toString());
-          if ( spanningVertexOrig ) spanningVertexOrig.add(neighbor)  // TODO: Faster if we could drop this test when we know we have all vertices.
-          if ( spanningNeighborOrig ) spanningNeighborOrig.add(v); // TODO: Faster if we could drop this test when we know we have all vertices.
-        }
-      });
-    });
-
-    return spanningTreeOrig;
-  }
-
-function getSpanningTree(vertices) {
-    const spanningTree = new Map();
-
-    // Add a key for each vertex to the tree.
-    // Each key points to a set of keys.
-    vertices.forEach(v => spanningTree.set(v.key, new Set()));
-
-    // Add the vertex neighbors
-    const visitedVertices = new Set();
-    vertices.forEach(v => {
-      const spanningVertex = spanningTree.get(v.key);
-      v.neighbors.forEach(neighbor => {
-        if ( !visitedVertices.has(neighbor.key) ) {
-          visitedVertices.add(neighbor.key); // TODO: Should be able to use neighbor directly
-
-          // If not all vertices provided, then the spanning tree may not contain vertex or neighbor.
-          const spanningNeighbor = spanningTree.get(neighbor.key);
-          if ( spanningVertex ) spanningVertex.add(neighbor)  // TODO: Faster if we could drop this test when we know we have all vertices.
-          if ( spanningNeighbor ) spanningNeighbor.add(v); // TODO: Faster if we could drop this test when we know we have all vertices.
-        }
-      });
-    });
-
-    return spanningTree;
-  }
-
-function  _getRejectedEdges(spanningTree) {
-    const rejectedEdges = new Map();
-    const vertices = this.getAllVertices();
-    for ( const v of vertices ) {
-      if ( !spanningTree.has(v.key) ) continue;
-
-
-
-
-
-      for ( const edge of v._edgeSet ) {
-        // Opposite vertex for edge is the neighbor. Test whether neighbor is in span for this vertex.
-        const neighbor = edge.otherVertex(v);
-        if ( spanningTree.get(v.key).has(neighbor.key) ) continue;
-        // Add v --> neighbor edge to rejected set. But only if rejected set does not have neighbor --> v.
-        const [edgeVN, edgeNV] = edge.A.key === v.key ? [edge, edge.reverse()] : [edge.reverse(), edge];
-        if ( !rejectedEdges.has(edgeNV.key) ) rejectedEdges.set(edgeVN.key, edgeVN); // This is a critical flip.
-      }
-    }
-
-    return rejectedEdges;
-  }
-
-function  _getRejectedEdgesOrig(spanningTree) {
-    const rejectedEdges = new Set();
-    const vertices = graph.getAllVertices();
-    vertices.forEach(v => {
-      if ( spanningTree.has(v.key) ) {
-        v.neighbors.forEach(neighbor => {
-          if ( !spanningTree.get(v.key).has(neighbor) ) {
-            if ( !rejectedEdges.has(`${neighbor.toString()}-${v.toString()}`) ) {
-              rejectedEdges.add(`${v.toString()}-${neighbor.toString()}`);
-            }
-          }
-        });
-      }
-     });
-
-
-    return rejectedEdges;
-  }
 
 
