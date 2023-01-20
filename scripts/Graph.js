@@ -12,7 +12,7 @@
  * Vertex of an undirected graph.
  */
 class GraphVertex {
-  #edges = new Set(); // TODO: Linked List or other alternative?
+  #edges = new Set();
 
   /** @type {*} */
   value;
@@ -178,15 +178,15 @@ class Graph {
   edges = new Map();
 
   /**
-   * Add a new vertex. If already added, this will keep the old vertex and do nothing.
+   * Add a new vertex. If already added, this will keep the old vertex.
    * @param {GraphVertex} newVertex
-   * @returns {Graph}
+   * @returns {GraphVertex} New or existing vertex, based on key.
    */
   addVertex(newVertex) {
     const key = newVertex.key;
-    if ( this.vertices.has(key) ) return this;
+    if ( this.vertices.has(key) ) return this.vertices.get(key);
     this.vertices.set(key, newVertex);
-    return this;
+    return newVertex;
   }
 
   /**
@@ -212,38 +212,52 @@ class Graph {
   }
 
   /**
-   * Add a new edge. If already added, this will keep the old edge and do nothing.
+   * Add a new edge. If already added, this will keep the old edge.
    * @param {GraphEdge} edge
-   * @returns {Graph}
+   * @returns {GraphEdge} The old or new edge.
    */
   addEdge(edge) {
     const key = edge.key;
-    if ( this.edges.has(key) ) return this;
+    if ( this.edges.has(key) ) return this.edges.get(key);
+    return this.addEdgeVertices(edge.A, edge.B, edge.weight);
+  }
 
+  /**
+   * Add a new edge for two vertices. Adds vertices as necessary; reuses existing where possible.
+   * If the edge already exists, does nothing.
+   * @param {GraphVertex} vertexA   First vertex to add
+   * @param {GraphVertex} vertexB   Second vertex to add
+   * @param {number} [weight=0]     Optional weight assigned to this edge, e.g. distance.
+   * @returns {GraphEdge} The old or existing edge.
+   */
+  addEdgeVertices(vertexA, vertexB, weight = 0) {
     // Try to find the start and end vertices.
-    let A = this.getVertexByKey(edge.A.key);
-    let B = this.getVertexByKey(edge.B.key);
+    const A = this.addVertex(vertexA);
+    const B = this.addVertex(vertexB);
 
-    // Insert start vertex if not already inserted.
-    if ( !A ) {
-      this.addVertex(edge.A);
-      A = this.getVertexByKey(edge.A.key);
-    }
-
-    // Insert end vertex if not already inserted.
-    if ( !B ) {
-      this.addVertex(edge.B);
-      B = this.getVertexByKey(edge.B.key);
-    }
-
-    this.edges.set(key, edge);
+    // Build and add the edge.
+    const edge = this._addEdge(new GraphEdge(A, B, weight));
 
     // Add edge to the vertices.
     // Undirected, so add to both.
     A.addEdge(edge);
     B.addEdge(edge);
 
-    return this;
+    return edge;
+  }
+
+  /**
+   * Add a new edge.
+   * Internal, because it lacks the checks on whether the vertices already exist
+   * and does not add the edge to the vertices.
+   * @param {GraphEdge} edge
+   * @returns {GraphEdge} The new or existing edge.
+   */
+  _addEdge(edge) {
+    const key = edge.key;
+    if ( this.edges.has(key) ) return this.edges.get(key);
+    this.edges.set(key, edge);
+    return edge;
   }
 
   /**
@@ -326,6 +340,7 @@ class Graph {
    */
   toString() {
     const vStrings = [...this.vertices.entries()].map(v => v.toString());
+    return "".concat([...vStrings]);
   }
 
   // ----- Depth-first search ----- //
@@ -501,7 +516,7 @@ class Graph {
 
           // If not all vertices provided, then the spanning tree may not contain vertex or neighbor.
           const spanningNeighborMap = spanningTree.get(neighbor.key);
-          if ( spanningVertexMap ) spanningVertexMap.set(neighbor.key, neighbor)  // TODO: Faster if we could drop this test when we know we have all vertices.
+          if ( spanningVertexMap ) spanningVertexMap.set(neighbor.key, neighbor);  // TODO: Faster if we could drop this test when we know we have all vertices.
           if ( spanningNeighborMap ) spanningNeighborMap.set(v.key, v); // TODO: Faster if we could drop this test when we know we have all vertices.
         }
       });
