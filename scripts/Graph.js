@@ -178,11 +178,14 @@ class Graph {
   edges = new Map();
 
   /**
+   * Add a new vertex. If already added, this will keep the old vertex and do nothing.
    * @param {GraphVertex} newVertex
    * @returns {Graph}
    */
   addVertex(newVertex) {
-    this.vertices.set(newVertex.key, newVertex);
+    const key = newVertex.key;
+    if ( this.vertices.has(key) ) return this;
+    this.vertices.set(key, newVertex);
     return this;
   }
 
@@ -209,10 +212,14 @@ class Graph {
   }
 
   /**
+   * Add a new edge. If already added, this will keep the old edge and do nothing.
    * @param {GraphEdge} edge
    * @returns {Graph}
    */
   addEdge(edge) {
+    const key = edge.key;
+    if ( this.edges.has(key) ) return this;
+
     // Try to find the start and end vertices.
     let A = this.getVertexByKey(edge.A.key);
     let B = this.getVertexByKey(edge.B.key);
@@ -229,11 +236,7 @@ class Graph {
       B = this.getVertexByKey(edge.B.key);
     }
 
-    // Check if edge already added.
-    if ( this.edges.has(edge.key) ) {
-      console.error("Edge has already been added before");
-      return this;
-    } else this.edges.set(edge.key, edge);
+    this.edges.set(key, edge);
 
     // Add edge to the vertices.
     // Undirected, so add to both.
@@ -248,7 +251,10 @@ class Graph {
    */
   deleteEdge(edge) {
     if ( this.edges.has(edge.key) ) this.edges.delete(edge.key);
-    else throw new Error("Edge not found in graph.");
+    else {
+      console.warn("Edge not found in graph.");
+      return;
+    }
 
     // TODO: This is probably unnecessary.
     // Locate vertices and delete the associated edge.
@@ -785,24 +791,11 @@ tracerEdgesSet = WallTracerEdge.allEdges();
 tracerEdgesSet.forEach(e => e.draw())
 
 graph = new Graph();
-seenVertices = new Map();
 for ( let tracerEdge of tracerEdgesSet ) {
   const aKey = tracerEdge.A.key;
   const bKey = tracerEdge.B.key;
-  let A;
-  let B;
-  if ( seenVertices.has(aKey) ) A = seenVertices.get(aKey);
-  else {
-   A = new GraphVertex(aKey);
-   seenVertices.set(aKey, A);
-  }
-
-  if ( seenVertices.has(bKey) ) B = seenVertices.get(bKey);
-  else {
-    B = new GraphVertex(bKey);
-    seenVertices.set(bKey, B);
-  }
-
+  const A = new GraphVertex(aKey);
+  const B = new GraphVertex(bKey);
   edgeAB = new GraphEdge(A, B);
   graph.addEdge(edgeAB);
 }
@@ -834,9 +827,9 @@ await foundry.utils.benchmark(benchFn, N, graph, { sortType: Graph.VERTEX_SORT.N
 await foundry.utils.benchmark(benchFn, N, graph, { sortType: Graph.VERTEX_SORT.LEAST })
 await foundry.utils.benchmark(benchFn, N, graph, { sortType: Graph.VERTEX_SORT.MOST })
 
-This is the End: ~ .77 ms per for each
-Hunter's Ravine: ~ .33 ms per for each
-Delicious Palace: ~ 10.6 ms per for each (ouch!)
+This is the End: ~ .77 ms per for each  Using Map and object/integer keys: ~ .23 ms
+Hunter's Ravine: ~ .33 ms per for each  Using Map and object/integer keys: ~ .12 ms
+Delicious Palace: ~ 10.6 ms per for each (ouch!) using Map and object/integer keys: ~ 1 ms
 
 
 
