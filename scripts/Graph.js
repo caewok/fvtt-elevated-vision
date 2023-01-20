@@ -58,6 +58,13 @@ class GraphVertex {
   get degree() { return this.#edges.size; }
 
   /**
+   * Return the edge set for internal use.
+   * Faster than get edges, but can be more easily abused.
+   * @type {Set<GraphEdge>}
+   */
+  get _edgeSet() { return this.#edges; }
+
+  /**
    * @param {GraphEdge} requiredEdge
    * @returns {boolean}
    */
@@ -74,6 +81,7 @@ class GraphVertex {
   }
 
   /**
+   * Find
    * @param {GraphVertex} vertex
    * @returns {GraphEdge|undefined}
    */
@@ -83,9 +91,10 @@ class GraphVertex {
 
   // TODO: Change this to use integers or object index when available?
   /** @type {string} */
-  get key() {  return this.value.toString(); }
+  get key() {  return this.value; }
 
   /**
+   * Remove all edges linked to this vertex.
    * @return {GraphVertex}
    */
   deleteAllEdges() {
@@ -94,6 +103,7 @@ class GraphVertex {
   }
 
   /**
+   * Convert the vertex to a string. String should be unique such that it can be an id or key.
    * @param {function} [callback]
    * @returns {string}
    */
@@ -129,7 +139,7 @@ class GraphEdge {
   /**
    * @return {string}
    */
-  get key() { return `${this.A.key}_${this.B.key}`; }
+  get key() { return `${this.A.toString()}_${this.B.toString()}`; }
 
   /**
    * Get the other vertex of this edge
@@ -140,7 +150,13 @@ class GraphEdge {
     return vertex.key === this.B.key ? this.A : this.B;
   }
 
-  // TODO: Do we need reverse? Would upset the cache.
+  /**
+   * Reverse this edge
+   * @returns {GraphEdge}
+   */
+  reverse() {
+    return new this.constructor(this.B, this.A, this.weight);
+  }
 
   /**
    * @return {string}
@@ -303,7 +319,7 @@ class Graph {
    * @return {string}
    */
   toString() {
-    return [...this.vertices.keys()].toString();
+    const vStrings = [...this.vertices.entries()].map(v => v.toString());
   }
 
   // ----- Depth-first search ----- //
@@ -460,26 +476,27 @@ class Graph {
   /**
    * Construct a spanning tree, meaning a map of vertex keys with values of neighboring vertices.
    * @param {GraphVertex[]} vertices    Array of vertices, possibly sorted from getSortedVertices
-   * @returns {Map<string, Set<GraphVertex>}
+   * @returns {Map<*, Map<*, GraphVertex>>} spanningTree. Keys are keys of vertices; values are vertices
    */
   getSpanningTree(vertices) {
     const spanningTree = new Map();
 
     // Add a key for each vertex to the tree.
-    vertices.forEach(v => spanningTree.set(v.key, new Set()));
+    // Each key points to a set of keys.
+    vertices.forEach(v => spanningTree.set(v.key, new Map()));
 
     // Add the vertex neighbors
     const visitedVertices = new Set();
     vertices.forEach(v => {
-      const spanningVertex = spanningTree.get(v.key);
+      const spanningVertexMap = spanningTree.get(v.key);
       v.neighbors.forEach(neighbor => {
         if ( !visitedVertices.has(neighbor.key) ) {
           visitedVertices.add(neighbor.key); // TODO: Should be able to use neighbor directly
 
           // If not all vertices provided, then the spanning tree may not contain vertex or neighbor.
-          const spanningNeighbor = spanningTree.get(neighbor.key);
-          if ( spanningVertex ) spanningVertex.add(neighbor)  // TODO: Faster if we could drop this test when we know we have all vertices.
-          if ( spanningNeighbor ) spanningNeighbor.add(v); // TODO: Faster if we could drop this test when we know we have all vertices.
+          const spanningNeighborMap = spanningTree.get(neighbor.key);
+          if ( spanningVertexMap ) spanningVertexMap.set(neighbor.key, neighbor)  // TODO: Faster if we could drop this test when we know we have all vertices.
+          if ( spanningNeighborMap ) spanningNeighborMap.set(v.key, v); // TODO: Faster if we could drop this test when we know we have all vertices.
         }
       });
     });
@@ -512,19 +529,21 @@ class Graph {
 
   /**
    * Perform DFS traversal on the spanning tree.
-   * @param {Map<string, Set<GraphVertex>} spanningTree
-   * @returns {string[][]}  Keys of vertices in arrays. Each array represents a cycle.
+   * @param {Map<*, Map<*, GraphVertex>>} spanningTree
+   * @returns {*[][]}  Keys of vertices in arrays. Each array represents a cycle.
    */
   _getCyclesForSpanningTree(spanningTree) {
     const cycles = [];
     const rejectedEdges = this._getRejectedEdges(spanningTree);
-    rejectedEdges.forEach(edge => {
-      const ends = edge.split("-");
-      const start = ends[0];
-      const end = ends[1];
+    for ( const edge of rejectedEdges.values() ) {
+      const start = edge.A;
+      const end = edge.B;
+//       const ends = edge.split("-");
+//       const start = ends[0];
+//       const end = ends[1];
       const cycle = findCycle(start, end, spanningTree);
       if ( cycle && cycle.length > 2 ) cycles.push(cycle);
-    });
+    }
 
     return cycles;
   }
@@ -532,15 +551,36 @@ class Graph {
   /**
    * Rejected edges is a set of edge keys, found by iterating through the graph and adding
    * edges that are not present in the spanning tree.
-   * @param {Map<string, Set<GraphVertex>} spanningTree
+   * @param {Map<*, Map<*, GraphVertex>>} spanningTree. Keys are keys of vertices; values are set of vertex keys
+   * @returns {Map<string, GraphEdge>} Map where keys are edge keys (strings), values are edges.
    */
   _getRejectedEdges(spanningTree) {
+    const rejectedEdges = new Map();
+    const vertices = this.getAllVertices();
+    for ( const v of vertices ) {
+      if ( !spanningTree.has(v.key) ) continue;
+      for ( const edge of v._edgeSet ) {
+        // Opposite vertex for edge is the neighbor. Test whether neighbor is in span for this vertex.
+        const neighbor = edge.otherVertex(v);
+
+
+        if ( spanningTree.get(v.key).has(neighbor.key) ) continue;
+        // Add v --> neighbor edge to rejected set. But only if rejected set does not have neighbor --> v.
+        const [edgeVN, edgeNV] = edge.A.key === v.key ? [edge, edge.reverse()] : [edge.reverse(), edge];
+        if ( !rejectedEdges.has(edgeNV.key) ) rejectedEdges.set(edgeVN.key, edgeVN); // This is a critical flip.
+      }
+    }
+
+    return rejectedEdges;
+  }
+
+  _getRejectedEdgesOrig(spanningTree) {
     const rejectedEdges = new Set();
     const vertices = this.getAllVertices();
     vertices.forEach(v => {
       if ( spanningTree.has(v.key) ) {
         v.neighbors.forEach(neighbor => {
-          if ( !spanningTree.get(v.key).has(neighbor) ) {
+          if ( !spanningTree.get(v.key).has(neighbor.key) ) {
             if ( !rejectedEdges.has(`${neighbor.toString()}-${v.toString()}`) ) {
               rejectedEdges.add(`${v.toString()}-${neighbor.toString()}`);
             }
@@ -556,14 +596,14 @@ class Graph {
 /**
  * Takes the start and end of the removed edge and performs DFS traversal
  * recursively on the spanning tree from start until it finds the end.
- * @param {string} start                  Key of the start vertex
- * @param {string} end                    Key of the end vertex
- * @param {Map<string, Set<GraphVertex>} spanningTree   Spanning tree created by this.getSpanningTree
- * @param {Set<string>} visited           Holds the set of visited vertices while traversing
+ * @param {GraphVertex} start               Start vertex
+ * @param {GraphVertex} end                 End vertex
+ * @param {Map<*, Map<*, GraphVertex>>} spanningTree      Spanning tree created by this.getSpanningTree
+ * @param {Set<*>} visited        Holds the set of visited vertices while traversing
  *                                        the tree in order to find a cycle
  * @param {Map<string, string>} parents   Stores the immediate parent of a node while traversing the tree
- * @param {string} current_node           Name (key) of the current vertex in the recursion
- * @param {string} parent_node            Name (key) of the parent vertex in the recursion
+ * @param {GraphVertex} current_node           Name (key) of the current vertex in the recursion
+ * @param {GraphVertex} parent_node            Name (key) of the parent vertex in the recursion
  */
 function findCycle(
   start,
@@ -572,22 +612,23 @@ function findCycle(
   visited = new Set(),
   parents = new Map(),
   current_node = start,
-  parent_node =  " ") {
+  parent_node = null) {
 
   let cycle = null;
-  visited.add(current_node);
-  parents.set(current_node, parent_node);
-  const destinations = spanningTree.get(current_node);
-  if ( !destinations ) return cycle; // If less than all vertices in spanningTree.
+  visited.add(current_node.key);
+  parents.set(current_node.key, parent_node);
+  const destinationMap = spanningTree.get(current_node.key);
+  if ( !destinationMap ) return cycle; // If less than all vertices in spanningTree.
 
-  for ( const destination of destinations ) {
-    const destinationKey = destination.key;
-    if ( destinationKey === end ) {
+  for ( const [destinationKey, destinationVertex] of destinationMap ) {
+//     const destinationKey = destination.key;
+    if ( destinationKey === end.key ) {
       cycle = getCyclePath(start, end, current_node, parents);
       return cycle;
     }
 
-    if ( destination == parents.get(current_node)) continue;
+    const parentValue = parents.get(current_node.key);
+    if ( parentValue && destinationKey == parentValue.key ) continue;
 
     if ( !visited.has(destinationKey) ) {
       cycle = findCycle(
@@ -596,7 +637,7 @@ function findCycle(
         spanningTree,
         visited,
         parents,
-        destinationKey,
+        destinationVertex,
         current_node
       );
       if ( !!cycle ) return cycle;
@@ -618,9 +659,9 @@ function findCycle(
  */
 function getCyclePath(start, end, current, parents) {
   const cycle = [end];
-  while ( current != start ) {
+  while ( current.key != start.key ) {
     cycle.push(current);
-    current = parents.get(current);
+    current = parents.get(current.key);
   }
   cycle.push(start);
   return cycle;
@@ -716,11 +757,14 @@ graph.detectCycle(1)
 graph.detectCycle(2)
 graph.detectCycle(3)
 
-graph.getSortedVertices()
-spanningTree = graph.getSpanningTree()
-graph._getRejectedEdges(spanningTree)
+vertices = graph.getSortedVertices()
+spanningTree = graph.getSpanningTree(vertices)
+rejectedEdges = graph._getRejectedEdges(spanningTree)
+rejectedEdgesOrig = graph._getRejectedEdgesOrig(spanningTree)
 graph.getAllCycles()
 
+
+getSpanningTreeOrig(vertices)
 
 // Test on scene with WallTracerEdges
 api = game.modules.get("elevatedvision").api
@@ -741,11 +785,24 @@ tracerEdgesSet = WallTracerEdge.allEdges();
 tracerEdgesSet.forEach(e => e.draw())
 
 graph = new Graph();
+seenVertices = new Map();
 for ( let tracerEdge of tracerEdgesSet ) {
   const aKey = tracerEdge.A.key;
   const bKey = tracerEdge.B.key;
-  let A = new GraphVertex(aKey);
-  let B = new GraphVertex(bKey);
+  let A;
+  let B;
+  if ( seenVertices.has(aKey) ) A = seenVertices.get(aKey);
+  else {
+   A = new GraphVertex(aKey);
+   seenVertices.set(aKey, A);
+  }
+
+  if ( seenVertices.has(bKey) ) B = seenVertices.get(bKey);
+  else {
+    B = new GraphVertex(bKey);
+    seenVertices.set(bKey, B);
+  }
+
   edgeAB = new GraphEdge(A, B);
   graph.addEdge(edgeAB);
 }
@@ -832,5 +889,100 @@ cycles12 = graph.getCyclesForVertices([v1, v2]);
 
 
 */
+
+function getSpanningTreeOrig(vertices) {
+    const spanningTreeOrig = new Map();
+
+    // Add a key for each vertex to the tree.
+    // Each key points to a set of keys.
+    vertices.forEach(v => spanningTreeOrig.set(v.key.toString(), new Set()));
+
+    // Add the vertex neighbors
+    const visitedVerticesOrig = new Set();
+    vertices.forEach(v => {
+      const spanningVertexOrig = spanningTreeOrig.get(v.key.toString());
+
+      v.neighbors.forEach(neighbor => {
+        if ( !visitedVerticesOrig.has(neighbor.key.toString()) ) {
+          visitedVerticesOrig.add(neighbor.key.toString()); // TODO: Should be able to use neighbor directly
+
+          // If not all vertices provided, then the spanning tree may not contain vertex or neighbor.
+          const spanningNeighborOrig = spanningTreeOrig.get(neighbor.key.toString());
+          if ( spanningVertexOrig ) spanningVertexOrig.add(neighbor)  // TODO: Faster if we could drop this test when we know we have all vertices.
+          if ( spanningNeighborOrig ) spanningNeighborOrig.add(v); // TODO: Faster if we could drop this test when we know we have all vertices.
+        }
+      });
+    });
+
+    return spanningTreeOrig;
+  }
+
+function getSpanningTree(vertices) {
+    const spanningTree = new Map();
+
+    // Add a key for each vertex to the tree.
+    // Each key points to a set of keys.
+    vertices.forEach(v => spanningTree.set(v.key, new Set()));
+
+    // Add the vertex neighbors
+    const visitedVertices = new Set();
+    vertices.forEach(v => {
+      const spanningVertex = spanningTree.get(v.key);
+      v.neighbors.forEach(neighbor => {
+        if ( !visitedVertices.has(neighbor.key) ) {
+          visitedVertices.add(neighbor.key); // TODO: Should be able to use neighbor directly
+
+          // If not all vertices provided, then the spanning tree may not contain vertex or neighbor.
+          const spanningNeighbor = spanningTree.get(neighbor.key);
+          if ( spanningVertex ) spanningVertex.add(neighbor)  // TODO: Faster if we could drop this test when we know we have all vertices.
+          if ( spanningNeighbor ) spanningNeighbor.add(v); // TODO: Faster if we could drop this test when we know we have all vertices.
+        }
+      });
+    });
+
+    return spanningTree;
+  }
+
+function  _getRejectedEdges(spanningTree) {
+    const rejectedEdges = new Map();
+    const vertices = this.getAllVertices();
+    for ( const v of vertices ) {
+      if ( !spanningTree.has(v.key) ) continue;
+
+
+
+
+
+      for ( const edge of v._edgeSet ) {
+        // Opposite vertex for edge is the neighbor. Test whether neighbor is in span for this vertex.
+        const neighbor = edge.otherVertex(v);
+        if ( spanningTree.get(v.key).has(neighbor.key) ) continue;
+        // Add v --> neighbor edge to rejected set. But only if rejected set does not have neighbor --> v.
+        const [edgeVN, edgeNV] = edge.A.key === v.key ? [edge, edge.reverse()] : [edge.reverse(), edge];
+        if ( !rejectedEdges.has(edgeNV.key) ) rejectedEdges.set(edgeVN.key, edgeVN); // This is a critical flip.
+      }
+    }
+
+    return rejectedEdges;
+  }
+
+function  _getRejectedEdgesOrig(spanningTree) {
+    const rejectedEdges = new Set();
+    const vertices = graph.getAllVertices();
+    vertices.forEach(v => {
+      if ( spanningTree.has(v.key) ) {
+        v.neighbors.forEach(neighbor => {
+          if ( !spanningTree.get(v.key).has(neighbor) ) {
+            if ( !rejectedEdges.has(`${neighbor.toString()}-${v.toString()}`) ) {
+              rejectedEdges.add(`${v.toString()}-${neighbor.toString()}`);
+            }
+          }
+        });
+      }
+     });
+
+
+    return rejectedEdges;
+  }
 
 
