@@ -271,7 +271,8 @@ export class WallTracerEdge extends GraphEdge {
     const eB = WallTracerEdge.pointAtWallRatio(wall, tB);
     const A = new WallTracerVertex(eA.x, eA.y);
     const B = new WallTracerVertex(eB.x, eB.y);
-    const edge = new this(A, B);
+    const dist = PIXI.Point.distanceSquaredBetween(A.point, B.point);
+    const edge = new this(A, B, dist);
 
     edge.tA = tA;
     edge.tB = tB;
@@ -635,8 +636,8 @@ export class WallTracer extends Graph {
    * Update the cached cycle polygons
    */
   updateCyclePolygons() {
-    const cyclesLeast = this.getAllCycles({ sortType: Graph.VERTEX_SORT.LEAST })
-    const cyclesMost = this.getAllCycles({ sortType: Graph.VERTEX_SORT.MOST })
+    const cyclesLeast = this.getAllCycles({ sortType: Graph.VERTEX_SORT.LEAST, weighted: true })
+    const cyclesMost = this.getAllCycles({ sortType: Graph.VERTEX_SORT.MOST, weighted: true })
     const cyclePolygons = this.cyclePolygons;
 
     cyclePolygons.least = cyclesLeast.map(cycle => WallTracer.cycleToPolygon(cycle));
