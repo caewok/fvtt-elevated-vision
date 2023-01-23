@@ -591,7 +591,7 @@ export class WallTracer extends Graph {
     // (The sort can sometimes mean none is faster, but not always)
     // Weighting by distance hurts performance.
     this.cyclePolygonsQuadtree.clear();
-    const cycles = this.getAllCycles({ sortType: Graph.VERTEX_SORT.MOST, weighted: false });
+    const cycles = this.getAllCycles({ sortType: Graph.VERTEX_SORT.LEAST, weighted: true });
     cycles.forEach(cycle => {
       const poly = WallTracer.cycleToPolygon(cycle);
       this.cyclePolygonsQuadtree.insert({ r: poly.getBounds(), t: poly });
@@ -637,7 +637,7 @@ export class WallTracer extends Graph {
   /**
    * For a given polygon, find all polygons that could be holes within it.
    * @param {PIXI.Polygon} encompassingPolygon
-   * @returns {Set<PIXI.Polygon>}
+   * @returns {encompassingPolygon: {PIXI.Polygon}, holes: {Set<PIXI.Polygon>}}
    */
   _encompassingPolygonsWithHoles(origin, type) {
     const encompassingPolygons = this.encompassingPolygons(origin, type);
@@ -652,7 +652,6 @@ export class WallTracer extends Graph {
     };
 
     const holes = this.cyclePolygonsQuadtree.getObjects(encompassingPolygon.getBounds(), { collisionTest });
-
     return { encompassingPolygon, holes };
   }
 
