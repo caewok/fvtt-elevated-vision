@@ -101,61 +101,6 @@ So northern hemisphere is negative, southern is positive.
 0 --> -π moves from east to west counterclockwise.
 */
 
-let SCENE_GRAPH;
-
-// Track wall creation, update, and deletion, constructing WallTracerEdges as we go.
-Hooks.on("createWall", function(document, _options, _userId) {
-  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
-
-  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
-  log(`createWall ${document.id}`);
-
-  // Build the edges for this wall.
-  SCENE_GRAPH.addWall(document.object);
-});
-
-Hooks.on("updateWall", function(document, changes, _options, _userId) {
-  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
-
-  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
-  log("updateWall");
-
-  // Only update the edges if the coordinates have changed.
-  if ( !Object.hasOwn(changes, "c") ) return;
-
-  // Easiest approach is to trash the edges for the wall and re-create them.
-  SCENE_GRAPH.removeWall(document.id);
-  SCENE_GRAPH.addWall(document.object);
-});
-
-Hooks.on("deleteWall", function(document, _options, _userId) {
-  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
-
-  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
-  log(`deleteWall ${document.id}`);
-
-  // The document.object is now null; use the id to remove the wall.
-  SCENE_GRAPH.removeWall(document.id);
-  return true;
-});
-
-Hooks.on("canvasReady", async function() {
-  if ( !getSetting(SETTINGS.CLOCKWISE_SWEEP) ) return;
-
-  const debug = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
-  log("canvasReady");
-
-  const t0 = performance.now();
-
-  // When canvas is ready, the existing walls are not created, so must re-do here.
-  SCENE_GRAPH = new WallTracer();
-  const walls = [...canvas.walls.placeables] ?? [];
-  walls.push(...canvas.walls.outerBounds);
-  walls.push(...canvas.walls.innerBounds);
-  for ( const wall of walls ) SCENE_GRAPH.addWall(wall);
-  const t1 = performance.now();
-  log(`Tracked ${walls.length} walls in ${t1 - t0} ms.`);
-});
 
 // Wall Tracer tracks all edges and vertices that make up walls/wall intersections.
 
@@ -446,7 +391,7 @@ export class WallTracer extends Graph {
   wallEdges = new Map();
 
   /** @type {CanvasQuadtree} */
-  quadtree = new CanvasQuadtree();
+  edgesQuadtree = new CanvasQuadtree();
 
   /**
    * @type {object}
@@ -454,10 +399,16 @@ export class WallTracer extends Graph {
    * @property {PIXI.Polygons} most
    * @property {PIXI.Polygons} combined
    */
-  cyclePolygons = {
-    least: [],
-    most: [],
-    combined: []
+  cyclePolygonsQuadtree = new CanvasQuadtree();
+
+  /**
+   * Clear all cached edges, etc. used in the graph.
+   */
+  clear() {
+    this.edgesQuadtree.clear();
+    this.cyclePolygonsQuadtree.clear();
+    this.wallEdges.clear();
+    super.clear();
   }
 
   /**
@@ -469,7 +420,7 @@ export class WallTracer extends Graph {
   addEdge(edge) {
     edge = super.addEdge(edge);
     const bounds = edge.bounds;
-    this.quadtree.insert({ r: bounds, t: edge });
+    this.edgesQuadtree.insert({ r: bounds, t: edge });
     return edge;
   }
 
@@ -478,7 +429,7 @@ export class WallTracer extends Graph {
    * @param {GraphEdge} edge
    */
   deleteEdge(edge) {
-    this.quadtree.remove(edge);
+    this.edgesQuadtree.remove(edge);
     super.deleteEdge(edge);
   }
 
@@ -567,7 +518,7 @@ export class WallTracer extends Graph {
     const { A, B } = wall;
     const collisions = [];
     const collisionTest = (o, _rect) => segmentsOverlap(A, B, o.t.A, o.t.B);
-    const collidingEdges = this.quadtree.getObjects(wall.bounds, { collisionTest });
+    const collidingEdges = this.edgesQuadtree.getObjects(wall.bounds, { collisionTest });
     for ( const edge of collidingEdges ) {
       const collision = edge.findWallCollision(wall);
       if ( collision ) collisions.push(collision);
@@ -633,25 +584,112 @@ export class WallTracer extends Graph {
   }
 
   /**
-   * Update the cached cycle polygons
+   * Update the quadtree of cycle polygons
    */
   updateCyclePolygons() {
-    const cyclesLeast = this.getAllCycles({ sortType: Graph.VERTEX_SORT.LEAST, weighted: true })
-    const cyclesMost = this.getAllCycles({ sortType: Graph.VERTEX_SORT.MOST, weighted: true })
-    const cyclePolygons = this.cyclePolygons;
-
-    cyclePolygons.least = cyclesLeast.map(cycle => WallTracer.cycleToPolygon(cycle));
-    cyclePolygons.most = cyclesMost.map(cycle => WallTracer.cycleToPolygon(cycle));
-    cyclePolygons.combined = [...cyclePolygons.least];
-
-    const seenPolys = new Set(cyclePolygons.least.map(poly => poly.key))
-    for ( const polyMost of cyclePolygons.most ) {
-      const key = polyMost.key;
-      if ( seenPolys.has(key) ) continue;
-      seenPolys.add(key);
-      cyclePolygons.combined.push(polyMost);
-    }
+    // Least, most, none are perform similarly. Most might be a bit faster
+    // (The sort can sometimes mean none is faster, but not always)
+    // Weighting by distance hurts performance.
+    this.cyclePolygonsQuadtree.clear();
+    const cycles = this.getAllCycles({ sortType: Graph.VERTEX_SORT.MOST, weighted: false });
+    cycles.forEach(cycle => {
+      const poly = WallTracer.cycleToPolygon(cycle);
+      this.cyclePolygonsQuadtree.insert({ r: poly.getBounds(), t: poly });
+    });
   }
+
+  /**
+   * For a given origin point, find all polygons that encompass it.
+   * Then narrow to the one that has the smallest area.
+   * @param {Point} origin
+   * @param {CONST.WALL_RESTRICTION_TYPES} [type]   Limit to polygons that are CONST.WALL_SENSE_TYPES.NORMAL
+   *                                                for the given type
+   * @returns {PIXI.Polygon|null}
+   */
+  encompassingPolygon(origin, type) {
+    const encompassingPolygons = this.encompassingPolygons(origin, type);
+    return this.smallestPolygon(encompassingPolygons);
+  }
+
+  encompassingPolygons(origin, type) {
+    const bounds = new PIXI.Rectangle(origin.x - 1, origin.y -1, 2, 2);
+    let encompassingPolygons = this.cyclePolygonsQuadtree.getObjects(bounds);
+
+    if ( type ) encompassingPolygons = encompassingPolygons.filter(poly =>
+      poly._wallTracerData.restrictionTypes[type] === CONST.WALL_SENSE_TYPES.NORMAL);
+
+    return encompassingPolygons;
+  }
+
+  smallestPolygon(polygons) {
+    const res = polygons.reduce((acc, curr) => {
+      const area = curr.area;
+      if ( area < acc.area ) {
+        acc.area = area;
+        acc.poly = curr;
+      }
+      return acc;
+    }, { area: Number.POSITIVE_INFINITY, poly: null})
+
+    return res.poly;
+  }
+
+  /**
+   * For a given polygon, find all polygons that could be holes within it.
+   * @param {PIXI.Polygon} encompassingPolygon
+   * @returns {Set<PIXI.Polygon>}
+   */
+  _encompassingPolygonsWithHoles(origin, type) {
+    const encompassingPolygons = this.encompassingPolygons(origin, type);
+    const encompassingPolygon = this.smallestPolygon(encompassingPolygons);
+
+    // Looking for all polygons that are not encompassing but do intersect with or are contained by
+    // the encompassing polygon.
+    const collisionTest = (o, _rect) => {
+      const poly = o.t;
+      if ( encompassingPolygons.some(ep => ep.equals(poly)) ) return false;
+      return poly.overlaps(encompassingPolygon);
+    };
+
+    const holes = this.cyclePolygonsQuadtree.getObjects(encompassingPolygon.getBounds(), { collisionTest });
+
+    return { encompassingPolygon, holes };
+  }
+
+  /**
+   * Build the representation of a polygon that encompasses the origin point,
+   * along with any holes for that encompassing polygon.
+   * @param {Point} origin
+   * @returns {PIXI.Polygon[]}
+   */
+  encompassingPolygonWithHoles(origin) {
+    const { encompassingPolygon, holes } = this._encompassingPolygonsWithHoles(origin, type);
+    if ( !encompassingPolygon ) return [];
+    if ( !holes.size ) return [encompassingPolygon];
+
+    // Union the holes
+    const paths = ClipperPaths.fromPolygons(holes);
+    const combined = paths.combine();
+
+    // Diff the encompassing polygon against the holes
+    const diffPath = combined.diffPolygon(encompassingPolygon);
+    return diffPath.toPolygons();
+  }
+
+}
+
+/**
+ * Test if at least one of a polygon is contained within another polygon
+ * @param {PIXI.Polygon} encompassingPolygon
+ * @param {PIXI.Polygon} other
+ * @return {boolean}
+ */
+function polygonPartiallyContained(encompassingPolygon, other) {
+  const pts = other.iteratePoints({close: false});
+  for ( const pt of pts ) {
+    if ( encompassingPolygon.contains(pt) ) return true;
+  }
+  return false;
 }
 
 /**
@@ -710,3 +748,53 @@ function findOverlappingPoints(a, b, c, d) {
 
   return [];
 }
+
+// Must declare this variable after defining WallTracer.
+export const SCENE_GRAPH = new WallTracer();
+
+// Track wall creation, update, and deletion, constructing WallTracerEdges as we go.
+Hooks.on("createWall", function(document, _options, _userId) {
+  log(`createWall ${document.id}`);
+
+  // Build the edges for this wall.
+  SCENE_GRAPH.addWall(document.object);
+  SCENE_GRAPH.updateCyclePolygons();
+});
+
+Hooks.on("updateWall", function(document, changes, _options, _userId) {
+  log("updateWall");
+
+  // Only update the edges if the coordinates have changed.
+  if ( !Object.hasOwn(changes, "c") ) return;
+
+  // Easiest approach is to trash the edges for the wall and re-create them.
+  SCENE_GRAPH.removeWall(document.id);
+  SCENE_GRAPH.addWall(document.object);
+  SCENE_GRAPH.updateCyclePolygons();
+});
+
+Hooks.on("deleteWall", function(document, _options, _userId) {
+  log(`deleteWall ${document.id}`);
+
+  // The document.object is now null; use the id to remove the wall.
+  SCENE_GRAPH.removeWall(document.id);
+  SCENE_GRAPH.updateCyclePolygons();
+  return true;
+});
+
+Hooks.on("canvasReady", async function() {
+  log("canvasReady");
+
+  const t0 = performance.now();
+
+  // When canvas is ready, the existing walls are not created, so must re-do here.
+  SCENE_GRAPH.clear();
+  const walls = [...canvas.walls.placeables] ?? [];
+  walls.push(...canvas.walls.outerBounds);
+  walls.push(...canvas.walls.innerBounds);
+  for ( const wall of walls ) SCENE_GRAPH.addWall(wall);
+  const t1 = performance.now();
+  SCENE_GRAPH.updateCyclePolygons();
+  const t2 = performance.now();
+  log(`Tracked ${walls.length} walls in ${t1 - t0} ms. Updated polygons in ${t2 - t1} ms. Total ${t2 - t0} ms`);
+});

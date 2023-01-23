@@ -20,7 +20,7 @@ import { FILOQueue } from "./FILOQueue.js";
 import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { ElevationGrid } from "./ElevationGrid.js";
-import { WallTracerEdge, WallTracerVertex, WallTracer } from "./WallTracer.js";
+import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches } from "./patching.js";
@@ -52,7 +52,8 @@ Hooks.once("init", function() {
     FILOQueue,
     WallTracerEdge,
     WallTracerVertex,
-    WallTracer
+    WallTracer,
+    SCENE_GRAPH
   };
 
   // These methods need to be registered early
