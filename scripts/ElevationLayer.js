@@ -28,7 +28,7 @@ import {
 
 import { Draw } from "./geometry/Draw.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
-import { WallTracer } from "./WallTracer.js";
+import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
 import { isTokenOnGround, tokenTileElevation, tokenElevationAt } from "./tokens.js";
@@ -960,8 +960,7 @@ export class ElevationLayer extends InteractionLayer {
     */
 
     log(`Attempting fill at { x: ${origin.x}, y: ${origin.y} } with elevation ${elevation}`);
-    const wt = new WallTracer(origin);
-    const polys = wt.encompassingPolygonWithHoles(origin);
+    const polys = SCENE_GRAPH.encompassingPolygonWithHoles(origin);
     if ( !polys.length ) {
       // Shouldn't happen, but...
       ui.notifications.warn(`Sorry; cannot locate a closed boundary for the requested fill at { x: ${origin.x}, y: ${origin.y} }!`);
