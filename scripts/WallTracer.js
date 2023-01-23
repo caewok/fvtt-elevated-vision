@@ -637,6 +637,8 @@ export class WallTracer extends Graph {
   /**
    * For a given polygon, find all polygons that could be holes within it.
    * @param {PIXI.Polygon} encompassingPolygon
+   * @param {CONST.WALL_RESTRICTION_TYPES} [type]   Limit to polygons that are CONST.WALL_SENSE_TYPES.NORMAL
+   *                                                for the given type
    * @returns {encompassingPolygon: {PIXI.Polygon}, holes: {Set<PIXI.Polygon>}}
    */
   _encompassingPolygonsWithHoles(origin, type) {
@@ -659,9 +661,11 @@ export class WallTracer extends Graph {
    * Build the representation of a polygon that encompasses the origin point,
    * along with any holes for that encompassing polygon.
    * @param {Point} origin
+   * @param {CONST.WALL_RESTRICTION_TYPES} [type]   Limit to polygons that are CONST.WALL_SENSE_TYPES.NORMAL
+   *                                                for the given type
    * @returns {PIXI.Polygon[]}
    */
-  encompassingPolygonWithHoles(origin) {
+  encompassingPolygonWithHoles(origin, type) {
     const { encompassingPolygon, holes } = this._encompassingPolygonsWithHoles(origin, type);
     if ( !encompassingPolygon ) return [];
     if ( !holes.size ) return [encompassingPolygon];
