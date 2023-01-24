@@ -12,7 +12,11 @@ ClockwiseSweepPolygon
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
-import { defaultOptionsAmbientSoundConfig } from "./renderConfig.js";
+import {
+  defaultOptionsAmbientSoundConfig,
+  getDataTileConfig,
+  _onChangeInputTileConfig
+} from "./renderConfig.js";
 
 import {
   _refreshToken,
@@ -40,7 +44,6 @@ import {
   _updateLosGeometryVisionSource,
   _createEVMeshVisionSourcePV,
   _createEVMeshLightSourcePV
-
 } from "./vision.js";
 
 import {
@@ -160,6 +163,8 @@ export function registerPatches() {
 
   // ----- Rendering configurations ----- //
   libWrapper.register(MODULE_ID, "AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig, libWrapper.WRAPPER);
+  libWrapper.register(MODULE_ID, "TileConfig.prototype.getData", getDataTileConfig, libWrapper.WRAPPER);
+  libWrapper.register(MODULE_ID, "TileConfig.prototype._onChangeInput", _onChangeInputTileConfig, libWrapper.WRAPPER);
 
   if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.NONE ) return;
 

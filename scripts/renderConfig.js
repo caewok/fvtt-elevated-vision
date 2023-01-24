@@ -58,3 +58,43 @@ export function defaultOptionsAmbientSoundConfig(wrapper) {
     height: "auto"
   });
 }
+
+/**
+ * Wrapper for TileConfig.prototype.getData.
+ * Add gridUnits value so units appear with the elevation setting.
+ */
+export function getDataTileConfig(wrapper, options={}) {
+  const data = wrapper(options);
+  data.gridUnits = canvas.scene.grid.units || game.i18n.localize("GridUnits");
+  return data;
+}
+
+/**
+ * Wrapper for TileConfig.prototype._onChangeInput.
+ * Link Levels bottom elevation with EV elevation of the tile
+ * If one changes, the other should change.
+ */
+export async function _onChangeInputTileConfig(wrapper, event) {
+  await wrapper(event);
+
+  // If EV elevation or levels bottom elevation updated, update the other.
+  // Update preview object
+  const fdo = new FormDataExtended(this.form).object;
+  if ( Object.hasOwn(fdo, "flags.elevatedvision.elevation") ) {
+    fdo["flags.levels.rangeBottom"] = fdo["flags.elevatedvision.elevation"];
+  } else if ( Object.hasOwn(fdo, "flags.levels.rangeBottom") ) {
+    fdo["flags.elevatedvision.elevation"] = fdo["flags.levels.rangeBottom"];
+  } else return;
+
+  // To allow a preview without glitches
+  fdo.width = Math.abs(fdo.width);
+  fdo.height = Math.abs(fdo.height);
+
+  // Handle tint exception
+  let tint = fdo["texture.tint"];
+  if ( !foundry.data.validators.isColorString(tint) ) fdo["texture.tint"] = null;
+
+  // Update preview object
+  foundry.utils.mergeObject(this.document, foundry.utils.expandObject(fdo));
+  this.document.object.refresh();
+}
