@@ -537,6 +537,10 @@ export class WallTracer extends Graph {
    * @property {number} _wallTracerData.restrictionTypes.sight
    * @property {number} _wallTracerData.restrictionTypes.sound
    * @property {number} _wallTracerData.restrictionTypes.move
+   * @property {object} _wallTracerData.height
+   * @property {number} _wallTracerData.height.min
+   * @property {number} _wallTracerData.height.max
+   * @property {number} _wallTracerData.hasOneWay
    */
 
   /**
@@ -556,7 +560,12 @@ export class WallTracer extends Graph {
       sight: CONST.WALL_SENSE_TYPES.NORMAL,
       sound: CONST.WALL_SENSE_TYPES.NORMAL,
       move: CONST.WALL_SENSE_TYPES.NORMAL
-    }
+    };
+    const height = {
+      min: Number.NEGATIVE_INFINITY,
+      max: Number.POSITIVE_INFINITY
+    };
+    let hasOneWay = false;
 
     let vertex = cycle[nVertices - 1];
     for ( let i = 0; i < nVertices; i += 1 ) {
@@ -574,12 +583,18 @@ export class WallTracer extends Graph {
       restrictionTypes.sound = Math.min(restrictionTypes.sound, doc.sound);
       restrictionTypes.move = Math.min(restrictionTypes.move, doc.move);
 
+      const minmax = Math.minMax(height.min, height.max, wall.topZ, wall.bottomZ);
+      height.min = minmax.min;
+      height.max = minmax.max;
+
+      hasOneWay ||= doc.dir;
+
       vertex = nextVertex;
     }
 
     const poly = new PIXI.Polygon(points);
     poly.clean();
-    poly._wallTracerData = { wallSet, restrictionTypes };
+    poly._wallTracerData = { wallSet, restrictionTypes, height, hasOneWay };
     return poly;
   }
 
@@ -612,11 +627,28 @@ export class WallTracer extends Graph {
   }
 
   encompassingPolygons(origin, type) {
+    origin.z ??= 0;
     const bounds = new PIXI.Rectangle(origin.x - 1, origin.y -1, 2, 2);
     let encompassingPolygons = this.cyclePolygonsQuadtree.getObjects(bounds);
 
-    if ( type ) encompassingPolygons = encompassingPolygons.filter(poly =>
-      poly._wallTracerData.restrictionTypes[type] === CONST.WALL_SENSE_TYPES.NORMAL);
+    if ( type ) encompassingPolygons = encompassingPolygons.filter(poly => {
+      const wallData = poly._wallTracerData;
+
+      if ( wallData.restrictionTypes[type] !== CONST.WALL_SENSE_TYPES.NORMAL
+        || wallData.height.max < origin.z
+        || wallData.height.min > origin.z ) return false;
+
+      if ( !wallData.hasOneWay ) return true;
+
+      // Confirm that each wall is blocking from the origin
+      for ( const wall of wallData.wallSet ) {
+        if ( !wallData.dir ) continue;
+        const side = wall.orientPoint(this.origin);
+        if ( side === wall.document.dir ) return false;
+
+      }
+      return true;
+    });
 
     return encompassingPolygons;
   }
