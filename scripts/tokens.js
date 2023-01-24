@@ -113,9 +113,10 @@ export function tokenTileElevation(token, position = { x: token.x, y: token.y })
   if ( !tiles.size ) return null;
 
   for ( const tile of tiles ) {
-    // If using Levels, prefer the bottom of the token range
-    const tileE = tile.document.flags?.levels?.rangeBottom ?? tile.document.elevation;
-    if ( tokenE.almostEqual(tileE) ) return tileE;
+    // In theory, the elevation flag should get updated if the levels bottom is changed, but...
+    const tileE = tile.document.flags?.elevatedvision?.elevation
+      ?? tile.document.flags?.levels?.rangeBottom ?? Number.NEGATIVE_INFINITY;
+    if ( isFinite(tileE) && tokenE.almostEqual(tileE) ) return tileE;
   }
   return null;
 }

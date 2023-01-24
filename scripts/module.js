@@ -11,7 +11,7 @@ import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
 
 // Rendering configs
-import { renderAmbientLightConfigHook, renderAmbientSoundConfigHook } from "./renderAmbientConfig.js";
+import { renderAmbientLightConfigHook, renderAmbientSoundConfigHook, renderTileConfigHook } from "./renderConfig.js";
 
 // API imports
 import * as util from "./util.js";
@@ -206,3 +206,4 @@ function updateTileHook(document, change, options, userId) {
 
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
 Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
+Hooks.on("renderTileConfig", renderTileConfigHook);
