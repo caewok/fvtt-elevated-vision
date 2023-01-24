@@ -19,6 +19,8 @@ export const SETTINGS = {
   VISION_USE_SHADER: "vision-use-shader",  // Deprecated
   AUTO_ELEVATION: "auto-change-elevation",
   AUTO_AVERAGING: "auto-change-elevation.averaging",
+  CLOCKWISE_SWEEP: "enhance-cw-sweep",
+
   WELCOME_DIALOG: {
     v020: "welcome-dialog-v0-20"
   }
@@ -82,10 +84,22 @@ export function registerSettings() {
     requiresReload: false
   });
 
+  game.settings.register(MODULE_ID, SETTINGS.CLOCKWISE_SWEEP, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.CLOCKWISE_SWEEP}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.CLOCKWISE_SWEEP}.hint`),
+    scope: "world",
+    config: true,
+    default: false,
+    requiresReload: true,
+    type: Boolean
+  })
+
   game.settings.register(MODULE_ID, SETTINGS.WELCOME_DIALOG.v020, {
     scope: "world",
     config: false,
     default: false,
     type: Boolean
   });
+
+
 }

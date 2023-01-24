@@ -1,3 +1,10 @@
+## 0.3.3
+Much improved fill algorithm.
+Fix for terrain wall shadows when rendering using Polygons or WebGL.
+Ignore tiles with infinite elevation when setting token elevations. Allow GM to set the tile elevation in the tile config, which will override the terrain elevation at that point.
+
+Experimental speed-up to vision/lighting/sound rendering when the source is contained in a closed set of walls. Uses the fill algorithm to identify closed polygonal areas, speeding up the clockwise sweep.
+
 ## 0.3.2
 Update to geometry lib v0.1.1.
 

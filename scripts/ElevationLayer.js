@@ -28,7 +28,7 @@ import {
 
 import { Draw } from "./geometry/Draw.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
-import { WallTracer } from "./WallTracer.js";
+import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
 import { isTokenOnGround, tokenTileElevation, tokenElevationAt } from "./tokens.js";
@@ -959,90 +959,17 @@ export class ElevationLayer extends InteractionLayer {
 
     */
 
-    log(`Attempting fill at ${origin.x},${origin.y} with elevation ${elevation}`);
-
-    let wallTracerMap = WallTracer.constructWallTracerMap(origin);
-    let wallTracerSet = new Set(wallTracerMap.values());
-
-    let useInnerBounds = canvas.dimensions.sceneRect.contains(origin.x, origin.y);
-    let boundaries = useInnerBounds
-      ? canvas.walls.innerBounds : canvas.walls.outerBounds;
-    let dest = { x: useInnerBounds ? canvas.dimensions.sceneX : 0, y: origin.y };
-    let candidateIxs = this._getAllWallCollisions(origin, dest, "sorted");
-    let westWall = boundaries.find(b => b.id.toLowerCase().includes("left"));
-    candidateIxs.push({wall: westWall});
-
-
-    let candidateLn = candidateIxs.length;
-    let closedBoundary;
-    for ( let i = 0; i < candidateLn; i += 1 ) {
-      log(`Fill iteration ${i}`);
-
-      let startingWall = wallTracerMap.get(candidateIxs[i].wall);
-      let ccw = startingWall.orderedEndpoints.ccw;
-      /* Debug
-      drawSegment(startingWall)
-      drawPoint(ccw, {color: COLORS.black})
-      startingEndpoint = ccw
-      startingIx = candidateIxs[i]
-      */
-      closedBoundary = this._testForClosedBoundaryWalls(
-        startingWall,
-        ccw,
-        wallTracerMap,
-        wallTracerSet,
-        candidateIxs[i]);
-      if ( closedBoundary ) break;
-    }
-
-    // Shouldn't happen, but...
-    if ( !closedBoundary ) {
-      console.warn(`No closed boundary found for fill at ${origin.x},${origin.y}`);
+    log(`Attempting fill at { x: ${origin.x}, y: ${origin.y} } with elevation ${elevation}`);
+    const polys = SCENE_GRAPH.encompassingPolygonWithHoles(origin);
+    if ( !polys.length ) {
+      // Shouldn't happen, but...
+      ui.notifications.warn(`Sorry; cannot locate a closed boundary for the requested fill at { x: ${origin.x}, y: ${origin.y} }!`);
       return;
     }
 
-    log("closedBoundary", closedBoundary);
-
-    // Test for holes
-    // Holes must have walls entirely contained by the boundary.
-    // (If the "hole" intersected the boundary, then the boundary would have included part
-    //  of the "hole.")
-    const holes = [];
-    const collisionTest = (o, rect) => closedBoundary.isSegmentEnclosed(o.t); // eslint-disable-line no-unused-vars
-    const enclosingBounds = closedBoundary.getBounds();
-    const enclosedWallsSet = canvas.walls.quadtree.getObjects(enclosingBounds, {collisionTest});
-
-    for ( const wall of enclosedWallsSet ) {
-      const wt = wallTracerMap.get(wall);
-      if ( !wallTracerSet.has(wt) ) continue;
-
-      let holeBoundary = this._testForClosedBoundaryWalls(
-        wt,
-        wt.A,
-        wallTracerMap,
-        wallTracerSet);
-
-      // If the holeBoundary not found, we need to try in the opposite direction.
-      holeBoundary ||= this._testForClosedBoundaryWalls(
-        wt,
-        wt.B,
-        wallTracerMap,
-        wallTracerSet);
-
-      if ( holeBoundary ) holes.push(holeBoundary);
-    }
-
-    log("holes", holes);
-
-    // Clean the boundary and holes
-    // Basically the same technique as constructing shadows
-    const combinedFill = combineBoundaryPolygonWithHoles(closedBoundary, holes);
-
-    log("combinedFill", combinedFill);
-
     // Create the graphics representing the fill!
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
-    drawPolygonWithHoles(combinedFill, { graphics, fillColor: this.elevationHex(elevation) });
+    drawPolygonWithHoles(polys, { graphics, fillColor: this.elevationHex(elevation) });
 
     this.renderElevation();
 
@@ -1213,11 +1140,12 @@ export class ElevationLayer extends InteractionLayer {
   _drawWallSegment(wall) {
     const g = new PIXI.Graphics();
     const draw = new Draw(g);
-    const color = Draw.COLORS.red
+    const color = wall.isOpen ? Draw.COLORS.blue : Draw.COLORS.red
+    const alpha = wall.isOpen ? 0.5 : 1;
 
-    draw.segment(wall, { color });
-    draw.point(wall.A, { color });
-    draw.point(wall.B, { color });
+    draw.segment(wall, { color, alpha });
+    draw.point(wall.A, { color: Draw.COLORS.red });
+    draw.point(wall.B, { color: Draw.COLORS.red });
     this._wallDataContainer.addChild(g);
   }
 

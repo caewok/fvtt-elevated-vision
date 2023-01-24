@@ -12,7 +12,11 @@ ClockwiseSweepPolygon
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
-import { defaultOptionsAmbientSoundConfig } from "./renderAmbientConfig.js";
+import {
+  defaultOptionsAmbientSoundConfig,
+  getDataTileConfig,
+  _onChangeInputTileConfig
+} from "./renderConfig.js";
 
 import {
   _refreshToken,
@@ -40,12 +44,12 @@ import {
   _updateLosGeometryVisionSource,
   _createEVMeshVisionSourcePV,
   _createEVMeshLightSourcePV
-
 } from "./vision.js";
 
 import {
   _computeClockwiseSweepPolygon,
-  _drawShadowsClockwiseSweepPolygon
+  _drawShadowsClockwiseSweepPolygon,
+  initializeClockwiseSweepPolygon
 } from "./clockwise_sweep.js";
 
 // A: shader / not shader
@@ -159,6 +163,8 @@ export function registerPatches() {
 
   // ----- Rendering configurations ----- //
   libWrapper.register(MODULE_ID, "AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig, libWrapper.WRAPPER);
+  libWrapper.register(MODULE_ID, "TileConfig.prototype.getData", getDataTileConfig, libWrapper.WRAPPER);
+  libWrapper.register(MODULE_ID, "TileConfig.prototype._onChangeInput", _onChangeInputTileConfig, libWrapper.WRAPPER);
 
   if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.NONE ) return;
 
@@ -194,4 +200,8 @@ export function registerPatches() {
       break;
   }
 
+  // ----- Clockwise sweep enhancements ----- //
+  if ( getSetting(SETTINGS.CLOCKWISE_SWEEP) ) {
+    libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype.initialize", initializeClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
+  }
 }

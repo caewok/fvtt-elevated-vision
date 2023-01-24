@@ -10,19 +10,17 @@ renderTemplate
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
 
-
-
 // Rendering configs
-import { renderAmbientLightConfigHook, renderAmbientSoundConfigHook } from "./renderAmbientConfig.js";
+import { renderAmbientLightConfigHook, renderAmbientSoundConfigHook, renderTileConfigHook } from "./renderConfig.js";
 
 // API imports
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
-import { WallTracer } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { ElevationGrid } from "./ElevationGrid.js";
+import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches } from "./patching.js";
@@ -49,10 +47,13 @@ Hooks.once("init", function() {
     extract,
     ElevationLayer,
     ElevationGrid,
-    WallTracer,
     ShadowShader,
     ShadowShaderNoRadius,
-    FILOQueue
+    FILOQueue,
+    WallTracerEdge,
+    WallTracerVertex,
+    WallTracer,
+    SCENE_GRAPH
   };
 
   // These methods need to be registered early
@@ -205,3 +206,4 @@ function updateTileHook(document, change, options, userId) {
 
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
 Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
+Hooks.on("renderTileConfig", renderTileConfigHook);
