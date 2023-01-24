@@ -676,6 +676,7 @@ export class WallTracer extends Graph {
   _encompassingPolygonsWithHoles(origin, type) {
     const encompassingPolygons = this.encompassingPolygons(origin, type);
     const encompassingPolygon = this.smallestPolygon(encompassingPolygons);
+    if ( !encompassingPolygon ) return { encompassingPolygon, holes: [] };
 
     // Looking for all polygons that are not encompassing but do intersect with or are contained by
     // the encompassing polygon.
