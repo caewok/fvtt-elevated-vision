@@ -35,5 +35,12 @@
 
   "elevatedvision.ambientconfig.legendtitle": "Elevated Vision",
   "elevatedvision.ambientconfig.elevation.name": "Elevation",
-  "elevatedvision.ambientconfig.elevation.hint": "Elevation of this source."
+  "elevatedvision.ambientconfig.elevation.hint": "Elevation of this source.",
+
+  "elevatedvision.tileconfig.legendtitle": "Elevated Vision",
+  "elevatedvision.tileconfig.elevation.name": "Elevation",
+  "elevatedvision.tileconfig.elevation.hint": "Elevation of this tile. If Levels module is active, this will be linked to the bottom tile elevation for Levels.",
+  "elevatedvision.tileconfig.adjustToken.name": "Adjust token elevations",
+  "elevatedvision.tileconfig.adjustToken.hint": "Should this tile be used to adjust token elevations on the canvas? If checked, the tile will override the terrain elevation if the token is on or above the tile."
+
 }

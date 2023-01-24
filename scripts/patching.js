@@ -12,7 +12,7 @@ ClockwiseSweepPolygon
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
-import { defaultOptionsAmbientSoundConfig } from "./renderAmbientConfig.js";
+import { defaultOptionsAmbientSoundConfig } from "./renderConfig.js";
 
 import {
   _refreshToken,

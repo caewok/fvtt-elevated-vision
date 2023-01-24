@@ -27,6 +27,15 @@ export async function renderAmbientSoundConfigHook(app, html, data) {
 }
 
 /**
+ * Inject html to add controls to the tile configuration to allow user to set elevation.
+ */
+export async function renderTileConfigHook(app, html, data) {
+  const template = `modules/${MODULE_ID}/templates/elevatedvision-tile-config.html`;
+  const findString = "div[data-tab='basic']:last";
+  await injectConfiguration(app, html, data, template, findString);
+}
+
+/**
  * Helper to inject configuration html into the application config.
  */
 async function injectConfiguration(app, html, data, template, findString) {

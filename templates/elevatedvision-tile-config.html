@@ -1,0 +1,21 @@
+<fieldset>
+  <legend>{{ localize "elevatedvision.tileconfig.legendtitle" }}</legend>
+
+    <div class="form-group" id="elevatedvision-tileconfig-elevation">
+      <label>{{ localize "elevatedvision.tileconfig.elevation.name" }} <span class="units">({{gridUnits}})</span></label>
+      <div class="form-fields">
+        <input type="number" placeholder="Infinity" id="elevatedvisiontileconfig" name="flags.elevatedvision.elevation" class="elevatedvision" value={{ data.flags.elevatedvision.elevation }} />
+      </div>
+      <p class="hint">{{ localize "elevatedvision.tileconfig.elevation.hint" }}</p>
+    </div>
+
+    <div class="form-group" id="elevatedvision-tileconfig-adjustToken">
+      <label>{{ localize "elevatedvision.tileconfig.adjustToken.name" }} </label>
+      <div class="form-fields">
+        <input type="checkbox" name="flags.elevatedvision.adjustToken" {{ checked data.flags.elevatedvision.adjustToken }} />
+      </div>
+      <p class="hint">{{ localize "elevatedvision.tileconfig.adjustToken.hint" }}</p>
+    </div>
+
+  </legend>
+</fieldset>
