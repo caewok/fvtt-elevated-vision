@@ -71,7 +71,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   this._elevatedvision ??= {};
   this._elevatedvision.shadows = [];
-//   this._elevatedvision.terrainShadows = []; // debugging
+  this._elevatedvision.terrainShadows = []; // debugging
   this._elevatedvision.combinedShadows = [];
   this._elevatedvision.terrainWalls = new Set();
   this._elevatedvision.heightWalls = new Set();
@@ -117,7 +117,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
       blocking.delete(w);
 
       if ( blocking.size ) {
-        const shadowWPts = proj.constructShadowPointsForWall(w);
+        const shadowWPts = proj._constructShadowPointsForWallPoints(w._elevatedvision.wallPoints);
         if ( !shadowWPts.length ) continue;
         const shadowW = new Shadow(shadowWPts);
 
@@ -128,7 +128,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
           const shadowIX = shadowW.intersectPolygon(shadowBW)[0];
           if ( shadowIX && shadowIX.points.length > 5 ) {
             this._elevatedvision.shadows.push(shadowIX);
-//             this._elevatedvision.terrainShadows.push(shadowIX);
+            this._elevatedvision.terrainShadows.push(shadowIX);
           }
         }
       }

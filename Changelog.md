@@ -1,5 +1,8 @@
 ## 0.3.3
 Much improved fill algorithm.
+Fix for terrain wall shadows when rendering using Polygons or WebGL.
+
+Experimental speed-up to vision/lighting/sound rendering when the source is contained in a closed set of walls. Uses the fill algorithm to identify closed polygonal areas, speeding up the clockwise sweep.
 
 ## 0.3.2
 Update to geometry lib v0.1.1.
