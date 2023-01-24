@@ -628,8 +628,13 @@ export class WallTracer extends Graph {
 
   encompassingPolygons(origin, type) {
     origin.z ??= 0;
+
+
+    // Find those polygons that actually contain the origin.
+    // Start by using the bounds, then test containment.
     const bounds = new PIXI.Rectangle(origin.x - 1, origin.y -1, 2, 2);
-    let encompassingPolygons = this.cyclePolygonsQuadtree.getObjects(bounds);
+    const collisionTest = (o, _rect) => o.t.contains(origin.x, origin.y);
+    let encompassingPolygons = this.cyclePolygonsQuadtree.getObjects(bounds, { collisionTest });
 
     if ( type ) encompassingPolygons = encompassingPolygons.filter(poly => {
       const wallData = poly._wallTracerData;
@@ -676,6 +681,7 @@ export class WallTracer extends Graph {
   _encompassingPolygonsWithHoles(origin, type) {
     const encompassingPolygons = this.encompassingPolygons(origin, type);
     const encompassingPolygon = this.smallestPolygon(encompassingPolygons);
+    if ( !encompassingPolygon ) return { encompassingPolygon, holes: [] };
 
     // Looking for all polygons that are not encompassing but do intersect with or are contained by
     // the encompassing polygon.
