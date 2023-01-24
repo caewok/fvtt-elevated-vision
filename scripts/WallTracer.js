@@ -791,6 +791,8 @@ export const SCENE_GRAPH = new WallTracer();
 Hooks.on("createWall", function(document, _options, _userId) {
   log(`createWall ${document.id}`);
 
+  if ( document.object.isOpen ) return;
+
   // Build the edges for this wall.
   SCENE_GRAPH.addWall(document.object);
   SCENE_GRAPH.updateCyclePolygons();
@@ -800,11 +802,13 @@ Hooks.on("updateWall", function(document, changes, _options, _userId) {
   log("updateWall");
 
   // Only update the edges if the coordinates have changed.
-  if ( !Object.hasOwn(changes, "c") ) return;
+  if ( !(Object.hasOwn(changes, "c") || Object.hasOwn(changes, "ds")) ) return;
 
   // Easiest approach is to trash the edges for the wall and re-create them.
   SCENE_GRAPH.removeWall(document.id);
-  SCENE_GRAPH.addWall(document.object);
+
+  // Only add the wall if it is not open
+  if ( !document.object.isOpen) SCENE_GRAPH.addWall(document.object);
   SCENE_GRAPH.updateCyclePolygons();
 });
 
@@ -824,9 +828,11 @@ Hooks.on("canvasReady", async function() {
 
   // When canvas is ready, the existing walls are not created, so must re-do here.
   SCENE_GRAPH.clear();
-  const walls = [...canvas.walls.placeables] ?? [];
+  let walls = [...canvas.walls.placeables] ?? [];
   walls.push(...canvas.walls.outerBounds);
   walls.push(...canvas.walls.innerBounds);
+  walls = walls.filter(w => !w.isOpen);
+
   for ( const wall of walls ) SCENE_GRAPH.addWall(wall);
   const t1 = performance.now();
   SCENE_GRAPH.updateCyclePolygons();
