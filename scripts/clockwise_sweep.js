@@ -13,7 +13,7 @@ import { Shadow, ShadowProjection } from "./geometry/Shadow.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Plane } from "./geometry/3d/Plane.js";
 import { getSetting, SETTINGS } from "./settings.js";
-import { WallTracer } from "./WallTracer.js";
+import { SCENE_GRAPH } from "./WallTracer.js";
 
 /**
  * Wrap ClockwisePolygonSweep.prototype._identifyEdges
@@ -308,8 +308,6 @@ function filterPotentialBlockingWalls(wallPoints, wallArr, sourceOrigin) {
   return blockingWallPoints;
 }
 
-
-
 // ----- Wall Tracing Enhancements to Sweep ----- //
 /**
  * Wrap ClockwiseSweepPolygon.prototype.initialize.
@@ -319,15 +317,13 @@ function filterPotentialBlockingWalls(wallPoints, wallArr, sourceOrigin) {
  * @param {object} config
  */
 export function initializeClockwiseSweepPolygon(wrapper, origin, config) {
-  const wt = new WallTracer(origin)
-  const encompassingPoly = wt.encompassingPolygonWithTest(testWallInclusion, this.config.type);
-  if ( encompassingPoly ) {
+  const encompassingPolygon = SCENE_GRAPH.encompassingPolygon(origin, this.config.type);
+  if ( encompassingPolygon ) {
     config.boundaryShapes ||= [];
-    config.boundaryShapes.push(encompassingPoly);
+    config.boundaryShapes.push(encompassingPolygon);
   }
   wrapper(origin, config);
 }
-
 
 function testWallInclusion(wall, type) {
   // Ignore limited walls for this type

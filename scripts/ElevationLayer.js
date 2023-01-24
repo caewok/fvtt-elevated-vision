@@ -1140,11 +1140,12 @@ export class ElevationLayer extends InteractionLayer {
   _drawWallSegment(wall) {
     const g = new PIXI.Graphics();
     const draw = new Draw(g);
-    const color = Draw.COLORS.red
+    const color = wall.isOpen ? Draw.COLORS.blue : Draw.COLORS.red
+    const alpha = wall.isOpen ? 0.5 : 1;
 
-    draw.segment(wall, { color });
-    draw.point(wall.A, { color });
-    draw.point(wall.B, { color });
+    draw.segment(wall, { color, alpha });
+    draw.point(wall.A, { color: Draw.COLORS.red });
+    draw.point(wall.B, { color: Draw.COLORS.red });
     this._wallDataContainer.addChild(g);
   }
 

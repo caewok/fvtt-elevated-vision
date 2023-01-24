@@ -88,7 +88,7 @@ export function registerSettings() {
     name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.CLOCKWISE_SWEEP}.name`),
     hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.CLOCKWISE_SWEEP}.hint`),
     scope: "world",
-    config: false,
+    config: true,
     default: false,
     requiresReload: true,
     type: Boolean
