@@ -5,6 +5,8 @@ Ignore tiles with infinite elevation when setting token elevations. Allow GM to 
 
 Experimental speed-up to vision/lighting/sound rendering when the source is contained in a closed set of walls. Uses the fill algorithm to identify closed polygonal areas, speeding up the clockwise sweep.
 
+Update to geometry lib v0.1.2.
+
 ## 0.3.2
 Update to geometry lib v0.1.1.
 
