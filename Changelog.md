@@ -1,3 +1,6 @@
+## 0.3.5
+Fix for enhanced LOS when limited walls or walls with defined heights are present.
+
 ## 0.3.4
 Update to geometry lib v0.1.3.
 
