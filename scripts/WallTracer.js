@@ -562,8 +562,8 @@ export class WallTracer extends Graph {
       move: CONST.WALL_SENSE_TYPES.NORMAL
     };
     const height = {
-      min: Number.NEGATIVE_INFINITY,
-      max: Number.POSITIVE_INFINITY
+      min: Number.POSITIVE_INFINITY,
+      max: Number.NEGATIVE_INFINITY
     };
     let hasOneWay = false;
 
@@ -583,9 +583,8 @@ export class WallTracer extends Graph {
       restrictionTypes.sound = Math.min(restrictionTypes.sound, doc.sound);
       restrictionTypes.move = Math.min(restrictionTypes.move, doc.move);
 
-      const minmax = Math.minMax(height.min, height.max, wall.topZ, wall.bottomZ);
-      height.min = minmax.min;
-      height.max = minmax.max;
+      height.min = Math.min(height.min, wall.bottomZ)
+      height.max = Math.max(height.max, wall.topZ)
 
       hasOneWay ||= doc.dir;
 
@@ -628,7 +627,6 @@ export class WallTracer extends Graph {
 
   encompassingPolygons(origin, type) {
     origin.z ??= 0;
-
 
     // Find those polygons that actually contain the origin.
     // Start by using the bounds, then test containment.
@@ -807,14 +805,16 @@ Hooks.on("createWall", function(document, _options, _userId) {
 Hooks.on("updateWall", function(document, changes, _options, _userId) {
   log("updateWall");
 
-  // Only update the edges if the coordinates have changed.
-  if ( !(Object.hasOwn(changes, "c") || Object.hasOwn(changes, "ds")) ) return;
+  // Only update the edges if the coordinates have changed or the door setting has changed.
+  if ( Object.hasOwn(changes, "c") || Object.hasOwn(changes, "ds") ) {
+    // Easiest approach is to trash the edges for the wall and re-create them.
+    SCENE_GRAPH.removeWall(document.id);
 
-  // Easiest approach is to trash the edges for the wall and re-create them.
-  SCENE_GRAPH.removeWall(document.id);
+    // Only add the wall back if it is not open
+    if ( !document.object.isOpen) SCENE_GRAPH.addWall(document.object);
+  }
 
-  // Only add the wall if it is not open
-  if ( !document.object.isOpen) SCENE_GRAPH.addWall(document.object);
+  // Update the polygons regardless, in case a wall limitation or wall height has changed.
   SCENE_GRAPH.updateCyclePolygons();
 });
 
