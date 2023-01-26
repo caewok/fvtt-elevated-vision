@@ -317,7 +317,8 @@ function filterPotentialBlockingWalls(wallPoints, wallArr, sourceOrigin) {
  * @param {object} config
  */
 export function initializeClockwiseSweepPolygon(wrapper, origin, config) {
-  const encompassingPolygon = SCENE_GRAPH.encompassingPolygon(origin, this.config.type);
+  const sourceOrigin = config.source ? Point3d.fromPointSource(config.source) : new Point3d(origin.x, origin.y, 0);
+  const encompassingPolygon = SCENE_GRAPH.encompassingPolygon(sourceOrigin, config.type);
   if ( encompassingPolygon ) {
     config.boundaryShapes ||= [];
     config.boundaryShapes.push(encompassingPolygon);
