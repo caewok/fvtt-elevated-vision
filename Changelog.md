@@ -1,3 +1,6 @@
+## 0.3.4
+Update to geometry lib v0.1.3.
+
 ## 0.3.3
 Much improved fill algorithm. Closes #22.
 Fix for terrain wall shadows when rendering using Polygons or WebGL. Possibly fixes #37.
