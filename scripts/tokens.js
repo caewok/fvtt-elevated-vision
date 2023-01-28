@@ -157,16 +157,16 @@ function averageElevationForToken(x, y, w, h) {
 export function tokenTileGroundElevation(token, { position, useAveraging = false, selectedTile = {} } = {} ) {
   position ??= { x: token.center.x, y: token.center.y };
 
-  const tokenE = token.bottomZ;
+  const tokenZ = token.bottomZ;
   const bounds = token.bounds;
   bounds.x = position.x;
   bounds.y = position.y;
 
   // Filter tiles that potentially serve as ground.
-  const tiles = [...canvas.tiles.quadtree.getObjects(token.bounds)].filter(tile => {
+  const tiles = [...canvas.tiles.quadtree.getObjects(bounds)].filter(tile => {
     if ( !tile.document.isOverhead ) return false;
-    const e = tile.elevationZ;
-    return isFinite(e) && (e.almostEqual(tokenE) || e < tokenE);
+    const tileZ = tile.elevationZ;
+    return isFinite(tileZ) && (tileZ.almostEqual(tokenZ) || tileZ < tokenZ);
   });
 
   // Take the tiles in order, from the top.
