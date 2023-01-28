@@ -3,8 +3,11 @@ Hooks,
 game,
 canvas,
 CONFIG,
-renderTemplate
+renderTemplate,
+Dialog,
+ui
 */
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
@@ -39,7 +42,7 @@ import {
 
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, setSetting, registerSettings } from "./settings.js";
-import { isTokenOnGround, tokenElevationAt } from "./tokens.js";
+import { isTokenOnGround, tokenGroundElevation } from "./tokens.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
@@ -76,7 +79,7 @@ Hooks.once("setup", async function() {
 Hooks.once("ready", async function() {
   if ( !getSetting(SETTINGS.WELCOME_DIALOG.v020) ) {
 		Dialog.prompt({
-			title: 'Elevated Vision v0.2.0 Changes!',
+			title: "Elevated Vision v0.2.0 Changes!",
 			content: `
 <p>
 As of version 0.2.0, Elevated Vision no longer adjusts token visibility. You can install one or more of the
@@ -148,11 +151,12 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // esli
   if ( typeof changes.x === "undefined" && typeof changes.y === "undefined" ) return;
 
   const tokenOrigin = { x: tokenD.x, y: tokenD.y };
-  if ( !isTokenOnGround(tokenD.object, tokenOrigin) ) return;
+  if ( !isTokenOnGround(tokenD.object, { position: tokenOrigin }) ) return;
 
   const tokenDestination = { x: changes.x ? changes.x : tokenD.x, y: changes.y ? changes.y : tokenD.y };
-  const newTokenE = tokenElevationAt(tokenD.object, tokenDestination);
-  if ( tokenD.elevation !== newTokenE ) changes.elevation = tokenElevationAt(tokenD.object, tokenDestination);
+  const newTokenE = tokenGroundElevation(tokenD.object, { position: tokenDestination });
+  if ( tokenD.elevation !== newTokenE )
+    changes.elevation = tokenGroundElevation(tokenD.object, { position: tokenDestination });
   tokenD.object._elevatedVision.tokenAdjustElevation = true;
 });
 
@@ -176,7 +180,7 @@ async function injectSceneConfiguration(app, html, data) {
 Hooks.on("createTile", createTileHook);
 Hooks.on("updateTile", updateTileHook);
 
-function createTileHook(document, options, userId) {
+function createTileHook(document, _options, _userId) {
   if ( !canvas.elevation?._initialized ) return;
 
   const elevationMin = canvas.elevation.elevationMin;
@@ -190,7 +194,7 @@ function createTileHook(document, options, userId) {
   }
 }
 
-function updateTileHook(document, change, options, userId) {
+function updateTileHook(document, change, _options, _userId) {
   if ( !canvas.elevation?._initialized ) return;
 
   const elevationMin = canvas.elevation.elevationMin;

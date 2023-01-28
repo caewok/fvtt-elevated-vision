@@ -5,6 +5,7 @@ canvas
 
 import { log } from "./util.js";
 import { getSetting, SETTINGS } from "./settings.js";
+import { CanvasPixelValueMatrix } from "./pixel_values.js";
 
 /*
 Adjustments for token visibility.
@@ -55,7 +56,7 @@ export function _refreshToken(wrapper, options) {
   }
 
   // Adjust the elevation
-  this.document.elevation = tokenElevationAt(this, this.document);
+  this.document.elevation = tokenGroundElevation(this, { position: this.document });
 
   log(`token _refresh at ${this.document.x},${this.document.y} from ${this.position.x},${this.position.y} to elevation ${this.document.elevation}`, options, this);
 
@@ -86,61 +87,49 @@ export function cloneToken(wrapper) {
  * Determine whether a token is "on the ground", meaning that the token is in contact
  * with the ground layer according to elevation of the background terrain.
  * @param {Token} token
- * @param {Point} position    Position to use for the token position.
+ * @param {object} [options]
+ * @param {Point} [options.position]    Position to use for the token position.
  *   Should be a grid position (a token x,y).
  * @return {boolean}
  */
-export function isTokenOnGround(token, position) {
-  const currTerrainElevation = tokenElevationAt(token, position);
+export function isTokenOnGround(token, { position } = {}) {
+  const currTerrainElevation = tokenGroundElevation(token, { position });
   return currTerrainElevation.almostEqual(token.document?.elevation);
 }
 
 /**
- * Determine whether a token is "on a tile", meaning the token is at the elevation of the
- * bottom of a tile.
+ * Determine token elevation for a give canvas location
+ * Will be either the tile elevation, if the token is on the tile, or the terrain elevation.
  * @param {Token} token
- * @param {Point} position    Position to use for the token position.
- *   Should be a grid position (a token x,y). Defaults to current token position.
- * @return {number|null} Return the tile elevation or null otherwise.
+ * @param {object} [options]    Options that affect the calculation.
+ * @param {Point} [options.position]          Canvas coordinates to use for token position.
+ *                                            Defaults to token center.
+ * @param {boolean} [options.useAveraging]    Use averaging instead of exact center point of the token.
+ *                                            Defaults to SETTINGS.AUTO_AVERAGING.
+ * @param {boolean} [options.considerTiles]   First consider tiles under the token?
+ * @returns {number} Elevation in grid units.
  */
-export function tokenTileElevation(token, position = { x: token.x, y: token.y }) {
-  const tokenE = token.document.elevation;
-  const bounds = token.bounds;
-  bounds.x = position.x;
-  bounds.y = position.y;
-
-  const tiles = canvas.tiles.quadtree.getObjects(token.bounds);
-  if ( !tiles.size ) return null;
-
-  for ( const tile of tiles ) {
-    // In theory, the elevation flag should get updated if the levels bottom is changed, but...
-    const tileE = tile.document.flags?.elevatedvision?.elevation
-      ?? tile.document.flags?.levels?.rangeBottom ?? Number.NEGATIVE_INFINITY;
-    if ( isFinite(tileE) && tokenE.almostEqual(tileE) ) return tileE;
-  }
-  return null;
+export function tokenGroundElevation(token, { position, useAveraging, considerTiles = true } = {}) {
+  let elevation = null;
+  if ( considerTiles ) elevation = tokenTileGroundElevation(token, { position, useAveraging });
+  if ( elevation === null ) elevation = tokenTerrainGroundElevation(token, { position, useAveraging });
+  return elevation;
 }
 
 /**
- * Determine token elevation for a give grid position.
+ * Determine token elevation for a give canvas location
  * Will be either the tile elevation, if the token is on the tile, or the terrain elevation.
  * @param {Token} token
- * @param {Point} position     Position to use for the token position.
- *   Should be a grid position (a token x,y).
- * @param {object} [options]
- * @param {boolean} [useAveraging]    Use averaging versus use the exact center point of the token at the position.
- *   Defaults to the GM setting.
- * @param {boolean} [considerTiles]   If false, skip testing tile elevations; return the underlying terrain elevation.
+ * @param {object} [options]    Options that affect the calculation.
+ * @param {Point} [options.position]          Canvas coordinates to use for token position.
+ *                                            Defaults to token center.
+ * @param {boolean} [options.useAveraging]    se averaging instead of exact center point of the token.
+ *                                            Defaults to SETTINGS.AUTO_AVERAGING.
  * @returns {number} Elevation in grid units.
  */
-export function tokenElevationAt(token, position, {
-  useAveraging = getSetting(SETTINGS.AUTO_AVERAGING),
-  considerTiles = true } = {}) {
-
-  if ( considerTiles ) {
-    const tileE = tokenTileElevation(token, position);
-    if ( tileE !== null ) return tileE;
-  }
+export function tokenTerrainGroundElevation(token, { position, useAveraging } = {}) {
+  position ??= { x: token.x, y: token.y };
+  useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
 
   if ( useAveraging ) return averageElevationForToken(position.x, position.y, token.w, token.h);
 
@@ -151,4 +140,65 @@ export function tokenElevationAt(token, position, {
 function averageElevationForToken(x, y, w, h) {
   const tokenShape = canvas.elevation._tokenShape(x, y, w, h);
   return canvas.elevation.averageElevationWithinShape(tokenShape);
+}
+
+/**
+ * Determine ground elevation of a token, taking into account tiles.
+ * @param {Token} token
+ * @param {object} [options]          Options that affect the tile elevation calculation
+ * @param {Point} [options.position]  Position to use for the token position.
+ *                                    Should be a grid position (a token x,y).
+ *                                    Defaults to current token position.
+ * @param {boolean} [options.useAveraging]    Token at tileE only if 50% of the token is over the tile.
+ * @param {object} [options.selectedTile]     Object (can be empty) in which "tile" property will
+ *                                            be set to the tile found, if any. Primarily for debugging.
+ * @return {number|null} Return the tile elevation or null otherwise.
+ */
+export function tokenTileGroundElevation(token, { position, useAveraging = false, selectedTile = {} } = {} ) {
+  position ??= { x: token.center.x, y: token.center.y };
+
+  const tokenE = token.bottomZ;
+  const bounds = token.bounds;
+  bounds.x = position.x;
+  bounds.y = position.y;
+
+  // Filter tiles that potentially serve as ground.
+  const tiles = [...canvas.tiles.quadtree.getObjects(token.bounds)].filter(tile => {
+    if ( !tile.document.isOverhead ) return false;
+    const e = tile.elevationZ;
+    return isFinite(e) && (e.almostEqual(tokenE) || e < tokenE);
+  });
+
+  // Take the tiles in order, from the top.
+  // No averaging:
+  // - Elevation is the highest tile that contains the position (alpha-excluded).
+  // Averaging:
+  // - Tile > 50% of the token shape: tileE.
+  // - Tile < 50% of token shape: fall to tile below.
+  // - Only non-transparent tile portions count.
+  tiles.sort((a, b) => b.elevationZ - a.elevationZ);
+  if ( useAveraging ) {
+    let tokenShape = canvas.elevation._tokenShape(token.x, token.y, token.w, token.h);
+    const targetArea = tokenShape.area * 0.5;
+
+    for ( const tile of tiles ) {
+      const mat = CanvasPixelValueMatrix.fromOverheadTileAlpha(tile);
+      const intersect = mat.intersectShape(tokenShape);
+      if ( intersect.areaAboveThreshold(0.99) > targetArea ) {
+        selectedTile.tile = tile;
+        return tile.elevationE;
+      }
+    }
+
+  } else {
+    for ( const tile of tiles ) {
+      if ( tile.containsPixel(position.x, position.y, 0.99) ) {
+        selectedTile.tile = tile;
+        return tile.elevationE;
+      }
+    }
+  }
+
+  // No tile matches the criteria
+  return null;
 }

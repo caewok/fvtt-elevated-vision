@@ -137,6 +137,19 @@ export function registerElevationAdditions() {
       get: zElevation
     });
   }
+
+  // ----- Tile ---- //
+  if ( !Object.hasOwn(Tile.prototype, "elevationE") ) {
+    Object.defineProperty(SoundSource.prototype, "elevationE", {
+      get: soundSourceElevation
+    });
+  }
+
+  if ( !Object.hasOwn(Tile.prototype, "elevationZ") ) {
+    Object.defineProperty(SoundSource.prototype, "elevationZ", {
+      get: zElevation
+    });
+  }
 }
 
 /**
@@ -237,4 +250,15 @@ function lightSourceElevation() {
 function soundSourceElevation() {
   if ( this.object instanceof Token ) return this.object.topE;
   return this.object.document.flags?.elevatedvision?.elevation ?? Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Elevation of the sound source.
+ * If attached to a token, use the token losHeight.
+ * @returns {number}  Grid Units
+ *   Default: Positive infinity. When infinite, treat like default Foundry light.
+ */
+function tileElevation() {
+  return tile.document.flags?.elevatedvision?.elevation
+      ?? tile.document.flags?.levels?.rangeBottom ?? Number.POSITIVE_INFINITY;
 }
