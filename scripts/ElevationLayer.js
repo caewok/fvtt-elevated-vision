@@ -30,7 +30,12 @@ import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
-import { isTokenOnGround, tokenGroundElevation, tokenTileGroundElevation, tokenTerrainGroundElevation } from "./tokens.js";
+import {
+  isTokenOnGround,
+  isTokenOnTile,
+  tokenGroundElevation,
+  tokenTileGroundElevation,
+  tokenTerrainGroundElevation } from "./tokens.js";
 
 /* Elevation layer
 
@@ -75,6 +80,7 @@ export class ElevationLayer extends InteractionLayer {
     tokenTerrainGroundElevation,
     tokenTileGroundElevation,
     isTokenOnGround,
+    isTokenOnTile,
     tokenOnGround: isTokenOnGround // Backwards compatibility
   };
 
@@ -486,7 +492,7 @@ export class ElevationLayer extends InteractionLayer {
 
     if ( min < currMin ) {
       this.elevationMin = min;
-      ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on scene tiles' minimum elevation range.`);
+      ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on the minimum elevation of one or more tiles in the scene.`);
     }
   }
 

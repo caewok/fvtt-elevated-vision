@@ -140,13 +140,13 @@ export function registerElevationAdditions() {
 
   // ----- Tile ---- //
   if ( !Object.hasOwn(Tile.prototype, "elevationE") ) {
-    Object.defineProperty(SoundSource.prototype, "elevationE", {
-      get: soundSourceElevation
+    Object.defineProperty(Tile.prototype, "elevationE", {
+      get: tileElevation
     });
   }
 
   if ( !Object.hasOwn(Tile.prototype, "elevationZ") ) {
-    Object.defineProperty(SoundSource.prototype, "elevationZ", {
+    Object.defineProperty(Tile.prototype, "elevationZ", {
       get: zElevation
     });
   }
@@ -259,6 +259,6 @@ function soundSourceElevation() {
  *   Default: Positive infinity. When infinite, treat like default Foundry light.
  */
 function tileElevation() {
-  return tile.document.flags?.elevatedvision?.elevation
-      ?? tile.document.flags?.levels?.rangeBottom ?? Number.POSITIVE_INFINITY;
+  return this.document.flags?.elevatedvision?.elevation
+      ?? this.document.flags?.levels?.rangeBottom ?? Number.POSITIVE_INFINITY;
 }

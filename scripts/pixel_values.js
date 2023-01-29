@@ -1,7 +1,7 @@
 /* globals
 PIXI,
 canvas,
-
+Ray
 */
 "use strict";
 
@@ -332,6 +332,58 @@ x:   149  150   151
   }
 
   /**
+   * Determine if a threshold value lies along a ray.
+   * @param {Ray} ray
+   * @param {object} [options]
+   * @param {number} [options.interval=10]  In local units, how much space between values?
+   *                                        For a horizontal ray, this will be pixels.
+   * @param {string} [options.values]             What array to use
+   * @returns {Point|null} Canvas location of the threshold value on the ray, or null if none.
+   */
+  thresholdAlongRay(ray, { interval = 10, values = "values", threshold = 1 } = {}) {
+    interval = Math.max(Math.roundFast(interval), 1);
+    const A = this.fromCanvasCoordinates(ray.A);
+    const B = this.fromCanvasCoordinates(ray.B);
+    values = this[values];
+
+    // Trim A and B to be inside the bounds.
+    const CSZ = PIXI.Rectangle.CS_ZONES;
+    const ixs = this.segmentIntersections(A, B);
+    if ( this._getZone(A) === CSZ.INSIDE ) ixs.unshift(A);
+    if ( this._getZone(B) === CSZ.INSIDE ) ixs.push(B);
+    if ( ixs.length < 2 ) return [];
+
+    const a = ixs[0];
+    const b = ixs[1];
+    if ( a.x.almostEqual(b.x) && a.y.almostEqual(b.y) ) return [];
+
+    // If the ray is horizontal, our life is easy!
+    if ( !ray.dy ) {
+      const iA = this._indexAtLocal(a);
+      const iB = this._indexAtLocal(b);
+      const arr = values.slice(iA, iB + 1).filter((_px, i) => (i % interval) === 0);
+      const idx = arr.findIndex(value => value > threshold);
+      if ( !~idx ) return null;
+
+      // The index is where the threshold is first met. Find the corresponding canvas coords.
+      const i = idx * interval;
+      return this.canvasCoordinatesAt(i);
+    }
+
+    // For vertical or diagonal, easier to pull values
+    const r = new Ray(a, b);
+    const proportion = interval / r.distance;
+    let t = 0;
+    while ( t < 1 ) {
+      const pt = r.project(t);
+      const i = this._indexAtLocal(pt);
+      if ( values[i] > threshold ) return this.toCanvasCoordinates(pt);
+      t += proportion;
+    }
+    return null;
+  }
+
+  /**
    * Draw a representation of this matrix on the canvas.
    * For debugging.
    * @param {Hex} [color]   Color to use for the fill
@@ -504,6 +556,18 @@ export class PixelValueShape extends PixelValueMatrix {
       if ( !poly.contains(pt.x, pt.y) ) clone.holes[i] = 1;
     }
     return clone;
+  }
+
+  /**
+   * Return hole values for intervals along a ray.
+   * @param {Ray} ray
+   * @param {object} [options]
+   * @param {number} [options.interval]     In local units, how much space between values?
+   *                                        For a horizontal ray, this will be pixels.
+   * @returns {number[]}
+   */
+  holesAlongRay(ray, { interval }) {
+    return this.valuesAlongRay(ray, { interval, values: "holes" });
   }
 }
 
