@@ -13,6 +13,9 @@ ui
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
 
+// Patches
+import { patchTile } from "./patches/Tile.js";
+
 // Rendering configs
 import { renderAmbientLightConfigHook, renderAmbientSoundConfigHook, renderTileConfigHook } from "./renderConfig.js";
 
@@ -42,7 +45,7 @@ import {
 
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, setSetting, registerSettings } from "./settings.js";
-import { isTokenOnGround, tokenGroundElevation } from "./tokens.js";
+import { isTokenOnGround, isTokenOnTile, tokenGroundElevation, tokenTileGroundElevation } from "./tokens.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
@@ -67,9 +70,9 @@ Hooks.once("init", function() {
   registerAdditions();
 });
 
-// Hooks.once("libWrapper.Ready", async function() {
-//   registerPatches();
-// });
+Hooks.once("libWrapper.Ready", async function() {
+  patchTile();
+});
 
 Hooks.once("setup", async function() {
   registerPatches();
@@ -143,21 +146,33 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // esli
   log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
   log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
 
+  // Set properties that are used by `Token.prototype._refresh` and `Token.prototype.clone`.
   tokenD.object._elevatedVision ??= {};
   tokenD.object._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
   tokenD.object._elevatedVision.tokenHasAnimated = false;
+  tokenD.object._elevatedVision.tileElevation = null;
 
+  // Do not automatically set elevation if setting is not enabled or the token is not moving.
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
   if ( typeof changes.x === "undefined" && typeof changes.y === "undefined" ) return;
 
+  // If the token is not starting on the ground, do not change the elevation.
   const tokenOrigin = { x: tokenD.x, y: tokenD.y };
   if ( !isTokenOnGround(tokenD.object, { position: tokenOrigin }) ) return;
 
+  // Record whether the token starts on a tile
+  tokenD.object._elevatedVision.tileElevation = tokenTileGroundElevation(tokenD.object, { position: tokenOrigin });
+
+  // Modify the destination elevation.
   const tokenDestination = { x: changes.x ? changes.x : tokenD.x, y: changes.y ? changes.y : tokenD.y };
   const newTokenE = tokenGroundElevation(tokenD.object, { position: tokenDestination });
   if ( tokenD.elevation !== newTokenE )
     changes.elevation = tokenGroundElevation(tokenD.object, { position: tokenDestination });
   tokenD.object._elevatedVision.tokenAdjustElevation = true;
+});
+
+Hooks.on("updateToken", function(tokenD, changes, options, userId) {
+
 });
 
 
