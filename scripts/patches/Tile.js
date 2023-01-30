@@ -54,10 +54,12 @@ function _createTextureDataTile() {
 
   // Map the alpha pixels
   const w = Math.roundFast(map.aw);
-  for ( let i = 0; i < pixels.length; i += 4 ) {
-    const a = map.pixels[i] = pixels[i + 3];
+  const ln = pixels.length;
+  const alphaPixels = new Uint8Array(ln / 4);
+  for ( let i = 0; i < ln; i += 4 ) {
+    const n = i / 4;
+    const a = alphaPixels[n] = pixels[i + 3];
     if ( a > 0 ) {
-      const n = i / 4;
       const x = n % w;
       const y = Math.floor(n / w);
       if ( (map.minX === undefined) || (x < map.minX) ) map.minX = x;
@@ -66,11 +68,14 @@ function _createTextureDataTile() {
       else if ( (map.maxY === undefined) || (y + 1 > map.maxY) ) map.maxY = y + 1;
     }
   }
+  map.pixels = alphaPixels;
 
   // Saving the texture data
   canvas.tiles.textureDataMap.set(this.document.texture.src, map);
   return this._textureData;
 }
+
+
 
 export function patchTile() {
   log("Patching Tile.prototype._createTextureData");

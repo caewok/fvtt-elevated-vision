@@ -3,7 +3,7 @@ canvas
 */
 "use strict";
 
-import { log } from "./util.js";
+import { log, groupBy } from "./util.js";
 import { getSetting, SETTINGS } from "./settings.js";
 import { CanvasPixelValueMatrix } from "./pixel_values.js";
 
@@ -231,13 +231,12 @@ export function tokenGroundElevation(token, { position, useAveraging, considerTi
  * @returns {number} Elevation in grid units.
  */
 export function tokenTerrainGroundElevation(token, { position, useAveraging } = {}) {
-  position ??= { x: token.x, y: token.y };
+  position ??= { x: token.center.x, y: token.center.y };
   useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
 
   if ( useAveraging ) return averageElevationForToken(position.x, position.y, token.w, token.h);
 
-  const center = token.getCenter(position.x, position.y);
-  return canvas.elevation.elevationAt(center.x, center.y);
+  return canvas.elevation.elevationAt(position.x, position.y);
 }
 
 function averageElevationForToken(x, y, w, h) {
@@ -259,8 +258,9 @@ function averageElevationForToken(x, y, w, h) {
  * @return {number|null} Return the tile elevation or null otherwise.
  */
 export function tokenTileGroundElevation(token,
-  { position, useAveraging = false, selectedTile = {}, checkTopOnly = false } = {} ) {
+  { position, useAveraging, selectedTile = {}, checkTopOnly = false } = {} ) {
   position ??= { x: token.center.x, y: token.center.y };
+  useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
 
   const tokenZ = token.bottomZ;
   const bounds = token.bounds;
@@ -323,50 +323,271 @@ function elevationTilesOnRay(ray) {
 
 /**
  * Determine the first point along a ray that is opaque with respect to a tile.
+ * The number of tests is based on the grid precision (see getSnappedPosition).
  * Does not test the alpha bounding box, which is assumed to be done separately.
  * @param {Tile} tile
- * @param {Ray} ray
+ * @param {Ray} ray                 Ray, in texture coordinates.
  * @param {number} alphaThreshold   Percentage between 0 and 1 above which is deemed "opaque".
  * @param {number} percentStep      Percentage between 0 and 1 to step along ray.
  * @returns {Point|null}
  */
-function findOpaqueTilePointAlongRay(tile, ray, alphaThreshold = 0.75, percentStep = 0.1) {
+function findOpaqueTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, percentStep = 0.1, debug = true } = {}) {
   if ( !tile._textureData?.pixels || !tile.mesh ) return null;
 
+  if ( debug ) {
+    canvasRay = textureRayToCanvas(ray, tile)
+    draw.segment(canvasRay, { color: Draw.COLORS.orange })
+  }
+
   // Confirm constants.
-  if ( percentStep <= 0 ) percentStep = 0.1;
   const aw = Math.roundFast(Math.abs(tile._textureData.aw));
   alphaThreshold = alphaThreshold * 255;
 
   // Step along the ray until we hit the threshold or run out of ray.
-  let t = 0;
+  let t = percentStep;
   while ( t <= 1 ) {
     const pt = ray.project(t);
-    const textureCoord = this.getTextureCoordinate(pt.x, pt.y);
-    const px = (Math.floor(textureCoord.y) * aw) + Math.floor(textureCoord.x);
+    const px = (Math.floor(pt.y) * aw) + Math.floor(pt.x);
     const value = tile._textureData.pixels[px];
-    if ( px > alphaThreshold ) return pt;
+
+    if ( debug ) {
+      const canvasPt = getCanvasCoordinate(tile, pt.x, pt.y)
+      draw.point(canvasPt, { radius: 1 })
+    }
+
+    if ( value > alphaThreshold ) return pt;
+    t += percentStep;
+  }
+  return null;
+}
+
+function findTransparentTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, percentStep = 0.1, debug = true } = {}) {
+  if ( !tile._textureData?.pixels || !tile.mesh ) return null;
+
+  if ( debug ) {
+    canvasRay = textureRayToCanvas(ray, tile)
+    draw.segment(canvasRay, { color: Draw.COLORS.orange })
+  }
+
+  // Confirm constants.
+  const aw = Math.roundFast(Math.abs(tile._textureData.aw));
+  alphaThreshold = alphaThreshold * 255;
+
+  // Step along the ray until we hit the threshold or run out of ray.
+  let t = percentStep;
+  while ( t <= 1 ) {
+    const pt = ray.project(t);
+    const px = (Math.floor(pt.y) * aw) + Math.floor(pt.x);
+    const value = tile._textureData.pixels[px];
+
+    if ( debug ) {
+      const canvasPt = getCanvasCoordinate(tile, pt.x, pt.y)
+      draw.point(canvasPt, { radius: 1 })
+    }
+
+    if ( value < alphaThreshold ) return pt;
     t += percentStep;
   }
   return null;
 }
 
 
+
+// canvas.walls.gridPrecision
+//
+// pts = []
+// for ( let i = 0; i < 100; i += 1 ) {
+//   const x = _token.center.x + i;
+//   const y = _token.center.y + i;
+//   const pt = canvas.grid.getSnappedPosition(x, y, canvas.walls.gridPrecision)
+//   pts.push(pt)
+//   console.log(`${x},${y} --> ${pt.x},${pt.y}`);
+// }
+
+A = _token.center;
+B = _token.center;
+canvasRay = new Ray(A, B)
+// Convert ray to texture coordinates, for speed.
+textureRay = canvasRayToTexture(ray, tile)
+
+textureIxs = rayIntersectsTile(tile, textureRay)
+canvasIxs = textureIxs.map(ix => getCanvasCoordinate(tile, ix.x, ix.y))
+
+opaqueTextureRay = new Ray(textureIxs[0], textureIxs[1])
+opaqueCanvasRay = textureRayToCanvas(opaqueTextureRay, tile)
+
+const interval = canvas.walls.gridPrecision
+percentStep = Math.max(canvas.grid.w / interval, canvas.grid.h / interval) / opaqueCanvasRay.distance;
+
+findOpaqueTilePointAlongRay(opaqueTextureRay, tile, { percentStep })
+findTransparentTilePointAlongRay(opaqueTextureRay, tile, { percentStep })
+
+function canvasRayToTexture(ray, tile) {
+  const a = getTextureCoordinate(tile, ray.A.x, ray.A.y);
+  const b = getTextureCoordinate(tile, ray.B.x, ray.B.y);
+  return new Ray(a, b);
+}
+
+function textureRayToCanvas(ray, tile) {
+  const A = getCanvasCoordinate(tile, ray.A.x, ray.A.y);
+  const B = getCanvasCoordinate(tile, ray.B.x, ray.B.y);
+  return new Ray(A, B);
+}
+
+tokenGroundElevation = canvas.elevation.tokens.tokenGroundElevation
+tokenTileGroundElevation = canvas.elevation.tokens.tokenTileGroundElevation
+tokenTerrainGroundElevation = canvas.elevation.tokens.tokenTerrainGroundElevation
+
+function endElevationForTokenTravel(token, travelRay) {
+  let currE = tokenGroundElevation(token, { position: travelRay.A });
+  if ( !currE.almostEqual(token.bottomE) ) return token.bottomE;
+
+  draw.segment(travelRay);
+
+  const tiles = elevationTilesOnRay(travelRay);
+  if ( !tiles.size ) return tokenGroundElevation(token, { position: travelRay.B });
+
+  // Organize tiles along the ray
+  const interval = canvas.walls.gridPrecision;
+  const intervalRatio = Math.max(canvas.grid.w / interval, canvas.grid.h / interval);
+  const rayTConversion = Math.abs(travelRay.dx) > Math.abs(travelRay.dy)
+    ? pt => (pt.x - travelRay.A.x) / travelRay.dx
+    : pt => (pt.y - travelRay.A.y) / travelRay.dy;
+
+
+  const tileMap = new Map();
+  const ixMap = new Map();
+
+  const tileIxs = [];
+  for ( const tile of tiles ) {
+    // TODO: Could make this textureRay. Which would be better?
+    // (intersection as a proportion of the ray stays the same---texture or canvas)
+    const ixs = canvasRayIntersectsTile(tile, travelRay);
+    if ( !ixs.length ) continue;
+    const t0 = ixs[0].t0;
+    const t1 = ixs[1].t0;
+
+    const s0 = tileMap.get(t0) || new Set();
+    const s1 = tileMap.get(t1) || new Set();
+    s0.add(tile);
+    s1.add(tile);
+    tileMap.set(t0, s0);
+    tileMap.set(t1, s1);
+    tileIxs.push(t0, t1);
+    ixMap.set(t0, ixs[0]);
+    ixMap.set(t1, ixs[1]);
+  }
+
+  // Closest intersection to A is last in the queue, so we can pop it.
+  tileIxs.sort((a, b) => b - a);
+
+  // At each intersection group, update the current elevation based on ground unless already on tile.
+  // If the token elevation equals that of the tile, the token is now on the tile.
+  let onTile = false;
+  while ( tileIxs.length ) {
+    const t = tileIxs.pop();
+    const ix = ixMap.get(t);
+    draw.point(ix, { color: onTile ? Draw.COLORS.red : Draw.COLORS.green, radius: 3 });
+    const tileSet = tileMap.get(t);
+
+    if ( onTile ) {
+      let matchingTile;
+      if ( tileSet && tileSet.size ) {
+        matchingTile = tileSet.find(t => t.elevationE.almostEqual(currE))
+      } else {
+        selectedTile = {};
+        const tileE = tokenTileGroundElevation(token, { position: ix, selectedTile });
+        matchingTile = selectedTile.tile;
+      }
+      if ( matchingTile ) {
+        onTile = true;
+
+        // Find the alpha intersection for this tile or the tile endpoint.
+        const tileCanvasRay = new Ray(ix, travelRay.B);
+        const percentStep = intervalRatio / tileCanvasRay.distance;
+        const tileTextureRay = canvasRayToTexture(tileCanvasRay, matchingTile)
+        const nextPt = findTransparentTilePointAlongRay(tileTextureRay, matchingTile, { percentStep });
+        if ( nextPt ) {
+          const nextCanvasPt = getCanvasCoordinate(matchingTile, nextPt.x, nextPt.y);
+          const nextT = rayTConversion(nextCanvasPt);
+          ixMap.set(nextT, nextCanvasPt);
+          tileIxs.push(nextT);
+          tileIxs.sort((a, b) => b - a);
+        }
+      } else {
+        const newE = tokenTerrainGroundElevation(token, { position: ix });
+        if ( newE < currE ) return currE;
+        currE = newE;
+
+      }
+
+
+
+
+
+    }
+
+
+    if ( !onTile && tileSet.size ) {
+      // TODO: Could check the tileMap instead of tokenTileGroundElevation
+      currE = tokenTerrainGroundElevation(token, { position: ix });
+      const matchingTile = tileSet.find(t => t.elevationE.almostEqual(currE))
+      if ( matchingTile ) {
+        onTile = true;
+
+        // Find the alpha intersection for this tile or the tile endpoint.
+        const tileCanvasRay = new Ray(ix, travelRay.B);
+        const percentStep = intervalRatio / tileCanvasRay.distance;
+        const tileTextureRay = canvasRayToTexture(tileCanvasRay, matchingTile)
+        const nextPt = findTransparentTilePointAlongRay(tileTextureRay, matchingTile, { percentStep });
+        if ( nextPt ) {
+          const nextCanvasPt = getCanvasCoordinate(matchingTile, nextPt.x, nextPt.y);
+          const nextT = rayTConversion(nextCanvasPt);
+          ixMap.set(nextT, nextCanvasPt);
+          tileIxs.push(nextT);
+          tileIxs.sort((a, b) => b - a);
+        }
+      }
+    } else {
+      if ( tileE && tileE.almostEqual(currE) ) {
+
+      } else {
+        onTile = false;
+        const newE = tokenGroundElevation(token, { position: ix });
+        if ( newE < currE ) return currE;
+        currE = newE;
+      }
+
+
+
+
+    }
+  }
+}
+
+
 /**
  * Find the point at which the tile is first opaque and last opaque, along a ray.
  * @param {Tile} tile
- * @param {Ray} ray
+ * @param {Ray} ray       Ray, in texture coordinates
  * @returns {Point[]}
  */
-function rayIntersectsTile(tile, ray) {
-  const bounds = tileAlphaBoundingBox(tile);
+function canvasRayIntersectsTile(tile, ray, alphaThreshold = 0.75) {
+  const bounds = tileAlphaCanvasBoundingBox(tile, alphaThreshold);
   const { A, B } = ray;
   const ixs = bounds.segmentIntersections(A, B);
   const CSZ = PIXI.Rectangle.CS_ZONES;
-  if ( bounds._getZone(A) === CSZ.INSIDE ) ixs.unshift(A);
-  if ( bounds._getZone(B) === CSZ.INSIDE ) ixs.push(B);
+  if ( bounds._getZone(A) === CSZ.INSIDE ) {
+    A.t0 = 0;
+    ixs.unshift(A);
+  }
+  if ( bounds._getZone(B) === CSZ.INSIDE ) {
+    B.t0 = 1;
+    ixs.push(B);
+  }
   return ixs;
 }
+
 
 /**
  * Build an alpha bounding box for a tile, based on the chosen threshold.
@@ -375,28 +596,26 @@ function rayIntersectsTile(tile, ray) {
  *                                  be considered transparent.
  * @returns {PIXI.Rectangle}
  */
-function constructTileAlphaBoundingBox(tile, alphaThreshold = 0.75) {
+function tileAlphaBoundingBox(tile, alphaThreshold = 0.75) {
   if ( !tile._textureData ) return tile.bounds;
   alphaThreshold = alphaThreshold * 255;
+  minX = undefined;
+  maxX = undefined;
+  minY = undefined;
+  maxY = undefined;
 
-  // Map the alpha pixels.
-  let minX = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxY =  Number.NEGATIVE_INFINITY;
-  const aw = tile._textureData.aw;
+  // Map the alpha pixels
   const pixels = tile._textureData.pixels;
-  const ln = pixels.length;
-  for ( let i = 0; i < ln; i += 4 ) {
-    const a = pixels[i];
-    if ( a > alphaThreshold ) {
-      const n = i / 4;
-      const x = n % aw;
-      const y = Math.floor(n / aw);
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
+  const w = Math.roundFast(tile._textureData.aw);
+  for ( let i = 0; i < pixels.length; i += 1 ) {
+    const a = pixels[i]
+    if ( a > 0 ) {
+      const x = i % w;
+      const y = Math.floor(i / w);
+      if ( (minX === undefined) || (x < minX) ) minX = x;
+      else if ( (maxX === undefined) || (x + 1 > maxX) ) maxX = x + 1;
+      if ( (minY === undefined) || (y < minY) ) minY = y;
+      else if ( (maxY === undefined) || (y + 1 > maxY) ) maxY = y + 1;
     }
   }
 
@@ -405,11 +624,24 @@ function constructTileAlphaBoundingBox(tile, alphaThreshold = 0.75) {
 }
 
 
+/**
+ * Convert the tile alpha bounding box to canvas coordinates.
+ * @param {Tile} tile
+ * @returns {PIXI.Rectangle}
+ */
+function tileAlphaCanvasBoundingBox(tile, alphaThreshold = 0.75) {
+  const alphaBounds = tileAlphaBoundingBox(tile, alphaThreshold);
+  const TL = getCanvasCoordinate(tile, alphaBounds.left, alphaBounds.top);
+  const BR = getCanvasCoordinate(tile, alphaBounds.right, alphaBounds.bottom);
+  return new PIXI.Rectangle(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y);
+}
+
+
 function drawTileAlpha(tile, color = Draw.COLORS.blue) {
   const pixels = tile._textureData.pixels;
   const ln = tile._textureData.pixels.length;
   const w = Math.roundFast(tile._textureData.aw);
-  for ( let i = 3; i < ln; i += 4) {
+  for ( let i = 0; i < ln; i += 4) {
     const alpha = pixels[i];
     if ( alpha === 0 ) continue;
     const n = i / 4;
@@ -421,108 +653,7 @@ function drawTileAlpha(tile, color = Draw.COLORS.blue) {
   }
 }
 
-// // Create a temporary Sprite using the Tile texture
-// tile._textureData = {
-//   pixels: undefined,
-//   minX: undefined,
-//   maxX: undefined,
-//   minY: undefined,
-//   maxY: undefined
-// };
-// // Else, we are preparing the texture data creation
-// map = tile._textureData;
-//
-// // Create a temporary Sprite using the Tile texture
-// sprite = new PIXI.Sprite(tile.texture);
-// sprite.width = map.aw = tile.texture.baseTexture.realWidth / 4;
-// sprite.height = map.ah = tile.texture.baseTexture.realHeight / 4;
-// sprite.anchor.set(0.5, 0.5);
-// sprite.position.set(map.aw / 2, map.ah / 2);
-//
-// // Create or update the alphaMap render texture
-// tex = PIXI.RenderTexture.create({width: map.aw, height: map.ah});
-//
-// // Render the sprite to the texture and extract its pixels
-// // Destroy sprite and texture when they are no longer needed
-// canvas.app.renderer.render(sprite, tex);
-// sprite.destroy(false);
-// pixels = map.pixels = canvas.app.renderer.extract.pixels(tex);
-// tex.destroy(true);
-//
-// // Map the alpha pixels
-// w = Math.round(map.aw)
-// for ( let i = 0; i < pixels.length; i += 4 ) {
-//   const n = i / 4;
-//   const a = map.pixels[i] = pixels[i + 3];
-//   if ( a > 0 ) {
-//     const x = n % w;
-//     const y = Math.floor(n / w);
-//     if ( (map.minX === undefined) || (x < map.minX) ) map.minX = x;
-//     else if ( (map.maxX === undefined) || (x + 1 > map.maxX) ) map.maxX = x + 1;
-//     if ( (map.minY === undefined) || (y < map.minY) ) map.minY = y;
-//     else if ( (map.maxY === undefined) || (y + 1 > map.maxY) ) map.maxY = y + 1;
-//   }
-// }
-//
-//
-// pixels = tile._textureData.pixels
-// width = Math.round(tile._textureData.aw)
-//
-// let { pixels, x, y, width, height } = extractPixels(canvas.app.renderer, tile.texture);
-// // unpremultiplyPixels(pixels);
-//
-// // pixels = pixels.filter((px, i) => i % 4 === 3)
-//
-// color = Draw.COLORS.blue
-// ln = pixels.length
-// for ( let i = 3; i < ln; i += 20*4) {
-//   const n = i / 4;
-//   const x = n % width;
-//   const y = Math.floor(n / width);
-//
-//   const alpha = pixels[i];
-// //     Draw.point(pt, { color, alpha: alpha / 255 });
-//    Draw.point({x, y}, { color, alpha: alpha / 255 });
-// }
 
-
-
-//
-// function drawTileAlpha(tile, color = Draw.COLORS.blue) {
-//   const ln = tile._textureData.pixels.length;
-//   const aw = tile._textureData.aw;
-//   const ah = tile._textureData.ah;
-//
-//   for ( let i = 0; i < ln; i += (4 * 10 )) {
-//     const n = i / 4;
-//     const x = Math.floor(n % aw);
-//     const y = Math.floor(n / aw);
-//
-//
-//
-//
-//     const pt = getCanvasCoordinate(tile, x, y);
-//     const alpha = tile._textureData.pixels[i];
-// //     Draw.point(pt, { color, alpha: alpha / 255 });
-//      Draw.point({x, y}, { color, alpha: alpha / 255 });
-//   }
-// }
-//
-//     // Bottom left x and y;
-//     const blx = border.x;
-//     const bly = border.y + height;
-//
-//     const ln = pixels.length;
-//     for ( let i = 0; i < ln; i += 4 ) {
-//       const pixelNum = i / 4;
-//       const col = pixelNum % width;
-//       const row = Math.floor(pixelNum / height);
-//
-//       if ( !shape.contains(blx + col, bly - row) ) continue;
-//
-//       denom += 1;
-//       sum += pixels[i];
-//     }
 
 function drawTileAlpha2(tile, color = Draw.COLORS.blue) {
   const { left, right, top, bottom } = tile.bounds;
@@ -562,20 +693,6 @@ function drawTileAlpha4(tile, color = Draw.COLORS.blue, threshold = .25) {
 }
 
 
-/**
- * Convert the tile alpha bounding box to canvas coordinates.
- * @param {Tile} tile
- * @returns {PIXI.Rectangle}
- */
-function tileAlphaBoundingBox(tile) {
-  if ( !tile._textureData ) return tile.bounds;
-
-  // Convert the alpha bounds to canvas coordinates.
-  const alphaBounds = tile._getAlphaBounds();
-  const TL = getCanvasCoordinate(tile, alphaBounds.left, alphaBounds.top);
-  const BR = getCanvasCoordinate(tile, alphaBounds.right, alphaBounds.bottom);
-  return new PIXI.Rectangle(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y);
-}
 
 
 /**
@@ -686,4 +803,32 @@ function testCoordinateConversion(tile) {
   return true;
 }
 
+/**
+ * Test indexing
+ */
+function testCoordinateConversion2(tile, color = Draw.COLORS.blue) {
+  const pixels = tile._textureData.pixels;
+  const ln = tile._textureData.pixels.length;
+  const w = Math.roundFast(tile._textureData.aw);
+  for ( let i = 0; i < ln; i += 1) {
+    const alpha = pixels[i];
+    if ( alpha === 0 ) continue;
+    const x = i % w;
+    const y = Math.floor(i / w);
+    const canvasCoord = getCanvasCoordinate(tile, x, y);
+    const textureCoord = getTextureCoordinate(tile, canvasCoord.x, canvasCoord.y);
+    if ( !textureCoord.x.almostEqual(x) || !textureCoord.y.almostEqual(y) ) {
+      console.log(`At i ${i} x,y ${x},${y} textureCoord ${textureCoord.x},${textureCoord.y} and canvasCoord ${canvasCoord.x},${canvasCoord.y}`);
+      return false;
+    }
 
+    const testI = ((textureCoord.y * w) + textureCoord.x);
+    if ( testI !== i ) {
+      console.log(`At i ${i} ≠ ${testI}`);
+      return false
+    }
+
+    Draw.point(canvasCoord, { color, alpha: alpha / 255 });
+    Draw.point({x, y}, { color, alpha: alpha / 255 });
+  }
+}
