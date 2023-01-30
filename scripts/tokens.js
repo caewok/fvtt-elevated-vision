@@ -1,11 +1,15 @@
 /* globals
-canvas
+canvas,
+Ray,
+PIXI
 */
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { log, groupBy } from "./util.js";
+import { log } from "./util.js";
 import { getSetting, SETTINGS } from "./settings.js";
 import { CanvasPixelValueMatrix } from "./pixel_values.js";
+import { Draw } from "./geometry/Draw.js";
 
 
 /* Token movement flow:
@@ -83,18 +87,45 @@ d. Locate tiles along a line segment, and filter according to elevations.
 // Token not starting on terrain or tile ground: no auto elevation
 //
 // If at any point, token moves on/off tile:
-// - tile --> terrain/tile @ same elevation --> auto elevation continues
-// - tile --> higher terrain elevation --> auto elevation continues
-// - tile --> lower terrain elevation --> auto elevation stops.
+// 1a. tile --> terrain/tile @ same elevation --> auto elevation continues
+// 1b. tile --> higher terrain elevation --> auto elevation continues
+// 1c. tile --> lower terrain elevation --> auto elevation stops.
 //   (Token now "flying"; token moved off tile "cliff" or "ledge")
-// - tile --> higher tile elevation --> auto elevation based on underneath tile
+// 1d. tile --> higher tile elevation --> auto elevation based on underneath tile
 //   (Token now under the tile)
-// - tile --> lower tile elevation --> auto elevation stops.
+// 1e. tile --> lower tile elevation --> auto elevation stops.
 //   (Token now "flying")
-// - terrain --> tile @ same elevation --> auto elevation continues
-// - terrain --> tile below --> auto elevation continues
+// 2a. terrain --> tile @ same elevation --> auto elevation continues
+// 2b. terrain --> tile below --> auto elevation stops (opposite of )
 //   (Token dropped from "hill" to "floor")
-// - terrain --> tile above --> tile ignored (above token)
+// 2c. terrain --> tile above --> tile ignored (above token)
+
+// Assumed tokens do not burrow, so higher terrain elevation forces the token higher.
+// Higher or lower means greater than 1 elevation step.
+// Within 1 elevation step, treated as same elevation and can continue.
+
+/*
+Fly-mode:
+Origination   Destination   Lower       Same (§)    Higher
+terrain       terrain       fly         terrain     terrain
+terrain       tile          fly         tile        NA (stay on origination terrain)
+tile          tile          fly         tile        NA (stay on origination tile)
+tile          terrain       fly         terrain     terrain
+fly           terrain       fly         terrain     terrain
+
+No-fly-mode:
+Origination   Destination   Lower       Same (§)    Higher
+terrain       terrain       terrain     terrain     terrain
+terrain       tile          tile        tile        NA (stay on origination terrain)
+tile          tile          tile        tile        NA (stay on origination tile)
+tile          terrain       terrain     terrain     terrain
+
+§ Within 1 elevation unit in either direction, treated as Same.
+
+*/
+
+
+
 
 /**
  * Wrap Token.prototype._refresh
@@ -335,8 +366,8 @@ function findOpaqueTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, percent
   if ( !tile._textureData?.pixels || !tile.mesh ) return null;
 
   if ( debug ) {
-    canvasRay = textureRayToCanvas(ray, tile)
-    draw.segment(canvasRay, { color: Draw.COLORS.orange })
+    const canvasRay = textureRayToCanvas(ray, tile);
+    Draw.segment(canvasRay, { color: Draw.COLORS.orange });
   }
 
   // Confirm constants.
@@ -351,8 +382,8 @@ function findOpaqueTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, percent
     const value = tile._textureData.pixels[px];
 
     if ( debug ) {
-      const canvasPt = getCanvasCoordinate(tile, pt.x, pt.y)
-      draw.point(canvasPt, { radius: 1 })
+      const canvasPt = getCanvasCoordinate(tile, pt.x, pt.y);
+      Draw.point(canvasPt, { radius: 1 });
     }
 
     if ( value > alphaThreshold ) return pt;
@@ -365,8 +396,8 @@ function findTransparentTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, pe
   if ( !tile._textureData?.pixels || !tile.mesh ) return null;
 
   if ( debug ) {
-    canvasRay = textureRayToCanvas(ray, tile)
-    draw.segment(canvasRay, { color: Draw.COLORS.orange })
+    const canvasRay = textureRayToCanvas(ray, tile);
+    Draw.segment(canvasRay, { color: Draw.COLORS.orange });
   }
 
   // Confirm constants.
@@ -381,8 +412,8 @@ function findTransparentTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, pe
     const value = tile._textureData.pixels[px];
 
     if ( debug ) {
-      const canvasPt = getCanvasCoordinate(tile, pt.x, pt.y)
-      draw.point(canvasPt, { radius: 1 })
+      const canvasPt = getCanvasCoordinate(tile, pt.x, pt.y);
+      Draw.point(canvasPt, { radius: 1 });
     }
 
     if ( value < alphaThreshold ) return pt;
@@ -392,35 +423,35 @@ function findTransparentTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, pe
 }
 
 
+/**
+ * Find elevated terrain along a ray.
+ * @param {Ray} ray       Ray using canvas coordinates
+ * @param {Token} token   Token to get elevation values for
+ * @param {object} [options]
+ * @param {number} [options.elevationThreshold=0]   If elevation over this threshold,
+ *                                                  return the point on the ray.
+ * @param {number} [options.percentStep=0.1]        Percent between 0 and 1 to move along the ray.
+ * @param {boolean} [options.debug=true]            Debug using drawings.
+ * @returns {Point|null}
+ */
+function findElevatedTerrainForTokenAlongRay(ray, token,
+  { elevationThreshold = 0, percentStep = 0.1, debug = true } = {}) {
+  if ( debug ) Draw.segment(ray, { color: Draw.COLORS.green });
 
-// canvas.walls.gridPrecision
-//
-// pts = []
-// for ( let i = 0; i < 100; i += 1 ) {
-//   const x = _token.center.x + i;
-//   const y = _token.center.y + i;
-//   const pt = canvas.grid.getSnappedPosition(x, y, canvas.walls.gridPrecision)
-//   pts.push(pt)
-//   console.log(`${x},${y} --> ${pt.x},${pt.y}`);
-// }
-
-A = _token.center;
-B = _token.center;
-canvasRay = new Ray(A, B)
-// Convert ray to texture coordinates, for speed.
-textureRay = canvasRayToTexture(ray, tile)
-
-textureIxs = rayIntersectsTile(tile, textureRay)
-canvasIxs = textureIxs.map(ix => getCanvasCoordinate(tile, ix.x, ix.y))
-
-opaqueTextureRay = new Ray(textureIxs[0], textureIxs[1])
-opaqueCanvasRay = textureRayToCanvas(opaqueTextureRay, tile)
-
-const interval = canvas.walls.gridPrecision
-percentStep = Math.max(canvas.grid.w / interval, canvas.grid.h / interval) / opaqueCanvasRay.distance;
-
-findOpaqueTilePointAlongRay(opaqueTextureRay, tile, { percentStep })
-findTransparentTilePointAlongRay(opaqueTextureRay, tile, { percentStep })
+  // Step along the ray until we hit the threshold or run out of ray.
+  let t = percentStep;
+  while ( t <= 1 ) {
+    const pt = ray.project(t);
+    if ( debug ) Draw.point(pt, { radius: 1 });
+    const value = tokenTerrainGroundElevation(token, { position: pt });
+    if ( value > elevationThreshold ) {
+      pt.t0 = t;
+      return pt;
+    }
+    t += percentStep;
+  }
+  return null;
+}
 
 function canvasRayToTexture(ray, tile) {
   const a = getTextureCoordinate(tile, ray.A.x, ray.A.y);
@@ -434,135 +465,145 @@ function textureRayToCanvas(ray, tile) {
   return new Ray(A, B);
 }
 
-tokenGroundElevation = canvas.elevation.tokens.tokenGroundElevation
-tokenTileGroundElevation = canvas.elevation.tokens.tokenTileGroundElevation
-tokenTerrainGroundElevation = canvas.elevation.tokens.tokenTerrainGroundElevation
+// The only time tiles cause automatic elevation to break is if the
+// tile stops or has a hole and there is nothing to catch the token, so it falls.
+// Test at every intersection point with a tile.
+//
 
-function endElevationForTokenTravel(token, travelRay) {
+
+//
+// tokenGroundElevation = canvas.elevation.tokens.tokenGroundElevation
+// tokenTileGroundElevation = canvas.elevation.tokens.tokenTileGroundElevation
+// tokenTerrainGroundElevation = canvas.elevation.tokens.tokenTerrainGroundElevation
+
+function elevationForTokenTravel(token, travelRay) {
+  Draw.segment(travelRay);
+  const out = {
+    token,
+    travelRay,
+    autoElevation: false,
+    tilesEncountered: false,
+    finalElevation: token.bottomE,
+    tileElevationChanges: []
+  };
+
   let currE = tokenGroundElevation(token, { position: travelRay.A });
-  if ( !currE.almostEqual(token.bottomE) ) return token.bottomE;
+  if ( !currE.almostEqual(token.bottomE) ) return out;
 
-  draw.segment(travelRay);
-
+  out.autoElevation = true;
+  out.finalElevation = tokenGroundElevation(token, { position: travelRay.B });
   const tiles = elevationTilesOnRay(travelRay);
-  if ( !tiles.size ) return tokenGroundElevation(token, { position: travelRay.B });
+  if ( !tiles.size ) return out;
+  out.tilesEncountered = true;
 
   // Organize tiles along the ray
-  const interval = canvas.walls.gridPrecision;
-  const intervalRatio = Math.max(canvas.grid.w / interval, canvas.grid.h / interval);
+  const gridPrecision = canvas.walls.gridPrecision;
+  const interval = Math.max(canvas.grid.w / gridPrecision, canvas.grid.h / gridPrecision);
   const rayTConversion = Math.abs(travelRay.dx) > Math.abs(travelRay.dy)
     ? pt => (pt.x - travelRay.A.x) / travelRay.dx
     : pt => (pt.y - travelRay.A.y) / travelRay.dy;
 
-
   const tileMap = new Map();
-  const ixMap = new Map();
-
   const tileIxs = [];
   for ( const tile of tiles ) {
-    // TODO: Could make this textureRay. Which would be better?
-    // (intersection as a proportion of the ray stays the same---texture or canvas)
     const ixs = canvasRayIntersectsTile(tile, travelRay);
-    if ( !ixs.length ) continue;
-    const t0 = ixs[0].t0;
-    const t1 = ixs[1].t0;
+    if ( ixs.length < 2 ) continue;
+    tileIxs.push(ixs[0], ixs[1]);
 
-    const s0 = tileMap.get(t0) || new Set();
-    const s1 = tileMap.get(t1) || new Set();
-    s0.add(tile);
-    s1.add(tile);
-    tileMap.set(t0, s0);
-    tileMap.set(t1, s1);
-    tileIxs.push(t0, t1);
-    ixMap.set(t0, ixs[0]);
-    ixMap.set(t1, ixs[1]);
+    const tileE = tile.elevationE;
+    let s = tileMap.get(tileE);
+    if ( !s ) {
+      s = new Set();
+      tileMap.set(tileE, s);
+    }
+    s.add(tile);
   }
 
   // Closest intersection to A is last in the queue, so we can pop it.
-  tileIxs.sort((a, b) => b - a);
+  tileIxs.sort((a, b) => b.t0 - a.t0);
 
   // At each intersection group, update the current elevation based on ground unless already on tile.
   // If the token elevation equals that of the tile, the token is now on the tile.
+  // Keep track of the seen intersections, in case of duplicates.
+  const tSeen = new Set();
   let onTile = false;
   while ( tileIxs.length ) {
-    const t = tileIxs.pop();
-    const ix = ixMap.get(t);
-    draw.point(ix, { color: onTile ? Draw.COLORS.red : Draw.COLORS.green, radius: 3 });
-    const tileSet = tileMap.get(t);
+    const ix = tileIxs.pop();
+    if ( tSeen.has(ix.t0) ) continue;
+    tSeen.add(ix.t0);
+    Draw.point(ix, { color: onTile ? Draw.COLORS.red : Draw.COLORS.green, radius: 3 });
 
-    if ( onTile ) {
-      let matchingTile;
-      if ( tileSet && tileSet.size ) {
-        matchingTile = tileSet.find(t => t.elevationE.almostEqual(currE))
-      } else {
-        selectedTile = {};
-        const tileE = tokenTileGroundElevation(token, { position: ix, selectedTile });
-        matchingTile = selectedTile.tile;
-      }
-      if ( matchingTile ) {
-        onTile = true;
+    if ( !onTile ) currE = tokenTerrainGroundElevation(token, { position: ix });
 
-        // Find the alpha intersection for this tile or the tile endpoint.
-        const tileCanvasRay = new Ray(ix, travelRay.B);
-        const percentStep = intervalRatio / tileCanvasRay.distance;
-        const tileTextureRay = canvasRayToTexture(tileCanvasRay, matchingTile)
-        const nextPt = findTransparentTilePointAlongRay(tileTextureRay, matchingTile, { percentStep });
-        if ( nextPt ) {
-          const nextCanvasPt = getCanvasCoordinate(matchingTile, nextPt.x, nextPt.y);
-          const nextT = rayTConversion(nextCanvasPt);
-          ixMap.set(nextT, nextCanvasPt);
-          tileIxs.push(nextT);
-          tileIxs.sort((a, b) => b - a);
-        }
-      } else {
-        const newE = tokenTerrainGroundElevation(token, { position: ix });
-        if ( newE < currE ) return currE;
-        currE = newE;
+    const matchingTile = tileMap.has(currE)
+      ? tileMap.get(currE).find(tile => tile.containsPixel(ix.x, ix.y) > 0)
+      : undefined;
 
-      }
-
-
-
-
-
+    let tileCanvasRay;
+    let percentStep;
+    if ( matchingTile ) {
+      tileCanvasRay = matchingTile ? new Ray(ix, travelRay.B) : undefined;
+      percentStep = interval / tileCanvasRay.distance;
     }
 
-
-    if ( !onTile && tileSet.size ) {
-      // TODO: Could check the tileMap instead of tokenTileGroundElevation
-      currE = tokenTerrainGroundElevation(token, { position: ix });
-      const matchingTile = tileSet.find(t => t.elevationE.almostEqual(currE))
-      if ( matchingTile ) {
-        onTile = true;
-
-        // Find the alpha intersection for this tile or the tile endpoint.
-        const tileCanvasRay = new Ray(ix, travelRay.B);
-        const percentStep = intervalRatio / tileCanvasRay.distance;
-        const tileTextureRay = canvasRayToTexture(tileCanvasRay, matchingTile)
-        const nextPt = findTransparentTilePointAlongRay(tileTextureRay, matchingTile, { percentStep });
-        if ( nextPt ) {
-          const nextCanvasPt = getCanvasCoordinate(matchingTile, nextPt.x, nextPt.y);
-          const nextT = rayTConversion(nextCanvasPt);
-          ixMap.set(nextT, nextCanvasPt);
-          tileIxs.push(nextT);
-          tileIxs.sort((a, b) => b - a);
-        }
+    if ( onTile && !matchingTile ) {
+      // Check whether token has walked off a tile ledge.
+      const newE = tokenTerrainGroundElevation(token, { position: ix });
+      if ( newE < currE ) {
+        out.autoElevation = false;
+        break;
       }
-    } else {
-      if ( tileE && tileE.almostEqual(currE) ) {
+      currE = newE;
+    } else // If onTile && matchingTile, we are just continuing our walk at this elevation from one tile to another
 
-      } else {
-        onTile = false;
-        const newE = tokenGroundElevation(token, { position: ix });
-        if ( newE < currE ) return currE;
-        currE = newE;
+    if ( !onTile && matchingTile ) {
+      // Find the alpha intersection for this tile or the tile endpoint.
+      const tileTextureRay = canvasRayToTexture(tileCanvasRay, matchingTile);
+      const nextPt = findTransparentTilePointAlongRay(tileTextureRay, matchingTile, { percentStep });
+      if ( nextPt ) {
+        const nextCanvasPt = getCanvasCoordinate(matchingTile, nextPt.x, nextPt.y);
+        nextCanvasPt.t0 = rayTConversion(nextCanvasPt);
+        _addIx(tileIxs, nextCanvasPt, { debug: true });
       }
+    } // If !onTile && !matchingTile, this point does nothing.
 
+    onTile = Boolean(matchingTile);
 
+    // If on a tile, check for the spot at which terrain elevation pokes through the tile.
+    if ( onTile) {
+      const elevationPt = findElevatedTerrainForTokenAlongRay(
+        tileCanvasRay, token, { elevationThreshold: currE, percentStep });
 
-
+      // The elevationPt already has correct t0, so only need to add the point.
+      if ( elevationPt ) _addIx(tileIxs, elevationPt, { debug: true, color: Draw.COLORS.green });
     }
+
+    out.tileElevationChanges.push({ ix, onTile, currE });
   }
+
+  out.finalElevation = currE;
+  return out;
+}
+
+function _addIx(trackingArray, pt, {debug = false, color = Draw.COLORS.yellow, radius = 2} = {}) {
+  trackingArray.push(pt); // The elevationPt already has correct t0.
+  trackingArray.sort((a, b) => b.t0 - a.t0);
+  if ( debug ) Draw.point(pt, { color, radius });
+}
+
+function drawElevationResults(results) {
+  Draw.segment(results.travelRay);
+  for ( let i = 0; i < results.tileElevationChanges.length; i += 1 ) {
+    const changes = results.tileElevationChanges[i];
+    const startPt = changes.ix;
+    const endPt = i < results.tileElevationChanges.length - 1
+      ? results.tileElevationChanges[i + 1].ix : results.travelRay.B;
+    const color = changes.onTile ? Draw.COLORS.red : Draw.COLORS.green;
+    Draw.point(startPt, { color });
+    Draw.segment({A: startPt, B: endPt}, { color });
+    Draw.labelPoint(startPt, changes.currE);
+  }
+  Draw.labelPoint(results.travelRay.B, results.finalElevation);
 }
 
 
@@ -599,17 +640,17 @@ function canvasRayIntersectsTile(tile, ray, alphaThreshold = 0.75) {
 function tileAlphaBoundingBox(tile, alphaThreshold = 0.75) {
   if ( !tile._textureData ) return tile.bounds;
   alphaThreshold = alphaThreshold * 255;
-  minX = undefined;
-  maxX = undefined;
-  minY = undefined;
-  maxY = undefined;
+  let minX = undefined;
+  let maxX = undefined;
+  let minY = undefined;
+  let maxY = undefined;
 
   // Map the alpha pixels
   const pixels = tile._textureData.pixels;
   const w = Math.roundFast(tile._textureData.aw);
   for ( let i = 0; i < pixels.length; i += 1 ) {
-    const a = pixels[i]
-    if ( a > 0 ) {
+    const a = pixels[i];
+    if ( a > alphaThreshold ) {
       const x = i % w;
       const y = Math.floor(i / w);
       if ( (minX === undefined) || (x < minX) ) minX = x;
@@ -636,7 +677,6 @@ function tileAlphaCanvasBoundingBox(tile, alphaThreshold = 0.75) {
   return new PIXI.Rectangle(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y);
 }
 
-
 function drawTileAlpha(tile, color = Draw.COLORS.blue) {
   const pixels = tile._textureData.pixels;
   const ln = tile._textureData.pixels.length;
@@ -652,8 +692,6 @@ function drawTileAlpha(tile, color = Draw.COLORS.blue) {
     Draw.point({x, y}, { color, alpha: alpha / 255 });
   }
 }
-
-
 
 function drawTileAlpha2(tile, color = Draw.COLORS.blue) {
   const { left, right, top, bottom } = tile.bounds;
@@ -691,9 +729,6 @@ function drawTileAlpha4(tile, color = Draw.COLORS.blue, threshold = .25) {
     }
   }
 }
-
-
-
 
 /**
  * Get tile alpha map texture coordinate with canvas coordinate.
@@ -825,7 +860,7 @@ function testCoordinateConversion2(tile, color = Draw.COLORS.blue) {
     const testI = ((textureCoord.y * w) + textureCoord.x);
     if ( testI !== i ) {
       console.log(`At i ${i} ≠ ${testI}`);
-      return false
+      return false;
     }
 
     Draw.point(canvasCoord, { color, alpha: alpha / 255 });
