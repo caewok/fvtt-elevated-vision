@@ -132,24 +132,31 @@ export function _refreshToken(wrapper, options) {
   if ( !this._elevatedVision || !this._elevatedVision.tokenAdjustElevation ) return wrapper(options);
 
   if ( this._original ) {
-    log("token _refresh is clone");
+    log("token _refresh is clone.");
     // This token is a clone in a drag operation.
-    // Adjust elevation of the clone
+    // Adjust elevation of the clone by calculating the elevation from origin to line.
+    const { tokenOrigin, tokenElevation } = this._elevatedVision;
+    const travelRay = new Ray(tokenOrigin, this.document);
+    const travel = elevationForTokenTravel(this, travelRay, { tokenElevation });
+    log(`{x: ${travelRay.A.x}, y: ${travelRay.A.y}, e: ${tokenElevation} } --> {x: ${travelRay.B.x}, y: ${travelRay.B.y}, e: ${travel.finalElevation} }`, travel);
+    this.document.elevation = travel.finalElevation;
+
+    log(`token _refresh at ${this.document.x},${this.document.y} from ${this._elevatedVision.tokenOrigin.x},${this._elevatedVision.tokenOrigin.y} to elevation ${this.document.elevation}`, options, this);
 
   } else {
-    const hasAnimated = this._elevatedVision.tokenHasAnimated;
-    if ( !this._animation && hasAnimated ) {
-      // Reset flag on token to prevent further elevation adjustments
-      this._elevatedVision.tokenAdjustElevation = false;
-      return wrapper(options);
-    } else if ( !hasAnimated ) this._elevatedVision.tokenHasAnimated = true;
+//     const hasAnimated = this._elevatedVision.tokenHasAnimated;
+//     if ( !this._animation && hasAnimated ) {
+//       // Reset flag on token to prevent further elevation adjustments
+//       this._elevatedVision.tokenAdjustElevation = false;
+//       return wrapper(options);
+//     } else if ( !hasAnimated ) this._elevatedVision.tokenHasAnimated = true;
   }
 
-  // Adjust the elevation
-  this.document.elevation = tokenGroundElevation(this, { position: this.document });
-
-  log(`token _refresh at ${this.document.x},${this.document.y} from ${this.position.x},${this.position.y} to elevation ${this.document.elevation}`, options, this);
-
+//   // Adjust the elevation
+//   this.document.elevation = tokenGroundElevation(this, { position: this.document });
+//
+//   log(`token _refresh at ${this.document.x},${this.document.y} from ${this.position.x},${this.position.y} to elevation ${this.document.elevation}`, options, this);
+//
   return wrapper(options);
 }
 
@@ -167,9 +174,11 @@ export function cloneToken(wrapper) {
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return clone;
 
   const tokenOrigin = { x: this.x, y: this.y };
-  if ( !isTokenOnGround(this, { position: tokenOrigin }) ) return clone;
+  if ( !isTokenOnGround(this, { position: tokenOrigin }) && !autoElevationFly() ) return clone;
 
   clone._elevatedVision.tokenAdjustElevation = true;
+  clone._elevatedVision.tokenOrigin = tokenOrigin;
+  clone._elevatedVision.tokenElevation = this.bottomE;
   return clone;
 }
 
@@ -185,13 +194,14 @@ export function cloneToken(wrapper) {
  * @param {boolean} [options.considerTiles]   First consider tiles under the token?
  * @return {boolean}
  */
-export function isTokenOnGround(token, { position, useAveraging, considerTiles } = {}) {
-  const currTerrainElevation = tokenGroundElevation(token, { position, useAveraging, considerTiles });
-  return currTerrainElevation.almostEqual(token.document?.elevation);
+export function isTokenOnGround(token, { position, tokenElevation, useAveraging, considerTiles } = {}) {
+  tokenElevation ??= token.bottomE;
+  const currTerrainElevation = tokenGroundElevation(token, { position, tokenElevation, useAveraging, considerTiles });
+  return currTerrainElevation.almostEqual(tokenElevation);
 }
 
-export function isTokenOnTerrain(token, { position, useAveraging, considerTiles = true } = {}) {
-  if ( considerTiles && isTokenOnTile(token, { position, useAveraging }) ) return false;
+export function isTokenOnTerrain(token, { position, tokenElevation, useAveraging, considerTiles = true } = {}) {
+  if ( considerTiles && isTokenOnTile(token, { position, tokenElevation, useAveraging }) ) return false;
   return isTokenOnGround(token, { position, useAveraging, considerTiles: false });
 }
 
@@ -206,9 +216,10 @@ export function isTokenOnTerrain(token, { position, useAveraging, considerTiles 
  * @param {boolean} [options.considerTiles]   First consider tiles under the token?
  * @return {boolean}
  */
-export function isTokenOnTile(token, { position, useAveraging }) {
-  const tileElevation = tokenTileElevation(token, { position, useAveraging, checkTopOnly: true });
-  return tileElevation !== null && tileElevation.almostEqual(token.elevationE);
+export function isTokenOnTile(token, { position, tokenElevation, useAveraging }) {
+  tokenElevation ??= token.bottomE;
+  const tileElevation = tokenTileElevation(token, { position, tokenElevation, useAveraging, checkTopOnly: true });
+  return tileElevation !== null && tileElevation.almostEqual(tokenElevation);
 }
 
 /**
@@ -223,9 +234,9 @@ export function isTokenOnTile(token, { position, useAveraging }) {
  * @param {boolean} [options.considerTiles]   First consider tiles under the token?
  * @returns {number} Elevation in grid units.
  */
-export function tokenGroundElevation(token, { position, useAveraging, considerTiles = true } = {}) {
+export function tokenGroundElevation(token, { position, tokenElevation, useAveraging, considerTiles = true } = {}) {
   let elevation = null;
-  if ( considerTiles ) elevation = tokenTileElevation(token, { position, useAveraging });
+  if ( considerTiles ) elevation = tokenTileElevation(token, { position, tokenElevation, useAveraging });
 
   // If the terrain is above the tile, use the terrain elevation. (Math.max(null, 5) returns 5.)
   return Math.max(elevation, tokenTerrainElevation(token, { position, useAveraging }));
@@ -251,6 +262,18 @@ export function tokenTerrainElevation(token, { position, useAveraging } = {}) {
   return canvas.elevation.elevationAt(position.x, position.y);
 }
 
+/**
+ * Determine if token elevation should be preferred
+ * @returns {boolean}
+ */
+export function autoElevationFly() {
+  if ( !getSetting(SETTINGS.FLY_BUTTON) ) return false;
+  const token_controls = ui.controls.controls.find(elem => elem.name === "token");
+  const fly = token_controls.tools.find(elem => elem.name === SETTINGS.FLY_BUTTON);
+  return fly.active;
+}
+
+
 function averageElevationForToken(x, y, w, h) {
   const tokenShape = canvas.elevation._tokenShape(x, y, w, h);
   return canvas.elevation.averageElevationWithinShape(tokenShape);
@@ -270,11 +293,12 @@ function averageElevationForToken(x, y, w, h) {
  * @return {number|null} Return the tile elevation or null otherwise.
  */
 export function tokenTileElevation(token,
-  { position, useAveraging, selectedTile = {}, checkTopOnly = false } = {} ) {
+  { position, tokenElevation, useAveraging, selectedTile = {}, checkTopOnly = false } = {} ) {
   position ??= { x: token.center.x, y: token.center.y };
   useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
+  tokenElevation ??= token.bottomE;
 
-  const tokenZ = token.bottomZ;
+  const tokenE = token.bottomZ;
   const bounds = token.bounds;
   bounds.x = position.x;
   bounds.y = position.y;
@@ -282,8 +306,8 @@ export function tokenTileElevation(token,
   // Filter tiles that potentially serve as ground.
   let tiles = [...canvas.tiles.quadtree.getObjects(bounds)].filter(tile => {
     if ( !tile.document.overhead ) return false;
-    const tileZ = tile.elevationZ;
-    return isFinite(tileZ) && (tileZ.almostEqual(tokenZ) || tileZ < tokenZ);
+    const tileE = tile.elevationE;
+    return isFinite(tileE) && (tileE.almostEqual(tokenE) || tileE < tokenE);
   });
   if ( !tiles.length ) return null;
 
@@ -343,7 +367,7 @@ function elevationTilesOnRay(ray) {
  * @param {number} percentStep      Percentage between 0 and 1 to step along ray.
  * @returns {Point|null}
  */
-function findOpaqueTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, stepT = 0.1, debug = true } = {}) {
+function findOpaqueTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, stepT = 0.1, debug = false } = {}) {
   if ( !tile._textureData?.pixels || !tile.mesh ) return null;
 
   if ( debug ) {
@@ -416,7 +440,7 @@ function findTransparentTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, st
  * @returns {Point|null}
  */
 function findElevatedTerrainForTokenAlongRay(ray, token,
-  { elevationThreshold = 0, stepT = 0.1, startT = stepT, debug = true } = {}) {
+  { elevationThreshold = 0, stepT = 0.1, startT = stepT, debug = false } = {}) {
   if ( debug ) Draw.segment(ray, { color: Draw.COLORS.green });
 
   // Step along the ray until we hit the threshold or run out of ray.
@@ -551,8 +575,8 @@ function almostBetween(value, min, max) {
 function almostLessThan(a, b) { return a < b || a.almostEqual(b); }
 function almostGreaterThan(a, b) { return a > b || a.almostEqual(b); }
 
-function _currentTokenState(token, { position } = {}) {
-  if ( isTokenOnTile(token, { position }) ) return TOKEN_ELEVATION_STATE.TILE;
+function _currentTokenState(token, { position, tokenElevation } = {}) {
+  if ( isTokenOnTile(token, { position, tokenElevation }) ) return TOKEN_ELEVATION_STATE.TILE;
   if ( isTokenOnGround(token, { position, considerTiles: false }) ) return TOKEN_ELEVATION_STATE.TERRAIN;
   return TOKEN_ELEVATION_STATE.FLY;
 }
@@ -586,28 +610,32 @@ drawElevationResults(results)
 */
 
 
-export function elevationForTokenTravel(token, travelRay, { fly = false, debug = false, tileStep, terrainStep } = {}) {
+export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation, debug = false, tileStep, terrainStep } = {}) {
   if ( debug ) Draw.segment(travelRay);
+
+  let { TERRAIN, TILE, FLY } = TOKEN_ELEVATION_STATE;
+  fly ??= autoElevationFly();
+  tokenElevation ??= token.bottomE;
   let out = {
     token,
     travelRay,
     autoElevation: false,
     trackingRequired: false,
-    startElevation: token.bottomE,
-    finalElevation: token.bottomE,
+    startElevation: tokenElevation,
+    finalElevation: tokenElevation,
     elevationChanges: []
   };
-  let { TERRAIN, TILE, FLY } = TOKEN_ELEVATION_STATE;
+
 
   // If flying not enabled and the token is currently flying, bail out.
-  let currState = _currentTokenState(token, { position: travelRay.A });
+  let currState = _currentTokenState(token, { position: travelRay.A, tokenElevation });
   if ( !fly && currState === FLY ) return out; // Flying
 
   // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
   out.autoElevation = true;
   let { tiles, tileIxs } = _organizeTiles(travelRay);
   if ( !tiles.length && !fly ) {
-    out.finalElevation = tokenGroundElevation(token, { position: travelRay.B });
+    out.finalElevation = tokenGroundElevation(token, { position: travelRay.B, tokenElevation });
     return out;
   }
   out.trackingRequired = true;
@@ -715,7 +743,7 @@ export function elevationForTokenTravel(token, travelRay, { fly = false, debug =
         if ( nextPt ) {
           const nextCanvasPt = getCanvasCoordinate(matchingTile, nextPt.x, nextPt.y);
           nextCanvasPt.t0 = rayTConversion(nextCanvasPt);
-          _addIx(tileIxs, nextCanvasPt, { debug: true });
+          _addIx(tileIxs, nextCanvasPt, { debug });
         }
 
         // Find the next location of where terrain pokes through the tile, if any.
