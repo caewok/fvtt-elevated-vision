@@ -601,7 +601,7 @@ drawElevationResults(results)
 */
 
 
-function elevationForTokenTravel(token, travelRay, { fly = false, debug = false, tileStep, terrainStep } = {}) {
+export function elevationForTokenTravel(token, travelRay, { fly = false, debug = false, tileStep, terrainStep } = {}) {
   if ( debug ) Draw.segment(travelRay);
   let out = {
     token,
