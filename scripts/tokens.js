@@ -592,8 +592,9 @@ travelRay = new Ray(A, B)
 
 draw.clearDrawings()
 draw.clearLabels()
-results = elevationForTokenTravel(token, travelRay, { debug: true, fly: true})
+results = elevationForTokenTravel(token, travelRay, { debug: true, fly: false})
 draw.clearDrawings()
+draw.clearLabels()
 drawElevationResults(results)
 
 
@@ -662,13 +663,14 @@ function elevationForTokenTravel(token, travelRay, { fly = false, debug = false,
     // Determine the destination type and associated elevation.
     // (1) If currently on the terrain, the current elevation reflects that of the last
     //     intersection. Update to the current intersection.
-    if ( currState === TERRAIN ) currE = tokenTerrainElevation(token, { position: ix });
+    let terrainE;
+    if ( currState === TERRAIN ) currE = terrainE = tokenTerrainElevation(token, { position: ix });
 
     // (2) Locate any tiles at this location with sufficiently near elevation.
     let matchingTile;
     if ( currTile && currTile.containsPixel(ix.x, ix.y) ) matchingTile = currTile;
     else {
-      const maxE = currE + tileStep;
+      const maxE = currE;
       matchingTile = tiles.find(tile => {
         const tileE = tile.elevationE;
         return almostLessThan(tileE, maxE) && tile.containsPixel(ix.x, ix.y) > 0;
@@ -680,7 +682,10 @@ function elevationForTokenTravel(token, travelRay, { fly = false, debug = false,
     if ( matchingTile ) {
       currState = TILE;
       currE = matchingTile.elevationE;
-    } else currState = TERRAIN;
+    } else {
+      currState = TERRAIN;
+      currE = terrainE ?? tokenTerrainElevation(token, { position: ix });
+    }
 
     // (4) If flying is enabled, direction of movement must be checked.
     //     Use the immediately previous terrain or tile elevation.
@@ -719,6 +724,7 @@ function elevationForTokenTravel(token, travelRay, { fly = false, debug = false,
 
       case TILE: {
         // Find the alpha intersection for this tile, if any, or the tile endpoint, if not.
+        const tileCanvasRay = new Ray(ix, travelRay.B);
         const tileTextureRay = canvasRayToTexture(tileCanvasRay, matchingTile);
         const nextPt = findTransparentTilePointAlongRay(tileTextureRay, matchingTile, { stepT });
         if ( nextPt ) {
@@ -739,7 +745,7 @@ function elevationForTokenTravel(token, travelRay, { fly = false, debug = false,
         const destRay = new Ray(ix, travelRay.B);
 
         // Find the tile intersections
-        const maxE = currE + elevationStep;
+        const maxE = currE;
         const minE = currE - elevationStep;
         const tilesWithinE = tiles.filter(tile => almostBetween(tile.elevationE, minE, maxE) );
         const ixs = [];
@@ -774,15 +780,15 @@ function _addIx(trackingArray, pt, {debug = false, color = Draw.COLORS.yellow, r
 
 function drawElevationResults(results) {
   Draw.segment(results.travelRay);
-  for ( let i = 0; i < results.tileElevationChanges.length; i += 1 ) {
-    const changes = results.tileElevationChanges[i];
+  for ( let i = 0; i < results.elevationChanges.length; i += 1 ) {
+    const changes = results.elevationChanges[i];
     const startPt = changes.ix;
-    const endPt = i < results.tileElevationChanges.length - 1
-      ? results.tileElevationChanges[i + 1].ix : results.travelRay.B;
-    const color = changes.onTile ? Draw.COLORS.red : Draw.COLORS.green;
+    const endPt = i < results.elevationChanges.length - 1
+      ? results.elevationChanges[i + 1].ix : results.travelRay.B;
+    const color = STATE_COLOR[changes.currState]
     Draw.point(startPt, { color });
     Draw.segment({A: startPt, B: endPt}, { color });
-    Draw.labelPoint(startPt, changes.currE);
+    Draw.labelPoint(PIXI.Point.midPoint(startPt, endPt), changes.currE);
   }
   Draw.labelPoint(results.travelRay.B, results.finalElevation);
 }
