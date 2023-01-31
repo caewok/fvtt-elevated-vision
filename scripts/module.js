@@ -45,7 +45,7 @@ import {
 
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, setSetting, registerSettings } from "./settings.js";
-import { isTokenOnGround, tokenGroundElevation } from "./tokens.js";
+import { isTokenOnGround, tokenGroundElevation, tokenTerrainElevation } from "./tokens.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
@@ -219,3 +219,30 @@ function updateTileHook(document, change, _options, _userId) {
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
 Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
 Hooks.on("renderTileConfig", renderTileConfigHook);
+
+Hooks.on("getSceneControlButtons", controls => {
+  if ( !getSetting(SETTINGS.AUTO_ELEVATION) || !getSetting(SETTINGS.FLY_BUTTON) ) return;
+
+  const tokenTools = controls.find(c => c.name === "token");
+  tokenTools.tools.push({
+    name: SETTINGS.FLY_BUTTON,
+    title: game.i18n.localize(`${MODULE_ID}.controls.${SETTINGS.FLY_BUTTON}.name`),
+    icon: "fa-solid fa-plane-lock",
+    toggle: true
+  });
+});
+
+/**
+ * Register listeners when the settings config is opened.
+ */
+function renderSettingsConfigHook(application, html, data) {
+  util.log("SettingsConfig", application, html, data);
+
+  const evSettings = html.find(`section[data-tab="${MODULE_ID}"]`);
+  if ( !evSettings || !evSettings.length ) return;
+
+  const display = getSetting(SETTINGS.AUTO_ELEVATION);
+  const input = evSettings.find(`input[name="${MODULE_ID}.${SETTINGS.FLY_BUTTON}"]`);
+  const div = input.parent().parent();
+  div[0].style.display = display;
+}

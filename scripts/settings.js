@@ -20,6 +20,7 @@ export const SETTINGS = {
   AUTO_ELEVATION: "auto-change-elevation",
   AUTO_AVERAGING: "auto-change-elevation.averaging",
   CLOCKWISE_SWEEP: "enhance-cw-sweep",
+  FLY_BUTTON: "add-fly-button",
 
   WELCOME_DIALOG: {
     v020: "welcome-dialog-v0-20"
@@ -71,7 +72,19 @@ export function registerSettings() {
     config: true,
     default: true,
     type: Boolean,
-    requiresReload: false
+    requiresReload: false,
+    onChange: reloadTokenControls
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.FLY_BUTTON, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.FLY_BUTTON}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.FLY_BUTTON}.hint`),
+    scope: "user",
+    config: () => getSetting(SETTINGS.AUTO_ELEVATION),
+    default: true,
+    type: Boolean,
+    requiresReload: false,
+    onChange: reloadTokenControls
   });
 
   game.settings.register(MODULE_ID, SETTINGS.AUTO_AVERAGING, {
@@ -100,6 +113,31 @@ export function registerSettings() {
     default: false,
     type: Boolean
   });
+}
 
+/**
+ * Force a reload of token controls layer.
+ * Used to force the added control to appear/disappear.
+ */
+function reloadTokenControls() {
+  if ( !canvas.tokens.active ) return;
+  canvas.tokens.deactivate();
+  canvas.tokens.activate();
+}
 
+/**
+ * Display or hide the fly button setting based on auto elevation toggle.
+ */
+function autoElevationSettingChanged(event) {
+  const autoElevation = event.target.checked ? "" : "none";
+  const input = document.getElementsByName(`${MODULE_ID}.${SETTINGS.FLY_BUTTON}`);
+  const div = input[0].parentElement.parentElement;
+  div.style.display = autoElevation;
+}
+
+export function activateListenersSettingsConfig(wrapper, html) {
+  log("activateListenersSettingsConfig", html);
+
+  html.find(`[name="${MODULE_ID}.${SETTINGS.AUTO_ELEVATION}"]`).change(autoElevationSettingChanged.bind(this));
+  wrapper(html);
 }

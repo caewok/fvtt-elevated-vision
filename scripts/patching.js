@@ -10,7 +10,7 @@ ClockwiseSweepPolygon
 // Patches
 
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
-import { getSetting, SETTINGS } from "./settings.js";
+import { getSetting, SETTINGS, activateListenersSettingsConfig } from "./settings.js";
 
 import {
   defaultOptionsAmbientSoundConfig,
@@ -153,6 +153,9 @@ function shaderPVAdditions() {
 
 
 export function registerPatches() {
+  // ---- Settings manipulations to hide unneeded settings ----- //
+  libWrapper.register(MODULE_ID, "SettingsConfig.prototype.activateListeners", activateListenersSettingsConfig, libWrapper.WRAPPER);
+
   const shaderAlgorithm = getSetting(SETTINGS.SHADING.ALGORITHM);
   // ----- Locating edges that create shadows in the LOS ----- //
   libWrapper.register(MODULE_ID, "ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, libWrapper.WRAPPER, {perf_mode: libWrapper.PERF_FAST});
