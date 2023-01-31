@@ -80,52 +80,40 @@ d. Locate tiles along a line segment, and filter according to elevations.
 // Token moves to 35' terrain. No auto update to elevation.
 // Token moves to 30' terrain. Token & terrain elevation now match.
 // Token moves to 35' terrain. Auto update, b/c previously at 30' (Token "landed.")
-//
-// So:
-// Token starts on terrain ground: auto elevation
-// Token starts on tile: auto elevation
-// Token not starting on terrain or tile ground: no auto elevation
-//
-// If at any point, token moves on/off tile:
-// 1a. tile --> terrain/tile @ same elevation --> auto elevation continues
-// 1b. tile --> higher terrain elevation --> auto elevation continues
-// 1c. tile --> lower terrain elevation --> auto elevation stops.
-//   (Token now "flying"; token moved off tile "cliff" or "ledge")
-// 1d. tile --> higher tile elevation --> auto elevation based on underneath tile
-//   (Token now under the tile)
-// 1e. tile --> lower tile elevation --> auto elevation stops.
-//   (Token now "flying")
-// 2a. terrain --> tile @ same elevation --> auto elevation continues
-// 2b. terrain --> tile below --> auto elevation stops (opposite of )
-//   (Token dropped from "hill" to "floor")
-// 2c. terrain --> tile above --> tile ignored (above token)
 
-// Assumed tokens do not burrow, so higher terrain elevation forces the token higher.
-// Higher or lower means greater than 1 elevation step.
-// Within 1 elevation step, treated as same elevation and can continue.
 
 /*
 Fly-mode:
 Origination   Destination   Lower       Same (§)    Higher
 terrain       terrain       fly         terrain     terrain
-terrain       tile          fly         tile        NA (stay on origination terrain)
-tile          tile          fly         tile        NA (stay on origination tile)
+terrain       tile          fly         tile        NA (stays on origination terrain)
+tile          tile          fly         tile        NA (stays on origination tile)
 tile          terrain       fly         terrain     terrain
 fly           terrain       fly         terrain     terrain
 
 No-fly-mode:
 Origination   Destination   Lower       Same (§)    Higher
 terrain       terrain       terrain     terrain     terrain
-terrain       tile          tile        tile        NA (stay on origination terrain)
-tile          tile          tile        tile        NA (stay on origination tile)
+terrain       tile          tile        tile        NA (stays on origination terrain)
+tile          tile          tile        tile        NA (stays on origination tile)
 tile          terrain       terrain     terrain     terrain
 
 § Within 1 elevation unit in either direction, treated as Same.
-
 */
 
+/*
+Programming by testing a position for the token:
+- Need to know the straight-line path taken.
+- Locate tile-terrain intersections and tile-tile intersections.
+- At each intersection, pick terrain or tile. Remember the tile elevation.
+- If fly is enabled, can pick "fly" as the third transition. Remember fly elevation
 
-
+Animating for any given location:
+- Check against segment spans. Point between:
+  - tile: use tile elevation
+  - terrain: get current terrain elevation
+  - fly: use fly elevation
+*/
 
 /**
  * Wrap Token.prototype._refresh
@@ -158,7 +146,7 @@ export function _refreshToken(wrapper, options) {
   }
 
   // Adjust the elevation
-  let tileE = tokenTileGroundElevation(this, { position: this.document, checkTopOnly: true });
+  let tileE = tokenTileElevation(this, { position: this.document, checkTopOnly: true });
   const groundE = tokenGroundElevation(this, { position: this.document });
   const prevTileE = this._elevatedVision.tileElevation;
 
@@ -214,6 +202,11 @@ export function isTokenOnGround(token, { position, useAveraging, considerTiles }
   return currTerrainElevation.almostEqual(token.document?.elevation);
 }
 
+export function isTokenOnTerrain(token, { position, useAveraging, considerTiles = true } = {}) {
+  if ( considerTiles && isTokenOnTile(token, { position, useAveraging }) ) return false;
+  return isTokenOnGround(token, { position, useAveraging, considerTiles: false });
+}
+
 /**
  * Determine whether a token is on a tile, meaning the token is in contact with the tile.
  * @param {Token} token       Token to test; may use token.getBounds() and token.center, depending on options.
@@ -226,8 +219,8 @@ export function isTokenOnGround(token, { position, useAveraging, considerTiles }
  * @return {boolean}
  */
 export function isTokenOnTile(token, { position, useAveraging }) {
-  const tileElevation = tokenTileGroundElevation(token, { position, useAveraging, checkTopOnly: true });
-  return tileElevation !== null && tileElevation === token.elevationE;
+  const tileElevation = tokenTileElevation(token, { position, useAveraging, checkTopOnly: true });
+  return tileElevation !== null && tileElevation.almostEqual(token.elevationE);
 }
 
 /**
@@ -244,10 +237,10 @@ export function isTokenOnTile(token, { position, useAveraging }) {
  */
 export function tokenGroundElevation(token, { position, useAveraging, considerTiles = true } = {}) {
   let elevation = null;
-  if ( considerTiles ) elevation = tokenTileGroundElevation(token, { position, useAveraging });
+  if ( considerTiles ) elevation = tokenTileElevation(token, { position, useAveraging });
 
   // If the terrain is above the tile, use the terrain elevation. (Math.max(null, 5) returns 5.)
-  return Math.max(elevation, tokenTerrainGroundElevation(token, { position, useAveraging }));
+  return Math.max(elevation, tokenTerrainElevation(token, { position, useAveraging }));
 }
 
 /**
@@ -261,7 +254,7 @@ export function tokenGroundElevation(token, { position, useAveraging, considerTi
  *                                            Defaults to SETTINGS.AUTO_AVERAGING.
  * @returns {number} Elevation in grid units.
  */
-export function tokenTerrainGroundElevation(token, { position, useAveraging } = {}) {
+export function tokenTerrainElevation(token, { position, useAveraging } = {}) {
   position ??= { x: token.center.x, y: token.center.y };
   useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
 
@@ -288,7 +281,7 @@ function averageElevationForToken(x, y, w, h) {
  * @param {boolean} [options.checkTopOnly]    Should all tiles under the token be checked, or only the top-most tile?
  * @return {number|null} Return the tile elevation or null otherwise.
  */
-export function tokenTileGroundElevation(token,
+export function tokenTileElevation(token,
   { position, useAveraging, selectedTile = {}, checkTopOnly = false } = {} ) {
   position ??= { x: token.center.x, y: token.center.y };
   useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
@@ -362,7 +355,7 @@ function elevationTilesOnRay(ray) {
  * @param {number} percentStep      Percentage between 0 and 1 to step along ray.
  * @returns {Point|null}
  */
-function findOpaqueTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, percentStep = 0.1, debug = true } = {}) {
+function findOpaqueTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, stepT = 0.1, debug = true } = {}) {
   if ( !tile._textureData?.pixels || !tile.mesh ) return null;
 
   if ( debug ) {
@@ -375,7 +368,7 @@ function findOpaqueTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, percent
   alphaThreshold = alphaThreshold * 255;
 
   // Step along the ray until we hit the threshold or run out of ray.
-  let t = percentStep;
+  let t = stepT;
   while ( t <= 1 ) {
     const pt = ray.project(t);
     const px = (Math.floor(pt.y) * aw) + Math.floor(pt.x);
@@ -387,12 +380,13 @@ function findOpaqueTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, percent
     }
 
     if ( value > alphaThreshold ) return pt;
-    t += percentStep;
+    t += stepT;
   }
   return null;
 }
 
-function findTransparentTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, percentStep = 0.1, debug = true } = {}) {
+// Ray is a tile texture ray
+function findTransparentTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, stepT = 0.1, debug = false } = {}) {
   if ( !tile._textureData?.pixels || !tile.mesh ) return null;
 
   if ( debug ) {
@@ -405,7 +399,7 @@ function findTransparentTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, pe
   alphaThreshold = alphaThreshold * 255;
 
   // Step along the ray until we hit the threshold or run out of ray.
-  let t = percentStep;
+  let t = stepT;
   while ( t <= 1 ) {
     const pt = ray.project(t);
     const px = (Math.floor(pt.y) * aw) + Math.floor(pt.x);
@@ -417,11 +411,10 @@ function findTransparentTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, pe
     }
 
     if ( value < alphaThreshold ) return pt;
-    t += percentStep;
+    t += stepT;
   }
   return null;
 }
-
 
 /**
  * Find elevated terrain along a ray.
@@ -435,23 +428,73 @@ function findTransparentTilePointAlongRay(ray, tile, { alphaThreshold = 0.75, pe
  * @returns {Point|null}
  */
 function findElevatedTerrainForTokenAlongRay(ray, token,
-  { elevationThreshold = 0, percentStep = 0.1, debug = true } = {}) {
+  { elevationThreshold = 0, stepT = 0.1, startT = stepT, debug = true } = {}) {
   if ( debug ) Draw.segment(ray, { color: Draw.COLORS.green });
 
   // Step along the ray until we hit the threshold or run out of ray.
-  let t = percentStep;
+  let t = startT;
   while ( t <= 1 ) {
     const pt = ray.project(t);
     if ( debug ) Draw.point(pt, { radius: 1 });
-    const value = tokenTerrainGroundElevation(token, { position: pt });
+    const value = tokenTerrainElevation(token, { position: pt });
     if ( value > elevationThreshold ) {
       pt.t0 = t;
       return pt;
     }
-    t += percentStep;
+    t += stepT;
   }
   return null;
 }
+
+function findTerrainElevationJumpsForTokenAlongRay(ray, token,
+  { maxJump = canvas.elevation.elevationStep, stepT = 0.1, startT = stepT, debug = false } = {}) {
+  if ( debug ) Draw.segment(ray, { color: Draw.COLORS.green });
+
+  // Step along the ray until we hit the threshold or run out of ray.
+  let t = startT;
+  let pt = ray.project(t);
+  let currValue = tokenTerrainElevation(token, { position: pt });
+  while ( t <= 1 ) {
+    if ( debug ) Draw.point(pt, { radius: 1 });
+    pt = ray.project(t);
+    const value = tokenTerrainElevation(token, { position: pt });
+    if ( almostBetween(value, currValue - maxJump, currValue + maxJump) ) currValue = value;
+    else {
+      pt.t0 = t;
+      return pt;
+    }
+    currValue = value;
+    t += stepT;
+  }
+  return null;
+}
+
+function findTerrainCliffsForTokenAlongRay(ray, token,
+  { maxFall, stepT = 0.1, startT=0, debug = false } = {}) {
+  if ( debug ) Draw.segment(ray, { color: Draw.COLORS.green });
+  maxFall ??= canvas.elevation.elevationStep;
+
+  // Step along the ray until we hit the threshold or run out of ray.
+  let pt = ray.project(startT);
+  let currValue = tokenTerrainElevation(token, { position: pt });
+  let t = startT + stepT;
+  while ( t <= 1 ) {
+    pt = ray.project(t);
+    if ( debug ) Draw.point(pt, { radius: 1 });
+    const value = tokenTerrainElevation(token, { position: pt });
+//     console.log(`${value} at ${t} `)
+    if ( value < (currValue - maxFall) ) {
+      if ( debug ) Draw.point(pt, { color: Draw.COLORS.red, radius: 3 });
+      pt.t0 = t;
+      return pt;
+    }
+    currValue = value;
+    t += stepT;
+  }
+  return null;
+}
+
+
 
 function canvasRayToTexture(ray, tile) {
   const a = getTextureCoordinate(tile, ray.A.x, ray.A.y);
@@ -476,109 +519,247 @@ function textureRayToCanvas(ray, tile) {
 // tokenTileGroundElevation = canvas.elevation.tokens.tokenTileGroundElevation
 // tokenTerrainGroundElevation = canvas.elevation.tokens.tokenTerrainGroundElevation
 
-function elevationForTokenTravel(token, travelRay) {
-  Draw.segment(travelRay);
-  const out = {
-    token,
-    travelRay,
-    autoElevation: false,
-    tilesEncountered: false,
-    finalElevation: token.bottomE,
-    tileElevationChanges: []
-  };
+/** @enum {number} */
+const TOKEN_ELEVATION_STATE = {
+  TERRAIN: 0, // Important that terrain is set to zero, so it can be checked for true/false.
+  TILE: 1,
+  FLY: 2
+};
 
-  let currE = tokenGroundElevation(token, { position: travelRay.A });
-  if ( !currE.almostEqual(token.bottomE) ) return out;
+/** @enum {number} */
+const TOKEN_ELEVATION_DIRECTION = {
+  LOWER: -1,
+  SAME: 0,
+  HIGHER: 1
+};
 
-  out.autoElevation = true;
-  out.finalElevation = tokenGroundElevation(token, { position: travelRay.B });
-  const tiles = elevationTilesOnRay(travelRay);
-  if ( !tiles.size ) return out;
-  out.tilesEncountered = true;
+/** @enum {hex} */
+// For debugging
+const STATE_COLOR = [Draw.COLORS.green, Draw.COLORS.orange, Draw.COLORS.blue];
 
-  // Organize tiles along the ray
-  const gridPrecision = canvas.walls.gridPrecision;
-  const interval = Math.max(canvas.grid.w / gridPrecision, canvas.grid.h / gridPrecision);
-  const rayTConversion = Math.abs(travelRay.dx) > Math.abs(travelRay.dy)
-    ? pt => (pt.x - travelRay.A.x) / travelRay.dx
-    : pt => (pt.y - travelRay.A.y) / travelRay.dy;
+function _organizeTiles(travelRay) {
+  const tiles = [...elevationTilesOnRay(travelRay)];
+  const out = { tiles };
+  const tileIxs = out.tileIxs = [];
+  if ( !tiles.length ) return out;
 
-  const tileMap = new Map();
-  const tileIxs = [];
+  // Sort tiles by elevation, highest to lowest.
+  // This will help with finding relevant tiles later.
+  // TODO: Take advantage of sorting in elevationForTokenTravel
+  tiles.sort((a, b) => b.elevationZ - a.elevationZ);
+
   for ( const tile of tiles ) {
     const ixs = canvasRayIntersectsTile(tile, travelRay);
     if ( ixs.length < 2 ) continue;
-    tileIxs.push(ixs[0], ixs[1]);
-
-    const tileE = tile.elevationE;
-    let s = tileMap.get(tileE);
-    if ( !s ) {
-      s = new Set();
-      tileMap.set(tileE, s);
-    }
-    s.add(tile);
+    tileIxs.push(ixs[0]);
   }
 
   // Closest intersection to A is last in the queue, so we can pop it.
   tileIxs.sort((a, b) => b.t0 - a.t0);
 
+  return out;
+}
+
+function almostBetween(value, min, max) {
+  return almostLessThan(value, max) && almostGreaterThan(value, min);
+}
+function almostLessThan(a, b) { return a < b || a.almostEqual(b); }
+function almostGreaterThan(a, b) { return a > b || a.almostEqual(b); }
+
+function _currentTokenState(token, { position } = {}) {
+  if ( isTokenOnTile(token, { position }) ) return TOKEN_ELEVATION_STATE.TILE;
+  if ( isTokenOnGround(token, { position, considerTiles: false }) ) return TOKEN_ELEVATION_STATE.TERRAIN;
+  return TOKEN_ELEVATION_STATE.FLY;
+}
+
+/* Testing
+api = game.modules.get("elevatedvision").api
+Draw = CONFIG.GeometryLib.Draw
+draw = new Draw()
+
+tokenGroundElevation = canvas.elevation.tokens.tokenGroundElevation
+tokenTileGroundElevation = canvas.elevation.tokens.tokenTileGroundElevation
+tokenTerrainGroundElevation = canvas.elevation.tokens.tokenTerrainGroundElevation
+
+tokenTileElevation = canvas.elevation.tokens.tokenTileGroundElevation
+tokenTerrainElevation = canvas.elevation.tokens.tokenTerrainGroundElevation
+
+let [token1, token2] = canvas.tokens.controlled;
+A = token1.center
+B = token2.center
+token = token1
+travelRay = new Ray(A, B)
+
+draw.clearDrawings()
+draw.clearLabels()
+results = elevationForTokenTravel(token, travelRay, { debug: true, fly: true})
+draw.clearDrawings()
+drawElevationResults(results)
+
+
+*/
+
+
+function elevationForTokenTravel(token, travelRay, { fly = false, debug = false, tileStep, terrainStep } = {}) {
+  if ( debug ) Draw.segment(travelRay);
+  let out = {
+    token,
+    travelRay,
+    autoElevation: false,
+    trackingRequired: false,
+    startElevation: token.bottomE,
+    finalElevation: token.bottomE,
+    elevationChanges: []
+  };
+  let { TERRAIN, TILE, FLY } = TOKEN_ELEVATION_STATE;
+
+  // If flying not enabled and the token is currently flying, bail out.
+  let currState = _currentTokenState(token, { position: travelRay.A });
+  if ( !fly && currState === FLY ) return out; // Flying
+
+  // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
+  out.autoElevation = true;
+  let { tiles, tileIxs } = _organizeTiles(travelRay);
+  if ( !tiles.length && !fly ) {
+    out.finalElevation = tokenGroundElevation(token, { position: travelRay.B });
+    return out;
+  }
+  out.trackingRequired = true;
+
+  // Variables required for the tracking loop.
+  tileStep ??= token.topE - token.bottomE;
+  terrainStep ??= token.topE - token.bottomE;
+
+  let currE = token.bottomE;
+  let currTile;
+  let elevationChanges = out.elevationChanges;
+  let { LOWER, SAME, HIGHER } = TOKEN_ELEVATION_DIRECTION;
+  let gridPrecision = canvas.walls.gridPrecision;
+  let interval = Math.max(canvas.grid.w / gridPrecision, canvas.grid.h / gridPrecision);
+  let stepT = interval / travelRay.distance;
+  let rayTConversion = Math.abs(travelRay.dx) > Math.abs(travelRay.dy)
+    ? pt => (pt.x - travelRay.A.x) / travelRay.dx
+    : pt => (pt.y - travelRay.A.y) / travelRay.dy;
+
+  // Add the start and endpoints for the ray
+  let startPt = travelRay.A;
+  let endPt = travelRay.B;
+  startPt.t0 = 0;
+  endPt.t0 = 1;
+  tileIxs.unshift(endPt);
+  tileIxs.push(startPt);
+
   // At each intersection group, update the current elevation based on ground unless already on tile.
   // If the token elevation equals that of the tile, the token is now on the tile.
   // Keep track of the seen intersections, in case of duplicates.
-  const tSeen = new Set();
-  let onTile = false;
+  let tSeen = new Set();
   while ( tileIxs.length ) {
-    const ix = tileIxs.pop();
+    let ix = tileIxs.pop();
     if ( tSeen.has(ix.t0) ) continue;
     tSeen.add(ix.t0);
-    Draw.point(ix, { color: onTile ? Draw.COLORS.red : Draw.COLORS.green, radius: 3 });
+    if ( debug ) Draw.point(ix, { color: STATE_COLOR[currState], radius: 3 });
 
-    if ( !onTile ) currE = tokenTerrainGroundElevation(token, { position: ix });
+    // Determine the destination type and associated elevation.
+    // (1) If currently on the terrain, the current elevation reflects that of the last
+    //     intersection. Update to the current intersection.
+    if ( currState === TERRAIN ) currE = tokenTerrainElevation(token, { position: ix });
 
-    const matchingTile = tileMap.has(currE)
-      ? tileMap.get(currE).find(tile => tile.containsPixel(ix.x, ix.y) > 0)
-      : undefined;
-
-    let tileCanvasRay;
-    let percentStep;
-    if ( matchingTile ) {
-      tileCanvasRay = matchingTile ? new Ray(ix, travelRay.B) : undefined;
-      percentStep = interval / tileCanvasRay.distance;
+    // (2) Locate any tiles at this location with sufficiently near elevation.
+    let matchingTile;
+    if ( currTile && currTile.containsPixel(ix.x, ix.y) ) matchingTile = currTile;
+    else {
+      const maxE = currE + tileStep;
+      matchingTile = tiles.find(tile => {
+        const tileE = tile.elevationE;
+        return almostLessThan(tileE, maxE) && tile.containsPixel(ix.x, ix.y) > 0;
+      });
     }
 
-    if ( onTile && !matchingTile ) {
-      // Check whether token has walked off a tile ledge.
-      const newE = tokenTerrainGroundElevation(token, { position: ix });
-      if ( newE < currE ) {
-        out.autoElevation = false;
+    // (3) Update state and elevation
+    //     If on terrain, that elevation was updated above.
+    if ( matchingTile ) {
+      currState = TILE;
+      currE = matchingTile.elevationE;
+    } else currState = TERRAIN;
+
+    // (4) If flying is enabled, direction of movement must be checked.
+    //     Use the immediately previous terrain or tile elevation.
+    //     If a matching tile is found, we are not flying.
+    if ( fly && !matchingTile ) {
+      const step = currTile ? tileStep : terrainStep;
+      let prevE = currTile?.elevationE;
+      if ( !currTile ) {
+        const prevT = ix.t0 - stepT;
+        const prevPt = travelRay.project(prevT);
+        prevE = tokenTerrainElevation(token, { position: prevPt });
+      }
+      if ( (currE + step) < prevE ) {
+        currState = FLY;
+        currE = prevE;
+      }
+    }
+
+    // (5) Remember the current tile for next iteration.
+    currTile = matchingTile;
+
+    // (6) Update the tracking results.
+    elevationChanges.push({ ix, currState, currE });
+
+    // (7) Depending on the new current state, look for additional tile or terrain intersections along the ray.
+    let startT = ix.t0 + step;
+    switch ( currState ) {
+      case TERRAIN: {
+        // Find the next terrain divergence so flying can be used
+        if ( fly ) {
+          const elevationPt = findTerrainCliffsForTokenAlongRay(travelRay, token, { maxFall: terrainStep, stepT, startT: ix.t0, debug });
+          if ( elevationPt ) _addIx(tileIxs, elevationPt, { debug, color: Draw.COLORS.green });
+        }
         break;
       }
-      currE = newE;
-    } else // If onTile && matchingTile, we are just continuing our walk at this elevation from one tile to another
 
-    if ( !onTile && matchingTile ) {
-      // Find the alpha intersection for this tile or the tile endpoint.
-      const tileTextureRay = canvasRayToTexture(tileCanvasRay, matchingTile);
-      const nextPt = findTransparentTilePointAlongRay(tileTextureRay, matchingTile, { percentStep });
-      if ( nextPt ) {
-        const nextCanvasPt = getCanvasCoordinate(matchingTile, nextPt.x, nextPt.y);
-        nextCanvasPt.t0 = rayTConversion(nextCanvasPt);
-        _addIx(tileIxs, nextCanvasPt, { debug: true });
+      case TILE: {
+        // Find the alpha intersection for this tile, if any, or the tile endpoint, if not.
+        const tileTextureRay = canvasRayToTexture(tileCanvasRay, matchingTile);
+        const nextPt = findTransparentTilePointAlongRay(tileTextureRay, matchingTile, { stepT });
+        if ( nextPt ) {
+          const nextCanvasPt = getCanvasCoordinate(matchingTile, nextPt.x, nextPt.y);
+          nextCanvasPt.t0 = rayTConversion(nextCanvasPt);
+          _addIx(tileIxs, nextCanvasPt, { debug: true });
+        }
+
+        // Find the next location of where terrain pokes through the tile, if any.
+        const elevationPt = findElevatedTerrainForTokenAlongRay(
+          travelRay, token, { elevationThreshold: currE, stepT, startT });
+        if ( elevationPt ) _addIx(tileIxs, elevationPt, { debug, color: Draw.COLORS.green });
+        break;
       }
-    } // If !onTile && !matchingTile, this point does nothing.
 
-    onTile = Boolean(matchingTile);
+      case FLY: {
+        // Check for tile or terrain that we will run into at this flying elevation.
+        const destRay = new Ray(ix, travelRay.B);
 
-    // If on a tile, check for the spot at which terrain elevation pokes through the tile.
-    if ( onTile) {
-      const elevationPt = findElevatedTerrainForTokenAlongRay(
-        tileCanvasRay, token, { elevationThreshold: currE, percentStep });
+        // Find the tile intersections
+        const maxE = currE + elevationStep;
+        const minE = currE - elevationStep;
+        const tilesWithinE = tiles.filter(tile => almostBetween(tile.elevationE, minE, maxE) );
+        const ixs = [];
+        for ( const tile of tilesWithinE ) {
+          const tileIxs = canvasRayIntersectsTile(tile, destRay);
+          if ( tileIxs.length ) ixs.push(tileIxs[0]);
+        }
 
-      // The elevationPt already has correct t0, so only need to add the point.
-      if ( elevationPt ) _addIx(tileIxs, elevationPt, { debug: true, color: Draw.COLORS.green });
+        // Find the elevation intersection.
+        const elevationPt = findElevatedTerrainForTokenAlongRay(
+          travelRay, token, { elevationThreshold: minE, stepT, startT });
+        if ( elevationPt ) ixs.push(elevationPt);
+
+        // If any intersections, add the first one encountered along the travel ray.
+        if ( !ixs.length ) break;
+        ixs.sort((a, b) => a.t0 - b.t0);
+        _addIx(tileIxs, ixs[0], { debug, color: Draw.COLORS.blue });
+        break;
+      }
     }
-
-    out.tileElevationChanges.push({ ix, onTile, currE });
   }
 
   out.finalElevation = currE;
