@@ -146,20 +146,8 @@ export function _refreshToken(wrapper, options) {
   }
 
   // Adjust the elevation
-  let tileE = tokenTileElevation(this, { position: this.document, checkTopOnly: true });
-  const groundE = tokenGroundElevation(this, { position: this.document });
-  const prevTileE = this._elevatedVision.tileElevation;
+  this.document.elevation = tokenGroundElevation(this, { position: this.document });
 
-  // If the ground is above the tile, we are on terrain poking through a tile
-  if ( tileE !== null && tileE < groundE ) tileE = null;
-  if ( prevTileE !== null && prevTileE > groundE ) {
-    // Token previously on or above a tile.
-    // Tile --> lower terrain/tile elevation; stop auto elevation.
-    this._elevatedVision.tokenAdjustElevation = false;
-  }
-
-  this._elevatedVision.tileElevation = tileE;
-  if ( this._elevatedVision.tokenAdjustElevation ) this.document.elevation = groundE;
   log(`token _refresh at ${this.document.x},${this.document.y} from ${this.position.x},${this.position.y} to elevation ${this.document.elevation}`, options, this);
 
   return wrapper(options);
@@ -179,7 +167,7 @@ export function cloneToken(wrapper) {
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return clone;
 
   const tokenOrigin = { x: this.x, y: this.y };
-  if ( !isTokenOnGround(this, tokenOrigin) ) return clone;
+  if ( !isTokenOnGround(this, { position: tokenOrigin }) ) return clone;
 
   clone._elevatedVision.tokenAdjustElevation = true;
   return clone;
@@ -482,7 +470,6 @@ function findTerrainCliffsForTokenAlongRay(ray, token,
     pt = ray.project(t);
     if ( debug ) Draw.point(pt, { radius: 1 });
     const value = tokenTerrainElevation(token, { position: pt });
-//     console.log(`${value} at ${t} `)
     if ( value < (currValue - maxFall) ) {
       if ( debug ) Draw.point(pt, { color: Draw.COLORS.red, radius: 3 });
       pt.t0 = t;
@@ -493,8 +480,6 @@ function findTerrainCliffsForTokenAlongRay(ray, token,
   }
   return null;
 }
-
-
 
 function canvasRayToTexture(ray, tile) {
   const a = getTextureCoordinate(tile, ray.A.x, ray.A.y);
@@ -634,7 +619,6 @@ export function elevationForTokenTravel(token, travelRay, { fly = false, debug =
   let currE = token.bottomE;
   let currTile;
   let elevationChanges = out.elevationChanges;
-  let { LOWER, SAME, HIGHER } = TOKEN_ELEVATION_DIRECTION;
   let gridPrecision = canvas.walls.gridPrecision;
   let interval = Math.max(canvas.grid.w / gridPrecision, canvas.grid.h / gridPrecision);
   let stepT = interval / travelRay.distance;
@@ -711,12 +695,13 @@ export function elevationForTokenTravel(token, travelRay, { fly = false, debug =
     elevationChanges.push({ ix, currState, currE });
 
     // (7) Depending on the new current state, look for additional tile or terrain intersections along the ray.
-    let startT = ix.t0 + step;
+    let startT = ix.t0 + stepT;
     switch ( currState ) {
       case TERRAIN: {
         // Find the next terrain divergence so flying can be used
         if ( fly ) {
-          const elevationPt = findTerrainCliffsForTokenAlongRay(travelRay, token, { maxFall: terrainStep, stepT, startT: ix.t0, debug });
+          const elevationPt = findTerrainCliffsForTokenAlongRay(travelRay, token,
+            { maxFall: terrainStep, stepT, startT: ix.t0, debug });
           if ( elevationPt ) _addIx(tileIxs, elevationPt, { debug, color: Draw.COLORS.green });
         }
         break;
@@ -746,7 +731,7 @@ export function elevationForTokenTravel(token, travelRay, { fly = false, debug =
 
         // Find the tile intersections
         const maxE = currE;
-        const minE = currE - elevationStep;
+        const minE = currE - tileStep;
         const tilesWithinE = tiles.filter(tile => almostBetween(tile.elevationE, minE, maxE) );
         const ixs = [];
         for ( const tile of tilesWithinE ) {
@@ -785,7 +770,7 @@ function drawElevationResults(results) {
     const startPt = changes.ix;
     const endPt = i < results.elevationChanges.length - 1
       ? results.elevationChanges[i + 1].ix : results.travelRay.B;
-    const color = STATE_COLOR[changes.currState]
+    const color = STATE_COLOR[changes.currState];
     Draw.point(startPt, { color });
     Draw.segment({A: startPt, B: endPt}, { color });
     Draw.labelPoint(PIXI.Point.midPoint(startPt, endPt), changes.currE);
