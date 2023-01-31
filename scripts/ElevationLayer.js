@@ -34,8 +34,8 @@ import {
   isTokenOnGround,
   isTokenOnTile,
   tokenGroundElevation,
-  tokenTileGroundElevation,
-  tokenTerrainGroundElevation } from "./tokens.js";
+  tokenTileElevation,
+  tokenTerrainElevation } from "./tokens.js";
 
 /* Elevation layer
 
@@ -77,8 +77,8 @@ export class ElevationLayer extends InteractionLayer {
   // Imported methods
   tokens = {
     tokenGroundElevation,
-    tokenTerrainGroundElevation,
-    tokenTileGroundElevation,
+    tokenTerrainElevation,
+    tokenTileElevation,
     isTokenOnGround,
     isTokenOnTile,
     tokenOnGround: isTokenOnGround // Backwards compatibility

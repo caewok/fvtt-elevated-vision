@@ -45,7 +45,7 @@ import {
 
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, setSetting, registerSettings } from "./settings.js";
-import { isTokenOnGround, isTokenOnTile, tokenGroundElevation, tokenTileGroundElevation } from "./tokens.js";
+import { isTokenOnGround, isTokenOnTile, tokenGroundElevation, tokenTileElevation } from "./tokens.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
