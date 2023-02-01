@@ -17,4 +17,12 @@
   </div>
   <p class="notes">{{ localize "elevatedvision.sceneconfig.elevationstep.hint" }}</p>
 
+  <div class="form-group">
+    <label>{{ localize "elevatedvision.sceneconfig.disable.name"}}</label>
+    <div class="form-fields">
+      <input type="checkbox" id="EVdisable" name="flags.elevatedvision.disable" class="elevatedvision" value={{ checked data.flags.elevatedvision.disable }}>
+    </div>
+  </div>
+  <p class="notes">{{ localize "elevatedvision.sceneconfig.disable.hint" }}</p>
+
 </fieldset>

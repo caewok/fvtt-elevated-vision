@@ -38,6 +38,9 @@
   "elevatedvision.sceneconfig.elevationstep.name": "Elevation Increment",
   "elevatedvision.sceneconfig.elevationstep.hint": "Elevation steps (increments) permitted in this scene. Maximum elevation for a scene equals minimum + 255 * increment.",
 
+  "elevatedvision.sceneconfig.disable.name": "Disable Elevated Vision for scene",
+  "elevatedvision.sceneconfig.disable.hint": "Disable the Elevated Vision module for this scene, to support compatibility with certain modules such as Levels 3D. Also to increase performance where elevation is not required for the scene.",
+
   "elevatedvision.ambientconfig.legendtitle": "Elevated Vision",
   "elevatedvision.ambientconfig.elevation.name": "Elevation",
   "elevatedvision.ambientconfig.elevation.hint": "Elevation of this source.",
