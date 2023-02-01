@@ -6,8 +6,8 @@ SoundSource,
 Wall,
 Token,
 GlobalLightSource,
+Tile,
 CONFIG
-
 */
 "use strict";
 
@@ -60,6 +60,20 @@ export function registerElevationAdditions() {
       get: zBottom
     });
   }
+
+  // Also need to convert a center point back to the top left point of a token.
+  // Used for automatic elevation determination.
+  Object.defineProperty(Token.prototype, "getTopLeft", {
+    value: function(x, y) {
+      return {
+        x: x - (this.w * 0.5),
+        y: y - (this.h * 0.5)
+      };
+    },
+    writable: true,
+    configurable: true
+  });
+
 
   // ----- WALLS ----- //
   if ( !Object.hasOwn(Wall.prototype, "topE") ) {
