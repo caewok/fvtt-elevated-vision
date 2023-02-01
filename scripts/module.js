@@ -3,12 +3,18 @@ Hooks,
 game,
 canvas,
 CONFIG,
-renderTemplate
+renderTemplate,
+Dialog,
+ui
 */
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
+
+// Patches
+import { patchTile } from "./patches/Tile.js";
 
 // Rendering configs
 import { renderAmbientLightConfigHook, renderAmbientSoundConfigHook, renderTileConfigHook } from "./renderConfig.js";
@@ -39,7 +45,12 @@ import {
 
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, setSetting, registerSettings } from "./settings.js";
-import { isTokenOnGround, tokenElevationAt } from "./tokens.js";
+import {
+ isTokenOnGround,
+ tokenGroundElevation,
+ tokenTerrainElevation,
+ autoElevationFly,
+ elevationForTokenTravel } from "./tokens.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
@@ -64,9 +75,9 @@ Hooks.once("init", function() {
   registerAdditions();
 });
 
-// Hooks.once("libWrapper.Ready", async function() {
-//   registerPatches();
-// });
+Hooks.once("libWrapper.Ready", async function() {
+  patchTile();
+});
 
 Hooks.once("setup", async function() {
   registerPatches();
@@ -76,7 +87,7 @@ Hooks.once("setup", async function() {
 Hooks.once("ready", async function() {
   if ( !getSetting(SETTINGS.WELCOME_DIALOG.v020) ) {
 		Dialog.prompt({
-			title: 'Elevated Vision v0.2.0 Changes!',
+			title: "Elevated Vision v0.2.0 Changes!",
 			content: `
 <p>
 As of version 0.2.0, Elevated Vision no longer adjusts token visibility. You can install one or more of the
@@ -140,20 +151,27 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // esli
   log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
   log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
 
-  tokenD.object._elevatedVision ??= {};
-  tokenD.object._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
-  tokenD.object._elevatedVision.tokenHasAnimated = false;
+  token._elevatedVision ??= {};
+  token._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
+  token._elevatedVision.tokenHasAnimated = false;
 
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
   if ( typeof changes.x === "undefined" && typeof changes.y === "undefined" ) return;
 
-  const tokenOrigin = { x: tokenD.x, y: tokenD.y };
-  if ( !isTokenOnGround(tokenD.object, tokenOrigin) ) return;
+  const tokenCenter = token.center;
+  const tokenDestination = token.getCenter(changes.x ? changes.x : tokenD.x, changes.y ? changes.y : tokenD.y );
+  const travelRay = new Ray(tokenCenter, tokenDestination);
+  const travel = token._elevatedVision.travel = elevationForTokenTravel(token, travelRay, { tokenElevation: token.document.elevation });
+  if ( !travel.autoElevation ) return
 
-  const tokenDestination = { x: changes.x ? changes.x : tokenD.x, y: changes.y ? changes.y : tokenD.y };
-  const newTokenE = tokenElevationAt(tokenD.object, tokenDestination);
-  if ( tokenD.elevation !== newTokenE ) changes.elevation = tokenElevationAt(tokenD.object, tokenDestination);
+  if ( tokenD.elevation !== travel.finalElevation ) changes.elevation = travel.finalElevation;
   tokenD.object._elevatedVision.tokenAdjustElevation = true;
+});
+
+Hooks.on("updateToken", function(tokenD, changes, _options, _userId) {
+  const token = tokenD.object;
+  log(`updateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
+
 });
 
 
@@ -176,7 +194,7 @@ async function injectSceneConfiguration(app, html, data) {
 Hooks.on("createTile", createTileHook);
 Hooks.on("updateTile", updateTileHook);
 
-function createTileHook(document, options, userId) {
+function createTileHook(document, _options, _userId) {
   if ( !canvas.elevation?._initialized ) return;
 
   const elevationMin = canvas.elevation.elevationMin;
@@ -190,7 +208,7 @@ function createTileHook(document, options, userId) {
   }
 }
 
-function updateTileHook(document, change, options, userId) {
+function updateTileHook(document, change, _options, _userId) {
   if ( !canvas.elevation?._initialized ) return;
 
   const elevationMin = canvas.elevation.elevationMin;
@@ -207,3 +225,32 @@ function updateTileHook(document, change, options, userId) {
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
 Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
 Hooks.on("renderTileConfig", renderTileConfigHook);
+
+Hooks.on("getSceneControlButtons", controls => {
+  if ( !getSetting(SETTINGS.AUTO_ELEVATION) || !getSetting(SETTINGS.FLY_BUTTON) ) return;
+
+  const tokenTools = controls.find(c => c.name === "token");
+  tokenTools.tools.push({
+    name: SETTINGS.FLY_BUTTON,
+    title: game.i18n.localize(`${MODULE_ID}.controls.${SETTINGS.FLY_BUTTON}.name`),
+    icon: "fa-solid fa-plane-lock",
+    toggle: true
+  });
+});
+
+/**
+ * Register listeners when the settings config is opened.
+ */
+Hooks.on("renderSettingsConfig", renderSettingsConfigHook);
+
+function renderSettingsConfigHook(application, html, data) {
+  util.log("SettingsConfig", application, html, data);
+
+  const evSettings = html.find(`section[data-tab="${MODULE_ID}"]`);
+  if ( !evSettings || !evSettings.length ) return;
+
+  const display = getSetting(SETTINGS.AUTO_ELEVATION) ? "" : "none";
+  const input = evSettings.find(`input[name="${MODULE_ID}.${SETTINGS.FLY_BUTTON}"]`);
+  const div = input.parent().parent();
+  div[0].style.display = display;
+}

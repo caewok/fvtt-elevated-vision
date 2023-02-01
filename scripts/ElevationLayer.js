@@ -23,15 +23,20 @@ import {
   log,
   readDataURLFromFile,
   convertBase64ToImage,
-  drawPolygonWithHoles,
-  combineBoundaryPolygonWithHoles } from "./util.js";
+  drawPolygonWithHoles } from "./util.js";
 
 import { Draw } from "./geometry/Draw.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
-import { isTokenOnGround, tokenTileElevation, tokenElevationAt } from "./tokens.js";
+import {
+  isTokenOnGround,
+  isTokenOnTile,
+  tokenGroundElevation,
+  tokenTileElevation,
+  tokenTerrainElevation,
+  elevationForTokenTravel } from "./tokens.js";
 
 /* Elevation layer
 
@@ -72,10 +77,17 @@ export class ElevationLayer extends InteractionLayer {
 
   // Imported methods
   tokens = {
-    tokenElevationAt,
+    tokenGroundElevation,
+    tokenTerrainElevation,
     tokenTileElevation,
     isTokenOnGround,
-    tokenOnGround: isTokenOnGround // Backwards compatibility
+    isTokenOnTile,
+    elevationForTokenTravel,
+
+    // Backwards compatibility
+    tokenOnGround: isTokenOnGround,
+    tokenTileGroundElevation: tokenTileElevation,
+    tokenTerrainGroundElevation: tokenTerrainElevation
   };
 
   /**
@@ -475,18 +487,18 @@ export class ElevationLayer extends InteractionLayer {
    * Update minimum elevation for the scene based on the Levels minimum tile elevation.
    */
   _updateMinimumElevationFromSceneTiles() {
-     const tiles = canvas.tiles.placeables;
-     const currMin = this.elevationMin;
-     let min = currMin;
-     for ( const tile of tiles ) {
-       const rangeBottom = tile.document.flags?.levels?.rangeBottom ?? currMin;
-       const rangeTop = tile.document.flags?.levels?.rangeTop ?? currMin;
-       min = Math.min(min, rangeBottom, rangeTop);
-     }
+    const tiles = canvas.tiles.placeables;
+    const currMin = this.elevationMin;
+    let min = currMin;
+    for ( const tile of tiles ) {
+      const rangeBottom = tile.document.flags?.levels?.rangeBottom ?? currMin;
+      const rangeTop = tile.document.flags?.levels?.rangeTop ?? currMin;
+      min = Math.min(min, rangeBottom, rangeTop);
+    }
 
-     if ( min < currMin ) {
-       this.elevationMin = min;
-       ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on scene tiles' minimum elevation range.`);
+    if ( min < currMin ) {
+      this.elevationMin = min;
+      ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on the minimum elevation of one or more tiles in the scene.`);
     }
   }
 
@@ -662,7 +674,7 @@ export class ElevationLayer extends InteractionLayer {
       pixels[i] = fn(pixels[i]);
     }
 
-    // newTex = PIXI.Texture.fromBuffer(pixels, width, height) makes vertical lines
+    // This makes vertical lines: newTex = PIXI.Texture.fromBuffer(pixels, width, height)
     const br = new PIXI.BufferResource(pixels, {width, height});
     const bt = new PIXI.BaseTexture(br);
     const newTex = new PIXI.Texture(bt);
@@ -1140,7 +1152,7 @@ export class ElevationLayer extends InteractionLayer {
   _drawWallSegment(wall) {
     const g = new PIXI.Graphics();
     const draw = new Draw(g);
-    const color = wall.isOpen ? Draw.COLORS.blue : Draw.COLORS.red
+    const color = wall.isOpen ? Draw.COLORS.blue : Draw.COLORS.red;
     const alpha = wall.isOpen ? 0.5 : 1;
 
     draw.segment(wall, { color, alpha });
