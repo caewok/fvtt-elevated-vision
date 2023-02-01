@@ -682,7 +682,7 @@ export class ElevationLayer extends InteractionLayer {
    * @param {Point} {x, y}    Canvas coordinates
    * @returns {Point}         Texture coordinates
    */
-  #fromCanvasCoordinates({x, y}) {
+  _fromCanvasCoordinates({x, y}) {
     const pt = new PIXI.Point(x, y);
 
     // TODO: Translate and adjust given resolution.
@@ -696,7 +696,7 @@ export class ElevationLayer extends InteractionLayer {
    * @param {Point} {x, y}    Texture coordinates
    * @returns {Point}         Canvas coordinates
    */
-  #toCanvasCoordinates({x, y}) {
+  _toCanvasCoordinates({x, y}) {
     const pt = new PIXI.Point(x, y);
 
     // TODO: Translate and adjust given resolution.
@@ -712,7 +712,7 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /** @type {number} */
-  get #cacheWidth() {
+  get cacheWidth() {
     if ( !this.#elevationPixelCache.pixels ) this.#refreshPixelCache();
     return this.#elevationPixelCache.width;
   }
@@ -722,10 +722,10 @@ export class ElevationLayer extends InteractionLayer {
    * @param {Point} {x, y}      Texture coordinates
    * @returns {number} pixel index
    */
-  _pixelIndexAtLocal({x, y}) { return ((~~y) * this.#cacheWidth) + (~~x); } // Floor the point coordinates.
+  _pixelIndexAtLocal({x, y}) { return ((~~y) * this.cacheWidth) + (~~x); } // Floor the point coordinates.
 
   _pixelIndexAtCanvas({x, y}) {
-    const local = this.#fromCanvasCoordinates({x, y});
+    const local = this._fromCanvasCoordinates({x, y});
     return this._pixelIndexAtLocal(local);
   }
 
@@ -734,7 +734,7 @@ export class ElevationLayer extends InteractionLayer {
   _pixelValueAtCanvas({x, y}) { return this.elevationPixelValues[this._pixelIndexAtCanvas({x, y})]; }
 
   _localCoordinatesAtPixelIndex(i) {
-    const width = this.#cacheWidth;
+    const width = this.cacheWidth;
     const col = i % width;
     const row = ~~(i / width); // Floor the row.
     return new PIXI.Point(col, row);
@@ -742,7 +742,7 @@ export class ElevationLayer extends InteractionLayer {
 
   _canvasCoordinatesAtPixelIndex(i) {
     const local = this._localCoordinatesAtPixelIndex(i);
-    return this.#toCanvasCoordinates(local);
+    return this._toCanvasCoordinates(local);
   }
 
   /**
@@ -814,7 +814,7 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {PixelFrame}
    */
   _extractFromCachedPixels(frame) {
-    return extractRectangleFromPixelArray(this.elevationPixelValues, this.#cacheWidth, frame);
+    return extractRectangleFromPixelArray(this.elevationPixelValues, this.cacheWidth, frame);
   }
 
   /**
@@ -827,7 +827,7 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {PixelFrame}
    */
   _applyFunctionToCachedPixels(fn, frame) {
-    return applyFunctionToPixelArray(this.elevationPixelValues, this.#cacheWidth, frame, fn);
+    return applyFunctionToPixelArray(this.elevationPixelValues, this.cacheWidth, frame, fn);
   }
 
   /* -------------------------------------------- */
@@ -866,11 +866,11 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {PIXI.Circle}
    */
   #circleToLocalCoordinates(circle) {
-    const origin = this.#fromCanvasCoordinates({ x: circle.x, y: circle.y});
+    const origin = this._fromCanvasCoordinates({ x: circle.x, y: circle.y});
 
     // For radius, use two points of equivalent distance to compare.
-    const radius = this.#fromCanvasCoordinates({ x: circle.radius, y: 0}).x
-      - this.#fromCanvasCoordinates({ x: 0, y: 0}).x;
+    const radius = this._fromCanvasCoordinates({ x: circle.radius, y: 0}).x
+      - this._fromCanvasCoordinates({ x: 0, y: 0}).x;
     return new PIXI.Circle(origin.x, origin.y, radius);
   }
 
@@ -880,13 +880,13 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {PIXI.Ellipse}
    */
   #ellipseToLocalCoordinates(ellipse) {
-    const origin = this.#fromCanvasCoordinates({ x: ellipse.x, y: ellipse.y});
+    const origin = this._fromCanvasCoordinates({ x: ellipse.x, y: ellipse.y});
 
     // For halfWidth and halfHeight, use two points of equivalent distance to compare.
-    const halfWidth = this.#fromCanvasCoordinates({ x: ellipse.halfWidth, y: 0}).x
-      - this.#fromCanvasCoordinates({ x: 0, y: 0}).x;
-    const halfHeight = this.#fromCanvasCoordinates({ x: ellipse.halfHeight, y: 0}).x
-      - this.#fromCanvasCoordinates({ x: 0, y: 0}).x;
+    const halfWidth = this._fromCanvasCoordinates({ x: ellipse.halfWidth, y: 0}).x
+      - this._fromCanvasCoordinates({ x: 0, y: 0}).x;
+    const halfHeight = this._fromCanvasCoordinates({ x: ellipse.halfHeight, y: 0}).x
+      - this._fromCanvasCoordinates({ x: 0, y: 0}).x;
     return new PIXI.Ellipse(origin.x, origin.y, halfWidth, halfHeight);
   }
 
@@ -896,8 +896,8 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {PIXI.Rectangle}
    */
   #rectangleToLocalCoordinates(rect) {
-    const TL = this.#fromCanvasCoordinates({x: rect.left, y: rect.top});
-    const BR = this.#fromCanvasCoordinates({x: rect.right, y: rect.bottom});
+    const TL = this._fromCanvasCoordinates({x: rect.left, y: rect.top});
+    const BR = this._fromCanvasCoordinates({x: rect.right, y: rect.bottom});
     return new PIXI.Rectangle(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y);
   }
 
@@ -907,7 +907,7 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {PIXI.Polygon}
    */
   #polygonToLocalCoordinates(poly) {
-    return new PIXI.Polygon(poly.points.map(pt => this.#fromCanvasCoordinates(pt)));
+    return new PIXI.Polygon(poly.points.map(pt => this._fromCanvasCoordinates(pt)));
   }
 
   /**

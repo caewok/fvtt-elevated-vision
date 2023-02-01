@@ -309,7 +309,6 @@ export function tokenTileElevation(token,
   useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
   tokenElevation ??= token.bottomE;
 
-  const tokenE = token.bottomZ;
   const bounds = token.bounds;
   const tokenTL = token.getTopLeft(tokenCenter.x, tokenCenter.y);
   bounds.x = tokenTL.x;
@@ -319,7 +318,7 @@ export function tokenTileElevation(token,
   let tiles = [...canvas.tiles.quadtree.getObjects(bounds)].filter(tile => {
     if ( !tile.document.overhead ) return false;
     const tileE = tile.elevationE;
-    return isFinite(tileE) && (tileE.almostEqual(tokenE) || tileE < tokenE);
+    return isFinite(tileE) && (tileE.almostEqual(tokenElevation) || tileE < tokenElevation);
   });
   if ( !tiles.length ) return null;
 
@@ -464,7 +463,10 @@ function nextPixelValueAlongRay(ray, pixels, width, cmp, { stepT = 0.1, startT =
     const pt = ray.project(t);
     const px = ((~~pt.y) * width) + (~~pt.x); // Floor the point coordinates.
     const value = pixels[px];
-    if ( cmp(value) ) return pt;
+    if ( cmp(value) ) {
+      pt.t0 = t;
+      return pt;
+    }
     t += stepT;
   }
   return null;
@@ -516,6 +518,26 @@ function findElevatedTerrainForTokenAlongRay(ray, token,
   return null;
 }
 
+function findElevatedTerrainForTokenAlongRay2(ray, token,
+ { elevationThreshold = 0, stepT = 0.1, startT = stepT, debug = false } = {}) {
+
+  if ( debug ) Draw.segment(ray, { color: Draw.COLORS.green });
+
+  const toLocal = canvas.elevation._fromCanvasCoordinates;
+  const textureRay = new Ray(toLocal(ray.A), toLocal(ray.B));
+  const pixelThreshold = canvas.elevation.elevationToPixelValue(elevationThreshold);
+  const cmp = value => value > pixelThreshold;
+  const pixels = canvas.elevation.elevationPixelValues;
+  const width = canvas.elevation.cacheWidth;
+  let pt = nextPixelValueAlongRay(textureRay, pixels, width, cmp, { stepT, startT });
+  if ( pt ) {
+    const t0 = pt.t0;
+    pt = canvas.elevation._toCanvasCoordinates(pt);
+    pt.t0 = t0;
+  }
+  return pt;
+}
+
 function findTerrainElevationJumpsForTokenAlongRay(ray, token,
   { maxJump = canvas.elevation.elevationStep, stepT = 0.1, startT = stepT, debug = false } = {}) {
   if ( debug ) Draw.segment(ray, { color: Draw.COLORS.green });
@@ -537,6 +559,38 @@ function findTerrainElevationJumpsForTokenAlongRay(ray, token,
     t += stepT;
   }
   return null;
+}
+
+function findTerrainElevationJumpsForTokenAlongRay2(ray, token,
+  { maxJump = canvas.elevation.elevationStep, stepT = 0.1, startT = stepT, debug = false } = {}) {
+  if ( debug ) Draw.segment(ray, { color: Draw.COLORS.green });
+
+  const ev = canvas.elevation;
+  const toLocal = ev._fromCanvasCoordinates;
+  const textureRay = new Ray(toLocal(ray.A), toLocal(ray.B));
+
+  // Don't clamp the jump value so we don't extend beyond the values desired.
+  const maxJumpPixel = (maxJump - ev.elevationMin) / ev.elevationStep;
+  const pixels = ev.elevationPixelValues;
+  const width = ev.cacheWidth;
+
+  // Initialize with the start value
+  const pt = ray.project(startT);
+  const currE = tokenTerrainElevation(token, { tokenCenter: pt });
+  let currPixelValue = ev.elevationToPixelValue(currE);
+  const cmp = value => {
+    if ( almostBetween(value, currPixelValue - maxJumpPixel, currPixelValue + maxJumpPixel) ) return true;
+    currPixelValue = value;
+    return false;
+  };
+
+  let foundPt = nextPixelValueAlongRay(textureRay, pixels, width, cmp, { stepT, startT });
+  if ( foundPt ) {
+    const t0 = foundPt.t0;
+    foundPt = ev._toCanvasCoordinates(foundPt);
+    foundPt.t0 = t0;
+  }
+  return foundPt;
 }
 
 function findTerrainCliffsForTokenAlongRay(ray, token,
@@ -561,6 +615,39 @@ function findTerrainCliffsForTokenAlongRay(ray, token,
     t += stepT;
   }
   return null;
+}
+
+function findTerrainCliffsForTokenAlongRay2(ray, token,
+  { maxFall, stepT = 0.1, startT=0, debug = false } = {}) {
+  if ( debug ) Draw.segment(ray, { color: Draw.COLORS.green });
+  maxFall ??= canvas.elevation.elevationStep;
+
+  const ev = canvas.elevation;
+  const toLocal = ev._fromCanvasCoordinates;
+  const textureRay = new Ray(toLocal(ray.A), toLocal(ray.B));
+
+  // Don't clamp the jump value so we don't extend beyond the values desired.
+  const maxFallPixel = (maxFall - ev.elevationMin) / ev.elevationStep;
+  const pixels = ev.elevationPixelValues;
+  const width = ev.cacheWidth;
+
+  // Initialize with the start value
+  const pt = ray.project(startT);
+  const currE = tokenTerrainElevation(token, { tokenCenter: pt });
+  let currPixelValue = ev.elevationToPixelValue(currE);
+  startT += stepT;
+  const cmp = value => {
+    if ( value < (currPixelValue - maxFallPixel) ) return true;
+    currPixelValue = value;
+    return false;
+  };
+  let foundPt = nextPixelValueAlongRay(textureRay, pixels, width, cmp, { stepT, startT });
+  if ( foundPt ) {
+    const t0 = foundPt.t0;
+    foundPt = ev._toCanvasCoordinates(foundPt);
+    foundPt.t0 = t0;
+  }
+  return foundPt;
 }
 
 function canvasRayToTexture(ray, tile) {
@@ -635,7 +722,8 @@ function almostGreaterThan(a, b) { return a > b || a.almostEqual(b); }
 
 function _currentTokenState(token, { tokenCenter, tokenElevation } = {}) {
   if ( isTokenOnTile(token, { tokenCenter, tokenElevation }) ) return TOKEN_ELEVATION_STATE.TILE;
-  if ( isTokenOnGround(token, { tokenCenter, tokenElevation, considerTiles: false }) ) return TOKEN_ELEVATION_STATE.TERRAIN;
+  if ( isTokenOnGround(token,
+    { tokenCenter, tokenElevation, considerTiles: false }) ) return TOKEN_ELEVATION_STATE.TERRAIN;
   return TOKEN_ELEVATION_STATE.FLY;
 }
 
@@ -677,13 +765,14 @@ drawElevationResults(results)
 */
 
 
-export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation, debug = false, tileStep, terrainStep } = {}) {
+export function elevationForTokenTravel(token, travelRay,
+  { fly, tokenElevation, debug = false, tileStep, terrainStep } = {}) {
   if ( debug ) Draw.segment(travelRay);
 
   // TODO: Move this to the Ray class?
   let rayTConversion = Math.abs(travelRay.dx) > Math.abs(travelRay.dy)
   ? pt => (pt.x - travelRay.A.x) / travelRay.dx
-  : pt => (pt.y - travelRay.A.y) / travelRay.dy;
+    : pt => (pt.y - travelRay.A.y) / travelRay.dy;
   travelRay.tConversion = rayTConversion;
 
   let { TERRAIN, TILE, FLY } = TOKEN_ELEVATION_STATE;
@@ -723,8 +812,6 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
   let gridPrecision = canvas.walls.gridPrecision;
   let interval = Math.max(canvas.grid.w / gridPrecision, canvas.grid.h / gridPrecision);
   let stepT = interval / travelRay.distance;
-
-
 
   // Add the start and endpoints for the ray
   let startPt = travelRay.A;
@@ -813,7 +900,7 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
       case TERRAIN: {
         // Find the next terrain divergence so flying can be used
         if ( fly ) {
-          const elevationPt = findTerrainCliffsForTokenAlongRay(travelRay, token,
+          const elevationPt = findTerrainCliffsForTokenAlongRay2(travelRay, token,
             { maxFall: terrainStep, stepT, startT: ix.t0, debug });
           if ( elevationPt ) _addIx(tileIxs, elevationPt, { debug, color: Draw.COLORS.green });
         }
@@ -824,7 +911,7 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
         // Find the alpha intersection for this tile, if any, or the tile endpoint, if not.
         const tileCanvasRay = new Ray(ix, travelRay.B);
         const tileTextureRay = canvasRayToTexture(tileCanvasRay, matchingTile);
-        const nextPt = findTransparentTilePointAlongRay(tileTextureRay, matchingTile, { stepT });
+        const nextPt = findTransparentTilePointAlongRay2(tileTextureRay, matchingTile, { stepT });
         if ( nextPt ) {
           const nextCanvasPt = getCanvasCoordinate(matchingTile, nextPt.x, nextPt.y);
           nextCanvasPt.t0 = rayTConversion(nextCanvasPt);
@@ -832,7 +919,7 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
         }
 
         // Find the next location of where terrain pokes through the tile, if any.
-        const elevationPt = findElevatedTerrainForTokenAlongRay(
+        const elevationPt = findElevatedTerrainForTokenAlongRay2(
           travelRay, token, { elevationThreshold: currE, stepT, startT });
         if ( elevationPt ) _addIx(tileIxs, elevationPt, { debug, color: Draw.COLORS.green });
         break;
@@ -853,7 +940,7 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
         }
 
         // Find the elevation intersection.
-        const elevationPt = findElevatedTerrainForTokenAlongRay(
+        const elevationPt = findElevatedTerrainForTokenAlongRay2(
           travelRay, token, { elevationThreshold: minE, stepT, startT });
         if ( elevationPt ) ixs.push(elevationPt);
 
