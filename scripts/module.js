@@ -45,7 +45,12 @@ import {
 
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, setSetting, registerSettings } from "./settings.js";
-import { isTokenOnGround, tokenGroundElevation, tokenTerrainElevation } from "./tokens.js";
+import {
+ isTokenOnGround,
+ tokenGroundElevation,
+ tokenTerrainElevation,
+ autoElevationFly,
+ elevationForTokenTravel } from "./tokens.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
@@ -146,19 +151,20 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // esli
   log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
   log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
 
-  tokenD.object._elevatedVision ??= {};
-  tokenD.object._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
-  tokenD.object._elevatedVision.tokenHasAnimated = false;
+  token._elevatedVision ??= {};
+  token._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
+  token._elevatedVision.tokenHasAnimated = false;
 
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
   if ( typeof changes.x === "undefined" && typeof changes.y === "undefined" ) return;
 
-  const tokenOrigin = { x: tokenD.x, y: tokenD.y };
-  if ( !isTokenOnGround(tokenD.object, tokenOrigin) ) return;
+  const tokenCenter = token.center;
+  const tokenDestination = token.getCenter(changes.x ? changes.x : tokenD.x, changes.y ? changes.y : tokenD.y );
+  const travelRay = new Ray(tokenCenter, tokenDestination);
+  const travel = token._elevatedVision.travel = elevationForTokenTravel(token, travelRay, { tokenElevation: token.document.elevation });
+  if ( !travel.autoElevation ) return
 
-  const tokenDestination = { x: changes.x ? changes.x : tokenD.x, y: changes.y ? changes.y : tokenD.y };
-  const newTokenE = tokenGroundElevation(tokenD.object, { position: tokenDestination });
-  if ( tokenD.elevation !== newTokenE ) changes.elevation = tokenGroundElevation(tokenD.object, { position: tokenDestination });
+  if ( tokenD.elevation !== travel.finalElevation ) changes.elevation = travel.finalElevation;
   tokenD.object._elevatedVision.tokenAdjustElevation = true;
 });
 

@@ -126,35 +126,52 @@ export function _refreshToken(wrapper, options) {
   // New position: this.document
 
   // Drag starts with position set to 0, 0 (likely, not yet set).
-  log(`token _refresh at ${this.document.x},${this.document.y} with elevation ${this.document.elevation} animate: ${Boolean(this._animation)}`);
+  log(`token _refresh at ${this.document.x},${this.document.y} (center ${this.center.x},${this.center.y}) with elevation ${this.document.elevation} animate: ${Boolean(this._animation)}`);
   if ( !this.position.x && !this.position.y ) return wrapper(options);
 
-  if ( !this._elevatedVision || !this._elevatedVision.tokenAdjustElevation ) return wrapper(options);
+  const ev = this._elevatedVision;
+  if ( !ev || !ev.tokenAdjustElevation ) return wrapper(options);
 
   if ( this._original ) {
     log("token _refresh is clone.");
     // This token is a clone in a drag operation.
     // Adjust elevation of the clone by calculating the elevation from origin to line.
-    const { tokenCenter, tokenElevation } = this._elevatedVision;
+    const { tokenCenter, tokenElevation } = ev;
     const travelRay = new Ray(tokenCenter, this.center);
     const travel = elevationForTokenTravel(this, travelRay, { tokenElevation });
     log(`{x: ${travelRay.A.x}, y: ${travelRay.A.y}, e: ${tokenElevation} } --> {x: ${travelRay.B.x}, y: ${travelRay.B.y}, e: ${travel.finalElevation} }`, travel);
     this.document.elevation = travel.finalElevation;
 
-  } else {
-//     const hasAnimated = this._elevatedVision.tokenHasAnimated;
+  } else if ( this._animation ) {
+  //   const hasAnimated = ev.tokenHasAnimated;
 //     if ( !this._animation && hasAnimated ) {
 //       // Reset flag on token to prevent further elevation adjustments
-//       this._elevatedVision.tokenAdjustElevation = false;
+//       ev.tokenAdjustElevation = false;
 //       return wrapper(options);
-//     } else if ( !hasAnimated ) this._elevatedVision.tokenHasAnimated = true;
+//     } else if ( !hasAnimated ) ev.tokenHasAnimated = true;
+
+    // Adjust the elevation as the token is moved by locating where we are on the travel ray.
+    const currPosition = this.getCenter(this.document.x, this.document.y);
+    const { travelRay, elevationChanges } = ev.travel;
+    const currT = travelRay.tConversion(currPosition);
+    const ln = elevationChanges.length;
+    let change = elevationChanges[ln - 1];
+    for ( let i = 1; i < ln; i += 1 ) {
+     if ( elevationChanges[i].ix.t0 > currT ) {
+       change = elevationChanges[i-1];
+       break;
+     }
+    }
+
+    change ??= { currState: TOKEN_ELEVATION_STATE.TERRAIN };
+    if ( change.currState === TOKEN_ELEVATION_STATE.TERRAIN ) change.currE = tokenTerrainElevation(this, { position: currPosition });
+
+    options.elevation ||= this.document.elevation !== change.currE;
+
+    this.document.elevation = change.currE;
+    log(`{x: ${currPosition.x}, y: ${currPosition.y}, e: ${change.currE} }`, ev.travel);
   }
 
-//   // Adjust the elevation
-//   this.document.elevation = tokenGroundElevation(this, { position: this.document });
-//
-//   log(`token _refresh at ${this.document.x},${this.document.y} from ${this.position.x},${this.position.y} to elevation ${this.document.elevation}`, options, this);
-//
   return wrapper(options);
 }
 
@@ -171,11 +188,11 @@ export function cloneToken(wrapper) {
 
   if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return clone;
 
-  const tokenOrigin = { x: this.x, y: this.y };
-  if ( !isTokenOnGround(this, { position: tokenOrigin }) && !autoElevationFly() ) return clone;
+  const tokenCenter = { x: this.center.x, y: this.center.y };
+  if ( !isTokenOnGround(this, { position: tokenCenter }) && !autoElevationFly() ) return clone;
 
   clone._elevatedVision.tokenAdjustElevation = true;
-  clone._elevatedVision.tokenCenter = { x: this.center.x, y: this.center.y };
+  clone._elevatedVision.tokenCenter = tokenCenter;
   clone._elevatedVision.tokenElevation = this.bottomE;
   return clone;
 }
@@ -620,6 +637,12 @@ drawElevationResults(results)
 export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation, debug = false, tileStep, terrainStep } = {}) {
   if ( debug ) Draw.segment(travelRay);
 
+  // TODO: Move this to the Ray class?
+  let rayTConversion = Math.abs(travelRay.dx) > Math.abs(travelRay.dy)
+  ? pt => (pt.x - travelRay.A.x) / travelRay.dx
+  : pt => (pt.y - travelRay.A.y) / travelRay.dy;
+  travelRay.tConversion = rayTConversion;
+
   let { TERRAIN, TILE, FLY } = TOKEN_ELEVATION_STATE;
   fly ??= autoElevationFly();
   tokenElevation ??= token.bottomE;
@@ -657,9 +680,8 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
   let gridPrecision = canvas.walls.gridPrecision;
   let interval = Math.max(canvas.grid.w / gridPrecision, canvas.grid.h / gridPrecision);
   let stepT = interval / travelRay.distance;
-  let rayTConversion = Math.abs(travelRay.dx) > Math.abs(travelRay.dy)
-    ? pt => (pt.x - travelRay.A.x) / travelRay.dx
-    : pt => (pt.y - travelRay.A.y) / travelRay.dy;
+
+
 
   // Add the start and endpoints for the ray
   let startPt = travelRay.A;
