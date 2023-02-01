@@ -669,8 +669,6 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
   tileIxs.unshift(endPt);
   tileIxs.push(startPt);
 
-  console.log(`Start at ${startPt.x},${startPt.y}: currE ${currE} currState ${currState}`);
-
   // At each intersection group, update the current elevation based on ground unless already on tile.
   // If the token elevation equals that of the tile, the token is now on the tile.
   // Keep track of the seen intersections, in case of duplicates.
@@ -680,7 +678,6 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
     if ( tSeen.has(ix.t0) ) continue;
     tSeen.add(ix.t0);
     if ( debug ) Draw.point(ix, { color: STATE_COLOR[currState], radius: 3 });
-    console.log(`t ${ix.t0} at ${ix.x},${ix.y}: currE ${currE} currState ${currState}`);
 
     // Determine the destination type and associated elevation.
     // (1) If currently on the terrain, the current elevation reflects that of the last
@@ -744,8 +741,6 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
 
     // (6) Update the tracking results.
     elevationChanges.push({ ix, currState, currE });
-
-    console.log(`\t After update: t ${ix.t0} at ${ix.x},${ix.y}: currE ${currE} currState ${currState}`);
 
     // (7) Depending on the new current state, look for additional tile or terrain intersections along the ray.
     let startT = ix.t0 + stepT;
