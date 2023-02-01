@@ -135,13 +135,11 @@ export function _refreshToken(wrapper, options) {
     log("token _refresh is clone.");
     // This token is a clone in a drag operation.
     // Adjust elevation of the clone by calculating the elevation from origin to line.
-    const { tokenOrigin, tokenElevation } = this._elevatedVision;
-    const travelRay = new Ray(tokenOrigin, this.document);
+    const { tokenCenter, tokenElevation } = this._elevatedVision;
+    const travelRay = new Ray(tokenCenter, this.center);
     const travel = elevationForTokenTravel(this, travelRay, { tokenElevation });
     log(`{x: ${travelRay.A.x}, y: ${travelRay.A.y}, e: ${tokenElevation} } --> {x: ${travelRay.B.x}, y: ${travelRay.B.y}, e: ${travel.finalElevation} }`, travel);
     this.document.elevation = travel.finalElevation;
-
-    log(`token _refresh at ${this.document.x},${this.document.y} from ${this._elevatedVision.tokenOrigin.x},${this._elevatedVision.tokenOrigin.y} to elevation ${this.document.elevation}`, options, this);
 
   } else {
 //     const hasAnimated = this._elevatedVision.tokenHasAnimated;
@@ -177,7 +175,7 @@ export function cloneToken(wrapper) {
   if ( !isTokenOnGround(this, { position: tokenOrigin }) && !autoElevationFly() ) return clone;
 
   clone._elevatedVision.tokenAdjustElevation = true;
-  clone._elevatedVision.tokenOrigin = tokenOrigin;
+  clone._elevatedVision.tokenCenter = { x: this.center.x, y: this.center.y };
   clone._elevatedVision.tokenElevation = this.bottomE;
   return clone;
 }
@@ -529,14 +527,14 @@ function textureRayToCanvas(ray, tile) {
 // tokenTerrainGroundElevation = canvas.elevation.tokens.tokenTerrainGroundElevation
 
 /** @enum {number} */
-const TOKEN_ELEVATION_STATE = {
+let TOKEN_ELEVATION_STATE = {
   TERRAIN: 0, // Important that terrain is set to zero, so it can be checked for true/false.
   TILE: 1,
   FLY: 2
 };
 
 /** @enum {number} */
-const TOKEN_ELEVATION_DIRECTION = {
+let TOKEN_ELEVATION_DIRECTION = {
   LOWER: -1,
   SAME: 0,
   HIGHER: 1
@@ -544,7 +542,7 @@ const TOKEN_ELEVATION_DIRECTION = {
 
 /** @enum {hex} */
 // For debugging
-const STATE_COLOR = [Draw.COLORS.green, Draw.COLORS.orange, Draw.COLORS.blue];
+let STATE_COLOR = [Draw.COLORS.green, Draw.COLORS.orange, Draw.COLORS.blue];
 
 function _organizeTiles(travelRay) {
   const tiles = [...elevationTilesOnRay(travelRay)];
@@ -577,7 +575,7 @@ function almostGreaterThan(a, b) { return a > b || a.almostEqual(b); }
 
 function _currentTokenState(token, { position, tokenElevation } = {}) {
   if ( isTokenOnTile(token, { position, tokenElevation }) ) return TOKEN_ELEVATION_STATE.TILE;
-  if ( isTokenOnGround(token, { position, considerTiles: false }) ) return TOKEN_ELEVATION_STATE.TERRAIN;
+  if ( isTokenOnGround(token, { position, tokenElevation, considerTiles: false }) ) return TOKEN_ELEVATION_STATE.TERRAIN;
   return TOKEN_ELEVATION_STATE.FLY;
 }
 
@@ -586,12 +584,15 @@ api = game.modules.get("elevatedvision").api
 Draw = CONFIG.GeometryLib.Draw
 draw = new Draw()
 
-tokenGroundElevation = canvas.elevation.tokens.tokenGroundElevation
-tokenTileGroundElevation = canvas.elevation.tokens.tokenTileGroundElevation
-tokenTerrainGroundElevation = canvas.elevation.tokens.tokenTerrainGroundElevation
+let {
+  tokenGroundElevation,
+  tokenTileElevation,
+  tokenTerrainElevation,
+  isTokenOnTile,
+  isTokenOnGround,
+  elevationForTokenTravel
+ } = canvas.elevation.tokens
 
-tokenTileElevation = canvas.elevation.tokens.tokenTileGroundElevation
-tokenTerrainElevation = canvas.elevation.tokens.tokenTerrainGroundElevation
 
 let [token1, token2] = canvas.tokens.controlled;
 A = token1.center
@@ -599,9 +600,15 @@ B = token2.center
 token = token1
 travelRay = new Ray(A, B)
 
+
+A = _token.center
+B = _token.center
+token = _token
+travelRay = new Ray(A, B)
+
 draw.clearDrawings()
 draw.clearLabels()
-results = elevationForTokenTravel(token, travelRay, { debug: true, fly: false})
+results = elevationForTokenTravel(token, travelRay, { tokenElevation: 0, debug: true, fly: false})
 draw.clearDrawings()
 draw.clearLabels()
 drawElevationResults(results)
@@ -635,7 +642,7 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
   out.autoElevation = true;
   let { tiles, tileIxs } = _organizeTiles(travelRay);
   if ( !tiles.length && !fly ) {
-    out.finalElevation = tokenGroundElevation(token, { position: travelRay.B, tokenElevation });
+    out.finalElevation = tokenTerrainElevation(token, { position: travelRay.B });
     return out;
   }
   out.trackingRequired = true;
@@ -644,7 +651,7 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
   tileStep ??= token.topE - token.bottomE;
   terrainStep ??= token.topE - token.bottomE;
 
-  let currE = token.bottomE;
+  let currE = tokenElevation;
   let currTile;
   let elevationChanges = out.elevationChanges;
   let gridPrecision = canvas.walls.gridPrecision;
@@ -662,6 +669,8 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
   tileIxs.unshift(endPt);
   tileIxs.push(startPt);
 
+  console.log(`Start at ${startPt.x},${startPt.y}: currE ${currE} currState ${currState}`);
+
   // At each intersection group, update the current elevation based on ground unless already on tile.
   // If the token elevation equals that of the tile, the token is now on the tile.
   // Keep track of the seen intersections, in case of duplicates.
@@ -671,12 +680,14 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
     if ( tSeen.has(ix.t0) ) continue;
     tSeen.add(ix.t0);
     if ( debug ) Draw.point(ix, { color: STATE_COLOR[currState], radius: 3 });
+    console.log(`t ${ix.t0} at ${ix.x},${ix.y}: currE ${currE} currState ${currState}`);
 
     // Determine the destination type and associated elevation.
     // (1) If currently on the terrain, the current elevation reflects that of the last
     //     intersection. Update to the current intersection.
-    let terrainE;
-    if ( currState === TERRAIN ) currE = terrainE = tokenTerrainElevation(token, { position: ix });
+
+    const terrainE = tokenTerrainElevation(token, { position: ix });
+    if ( currState === TERRAIN ) currE = terrainE;
 
     // (2) Locate any tiles at this location with sufficiently near elevation.
     let matchingTile;
@@ -689,20 +700,23 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
       });
     }
 
-    // (3) Update state and elevation
-    //     If on terrain, that elevation was updated above.
+    // (3) Check if we are on a tile
     if ( matchingTile ) {
       currState = TILE;
       currE = matchingTile.elevationE;
-    } else {
-      currState = TERRAIN;
-      currE = terrainE ?? tokenTerrainElevation(token, { position: ix });
-    }
+    } else
 
-    // (4) If flying is enabled, direction of movement must be checked.
+    // (4) Check if we are flying and "landing"
+    if ( fly && currState === FLY ) {
+      const step = terrainStep;
+      currState = almostLessThan(currE - step, terrainE) ? TERRAIN : FLY;
+      if ( currState === TERRAIN ) currE = terrainE;
+    } else
+
+    // (5) If flying is enabled, direction of movement must be checked.
     //     Use the immediately previous terrain or tile elevation.
     //     If a matching tile is found, we are not flying.
-    if ( fly && !matchingTile ) {
+    if ( fly && !matchingTile) {
       const step = currTile ? tileStep : terrainStep;
       let prevE = currTile?.elevationE;
       if ( !currTile ) {
@@ -713,7 +727,16 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
       if ( (currE + step) < prevE ) {
         currState = FLY;
         currE = prevE;
+      } else {
+        currState = TERRAIN;
+        currE = terrainE;
       }
+    } else
+
+    // (6) Otherwise, on terrain.
+    {
+      currState = TERRAIN;
+      currE = terrainE;
     }
 
     // (5) Remember the current tile for next iteration.
@@ -721,6 +744,8 @@ export function elevationForTokenTravel(token, travelRay, { fly, tokenElevation,
 
     // (6) Update the tracking results.
     elevationChanges.push({ ix, currState, currE });
+
+    console.log(`\t After update: t ${ix.t0} at ${ix.x},${ix.y}: currE ${currE} currState ${currState}`);
 
     // (7) Depending on the new current state, look for additional tile or terrain intersections along the ray.
     let startT = ix.t0 + stepT;

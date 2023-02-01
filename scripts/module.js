@@ -235,13 +235,15 @@ Hooks.on("getSceneControlButtons", controls => {
 /**
  * Register listeners when the settings config is opened.
  */
+Hooks.on("renderSettingsConfig", renderSettingsConfigHook);
+
 function renderSettingsConfigHook(application, html, data) {
   util.log("SettingsConfig", application, html, data);
 
   const evSettings = html.find(`section[data-tab="${MODULE_ID}"]`);
   if ( !evSettings || !evSettings.length ) return;
 
-  const display = getSetting(SETTINGS.AUTO_ELEVATION);
+  const display = getSetting(SETTINGS.AUTO_ELEVATION) ? "" : "none";
   const input = evSettings.find(`input[name="${MODULE_ID}.${SETTINGS.FLY_BUTTON}"]`);
   const div = input.parent().parent();
   div[0].style.display = display;
