@@ -267,11 +267,7 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   set elevationMin(minNew) {
-    if ( !Number.isInteger(minNew) ) {
-      console.warn("elevationMin should be an integer.");
-      return;
-    }
-
+    minNew = Math.floor(minNew);
     const min = this.elevationMin;
     const step = this.elevationStep;
     minNew = Math.round(minNew / step) * step;
@@ -489,18 +485,14 @@ export class ElevationLayer extends InteractionLayer {
    * Update minimum elevation for the scene based on the Levels minimum tile elevation.
    */
   _updateMinimumElevationFromSceneTiles() {
-    const tiles = canvas.tiles.placeables;
+    const tiles = canvas.tiles.placeables.filter(tile => tile.document.overhead);
     const currMin = this.elevationMin;
     let min = currMin;
-    for ( const tile of tiles ) {
-      const rangeBottom = tile.document.flags?.levels?.rangeBottom ?? currMin;
-      const rangeTop = tile.document.flags?.levels?.rangeTop ?? currMin;
-      min = Math.min(min, rangeBottom, rangeTop);
-    }
+    for ( const tile of tiles ) min = Math.min(min, tile.elevationE);
 
     if ( min < currMin ) {
       this.elevationMin = min;
-      ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on the minimum elevation of one or more tiles in the scene.`);
+      ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${this.elevationMin} based on the minimum elevation of one or more tiles in the scene.`);
     }
   }
 

@@ -1,10 +1,13 @@
 /* globals
 GlobalLightSource,
 canvas,
-PIXI
+PIXI,
+CONFIG
 */
 "use strict";
 
+import { MODULE_ID } from "./const.js";
+import { SETTINGS, getSceneSetting } from "./settings.js";
 import { log } from "./util.js";
 import { ShaderPatcher, applyPatches } from "./perfect-vision/shader-patcher.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
@@ -355,13 +358,22 @@ function addShadowCode(source) {
 
 }
 
+const originalFragmentSource = new Map();
+
 /**
  * Wrap AdaptiveLightShader.prototype.create
  * Modify the code to add shadow depth based on background elevation and walls
  * Add uniforms used by the fragment shader to draw shadows in the color and illumination shaders.
  */
 export function createAdaptiveLightingShader(wrapped, ...args) {
-  log("createAdaptiveLightingShaderPV");
+  log("createAdaptiveLightingShader");
+
+  if ( !originalFragmentSource.has(this.name) ) originalFragmentSource.set(this.name, this.fragmentShader);
+  const shaderAlgorithm = getSceneSetting(SETTINGS.SHADING.ALGORITHM);
+  if ( shaderAlgorithm !== SETTINGS.SHADING.TYPES.WEBGL ) {
+    this.fragmentShader = originalFragmentSource.get(this.name);
+    return wrapped(...args);
+  }
 
   applyPatches(this,
     false,
@@ -459,20 +471,16 @@ export function _updateEVLightUniformsLightSource(mesh) {
 
   const heightWalls = this.los._elevatedvision?.heightWalls || new Set();
   const terrainWalls = this.los._elevatedvision?.terrainWalls || new Set();
-
-  const center = {x, y};
   const r_inv = 1 / radius;
 
   // Radius is .5 in the shader coordinates; adjust elevation accordingly
   const u = shader.uniforms;
   u.EV_sourceLocation = [0.5, 0.5, elevationZ * 0.5 * r_inv];
 
-  const center_shader = {x: 0.5, y: 0.5};
-
   let terrainWallCoords = [];
   let terrainWallDistances = [];
   for ( const w of terrainWalls ) {
-    addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source, r_inv)
+    addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source, r_inv);
   }
   u.EV_numTerrainWalls = terrainWallDistances.length;
 

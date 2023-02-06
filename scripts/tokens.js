@@ -8,7 +8,8 @@ ui
 "use strict";
 
 import { log } from "./util.js";
-import { getSetting, SETTINGS } from "./settings.js";
+import { MODULE_ID } from "./const.js";
+import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
 import { CanvasPixelValueMatrix } from "./pixel_values.js";
 import { Draw } from "./geometry/Draw.js";
 
@@ -121,7 +122,7 @@ Animating for any given location:
  * Adjust elevation as the token moves.
  */
 export function _refreshToken(wrapper, options) {
-  if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return wrapper(options);
+  if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return wrapper(options);
 
   // Old position: this.position
   // New position: this.document
@@ -188,7 +189,7 @@ export function cloneToken(wrapper) {
   clone._elevatedVision ??= {};
   clone._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
 
-  if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return clone;
+  if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return clone;
 
   const tokenCenter = { x: this.center.x, y: this.center.y };
   if ( !isTokenOnGround(this, { tokenCenter }) && !autoElevationFly() ) return clone;
