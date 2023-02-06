@@ -46,8 +46,15 @@ import {
 } from "./controls.js";
 
 // Settings, to toggle whether to change elevation on token move
-import { SETTINGS, getSetting, setSetting, registerSettings } from "./settings.js";
+import { SETTINGS, getSetting, setSetting, registerSettings, getSceneSetting, setSceneSetting, reloadTokenControls } from "./settings.js";
 import { elevationForTokenTravel } from "./tokens.js";
+
+const FLY_CONTROL = {
+  name: SETTINGS.FLY_BUTTON,
+  title: `${MODULE_ID}.controls.${SETTINGS.FLY_BUTTON}.name`,
+  icon: "fa-solid fa-plane-lock",
+  toggle: true
+}
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
@@ -63,6 +70,8 @@ Hooks.once("init", function() {
     WallTracer,
     SCENE_GRAPH
   };
+
+  FLY_CONTROL.title = game.i18n.localize(FLY_CONTROL.title);
 
   // These methods need to be registered early
   registerGeometry();
@@ -124,18 +133,18 @@ want to keep seeing this message, please click the close button above.</em>
 Hooks.on("canvasInit", async function(canvas) {
   log("canvasInit");
 
-  if ( typeof canvas.scene.getFlag(MODULE_ID, "autoelevate") === "undefined" ) {
-    const autoelevate = getSetting(SETTINGS.AUTOELEVATION) ?? true;
-    canvas.scene.setFlag(MODULE_ID, "autoelevate", autoelevate);
+  if ( typeof getSceneSetting(SETTINGS.AUTO_ELEVATION) === "undefined" ) {
+    const autoelevate = getSetting(SETTINGS.AUTO_ELEVATION) ?? true;
+    await setSceneSetting(SETTINGS.AUTO_ELEVATION, autoelevate);
   }
 
-  if ( typeof canvas.scene.getFlag(MODULE_ID, "algorithm") === "undefined" ) {
+  if ( typeof getSceneSetting(SETTINGS.SHADING.ALGORITHM) === "undefined" ) {
     const algorithm = getSetting(SETTINGS.SHADING.ALGORITHM) ?? SETTINGS.SHADING.TYPES.WEBGL;
-    canvas.scene.setFlag(MODULE_ID, "algorithm", algorithm);
+    await setSceneSetting(SETTINGS.SHADING.ALGORITHM, algorithm);
   }
 
   registerShadowPatches();
-
+  updateFlyTokenControl();
 });
 
 Hooks.on("canvasReady", async function() {
@@ -150,11 +159,14 @@ Hooks.on("3DCanvasToggleMode", async function(isOn) {
   //       is not likely to be used in a non-3d state and require EV for it.
   if ( !isOn ) return;
 
-  const autoelevateDisabled = canvas.scene.getFlag(MODULE_ID, "autoelevate");
-  const shadowsDisabled = canvas.scene.getFlag(MODULE_ID, "algorithm") !== SETTINGS.SHADING.TYPES.NONE;
+  const autoelevateDisabled = getSceneSetting(SETTINGS.AUTO_ELEVATION);
+  const shadowsDisabled = getSceneSetting(SETTINGS.SHADING.ALGORITHM) !== SETTINGS.SHADING.TYPES.NONE;
 
-  await canvas.scene.setFlag(MODULE_ID, "autoelevate", false);
-  await canvas.scene.setFlag(MODULE_ID, "algorithm", SETTINGS.SHADING.TYPES.NONE);
+  if ( autoelevateDisabled ) {
+    await setSceneSetting(SETTINGS.AUTO_ELEVATION, false);
+    updateFlyTokenControl(false);
+  }
+  if ( shadowsDisabled ) await setSceneSetting(SETTINGS.SHADING.ALGORITHM, SETTINGS.SHADING.TYPES.NONE);
 
   registerShadowPatches();
   await canvas.draw(canvas.scene);
@@ -181,8 +193,6 @@ function registerLayer() {
 // Reset the token elevation when moving the token after a cloned drag operation.
 // Token.prototype._refresh is then used to update the elevation as the token is moved.
 Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // eslint-disable-line no-unused-vars
-  if ( !canvas.scene.flags[MODULE_ID].autoelevate ) return;
-
   const token = tokenD.object;
   log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
   log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
@@ -191,7 +201,7 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // esli
   token._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
   token._elevatedVision.tokenHasAnimated = false;
 
-  if ( !getSetting(SETTINGS.AUTO_ELEVATION) ) return;
+  if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
   if ( typeof changes.x === "undefined" && typeof changes.y === "undefined" ) return;
 
   const tokenCenter = token.center;
@@ -265,35 +275,11 @@ Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
 Hooks.on("renderTileConfig", renderTileConfigHook);
 
 Hooks.on("getSceneControlButtons", controls => {
-  if ( !getSetting(SETTINGS.AUTO_ELEVATION)
-    || !getSetting(SETTINGS.FLY_BUTTON) ) return;
+  if ( !canvas.scene || !getSetting(SETTINGS.FLY_BUTTON) || !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
 
   const tokenTools = controls.find(c => c.name === "token");
-  tokenTools.tools.push({
-    name: SETTINGS.FLY_BUTTON,
-    title: game.i18n.localize(`${MODULE_ID}.controls.${SETTINGS.FLY_BUTTON}.name`),
-    icon: "fa-solid fa-plane-lock",
-    toggle: true
-  });
+  tokenTools.tools.push(FLY_CONTROL);
 });
-
-/**
- * Register listeners when the settings config is opened.
- */
-Hooks.on("renderSettingsConfig", renderSettingsConfigHook);
-
-function renderSettingsConfigHook(application, html, data) {
-  util.log("SettingsConfig", application, html, data);
-
-  const evSettings = html.find(`section[data-tab="${MODULE_ID}"]`);
-  if ( !evSettings || !evSettings.length ) return;
-
-  const display = getSetting(SETTINGS.AUTO_ELEVATION) ? "" : "none";
-  const input = evSettings.find(`input[name="${MODULE_ID}.${SETTINGS.FLY_BUTTON}"]`);
-  const div = input.parent().parent();
-  div[0].style.display = display;
-}
-
 
 /**
  * Update data for pull-down algorithm menu for the scene config.
@@ -315,9 +301,12 @@ function renderSceneConfigHook(application, html, data) {
 Hooks.on("updateScene", updateSceneHook);
 
 async function updateSceneHook(document, change, _options, _userId) {
-  const autoelevate = change.flags?.[MODULE_ID]?.autoelevate;
-  if ( autoelevate === true ) ui.notifications.notify("Elevated Vision autoelevate enabled for scene.");
-  else if ( autoelevate === false ) ui.notifications.notify("Elevated Vision autoelevate disabled for scene.");
+  const autoelevate = change.flags?.[MODULE_ID]?.[SETTINGS.AUTO_ELEVATION];
+  if ( typeof autoelevate !== "undefined" ) {
+    updateFlyTokenControl(autoelevate);
+    if ( autoelevate === true ) ui.notifications.notify("Elevated Vision autoelevate enabled for scene.");
+    else if ( autoelevate === false ) ui.notifications.notify("Elevated Vision autoelevate disabled for scene.");
+  }
 
   const algorithm = change.flags?.[MODULE_ID]?.algorithm;
   if ( algorithm ) {
@@ -327,3 +316,13 @@ async function updateSceneHook(document, change, _options, _userId) {
     ui.notifications.notify(`Elevated Vision scene shadows switched to ${label}.`);
   }
 }
+
+function updateFlyTokenControl(enable) {
+  enable ??= getSceneSetting(SETTINGS.AUTO_ELEVATION);
+  const tokenTools = ui.controls.controls.find(c => c.name === "token");
+  const flyIndex = tokenTools.tools.findIndex(b => b.name === SETTINGS.FLY_BUTTON);
+  if ( enable && !~flyIndex ) tokenTools.tools.push(FLY_CONTROL);
+  else if ( ~flyIndex ) tokenTools.tools.splice(flyIndex, 1);
+  ui.controls.render(true)
+}
+

@@ -12,7 +12,7 @@ import { Draw } from "./geometry/Draw.js";
 import { Shadow, ShadowProjection } from "./geometry/Shadow.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Plane } from "./geometry/3d/Plane.js";
-import { SETTINGS } from "./settings.js";
+import { SETTINGS, getSceneSetting } from "./settings.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { MODULE_ID } from "./const.js";
 
@@ -26,7 +26,7 @@ import { MODULE_ID } from "./const.js";
 export function _computeClockwiseSweepPolygon(wrapped) {
   wrapped();
 
-  const shaderAlgorithm = canvas.scene.flags[MODULE_ID].algorithm;
+  const shaderAlgorithm = getSceneSetting(SETTINGS.SHADING.ALGORITHM);
   if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.NONE ) return;
 
   // Ignore lights set with default of positive infinity

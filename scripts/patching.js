@@ -11,7 +11,7 @@ canvas
 // Patches
 
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
-import { getSetting, SETTINGS, activateListenersSettingsConfig } from "./settings.js";
+import { getSetting, SETTINGS } from "./settings.js";
 
 import {
   defaultOptionsAmbientSoundConfig,
@@ -159,9 +159,6 @@ function regShaderPatch(target, fn, { type, perf_mode } = {}) {
 }
 
 export function registerPatches() {
-  // ---- Settings manipulations to hide unneeded settings ----- //
-  regPatch("SettingsConfig.prototype.activateListeners", activateListenersSettingsConfig);
-
   // ----- Locating edges that create shadows in the LOS ----- //
   regPatch("ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
 

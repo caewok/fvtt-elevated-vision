@@ -7,7 +7,7 @@ CONFIG
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { SETTINGS } from "./settings.js";
+import { SETTINGS, getSceneSetting } from "./settings.js";
 import { log } from "./util.js";
 import { ShaderPatcher, applyPatches } from "./perfect-vision/shader-patcher.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
@@ -369,7 +369,7 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   log("createAdaptiveLightingShader");
 
   if ( !originalFragmentSource.has(this.name) ) originalFragmentSource.set(this.name, this.fragmentShader);
-  const shaderAlgorithm = canvas.scene.flags[MODULE_ID].algorithm;
+  const shaderAlgorithm = getSceneSetting(SETTINGS.SHADING.ALGORITHM);
   if ( shaderAlgorithm !== SETTINGS.SHADING.TYPES.WEBGL ) {
     this.fragmentShader = originalFragmentSource.get(this.name);
     return wrapped(...args);

@@ -37,33 +37,31 @@ export function getSetting(settingName) {
   return game.settings.get(MODULE_ID, settingName);
 }
 
-export async function toggleSetting(settingName) {
-  const curr = getSetting(settingName);
-  return await game.settings.set(MODULE_ID, settingName, !curr);
-}
-
 export async function setSetting(settingName, value) {
   return await game.settings.set(MODULE_ID, settingName, value);
 }
+
+export function getSceneSetting(settingName) {
+  return canvas.scene.flags[MODULE_ID][settingName];
+}
+
+export async function setSceneSetting(settingName, value) {
+  return await canvas.scene.setFlag(MODULE_ID, settingName, value);
+}
+
 
 export function registerSettings() {
   log("Registering elevated vision settings");
 
   const STYPES = SETTINGS.SHADING.TYPES;
-
-  // The old value was a boolean to turn on WebGL.
-  // New default should be polygons unless WebGL is expressly turned on.
-  const prior_setting = [...game.settings.storage.get("world").values()].find(v => v.key === `${MODULE_ID}.${SETTINGS.VISION_USE_SHADER}`);
-  const prior_default = prior_setting?.value ? STYPES.WEBGL : STYPES.POLYGONS;
-
   game.settings.register(MODULE_ID, SETTINGS.SHADING.ALGORITHM, {
     name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.SHADING.ALGORITHM}.name`),
     hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.SHADING.ALGORITHM}.hint`),
     scope: "world",
     config: true,
-    default: prior_default,
+    default: STYPES.WEBGL,
     type: String,
-    requiresReload: true,
+    requiresReload: false,
     choices: {
       [STYPES.NONE]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.NONE}`),
       [STYPES.POLYGONS]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.POLYGONS}`),
@@ -86,7 +84,7 @@ export function registerSettings() {
     name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.FLY_BUTTON}.name`),
     hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.FLY_BUTTON}.hint`),
     scope: "user",
-    config: () => getSetting(SETTINGS.AUTO_ELEVATION),
+    config: true,
     default: true,
     type: Boolean,
     requiresReload: false,
@@ -125,29 +123,8 @@ export function registerSettings() {
  * Force a reload of token controls layer.
  * Used to force the added control to appear/disappear.
  */
-function reloadTokenControls() {
+export function reloadTokenControls() {
   if ( !canvas.tokens.active ) return;
   canvas.tokens.deactivate();
   canvas.tokens.activate();
 }
-
-/**
- * Display or hide the fly button setting based on auto elevation toggle.
- */
-function autoElevationSettingChanged(event) {
-  const autoElevation = event.target.checked ? "" : "none";
-  const input = document.getElementsByName(`${MODULE_ID}.${SETTINGS.FLY_BUTTON}`);
-  const div = input[0].parentElement.parentElement;
-  div.style.display = autoElevation;
-}
-
-export function activateListenersSettingsConfig(wrapper, html) {
-  log("activateListenersSettingsConfig", html);
-
-  html.find(`[name="${MODULE_ID}.${SETTINGS.AUTO_ELEVATION}"]`).change(autoElevationSettingChanged.bind(this));
-  wrapper(html);
-}
-
-
-
-
