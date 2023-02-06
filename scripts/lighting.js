@@ -5,6 +5,8 @@ PIXI
 */
 "use strict";
 
+import { MODULE_ID } from "./const.js";
+import { SETTINGS } from "./settings.js";
 import { log } from "./util.js";
 import { ShaderPatcher, applyPatches } from "./perfect-vision/shader-patcher.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
@@ -355,13 +357,22 @@ function addShadowCode(source) {
 
 }
 
+const originalFragmentSource = new Map();
+
 /**
  * Wrap AdaptiveLightShader.prototype.create
  * Modify the code to add shadow depth based on background elevation and walls
  * Add uniforms used by the fragment shader to draw shadows in the color and illumination shaders.
  */
 export function createAdaptiveLightingShader(wrapped, ...args) {
-  log("createAdaptiveLightingShaderPV");
+  log("createAdaptiveLightingShader");
+
+  if ( !originalFragmentSource.has(this.name) ) originalFragmentSource.set(this.name, this.fragmentShader);
+  const shaderAlgorithm = canvas.scene.flags?.[MODULE_ID].algorithm ?? SETTINGS.SHADING.TYPES.NONE;
+  if ( shaderAlgorithm !== SETTINGS.SHADING.TYPES.WEBGL ) {
+    this.fragmentShader = originalFragmentSource.get(this.name);
+    return wrapped(...args);
+  }
 
   applyPatches(this,
     false,

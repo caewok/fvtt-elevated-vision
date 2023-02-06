@@ -5,7 +5,8 @@ canvas,
 CONFIG,
 renderTemplate,
 Dialog,
-ui
+ui,
+Ray
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -29,7 +30,7 @@ import { ElevationGrid } from "./ElevationGrid.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 
 // Register methods, patches, settings
-import { registerAdditions, registerPatches } from "./patching.js";
+import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
 import { registerElevationAdditions } from "./elevation.js";
 
@@ -45,12 +46,7 @@ import {
 
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, setSetting, registerSettings } from "./settings.js";
-import {
- isTokenOnGround,
- tokenGroundElevation,
- tokenTerrainElevation,
- autoElevationFly,
- elevationForTokenTravel } from "./tokens.js";
+import { elevationForTokenTravel } from "./tokens.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
@@ -85,6 +81,18 @@ Hooks.once("setup", async function() {
 
 
 Hooks.once("ready", async function() {
+  if ( typeof canvas.scene.getFlag(MODULE_ID, "autoelevate") === "undefined"  ) {
+    const autoelevate = getSetting(SETTINGS.AUTOELEVATION) ?? true;
+    canvas.scene.setFlag(MODULE_ID, "autoelevate", autoelevate);
+  }
+
+  if ( typeof canvas.scene.getFlag(MODULE_ID, "algorithm") === "undefined"  ) {
+    const algorithm = getSetting(SETTINGS.SHADING.ALGORITHM) ?? SETTINGS.SHADING.TYPES.WEBGL;
+    canvas.scene.setFlag(MODULE_ID, "algorithm", algorithm);
+  }
+
+  if ( typeof canvas.scene.getFlag(MODULE_ID, "enable") === "undefined"  ) canvas.scene.setFlag(MODULE_ID, "enable", true);
+
   if ( !getSetting(SETTINGS.WELCOME_DIALOG.v020) ) {
 		Dialog.prompt({
 			title: "Elevated Vision v0.2.0 Changes!",
@@ -124,11 +132,34 @@ want to keep seeing this message, please click the close button above.</em>
 	}
 });
 
+Hooks.on("canvasInit", async function(canvas) {
+  log("canvasInit");
+  registerShadowPatches();
+
+});
+
 Hooks.on("canvasReady", async function() {
   // Set the elevation grid now that we know scene dimensions
+
+  if ( canvas.scene.getFlag("elevatedvision", "enable") === false || !canvas.elevation ) return;
+
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
 });
+
+
+Hooks.on("3DCanvasToggleMode", function(isOn) {
+  const sceneEnabled = !canvas.scene.getFlag("elevatedvision", "enabled");
+
+  if ( isOn ) {
+    ui.notifications.notify("Turning off Elevated Vision so 3D Canvas can be used.");
+
+  } else if ( !isOn ){
+    ui.notifications.notify("Re-enabling Elevated Vision.");
+  }
+});
+
+
 
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
 Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
@@ -147,6 +178,8 @@ function registerLayer() {
 // Reset the token elevation when moving the token after a cloned drag operation.
 // Token.prototype._refresh is then used to update the elevation as the token is moved.
 Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // eslint-disable-line no-unused-vars
+  if ( !canvas.scene?.flags?.[MODULE_ID]?.autoelevate ) return;
+
   const token = tokenD.object;
   log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
   log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
@@ -161,8 +194,9 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // esli
   const tokenCenter = token.center;
   const tokenDestination = token.getCenter(changes.x ? changes.x : tokenD.x, changes.y ? changes.y : tokenD.y );
   const travelRay = new Ray(tokenCenter, tokenDestination);
-  const travel = token._elevatedVision.travel = elevationForTokenTravel(token, travelRay, { tokenElevation: token.document.elevation });
-  if ( !travel.autoElevation ) return
+  const travel = token._elevatedVision.travel = elevationForTokenTravel(token, travelRay,
+    { tokenElevation: token.document.elevation });
+  if ( !travel.autoElevation ) return;
 
   if ( tokenD.elevation !== travel.finalElevation ) changes.elevation = travel.finalElevation;
   tokenD.object._elevatedVision.tokenAdjustElevation = true;
@@ -180,8 +214,9 @@ Hooks.on("renderSceneConfig", injectSceneConfiguration);
 async function injectSceneConfiguration(app, html, data) {
   util.log("injectSceneConfig", app, html, data);
 
-  if ( !app.object.getFlag(MODULE_ID, "elevationmin") ) app.object.setFlag(MODULE_ID, "elevationmin", 0);
-  if ( !app.object.getFlag(MODULE_ID, "elevationstep") ) app.object.setFlag(MODULE_ID, "elevationstep", canvas.dimensions.distance);
+  if ( typeof app.object.getFlag(MODULE_ID, "elevationmin") === "undefined" ) app.object.setFlag(MODULE_ID, "elevationmin", 0);
+  if ( typeof app.object.getFlag(MODULE_ID, "elevationstep") === "undefined" ) app.object.setFlag(MODULE_ID, "elevationstep", canvas.dimensions.distance);
+  if ( typeof app.object.getFlag(MODULE_ID, "enable") === "undefined" ) app.object.setFlag(MODULE_ID, "enable", true);
 
   const form = html.find(`input[name="initial.scale"]`).closest(".form-group");
   const snippet = await renderTemplate(`modules/${MODULE_ID}/templates/scene-elevation-config.html`, data);
@@ -227,7 +262,8 @@ Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
 Hooks.on("renderTileConfig", renderTileConfigHook);
 
 Hooks.on("getSceneControlButtons", controls => {
-  if ( !getSetting(SETTINGS.AUTO_ELEVATION) || !getSetting(SETTINGS.FLY_BUTTON) ) return;
+  if ( !getSetting(SETTINGS.AUTO_ELEVATION)
+    || !getSetting(SETTINGS.FLY_BUTTON) ) return;
 
   const tokenTools = controls.find(c => c.name === "token");
   tokenTools.tools.push({
@@ -253,4 +289,61 @@ function renderSettingsConfigHook(application, html, data) {
   const input = evSettings.find(`input[name="${MODULE_ID}.${SETTINGS.FLY_BUTTON}"]`);
   const div = input.parent().parent();
   div[0].style.display = display;
+}
+
+
+/**
+ * Update data for pull-down algorithm menu for the scene config.
+ */
+Hooks.on("renderSceneConfig", renderSceneConfigHook);
+
+function renderSceneConfigHook(application, html, data) {
+  util.log("SceneConfig", application, html, data);
+
+  // Avoid name collisions by using "elevatedvision"
+  const renderData = {};
+  renderData[MODULE_ID] = { algorithms: SETTINGS.SHADING.LABELS };
+  foundry.utils.mergeObject(data, renderData, {inplace: true});
+}
+
+/**
+ * Monitor whether EV has been enabled or disabled for a scene.
+ */
+Hooks.on("updateScene", updateSceneHook);
+
+async function updateSceneHook(document, change, _options, _userId) {
+  const autoelevate = change.flags?.[MODULE_ID]?.autoelevate;
+  if ( autoelevate === true ) {
+    ui.notifications.notify("Elevated Vision autoelevate enabled for scene.");
+  } else if ( autoelevate === false ) {
+    ui.notifications.notify("Elevated Vision autoelevate disabled for scene.");
+  }
+
+  const algorithm = change.flags?.[MODULE_ID]?.algorithm;
+  if ( algorithm ) {
+    registerShadowPatches();
+    await canvas.draw(canvas.scene);
+    const label = game.i18n.localize(SETTINGS.SHADING.LABELS[algorithm]);
+    ui.notifications.notify(`Elevated Vision scene shadows switched to ${label}.`)
+  }
+
+  const enable = change.flags?.[MODULE_ID]?.enable;
+  if ( enable === true ) {
+    ui.notifications.notify("Elevated Vision enabled for scene.");
+
+  } else if ( enable === false) {
+    ui.notifications.notify("Elevated Vision disabled for scene.");
+  }
+}
+
+
+
+
+function disableEV() {
+
+}
+
+function enableEV() {
+
+
 }

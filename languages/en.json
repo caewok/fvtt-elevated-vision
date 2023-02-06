@@ -2,14 +2,14 @@
   "elevatedvision.name": "Elevation",
 
   "elevatedvision.settings.shading-algorithm.name": "Display Elevation Shadows",
-  "elevatedvision.settings.shading-algorithm.hint": "Polygons: Represent shadows caused by limited-height walls using polygons for token vision. WebGL: Use WebGL for light shadows and token vision caused by limited height walls. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively.",
+  "elevatedvision.settings.shading-algorithm.hint": "Polygons: Represent shadows caused by limited-height walls using polygons for token vision. WebGL: Use WebGL for light shadows and token vision caused by limited height walls. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively. This sets the default for new scenes, but can be adjust per-scene using the scene configuration.",
 
   "elevatedvision.settings.shading-none": "None",
   "elevatedvision.settings.shading-polygons": "Polygons",
   "elevatedvision.settings.shading-webgl": "WebGL",
 
   "elevatedvision.settings.auto-change-elevation.name": "Automatic token elevation",
-  "elevatedvision.settings.auto-change-elevation.hint": "If selected, will automatically adjust token elevation based on elevation layer data. Token elevation is only adjusted if the token is currently 'on the ground.'",
+  "elevatedvision.settings.auto-change-elevation.hint": "If selected, will automatically adjust token elevation based on elevation layer data. Token elevation is only adjusted if the token is currently 'on the ground', meaning the token's starting elevation equals the terrain elevation. This sets the default for new scenes, but can be adjust per-scene using the scene configuration.",
 
   "elevatedvision.settings.auto-change-elevation.averaging.name": "Average token elevation",
   "elevatedvision.settings.auto-change-elevation.averaging.hint": "When auto-adjusting, use the average elevation under the token shape. If false, use the token center-point to determine elevation.",
@@ -32,14 +32,24 @@
 
   "elevatedvision.controls.add-fly-button.name": "Elevated Tokens Fly",
 
+  "elevatedvision.shading-none": "None",
+  "elevatedvision.shading-polygons": "Polygons",
+  "elevatedvision.shading-webgl": "WebGL",
+
   "elevatedvision.sceneconfig.elevationmin.name": "Minimum Elevation",
   "elevatedvision.sceneconfig.elevationmin.hint": "Minimum elevation for this scene.",
 
   "elevatedvision.sceneconfig.elevationstep.name": "Elevation Increment",
   "elevatedvision.sceneconfig.elevationstep.hint": "Elevation steps (increments) permitted in this scene. Maximum elevation for a scene equals minimum + 255 * increment.",
 
-  "elevatedvision.sceneconfig.disable.name": "Disable Elevated Vision for scene",
-  "elevatedvision.sceneconfig.disable.hint": "Disable the Elevated Vision module for this scene, to support compatibility with certain modules such as Levels 3D. Also to increase performance where elevation is not required for the scene.",
+  "elevatedvision.sceneconfig.autoelevate.name": "Auto Elevate Tokens",
+  "elevatedvision.sceneconfig.autoelevate.hint": "When enabled, tokens automatically adjust elevation based on elevation layer data when moving. Token elevation is only adjusted if the token is currently 'on the ground.'",
+
+  "elevatedvision.sceneconfig.algorithm.name": "Display Elevation Shadows",
+  "elevatedvision.sceneconfig.algorithm.hint": "Polygons: Represent shadows caused by limited-height walls using polygons for token vision. WebGL: Use WebGL for light shadows and token vision caused by limited height walls. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively. Will force scene reload if changed.",
+
+  "elevatedvision.sceneconfig.enable.name": "Enable Elevated Vision for scene",
+  "elevatedvision.sceneconfig.enable.hint": "Enable if you want to use Elevated Vision for this scene. Typically, you can leave this alone. You might want to disable Elevated Vision for a scene if you are using other modules that have compatibility issues or to increase performance when elevation is not required for the scene. Will force scene reload if changed.",
 
   "elevatedvision.ambientconfig.legendtitle": "Elevated Vision",
   "elevatedvision.ambientconfig.elevation.name": "Elevation",

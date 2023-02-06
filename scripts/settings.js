@@ -13,6 +13,12 @@ export const SETTINGS = {
       NONE: "shading-none",
       POLYGONS: "shading-polygons",
       WEBGL: "shading-webgl"
+    },
+
+    LABELS: {
+      "shading-none": "elevatedvision.shading-none",
+      "shading-polygons": "elevatedvision.shading-polygons",
+      "shading-webgl": "elevatedvision.shading-webgl"
     }
   },
 
@@ -141,3 +147,7 @@ export function activateListenersSettingsConfig(wrapper, html) {
   html.find(`[name="${MODULE_ID}.${SETTINGS.AUTO_ELEVATION}"]`).change(autoElevationSettingChanged.bind(this));
   wrapper(html);
 }
+
+
+
+

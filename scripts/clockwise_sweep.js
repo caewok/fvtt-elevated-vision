@@ -14,6 +14,7 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 import { Plane } from "./geometry/3d/Plane.js";
 import { getSetting, SETTINGS } from "./settings.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
+import { MODULE_ID } from "./const.js";
 
 /**
  * Wrap ClockwisePolygonSweep.prototype._identifyEdges
@@ -25,7 +26,7 @@ import { SCENE_GRAPH } from "./WallTracer.js";
 export function _computeClockwiseSweepPolygon(wrapped) {
   wrapped();
 
-  const shaderAlgorithm = getSetting(SETTINGS.SHADING.ALGORITHM);
+  const shaderAlgorithm = canvas.scene.flags?.[MODULE_ID].algorithm ?? SETTINGS.SHADING.TYPES.NONE;
   if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.NONE ) return;
 
   // Ignore lights set with default of positive infinity
