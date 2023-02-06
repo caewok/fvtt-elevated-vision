@@ -3,6 +3,7 @@ LightSource,
 VisionSource,
 libWrapper,
 ClockwiseSweepPolygon
+canvas
 */
 
 "use strict";
@@ -183,8 +184,6 @@ export function registerPatches() {
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
-
-//   registerShadowPatches();
 }
 
 /**

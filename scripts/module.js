@@ -6,7 +6,8 @@ CONFIG,
 renderTemplate,
 Dialog,
 ui,
-Ray
+Ray,
+foundry
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -81,18 +82,6 @@ Hooks.once("setup", async function() {
 
 
 Hooks.once("ready", async function() {
-  if ( typeof canvas.scene.getFlag(MODULE_ID, "autoelevate") === "undefined"  ) {
-    const autoelevate = getSetting(SETTINGS.AUTOELEVATION) ?? true;
-    canvas.scene.setFlag(MODULE_ID, "autoelevate", autoelevate);
-  }
-
-  if ( typeof canvas.scene.getFlag(MODULE_ID, "algorithm") === "undefined"  ) {
-    const algorithm = getSetting(SETTINGS.SHADING.ALGORITHM) ?? SETTINGS.SHADING.TYPES.WEBGL;
-    canvas.scene.setFlag(MODULE_ID, "algorithm", algorithm);
-  }
-
-  if ( typeof canvas.scene.getFlag(MODULE_ID, "enable") === "undefined"  ) canvas.scene.setFlag(MODULE_ID, "enable", true);
-
   if ( !getSetting(SETTINGS.WELCOME_DIALOG.v020) ) {
 		Dialog.prompt({
 			title: "Elevated Vision v0.2.0 Changes!",
@@ -134,32 +123,46 @@ want to keep seeing this message, please click the close button above.</em>
 
 Hooks.on("canvasInit", async function(canvas) {
   log("canvasInit");
+
+  if ( typeof canvas.scene.getFlag(MODULE_ID, "autoelevate") === "undefined" ) {
+    const autoelevate = getSetting(SETTINGS.AUTOELEVATION) ?? true;
+    canvas.scene.setFlag(MODULE_ID, "autoelevate", autoelevate);
+  }
+
+  if ( typeof canvas.scene.getFlag(MODULE_ID, "algorithm") === "undefined" ) {
+    const algorithm = getSetting(SETTINGS.SHADING.ALGORITHM) ?? SETTINGS.SHADING.TYPES.WEBGL;
+    canvas.scene.setFlag(MODULE_ID, "algorithm", algorithm);
+  }
+
   registerShadowPatches();
 
 });
 
 Hooks.on("canvasReady", async function() {
   // Set the elevation grid now that we know scene dimensions
-
-  if ( canvas.scene.getFlag("elevatedvision", "enable") === false || !canvas.elevation ) return;
-
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
 });
 
 
-Hooks.on("3DCanvasToggleMode", function(isOn) {
-  const sceneEnabled = !canvas.scene.getFlag("elevatedvision", "enabled");
+Hooks.on("3DCanvasToggleMode", async function(isOn) {
+  // TODO: Do we need to reset the values for the scene? Seems unnecessary, as a 3d canvas
+  //       is not likely to be used in a non-3d state and require EV for it.
+  if ( !isOn ) return;
 
-  if ( isOn ) {
-    ui.notifications.notify("Turning off Elevated Vision so 3D Canvas can be used.");
+  const autoelevateDisabled = canvas.scene.getFlag(MODULE_ID, "autoelevate");
+  const shadowsDisabled = canvas.scene.getFlag(MODULE_ID, "algorithm") !== SETTINGS.SHADING.TYPES.NONE;
 
-  } else if ( !isOn ){
-    ui.notifications.notify("Re-enabling Elevated Vision.");
+  await canvas.scene.setFlag(MODULE_ID, "autoelevate", false);
+  await canvas.scene.setFlag(MODULE_ID, "algorithm", SETTINGS.SHADING.TYPES.NONE);
+
+  registerShadowPatches();
+  await canvas.draw(canvas.scene);
+
+  if ( autoelevateDisabled || shadowsDisabled ) {
+    ui.notifications.notify("Elevated Vision autoelevate and features for the scenes for compatibility with 3D Canvas.");
   }
 });
-
-
 
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
 Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
@@ -178,7 +181,7 @@ function registerLayer() {
 // Reset the token elevation when moving the token after a cloned drag operation.
 // Token.prototype._refresh is then used to update the elevation as the token is moved.
 Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // eslint-disable-line no-unused-vars
-  if ( !canvas.scene?.flags?.[MODULE_ID]?.autoelevate ) return;
+  if ( !canvas.scene.flags[MODULE_ID].autoelevate ) return;
 
   const token = tokenD.object;
   log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
@@ -313,37 +316,14 @@ Hooks.on("updateScene", updateSceneHook);
 
 async function updateSceneHook(document, change, _options, _userId) {
   const autoelevate = change.flags?.[MODULE_ID]?.autoelevate;
-  if ( autoelevate === true ) {
-    ui.notifications.notify("Elevated Vision autoelevate enabled for scene.");
-  } else if ( autoelevate === false ) {
-    ui.notifications.notify("Elevated Vision autoelevate disabled for scene.");
-  }
+  if ( autoelevate === true ) ui.notifications.notify("Elevated Vision autoelevate enabled for scene.");
+  else if ( autoelevate === false ) ui.notifications.notify("Elevated Vision autoelevate disabled for scene.");
 
   const algorithm = change.flags?.[MODULE_ID]?.algorithm;
   if ( algorithm ) {
     registerShadowPatches();
     await canvas.draw(canvas.scene);
     const label = game.i18n.localize(SETTINGS.SHADING.LABELS[algorithm]);
-    ui.notifications.notify(`Elevated Vision scene shadows switched to ${label}.`)
+    ui.notifications.notify(`Elevated Vision scene shadows switched to ${label}.`);
   }
-
-  const enable = change.flags?.[MODULE_ID]?.enable;
-  if ( enable === true ) {
-    ui.notifications.notify("Elevated Vision enabled for scene.");
-
-  } else if ( enable === false) {
-    ui.notifications.notify("Elevated Vision disabled for scene.");
-  }
-}
-
-
-
-
-function disableEV() {
-
-}
-
-function enableEV() {
-
-
 }

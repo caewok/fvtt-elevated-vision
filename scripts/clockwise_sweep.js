@@ -12,7 +12,7 @@ import { Draw } from "./geometry/Draw.js";
 import { Shadow, ShadowProjection } from "./geometry/Shadow.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Plane } from "./geometry/3d/Plane.js";
-import { getSetting, SETTINGS } from "./settings.js";
+import { SETTINGS } from "./settings.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { MODULE_ID } from "./const.js";
 
@@ -26,7 +26,7 @@ import { MODULE_ID } from "./const.js";
 export function _computeClockwiseSweepPolygon(wrapped) {
   wrapped();
 
-  const shaderAlgorithm = canvas.scene.flags?.[MODULE_ID].algorithm ?? SETTINGS.SHADING.TYPES.NONE;
+  const shaderAlgorithm = canvas.scene.flags[MODULE_ID].algorithm;
   if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.NONE ) return;
 
   // Ignore lights set with default of positive infinity
@@ -72,7 +72,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
 
   this._elevatedvision ??= {};
   this._elevatedvision.shadows = [];
-  this._elevatedvision.terrainShadows = []; // debugging
+//   this._elevatedvision.terrainShadows = []; // Debugging
   this._elevatedvision.combinedShadows = [];
   this._elevatedvision.terrainWalls = new Set();
   this._elevatedvision.heightWalls = new Set();
@@ -114,7 +114,10 @@ export function _computeClockwiseSweepPolygon(wrapped) {
     const sourceOrigin = Point3d.fromPointSource(this.config.source);
 
     for ( const w of this._elevatedvision.terrainWalls ) {
-      const blocking = filterPotentialBlockingWalls(w._elevatedvision.wallPoints, this._elevatedvision.terrainWalls, sourceOrigin);
+      const blocking = filterPotentialBlockingWalls(
+        w._elevatedvision.wallPoints,
+        this._elevatedvision.terrainWalls,
+        sourceOrigin);
       blocking.delete(w);
 
       if ( blocking.size ) {
@@ -129,7 +132,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
           const shadowIX = shadowW.intersectPolygon(shadowBW)[0];
           if ( shadowIX && shadowIX.points.length > 5 ) {
             this._elevatedvision.shadows.push(shadowIX);
-            this._elevatedvision.terrainShadows.push(shadowIX);
+//             this._elevatedvision.terrainShadows.push(shadowIX);
           }
         }
       }
@@ -325,18 +328,4 @@ export function initializeClockwiseSweepPolygon(wrapper, origin, config) {
     config.boundaryShapes.push(encompassingPolygon);
   }
   wrapper(origin, config);
-}
-
-function testWallInclusion(wall, type) {
-  // Ignore limited walls for this type
-  if ( wall.document[type] !== CONST.WALL_SENSE_TYPES.NORMAL ) return false;
-
-  // Always include interior walls underneath active roof tiles
-  if ( (type === "sight") && wall.hasActiveRoof ) return true;
-
-  // Otherwise, ignore walls that are not blocking for this polygon type
-  else if ( wall.isOpen ) return false;
-
-  // Ignore one-directional walls which are facing away from the origin
-  return !wall.document.dir || (side !== wall.document.dir);
 }

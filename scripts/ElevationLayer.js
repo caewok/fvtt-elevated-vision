@@ -40,8 +40,6 @@ import {
   tokenTerrainElevation,
   elevationForTokenTravel } from "./tokens.js";
 
-import { getSetting, SETTINGS } from "./settings.js";
-
 /* Elevation layer
 
 Allow the user to "paint" areas with different elevations. This elevation data will then

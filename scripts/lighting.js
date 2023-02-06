@@ -1,7 +1,8 @@
 /* globals
 GlobalLightSource,
 canvas,
-PIXI
+PIXI,
+CONFIG
 */
 "use strict";
 
@@ -368,7 +369,7 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   log("createAdaptiveLightingShader");
 
   if ( !originalFragmentSource.has(this.name) ) originalFragmentSource.set(this.name, this.fragmentShader);
-  const shaderAlgorithm = canvas.scene.flags?.[MODULE_ID].algorithm ?? SETTINGS.SHADING.TYPES.NONE;
+  const shaderAlgorithm = canvas.scene.flags[MODULE_ID].algorithm;
   if ( shaderAlgorithm !== SETTINGS.SHADING.TYPES.WEBGL ) {
     this.fragmentShader = originalFragmentSource.get(this.name);
     return wrapped(...args);
@@ -470,20 +471,16 @@ export function _updateEVLightUniformsLightSource(mesh) {
 
   const heightWalls = this.los._elevatedvision?.heightWalls || new Set();
   const terrainWalls = this.los._elevatedvision?.terrainWalls || new Set();
-
-  const center = {x, y};
   const r_inv = 1 / radius;
 
   // Radius is .5 in the shader coordinates; adjust elevation accordingly
   const u = shader.uniforms;
   u.EV_sourceLocation = [0.5, 0.5, elevationZ * 0.5 * r_inv];
 
-  const center_shader = {x: 0.5, y: 0.5};
-
   let terrainWallCoords = [];
   let terrainWallDistances = [];
   for ( const w of terrainWalls ) {
-    addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source, r_inv)
+    addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source, r_inv);
   }
   u.EV_numTerrainWalls = terrainWallDistances.length;
 

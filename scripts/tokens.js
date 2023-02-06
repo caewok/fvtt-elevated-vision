@@ -122,7 +122,7 @@ Animating for any given location:
  * Adjust elevation as the token moves.
  */
 export function _refreshToken(wrapper, options) {
-  if ( !canvas.scene?.flags?.[MODULE_ID]?.autoelevate ) return wrapper(options);
+  if ( !canvas.scene.flags[MODULE_ID].autoelevate ) return wrapper(options);
 
   // Old position: this.position
   // New position: this.document
@@ -189,7 +189,7 @@ export function cloneToken(wrapper) {
   clone._elevatedVision ??= {};
   clone._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
 
-  if ( !canvas.scene?.flags?.[MODULE_ID]?.autoelevate ) return clone;
+  if ( !canvas.scene.flags[MODULE_ID].autoelevate ) return clone;
 
   const tokenCenter = { x: this.center.x, y: this.center.y };
   if ( !isTokenOnGround(this, { tokenCenter }) && !autoElevationFly() ) return clone;
