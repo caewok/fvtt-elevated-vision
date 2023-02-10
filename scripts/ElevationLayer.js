@@ -19,6 +19,7 @@ PreciseText
 "use strict";
 
 import { MODULE_ID, FLAG_ELEVATION_IMAGE } from "./const.js";
+import { PixelCache } from "./PixelCache.js";
 import {
   log,
   readDataURLFromFile,
@@ -26,7 +27,6 @@ import {
   drawPolygonWithHoles,
   extractRectangleFromPixelArray,
   applyFunctionToPixelArray } from "./util.js";
-
 import { Draw } from "./geometry/Draw.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
@@ -662,6 +662,8 @@ export class ElevationLayer extends InteractionLayer {
    */
 
   /** @type {PixelFrame} */
+  // #elevationPixelCache;
+
   #elevationPixelCache = {
     pixels: undefined,
     width: 0,

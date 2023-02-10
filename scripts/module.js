@@ -29,6 +29,7 @@ import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { ElevationGrid } from "./ElevationGrid.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
+import { PixelCache, TilePixelCache } from "./PixelCache.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -68,7 +69,9 @@ Hooks.once("init", function() {
     WallTracerEdge,
     WallTracerVertex,
     WallTracer,
-    SCENE_GRAPH
+    SCENE_GRAPH,
+    PixelCache,
+    TilePixelCache
   };
 
   FLY_CONTROL.title = game.i18n.localize(FLY_CONTROL.title);
