@@ -94,6 +94,25 @@ cacheTile1.draw({local: true})
 cacheTile1sm.draw({local: true})
 cacheTile2.draw({local: true})
 
+cacheTile1.draw()
+cacheTile1sm.draw()
+cacheTile2.draw()
+
+function testCoordinateTransform(pixelCache) {
+  const { left, right, top, bottom } = pixelCache;
+  for ( let x = left; x <= right; x += 1 ) {
+    for ( let y = top; y <= bottom; y += 1 ) {
+      const local = pixelCache._fromCanvasCoordinates(x, y);
+      const canvas = pixelCache._toCanvasCoordinates(local.x, local.y);
+      if ( !canvas.almostEqual({x, y}) ) {
+        console.log(`${x},${y} not equal.`);
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 */
 
 
@@ -607,11 +626,12 @@ export class PixelCache extends PIXI.Rectangle {
    */
   draw({color = Draw.COLORS.blue, alphaAdder = 0, local = false } = {}) {
     const ln = this.pixels.length;
+    const coordFn = local ? this._localAtIndex : this._canvasAtIndex;
     for ( let i = 0; i < ln; i += 1 ) {
-      const pt = local ? this._localAtIndex(i) : this._canvasAtIndex(i);
       const value = this.pixels[i];
       if ( !value ) continue;
       const alpha = (value + alphaAdder) / this.#maximumPixelValue;
+      const pt = coordFn.call(this, i);
       Draw.point(pt, { color, alpha, radius: 1 });
     }
   }
@@ -623,8 +643,9 @@ export class PixelCache extends PIXI.Rectangle {
    */
   drawColors({defaultColor = Draw.COLORS.blue, colors = {}, local = false } = {}) {
     const ln = this.pixels.length;
+    const coordFn = local ? this._localAtIndex : this._canvasAtIndex;
     for ( let i = 0; i < ln; i += 1 ) {
-      const pt = local ? this._localAtIndex(i) : this._canvasAtIndex(i);
+      const pt = coordFn.call(this, i);
       const value = this.pixels[i];
       const color = colors[value] ?? defaultColor;
       Draw.point(pt, { color, alpha: .9, radius: 1 });
@@ -719,13 +740,13 @@ export class TilePixelCache extends PixelCache {
     // Account for tile rotation
     if ( rotation ) {
       // Center the coordinate so the tile center is 0,0 so the coordinate can be easily rotated.
-      const center = { x: this.center.x + this.x, y: this.center.y + this.y };
-      pt.subtract(center, pt);
+      pt.subtract(this.center, pt);
       pt.rotate(-rotation, pt);
-      pt.translate(center.x, center.y, pt);
-    } else {
-      pt.translate(-this.x, -this.y, pt);
+      pt.add(this.center, pt);
     }
+
+    // Move from 0,0 to the tile location
+    pt.translate(-this.x, -this.y, pt);
 
     // Account for scale
     // Mirror if scale is negative
@@ -778,10 +799,9 @@ export class TilePixelCache extends PixelCache {
     // Account for tile rotation
     if ( rotation ) {
       // Center the coordinate so that the tile center is 0,0 so the coordinate can be easily rotated.
-      const center = { x: this.center.x + this.x, y: this.center.y + this.y };
-      pt.subtract(center, pt);
+      pt.subtract(this.center, pt);
       pt.rotate(rotation, pt);
-      pt.add(center, pt);
+      pt.add(this.center, pt);
     }
 
     return pt;
@@ -812,6 +832,8 @@ export class TilePixelCache extends PixelCache {
     const texture = tile.texture;
     opts.tile = tile;
     opts.channel ??= 3;
+    opts.x = tile.x;
+    opts.y = tile.y;
     return this.fromTexture(texture, opts);
   }
 
