@@ -844,21 +844,13 @@ new Matrix = [
     // TODO: Handle negative scaling
 
     // Scale
-    const { ascX, ascY } = this.scale;
+    const { ascX, ascY, sscX, sscY } = this.scale;
     const mScale = new Matrix([
-      [ascX, 0, 0],
-      [0, ascY, 0],
+      [ascX * sscX, 0, 0],
+      [0, ascY * sscY, 0],
       [0, 0, 1]
     ]);
     M = M.multiply(mScale);
-
-    // Recenter due to scaling
-//     const mRecenter = new Matrix([
-//       [1, 0, 0],
-//       [0, 1, 0],
-//       [width * 0.5 * (ascX - 1), height * 0.5 * (ascY - 1), 1]
-//     ]);
-//     M = M.multiply(mRecenter);
 
     // Rotate around the Z axis
     // (The center must be 0,0 for this to work properly.)
