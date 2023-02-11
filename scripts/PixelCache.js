@@ -38,6 +38,25 @@ cache = canvas.elevation.elevationPixelCache
 cache.drawLocal({ gammaCorrect: true })
 cache.draw({ gammaCorrect: true })
 
+
+dims = canvas.dimensions
+opts = {
+      resolution: 0.5, // TODO: Remove these defaults
+      width: dims.sceneWidth,
+      height: dims.sceneHeight,
+      mipmap: PIXI.MIPMAP_MODES.OFF,
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      multisample: PIXI.MSAA_QUALITY.NONE,
+      format: PIXI.FORMATS.RED
+      // Cannot be extracted ( GL_INVALID_OPERATION: Invalid format and type combination)
+      // format: PIXI.FORMATS.RED_INTEGER,
+      // type: PIXI.TYPES.INT
+    }
+
+tex = PIXI.RenderTexture.create(opts);
+cache = PixelCache.fromTexture(tex, { x: dims.sceneX, y: dims.sceneY })
+
+
 // For the moment, evTexture is
 evTexture = canvas.elevation._elevationTexture
 cache = PixelCache.fromTexture(evTexture, { frame: canvas.dimensions.sceneRect })
@@ -126,6 +145,17 @@ function testCoordinateTransform(pixelCache) {
 
 testCoordinateTransform(cacheTile1)
 testCoordinateTransform(cacheTile1sm)
+*/
+
+/* Resolution math
+
+Assume 4000 x 3000 texture.
+
+If resolution is 0.5 --> 2000 x 1500.
+
+If texture resolution is 0.5 --> 2000 x 1500.
+
+Combined ---> 1000 x 750. Which is 0.5 * 0.5 = 0.25.
 */
 
 
@@ -564,8 +594,10 @@ export class PixelCache extends PIXI.Rectangle {
     const arr = scalingMethod(pixels, width, height, opts.resolution, { channel });
     opts.x += texX;
     opts.y += texY;
-    opts.height = height;
-    return new this(arr, width, opts);
+    opts.resolution *= texture.resolution;
+    opts.height = texture.height;
+
+    return new this(arr, texture.width, opts);
   }
 
   /**

@@ -553,9 +553,9 @@ export class ElevationLayer extends InteractionLayer {
     }
 
     return {
-      resolution: 1, // TODO: Remove these defaults
-      width: dims.sceneWidth,
-      height: dims.sceneHeight,
+      resolution, // TODO: Remove these defaults
+      width,
+      height,
       mipmap: PIXI.MIPMAP_MODES.OFF,
       scaleMode: PIXI.SCALE_MODES.NEAREST,
       multisample: PIXI.MSAA_QUALITY.NONE,
@@ -728,8 +728,8 @@ export class ElevationLayer extends InteractionLayer {
    */
   #refreshElevationPixelCache() {
     // TODO: This needs to handle textures with resolutions less than 1.
-//     const { sceneX: x, sceneY: y } = canvas.dimensions;
-    return PixelCache.fromTexture(this._elevationTexture);
+    const { sceneX: x, sceneY: y } = canvas.dimensions;
+    return PixelCache.fromTexture(this._elevationTexture, { x, y });
   }
 
 
@@ -1261,7 +1261,9 @@ export class ElevationLayer extends InteractionLayer {
    * (Re)render the graphics stored in the container.
    */
   renderElevation() {
-    canvas.app.renderer.render(this._graphicsContainer, this._elevationTexture);
+    const dims = canvas.dimensions;
+    const transform = new PIXI.Matrix(1, 0, 0, 1, -dims.sceneX, -dims.sceneY);
+    canvas.app.renderer.render(this._graphicsContainer, this._elevationTexture, undefined, transform);
 
     // Destroy the cache
     this.#elevationPixelCache = undefined;
@@ -1513,7 +1515,13 @@ class ElevationFilter extends AbstractBaseFilter {
       vec4 tex = texture2D(uSampler, vTextureCoord);
       vec4 elevation = texture2D(elevationSampler, vCanvasCoordNorm);
 
-      if ( elevation.r == 0.0 ) {
+
+      if ( elevation.r == 0.
+        || vCanvasCoordNorm.x < 0.
+        || vCanvasCoordNorm.y < 0.
+        || vCanvasCoordNorm.x > 1.
+        || vCanvasCoordNorm.y > 1. ) {
+        // Outside the scene boundary or no elevation set: use the background texture.
         gl_FragColor = tex;
       } else {
         // Adjust alpha to avoid extremely light alphas
@@ -1527,8 +1535,12 @@ class ElevationFilter extends AbstractBaseFilter {
   /** @override */
   // Thanks to https://ptb.discord.com/channels/732325252788387980/734082399453052938/1009287977261879388
   apply(filterManager, input, output, clear, currentState) {
+    const { sceneX, sceneY } = canvas.dimensions;
     this.uniforms.canvasMatrix ??= new PIXI.Matrix();
-    this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform).invert();
+    this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform);
+//     this.uniforms.canvasMatrix.translate(sceneX, sceneY);
+    this.uniforms.canvasMatrix.invert();
+    this.uniforms.canvasMatrix.translate(-sceneX, -sceneY);
     return super.apply(filterManager, input, output, clear, currentState);
   }
 
