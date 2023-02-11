@@ -33,6 +33,11 @@ gridSize = canvas.dimensions.size
 gridPrecision = gridSize >= 128 ? 16 : 8;
 Matrix = CONFIG.GeometryLib.Matrix
 
+cache = canvas.elevation.elevationPixelCache
+
+cache.drawLocal({ gammaCorrect: true })
+cache.draw({ gammaCorrect: true })
+
 // For the moment, evTexture is
 evTexture = canvas.elevation._elevationTexture
 cache = PixelCache.fromTexture(evTexture, { frame: canvas.dimensions.sceneRect })
@@ -210,9 +215,9 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {Matrix}
    */
   _calculateToLocalTransform() {
-    // Translate so the center is at 0, 0
-    const { width, height, x, y } = this;
-    const mTranslate = Matrix.translation(-(width * 0.5) - x, -(height * 0.5) - y);
+    // Translate so top corner is at 0, 0
+    const { x, y, scale } = this;
+    const mTranslate = Matrix.translation(-x, -y);
  //    const mTranslate = new Matrix([
 //       [1, 0, 0],
 //       [0, 1, 0],
@@ -220,7 +225,7 @@ export class PixelCache extends PIXI.Rectangle {
 //     ]);
 
     // Scale based on resolution.
-    const resolution = this.scale.resolution;
+    const resolution = scale.resolution;
     const mRes = Matrix.scale(resolution, resolution);
 //     const mRes = new Matrix([
 //       [resolution, 0, 0],
@@ -546,6 +551,7 @@ export class PixelCache extends PIXI.Rectangle {
 
   /**
    * Construct a pixel cache from a texture.
+   * Will automatically adjust the resolution of the pixel cache based on the texture resolution.
    * @param {PIXI.Texture} texture      Texture from which to pull pixel data
    * @param {object} [options]          Options affecting which pixel data is used
    * @param {PIXI.Rectangle} [options.frame]    Optional rectangle to trim the extraction
@@ -556,7 +562,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {function} [options.scalingMethod=PixelCache.nearestNeighborScaling]
    * @returns {PixelCache}
    */
-  static fromTexture(texture, opts) {
+  static fromTexture(texture, opts = {}) {
     opts.x ??= 0;
     opts.y ??= 0;
     opts.resolution ??= 1;
@@ -679,13 +685,15 @@ export class PixelCache extends PIXI.Rectangle {
    * to represent values. For debugging.
    * @param {Hex} [color]   Color to use for the fill
    */
-  draw({color = Draw.COLORS.blue, alphaAdder = 0, local = false } = {}) {
+  draw({color = Draw.COLORS.blue, gammaCorrect = false, local = false } = {}) {
     const ln = this.pixels.length;
     const coordFn = local ? this._localAtIndex : this._canvasAtIndex;
+    const gammaExp = gammaCorrect ? 1 / 2.2 : 1;
+
     for ( let i = 0; i < ln; i += 1 ) {
       const value = this.pixels[i];
       if ( !value ) continue;
-      const alpha = (value + alphaAdder) / this.#maximumPixelValue;
+      const alpha = Math.pow(value / this.#maximumPixelValue, gammaExp);
       const pt = coordFn.call(this, i);
       Draw.point(pt, { color, alpha, radius: 1 });
     }
@@ -696,12 +704,13 @@ export class PixelCache extends PIXI.Rectangle {
    * to represent values. For debugging.
    * @param {Hex} [color]   Color to use for the fill
    */
-  drawLocal({color = Draw.COLORS.blue, alphaAdder = 0 } = {}) {
+  drawLocal({color = Draw.COLORS.blue, gammaCorrect = false } = {}) {
     const ln = this.pixels.length;
+    const gammaExp = gammaCorrect ? 1 / 2.2 : 1;
     for ( let i = 0; i < ln; i += 1 ) {
       const value = this.pixels[i];
       if ( !value ) continue;
-      const alpha = (value + alphaAdder) / this.#maximumPixelValue;
+      const alpha = Math.pow(value / this.#maximumPixelValue, gammaExp);
       const pt = this._canvasAtIndex(i);
       const local = this._fromCanvasCoordinates(pt.x, pt.y);
       Draw.point(local, { color, alpha, radius: 1 });

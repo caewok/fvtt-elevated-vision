@@ -728,8 +728,8 @@ export class ElevationLayer extends InteractionLayer {
    */
   #refreshElevationPixelCache() {
     // TODO: This needs to handle textures with resolutions less than 1.
-    const { sceneX: x, sceneY: y } = canvas.dimensions;
-    return PixelCache.fromTexture(this._elevationTexture, { x, y });
+//     const { sceneX: x, sceneY: y } = canvas.dimensions;
+    return PixelCache.fromTexture(this._elevationTexture);
   }
 
 
