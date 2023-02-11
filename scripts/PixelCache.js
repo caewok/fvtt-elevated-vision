@@ -456,15 +456,15 @@ export class PixelCache extends PIXI.Rectangle {
     else frame = this.#localFrame;
 
     // In local coordinates, TL is always {0,0}.
-    const { right, bottom } = frame;
-    for ( let ptX = 0; ptX < right; ptX += 1 ) {
-      for ( let ptY = 0; ptY < bottom; ptY += 1) {
+    const { left, top, right, bottom, width, height} = frame;
+    for ( let ptX = left; ptX < right; ptX += 1 ) {
+      for ( let ptY = top; ptY < bottom; ptY += 1) {
         const px = this._indexAtLocal(ptX, ptY);
         const value = this.pixels[px];
         fn(value, px);
       }
     }
-    return right * bottom;
+    return width * height;
   }
 
   /**

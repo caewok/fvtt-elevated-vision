@@ -24,9 +24,7 @@ import {
   log,
   readDataURLFromFile,
   convertBase64ToImage,
-  drawPolygonWithHoles,
-  extractRectangleFromPixelArray,
-  applyFunctionToPixelArray } from "./util.js";
+  drawPolygonWithHoles } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
@@ -197,6 +195,24 @@ export class ElevationLayer extends InteractionLayer {
   #maximumPixelValue = 255;
 
   get maximumPixelValue() { return this.#maximumPixelValue; }
+
+  /**
+   * The maximum allowable visibility texture size.
+   * In v11, this is equal to CanvasVisibility.#MAXIMUM_VISIBILITY_TEXTURE_SIZE
+   * @type {number}
+   */
+  static #MAXIMUM_ELEVATION_TEXTURE_SIZE = 4096;
+
+  /** @type ElevationTextureConfiguration */
+  #textureConfiguration;
+
+  /**
+   * The configured options used for the saved elevation texture.
+   * @type {ElevationTextureConfiguration}
+   */
+  get textureConfiguration() {
+    return this.#textureConfiguration;
+  }
 
   /**
    * Flag for when the elevation data has changed for the scene, requiring a save.
@@ -455,7 +471,7 @@ export class ElevationLayer extends InteractionLayer {
     log("Initializing elevation layer");
 
     this._initialized = false;
-    this._resolution = this._configureResolution();
+    this.#textureConfiguration = this._configureElevationTexture();
 
     // Initialize container to hold the elevation data and GM modifications
     const w = new FullCanvasContainer();
@@ -466,7 +482,7 @@ export class ElevationLayer extends InteractionLayer {
     this._backgroundElevation.position = { x: sceneX, y: sceneY };
 
     // Add the render texture for displaying elevation information to the GM
-    this._elevationTexture = PIXI.RenderTexture.create(this._resolution);
+    this._elevationTexture = PIXI.RenderTexture.create(this.#textureConfiguration);
     // Set the clear color of the render texture to black. The texture needs to be opaque.
     this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
 
@@ -497,17 +513,56 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
-   * Values used when rendering elevation data to a texture representing the scene canvas.
-   * @returns {object}
+   * @typedef {object} ElevationTextureConfiguration
+   * @property {number} resolution    Resolution of the texture
+   * @property {number} width         Width, based on sceneWidth
+   * @property {number} height        Height, based on sceneHeight
+   * @property {PIXI.MIPMAP_MODES} mipmap
+   * @property {PIXI.SCALE_MODES} scaleMode
+   * @property {PIXI.MSAA_QUALITY} multisample
+   * @property {PIXI.FORMATS} format
    */
-  _configureResolution() {
+
+  /**
+   * Values used when rendering elevation data to a texture representing the scene canvas.
+   * It may be important that width/height of the elevation texture is evenly divisible
+   * by the downscaling resolution. (It is important for fog manager to prevent drift.)
+   * @returns {ElevationTextureConfiguration}
+   */
+  _configureElevationTexture() {
+    // In v11, see CanvasVisibility.prototype.#configureVisibilityTexture
+    const dims = canvas.scene.dimensions;
+    const size = dims.size;
+    let width = dims.sceneWidth;
+    let height = dims.sceneHeight;
+
+    // Use the same method as wall sub-grid to determine elevation resolution.
+    // 8 or 16 elevation measurements per grid space.
+    const gridPrecision = size >= 128 ? 16 : 8;
+    let resolution = gridPrecision / size;
+    const maxSize = Math.min(
+      ElevationLayer.#MAXIMUM_ELEVATION_TEXTURE_SIZE,
+      resolution * Math.max(width, height));
+
+    if ( width >= height ) {
+      resolution = maxSize / width;
+      height = Math.ceil(height * resolution) / resolution;
+    } else {
+      resolution = maxSize / height;
+      width = Math.ceil(width * resolution) / resolution;
+    }
+
     return {
-      resolution: 1.0,
-      width: canvas.dimensions.width,
-      height: canvas.dimensions.height,
+      resolution: 1, // TODO: Remove these defaults
+      width: dims.sceneWidth,
+      height: dims.sceneHeight,
       mipmap: PIXI.MIPMAP_MODES.OFF,
-      scaleMode: PIXI.SCALE_MODES.LINEAR,
-      multisample: PIXI.MSAA_QUALITY.NONE
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      multisample: PIXI.MSAA_QUALITY.NONE,
+      format: PIXI.FORMATS.RED
+      // Cannot be extracted ( GL_INVALID_OPERATION: Invalid format and type combination)
+      // format: PIXI.FORMATS.RED_INTEGER,
+      // type: PIXI.TYPES.INT
     };
   }
 
@@ -662,97 +717,21 @@ export class ElevationLayer extends InteractionLayer {
    */
 
   /** @type {PixelFrame} */
-  // #elevationPixelCache;
+  #elevationPixelCache;
 
-  #elevationPixelCache = {
-    pixels: undefined,
-    width: 0,
-    height: 0,
-    resolution: 1
-  };
-
-  /**
-   * Convert from canvas coordinates to elevation texture coordinates.
-   * @param {Point} {x, y}    Canvas coordinates
-   * @returns {Point}         Texture coordinates
-   */
-  _fromCanvasCoordinates({x, y}) {
-    const pt = new PIXI.Point(x, y);
-
-    // TODO: Translate and adjust given resolution.
-    // pt.translate(-canvas.dimensions.sceneX, -canvas.dimensions.sceneY, pt);
-    // pt.multiplyScalar(this.#elevationPixelCache.resolution, pt);
-    return pt;
-  }
-
-  /**
-   * Convert from elevation texture coordinates to pixel coordinates.
-   * @param {Point} {x, y}    Texture coordinates
-   * @returns {Point}         Canvas coordinates
-   */
-  _toCanvasCoordinates({x, y}) {
-    const pt = new PIXI.Point(x, y);
-
-    // TODO: Translate and adjust given resolution.
-    // pt.multiplyScalar(1 / this.#elevationPixelCache.resolution, pt);
-    // pt.translate(canvas.dimensions.sceneX, canvas.dimensions.sceneY, pt);
-    return pt;
-  }
-
-  /** @type {number[]} */
-  get elevationPixelValues() {
-    if ( !this.#elevationPixelCache.pixels ) this.#refreshPixelCache();
-    return this.#elevationPixelCache.pixels;
-  }
-
-  /** @type {number} */
-  get cacheWidth() {
-    if ( !this.#elevationPixelCache.pixels ) this.#refreshPixelCache();
-    return this.#elevationPixelCache.width;
-  }
-
-  /**
-   * Get the pixel index for a specific texture location
-   * @param {Point} {x, y}      Texture coordinates
-   * @returns {number} pixel index
-   */
-  _pixelIndexAtLocal({x, y}) { return ((~~y) * this.cacheWidth) + (~~x); } // Floor the point coordinates.
-
-  _pixelIndexAtCanvas({x, y}) {
-    const local = this._fromCanvasCoordinates({x, y});
-    return this._pixelIndexAtLocal(local);
-  }
-
-  _pixelValueAtLocal({x, y}) { return this.elevationPixelValues[this._pixelIndexAtLocal({x, y})]; }
-
-  _pixelValueAtCanvas({x, y}) { return this.elevationPixelValues[this._pixelIndexAtCanvas({x, y})]; }
-
-  _localCoordinatesAtPixelIndex(i) {
-    const width = this.cacheWidth;
-    const col = i % width;
-    const row = ~~(i / width); // Floor the row.
-    return new PIXI.Point(col, row);
-  }
-
-  _canvasCoordinatesAtPixelIndex(i) {
-    const local = this._localCoordinatesAtPixelIndex(i);
-    return this._toCanvasCoordinates(local);
+  get elevationPixelCache() {
+    return this.#elevationPixelCache ?? (this.#elevationPixelCache = this.#refreshElevationPixelCache());
   }
 
   /**
    * Refresh the pixel array cache from the elevation texture.
    */
-  #refreshPixelCache() {
-    // TODO: Limit resolution. Possibly also limit the texture size to the canvas.
-    const { pixels, width, height } = this._extractFromElevationTexture();
-
-    // Converting the entire array to pixel values takes a long time.
-    // Probably better to keep as pixels.
-    // Otherwise, would need to async everything.
-    this.#elevationPixelCache.pixels = pixels;
-    this.#elevationPixelCache.width = width;
-    this.#elevationPixelCache.height = height;
+  #refreshElevationPixelCache() {
+    // TODO: This needs to handle textures with resolutions less than 1.
+    const { sceneX: x, sceneY: y } = canvas.dimensions;
+    return PixelCache.fromTexture(this._elevationTexture, { x, y });
   }
+
 
   /* -------------------------------------------- */
   /* NOTE: ELEVATION PIXEL EXTRACTION */
@@ -764,17 +743,17 @@ export class ElevationLayer extends InteractionLayer {
    *                                      Below 1 will shrink the resulting array.
    * @returns {PixelFrame}
    */
-  _extractFromElevationTexture(frame, resolution = 1) {
-    let { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, frame);
-    const nPixels = width * height * 4; // RGBA channels are extracted
-    width *= resolution;
-    height *= resolution;
-    const skip = 4 * (1 / resolution); // Need only the red channel, so use every 4th.
-    const N = width * height;
-    const arr = new Uint8Array(N);
-    for ( let i = 0, j = 0; i < nPixels; i += skip, j += 1 ) arr[j] = pixels[i];
-    return { pixels: arr, width, height };
-  }
+//   _extractFromElevationTexture(frame, resolution = 1) {
+//     let { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, frame);
+//     const nPixels = width * height * 4; // RGBA channels are extracted
+//     width *= resolution;
+//     height *= resolution;
+//     const skip = 4 * (1 / resolution); // Need only the red channel, so use every 4th.
+//     const N = width * height;
+//     const arr = new Uint8Array(N);
+//     for ( let i = 0, j = 0; i < nPixels; i += skip, j += 1 ) arr[j] = pixels[i];
+//     return { pixels: arr, width, height };
+//   }
 
   /**
    * Pull the pixels from the elevation texture, and simultaneously apply a function to each pixel.
@@ -784,21 +763,21 @@ export class ElevationLayer extends InteractionLayer {
    *                                      Below 1 will shrink the resulting array.
    * @returns {PixelFrame}
    */
-  _applyFunctionToElevationTexture(fn, frame, resolution = 1) {
-    let { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, frame);
-    const nPixels = width * height * 4; // RGBA channels are extracted
-    width *= resolution;
-    height *= resolution;
-    const skip = 4 * (1 / resolution); // Need only the red channel, so use every 4th.
-    const N = width * height;
-    const arr = new Uint8Array(N);
-    for ( let i = 0, j = 0; i < nPixels; i += skip, j += 1 ) {
-      const px = pixels[i];
-      arr[j] = px;
-      fn(px, i);
-    }
-    return { pixels: arr, width, height };
-  }
+//   _applyFunctionToElevationTexture(fn, frame, resolution = 1) {
+//     let { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, frame);
+//     const nPixels = width * height * 4; // RGBA channels are extracted
+//     width *= resolution;
+//     height *= resolution;
+//     const skip = 4 * (1 / resolution); // Need only the red channel, so use every 4th.
+//     const N = width * height;
+//     const arr = new Uint8Array(N);
+//     for ( let i = 0, j = 0; i < nPixels; i += skip, j += 1 ) {
+//       const px = pixels[i];
+//       arr[j] = px;
+//       fn(px, i);
+//     }
+//     return { pixels: arr, width, height };
+//   }
 
   /**
    * Retrieve an array representing a rectangular from from the cached pixels.
@@ -807,9 +786,9 @@ export class ElevationLayer extends InteractionLayer {
    * @param {PIXI.Rectangle} frame
    * @returns {PixelFrame}
    */
-  _extractFromCachedPixels(frame) {
-    return extractRectangleFromPixelArray(this.elevationPixelValues, this.cacheWidth, frame);
-  }
+//   _extractFromCachedPixels(frame) {
+//     return extractRectangleFromPixelArray(this.elevationPixelValues, this.cacheWidth, frame);
+//   }
 
   /**
    * Retrieve an array representing a rectangular from from the cached pixels.
@@ -820,9 +799,9 @@ export class ElevationLayer extends InteractionLayer {
    * @param {PIXI.Rectangle} frame
    * @returns {PixelFrame}
    */
-  _applyFunctionToCachedPixels(fn, frame) {
-    return applyFunctionToPixelArray(this.elevationPixelValues, this.cacheWidth, frame, fn);
-  }
+//   _applyFunctionToCachedPixels(fn, frame) {
+//     return applyFunctionToPixelArray(this.elevationPixelValues, this.cacheWidth, frame, fn);
+//   }
 
   /* -------------------------------------------- */
   /* NOTE: ELEVATION VALUES */
@@ -833,7 +812,8 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number} Elevation value.
    */
   elevationAt({x, y}) {
-    return this.pixelValueToElevation(this._pixelValueAtCanvas({x, y}));
+    const value = this.elevationPixelCache.pixelAtCanvas(x, y);
+    return this.pixelValueToElevation(value);
   }
 
   /**
@@ -844,64 +824,14 @@ export class ElevationLayer extends InteractionLayer {
   averageElevationWithinRectangle(rect, { use_cache }) {
     // At around area 1_000_000, the texture extraction is faster than the cached pixels.
     // TODO: Does this change if less pixels are cached with lower resolutions?
-    rect ??= new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height);
-    use_cache ??= rect.area < 1e06;
-    const applyFn = use_cache ? this._applyFunctionToCachedPixels : this._applyFunctionToElevationTexture;
+//     rect ??= new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height);
+//     use_cache ??= rect.area < 1e06;
+//     const applyFn = use_cache ? this._applyFunctionToCachedPixels : this._applyFunctionToElevationTexture;
 
     let sum = 0;
     const sumFn = px => sum + px;
-    const { pixels } = applyFn(sumFn, rect);
-    return this.pixelValueToElevation(sum / pixels.length); // Use length to ensure we get an accurate count if resolution ≠ 1.
-  }
-
-  /**
-   * Convert a circle to local texture coordinates
-   * @param {PIXI.Circle}
-   * @returns {PIXI.Circle}
-   */
-  #circleToLocalCoordinates(circle) {
-    const origin = this._fromCanvasCoordinates({ x: circle.x, y: circle.y});
-
-    // For radius, use two points of equivalent distance to compare.
-    const radius = this._fromCanvasCoordinates({ x: circle.radius, y: 0}).x
-      - this._fromCanvasCoordinates({ x: 0, y: 0}).x;
-    return new PIXI.Circle(origin.x, origin.y, radius);
-  }
-
-  /**
-   * Convert an ellipse to local texture coordinates
-   * @param {PIXI.Ellipse}
-   * @returns {PIXI.Ellipse}
-   */
-  #ellipseToLocalCoordinates(ellipse) {
-    const origin = this._fromCanvasCoordinates({ x: ellipse.x, y: ellipse.y});
-
-    // For halfWidth and halfHeight, use two points of equivalent distance to compare.
-    const halfWidth = this._fromCanvasCoordinates({ x: ellipse.halfWidth, y: 0}).x
-      - this._fromCanvasCoordinates({ x: 0, y: 0}).x;
-    const halfHeight = this._fromCanvasCoordinates({ x: ellipse.halfHeight, y: 0}).x
-      - this._fromCanvasCoordinates({ x: 0, y: 0}).x;
-    return new PIXI.Ellipse(origin.x, origin.y, halfWidth, halfHeight);
-  }
-
-  /**
-   * Convert a rectangle to local texture coordinates
-   * @param {PIXI.Rectangle}
-   * @returns {PIXI.Rectangle}
-   */
-  #rectangleToLocalCoordinates(rect) {
-    const TL = this._fromCanvasCoordinates({x: rect.left, y: rect.top});
-    const BR = this._fromCanvasCoordinates({x: rect.right, y: rect.bottom});
-    return new PIXI.Rectangle(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y);
-  }
-
-  /**
-   * Convert a polygon to local texture coordinates
-   * @param {PIXI.Polygon}
-   * @returns {PIXI.Polygon}
-   */
-  #polygonToLocalCoordinates(poly) {
-    return new PIXI.Polygon(poly.points.map(pt => this._fromCanvasCoordinates(pt)));
+    const denom = this.elevationPixelCache.applyFunction(sumFn, rect);
+    return this.pixelValueToElevation(sum / denom);
   }
 
   /**
@@ -911,30 +841,36 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number} Average of pixel values within the shape
    */
   averageElevationWithinShape(shape, { use_cache }) {
-    if ( shape instanceof PIXI.Rectangle ) return this.averageElevationWithinRectangle(shape, { use_cache });
-
-    const border = shape.getBounds(shape);
-    use_cache ??= border.area < 1e06;
-    const applyFn = use_cache ? this._applyFunctionToCachedPixels : this._applyFunctionToElevationTexture;
-
-    // Shift the shape to texture coordinates; likely faster than converting each pixel to canvas.
-    if ( shape instanceof PIXI.Polygon ) shape = this.#polygonToLocalCoordinates(shape);
-    else if ( shape instanceof PIXI.Circle ) shape = this.#circleToLocalCoordinates(shape);
-    else if ( shape instanceof PIXI.Ellipse ) shape = this.#ellipseToLocalCoordinates(shape);
-
-    // Sum the pixels contained within the shape
-    let denom = 0;
     let sum = 0;
-    const sumFn = (value, i) => {
-      const local = this._localCoordinatesAtPixelIndex(i);
-      if ( shape.contains(local.x, local.y) ) {
-        denom += 1;
-        sum += value;
-      }
-    };
-    applyFn(sumFn, border);
-
+    const sumFn = px => sum + px;
+    const denom = this.elevationPixelCache.applyFunctionToShape(sumFn, shape);
     return this.pixelValueToElevation(sum / denom);
+
+
+//     if ( shape instanceof PIXI.Rectangle ) return this.averageElevationWithinRectangle(shape, { use_cache });
+//
+//     const border = shape.getBounds(shape);
+//     use_cache ??= border.area < 1e06;
+//     const applyFn = use_cache ? this._applyFunctionToCachedPixels : this._applyFunctionToElevationTexture;
+//
+//     // Shift the shape to texture coordinates; likely faster than converting each pixel to canvas.
+//     if ( shape instanceof PIXI.Polygon ) shape = this.#polygonToLocalCoordinates(shape);
+//     else if ( shape instanceof PIXI.Circle ) shape = this.#circleToLocalCoordinates(shape);
+//     else if ( shape instanceof PIXI.Ellipse ) shape = this.#ellipseToLocalCoordinates(shape);
+//
+//     // Sum the pixels contained within the shape
+//     let denom = 0;
+//     let sum = 0;
+//     const sumFn = (value, i) => {
+//       const local = this._localCoordinatesAtPixelIndex(i);
+//       if ( shape.contains(local.x, local.y) ) {
+//         denom += 1;
+//         sum += value;
+//       }
+//     };
+//     applyFn(sumFn, border);
+//
+//     return this.pixelValueToElevation(sum / denom);
   }
 
   /**
@@ -1328,7 +1264,7 @@ export class ElevationLayer extends InteractionLayer {
     canvas.app.renderer.render(this._graphicsContainer, this._elevationTexture);
 
     // Destroy the cache
-    this.#elevationPixelCache.pixels = undefined;
+    this.#elevationPixelCache = undefined;
   }
 
   /**
@@ -1336,8 +1272,9 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {FullCanvasContainer|null}    The elevation container
    */
   drawElevation() {
+    const { width, height } = this.elevationPixelCache;
     const elevationFilter = ElevationFilter.create({
-      dimensions: [this._resolution.width, this._resolution.height],
+      dimensions: [width, height],
       elevationSampler: this._elevationTexture
     });
     this.container.filters = [elevationFilter];
