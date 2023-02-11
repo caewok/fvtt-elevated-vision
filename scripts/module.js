@@ -27,7 +27,6 @@ import * as extract from "./perfect-vision/extract-pixels.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
-import { ElevationGrid } from "./ElevationGrid.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { PixelCache, TilePixelCache } from "./PixelCache.js";
 
@@ -62,7 +61,6 @@ Hooks.once("init", function() {
     util,
     extract,
     ElevationLayer,
-    ElevationGrid,
     ShadowShader,
     ShadowShaderNoRadius,
     FILOQueue,
