@@ -136,7 +136,7 @@ export class PixelCache extends PIXI.Rectangle {
   #localWidth = 0;
 
   /** @type {PIXI.Rectangle} */
-  #localFrame = new PIXI.Rectangle();
+  #localFrame;
 
   /** @type {number} */
   #maximumPixelValue = 255;
@@ -154,6 +154,12 @@ export class PixelCache extends PIXI.Rectangle {
     resolution: 1,
     resolutionInv: 1
   };
+
+  /** @type {Matrix} */
+  #toLocalTransform;
+
+  /** @type {Matrix} */
+  #toCanvasTransform;
 
   /**
    * @param {number[]} pixels     Array of integer values.
@@ -177,7 +183,52 @@ export class PixelCache extends PIXI.Rectangle {
     this.scale.resolution = resolution;
     this.scale.resolutionInv = 1 / resolution;
     this.#localWidth = localWidth;
-    this.#localFrame = this.#rectangleToLocalCoordinates(this);
+  }
+
+  /** @type {PIXI.Rectangle} */
+  get localFrame() { return this.#localFrame ?? (this.#localFrame = this.#rectangleToLocalCoordinates(this)); }
+
+  /** @type {Matrix} */
+  get toLocalTransform() {
+    return this.#toLocalTransform ?? (this.#toLocalTransform = this._calculateToLocalTransform());
+  }
+
+  /** @type {Matrix} */
+  get toCanvasTransform() {
+    return this.#toCanvasTransform ?? (this.#toCanvasTransform = this.toLocalTransform.invert());
+  }
+
+  /**
+   * Reset transforms. Typically used when size or resolution has changed.
+   */
+  clearTransforms() {
+    this.#toLocalTransform = undefined;
+    this.#toCanvasTransform = undefined;
+    this.#localFrame = undefined;
+  }
+
+  /**
+   * Matrix that takes a canvas point and transforms to a local point.
+   * @returns {Matrix}
+   */
+  _calculateToLocalTransform() {
+    // Translate so the center is at 0, 0
+    const { width, height, x, y } = this;
+    const mTranslate = new Matrix([
+      [1, 0, 0],
+      [0, 1, 0],
+      [-(width * 0.5) - x, -(height * 0.5) - y, 1]
+    ]);
+
+    // Scale based on resolution.
+    const resolution = this.scale.resolution;
+    const mRes = new Matrix([
+      [resolution, 0, 0],
+      [0, resolution, 0],
+      [0, 0, 1]
+    ]);
+
+    return mTranslate.multiply3x3(mRes);
   }
 
   /**
@@ -303,9 +354,7 @@ export class PixelCache extends PIXI.Rectangle {
    */
   _fromCanvasCoordinates(x, y) {
     const pt = new PIXI.Point(x, y);
-    pt.translate(-this.x, -this.y, pt);
-    pt.multiplyScalar(this.scale.resolution, pt);
-    return pt;
+    return this.toLocalTransform.multiplyPoint2d(pt, pt);
   }
 
   /**
@@ -317,9 +366,7 @@ export class PixelCache extends PIXI.Rectangle {
    */
   _toCanvasCoordinates(x, y) {
     const pt = new PIXI.Point(x, y);
-    pt.multiplyScalar(this.scale.resolutionInv, pt);
-    pt.translate(this.x, this.y, pt);
-    return pt;
+    return this.toCanvasTransform.multiplyPoint2d(pt, pt);
   }
 
   /**
@@ -753,17 +800,14 @@ export class TilePixelCache extends PixelCache {
    * Transform canvas coordinates into the local pixel rectangle coordinates.
    * @inherits
    */
-  _fromCanvasCoordinates(x, y) {
-//     let M = Matrix.fromPoint2d({x, y});
-
+  _calculateToLocalTransform() {
     // Translate so the center is at 0, 0
     const { width, height } = this;
     const mTranslate = new Matrix([
       [1, 0, 0],
       [0, 1, 0],
-      [-width * 0.5 - this.x, -height * 0.5 - this.y, 1]
+      [-(width * 0.5) - this.x, -(height * 0.5) - this.y, 1]
     ]);
-//     M = M.multiply(mTranslate);
 
     // Rotate around the Z axis
     // (The center must be 0,0 for this to work properly.)
@@ -777,7 +821,6 @@ export class TilePixelCache extends PixelCache {
       [-s, c, 0],
       [0, 0, 1]
     ]);
-//     M = M.multiply(mRot);
 
     // Scale
     const { ascX, ascY, sscX, sscY } = this.scale;
@@ -786,7 +829,6 @@ export class TilePixelCache extends PixelCache {
       [0, 1 / (ascY * sscY), 0],
       [0, 0, 1]
     ]);
-//     M = M.multiply(mScale);
 
     // Translate so top corner is 0,0
     const mCenter = new Matrix([
@@ -794,7 +836,6 @@ export class TilePixelCache extends PixelCache {
       [0, 1, 0],
       [width * 0.5, height * 0.5, 1]
     ]);
-//     M = M.multiply(mCenter);
 
     // Scale based on resolution.
     const resolution = this.scale.resolution;
@@ -803,206 +844,8 @@ export class TilePixelCache extends PixelCache {
       [0, resolution, 0],
       [0, 0, 1]
     ]);
-//     M = M.multiply(mRes);
 
-//     const convertM = mTranslate.multiply3x3(mRot);
-    const convertM = mTranslate.multiply3x3(mRot).multiply3x3(mScale).multiply3x3(mCenter).multiply3x3(mRes);
-    const pt = new PIXI.Point(x, y);
-    return convertM.multiplyPoint2d(pt, pt);
-//     return M.toPoint2d();
-
-  //
-//     const pt = new PIXI.Point(x, y);
-//
-//     // See Tile.prototype.#getTextureCoordinate
-//     const { scale, width, height, left, top, rotation } = this;
-//     const { sscX, sscY, ascX, ascY } = scale;
-//     const width1_2 = width * 0.5;
-//     const height1_2 = height * 0.5;
-//
-//     // Account for tile rotation
-//     if ( rotation ) {
-//       // Center the coordinate so the tile center is 0,0 so the coordinate can be easily rotated.
-//       pt.subtract(this.center, pt);
-//       pt.rotate(-rotation, pt);
-//       pt.add(this.center, pt);
-//     }
-//
-//     // Move from 0,0 to the tile location
-//     pt.translate(-this.x, -this.y, pt);
-//
-//     // Account for scale
-//     // Mirror if scale is negative
-//     const xMult = sscX * (ascX - 1);
-//     const yMult = sscY * (ascY - 1);
-//     if ( sscX < 0 ) {
-//       pt.x = (-pt.x + width - (xMult*left) - (xMult*width1_2)) / (1 - xMult);
-//     } else {
-//       pt.x = (pt.x + (xMult*left) + (xMult*width1_2)) / (1 + xMult);
-//     }
-//
-//     if ( sscY < 0 ) {
-//       pt.y = (-pt.y + height - (yMult*top) - (yMult*height1_2)) / (1 - yMult);
-//     } else {
-//       pt.y = (pt.y + (yMult*top) + (yMult*height1_2)) / (1 + yMult);
-//     }
-//
-//     pt.multiplyScalar(scale.resolution, pt);
-//
-//     return pt;
-  }
-
-/*
-M = Matrix.fromPoint2d({x, y});
-
-mInvRes = new Matrix([
- [scale.resolutionInv, 0, 0],
- [0, scale.resolutionInv, 0],
- [0, 0, 1]
-])
-
-mScale = new Matrix([
-  [ascX, 0, 0],
-  [0, ascY, 1],
-  [0, 0, 1]
-]);
-
-mTranslate = new Matrix([
-  [1, 0, 0],
-  [0, 1, 0],
-  [x, y, 0]
-])
-
-
-// Rotate around Z
-// First translate to 0,0
-
-
-let c = Math.cos(angle);
-let s = Math.sin(angle);
-if ( c.almostEqual(0) ) c = 0;
-if ( s.almostEqual(0) ) s = 0;
-
-new Matrix = [
-      [c, s, 0],
-      [-s, c, 0],
-      [0, 0, 1]
-    ];
-
-// Translate to final coordinates
-
-*/
-
-
-  /**
-   * Transform local coordinates into canvas coordinates.
-   * Inverse of _fromCanvasCoordinates
-   * @inherits
-   */
-  _toCanvasCoordinates(x, y) {
-//     let M = Matrix.fromPoint2d({x, y});
-
-    // Scale based on resolution.
-    const resolutionInv = this.scale.resolutionInv;
-    const mInvRes = new Matrix([
-      [resolutionInv, 0, 0],
-      [0, resolutionInv, 0],
-      [0, 0, 1]
-    ]);
-//     M = M.multiply(mInvRes);
-
-    // Translate so center is 0, 0.
-    const { width, height } = this;
-    const mCenter = new Matrix([
-      [1, 0, 0],
-      [0, 1, 0],
-      [-width * 0.5, -height * 0.5, 1]
-    ]);
-//     M = M.multiply(mCenter);
-
-    // Scale
-    const { ascX, ascY, sscX, sscY } = this.scale;
-    const mScale = new Matrix([
-      [ascX * sscX, 0, 0],
-      [0, ascY * sscY, 0],
-      [0, 0, 1]
-    ]);
-//     M = M.multiply(mScale);
-
-    // Rotate around the Z axis
-    // (The center must be 0,0 for this to work properly.)
-    const rotation = this.rotation;
-    let c = Math.cos(rotation);
-    let s = Math.sin(rotation);
-    if ( c.almostEqual(0) ) c = 0;
-    if ( s.almostEqual(0) ) s = 0;
-    const mRot = new Matrix([
-      [c, s, 0],
-      [-s, c, 0],
-      [0, 0, 1]
-    ]);
-//     M = M.multiply(mRot);
-
-    // Translate back from center, and translate to x,y position on canvas
-    const mTranslate = new Matrix([
-      [1, 0, 0],
-      [0, 1, 0],
-      [width * 0.5 + this.x, height * 0.5 + this.y, 1]
-    ]);
-//     M = M.multiply(mTranslate);
-
-    const convertM = mInvRes.multiply3x3(mCenter).multiply3x3(mScale).multiply3x3(mRot).multiply3x3(mTranslate);
-    const pt = new PIXI.Point(x, y);
-    return convertM.multiplyPoint2d(pt, pt);
-
-//     return M.toPoint2d();
-
-
-
-  //   const pt = new PIXI.Point(x, y);
-//     const { scale, width, height, left, top, rotation } = this;
-//     const { sscX, sscY, ascX, ascY } = scale;
-//
-//     pt.multiplyScalar(scale.resolutionInv, pt);
-//
-//     const xStart = (pt.x - left - (width * 0.5));
-//     const yStart = (pt.y - top - (height * 0.5));
-//
-//     // Mirror if scale is negative.
-//     if ( sscX < 0 ) pt.x = width - pt.x;
-//     if ( sscY < 0 ) pt.y = height - pt.y;
-//
-//     const xScale = ascX !== 1;
-//     const yScale = ascX !== 1;
-//
-//     // Account for scale.
-//     // Top-left corner remains the same, at 0, 0.
-//     const xMult = sscX * (ascX - 1);
-//     const yMult = sscY * (ascY - 1);
-//     pt.translate(xMult * xStart, yMult * yStart, pt);
-//
-//
-//
-// //     pt.translate(xScale * ascX * width * 0.5, yScale * ascY * height * 0.5, pt);
-//
-//     // Shift to the tile location on the canvas.
-//     pt.translate(this.x, this.y, pt);
-//
-//     // Account for tile rotation
-//     if ( rotation ) {
-//       // Center the coordinate so that the tile center is 0,0 so the coordinate can be easily rotated.
-//       // Center may be shifted due to scale
-//       const center = {
-//         x: width * 0.5 * ascX,
-//         y: height * 0.5 * ascY
-//       }
-//
-//       pt.subtract(center, pt);
-//       pt.rotate(rotation, pt);
-//       pt.add(center, pt);
-//     }
-//
-//     return pt;
+    return mTranslate.multiply3x3(mRot).multiply3x3(mScale).multiply3x3(mCenter).multiply3x3(mRes);
   }
 
   /**
