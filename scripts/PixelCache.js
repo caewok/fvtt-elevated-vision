@@ -218,21 +218,12 @@ export class PixelCache extends PIXI.Rectangle {
     // Translate so top corner is at 0, 0
     const { x, y, scale } = this;
     const mTranslate = Matrix.translation(-x, -y);
- //    const mTranslate = new Matrix([
-//       [1, 0, 0],
-//       [0, 1, 0],
-//       [-(width * 0.5) - x, -(height * 0.5) - y, 1]
-//     ]);
 
     // Scale based on resolution.
     const resolution = scale.resolution;
     const mRes = Matrix.scale(resolution, resolution);
-//     const mRes = new Matrix([
-//       [resolution, 0, 0],
-//       [0, resolution, 0],
-//       [0, 0, 1]
-//     ]);
 
+    // Combine the matrices
     return mTranslate.multiply3x3(mRes);
   }
 
@@ -813,52 +804,24 @@ export class TilePixelCache extends PixelCache {
     // Translate so the center is at 0, 0
     const { width, height } = this;
     const mTranslate = Matrix.translation(-(width * 0.5) - this.x, -(height * 0.5) - this.y);
-//     const mTranslate = new Matrix([
-//       [1, 0, 0],
-//       [0, 1, 0],
-//       [-(width * 0.5) - this.x, -(height * 0.5) - this.y, 1]
-//     ]);
 
     // Rotate around the Z axis
     // (The center must be 0,0 for this to work properly.)
     const rotation = -this.rotation;
     const mRot = Matrix.rotationZ(rotation, false);
-//     let c = Math.cos(rotation);
-//     let s = Math.sin(rotation);
-//     if ( c.almostEqual(0) ) c = 0;
-//     if ( s.almostEqual(0) ) s = 0;
-//     const mRot = new Matrix([
-//       [c, s, 0],
-//       [-s, c, 0],
-//       [0, 0, 1]
-//     ]);
 
     // Scale
     const { ascX, ascY, sscX, sscY } = this.scale;
     const mScale = Matrix.scale(1 / (ascX * sscX), 1 / (ascY * sscY));
-//     const mScale = new Matrix([
-//       [1 / (ascX * sscX), 0, 0],
-//       [0, 1 / (ascY * sscY), 0],
-//       [0, 0, 1]
-//     ]);
 
     // Translate so top corner is 0,0
     const mCenter = Matrix.translation(width * 0.5, height * 0.5);
-//     const mCenter = new Matrix([
-//       [1, 0, 0],
-//       [0, 1, 0],
-//       [width * 0.5, height * 0.5, 1]
-//     ]);
 
     // Scale based on resolution.
     const resolution = this.scale.resolution;
     const mRes = Matrix.scale(resolution, resolution);
-//     const mRes = new Matrix([
-//       [resolution, 0, 0],
-//       [0, resolution, 0],
-//       [0, 0, 1]
-//     ]);
 
+    // Combine the matrices.
     return mTranslate.multiply3x3(mRot).multiply3x3(mScale).multiply3x3(mCenter).multiply3x3(mRes);
   }
 
