@@ -151,8 +151,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @property {number} resolution  Ratio of pixels to canvas values.
    */
   scale = {
-    resolution: 1,
-    resolutionInv: 1
+    resolution: 1
   };
 
   /** @type {Matrix} */
@@ -181,7 +180,6 @@ export class PixelCache extends PIXI.Rectangle {
     super(x, y, width, height);
     this.pixels = pixels;
     this.scale.resolution = resolution;
-    this.scale.resolutionInv = 1 / resolution;
     this.#localWidth = localWidth;
   }
 
