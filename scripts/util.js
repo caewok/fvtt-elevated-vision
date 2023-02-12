@@ -10,6 +10,22 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
+function almostLessThan(a, b) { return a < b || a.almostEqual(b); }
+
+function almostGreaterThan(a, b) { return a > b || a.almostEqual(b); }
+
+function almostBetween(value, min, max) {
+  return almostLessThan(value, max) && almostGreaterThan(value, min);
+}
+
+
+/**
+ * Fast rounding for positive numbers
+ * @param {number} n
+ * @returns {number}
+ */
+export function roundFastPositive(n) { return (n + 0.5) << 0; }
+
 /**
  * @typedef {object} PixelFrame
  * @property {number[]} pixels

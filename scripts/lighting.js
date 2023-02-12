@@ -199,11 +199,30 @@ int wallsToProcess = EV_numWalls;
 int terrainWallsToProcess = EV_numTerrainWalls;
 vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
 vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
-backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+
+vec2 evTextureCoord = (vUvs.xy - EV_sceneDims.xy) / EV_sceneDims.zw;
+backgroundElevation = texture2D(EV_elevationSampler, evTextureCoord);
+//backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
 
 float percentDistanceFromWall;
 float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
-if ( pixelElevation > EV_sourceLocation.z ) {
+
+float sceneLeft = EV_sceneDims.x;
+float sceneTop = EV_sceneDims.y;
+float sceneWidth = EV_sceneDims.z;
+float sceneHeight = EV_sceneDims.w;
+float sceneRight = sceneLeft + sceneWidth;
+float sceneBottom = sceneTop + sceneHeight;
+
+if ( vUvs.x < sceneLeft
+  || vUvs.x > sceneRight
+  || vUvs.y < sceneTop
+  || vUvs.y > sceneBottom ) {
+
+  // Skip if we are outside the scene boundary
+  wallsToProcess = 0;
+} else if ( pixelElevation > EV_sourceLocation.z ) {
+
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
   wallsToProcess = 0;
@@ -293,6 +312,7 @@ function addShadowCode(source) {
       .addUniform("EV_transform", "vec4")
       .addUniform("EV_elevationResolution", "vec4")
       .addUniform("EV_hasElevationSampler", "bool")
+      .addUniform("EV_sceneDims", "vec4")
 
       // Functions must be in reverse-order of dependency.
       .addFunction("locationInWallShadow", "bool", FN_LOCATION_IN_WALL_SHADOW, [
@@ -543,6 +563,14 @@ export function _updateEVLightUniformsLightSource(mesh) {
     u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
     u.EV_hasElevationSampler = true;
   }
+
+  // Convert scene rectangle to local light coordinates
+  const sceneRect = canvas.dimensions.sceneRect;
+  const sceneLeft = circleCoord(sceneRect.left, radius, x, r_inv);
+  const sceneRight = circleCoord(sceneRect.right, radius, x, r_inv);
+  const sceneTop = circleCoord(sceneRect.top, radius, y, r_inv);
+  const sceneBottom = circleCoord(sceneRect.bottom, radius, y, r_inv);
+  u.EV_sceneDims = [sceneLeft, sceneTop, sceneRight - sceneLeft, sceneBottom - sceneTop];
 }
 
 function addWallDataToShaderArrays(w, wallDistances, wallCoords, source, r_inv = 1 / source.radius) {
@@ -605,12 +633,11 @@ function circleCoord(a, r, c = 0, r_inv = 1 / r) {
  * @returns {number}
  */
 function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-vars
-  // Calc:
-  // ((a - c) / 2r) + 0.5 = p
-  //  ((a - c) / 2r) = p +  0.5
-  //  a - c = (p + 0.5) * 2r
-  //  a = (p + 0.5) * 2r + c
-  return ((p + 0.5) * 2 * r) + c;
+  // ((a - c) * 1/r * 0.5) + 0.5 = p
+  // (a - c) * 1/r = (p - 0.5) / 0.5
+  // a - c = 2 * (p - 0.5) / 1/r = 2 * (p - 0.5) * r
+  // a = 2 * (p - 0.5) * r + c
+  return ((p - 0.5) * r * 2) + c
 }
 
 /**

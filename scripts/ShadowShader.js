@@ -57,6 +57,7 @@ export class ShadowShader extends PIXI.Shader {
   uniform vec3 EV_sourceLocation;
   uniform int EV_numWalls;
   uniform int EV_numTerrainWalls;
+  uniform vec4 EV_sceneDims;
 
   // Wall data, in vUvs coordinate space
   uniform vec3 EV_wallCoords[MAX_NUM_WALL_ENDPOINTS];
@@ -69,14 +70,34 @@ export class ShadowShader extends PIXI.Shader {
       discard;
     }
 
-    vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+    float sceneLeft = EV_sceneDims.x;
+    float sceneTop = EV_sceneDims.y;
+    float sceneWidth = EV_sceneDims.z;
+    float sceneHeight = EV_sceneDims.w;
+    float sceneRight = sceneLeft + sceneWidth;
+    float sceneBottom = sceneTop + sceneHeight;
+
+    // Elevation texture spans the scene width/height
+    vec2 evTextureCoord = (vTextureCoord - EV_sceneDims.xy) / EV_sceneDims.zw;
+    vec4 backgroundElevation = texture2D(EV_elevationSampler, evTextureCoord);
+    // vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
     float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
+
     bool inShadow = false;
     float percentDistanceFromWall;
     int wallsToProcess = EV_numWalls;
     int terrainWallsToProcess = EV_numTerrainWalls;
 
-    if ( pixelElevation > EV_sourceLocation.z ) {
+    if ( vUvs.x < sceneLeft
+      || vUvs.x > sceneRight
+      || vUvs.y < sceneTop
+      || vUvs.y > sceneBottom ) {
+
+      // Skip if we are outside the scene boundary
+      wallsToProcess = 0;
+    } else if ( pixelElevation > EV_sourceLocation.z ) {
+
+      // Pixel higher than source; automatically shadow.
       inShadow = true;
       wallsToProcess = 0;
       terrainWallsToProcess = 0;
@@ -286,6 +307,9 @@ export class ShadowShader extends PIXI.Shader {
 
     uniforms.EV_wallCoords = wallCoords;
     uniforms.EV_wallDistances = wallDistances;
+
+    const { sceneX, sceneY, sceneWidth, sceneHeight } = canvas.dimensions;
+    uniforms.EV_sceneDims = [sceneX, sceneY, sceneWidth, sceneHeight];
   }
 }
 
