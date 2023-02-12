@@ -480,6 +480,7 @@ export class ElevationLayer extends InteractionLayer {
     // Background elevation sprite should start at the upper left scene corner
     const { sceneX, sceneY } = canvas.dimensions;
     this._backgroundElevation.position = { x: sceneX, y: sceneY };
+    // this._backgroundElevation.position = { x: 0, y: 0 };
 
     // Add the render texture for displaying elevation information to the GM
     this._elevationTexture = PIXI.RenderTexture.create(this.#textureConfiguration);
@@ -582,7 +583,10 @@ export class ElevationLayer extends InteractionLayer {
     // We are loading a saved file, so we only want to require a save if the scene
     // elevation has already been modified.
     const neededSave = this._requiresSave;
-    await this.importFromImageFile(elevationImage.imageData);
+    await this.importFromImageFile(elevationImage.imageData, {
+      resolution: elevationImage.resolution,
+      width: elevationImage.width,
+      height: elevationImage.height });
     this._requiresSave = neededSave;
 
     // Following won't work if _resolution.format = PIXI.FORMATS.ALPHA
@@ -601,6 +605,9 @@ export class ElevationLayer extends InteractionLayer {
     const saveObj = {
       imageData,
       format,
+      width: this._elevationTexture.width,
+      height: this._elevationTexture.height,
+      resolution: this._elevationTexture.resolution,
       timestamp: Date.now(),
       version: game.modules.get(MODULE_ID).version };
 
@@ -614,8 +621,8 @@ export class ElevationLayer extends InteractionLayer {
     // From https://github.com/dev7355608/perfect-vision/blob/3eb3c040dfc83a422fd88d4c7329c776742bef2f/patches/fog.js#L256
     const { pixels, width, height } = extractPixels(
       canvas.app.renderer,
-      this._elevationTexture,
-      canvas.dimensions.sceneRect);
+      this._elevationTexture);
+      //canvas.dimensions.sceneRect);
     const canvasElement = pixelsToCanvas(pixels, width, height);
 
     // Depending on format, may need quality = 1 to avoid lossy compression
@@ -660,12 +667,19 @@ export class ElevationLayer extends InteractionLayer {
    * Import elevation data from the provided image file location into the scene.
    * @param {File} file
    */
-  async importFromImageFile(file) {
-    log(`import ${file}`, file);
+  async importFromImageFile(file, { resolution = 1, width, height } = {}) {
+    width ??= canvas.dimensions.sceneWidth;
+    height ??= canvas.dimensions.sceneHeight;
+    log(`import ${width}x${height} ${file} with resolution ${resolution}`, file);
 
     // See https://stackoverflow.com/questions/41494623/pixijs-sprite-not-loading
     const texture = await PIXI.Texture.fromURL(file);
     log(`Loaded texture with dim ${texture.width},${texture.height}`, texture);
+
+    resolution ??= texture.width > texture.height ? texture.width / width : texture.height / height;
+
+    texture.baseTexture.setSize(width, height, resolution);
+    texture.baseTexture.setStyle(this.#textureConfiguration.scaleMode, this.#textureConfiguration.mipmap)
 
     // Testing: let sprite = PIXI.Sprite.from("elevation/test_001.png");
     canvas.elevation._backgroundElevation.texture.destroy();
