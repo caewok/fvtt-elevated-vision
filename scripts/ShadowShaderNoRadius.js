@@ -71,7 +71,6 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
     // Elevation texture spans the scene width/height.
     vec2 evTextureCoord = (vTextureCoord - EV_sceneDims.xy) / EV_sceneDims.zw;
     vec4 backgroundElevation = texture2D(EV_elevationSampler, evTextureCoord);
-
     //vec4 backgroundElevation = texture2D(EV_elevationSampler, vEVTextureCoord);
     float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
 
@@ -85,10 +84,11 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
       || vTextureCoord.x > sceneRight
       || vTextureCoord.y < sceneTop
       || vTextureCoord.y > sceneBottom ) {
-      // Skip if we are outside the scene boundary
 
+      // Skip if we are outside the scene boundary
       wallsToProcess = 0;
     } else  if ( pixelElevation > EV_sourceLocation.z ) {
+
       // Pixel higher than source; automatically shadow.
       inShadow = true;
       wallsToProcess = 0;
