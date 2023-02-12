@@ -88,11 +88,10 @@ export class ShadowShader extends PIXI.Shader {
     int wallsToProcess = EV_numWalls;
     int terrainWallsToProcess = EV_numTerrainWalls;
 
-    if ( vTextureCoord.x < sceneLeft
-      || vTextureCoord.x > sceneRight
-      || vTextureCoord.y < sceneTop
-      || vTextureCoord.y > sceneBottom ) {
-
+    if ( vUvs.x < sceneLeft
+      || vUvs.x > sceneRight
+      || vUvs.y < sceneTop
+      || vUvs.y > sceneBottom ) {
 
       // Skip if we are outside the scene boundary
       wallsToProcess = 0;
