@@ -214,10 +214,10 @@ float sceneHeight = EV_sceneDims.w;
 float sceneRight = sceneLeft + sceneWidth;
 float sceneBottom = sceneTop + sceneHeight;
 
-if ( evTextureCoord.x < sceneLeft
-  || evTextureCoord.x > sceneRight
-  || evTextureCoord.y < sceneTop
-  || evTextureCoord.y > sceneBottom ) {
+if ( vUvs.x < sceneLeft
+  || vUvs.x > sceneRight
+  || vUvs.y < sceneTop
+  || vUvs.y > sceneBottom ) {
 
   // Skip if we are outside the scene boundary
   wallsToProcess = 0;
