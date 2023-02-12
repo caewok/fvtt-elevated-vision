@@ -200,23 +200,28 @@ int terrainWallsToProcess = EV_numTerrainWalls;
 vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
 vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
 
+vec2 evTextureCoord = (vUvs.xy - EV_sceneDims.xy) / EV_sceneDims.zw;
+backgroundElevation = texture2D(EV_elevationSampler, evTextureCoord);
+//backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+
+float percentDistanceFromWall;
+float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
+
 float sceneLeft = EV_sceneDims.x;
 float sceneTop = EV_sceneDims.y;
 float sceneWidth = EV_sceneDims.z;
 float sceneHeight = EV_sceneDims.w;
 float sceneRight = sceneLeft + sceneWidth;
 float sceneBottom = sceneTop + sceneHeight;
-vec2 center = EV_conversion.xy;
-float radius = EV_conversion.z;
-vec2 canvasPosition = ((vUvs.xy - 0.5) * radius * 2.) + center;
 
-vec2 evTextureCoord = (canvasPosition - EV_sceneDims.xy) / EV_sceneDims.zw;
-backgroundElevation = texture2D(EV_elevationSampler, evTextureCoord);
-//backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+if ( evTextureCoord.x < sceneLeft
+  || evTextureCoord.x > sceneRight
+  || evTextureCoord.y < sceneTop
+  || evTextureCoord.y > sceneBottom ) {
 
-float percentDistanceFromWall;
-float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
-if ( pixelElevation > EV_sourceLocation.z ) {
+  // Skip if we are outside the scene boundary
+  wallsToProcess = 0;
+} else if ( pixelElevation > EV_sourceLocation.z ) {
 
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
@@ -308,7 +313,6 @@ function addShadowCode(source) {
       .addUniform("EV_elevationResolution", "vec4")
       .addUniform("EV_hasElevationSampler", "bool")
       .addUniform("EV_sceneDims", "vec4")
-      .addUniform("EV_conversion", "vec3")
 
       // Functions must be in reverse-order of dependency.
       .addFunction("locationInWallShadow", "bool", FN_LOCATION_IN_WALL_SHADOW, [
@@ -560,9 +564,13 @@ export function _updateEVLightUniformsLightSource(mesh) {
     u.EV_hasElevationSampler = true;
   }
 
-  const { sceneX, sceneY, sceneWidth, sceneHeight } = canvas.dimensions;
-  u.EV_sceneDims = [sceneX, sceneY, sceneWidth, sceneHeight];
-  u.EV_conversion = [x, y, radius];
+  // Convert scene rectangle to local light coordinates
+  const sceneRect = canvas.dimensions.sceneRect;
+  const sceneLeft = circleCoord(sceneRect.left, radius, x, r_inv);
+  const sceneRight = circleCoord(sceneRect.right, radius, x, r_inv);
+  const sceneTop = circleCoord(sceneRect.top, radius, y, r_inv);
+  const sceneBottom = circleCoord(sceneRect.bottom, radius, y, r_inv);
+  u.EV_sceneDims = [sceneLeft, sceneTop, sceneRight - sceneLeft, sceneBottom - sceneTop];
 }
 
 function addWallDataToShaderArrays(w, wallDistances, wallCoords, source, r_inv = 1 / source.radius) {
