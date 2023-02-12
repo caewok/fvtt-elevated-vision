@@ -582,7 +582,16 @@ export class ElevationLayer extends InteractionLayer {
 
     // We are loading a saved file, so we only want to require a save if the scene
     // elevation has already been modified.
-    const neededSave = this._requiresSave;
+    let neededSave = this._requiresSave;
+
+    // Check if this is an updated version.
+    // v0.4.0 added resolution, width, height.
+    if ( isNewerVersion("0.4.0", elevationImage.version) ) {
+      ui.notifications.notify("Detected older version of elevation scene data. Downloading backup in case upgrade goes poorly!");
+      this.downloadStoredSceneElevationData();
+      neededSave = true;
+    }
+
     await this.importFromImageFile(elevationImage.imageData, {
       resolution: elevationImage.resolution,
       width: elevationImage.width,
@@ -696,12 +705,21 @@ export class ElevationLayer extends InteractionLayer {
    * @param {string} [options.format] Image format, e.g. "image/jpeg" or "image/webp".
    * @param {string} [options.fileName] Name of the file. Extension will be added based on format.
    */
-  async downloadElevationData({ format = "image/png", fileName = "elevation"} = {}) {
+  async downloadElevationData({ format = "image/png", fileName = canvas.scene.name } = {}) {
     const imageExtension = format.split("/")[1];
     fileName += `.${imageExtension}`;
 
     const image64 = await this._extractElevationImageData(format);
     saveDataToFile(convertBase64ToImage(image64), format, fileName);
+  }
+
+  /**
+   * Download the stored elevation data for the scene.
+   */
+  async downloadStoredSceneElevationData({ fileName = "elevation-" + canvas.scene.name } = {}) {
+    const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAG_ELEVATION_IMAGE);
+    if ( !elevationImage || isEmpty(elevationImage) || isEmpty(elevationImage.imageData) ) return;
+    saveDataToFile(convertBase64ToImage(elevationImage.imageData), elevationImage.format, fileName);
   }
 
   // TO-DO: Preferably download as alpha, possibly by constructing a new texture?
