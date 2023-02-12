@@ -1497,8 +1497,8 @@ class ElevationFilter extends AbstractBaseFilter {
     {
        vTextureCoord = aVertexPosition * (outputFrame.zw * inputSize.zw);
        vec2 position = aVertexPosition * max(outputFrame.zw, vec2(0.)) + outputFrame.xy;
-       vec2 vCanvasCoord = (canvasMatrix * vec3(position, 1.0)).xy;
-       vCanvasCoordNorm = vCanvasCoord / dimensions;
+       vec2 canvasCoord = (canvasMatrix * vec3(position, 1.0)).xy;
+       vCanvasCoordNorm = canvasCoord / dimensions;
        gl_Position = vec4((projectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
     }
   `;
