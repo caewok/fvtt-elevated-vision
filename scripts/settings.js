@@ -14,11 +14,10 @@ export const SETTINGS = {
       POLYGONS: "shading-polygons",
       WEBGL: "shading-webgl"
     },
-
     LABELS: {
-      "shading-none": "elevatedvision.shading-none",
-      "shading-polygons": "elevatedvision.shading-polygons",
-      "shading-webgl": "elevatedvision.shading-webgl"
+      "shading-none": `${MODULE_ID}.shading-none`,
+      "shading-polygons": `${MODULE_ID}.shading-polygons`,
+      "shading-webgl": `${MODULE_ID}.shading-webgl`,
     }
   },
 
@@ -27,6 +26,8 @@ export const SETTINGS = {
   AUTO_AVERAGING: "auto-change-elevation.averaging",
   CLOCKWISE_SWEEP: "enhance-cw-sweep",
   FLY_BUTTON: "add-fly-button",
+  ELEVATION_MINIMUM: "elevationmin",
+  ELEVATION_INCREMENT: "elevationstep",
 
   WELCOME_DIALOG: {
     v020: "welcome-dialog-v0-20"
@@ -69,6 +70,26 @@ export function registerSettings() {
     }
   });
 
+  game.settings.register(MODULE_ID, SETTINGS.ELEVATION_MINIMUM, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.ELEVATION_MINIMUM}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.ELEVATION_MINIMUM}.hint`),
+    scope: "world",
+    config: true,
+    default: 0,
+    requiresReload: false,
+    type: Number
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.ELEVATION_INCREMENT, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.ELEVATION_INCREMENT}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.ELEVATION_INCREMENT}.hint`),
+    scope: "world",
+    config: true,
+    default: 5,
+    requiresReload: false,
+    type: Number
+  });
+
   game.settings.register(MODULE_ID, SETTINGS.AUTO_ELEVATION, {
     name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.AUTO_ELEVATION}.name`),
     hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.AUTO_ELEVATION}.hint`),
@@ -109,7 +130,8 @@ export function registerSettings() {
     default: false,
     requiresReload: true,
     type: Boolean
-  })
+  });
+
 
   game.settings.register(MODULE_ID, SETTINGS.WELCOME_DIALOG.v020, {
     scope: "world",

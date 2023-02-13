@@ -14,7 +14,8 @@ isEmpty,
 PolygonVertex,
 CONFIG,
 Ray,
-PreciseText
+PreciseText,
+isNewerVersion
 */
 "use strict";
 
@@ -37,6 +38,7 @@ import {
   tokenTileElevation,
   tokenTerrainElevation,
   elevationForTokenTravel } from "./tokens.js";
+import { setSceneSetting, getSceneSetting, SETTINGS } from "./settings.js";
 
 /* Elevation layer
 
@@ -243,7 +245,7 @@ export class ElevationLayer extends InteractionLayer {
    * @type {number}
    */
   get elevationStep() {
-    const step = canvas.scene.getFlag(MODULE_ID, "elevationstep");
+    const step = getSceneSetting(SETTINGS.ELEVATION_INCREMENT);
     return step ?? canvas.scene.dimensions.distance;
   }
 
@@ -267,7 +269,7 @@ export class ElevationLayer extends InteractionLayer {
       return out || 0;
     };
 
-    canvas.scene.setFlag(MODULE_ID, "elevationstep", stepNew);
+    setSceneSetting(SETTINGS.ELEVATION_INCREMENT, stepNew);
     this.changePixelValuesUsingFunction(stepAdjust);
   }
 
@@ -278,7 +280,7 @@ export class ElevationLayer extends InteractionLayer {
    * @type {number}
    */
   get elevationMin() {
-    const min = canvas.scene.getFlag(MODULE_ID, "elevationmin");
+    const min = getSceneSetting(SETTINGS.ELEVATION_MINIMUM);
     return min ?? 0;
   }
 
@@ -304,7 +306,7 @@ export class ElevationLayer extends InteractionLayer {
       return out || 0; // In case of NaN, etc.
     };
 
-    canvas.scene.setFlag(MODULE_ID, "elevationmin", minNew);
+    setSceneSetting(SETTINGS.ELEVATION_MINIMUM, minNew);
     this.changePixelValuesUsingFunction(minAdjust);
   }
 
@@ -480,7 +482,6 @@ export class ElevationLayer extends InteractionLayer {
     // Background elevation sprite should start at the upper left scene corner
     const { sceneX, sceneY } = canvas.dimensions;
     this._backgroundElevation.position = { x: sceneX, y: sceneY };
-    // this._backgroundElevation.position = { x: 0, y: 0 };
 
     // Add the render texture for displaying elevation information to the GM
     this._elevationTexture = PIXI.RenderTexture.create(this.#textureConfiguration);
@@ -688,7 +689,7 @@ export class ElevationLayer extends InteractionLayer {
     resolution ??= texture.width > texture.height ? texture.width / width : texture.height / height;
 
     texture.baseTexture.setSize(width, height, resolution);
-    texture.baseTexture.setStyle(this.#textureConfiguration.scaleMode, this.#textureConfiguration.mipmap)
+    texture.baseTexture.setStyle(this.#textureConfiguration.scaleMode, this.#textureConfiguration.mipmap);
 
     // Testing: let sprite = PIXI.Sprite.from("elevation/test_001.png");
     canvas.elevation._backgroundElevation.texture.destroy();
