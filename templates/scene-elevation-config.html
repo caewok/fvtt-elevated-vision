@@ -26,13 +26,13 @@
   <p class="notes">{{ localize "elevatedvision.sceneconfig.autoelevate.hint" }}</p>
 
   <div class="form-group">
-    <label>{{ localize "elevatedvision.sceneconfig.algorithm.name"}}</label>
+    <label>{{ localize "elevatedvision.sceneconfig.shading-algorithm.name"}}</label>
     <div class="form-fields">
-      <select id="EValgorithm" name="flags.elevatedvision.algorithm" class="elevatedvision">
-      {{ selectOptions elevatedvision.algorithms selected=data.flags.elevatedvision.algorithm localize=true }}
+      <select id="EValgorithm" name="flags.elevatedvision.shading-algorithm" class="elevatedvision">
+      {{ selectOptions elevatedvision.algorithms selected=data.flags.elevatedvision.shading-algorithm localize=true }}
       </select>
     </div>
   </div>
-  <p class="notes">{{ localize "elevatedvision.sceneconfig.algorithm.hint" }}</p>
+  <p class="notes">{{ localize "elevatedvision.sceneconfig.shading-algorithm.hint" }}</p>
 
 </fieldset>

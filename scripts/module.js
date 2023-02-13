@@ -54,7 +54,7 @@ const FLY_CONTROL = {
   title: `${MODULE_ID}.controls.${SETTINGS.FLY_BUTTON}.name`,
   icon: "fa-solid fa-plane-lock",
   toggle: true
-}
+};
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
@@ -131,7 +131,7 @@ want to keep seeing this message, please click the close button above.</em>
 	}
 });
 
-Hooks.on("canvasInit", async function(canvas) {
+Hooks.on("canvasInit", async function(_canvas) {
   log("canvasInit");
 
   if ( typeof getSceneSetting(SETTINGS.AUTO_ELEVATION) === "undefined" ) {
@@ -222,22 +222,6 @@ Hooks.on("updateToken", function(tokenD, changes, _options, _userId) {
 
 });
 
-
-// Add settings for minimum and step elevation to the scene configuration.
-Hooks.on("renderSceneConfig", injectSceneConfiguration);
-async function injectSceneConfiguration(app, html, data) {
-  util.log("injectSceneConfig", app, html, data);
-
-  if ( typeof app.object.getFlag(MODULE_ID, "elevationmin") === "undefined" ) app.object.setFlag(MODULE_ID, "elevationmin", 0);
-  if ( typeof app.object.getFlag(MODULE_ID, "elevationstep") === "undefined" ) app.object.setFlag(MODULE_ID, "elevationstep", canvas.dimensions.distance);
-  if ( typeof app.object.getFlag(MODULE_ID, "enable") === "undefined" ) app.object.setFlag(MODULE_ID, "enable", true);
-
-  const form = html.find(`input[name="initial.scale"]`).closest(".form-group");
-  const snippet = await renderTemplate(`modules/${MODULE_ID}/templates/scene-elevation-config.html`, data);
-  form.append(snippet);
-  app.setPosition({ height: "auto" });
-}
-
 // Hook when a tile changes elevation.
 // Track for Levels, to ensure minimum elevation for the scene is met.
 Hooks.on("createTile", createTileHook);
@@ -287,13 +271,34 @@ Hooks.on("getSceneControlButtons", controls => {
  */
 Hooks.on("renderSceneConfig", renderSceneConfigHook);
 
-function renderSceneConfigHook(application, html, data) {
-  util.log("SceneConfig", application, html, data);
+async function renderSceneConfigHook(app, html, data) {
+  util.log("SceneConfig", app, html, data);
 
-  // Avoid name collisions by using "elevatedvision"
   const renderData = {};
   renderData[MODULE_ID] = { algorithms: SETTINGS.SHADING.LABELS };
+
+  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.ELEVATION_MINIMUM) === "undefined" ) {
+    renderData[`data.flags.${MODULE_ID}.${SETTINGS.ELEVATION_MINIMUM}`] = getSetting(SETTINGS.ELEVATION_MINIMUM) ?? 0;
+  }
+
+  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.ELEVATION_INCREMENT) === "undefined" ) {
+    renderData[`data.flags.${MODULE_ID}.${SETTINGS.ELEVATION_INCREMENT}`] = getSetting(SETTINGS.ELEVATION_INCREMENT) ?? canvas.dimensions.distance;
+  }
+
+  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.AUTO_ELEVATION) === "undefined" ) {
+    renderData[`data.flags.${MODULE_ID}.${SETTINGS.AUTO_ELEVATION}`] = getSetting(SETTINGS.AUTO_ELEVATION) ?? true;
+  }
+
+  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.SHADING.ALGORITHM) === "undefined" ) {
+    renderData[`data.flags.${MODULE_ID}.${SETTINGS.SHADING.ALGORITHM}`] = getSetting(SETTINGS.SHADING.ALGORITHM) ?? SETTINGS.SHADING.TYPES.WEBGL;
+  }
+
   foundry.utils.mergeObject(data, renderData, {inplace: true});
+
+  const form = html.find(`input[name="initial.scale"]`).closest(".form-group");
+  const snippet = await renderTemplate(`modules/${MODULE_ID}/templates/scene-elevation-config.html`, data);
+  form.append(snippet);
+  app.setPosition({ height: "auto" });
 }
 
 /**
@@ -302,6 +307,9 @@ function renderSceneConfigHook(application, html, data) {
 Hooks.on("updateScene", updateSceneHook);
 
 async function updateSceneHook(document, change, _options, _userId) {
+  if ( canvas.scene.id !== document.id ) return;
+
+  // If the updated scene is currently the active scene, then update patches and fly controls.
   const autoelevate = change.flags?.[MODULE_ID]?.[SETTINGS.AUTO_ELEVATION];
   if ( typeof autoelevate !== "undefined" ) {
     updateFlyTokenControl(autoelevate);
@@ -313,7 +321,7 @@ async function updateSceneHook(document, change, _options, _userId) {
   if ( algorithm ) {
     registerShadowPatches();
     await canvas.draw(canvas.scene);
-    const label = game.i18n.localize(SETTINGS.SHADING.LABELS[algorithm]);
+    const label = game.i18n.localize(SETTINGS.SHADING.TYPES[algorithm]);
     ui.notifications.notify(`Elevated Vision scene shadows switched to ${label}.`);
   }
 }
