@@ -95,6 +95,7 @@ export class ShadowShader extends PIXI.Shader {
 
       // Skip if we are outside the scene boundary
       wallsToProcess = 0;
+      terrainWallsToProcess = 0;
     } else if ( pixelElevation > EV_sourceLocation.z ) {
 
       // Pixel higher than source; automatically shadow.
