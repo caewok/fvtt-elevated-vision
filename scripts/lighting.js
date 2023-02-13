@@ -221,7 +221,10 @@ if ( vUvs.x < sceneLeft
 
   // Skip if we are outside the scene boundary
   wallsToProcess = 0;
+  terrainWallsToProcess = 0;
+
 } else if ( pixelElevation > EV_sourceLocation.z ) {
+// if ( pixelElevation > EV_sourceLocation.z ) {
 
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
