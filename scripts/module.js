@@ -81,6 +81,47 @@ Hooks.once("init", function() {
   registerSettings();
   registerLayer();
   registerAdditions();
+
+  // Set CONFIGS used by this module.
+  CONFIG[MODULE_ID] = {
+
+    /**
+     * TravelElevation.
+     * The percent threshold under which a tile should be considered transparent at that pixel.
+     * @type {number}
+     */
+    alphaThreshold: 0.75,
+
+    /**
+     * ElevationLayer.
+     * Delay in milliseconds before displaying elevation values in the layer.
+     * @type {number}
+     */
+    hoverDelay: 500,
+
+    /**
+     * ElevationLayer.
+     * Maximum texture size used to represent elevation values.
+     * @type {number}
+     */
+    elevationTextureSize: 4096,
+
+    /**
+     * TravelElevation.
+     * Permitted step size to allow tokens to move between tiles of similar elevations before flying.
+     * If undefined, will use token height.
+     * @type {number|undefined}
+     */
+    tileStep: undefined,
+
+    /**
+     * TravelElevation.
+     * Permitted step size to allow tokens to move between terrains of similar elevations before flying.
+     * If undefined, will use terrain height.
+     * @type {number|undefined}
+     */
+    terrainStep: undefined
+  }
 });
 
 Hooks.once("libWrapper.Ready", async function() {

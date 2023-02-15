@@ -94,7 +94,7 @@ export class ElevationLayer extends InteractionLayer {
    * Delay in milliseconds before displaying elevation value when mouse hovers.
    * @type {number}
    */
-  _HOVER_DELAY = 500;
+  _HOVER_DELAY = CONFIG[MODULE_ID]?.hoverDelay ?? 500;
 
   /**
    * Activate a listener to display elevation values when the mouse hovers over an area
@@ -201,7 +201,7 @@ export class ElevationLayer extends InteractionLayer {
    * In v11, this is equal to CanvasVisibility.#MAXIMUM_VISIBILITY_TEXTURE_SIZE
    * @type {number}
    */
-  static #MAXIMUM_ELEVATION_TEXTURE_SIZE = 4096;
+  static #MAXIMUM_ELEVATION_TEXTURE_SIZE = CONFIG[MODULE_ID]?.elevationTextureSize ?? 4096;;
 
   /** @type ElevationTextureConfiguration */
   #textureConfiguration;

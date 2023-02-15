@@ -2,11 +2,13 @@
 canvas,
 Ray,
 ui,
-PIXI
+PIXI,
+CONFIG
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { MODULE_ID } from "./const.js";
 import { almostLessThan, almostBetween } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
@@ -77,7 +79,7 @@ export class TravelElevation {
   // ----- NOTE: Preset Configuration Parameters ----- //
 
   /** @type {number} */
-  alphaThreshold = 0.75;
+  alphaThreshold = CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
 
   /** @type {boolean} */
   fly = TravelElevation.autoElevationFly();
@@ -93,8 +95,9 @@ export class TravelElevation {
     this.travelRay = travelRay;
 
     // Tile and terrain steps based on token size.
-    this.tileStep = token.topE - token.bottomE;
-    this.terrainStep = token.topE - token.bottomE;
+    const tokenHeight = token.topE - token.bottomE;
+    this.tileStep = CONFIG[MODULE_ID]?.tileStep ?? (tokenHeight || canvas.elevation.elevationStep);
+    this.terrainStep = CONFIG[MODULE_ID]?.terrainStep ?? (tokenHeight || canvas.elevation.elevationStep);
 
     // When stepping along the ray, move in steps based on the grid precision.
     const gridPrecision = canvas.walls.gridPrecision;
@@ -183,6 +186,7 @@ export class TravelElevation {
 
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
     out.checkTerrain = true;
+    out.adjustElevation = true;
     const tiles = this.tiles;
     if ( !tiles.length && !fly ) {
       out.finalElevation = tokenTerrainElevation(token, { tokenCenter: travelRay.B });
@@ -194,11 +198,6 @@ export class TravelElevation {
     const { finalElevation, elevationChanges } = this._trackElevationChanges(startElevation, currState);
     out.finalElevation = finalElevation;
     out.elevationChanges = elevationChanges;
-
-    out.adjustElevation = out.finalElevation !== out.startElevation
-      || out.checkTerrain
-      || out.elevationChanges.length;
-
     return out;
   }
 
