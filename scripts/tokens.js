@@ -12,7 +12,7 @@ import { MODULE_ID } from "./const.js";
 import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
 import { CanvasPixelValueMatrix } from "./pixel_values.js";
 import { Draw } from "./geometry/Draw.js";
-
+import { TravelElevation } from "./TravelElevation.js";
 
 /* Token movement flow:
 
@@ -140,7 +140,9 @@ export function _refreshToken(wrapper, options) {
     // Adjust elevation of the clone by calculating the elevation from origin to line.
     const { tokenCenter, tokenElevation } = ev;
     const travelRay = new Ray(tokenCenter, this.center);
-    const travel = elevationForTokenTravel(this, travelRay, { tokenElevation });
+    const te = new TravelElevation(this, travelRay);
+    const travel = te.calculateElevationAlongRay(tokenElevation);
+
     log(`{x: ${travelRay.A.x}, y: ${travelRay.A.y}, e: ${tokenElevation} } --> {x: ${travelRay.B.x}, y: ${travelRay.B.y}, e: ${travel.finalElevation} }`, travel);
     this.document.elevation = travel.finalElevation;
 
@@ -165,10 +167,9 @@ export function _refreshToken(wrapper, options) {
      }
     }
 
-    change ??= { currState: TOKEN_ELEVATION_STATE.TERRAIN };
-    if ( change.currState === TOKEN_ELEVATION_STATE.TERRAIN )
-      change.currE = tokenTerrainElevation(this, { tokenCenter });
-
+    const TERRAIN = TravelElevation.TOKEN_ELEVATION_STATE.TERRAIN
+    change ??= { currState: TERRAIN };
+    if ( change.currState === TERRAIN ) change.currE = tokenTerrainElevation(this, { tokenCenter });
     options.elevation ||= this.document.elevation !== change.currE;
 
     this.document.elevation = change.currE;
@@ -192,7 +193,7 @@ export function cloneToken(wrapper) {
   if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return clone;
 
   const tokenCenter = { x: this.center.x, y: this.center.y };
-  if ( !isTokenOnGround(this, { tokenCenter }) && !autoElevationFly() ) return clone;
+  if ( !isTokenOnGround(this, { tokenCenter }) && !TravelElevation.autoElevationFly() ) return clone;
 
   clone._elevatedVision.tokenAdjustElevation = true;
   clone._elevatedVision.tokenCenter = tokenCenter;

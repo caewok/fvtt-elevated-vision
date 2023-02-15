@@ -168,6 +168,7 @@ export class TravelElevation {
     const out = {
       token,
       travelRay,
+      adjustElevation: false,
       checkTerrain: false,
       trackingRequired: false,
       startElevation,
@@ -193,6 +194,11 @@ export class TravelElevation {
     const { finalElevation, elevationChanges } = this._trackElevationChanges(startElevation, currState);
     out.finalElevation = finalElevation;
     out.elevationChanges = elevationChanges;
+
+    out.adjustElevation = out.finalElevation !== out.startElevation
+      || out.checkTerrain
+      || out.elevationChanges.length;
+
     return out;
   }
 

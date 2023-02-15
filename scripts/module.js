@@ -217,9 +217,9 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // esli
   const tokenCenter = token.center;
   const tokenDestination = token.getCenter(changes.x ? changes.x : tokenD.x, changes.y ? changes.y : tokenD.y );
   const travelRay = new Ray(tokenCenter, tokenDestination);
-  const travel = token._elevatedVision.travel = elevationForTokenTravel(token, travelRay,
-    { tokenElevation: token.document.elevation });
-  if ( !travel.autoElevation ) return;
+  const te = new TravelElevation(token, travelRay);
+  const travel = token._elevatedVision.travel = te.calculateElevationAlongRay(token.document.elevation);
+  if ( !travel.adjustElevation ) return;
 
   if ( tokenD.elevation !== travel.finalElevation ) changes.elevation = travel.finalElevation;
   tokenD.object._elevatedVision.tokenAdjustElevation = true;
