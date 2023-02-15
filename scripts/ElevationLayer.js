@@ -852,17 +852,22 @@ export class ElevationLayer extends InteractionLayer {
    * @param {PIXI.Rectangle} rect
    * @returns {number} Average pixel values
    */
-  averageElevationWithinRectangle(rect, { use_cache }) {
-    // At around area 1_000_000, the texture extraction is faster than the cached pixels.
-    // TODO: Does this change if less pixels are cached with lower resolutions?
-//     rect ??= new PIXI.Rectangle(0, 0, this._resolution.width, this._resolution.height);
-//     use_cache ??= rect.area < 1e06;
-//     const applyFn = use_cache ? this._applyFunctionToCachedPixels : this._applyFunctionToElevationTexture;
-
+  averageElevationWithinRectangle(rect) {
     let sum = 0;
-    const sumFn = px => sum + px;
+    const sumFn = px => sum += px;
     const denom = this.elevationPixelCache.applyFunction(sumFn, rect);
     return this.pixelValueToElevation(sum / denom);
+  }
+
+  /**
+   * Calculate the average value of the pixels within a provided rectangle.
+   * @param {PIXI.Rectangle} rect
+   * @returns {number} Average pixel values
+   */
+  averageElevationWithinRectangleFast(frame) {
+    const skip = CONFIG[MODULE_ID]?.averageTerrain ?? 1;
+    const value = this.elevationPixelCache.average({ frame, skip });
+    return this.pixelValueToElevation(value);
   }
 
   /**
@@ -871,37 +876,19 @@ export class ElevationLayer extends InteractionLayer {
    * @param {PIXI.Circle|PIXI.Polygon|PIXI.Rectangle|PIXI.Ellipse} shape
    * @returns {number} Average of pixel values within the shape
    */
-  averageElevationWithinShape(shape, { use_cache }) {
+  averageElevationWithinShape(shape) {
     let sum = 0;
-    const sumFn = px => sum + px;
+    const sumFn = px => sum += px;
     const denom = this.elevationPixelCache.applyFunctionToShape(sumFn, shape);
     return this.pixelValueToElevation(sum / denom);
+  }
 
-
-//     if ( shape instanceof PIXI.Rectangle ) return this.averageElevationWithinRectangle(shape, { use_cache });
-//
-//     const border = shape.getBounds(shape);
-//     use_cache ??= border.area < 1e06;
-//     const applyFn = use_cache ? this._applyFunctionToCachedPixels : this._applyFunctionToElevationTexture;
-//
-//     // Shift the shape to texture coordinates; likely faster than converting each pixel to canvas.
-//     if ( shape instanceof PIXI.Polygon ) shape = this.#polygonToLocalCoordinates(shape);
-//     else if ( shape instanceof PIXI.Circle ) shape = this.#circleToLocalCoordinates(shape);
-//     else if ( shape instanceof PIXI.Ellipse ) shape = this.#ellipseToLocalCoordinates(shape);
-//
-//     // Sum the pixels contained within the shape
-//     let denom = 0;
-//     let sum = 0;
-//     const sumFn = (value, i) => {
-//       const local = this._localCoordinatesAtPixelIndex(i);
-//       if ( shape.contains(local.x, local.y) ) {
-//         denom += 1;
-//         sum += value;
-//       }
-//     };
-//     applyFn(sumFn, border);
-//
-//     return this.pixelValueToElevation(sum / denom);
+  averageElevationWithinShapeFast(shape) {
+    const skip = CONFIG[MODULE_ID]?.averageTerrain ?? 1;
+    let sum = 0;
+    const sumFn = px => sum += px;
+    const denom = this.elevationPixelCache.applyFunctionToShape(sumFn, shape, skip);
+    return this.pixelValueToElevation(sum / denom);
   }
 
   /**

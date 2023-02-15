@@ -1,13 +1,14 @@
 /* globals
 canvas,
-Ray
+Ray,
+CONFIG
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { log } from "./util.js";
+import { MODULE_ID } from "./const.js";
 import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
-import { CanvasPixelValueMatrix } from "./pixel_values.js";
 import { TravelElevation } from "./TravelElevation.js";
 
 /* Token movement flow:
@@ -288,13 +289,8 @@ export function tokenTileElevation(token,
   useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
   tokenElevation ??= token.bottomE;
 
-  const bounds = token.bounds;
-  const tokenTL = token.getTopLeft(tokenCenter.x, tokenCenter.y);
-  bounds.x = tokenTL.x;
-  bounds.y = tokenTL.y;
-
   // Filter tiles that potentially serve as ground.
-  let tiles = [...canvas.tiles.quadtree.getObjects(bounds)].filter(tile => {
+  let tiles = [...canvas.tiles.quadtree.getObjects(token.bounds)].filter(tile => {
     if ( !tile.document.overhead ) return false;
     const tileE = tile.elevationE;
     return isFinite(tileE) && (tileE.almostEqual(tokenElevation) || tileE < tokenElevation);
@@ -311,14 +307,36 @@ export function tokenTileElevation(token,
   tiles.sort((a, b) => b.elevationZ - a.elevationZ);
   if ( checkTopOnly ) tiles = [tiles[0]];
 
+  const alphaThreshold = CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
   if ( useAveraging ) {
-    let tokenShape = canvas.elevation._tokenShape(tokenTL.x, tokenTL.y, token.w, token.h);
-    const targetArea = tokenShape.area * 0.5;
+    const skip = CONFIG[MODULE_ID]?.averageTiles ?? 1;
+    const tokenTL = token.getTopLeft(tokenCenter.x, tokenCenter.y);
+    let tokenShape = canvas.elevation._tokenShape(tokenTL, token.w, token.h);
+    const evCache = canvas.elevation.elevationPixelCache;
 
     for ( const tile of tiles ) {
-      const mat = CanvasPixelValueMatrix.fromOverheadTileAlpha(tile);
-      const intersect = mat.intersectShape(tokenShape);
-      if ( intersect.areaAboveThreshold(0.99) > targetArea ) {
+      const cache = tile._textureData?._evPixelCache;
+      if ( !cache ) continue;
+
+      // This is tricky, b/c we want terrain to count if it is the same height as the tile.
+      // So if a token is 40% on a tile at elevation 30, 40% on terrain elevation 30 and
+      // 20% on transparent tile with elevation 0, the token elevation should be 30.
+      // In the easy cases, there is 50% coverage for either tile or terrain alone.
+      // But the hard case makes us iterate over both tile and terrain at once,
+      // b/c otherwise we cannot tell where the overlaps occur. E.g., 30% tile, 20% terrain?
+      let sum = 0;
+      const tileE = tile.elevationE;
+      const pixelE = canvas.elevation.elevationToPixelValue(tileE);
+      const countFn = (value, _i, localX, localY) => {
+         if ( value > alphaThreshold ) return sum += 1;
+         const canvas = cache._toCanvasCoordinates(localX, localY);
+         const terrainValue = evCache.pixelAtCanvas(canvas.x, canvas.y);
+         if ( terrainValue.almostEqual(pixelE) ) return sum += 1;
+         return;
+      }
+      const denom = cache.applyFunctionToShape(countFn, tokenShape, skip);
+      const percentCoverage = sum / denom;
+      if ( percentCoverage > 0.5 ) {
         selectedTile.tile = tile;
         return tile.elevationE;
       }
@@ -326,7 +344,7 @@ export function tokenTileElevation(token,
 
   } else {
     for ( const tile of tiles ) {
-      if ( tile.containsPixel(tokenCenter.x, tokenCenter.y, 0.99) ) {
+      if ( tile.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold) ) {
         selectedTile.tile = tile;
         return tile.elevationE;
       }

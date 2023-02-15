@@ -39,6 +39,44 @@ te.fly = true;
 results = te.calculateElevationAlongRay();
 TravelElevation.drawResults(results)
 
+
+// Test tile transparency
+tile = te.tiles[0]
+te._findTileHole(tile)
+
+
+
+// Bench getting the next transparent value along a ray
+let [tile] = canvas.tiles.placeables
+cache = tile._textureData._evPixelCache;
+pixelThreshold = 0.90 * 255;
+cmp = value => value < pixelThreshold;
+
+function bench1(cache) {
+  return cache.nextPixelValueAlongCanvasRay(travelRay, cmp, { stepT: .02, startT: 0 });
+}
+
+function bench2(cache, spacer) {
+  return cache.nextPixelValueAlongCanvasRay(travelRay, cmp, { stepT: .02, startT: 0, spacer});
+}
+
+function bench3(cache, token, skip) {
+  return cache.nextPixelValueAlongCanvasRay(travelRay, cmp, { stepT: .02, startT: 0, frame: token.bounds, skip });
+}
+
+bench1(cache)
+bench2(cache, 25)
+bench3(cache, token1, 2)
+
+
+N = 1000
+await foundry.utils.benchmark(bench1, N, cache)
+await foundry.utils.benchmark(bench2, N, cache, 25)
+await foundry.utils.benchmark(bench3, N, cache, token1, 1)
+await foundry.utils.benchmark(bench3, N, cache, token1, 2)
+await foundry.utils.benchmark(bench3, N, cache, token1, 4)
+await foundry.utils.benchmark(bench3, N, cache, token1, 10)
+
 */
 
 /** @enum {hex} */
@@ -90,6 +128,12 @@ export class TravelElevation {
   /** @type {number} */
   terrainStep = 1;
 
+  /** @type {number} */
+  averageTerrain = 0;
+
+  /** @type {number} */
+  averageTiles = 0;
+
   constructor(token, travelRay) {
     this.token = token;
     this.travelRay = travelRay;
@@ -113,6 +157,11 @@ export class TravelElevation {
     // Make sure t0 is set on the ray endpoints; used in calculateElevationAlongRay.
     travelRay.A.t0 = 0;
     travelRay.B.t0 = 1;
+
+    if ( getSetting(SETTINGS.AUTO_AVERAGING) ) {
+      this.averageTerrain = CONFIG[MODULE_ID]?.averageTerrain ?? 1;
+      this.averageTiles = CONFIG[MODULE_ID]?.averageTiles ?? 1;
+    }
   }
 
   // ----- NOTE: Static Methods ----- //
@@ -230,7 +279,7 @@ export class TravelElevation {
       if ( currState === TERRAIN ) currE = terrainE;
 
       // (2) Locate any tiles at this location with sufficiently near elevation.
-      const matchingTile = (currTile && currTile.containsPixel(ix.x, ix.y))
+      const matchingTile = (currTile && this.#tileMatches(currTile, ix, currE))
         ? currTile : this.#findMatchingTile(ix, currE);
 
       // (3) Check if we are on a tile
@@ -338,10 +387,31 @@ export class TravelElevation {
    * @returns {Tile|undefined}
    */
   #findMatchingTile(ix, maxE) {
-    return this.tiles.find(tile => {
+    return this.tiles.find(tile => this.#tileMatches(tile, ix, maxE));
+  }
+
+  #tileMatches(tile, ix, maxE) {
+      const { alphaThreshold, averageTiles, token } = this;
       const tileE = tile.elevationE;
-      return almostLessThan(tileE, maxE) && tile.containsPixel(ix.x, ix.y) > 0;
-    });
+      if ( !almostLessThan(tileE, maxE) || !tile.bounds.contains(ix.x, ix.y) ) return false;
+      if ( !averageTiles ) return tile.containsPixel(ix.x, ix.y) > 0;
+
+      // Same bounds test as tokenTileElevation.
+      // For speed, always use token bounds rectangle.
+      const cache = tile._textureData._evPixelCache;
+      const evCache = canvas.elevation.elevationPixelCache;
+      const pixelE = canvas.elevation.elevationToPixelValue(tileE)
+      let sum = 0;
+      const countFn = (value, _i, localX, localY) => {
+         if ( value > alphaThreshold ) return sum += 1;
+         const canvas = cache._toCanvasCoordinates(localX, localY);
+         const terrainValue = evCache.pixelAtCanvas(canvas.x, canvas.y);
+         if ( terrainValue.almostEqual(pixelE) ) return sum += 1;
+         return;
+      }
+      const denom = cache.applyFunctionToShape(countFn, token.bounds, averageTiles);
+      const percentCoverage = sum / denom;
+      return percentCoverage > 0.5;
   }
 
   /**
@@ -371,7 +441,13 @@ export class TravelElevation {
       return false;
     };
 
-    return evCache.nextPixelValueAlongRay(travelRay, cmp, { stepT, startT });
+    const opts = { stepT, startT };
+    if ( this.averageTerrain ) {
+      opts.frame = this.token.bounds;
+      opts.skip = this.averageTerrain;
+    }
+
+    return evCache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
   }
 
   /**
@@ -390,7 +466,14 @@ export class TravelElevation {
     // Function to test if the given pixel is under the threshold.
     const pixelThreshold = alphaThreshold * TravelElevation.#maximumPixelValue;
     const cmp = value => value < pixelThreshold;
-    return cache.nextPixelValueAlongRay(travelRay, cmp, { stepT, startT });
+
+    const opts = { stepT, startT };
+    if ( this.averageTiles ) {
+      opts.frame = this.token.bounds;
+      opts.skip = this.averageTile;
+    }
+
+    return cache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
   }
 
   /**
@@ -409,7 +492,13 @@ export class TravelElevation {
     const pixelThreshold = ev.elevationToPixelValue(elevationThreshold);
     const cmp = value => value > pixelThreshold;
 
-    return evCache.nextPixelValueAlongRay(travelRay, cmp, { stepT, startT });
+    const opts = { stepT, startT };
+    if ( this.averageTerrain ) {
+      opts.frame = this.token.bounds;
+      opts.skip = this.averageTerrain;
+    }
+
+    return evCache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
   }
 
   /**
