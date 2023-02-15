@@ -29,6 +29,7 @@ import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { PixelCache, TilePixelCache } from "./PixelCache.js";
+import { TravelElevation } from "./TravelElevation.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -69,7 +70,8 @@ Hooks.once("init", function() {
     WallTracer,
     SCENE_GRAPH,
     PixelCache,
-    TilePixelCache
+    TilePixelCache,
+    TravelElevation
   };
 
   FLY_CONTROL.title = game.i18n.localize(FLY_CONTROL.title);
@@ -152,6 +154,13 @@ Hooks.on("canvasReady", async function() {
   // Set the elevation grid now that we know scene dimensions
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
+
+  // Cache overhead tile pixel data.
+  for ( const tile of canvas.tiles.placeables ) {
+    if ( tile.document.overhead ) {
+      tile._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(tile);
+    }
+  }
 });
 
 
@@ -252,6 +261,52 @@ function updateTileHook(document, change, _options, _userId) {
   if ( min < elevationMin ) {
     canvas.elevation.elevationMin = min;
     ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on tile minimum elevation range.`);
+  }
+
+  if ( change.overhead ) {
+    document.object._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(document.object);
+  } else if ( document.overhead ) {
+    let updated = false;
+    const cache = document.object._textureData._evPixelCache;
+
+    if ( Object.hasOwn(change, "x") ) {
+      updated = true;
+      cache.x = change.x;
+    }
+
+    if ( Object.hasOwn(change, "y") ) {
+      updated = true;
+      cache.y = change.y;
+    }
+
+    if ( Object.hasOwn(change, "width") ) {
+      updated = true;
+      cache.width = change.width;
+    }
+
+    if ( Object.hasOwn(change, "height") ) {
+      updated = true;
+      cache.height = change.height;
+    }
+
+    if ( Object.hasOwn(change, "rotation") ) {
+      updated = true;
+      cache.rotationDegrees = change.rotation;
+    }
+
+    if ( Object.hasOwn(change, "texture") ) {
+      if ( Object.hasOwn(change.texture, "scaleX") ) {
+        updated = true;
+        cache.scaleX = change.texture.scaleX;
+      }
+
+      if ( Object.hasOwn(change.texture, "scaleY") ) {
+        updated = true;
+        cache.scaleY = change.texture.scaleY;
+      }
+    }
+
+    if ( updated ) cache.clearTransforms();
   }
 }
 

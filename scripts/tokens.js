@@ -770,7 +770,6 @@ export function elevationForTokenTravel(token, travelRay,
   { fly, tokenElevation, debug = false, tileStep, terrainStep } = {}) {
   if ( debug ) Draw.segment(travelRay);
 
-  // TODO: Move this to the Ray class?
   let rayTConversion = Math.abs(travelRay.dx) > Math.abs(travelRay.dy)
   ? pt => (pt.x - travelRay.A.x) / travelRay.dx
     : pt => (pt.y - travelRay.A.y) / travelRay.dy;
