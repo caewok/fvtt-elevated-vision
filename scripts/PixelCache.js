@@ -238,6 +238,7 @@ export class PixelCache extends PIXI.Rectangle {
     this.#toLocalTransform = undefined;
     this.#toCanvasTransform = undefined;
     this.#localFrame = undefined;
+    this.#thresholdBoundingBoxes.clear();
   }
 
   /**
@@ -264,8 +265,8 @@ export class PixelCache extends PIXI.Rectangle {
    */
   getThresholdCanvasBoundingBox(threshold = 0.75) {
     const bounds = this.getThresholdBoundingBox(threshold);
-    const TL = this._toCanvasCoordinate(bounds.left, bounds.top);
-    const BR = this._toCanvasCoordinate(bounds.right, bounds.bottom);
+    const TL = this._toCanvasCoordinates(bounds.left, bounds.top);
+    const BR = this._toCanvasCoordinates(bounds.right, bounds.bottom);
     return new PIXI.Rectangle(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y);
   }
 
@@ -540,8 +541,15 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {Point}   Point, with t0 set to the t value along the ray.
    */
   nextPixelValueAlongRay(ray, cmp, opts) {
-    const textureRay = new Ray(this._fromCanvasCoordinates(ray.A), this._fromCanvasCoordinates(ray.B));
-    return this._nextPixelValueAlongRay(textureRay, cmp, opts);
+    const { A, B } = ray;
+    const textureRay = new Ray(this._fromCanvasCoordinates(A.x, A.y), this._fromCanvasCoordinates(B.x, B.y));
+    let foundPt = this._nextPixelValueAlongRay(textureRay, cmp, opts);
+    if ( foundPt ) {
+      const t0 = foundPt.t0;
+      foundPt = this._toCanvasCoordinates(foundPt.x, foundPt.y);
+      foundPt.t0 = t0;
+    }
+    return foundPt;
   }
 
   /**
@@ -568,6 +576,30 @@ export class PixelCache extends PIXI.Rectangle {
       t += stepT;
     }
     return null;
+  }
+
+  /**
+   * Find the points at which a pixel cache boundary intersects a ray,
+   * given a specific threshold defining the boundary.
+   * @param {Ray} ray             The ray to test against the boundary
+   * @param {number} threshold    Threshold for the boundary.
+   * @returns {Point[]}  Points. Intersection positions along ray will be marked with t0,
+   *   where t0 = 0 is endpoint A and t0 = 1 is endpoint B.
+   */
+  rayIntersectsBoundary(ray, threshold = 0.75) {
+    const { A, B } = ray;
+    const bounds = this.getThresholdCanvasBoundingBox(0.75);
+    const ixs = bounds.segmentIntersections(A, B);
+    const CSZ = PIXI.Rectangle.CS_ZONES;
+    if ( bounds._getZone(A) === CSZ.INSIDE ) {
+      A.t0 = 0;
+      ixs.unshift(A);
+    }
+    if ( bounds._getZone(B) === CSZ.INSIDE ) {
+      B.t0 = 1;
+      ixs.push(B);
+    }
+    return ixs;
   }
 
   /**
@@ -864,8 +896,8 @@ export class TilePixelCache extends PixelCache {
    */
   getThresholdCanvasBoundingBox(threshold = 0.75) {
     const bounds = this.getThresholdBoundingBox(threshold);
-    const TL = this._toCanvasCoordinate(bounds.left, bounds.top);
-    const BR = this._toCanvasCoordinate(bounds.right, bounds.bottom);
+    const TL = this._toCanvasCoordinates(bounds.left, bounds.top);
+    const BR = this._toCanvasCoordinates(bounds.right, bounds.bottom);
     const r = this.rotation;
     return PIXI.Rectangle.fromRotation(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y, r).normalize();
   }

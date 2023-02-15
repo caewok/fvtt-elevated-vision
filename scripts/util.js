@@ -10,11 +10,11 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
-function almostLessThan(a, b) { return a < b || a.almostEqual(b); }
+export function almostLessThan(a, b) { return a < b || a.almostEqual(b); }
 
-function almostGreaterThan(a, b) { return a > b || a.almostEqual(b); }
+export function almostGreaterThan(a, b) { return a > b || a.almostEqual(b); }
 
-function almostBetween(value, min, max) {
+export function almostBetween(value, min, max) {
   return almostLessThan(value, max) && almostGreaterThan(value, min);
 }
 

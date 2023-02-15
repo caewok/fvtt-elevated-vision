@@ -29,6 +29,7 @@ import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { PixelCache, TilePixelCache } from "./PixelCache.js";
+import { TravelElevation } from "./TravelElevation.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -46,8 +47,7 @@ import {
 } from "./controls.js";
 
 // Settings, to toggle whether to change elevation on token move
-import { SETTINGS, getSetting, setSetting, registerSettings, getSceneSetting, setSceneSetting, reloadTokenControls } from "./settings.js";
-import { elevationForTokenTravel } from "./tokens.js";
+import { SETTINGS, getSetting, setSetting, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
 
 const FLY_CONTROL = {
   name: SETTINGS.FLY_BUTTON,
@@ -69,7 +69,8 @@ Hooks.once("init", function() {
     WallTracer,
     SCENE_GRAPH,
     PixelCache,
-    TilePixelCache
+    TilePixelCache,
+    TravelElevation
   };
 
   FLY_CONTROL.title = game.i18n.localize(FLY_CONTROL.title);
@@ -152,6 +153,13 @@ Hooks.on("canvasReady", async function() {
   // Set the elevation grid now that we know scene dimensions
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
+
+  // Cache overhead tile pixel data.
+  for ( const tile of canvas.tiles.placeables ) {
+    if ( tile.document.overhead ) {
+      tile._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(tile);
+    }
+  }
 });
 
 
@@ -208,9 +216,9 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // esli
   const tokenCenter = token.center;
   const tokenDestination = token.getCenter(changes.x ? changes.x : tokenD.x, changes.y ? changes.y : tokenD.y );
   const travelRay = new Ray(tokenCenter, tokenDestination);
-  const travel = token._elevatedVision.travel = elevationForTokenTravel(token, travelRay,
-    { tokenElevation: token.document.elevation });
-  if ( !travel.autoElevation ) return;
+  const te = new TravelElevation(token, travelRay);
+  const travel = token._elevatedVision.travel = te.calculateElevationAlongRay(token.document.elevation);
+  if ( !travel.adjustElevation ) return;
 
   if ( tokenD.elevation !== travel.finalElevation ) changes.elevation = travel.finalElevation;
   tokenD.object._elevatedVision.tokenAdjustElevation = true;
@@ -252,6 +260,52 @@ function updateTileHook(document, change, _options, _userId) {
   if ( min < elevationMin ) {
     canvas.elevation.elevationMin = min;
     ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on tile minimum elevation range.`);
+  }
+
+  if ( change.overhead ) {
+    document.object._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(document.object);
+  } else if ( document.overhead ) {
+    let updated = false;
+    const cache = document.object._textureData._evPixelCache;
+
+    if ( Object.hasOwn(change, "x") ) {
+      updated = true;
+      cache.x = change.x;
+    }
+
+    if ( Object.hasOwn(change, "y") ) {
+      updated = true;
+      cache.y = change.y;
+    }
+
+    if ( Object.hasOwn(change, "width") ) {
+      updated = true;
+      cache.width = change.width;
+    }
+
+    if ( Object.hasOwn(change, "height") ) {
+      updated = true;
+      cache.height = change.height;
+    }
+
+    if ( Object.hasOwn(change, "rotation") ) {
+      updated = true;
+      cache.rotationDegrees = change.rotation;
+    }
+
+    if ( Object.hasOwn(change, "texture") ) {
+      if ( Object.hasOwn(change.texture, "scaleX") ) {
+        updated = true;
+        cache.scaleX = change.texture.scaleX;
+      }
+
+      if ( Object.hasOwn(change.texture, "scaleY") ) {
+        updated = true;
+        cache.scaleY = change.texture.scaleY;
+      }
+    }
+
+    if ( updated ) cache.clearTransforms();
   }
 }
 
@@ -332,6 +386,6 @@ function updateFlyTokenControl(enable) {
   const flyIndex = tokenTools.tools.findIndex(b => b.name === SETTINGS.FLY_BUTTON);
   if ( enable && !~flyIndex ) tokenTools.tools.push(FLY_CONTROL);
   else if ( ~flyIndex ) tokenTools.tools.splice(flyIndex, 1);
-  ui.controls.render(true)
+  ui.controls.render(true);
 }
 
