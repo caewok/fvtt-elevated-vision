@@ -47,8 +47,7 @@ import {
 } from "./controls.js";
 
 // Settings, to toggle whether to change elevation on token move
-import { SETTINGS, getSetting, setSetting, registerSettings, getSceneSetting, setSceneSetting, reloadTokenControls } from "./settings.js";
-import { elevationForTokenTravel } from "./tokens.js";
+import { SETTINGS, getSetting, setSetting, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
 
 const FLY_CONTROL = {
   name: SETTINGS.FLY_BUTTON,
@@ -387,6 +386,6 @@ function updateFlyTokenControl(enable) {
   const flyIndex = tokenTools.tools.findIndex(b => b.name === SETTINGS.FLY_BUTTON);
   if ( enable && !~flyIndex ) tokenTools.tools.push(FLY_CONTROL);
   else if ( ~flyIndex ) tokenTools.tools.splice(flyIndex, 1);
-  ui.controls.render(true)
+  ui.controls.render(true);
 }
 
