@@ -159,6 +159,23 @@ Combined ---> 1000 x 750. Which is 0.5 * 0.5 = 0.25.
 */
 
 
+// Original function:
+// function fastFixed(num, n) {
+// 	const pow10 = Math.pow(10,n);
+//   return Math.round(num*pow10)/pow10; // roundFastPositive fails for large numbers
+// }
+
+/**
+ * Fix a number to 8 decimal places
+ * @param {number} x    Number to fix
+ * @returns {number}
+ */
+const POW10_8 = Math.pow(10, 8);
+function fastFixed(x) {
+  return Math.round(x * POW10_8) / POW10_8;
+}
+
+
 /**
  * Class representing a rectangular array of pixels, typically pulled from a texture.
  * The underlying rectangle is in canvas coordinates.
@@ -403,7 +420,12 @@ export class PixelCache extends PIXI.Rectangle {
    */
   _fromCanvasCoordinates(x, y) {
     const pt = new PIXI.Point(x, y);
-    return this.toLocalTransform.multiplyPoint2d(pt, pt);
+    const local = this.toLocalTransform.multiplyPoint2d(pt, pt);
+
+    // Avoid common rounding errors, like 19.999999999998.
+    local.x = fastFixed(local.x);
+    local.y = fastFixed(local.y);
+    return local;
   }
 
   /**
@@ -415,7 +437,12 @@ export class PixelCache extends PIXI.Rectangle {
    */
   _toCanvasCoordinates(x, y) {
     const pt = new PIXI.Point(x, y);
-    return this.toCanvasTransform.multiplyPoint2d(pt, pt);
+    const canvas = this.toCanvasTransform.multiplyPoint2d(pt, pt);
+
+    // Avoid common rounding errors, like 19.999999999998.
+    canvas.x = fastFixed(canvas.x);
+    canvas.y = fastFixed(canvas.y);
+    return canvas;
   }
 
   /**
@@ -614,6 +641,7 @@ export class PixelCache extends PIXI.Rectangle {
       const t0 = foundPt.t0;
       foundPt = this._toCanvasCoordinates(foundPt.x, foundPt.y);
       foundPt.t0 = t0;
+      foundPt.value = value;
     }
     return foundPt;
   }
@@ -638,6 +666,7 @@ export class PixelCache extends PIXI.Rectangle {
       const value = this._pixelAtLocal(pt.x, pt.y);
       if ( cmp(value) ) {
         pt.t0 = t;
+        pt.value = value;
         return pt;
       }
       t += stepT;
@@ -669,6 +698,7 @@ export class PixelCache extends PIXI.Rectangle {
 
       if ( foundValue ) {
         pt.t0 = t;
+        pt.value = value;
         return pt;
       }
       t += stepT;
@@ -690,6 +720,7 @@ export class PixelCache extends PIXI.Rectangle {
       const value = this._average(testFrame, skip);
       if ( cmp(value) ) {
         pt.t0 = t;
+        pt.value = value;
         return pt;
       }
       t += stepT;
