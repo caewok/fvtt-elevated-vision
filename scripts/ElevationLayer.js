@@ -35,7 +35,7 @@ import {
   isTokenOnGround,
   isTokenOnTile,
   tokenGroundElevation,
-  tokenTileElevation,
+  tileAtTokenElevation,
   tokenTerrainElevation } from "./tokens.js";
 import { setSceneSetting, getSceneSetting, SETTINGS } from "./settings.js";
 
@@ -80,14 +80,9 @@ export class ElevationLayer extends InteractionLayer {
   tokens = {
     tokenGroundElevation,
     tokenTerrainElevation,
-    tokenTileElevation,
+    tileAtTokenElevation,
     isTokenOnGround,
-    isTokenOnTile,
-
-    // Backwards compatibility
-    tokenOnGround: isTokenOnGround,
-    tokenTileGroundElevation: tokenTileElevation,
-    tokenTerrainGroundElevation: tokenTerrainElevation
+    isTokenOnTile
   };
 
   /**
@@ -201,7 +196,7 @@ export class ElevationLayer extends InteractionLayer {
    * In v11, this is equal to CanvasVisibility.#MAXIMUM_VISIBILITY_TEXTURE_SIZE
    * @type {number}
    */
-  static #MAXIMUM_ELEVATION_TEXTURE_SIZE = CONFIG[MODULE_ID]?.elevationTextureSize ?? 4096;;
+  static #MAXIMUM_ELEVATION_TEXTURE_SIZE = CONFIG[MODULE_ID]?.elevationTextureSize ?? 4096;
 
   /** @type ElevationTextureConfiguration */
   #textureConfiguration;
@@ -877,13 +872,6 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number} Average of pixel values within the shape
    */
   averageElevationWithinShape(shape) {
-    let sum = 0;
-    const sumFn = px => sum += px;
-    const denom = this.elevationPixelCache.applyFunctionToShape(sumFn, shape);
-    return this.pixelValueToElevation(sum / denom);
-  }
-
-  averageElevationWithinShapeFast(shape) {
     const skip = CONFIG[MODULE_ID]?.averageTerrain ?? 1;
     let sum = 0;
     const sumFn = px => sum += px;

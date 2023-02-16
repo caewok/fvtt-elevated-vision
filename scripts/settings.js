@@ -150,3 +150,19 @@ export function reloadTokenControls() {
   canvas.tokens.deactivate();
   canvas.tokens.activate();
 }
+
+/**
+ * Get setting to average tiles
+ * @returns {number} 0 if not averaging; 1+ for testing every N pixels for average.
+ */
+export function averageTilesSetting() {
+  return getSetting(SETTINGS.AUTO_AVERAGING) ? (CONFIG[MODULE_ID]?.averageTiles ?? 1) : 0;
+}
+
+/**
+ * Get setting to average terrain
+ * @returns {number} 0 if not averaging; 1+ for testing every N pixels for average.
+ */
+export function averageTerrainSetting() {
+  return getSetting(SETTINGS.AUTO_AVERAGING) ? (CONFIG[MODULE_ID]?.averageTerrain ?? 1) : 0;
+}

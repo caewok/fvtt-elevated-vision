@@ -218,6 +218,25 @@ export class PixelCache extends PIXI.Rectangle {
     this.#localWidth = localWidth;
   }
 
+  /**
+   * Test whether the pixel cache contains a specific canvas point.
+   * See Tile.prototype.containsPixel
+   * @param {number} x
+   * @param {number} y
+   * @param {number} [alphaThreshold=0.75]  Value required for the pixel to "count."
+   * @returns {boolean}
+   */
+  containsPixel(x, y, alphaThreshold = 0.75) {
+    // First test against the bounding box
+    const bounds = this.getThresholdCanvasBoundingBox(alphaThreshold);
+    if ( (x < bounds.left) || (x > bounds.right) ) return false;
+    if ( (y < bounds.top) || (y > bounds.bottom) ) return false;
+
+    // Next test a specific pixel
+    const value = this.pixelAtCanvas(x, y);
+    return value > (alphaThreshold * this.#maximumPixelValue);
+  }
+
   /** @type {PIXI.Rectangle} */
   get localFrame() { return this.#localFrame ?? (this.#localFrame = this.#rectangleToLocalCoordinates(this)); }
 
@@ -486,7 +505,7 @@ export class PixelCache extends PIXI.Rectangle {
    */
   average({frame, skip = 1 } = {}) {
     if ( frame ) frame = this.#rectangleToLocalCoordinates(frame);
-    return this._average(frame, skip)
+    return this._average(frame, skip);
   }
 
   _average(frame, skip = 1) {
@@ -580,7 +599,7 @@ export class PixelCache extends PIXI.Rectangle {
       spacer = PIXI.Point.distanceBetween(
         this._fromCanvasCoordinates(0, 0),
         this._fromCanvasCoordinates(spacer, 0));
-      foundPt = this._nextPixelValueAlongLocalRaySpacer(textureRay, cmp, spacer);
+      foundPt = this._nextPixelValueAlongLocalRaySpacer(textureRay, cmp, spacer, stepT, startT);
     } else if ( frame ) {
       // Move the frame such that it is centered over the ray at the starting point
       const pt = ray.project(startT);
@@ -588,7 +607,7 @@ export class PixelCache extends PIXI.Rectangle {
       const dx = pt.x - center.x;
       const dy = pt.y - center.y;
       frame = this.#rectangleToLocalCoordinates(frame.translate(dx, dy));
-      foundPt = this._nextPixelValueAlongLocalRayAverage(textureRay, cmp, stepT, startT, skip, frame);
+      foundPt = this._nextPixelValueAlongLocalRayAverage(textureRay, cmp, frame, skip, stepT, startT);
     } else foundPt = this._nextPixelValueAlongLocalRay(textureRay, cmp, stepT, startT);
 
     if ( foundPt ) {
@@ -626,7 +645,7 @@ export class PixelCache extends PIXI.Rectangle {
     return null;
   }
 
-  _nextPixelValueAlongLocalRaySpacer(ray, cmp, stepT = 0.1, startT = stepT, spacer = 1) {
+  _nextPixelValueAlongLocalRaySpacer(ray, cmp, spacer = 1, stepT = 0.1, startT = stepT) {
     // Step along the ray until we hit the threshold
     const localFrame = this.localFrame;
 
@@ -657,7 +676,7 @@ export class PixelCache extends PIXI.Rectangle {
     return null;
   }
 
-  _nextPixelValueAlongLocalRayAverage(ray, cmp, stepT = 0.1, startT = stepT, skip = 1, frame) {
+  _nextPixelValueAlongLocalRayAverage(ray, cmp, frame, skip = 1, stepT = 0.1, startT = stepT) {
     // Step along the ray until we hit the threshold
     // Each point assumed to be the center of the rectangular frame.
     const center = frame.center;

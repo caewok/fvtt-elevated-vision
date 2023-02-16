@@ -11,8 +11,8 @@ CONFIG
 import { MODULE_ID } from "./const.js";
 import { almostLessThan, almostBetween } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
-import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
-import { isTokenOnGround, isTokenOnTile, tokenTerrainElevation } from "./tokens.js";
+import { getSetting, getSceneSetting, SETTINGS, averageTilesSetting, averageTerrainSetting } from "./settings.js";
+import { isTokenOnGround, isTokenOnTile, tokenTerrainElevation, tileAtTokenElevation } from "./tokens.js";
 
 /* Testing
 api = game.modules.get("elevatedvision").api
@@ -158,10 +158,8 @@ export class TravelElevation {
     travelRay.A.t0 = 0;
     travelRay.B.t0 = 1;
 
-    if ( getSetting(SETTINGS.AUTO_AVERAGING) ) {
-      this.averageTerrain = CONFIG[MODULE_ID]?.averageTerrain ?? 1;
-      this.averageTiles = CONFIG[MODULE_ID]?.averageTiles ?? 1;
-    }
+    this.averageTerrain = averageTerrainSetting();
+    this.averageTiles = averageTilesSetting();
   }
 
   // ----- NOTE: Static Methods ----- //
@@ -260,7 +258,20 @@ export class TravelElevation {
     const elevationChanges = [];
     const stepT = this.#stepT;
     const { TERRAIN, TILE, FLY } = TravelElevation.TOKEN_ELEVATION_STATE;
-    const { travelRay, tileStep, terrainStep, fly, token, debug } = this;
+    const {
+      travelRay,
+      tileStep,
+      terrainStep,
+      fly,
+      token,
+      debug,
+      averageTiles,
+      alphaThreshold,
+      tiles } = this;
+
+    const tokenCenter = token.center;
+    const tokenTL = token.getTopLeft(tokenCenter.x, tokenCenter.y);
+    const tokenBorder = canvas.elevation._tokenShape(tokenTL, token.w, token.h);
 
     // At each intersection group, update the current elevation based on ground unless already on tile.
     // If the token elevation equals that of the tile, the token is now on the tile.
@@ -273,14 +284,30 @@ export class TravelElevation {
       if ( debug ) Draw.point(ix, { color: STATE_COLOR[currState], radius: 3 });
 
       // Determine the destination type and associated elevation.
-      // (1) If currently on the terrain, the current elevation reflects that of the last
-      //     intersection. Update to the current intersection.
-      const terrainE = tokenTerrainElevation(token, { tokenCenter: ix });
-      if ( currState === TERRAIN ) currE = terrainE;
+      // (1) Use the immediately prior terrain elevation or the current elevation as the start
+      const prevT = ix.t0 - stepT;
+      const prevPt = travelRay.project(prevT);
+      const prevE = Math.max(currE, tokenTerrainElevation(token, { tokenCenter: prevPt }));
 
       // (2) Locate any tiles at this location with sufficiently near elevation.
-      const matchingTile = (currTile && this.#tileMatches(currTile, ix, currE))
-        ? currTile : this.#findMatchingTile(ix, currE);
+      //     Update the token shape location
+      let tokenShape;
+      if ( averageTiles ) {
+        const dx = prevPt.x - tokenCenter.x;
+        const dy = prevPt.y - tokenCenter.y;
+        tokenShape = tokenBorder.translate(dx, dy);
+      }
+
+      const matchingTile = tileAtTokenElevation(token, {
+        tokenCenter: ix,
+        tokenElevation: prevE,
+        tokenShape,
+        averageTiles,
+        alphaThreshold,
+        tiles });
+
+
+      const terrainE = tokenTerrainElevation(token, { tokenCenter: ix });
 
       // (3) Check if we are on a tile
       if ( matchingTile ) {
@@ -386,33 +413,33 @@ export class TravelElevation {
    * @param {number} maxE   Maximum elevation to consider
    * @returns {Tile|undefined}
    */
-  #findMatchingTile(ix, maxE) {
-    return this.tiles.find(tile => this.#tileMatches(tile, ix, maxE));
-  }
-
-  #tileMatches(tile, ix, maxE) {
-      const { alphaThreshold, averageTiles, token } = this;
-      const tileE = tile.elevationE;
-      if ( !almostLessThan(tileE, maxE) || !tile.bounds.contains(ix.x, ix.y) ) return false;
-      if ( !averageTiles ) return tile.containsPixel(ix.x, ix.y) > 0;
-
-      // Same bounds test as tokenTileElevation.
-      // For speed, always use token bounds rectangle.
-      const cache = tile._textureData._evPixelCache;
-      const evCache = canvas.elevation.elevationPixelCache;
-      const pixelE = canvas.elevation.elevationToPixelValue(tileE)
-      let sum = 0;
-      const countFn = (value, _i, localX, localY) => {
-         if ( value > alphaThreshold ) return sum += 1;
-         const canvas = cache._toCanvasCoordinates(localX, localY);
-         const terrainValue = evCache.pixelAtCanvas(canvas.x, canvas.y);
-         if ( terrainValue.almostEqual(pixelE) ) return sum += 1;
-         return;
-      }
-      const denom = cache.applyFunctionToShape(countFn, token.bounds, averageTiles);
-      const percentCoverage = sum / denom;
-      return percentCoverage > 0.5;
-  }
+//   #findMatchingTile(ix, maxE) {
+//     return this.tiles.find(tile => this.#tileMatches(tile, ix, maxE));
+//   }
+//
+//   #tileMatches(tile, ix, maxE) {
+//       const { alphaThreshold, averageTiles, token } = this;
+//       const tileE = tile.elevationE;
+//       if ( !almostLessThan(tileE, maxE) || !tile.bounds.contains(ix.x, ix.y) ) return false;
+//       if ( !averageTiles ) return tile.containsPixel(ix.x, ix.y, alphaThreshold) > 0;
+//
+//       // Same bounds test as tileAtTokenElevation.
+//       // For speed, always use token bounds rectangle.
+//       const cache = tile._textureData._evPixelCache;
+//       const evCache = canvas.elevation.elevationPixelCache;
+//       const pixelE = canvas.elevation.elevationToPixelValue(tileE)
+//       let sum = 0;
+//       const countFn = (value, _i, localX, localY) => {
+//          if ( value > alphaThreshold ) return sum += 1;
+//          const canvas = cache._toCanvasCoordinates(localX, localY);
+//          const terrainValue = evCache.pixelAtCanvas(canvas.x, canvas.y);
+//          if ( terrainValue.almostEqual(pixelE) ) return sum += 1;
+//          return;
+//       }
+//       const denom = cache.applyFunctionToShape(countFn, token.bounds, averageTiles);
+//       const percentCoverage = sum / denom;
+//       return percentCoverage > 0.5;
+//   }
 
   /**
    * Search for a terrain cliff along the ray beginning at a specified point.

@@ -6,9 +6,9 @@ CONFIG
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { log } from "./util.js";
+import { log, almostLessThan } from "./util.js";
 import { MODULE_ID } from "./const.js";
-import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
+import { getSceneSetting, SETTINGS, averageTilesSetting } from "./settings.js";
 import { TravelElevation } from "./TravelElevation.js";
 
 /* Token movement flow:
@@ -125,11 +125,18 @@ export function _refreshToken(wrapper, options) {
   // New position: this.document
 
   // Drag starts with position set to 0, 0 (likely, not yet set).
-  log(`token _refresh at ${this.document.x},${this.document.y} (center ${this.center.x},${this.center.y}) with elevation ${this.document.elevation} animate: ${Boolean(this._animation)}`);
   if ( !this.position.x && !this.position.y ) return wrapper(options);
 
+  if ( this.position.x === this.document.x && this.position.y === this.document.y ) return wrapper(options);
+
+  log(`token _refresh at ${this.document.x},${this.document.y} (center ${this.center.x},${this.center.y}) with elevation ${this.document.elevation} animate: ${Boolean(this._animation)}`);
+
+
   const ev = this._elevatedVision;
-  if ( !ev || !ev.tokenAdjustElevation ) return wrapper(options);
+  if ( !ev || !ev.tokenAdjustElevation ) {
+   log(`Token _refresh: Adjust elevation is false.`);
+   return wrapper(options);
+  }
 
   if ( this._original ) {
     log("token _refresh is clone.");
@@ -145,6 +152,7 @@ export function _refreshToken(wrapper, options) {
 
   } else if ( this._animation ) {
     // Adjust the elevation as the token is moved by locating where we are on the travel ray.
+    log(`token _refresh: animation`);
     const tokenCenter = this.center;
     const { travelRay, elevationChanges } = ev.travel;
     const currT = travelRay.tConversion(tokenCenter);
@@ -185,6 +193,8 @@ export function cloneToken(wrapper) {
   const tokenCenter = { x: this.center.x, y: this.center.y };
   if ( !isTokenOnGround(this, { tokenCenter }) && !TravelElevation.autoElevationFly() ) return clone;
 
+  log(`cloneToken ${this.name} at elevation ${this.document?.elevation}: setting adjust elevation to true`);
+
   clone._elevatedVision.tokenAdjustElevation = true;
   clone._elevatedVision.tokenCenter = tokenCenter;
   clone._elevatedVision.tokenElevation = this.bottomE;
@@ -224,10 +234,21 @@ export function isTokenOnTerrain(token, { tokenCenter, tokenElevation, useAverag
  * @param {boolean} [options.considerTiles]   First consider tiles under the token?
  * @return {boolean}
  */
-export function isTokenOnTile(token, { tokenCenter, tokenElevation, useAveraging }) {
+export function isTokenOnTile(token, { tokenCenter, tokenElevation, averageTiles }) {
   tokenElevation ??= token.bottomE;
-  const tileElevation = tokenTileElevation(token, { tokenCenter, tokenElevation, useAveraging, checkTopOnly: true });
-  return tileElevation !== null && tileElevation.almostEqual(tokenElevation);
+
+  // Filter tiles in advance so only ones with nearly equal elevation to the token remain.
+  const tiles = [...canvas.tiles.quadtree.getObjects(token.bounds)].filter(tile => {
+    if ( !tile.document.overhead ) return false;
+    const tileE = tile.elevationE;
+    return isFinite(tileE) && tileE.almostEqual(tokenElevation);
+  });
+  if ( !tiles.length ) return false;
+
+  // Determine whether the token is on a tile or only on the transparent portions
+  tiles.sort((a, b) => b.elevationZ - a.elevationZ);
+  const tile = tileAtTokenElevation(token, { tokenCenter, tokenElevation, averageTiles, tiles });
+  return Boolean(tile);
 }
 
 /**
@@ -243,7 +264,11 @@ export function isTokenOnTile(token, { tokenCenter, tokenElevation, useAveraging
  */
 export function tokenGroundElevation(token, { tokenCenter, tokenElevation, useAveraging, considerTiles = true } = {}) {
   let elevation = null;
-  if ( considerTiles ) elevation = tokenTileElevation(token, { tokenCenter, tokenElevation, useAveraging });
+  if ( considerTiles ) {
+    const averageTiles = useAveraging ? averageTilesSetting() : 0;
+    const tile = tileAtTokenElevation(token, { tokenCenter, tokenElevation, averageTiles });
+    if ( tile ) elevation = tile.elevationE;
+  }
 
   // If the terrain is above the tile, use the terrain elevation. (Math.max(null, 5) returns 5.)
   return Math.max(elevation, tokenTerrainElevation(token, { tokenCenter, useAveraging }));
@@ -260,97 +285,96 @@ export function tokenGroundElevation(token, { tokenCenter, tokenElevation, useAv
  * @returns {number} Elevation in grid units.
  */
 export function tokenTerrainElevation(token, { tokenCenter, useAveraging } = {}) {
-  useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
   tokenCenter ??= token.center;
-  if ( useAveraging ) return averageElevationForTokenShape(
-    token.getTopLeft(tokenCenter.x, tokenCenter.y), token.w, token.h);
+  if ( useAveraging ) {
+    const tokenTLCorner = token.getTopLeft(tokenCenter.x, tokenCenter.y);
+    const tokenShape = canvas.elevation._tokenShape(tokenTLCorner, token.w, token.h);
+    return canvas.elevation.averageElevationWithinShape(tokenShape);
+  }
   return canvas.elevation.elevationAt(tokenCenter);
 }
 
-function averageElevationForTokenShape(tokenTLCorner, w, h) {
-  const tokenShape = canvas.elevation._tokenShape(tokenTLCorner, w, h);
-  return canvas.elevation.averageElevationWithinShape(tokenShape);
-}
-
 /**
- * Determine ground elevation of a token, taking into account tiles.
+ * Determine whether a token is sufficiently near a tile such that the token can be considered on the tile.
  * @param {Token} token       Token to test; may use token.getBounds() and token.center, depending on options.
  * @param {object} [options]  Options that affect the tile elevation calculation
  * @param {Point} [options.tokenCenter]       Position to use for the token center.
- * @param {boolean} [options.useAveraging]    Token at tileE only if 50% of the token is over the tile.
- * @param {object} [options.selectedTile]     Object (can be empty) in which "tile" property will
- *                                            be set to the tile found, if any. Primarily for debugging.
- * @param {boolean} [options.checkTopOnly]    Should all tiles under the token be checked, or only the top-most tile?
- * @return {number|null} Return the tile elevation or null otherwise.
+ * @param {number} [options.tokenElevation]   Elevation of the token
+ * @param {PIXI.Rectangle|PIXI.Polygon} [tokenShape]  Shape representing a token boundary
+ * @param {number} [options.averageTiles]     0 for no averaging. Otherwise an integer for every N pixels to test in average
+ * @param {number} [options.alphaThreshold]   Percent minimum pixel value before considered transparent
+ * @param {Tile[]} [options.tiles]            Array of tiles to test
+ * @return {Tile|null} Return the tile. Elevation can then be easily determined: tile.elevationE;
  */
-export function tokenTileElevation(token,
-  { tokenCenter, tokenElevation, useAveraging, selectedTile = {}, checkTopOnly = false } = {} ) {
+export function tileAtTokenElevation(token,
+  { tokenCenter, tokenElevation, tokenShape, averageTiles, alphaThreshold, tiles } = {} ) {
   tokenCenter ??= token.center;
-  useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
   tokenElevation ??= token.bottomE;
+  averageTiles ??= averageTilesSetting();
+  alphaThreshold = CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
 
-  // Filter tiles that potentially serve as ground.
-  let tiles = [...canvas.tiles.quadtree.getObjects(token.bounds)].filter(tile => {
-    if ( !tile.document.overhead ) return false;
-    const tileE = tile.elevationE;
-    return isFinite(tileE) && (tileE.almostEqual(tokenElevation) || tileE < tokenElevation);
-  });
+  // Filter tiles that potentially serve as ground from canvas tiles.
+  if ( typeof tiles === "undefined" ) {
+    tiles = [...canvas.tiles.quadtree.getObjects(token.bounds)].filter(tile => {
+      if ( !tile.document.overhead ) return false;
+      const tileE = tile.elevationE;
+      return isFinite(tileE);
+    });
+    tiles.sort((a, b) => b.elevationZ - a.elevationZ);
+  }
   if ( !tiles.length ) return null;
 
-  // Take the tiles in order, from the top.
-  // No averaging:
-  // - Elevation is the highest tile that contains the position (alpha-excluded).
-  // Averaging:
-  // - Tile > 50% of the token shape: tileE.
-  // - Tile < 50% of token shape: fall to tile below.
-  // - Only non-transparent tile portions count.
-  tiles.sort((a, b) => b.elevationZ - a.elevationZ);
-  if ( checkTopOnly ) tiles = [tiles[0]];
-
-  const alphaThreshold = CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
-  if ( useAveraging ) {
-    const skip = CONFIG[MODULE_ID]?.averageTiles ?? 1;
-    const tokenTL = token.getTopLeft(tokenCenter.x, tokenCenter.y);
-    let tokenShape = canvas.elevation._tokenShape(tokenTL, token.w, token.h);
-    const evCache = canvas.elevation.elevationPixelCache;
-
-    for ( const tile of tiles ) {
-      const cache = tile._textureData?._evPixelCache;
-      if ( !cache ) continue;
-
-      // This is tricky, b/c we want terrain to count if it is the same height as the tile.
-      // So if a token is 40% on a tile at elevation 30, 40% on terrain elevation 30 and
-      // 20% on transparent tile with elevation 0, the token elevation should be 30.
-      // In the easy cases, there is 50% coverage for either tile or terrain alone.
-      // But the hard case makes us iterate over both tile and terrain at once,
-      // b/c otherwise we cannot tell where the overlaps occur. E.g., 30% tile, 20% terrain?
-      let sum = 0;
-      const tileE = tile.elevationE;
-      const pixelE = canvas.elevation.elevationToPixelValue(tileE);
-      const countFn = (value, _i, localX, localY) => {
-         if ( value > alphaThreshold ) return sum += 1;
-         const canvas = cache._toCanvasCoordinates(localX, localY);
-         const terrainValue = evCache.pixelAtCanvas(canvas.x, canvas.y);
-         if ( terrainValue.almostEqual(pixelE) ) return sum += 1;
-         return;
-      }
-      const denom = cache.applyFunctionToShape(countFn, tokenShape, skip);
-      const percentCoverage = sum / denom;
-      if ( percentCoverage > 0.5 ) {
-        selectedTile.tile = tile;
-        return tile.elevationE;
-      }
-    }
-
-  } else {
-    for ( const tile of tiles ) {
-      if ( tile.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold) ) {
-        selectedTile.tile = tile;
-        return tile.elevationE;
-      }
+  // Token shape only required when averaging
+  tokenShape ??= averageTiles
+    ? canvas.elevation._tokenShape(token.getTopLeft(tokenCenter.x, tokenCenter.y), token.w, token.h)
+    : undefined;
+  for ( const tile of tiles ) {
+    if ( tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, tokenShape) ) {
+      return tile;
     }
   }
 
   // No tile matches the criteria
   return null;
+}
+
+/**
+ * Determine if a tile "supports" a token, meaning the token would not fall through.
+ * Token would fall through if tile is transparent unless terrain would fill the gap(s).
+ * @param {Tile} tile                                 Tile to test
+ * @param {Point} tokenCenter                         Center point
+ * @param {number} tokenElevation                     Maximum elevation point to test
+ * @param {number} averageTiles                       Positive integer to skip pixels when averaging.
+ *                                                    0 if point-based.
+ * @param {number} alphaThreshold                     Threshold to determine transparency
+ * @param {PIXI.Rectangle|PIXI.Polygon} [tokenShape]  Shape representing a token boundary
+ *                                                    Required if not averaging
+ * @returns {boolean}
+ */
+export function tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, tokenShape) {
+  const cache = tile._textureData?._evPixelCache;
+  if ( !cache ) return false;
+  const tileE = tile.elevationE;
+  if ( !almostLessThan(tileE, tokenElevation) || !tile.bounds.contains(tokenCenter.x, tokenCenter.y) ) return false;
+  if ( !averageTiles ) return cache.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold);
+
+  // This is tricky, b/c we want terrain to count if it is the same height as the tile.
+  // So if a token is 40% on a tile at elevation 30, 40% on terrain elevation 30 and
+  // 20% on transparent tile with elevation 0, the token elevation should be 30.
+  // In the easy cases, there is 50% coverage for either tile or terrain alone.
+  // But the hard case makes us iterate over both tile and terrain at once,
+  // b/c otherwise we cannot tell where the overlaps occur. E.g., 30% tile, 20% terrain?
+  const evCache = canvas.elevation.elevationPixelCache;
+  const pixelE = canvas.elevation.elevationToPixelValue(tileE)
+  let sum = 0;
+  const countFn = (value, _i, localX, localY) => {
+     if ( value > alphaThreshold ) return sum += 1;
+     const canvas = cache._toCanvasCoordinates(localX, localY);
+     const terrainValue = evCache.pixelAtCanvas(canvas.x, canvas.y);
+     if ( terrainValue.almostEqual(pixelE) ) return sum += 1;
+     return;
+  }
+  const denom = cache.applyFunctionToShape(countFn, tokenShape, averageTiles);
+  const percentCoverage = sum / denom;
+  return percentCoverage > 0.5;
 }
