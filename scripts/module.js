@@ -120,7 +120,25 @@ Hooks.once("init", function() {
      * If undefined, will use terrain height.
      * @type {number|undefined}
      */
-    terrainStep: undefined
+    terrainStep: undefined,
+
+    /**
+     * TravelElevation.
+     * When auto-averaging is enabled, this value will be used to average over terrain when
+     * calculating token travel elevation. 0 means do not average, 1+ means test every N pixels.
+     * Should be a positive integer or 0.
+     * @type {number}
+     */
+    averageTerrain: 1, // Terrain elevation already compressed, so makes sense to not skip
+
+    /**
+     * TravelElevation.
+     * When auto-averaging is enabled, this value will be used to average over tiles when
+     * calculating token travel elevation. 0 means do not average, 1+ means test every N pixels.
+     * Should be a positive integer or 0.
+     * @type {number}
+     */
+    averageTiles: 4
   }
 });
 
