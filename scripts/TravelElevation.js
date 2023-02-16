@@ -11,6 +11,7 @@ CONFIG
 import { MODULE_ID } from "./const.js";
 import { almostLessThan, almostBetween } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 import { getSetting, getSceneSetting, SETTINGS, averageTilesSetting, averageTerrainSetting } from "./settings.js";
 import { isTokenOnGround, isTokenOnTile, tokenTerrainElevation, tileAtTokenElevation } from "./tokens.js";
 
@@ -18,6 +19,7 @@ import { isTokenOnGround, isTokenOnTile, tokenTerrainElevation, tileAtTokenEleva
 api = game.modules.get("elevatedvision").api
 TravelElevation = api.TravelElevation
 Draw = CONFIG.GeometryLib.Draw
+Point3d = CONFIG.GeometryLib.threeD.Point3d
 draw = new Draw()
 
 draw.clearDrawings()
@@ -102,7 +104,7 @@ export class TravelElevation {
   /** @type {Tile[]} */
   #tiles;
 
-  /** @type {Point[]} */
+  /** @type {Point3d[]} */
   #tileIxs;
 
   /** @type {Point3d[]} */
@@ -558,7 +560,13 @@ export class TravelElevation {
       opts.skip = this.averageTile;
     }
 
-    return cache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
+    const ix = cache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
+    if ( !ix ) return null;
+    const pt3d = new Point3d(ix.x, ix.y, tile.elevationZ);
+    pt3d.e = tile.elevationE;
+    pt3d.t0 = ix.t0;
+    pt3d.tile = tile;
+    return pt3d;
   }
 
   /**
@@ -636,7 +644,12 @@ export class TravelElevation {
       const ixs = cache.rayIntersectsBoundary(travelRay, alphaThreshold);
       if ( ixs.length < 2 ) continue;
 
-      tileIxs.push(ixs[0]);
+      const ix = ixs[0];
+      const pt3d = new Point3d(ix.x, ix.y, tile.elevationZ);
+      pt3d.e = tile.elevationE;
+      pt3d.t0 = ix.t0;
+      pt3d.tile = tile;
+      tileIxs.push(pt3d);
     }
 
     // Closest intersection to A is last in the queue, so we can pop it.
@@ -682,5 +695,19 @@ export class TravelElevation {
       Draw.labelPoint(PIXI.Point.midPoint(startPt, endPt), changes.currE);
     }
     Draw.labelPoint(results.travelRay.B, results.finalElevation);
+  }
+
+  /**
+   * For debugging, draw the terrain elevations.
+   */
+  drawTerrainElevations() {
+    const color = Draw.COLORS.green;
+    Draw.segment(this.travelRay, { color });
+
+    const tes = this.terrainElevations;
+    for ( const te of tes ) {
+      Draw.point(te, { color });
+      Draw.labelPoint(te, te.e);
+    }
   }
 }
