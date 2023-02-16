@@ -743,11 +743,11 @@ export class PixelCache extends PIXI.Rectangle {
     const ixs = bounds.segmentIntersections(A, B);
     const CSZ = PIXI.Rectangle.CS_ZONES;
     if ( bounds._getZone(A) === CSZ.INSIDE ) {
-      A.t0 = 0;
+      A.t0 ??= 0;
       ixs.unshift(A);
     }
     if ( bounds._getZone(B) === CSZ.INSIDE ) {
-      B.t0 = 1;
+      B.t0 ??= 1;
       ixs.push(B);
     }
     return ixs;

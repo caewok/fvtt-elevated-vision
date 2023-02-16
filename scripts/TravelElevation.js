@@ -302,7 +302,9 @@ export class TravelElevation {
 
     // Tiles are present and/or flying is enabled.
     out.trackingRequired = true;
-    const { finalElevation, elevationChanges } = this._trackElevationChanges(startElevation, currState);
+    const { finalElevation, elevationChanges } = fly
+      ? this._trackElevationChangesWithFlight(startElevation, currState)
+      : this._trackElevationChanges(startElevation, currState);
     out.finalElevation = finalElevation;
     out.elevationChanges = elevationChanges;
     return out;
@@ -322,7 +324,101 @@ export class TravelElevation {
       travelRay,
       tileStep,
       terrainStep,
-      fly,
+      token,
+      debug,
+      averageTiles,
+      alphaThreshold,
+      tiles } = this;
+
+    const tokenCenter = token.center;
+    const tokenTL = token.getTopLeft(tokenCenter.x, tokenCenter.y);
+    const tokenBorder = canvas.elevation._tokenShape(tokenTL, token.w, token.h);
+
+    // At each intersection group, update the current elevation based on ground unless already on tile.
+    // If the token elevation equals that of the tile, the token is now on the tile.
+    // Keep track of the seen intersections, in case of duplicates.
+    const tSeen = new Set();
+    while ( tileIxs.length ) {
+      const ix = tileIxs.pop();
+      if ( tSeen.has(ix.t0) ) continue;
+      tSeen.add(ix.t0);
+      if ( debug ) Draw.point(ix, { color: STATE_COLOR[currState], radius: 3 });
+
+      // Determine the destination type and associated elevation.
+      // (1) Use the immediately prior center terrain elevation or the current elevation as the start
+      const prevT = ix.t0 - stepT;
+      const prevPt = travelRay.project(prevT);
+      const prevE = Math.max(currE, tokenTerrainElevation(token, { tokenCenter: prevPt, useAveraging: false }));
+
+      // (2) Locate any tiles at this location with sufficiently near elevation.
+      //     Update the token shape location
+      let tokenShape;
+      if ( averageTiles ) {
+        const dx = prevPt.x - tokenCenter.x;
+        const dy = prevPt.y - tokenCenter.y;
+        tokenShape = tokenBorder.translate(dx, dy);
+      }
+
+      const matchingTile = tileAtTokenElevation(token, {
+        tokenCenter: ix,
+        tokenElevation: prevE,
+        tokenShape,
+        averageTiles,
+        alphaThreshold,
+        tiles });
+
+      const terrainE = tokenTerrainElevation(token, { tokenCenter: ix });
+
+      // (3) Check if we are on a tile; otherwise on terrain
+      [currState, currE] = matchingTile ? [TILE, matchingTile.elevationE] : [TERRAIN, terrainE];
+
+      // (4) Remember the current tile for next iteration.
+      currTile = matchingTile;
+
+      // (5) Update the tracking results.
+      elevationChanges.push({ ix, currState, currE });
+
+      // (6) Depending on the new current state, look for additional tile or terrain intersections along the ray.
+      //       const startT = ix.t0 + stepT;
+      switch ( currState ) {
+        case TERRAIN: {
+          const cliffPt = this._findTerrainCliff(ix.t0);
+          if ( cliffPt ) this.#addIx(tileIxs, cliffPt, { color: Draw.COLORS.green });
+          break;
+        }
+
+        case TILE: {
+          const tilePt = this._findTileHole(currTile, ix.t0);
+          if ( tilePt ) this.#addIx(tileIxs, tilePt, { color: Draw.COLORS.yellow });
+
+          // Find next location where terrain pokes through tile, if any.
+          const terrainPt = this._findElevatedTerrain(currE, ix.t0);
+          if ( terrainPt ) this.#addIx(tileIxs, terrainPt, { color: Draw.COLORS.green });
+          break;
+        }
+      }
+    }
+
+    let finalElevation = currE;
+    if ( currState === TERRAIN ) finalElevation = tokenTerrainElevation(token, { tokenCenter: travelRay.B });
+
+    return { finalElevation, elevationChanges };
+  }
+
+  /**
+   * Track elevation changes along a ray
+   */
+  _trackElevationChangesWithFlight(startElevation, currState) {
+    const tileIxs = [...this.tileIxs]; // Make a copy that we can modify in the loop.
+    let currE = startElevation;
+    let currTile;
+    const elevationChanges = [];
+    const stepT = this.#stepT;
+    const { TERRAIN, TILE, FLY } = TravelElevation.TOKEN_ELEVATION_STATE;
+    const {
+      travelRay,
+      tileStep,
+      terrainStep,
       token,
       debug,
       averageTiles,
@@ -371,29 +467,23 @@ export class TravelElevation {
 
       // (3) Check if we are on a tile
       if ( matchingTile ) {
-        currState = TILE;
-        currE = matchingTile.elevationE;
+        [currState, currE] = [TILE, matchingTile.elevationE];
       } else
 
       // (4) Check if we are flying and "landing"
-      if ( fly && currState === FLY ) {
+      if ( currState === FLY ) {
         const step = terrainStep;
         currState = almostLessThan(currE - step, terrainE) ? TERRAIN : FLY;
         if ( currState === TERRAIN ) currE = terrainE;
       } else
 
-      // (5) If flying is enabled, direction of movement must be checked.
-      //     Use the immediately previous terrain or tile elevation.
-      //     If a matching tile is found, we are not flying.
-      if ( fly && !matchingTile) {
+      // (5) If flying is enabled, fly if the movement exceeds the step size.
+      //     If there is a matching tile, we are not flying (move to tile instead)
+      if ( !matchingTile) {
         const step = currTile ? tileStep : terrainStep;
-        let prevE = currTile?.elevationE;
-        if ( !currTile ) {
-          const prevT = ix.t0 - stepT;
-          const prevPt = travelRay.project(prevT);
-          prevE = tokenTerrainElevation(token, { tokenCenter: prevPt });
-        }
-        [currState, currE] = ((currE + step) < prevE) ? [FLY, prevE] : [TERRAIN, terrainE];
+        // If the current state is terrain, get the immediately prior terrain
+
+        [currState, currE] = ((terrainE + step) < currE) ? [FLY, currE] : [TERRAIN, terrainE];
       } else
 
       // (6) Otherwise, on terrain.
@@ -440,7 +530,7 @@ export class TravelElevation {
             if ( !cache ) return null;
 
             const tileIxs = cache.rayIntersectsBoundary(destRay, this.alphaThreshold);
-            if ( tileIxs.length ) ixs.push(tileIxs[0]);
+            if ( tileIxs.length && tileIxs[0].t0 > ix.t0 ) ixs.push(tileIxs[0]);
           }
 
           // Find the elevation intersection.
@@ -459,7 +549,7 @@ export class TravelElevation {
     let finalElevation = currE;
     if ( currState === TERRAIN ) finalElevation = tokenTerrainElevation(token, { tokenCenter: travelRay.B });
 
-    return { finalElevation: currE, elevationChanges };
+    return { finalElevation, elevationChanges };
   }
 
   #addIx(trackingArray, pt, {color, radius = 2} = {}) {
