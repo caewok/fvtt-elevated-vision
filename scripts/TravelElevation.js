@@ -105,6 +105,9 @@ export class TravelElevation {
   /** @type {Point[]} */
   #tileIxs;
 
+  /** @type {Point3d[]} */
+  #terrainElevations;
+
   /** @type {Token} */
   token;
 
@@ -189,6 +192,61 @@ export class TravelElevation {
    */
   get tileIxs() {
     return this.#tileIxs || (this.#tileIxs = this._tileRayIntersections());
+  }
+
+  /**
+   * Terrain elevation points along the ray.
+   * @type {Point3d[]}
+   */
+  get terrainElevations() {
+    return this.#terrainElevations || (this.#terrainElevations = this.calculateTerrainElevationsAlongRay());
+  }
+
+  /**
+   * For this ray, determine terrain changes along the path.
+   * @returns [Point3d[]]  3d point array representing points at which elevation changes.
+   * Each point represents the terrain at that point and rightward (A --> B) along the ray.
+   * Averaging is not accounted for.
+   */
+  calculateTerrainElevationsAlongRay() {
+    const travelRay = this.travelRay;
+    const stepT = this.#stepT;
+    const ev = canvas.elevation;
+    const evCache = ev.elevationPixelCache;
+    const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
+
+    // Localize the ray for speed.
+    const A = evCache._fromCanvasCoordinates(travelRay.A.x, travelRay.A.y);
+    const B = evCache._fromCanvasCoordinates(travelRay.B.x, travelRay.B.y);
+    const localRay = new Ray(A, B);
+
+    // Array of 3d points
+    const out = [];
+
+    // Function to test if the given pixel has changed versus last.
+    let currValue;
+    const cmp = value => !value.almostEqual(currValue);
+
+    // Initialize and loop until the ray is traversed.
+    let t = 0;
+    while ( t < 1 ) {
+      const local = evCache._nextPixelValueAlongLocalRay(localRay, cmp, stepT, t);
+      if ( local ) {
+        let pt = evCache._toCanvasCoordinates(local.x, local.y);
+        let e = ev.pixelValueToElevation(local.value);
+        let z = gridUnitsToPixels(e);
+        let pt3d = new Point3d(pt.x, pt.y, z);
+        pt3d.e = e;
+        pt3d.t0 = local.t0;
+        out.push(pt3d);
+        t = local.t0 + stepT; // + stepT;
+        currValue = local.value;
+
+      } else t = 1;
+    }
+
+    // Don't need the B point if it did not change.
+    return out;
   }
 
   /**
