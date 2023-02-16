@@ -344,10 +344,10 @@ export class TravelElevation {
       if ( debug ) Draw.point(ix, { color: STATE_COLOR[currState], radius: 3 });
 
       // Determine the destination type and associated elevation.
-      // (1) Use the immediately prior terrain elevation or the current elevation as the start
+      // (1) Use the immediately prior center terrain elevation or the current elevation as the start
       const prevT = ix.t0 - stepT;
       const prevPt = travelRay.project(prevT);
-      const prevE = Math.max(currE, tokenTerrainElevation(token, { tokenCenter: prevPt }));
+      const prevE = Math.max(currE, tokenTerrainElevation(token, { tokenCenter: prevPt, useAveraging: false }));
 
       // (2) Locate any tiles at this location with sufficiently near elevation.
       //     Update the token shape location
@@ -455,6 +455,9 @@ export class TravelElevation {
         }
       }
     }
+
+    let finalElevation = currE;
+    if ( currState === TERRAIN ) finalElevation = tokenTerrainElevation(token, { tokenCenter: travelRay.B });
 
     return { finalElevation: currE, elevationChanges };
   }

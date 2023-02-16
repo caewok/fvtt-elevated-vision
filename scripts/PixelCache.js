@@ -639,6 +639,7 @@ export class PixelCache extends PIXI.Rectangle {
 
     if ( foundPt ) {
       const t0 = foundPt.t0;
+      const value = foundPt.value;
       foundPt = this._toCanvasCoordinates(foundPt.x, foundPt.y);
       foundPt.t0 = t0;
       foundPt.value = value;

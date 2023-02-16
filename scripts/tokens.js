@@ -8,7 +8,7 @@ CONFIG
 
 import { log, almostLessThan } from "./util.js";
 import { MODULE_ID } from "./const.js";
-import { getSceneSetting, SETTINGS, averageTilesSetting } from "./settings.js";
+import { getSceneSetting, getSetting, SETTINGS, averageTilesSetting } from "./settings.js";
 import { TravelElevation } from "./TravelElevation.js";
 
 /* Token movement flow:
@@ -263,6 +263,7 @@ export function isTokenOnTile(token, { tokenCenter, tokenElevation, averageTiles
  * @returns {number} Elevation in grid units.
  */
 export function tokenGroundElevation(token, { tokenCenter, tokenElevation, useAveraging, considerTiles = true } = {}) {
+  useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
   let elevation = null;
   if ( considerTiles ) {
     const averageTiles = useAveraging ? averageTilesSetting() : 0;
@@ -285,6 +286,7 @@ export function tokenGroundElevation(token, { tokenCenter, tokenElevation, useAv
  * @returns {number} Elevation in grid units.
  */
 export function tokenTerrainElevation(token, { tokenCenter, useAveraging } = {}) {
+  useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
   tokenCenter ??= token.center;
   if ( useAveraging ) {
     const tokenTLCorner = token.getTopLeft(tokenCenter.x, tokenCenter.y);
