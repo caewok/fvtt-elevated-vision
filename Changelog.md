@@ -1,9 +1,15 @@
 ## 0.4.0
+Overhaul the saving and loading of the elevation texture so lower resolution images can be used. Should resolve issue #38 (large maps) and generally improve speed.
+
+Use a pixel cache for elevation texture and tile textures. Add patch for [Foundry issue #8831](https://github.com/foundryvtt/foundryvtt/issues/8831). Improves speed and allows for more complex auto-elevations.
+
 Move selection of auto-elevation and shadow algorithm to the scene configuration. As a consequence, the world settings now operate as default values for new scenes.
 
-Added an optional "fly" button to the token controls when auto-elevation is enabled. When the button is enabled, it tells EV that the token should fly if it encounters a lower elevation.
+Added an optional "fly" button to the token controls when auto-elevation is enabled. When the button is enabled, it tells EV that the token should fly if it encounters a lower elevation (like a terrain cliff or a tile hole).
 
-New methodology to determine elevation automatically. Auto-elevation will consider a token to be "on-the-ground" if the token elevation equals the terrain elevation or the elevation of an overhead tile at that position. Transparent portions of tiles are ignored (treated as "holes"). If the fly button is not enabled, as a token on the ground moves, it's elevation will adjust up or down. If the fly button is enabled, a token's elevation will not change if it would result in a movement down further than the token height. In effect, the token will be treated as "flying" over valleys or terrain holes.
+New methodology to determine elevation automatically. Auto-elevation will consider a token to be "on-the-ground" if the token elevation equals the terrain elevation or the elevation of an overhead tile at that position. Transparent portions of tiles are ignored (treated as "holes"). If the fly button is not enabled, as a token on the ground moves, it's elevation will adjust up or down. If the fly button is enabled, a token's elevation will not change if it would result in a movement down further than the token height. In effect, the token will be treated as "flying" over valleys or terrain holes. May resolve issue #28.
+
+The new auto-elevation allows for use of bridges over canyons and tiles with transparent holes.
 
 Possible fix for multiple changes to the minimum elevation when using Levels 3D. Auto-elevation and shading will be disabled when a scene is using 3D.
 
