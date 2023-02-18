@@ -1009,42 +1009,42 @@ export class TilePixelCache extends PixelCache {
    * @inherits
    */
   _calculateToLocalTransform() {
-    // Translate so x,y is 0,0
-    const {x, y} = this;
-    const mXYTranslate = Matrix.translation(-x, -y);
-
-    // Scale the canvas width/height back to texture width/height, if not 1:1.
-    // (Must have top left corner at 0,0 for this to work properly.)
-    const { proportionalWidth, proportionalHeight } = this;
-    const mProportion = Matrix.scale(1 / proportionalWidth, 1 / proportionalHeight);
-
-    // Translate so the center is at 0, 0
-    const { textureWidth, textureHeight } = this;
-    const mCenterTranslate = Matrix.translation(-(textureWidth * 0.5), -(textureHeight * 0.5));
+    // 1. Clear the rotation
+    // Translate so the center is 0,0
+    const { x, y, width, height } = this;
+    const mCenterTranslate = Matrix.translation(-(width * 0.5) - x, -(height * 0.5) - y);
 
     // Rotate around the Z axis
     // (The center must be 0,0 for this to work properly.)
     const rotation = -this.rotation;
     const mRot = Matrix.rotationZ(rotation, false);
 
-    // Scale
+    // 2. Clear the scale
+    // (The center must be 0,0 for this to work properly.)
     const { scaleX, scaleY } = this;
     const mScale = Matrix.scale(1 / scaleX, 1 / scaleY);
 
+    // 3. Clear the width/height
     // Translate so top corner is 0,0
-    const mCornerTranslate = Matrix.translation(textureWidth * 0.5, textureHeight * 0.5);
+    const { textureWidth, textureHeight, proportionalWidth, proportionalHeight } = this;
+    const currWidth = textureWidth * proportionalWidth;
+    const currHeight = textureHeight * proportionalHeight;
+    const mCornerTranslate = Matrix.translation(currWidth * 0.5, currHeight * 0.5);
 
-    // Scale based on resolution.
+    // Scale the canvas width/height back to texture width/height, if not 1:1.
+    // (Must have top left corner at 0,0 for this to work properly.)
+    const mProportion = Matrix.scale(1 / proportionalWidth, 1 / proportionalHeight);
+
+    // 4. Scale based on resolution of the underlying pixel data
     const resolution = this.scale.resolution;
     const mRes = Matrix.scale(resolution, resolution);
 
     // Combine the matrices.
-    return mXYTranslate
-      .multiply3x3(mProportion)
-      .multiply3x3(mCenterTranslate)
+    return mCenterTranslate
       .multiply3x3(mRot)
       .multiply3x3(mScale)
       .multiply3x3(mCornerTranslate)
+      .multiply3x3(mProportion)
       .multiply3x3(mRes);
   }
 
