@@ -194,7 +194,7 @@ export class PixelCache extends PIXI.Rectangle {
   #maximumPixelValue = 255;
 
   /** @type {Map<PIXI.Rectangle>} */
-  #thresholdBoundingBoxes = new Map();
+  #thresholdCanvasBoundingBoxes = new Map();
 
   /**
    * @type {object}
@@ -238,8 +238,8 @@ export class PixelCache extends PIXI.Rectangle {
   /**
    * Test whether the pixel cache contains a specific canvas point.
    * See Tile.prototype.containsPixel
-   * @param {number} x
-   * @param {number} y
+   * @param {number} x    Canvas x-coordinate
+   * @param {number} y    Canvas y-coordinate
    * @param {number} [alphaThreshold=0.75]  Value required for the pixel to "count."
    * @returns {boolean}
    */
@@ -267,6 +267,9 @@ export class PixelCache extends PIXI.Rectangle {
     return this.#toCanvasTransform ?? (this.#toCanvasTransform = this.toLocalTransform.invert());
   }
 
+  /** @type {number} */
+  get maximumPixelValue() { return this.#maximumPixelValue; }
+
   /**
    * Reset transforms. Typically used when size or resolution has changed.
    */
@@ -274,7 +277,7 @@ export class PixelCache extends PIXI.Rectangle {
     this.#toLocalTransform = undefined;
     this.#toCanvasTransform = undefined;
     this.#localFrame = undefined;
-    this.#thresholdBoundingBoxes.clear();
+    this.#thresholdCanvasBoundingBoxes.clear();
   }
 
   /**
@@ -300,20 +303,8 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
    */
   getThresholdCanvasBoundingBox(threshold = 0.75) {
-    const bounds = this.getThresholdBoundingBox(threshold);
-    const TL = this._toCanvasCoordinates(bounds.left, bounds.top);
-    const BR = this._toCanvasCoordinates(bounds.right, bounds.bottom);
-    return new PIXI.Rectangle(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y);
-  }
-
-  /**
-   * Cache a bounding box based on a specific threshold.
-   * @param {number} [threshold=0.75]   Values lower than this will be ignored around the edges.
-   * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
-   */
-  getThresholdBoundingBox(threshold = 0.75) {
-    const map = this.#thresholdBoundingBoxes;
-    if ( !map.has(threshold) ) map.set(threshold, this.#calculateBoundingBox(threshold));
+    const map = this.#thresholdCanvasBoundingBoxes;
+    if ( !map.has(threshold) ) map.set(threshold, this.#calculateCanvasBoundingBox(threshold));
     return map.get(threshold);
   }
 
@@ -322,7 +313,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} [threshold=0.75]   Values lower than this will be ignored around the edges.
    * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
    */
-  #calculateBoundingBox(threshold=0.75) {
+  #calculateCanvasBoundingBox(threshold=0.75) {
     threshold = threshold * this.#maximumPixelValue;
     let minX = undefined;
     let maxX = undefined;
@@ -331,12 +322,10 @@ export class PixelCache extends PIXI.Rectangle {
 
     // Map the pixels
     const pixels = this.pixels;
-    const width = this.#localWidth;
     for ( let i = 0; i < pixels.length; i += 1 ) {
       const a = pixels[i];
       if ( a > threshold ) {
-        const x = i % width;
-        const y = ~~(i / width); // Floor
+        const { x, y } = this._canvasAtIndex(i);
         if ( (minX === undefined) || (x < minX) ) minX = x;
         else if ( (maxX === undefined) || (x + 1 > maxX) ) maxX = x + 1;
         if ( (minY === undefined) || (y < minY) ) minY = y;
@@ -353,9 +342,9 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {number}
    */
   _indexAtLocal(x, y) {
-    // Use nearest to avoid rounding issues such as x = 7.9999998.
-    // return ((~~y) * this.#localWidth) + (~~x);
-    return (roundFastPositive(y) * this.#localWidth) + roundFastPositive(x);
+    // Use floor to ensure consistency when converting to/from coordinates <--> index.
+    return ((~~y) * this.#localWidth) + (~~x);
+    //return (roundFastPositive(y) * this.#localWidth) + roundFastPositive(x);
   }
 
   /**

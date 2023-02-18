@@ -721,17 +721,21 @@ export class TravelElevation {
         if ( startT >= ixs[0].t0 ) return null;
       } else if ( bInside ) {
         // Intersection is where tile becomes solid along ray.
-        startT = Math.max(startT, ixs[0].t0);
+        // Use set steps to avoid issues with rounding.
+        const quotient = ~~(ixs[0].t0 / stepT);
+        startT = Math.max(stepT * quotient, startT);
+
       } else {
         // Neither inside; first intersection becomes solid; second becomes transparent.
-        if ( startT >= ixs[1].t0 ) return null;
-        startT = Math.max(startT, ixs[0].t0);
+        if ( startT > ixs[1].t0 ) return null;
+        const quotient = ~~(ixs[0].t0 / stepT);
+        startT = Math.max(stepT * quotient, startT);
       }
     }
 
     // Function to test if the given pixel is within the threshold.
     const pixelThreshold = alphaThreshold * TravelElevation.#maximumPixelValue;
-    const cmp = value => value >= pixelThreshold;
+    const cmp = value => value > pixelThreshold;
 
     const opts = { stepT, startT };
     if ( this.averageTiles ) {
