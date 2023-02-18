@@ -41,6 +41,12 @@ te.fly = true;
 results = te.calculateElevationAlongRay();
 TravelElevation.drawResults(results)
 
+// Test tile cache coordinates
+[tile] = canvas.tiles.placeables
+cache = tile._textureData._evPixelCache
+cache.draw()
+
+
 
 // Test tile transparency
 tile = te.tiles[0]

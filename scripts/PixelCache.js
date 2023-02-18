@@ -699,7 +699,7 @@ export class PixelCache extends PIXI.Rectangle {
 
       if ( foundValue ) {
         pt.t0 = t;
-        pt.value = value;
+        pt.value = foundValue;
         return pt;
       }
       t += stepT;
@@ -955,60 +955,53 @@ export class TilePixelCache extends PixelCache {
    * @inherits
    */
   constructor(pixels, width, opts = {}) {
-    if ( opts.tile ) {
-      opts.x ??= opts.tile.x;
-      opts.y ??= opts.tile.y;
-      width ??= opts.tile.texture.width;
-      opts.height ??= opts.tile.texture.height;
-    }
-
     super(pixels, width, opts);
-    if ( opts.tile ) {
-      this.tile = opts.tile;
-      this.#setTileScaleData(opts.tile);
-    }
-
+    this.tile = opts.tile;
+    this._resize();
   }
 
   /** @type {numeric} */
-  get scaleX() { return this.scale.sscX * this.scale.ascX; }
+  get scaleX() { return this.tile.document.texture.scaleX; }
 
   /** @type {numeric} */
-  set scaleX(value) {
-    this.scale.sscX = Math.sign(value);
-    this.scale.ascX = Math.abs(value);
-  }
+  get scaleY() { return this.tile.document.texture.scaleY; }
 
   /** @type {numeric} */
-  get scaleY() { return this.scale.sscY * this.scale.ascY; }
+  get rotation() { return Math.toRadians(this.tile.document.rotation); }
 
   /** @type {numeric} */
-  set scaleY(value) {
-    this.scale.sscY = Math.sign(value);
-    this.scale.ascY = Math.abs(value);
-  }
+  get proportionalWidth() { return this.tile.document.width / this.tile.texture.width; }
 
   /** @type {numeric} */
-  get rotation() { return this.scale.rotation; }
+  get proportionalHeight() { return this.tile.document.height / this.tile.texture.height; }
 
   /** @type {numeric} */
-  set rotation(value) { this.scale.rotation = Math.normalizeRadians(value); }
+  get textureWidth() { return this.tile.texture.width; }
 
   /** @type {numeric} */
-  get rotationDegrees() { return Math.toDegrees(this.scale.rotation); }
+  get textureHeight() { return this.tile.texture.height; }
 
   /** @type {numeric} */
-  set rotationDegrees(value) { this.scale.rotation = Math.toRadians(value); }
+  get tileX() { return this.tile.document.x; }
+
+  /** @type {numeric} */
+  get tileY() { return this.tile.document.y; }
+
+  /** @type {numeric} */
+  get tileWidth() { return this.tile.document.width; }
+
+  /** @type {numeric} */
+  get tileHeight() { return this.tile.document.height; }
 
   /**
-   * Set scaling data from a given tile.
-   * @param {Tile} tile
+   * Resize canvas dimensions for the tile.
    */
-  #setTileScaleData(tile) {
-    const tileDoc = tile.document;
-    this.scaleX = tileDoc.texture.scaleX;
-    this.scaleY = tileDoc.texture.scaleY;
-    this.rotationDegrees = tileDoc.rotation;
+  _resize(x, y, width, height) {
+    this.x = x ?? this.tileX;
+    this.y = y ?? this.tileY;
+    this.width = width ?? this.tileWidth;
+    this.height = height ?? this.tileHeight;
+    this.clearTransforms();
   }
 
   /**
@@ -1016,9 +1009,18 @@ export class TilePixelCache extends PixelCache {
    * @inherits
    */
   _calculateToLocalTransform() {
+    // Translate so x,y is 0,0
+    const {x, y} = this;
+    const mXYTranslate = Matrix.translation(-x, -y);
+
+    // Scale the canvas width/height back to texture width/height, if not 1:1.
+    // (Must have top left corner at 0,0 for this to work properly.)
+    const { proportionalWidth, proportionalHeight } = this;
+    const mProportion = Matrix.scale(1 / proportionalWidth, 1 / proportionalHeight);
+
     // Translate so the center is at 0, 0
-    const { width, height } = this;
-    const mTranslate = Matrix.translation(-(width * 0.5) - this.x, -(height * 0.5) - this.y);
+    const { textureWidth, textureHeight } = this;
+    const mCenterTranslate = Matrix.translation(-(textureWidth * 0.5), -(textureHeight * 0.5));
 
     // Rotate around the Z axis
     // (The center must be 0,0 for this to work properly.)
@@ -1026,31 +1028,24 @@ export class TilePixelCache extends PixelCache {
     const mRot = Matrix.rotationZ(rotation, false);
 
     // Scale
-    const { ascX, ascY, sscX, sscY } = this.scale;
-    const mScale = Matrix.scale(1 / (ascX * sscX), 1 / (ascY * sscY));
+    const { scaleX, scaleY } = this;
+    const mScale = Matrix.scale(1 / scaleX, 1 / scaleY);
 
     // Translate so top corner is 0,0
-    const mCenter = Matrix.translation(width * 0.5, height * 0.5);
+    const mCornerTranslate = Matrix.translation(textureWidth * 0.5, textureHeight * 0.5);
 
     // Scale based on resolution.
     const resolution = this.scale.resolution;
     const mRes = Matrix.scale(resolution, resolution);
 
     // Combine the matrices.
-    return mTranslate.multiply3x3(mRot).multiply3x3(mScale).multiply3x3(mCenter).multiply3x3(mRes);
-  }
-
-  /**
-   * Get a canvas bounding box based on a specific threshold.
-   * @param {number} [threshold=0.75]   Values lower than this will be ignored around the edges.
-   * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
-   */
-  getThresholdCanvasBoundingBox(threshold = 0.75) {
-    const bounds = this.getThresholdBoundingBox(threshold);
-    const TL = this._toCanvasCoordinates(bounds.left, bounds.top);
-    const BR = this._toCanvasCoordinates(bounds.right, bounds.bottom);
-    const r = this.rotation;
-    return PIXI.Rectangle.fromRotation(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y, r).normalize();
+    return mXYTranslate
+      .multiply3x3(mProportion)
+      .multiply3x3(mCenterTranslate)
+      .multiply3x3(mRot)
+      .multiply3x3(mScale)
+      .multiply3x3(mCornerTranslate)
+      .multiply3x3(mRes);
   }
 
   /**
@@ -1065,8 +1060,6 @@ export class TilePixelCache extends PixelCache {
     const texture = tile.texture;
     opts.tile = tile;
     opts.channel ??= 3;
-    opts.x = tile.x;
-    opts.y = tile.y;
     return this.fromTexture(texture, opts);
   }
 
@@ -1080,13 +1073,14 @@ export class TilePixelCache extends PixelCache {
   static fromOverheadTileAlpha(tile) {
     if ( !tile.document.overhead ) return this.fromTileAlpha(tile);
 
+    // Texture width/height not necessarily same as canvas width/height for tiles.
+
     // The aw and ah properties must be rounded to determine the dimensions.
     const localWidth = tile._textureData.aw;
-    const width = tile.texture.width;
-    const resolution = localWidth / width;
+    const texWidth = tile.texture.width;
+    const resolution = localWidth / texWidth;
 
     // Resolution consistent with `_createTextureData` which divides by 4.
-    return new this(tile._textureData.pixels, width, { tile, resolution });
+    return new this(tile._textureData.pixels, texWidth, { tile, resolution });
   }
-
 }
