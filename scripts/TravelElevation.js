@@ -683,7 +683,7 @@ export class TravelElevation {
 
     // Function to test if the given pixel is under the threshold.
     const pixelThreshold = alphaThreshold * TravelElevation.#maximumPixelValue;
-    const cmp = value => value < pixelThreshold;
+    const cmp = value => value <= pixelThreshold;
 
     const opts = { stepT, startT };
     if ( this.averageTiles ) {
