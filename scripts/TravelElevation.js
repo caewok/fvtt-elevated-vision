@@ -13,7 +13,7 @@ import { almostLessThan, almostBetween } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { getSetting, getSceneSetting, SETTINGS, averageTilesSetting, averageTerrainSetting } from "./settings.js";
-import { isTokenOnGround, isTokenOnTile, tokenTerrainElevation, tileAtTokenElevation } from "./tokens.js";
+import { tokenTerrainElevation, tileAtTokenElevation } from "./tokens.js";
 
 /* Testing
 api = game.modules.get("elevatedvision").api
@@ -310,9 +310,14 @@ export class TravelElevation {
     };
 
     // If flying not enabled and the token is currently flying, bail out.
-    let currState = TravelElevation.currentTokenState(token,
-      { tokenCenter: travelRay.A, tokenElevation: startElevation });
-    if ( !fly && currState === FLY ) return out; // Flying
+    // For averaging, consider near values sufficient.
+    // If within token height of ground, fly --> ground.
+    // If within token height of tile, fly --> tile.
+
+
+    const { currState, currE } = this.currentTokenState({ tokenCenter: travelRay.A, tokenElevation: startElevation });
+    if ( currState === FLY && !fly ) return out;
+
 
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
     out.checkTerrain = true;
@@ -326,8 +331,8 @@ export class TravelElevation {
     // Tiles are present and/or flying is enabled.
     out.trackingRequired = true;
     const { finalElevation, elevationChanges } = fly
-      ? this._trackElevationChangesWithFlight(startElevation, currState)
-      : this._trackElevationChanges(startElevation, currState);
+      ? this._trackElevationChangesWithFlight(currE, currState)
+      : this._trackElevationChanges(currE, currState);
     out.finalElevation = finalElevation;
     out.elevationChanges = elevationChanges;
     return out;
@@ -523,11 +528,11 @@ export class TravelElevation {
    */
   #locateNextTileObstacle(currTile, tileIxs, ix, currE) {
     // Find next point at which the token could fall through a tile hole, if any.
-    const tilePt = this._findTileHole(currTile, ix.t0);
+    const tilePt = this._findTileHole(currTile, ix.t0 + this.#stepT);
     if ( tilePt ) this.#addIx(tileIxs, tilePt, { color: Draw.COLORS.yellow });
 
     // Find next location where terrain pokes through tile, if any.
-    const terrainPt = this._findElevatedTerrain(currE, ix.t0);
+    const terrainPt = this._findElevatedTerrain(currE, ix.t0 + this.#stepT);
     if ( terrainPt ) this.#addIx(tileIxs, terrainPt, { color: Draw.COLORS.green });
   }
 
@@ -562,7 +567,7 @@ export class TravelElevation {
         }
 
         // Find the elevation intersection.
-        const terrainPt = this._findElevatedTerrain(minE, ix.t0);
+        const terrainPt = this._findElevatedTerrain(minE, ix.t0 + this.#stepT);
         if ( terrainPt ) this.#addIx(tileIxs, terrainPt, { color: Draw.COLORS.green });
 
         // If any intersections, add the first one encountered along the travel ray.
@@ -768,11 +773,24 @@ export class TravelElevation {
    * @param {number} [options.tokenElevation]   Elevation of the token
    * @returns {TOKEN_ELEVATION_STATE}
    */
-  static currentTokenState(token, { tokenCenter, tokenElevation }) {
-    if ( isTokenOnTile(token, { tokenCenter, tokenElevation }) ) return TILE;
-    if ( isTokenOnGround(token,
-      { tokenCenter, tokenElevation, considerTiles: false }) ) return TERRAIN;
-    return FLY;
+  currentTokenState({ tokenCenter, tokenElevation } = {}) {
+    const { token, tileStep, terrainStep, averageTiles, alphaThreshold, tiles } = this;
+    const matchingTile = tileAtTokenElevation(token, {
+        tokenCenter,
+        tokenElevation,
+        averageTiles,
+        alphaThreshold,
+        tiles });
+
+    if ( matchingTile ) {
+      const tileE = matchingTile.elevationE;
+      if ( almostBetween(tileE, tokenElevation - tileStep, tokenElevation) ) return { currE: tileE, currState: TILE };
+    }
+
+    const terrainE = tokenTerrainElevation(token, { tokenCenter });
+    if ( almostBetween(terrainE, tokenElevation - terrainStep, tokenElevation) ) return { currE: terrainE, currState: TERRAIN };
+
+    return { currE: tokenElevation, currState: FLY };
   }
 
   /**
