@@ -665,22 +665,6 @@ export class TravelElevation {
     const cache = tile._textureData?._evPixelCache;
     if ( !cache ) return null;
 
-    // Test starting location based on alpha boundary of the tile.
-    const { ixs, aInside, bInside } = cache.rayIntersectsBoundary(travelRay, alphaThreshold);
-    if ( ixs.length ) {
-      if ( aInside ) {
-        // Intersection is where tile becomes transparent along ray.
-        if ( startT > ixs[0].t0 ) return startT;
-      } else if ( bInside ) {
-        // Intersection is where tile becomes solid along ray.
-        if ( startT < ixs[0].t0 ) return startT;
-      } else {
-        // Neither inside; first intersection becomes solid; second becomes transparent.
-        if ( startT > ixs[0].t0 || startT < ixs[0].t0 ) return startT;
-        if ( startT < ixs[0].t0 ) return startT;
-      }
-    }
-
     // Function to test if the given pixel is under the threshold.
     const pixelThreshold = alphaThreshold * TravelElevation.#maximumPixelValue;
     const cmp = value => value <= pixelThreshold;

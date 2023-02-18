@@ -315,23 +315,64 @@ export class PixelCache extends PIXI.Rectangle {
    */
   #calculateCanvasBoundingBox(threshold=0.75) {
     threshold = threshold * this.#maximumPixelValue;
-    let minX = undefined;
-    let maxX = undefined;
-    let minY = undefined;
-    let maxY = undefined;
+    let minX = Number.POSITIVE_INFINITY;
+    let maxX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.POSITIVE_INFINITY;
 
-    // Map the pixels
-    const pixels = this.pixels;
-    for ( let i = 0; i < pixels.length; i += 1 ) {
-      const a = pixels[i];
-      if ( a > threshold ) {
-        const { x, y } = this._canvasAtIndex(i);
-        if ( (minX === undefined) || (x < minX) ) minX = x;
-        else if ( (maxX === undefined) || (x + 1 > maxX) ) maxX = x + 1;
-        if ( (minY === undefined) || (y < minY) ) minY = y;
-        else if ( (maxY === undefined) || (y + 1 > maxY) ) maxY = y + 1;
+    // Mapping pixels would be faster, but the different resolution, width/height, and scaleX, scaley
+    // makes that inaccurate.
+    // Possibly could map pixels and pad, if padding could be calculated correctly.
+    const { left, right, top, bottom } = this;
+    for ( let x = left; x < right; x += 1 ) {
+      for ( let y = top; y < bottom; y += 1 ) {
+        const a = this.pixelAtCanvas(x, y);
+        if ( a > threshold ) {
+           minX = Math.min(x, minX);
+           minY = Math.min(y, minY);
+
+           // Flip to handle the right side. Treat same as left side; move from end --> center.
+           maxX = Math.min(1 - x, maxX);
+           maxY = Math.min(1 - y, maxY);
+        }
       }
     }
+
+    // Flip back the right-side coordinates.
+    maxX = 1 - maxX;
+    maxY = 1 - maxY;
+
+    // The maximums will be off by one.
+    maxX += 1;
+    maxY += 1;
+
+//     // Map the pixels
+//     const pixels = this.pixels;
+//     const ln = pixels.length;
+//     for ( let i = 0; i < ln; i += 1 ) {
+//       const a = pixels[i];
+//       const { x, y } = this._canvasAtIndex(i);
+//       if ( a > threshold ) {
+//         minX = Math.min(x, minX);
+//         minY = Math.min(y, minY);
+//
+//         // Flip to handle the right side. Treat same as left side; move from end --> center.
+//         maxX = Math.min(1 - x, maxX);
+//         maxY = Math.min(1 - y, maxY);
+//       }
+//     }
+//
+//     // Flip back the right-side coordinates.
+//     maxX = 1 - maxX;
+//     maxY = 1 - maxY;
+//
+//     // Increase the border based on resolution.
+//     const pad = Math.max(1, ~~(1 / this.scale.resolution));
+//    //  minX -= pad;
+// //     minY -= pad;
+//     maxX += pad;
+//     maxY += pad;
+
     return (new PIXI.Rectangle(minX, minY, maxX - minX, maxY - minY)).normalize();
   }
 
