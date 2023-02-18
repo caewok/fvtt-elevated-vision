@@ -740,17 +740,12 @@ export class PixelCache extends PIXI.Rectangle {
   rayIntersectsBoundary(ray, threshold = 0.75) {
     const { A, B } = ray;
     const bounds = this.getThresholdCanvasBoundingBox(threshold);
-    const ixs = bounds.segmentIntersections(A, B);
     const CSZ = PIXI.Rectangle.CS_ZONES;
-    if ( bounds._getZone(A) === CSZ.INSIDE ) {
-      A.t0 ??= 0;
-      ixs.unshift(A);
+    return {
+      aInside: bounds._getZone(A) === CSZ.INSIDE,
+      bInside: bounds._getZone(B) === CSZ.INSIDE,
+      ixs: bounds.segmentIntersections(A, B)
     }
-    if ( bounds._getZone(B) === CSZ.INSIDE ) {
-      B.t0 ??= 1;
-      ixs.push(B);
-    }
-    return ixs;
   }
 
   /**
