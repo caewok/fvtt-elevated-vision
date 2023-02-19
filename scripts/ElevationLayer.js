@@ -487,7 +487,7 @@ export class ElevationLayer extends InteractionLayer {
     await this.loadSceneElevationData();
     this.renderElevation();
 
-    this._updateMinimumElevationFromSceneTiles();
+//     this._updateMinimumElevationFromSceneTiles();
 
     this._initialized = true;
   }
