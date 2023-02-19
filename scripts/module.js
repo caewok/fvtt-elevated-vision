@@ -421,11 +421,11 @@ async function updateSceneHook(document, change, _options, _userId) {
     else if ( autoelevate === false ) ui.notifications.notify("Elevated Vision autoelevate disabled for scene.");
   }
 
-  const algorithm = change.flags?.[MODULE_ID]?.algorithm;
+  const algorithm = change.flags?.[MODULE_ID]?.[SETTINGS.SHADING.ALGORITHM];
   if ( algorithm ) {
     registerShadowPatches();
-    await canvas.draw(canvas.scene);
-    const label = game.i18n.localize(SETTINGS.SHADING.TYPES[algorithm]);
+    await canvas.draw();
+    const label = game.i18n.localize(SETTINGS.SHADING.LABELS[algorithm]);
     ui.notifications.notify(`Elevated Vision scene shadows switched to ${label}.`);
   }
 }
