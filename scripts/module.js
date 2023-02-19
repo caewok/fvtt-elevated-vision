@@ -216,11 +216,16 @@ Hooks.on("canvasReady", async function() {
   // Cache overhead tile pixel data.
   for ( const tile of canvas.tiles.placeables ) {
     if ( tile.document.overhead ) {
+      // Match Levels settings. Prefer Levels settings.
+      const levelsE = tile.document?.flag?.levels?.rangeBottom;
+      if ( typeof levelsE !== "undefined" ) tile.document.setFlag(MODULE_ID, "elevation", levelsE);
+      else tile.document.update({flags: { levels: { rangeBottom: tile.elevationE } } })
+
+      // Cache the tile pixels.
       tile._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(tile);
     }
   }
 });
-
 
 Hooks.on("3DCanvasToggleMode", async function(isOn) {
   // TODO: Do we need to reset the values for the scene? Seems unnecessary, as a 3d canvas
@@ -292,10 +297,11 @@ Hooks.on("updateToken", function(tokenD, changes, _options, _userId) {
 // Hook when a tile changes elevation.
 // Track for Levels, to ensure minimum elevation for the scene is met.
 Hooks.on("createTile", createTileHook);
+Hooks.on("preUpdateTile", preUpdateTileHook);
 Hooks.on("updateTile", updateTileHook);
 
 function createTileHook(document, _options, _userId) {
-  if ( !canvas.elevation?._initialized ) return;
+//   if ( !canvas.elevation?._initialized ) return;
 
   const elevationMin = canvas.elevation.elevationMin;
   const rangeBottom = document.flags?.levels?.rangeBottom ?? document.elevation ?? elevationMin;
@@ -308,18 +314,27 @@ function createTileHook(document, _options, _userId) {
   }
 }
 
+function preUpdateTileHook(document, changes, options, userId) {
+  const updateData = {};
+  if ( changes.flags?.levels?.rangeBottom ) updateData[`flags.${MODULE_ID}.elevation`] = changes.flags.levels.rangeBottom;
+  else if ( changes.flags?.[MODULE_ID]?.elevation) updateData[`flags.levels.rangeBottom`] = changes.flags[MODULE_ID].elevation;
+  foundry.utils.mergeObject(changes, updateData, {inplace: true});
+}
+
 function updateTileHook(document, change, _options, _userId) {
-  if ( !canvas.elevation?._initialized ) return;
+//   if ( !canvas.elevation?._initialized ) return;
 
-  const elevationMin = canvas.elevation.elevationMin;
-  const rangeBottom = change.flags?.levels?.rangeBottom ?? document.elevation ?? elevationMin;
-  const rangeTop = change.flags?.levels?.rangeTop ?? document.elevation ?? elevationMin;
-  const min = Math.min(rangeBottom, rangeTop);
+//   const elevationMin = canvas.elevation.elevationMin;
+//   const rangeBottom = change.flags?.levels?.rangeBottom ?? document.elevation ?? elevationMin;
+//   const rangeTop = change.flags?.levels?.rangeTop ?? document.elevation ?? elevationMin;
+//   const min = Math.min(rangeBottom, rangeTop);
 
-  if ( min < elevationMin ) {
-    canvas.elevation.elevationMin = min;
-    ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on tile minimum elevation range.`);
-  }
+
+
+//   if ( min < elevationMin ) {
+//     canvas.elevation.elevationMin = min;
+//     ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on tile minimum elevation range.`);
+//   }
 
   if ( change.overhead ) {
     document.object._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(document.object);
