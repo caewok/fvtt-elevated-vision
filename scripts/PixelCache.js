@@ -194,7 +194,7 @@ export class PixelCache extends PIXI.Rectangle {
   #maximumPixelValue = 255;
 
   /** @type {Map<PIXI.Rectangle>} */
-  #thresholdBoundingBoxes = new Map();
+  #thresholdCanvasBoundingBoxes = new Map();
 
   /**
    * @type {object}
@@ -238,8 +238,8 @@ export class PixelCache extends PIXI.Rectangle {
   /**
    * Test whether the pixel cache contains a specific canvas point.
    * See Tile.prototype.containsPixel
-   * @param {number} x
-   * @param {number} y
+   * @param {number} x    Canvas x-coordinate
+   * @param {number} y    Canvas y-coordinate
    * @param {number} [alphaThreshold=0.75]  Value required for the pixel to "count."
    * @returns {boolean}
    */
@@ -267,6 +267,9 @@ export class PixelCache extends PIXI.Rectangle {
     return this.#toCanvasTransform ?? (this.#toCanvasTransform = this.toLocalTransform.invert());
   }
 
+  /** @type {number} */
+  get maximumPixelValue() { return this.#maximumPixelValue; }
+
   /**
    * Reset transforms. Typically used when size or resolution has changed.
    */
@@ -274,7 +277,7 @@ export class PixelCache extends PIXI.Rectangle {
     this.#toLocalTransform = undefined;
     this.#toCanvasTransform = undefined;
     this.#localFrame = undefined;
-    this.#thresholdBoundingBoxes.clear();
+    this.#thresholdCanvasBoundingBoxes.clear();
   }
 
   /**
@@ -300,20 +303,8 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
    */
   getThresholdCanvasBoundingBox(threshold = 0.75) {
-    const bounds = this.getThresholdBoundingBox(threshold);
-    const TL = this._toCanvasCoordinates(bounds.left, bounds.top);
-    const BR = this._toCanvasCoordinates(bounds.right, bounds.bottom);
-    return new PIXI.Rectangle(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y);
-  }
-
-  /**
-   * Cache a bounding box based on a specific threshold.
-   * @param {number} [threshold=0.75]   Values lower than this will be ignored around the edges.
-   * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
-   */
-  getThresholdBoundingBox(threshold = 0.75) {
-    const map = this.#thresholdBoundingBoxes;
-    if ( !map.has(threshold) ) map.set(threshold, this.#calculateBoundingBox(threshold));
+    const map = this.#thresholdCanvasBoundingBoxes;
+    if ( !map.has(threshold) ) map.set(threshold, this.#calculateCanvasBoundingBox(threshold));
     return map.get(threshold);
   }
 
@@ -322,27 +313,66 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} [threshold=0.75]   Values lower than this will be ignored around the edges.
    * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
    */
-  #calculateBoundingBox(threshold=0.75) {
+  #calculateCanvasBoundingBox(threshold=0.75) {
     threshold = threshold * this.#maximumPixelValue;
-    let minX = undefined;
-    let maxX = undefined;
-    let minY = undefined;
-    let maxY = undefined;
+    let minX = Number.POSITIVE_INFINITY;
+    let maxX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.POSITIVE_INFINITY;
 
-    // Map the pixels
-    const pixels = this.pixels;
-    const width = this.#localWidth;
-    for ( let i = 0; i < pixels.length; i += 1 ) {
-      const a = pixels[i];
-      if ( a > threshold ) {
-        const x = i % width;
-        const y = ~~(i / width); // Floor
-        if ( (minX === undefined) || (x < minX) ) minX = x;
-        else if ( (maxX === undefined) || (x + 1 > maxX) ) maxX = x + 1;
-        if ( (minY === undefined) || (y < minY) ) minY = y;
-        else if ( (maxY === undefined) || (y + 1 > maxY) ) maxY = y + 1;
+    // Mapping pixels would be faster, but the different resolution, width/height, and scaleX, scaley
+    // makes that inaccurate.
+    // Possibly could map pixels and pad, if padding could be calculated correctly.
+    const { left, right, top, bottom } = this;
+    for ( let x = left; x < right; x += 1 ) {
+      for ( let y = top; y < bottom; y += 1 ) {
+        const a = this.pixelAtCanvas(x, y);
+        if ( a > threshold ) {
+           minX = Math.min(x, minX);
+           minY = Math.min(y, minY);
+
+           // Flip to handle the right side. Treat same as left side; move from end --> center.
+           maxX = Math.min(1 - x, maxX);
+           maxY = Math.min(1 - y, maxY);
+        }
       }
     }
+
+    // Flip back the right-side coordinates.
+    maxX = 1 - maxX;
+    maxY = 1 - maxY;
+
+    // The maximums will be off by one.
+    maxX += 1;
+    maxY += 1;
+
+//     // Map the pixels
+//     const pixels = this.pixels;
+//     const ln = pixels.length;
+//     for ( let i = 0; i < ln; i += 1 ) {
+//       const a = pixels[i];
+//       const { x, y } = this._canvasAtIndex(i);
+//       if ( a > threshold ) {
+//         minX = Math.min(x, minX);
+//         minY = Math.min(y, minY);
+//
+//         // Flip to handle the right side. Treat same as left side; move from end --> center.
+//         maxX = Math.min(1 - x, maxX);
+//         maxY = Math.min(1 - y, maxY);
+//       }
+//     }
+//
+//     // Flip back the right-side coordinates.
+//     maxX = 1 - maxX;
+//     maxY = 1 - maxY;
+//
+//     // Increase the border based on resolution.
+//     const pad = Math.max(1, ~~(1 / this.scale.resolution));
+//    //  minX -= pad;
+// //     minY -= pad;
+//     maxX += pad;
+//     maxY += pad;
+
     return (new PIXI.Rectangle(minX, minY, maxX - minX, maxY - minY)).normalize();
   }
 
@@ -353,9 +383,9 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {number}
    */
   _indexAtLocal(x, y) {
-    // Use nearest to avoid rounding issues such as x = 7.9999998.
-    // return ((~~y) * this.#localWidth) + (~~x);
-    return (roundFastPositive(y) * this.#localWidth) + roundFastPositive(x);
+    // Use floor to ensure consistency when converting to/from coordinates <--> index.
+    return ((~~y) * this.#localWidth) + (~~x);
+    //return (roundFastPositive(y) * this.#localWidth) + roundFastPositive(x);
   }
 
   /**
@@ -699,7 +729,7 @@ export class PixelCache extends PIXI.Rectangle {
 
       if ( foundValue ) {
         pt.t0 = t;
-        pt.value = value;
+        pt.value = foundValue;
         return pt;
       }
       t += stepT;
@@ -740,17 +770,12 @@ export class PixelCache extends PIXI.Rectangle {
   rayIntersectsBoundary(ray, threshold = 0.75) {
     const { A, B } = ray;
     const bounds = this.getThresholdCanvasBoundingBox(threshold);
-    const ixs = bounds.segmentIntersections(A, B);
     const CSZ = PIXI.Rectangle.CS_ZONES;
-    if ( bounds._getZone(A) === CSZ.INSIDE ) {
-      A.t0 ??= 0;
-      ixs.unshift(A);
+    return {
+      aInside: bounds._getZone(A) === CSZ.INSIDE,
+      bInside: bounds._getZone(B) === CSZ.INSIDE,
+      ixs: bounds.segmentIntersections(A, B)
     }
-    if ( bounds._getZone(B) === CSZ.INSIDE ) {
-      B.t0 ??= 1;
-      ixs.push(B);
-    }
-    return ixs;
   }
 
   /**
@@ -955,60 +980,53 @@ export class TilePixelCache extends PixelCache {
    * @inherits
    */
   constructor(pixels, width, opts = {}) {
-    if ( opts.tile ) {
-      opts.x ??= opts.tile.x;
-      opts.y ??= opts.tile.y;
-      width ??= opts.tile.texture.width;
-      opts.height ??= opts.tile.texture.height;
-    }
-
     super(pixels, width, opts);
-    if ( opts.tile ) {
-      this.tile = opts.tile;
-      this.#setTileScaleData(opts.tile);
-    }
-
+    this.tile = opts.tile;
+    this._resize();
   }
 
   /** @type {numeric} */
-  get scaleX() { return this.scale.sscX * this.scale.ascX; }
+  get scaleX() { return this.tile.document.texture.scaleX; }
 
   /** @type {numeric} */
-  set scaleX(value) {
-    this.scale.sscX = Math.sign(value);
-    this.scale.ascX = Math.abs(value);
-  }
+  get scaleY() { return this.tile.document.texture.scaleY; }
 
   /** @type {numeric} */
-  get scaleY() { return this.scale.sscY * this.scale.ascY; }
+  get rotation() { return Math.toRadians(this.tile.document.rotation); }
 
   /** @type {numeric} */
-  set scaleY(value) {
-    this.scale.sscY = Math.sign(value);
-    this.scale.ascY = Math.abs(value);
-  }
+  get proportionalWidth() { return this.tile.document.width / this.tile.texture.width; }
 
   /** @type {numeric} */
-  get rotation() { return this.scale.rotation; }
+  get proportionalHeight() { return this.tile.document.height / this.tile.texture.height; }
 
   /** @type {numeric} */
-  set rotation(value) { this.scale.rotation = Math.normalizeRadians(value); }
+  get textureWidth() { return this.tile.texture.width; }
 
   /** @type {numeric} */
-  get rotationDegrees() { return Math.toDegrees(this.scale.rotation); }
+  get textureHeight() { return this.tile.texture.height; }
 
   /** @type {numeric} */
-  set rotationDegrees(value) { this.scale.rotation = Math.toRadians(value); }
+  get tileX() { return this.tile.document.x; }
+
+  /** @type {numeric} */
+  get tileY() { return this.tile.document.y; }
+
+  /** @type {numeric} */
+  get tileWidth() { return this.tile.document.width; }
+
+  /** @type {numeric} */
+  get tileHeight() { return this.tile.document.height; }
 
   /**
-   * Set scaling data from a given tile.
-   * @param {Tile} tile
+   * Resize canvas dimensions for the tile.
    */
-  #setTileScaleData(tile) {
-    const tileDoc = tile.document;
-    this.scaleX = tileDoc.texture.scaleX;
-    this.scaleY = tileDoc.texture.scaleY;
-    this.rotationDegrees = tileDoc.rotation;
+  _resize(x, y, width, height) {
+    this.x = x ?? this.tileX;
+    this.y = y ?? this.tileY;
+    this.width = width ?? this.tileWidth;
+    this.height = height ?? this.tileHeight;
+    this.clearTransforms();
   }
 
   /**
@@ -1016,41 +1034,43 @@ export class TilePixelCache extends PixelCache {
    * @inherits
    */
   _calculateToLocalTransform() {
-    // Translate so the center is at 0, 0
-    const { width, height } = this;
-    const mTranslate = Matrix.translation(-(width * 0.5) - this.x, -(height * 0.5) - this.y);
+    // 1. Clear the rotation
+    // Translate so the center is 0,0
+    const { x, y, width, height } = this;
+    const mCenterTranslate = Matrix.translation(-(width * 0.5) - x, -(height * 0.5) - y);
 
     // Rotate around the Z axis
     // (The center must be 0,0 for this to work properly.)
     const rotation = -this.rotation;
     const mRot = Matrix.rotationZ(rotation, false);
 
-    // Scale
-    const { ascX, ascY, sscX, sscY } = this.scale;
-    const mScale = Matrix.scale(1 / (ascX * sscX), 1 / (ascY * sscY));
+    // 2. Clear the scale
+    // (The center must be 0,0 for this to work properly.)
+    const { scaleX, scaleY } = this;
+    const mScale = Matrix.scale(1 / scaleX, 1 / scaleY);
 
+    // 3. Clear the width/height
     // Translate so top corner is 0,0
-    const mCenter = Matrix.translation(width * 0.5, height * 0.5);
+    const { textureWidth, textureHeight, proportionalWidth, proportionalHeight } = this;
+    const currWidth = textureWidth * proportionalWidth;
+    const currHeight = textureHeight * proportionalHeight;
+    const mCornerTranslate = Matrix.translation(currWidth * 0.5, currHeight * 0.5);
 
-    // Scale based on resolution.
+    // Scale the canvas width/height back to texture width/height, if not 1:1.
+    // (Must have top left corner at 0,0 for this to work properly.)
+    const mProportion = Matrix.scale(1 / proportionalWidth, 1 / proportionalHeight);
+
+    // 4. Scale based on resolution of the underlying pixel data
     const resolution = this.scale.resolution;
     const mRes = Matrix.scale(resolution, resolution);
 
     // Combine the matrices.
-    return mTranslate.multiply3x3(mRot).multiply3x3(mScale).multiply3x3(mCenter).multiply3x3(mRes);
-  }
-
-  /**
-   * Get a canvas bounding box based on a specific threshold.
-   * @param {number} [threshold=0.75]   Values lower than this will be ignored around the edges.
-   * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
-   */
-  getThresholdCanvasBoundingBox(threshold = 0.75) {
-    const bounds = this.getThresholdBoundingBox(threshold);
-    const TL = this._toCanvasCoordinates(bounds.left, bounds.top);
-    const BR = this._toCanvasCoordinates(bounds.right, bounds.bottom);
-    const r = this.rotation;
-    return PIXI.Rectangle.fromRotation(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y, r).normalize();
+    return mCenterTranslate
+      .multiply3x3(mRot)
+      .multiply3x3(mScale)
+      .multiply3x3(mCornerTranslate)
+      .multiply3x3(mProportion)
+      .multiply3x3(mRes);
   }
 
   /**
@@ -1065,8 +1085,6 @@ export class TilePixelCache extends PixelCache {
     const texture = tile.texture;
     opts.tile = tile;
     opts.channel ??= 3;
-    opts.x = tile.x;
-    opts.y = tile.y;
     return this.fromTexture(texture, opts);
   }
 
@@ -1080,13 +1098,14 @@ export class TilePixelCache extends PixelCache {
   static fromOverheadTileAlpha(tile) {
     if ( !tile.document.overhead ) return this.fromTileAlpha(tile);
 
+    // Texture width/height not necessarily same as canvas width/height for tiles.
+
     // The aw and ah properties must be rounded to determine the dimensions.
     const localWidth = tile._textureData.aw;
-    const width = tile.texture.width;
-    const resolution = localWidth / width;
+    const texWidth = tile.texture.width;
+    const resolution = localWidth / texWidth;
 
     // Resolution consistent with `_createTextureData` which divides by 4.
-    return new this(tile._textureData.pixels, width, { tile, resolution });
+    return new this(tile._textureData.pixels, texWidth, { tile, resolution });
   }
-
 }

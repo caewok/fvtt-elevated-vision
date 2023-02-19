@@ -13,7 +13,7 @@ import { almostLessThan, almostBetween } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { getSetting, getSceneSetting, SETTINGS, averageTilesSetting, averageTerrainSetting } from "./settings.js";
-import { isTokenOnGround, isTokenOnTile, tokenTerrainElevation, tileAtTokenElevation } from "./tokens.js";
+import { tokenTerrainElevation, tileAtTokenElevation } from "./tokens.js";
 
 /* Testing
 api = game.modules.get("elevatedvision").api
@@ -40,6 +40,12 @@ TravelElevation.drawResults(results)
 te.fly = true;
 results = te.calculateElevationAlongRay();
 TravelElevation.drawResults(results)
+
+// Test tile cache coordinates
+[tile] = canvas.tiles.placeables
+cache = tile._textureData._evPixelCache
+cache.draw()
+
 
 
 // Test tile transparency
@@ -304,9 +310,14 @@ export class TravelElevation {
     };
 
     // If flying not enabled and the token is currently flying, bail out.
-    let currState = TravelElevation.currentTokenState(token,
-      { tokenCenter: travelRay.A, tokenElevation: startElevation });
-    if ( !fly && currState === FLY ) return out; // Flying
+    // For averaging, consider near values sufficient.
+    // If within token height of ground, fly --> ground.
+    // If within token height of tile, fly --> tile.
+
+
+    const { currState, currE } = this.currentTokenState({ tokenCenter: travelRay.A, tokenElevation: startElevation });
+    if ( currState === FLY && !fly ) return out;
+
 
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
     out.checkTerrain = true;
@@ -320,8 +331,8 @@ export class TravelElevation {
     // Tiles are present and/or flying is enabled.
     out.trackingRequired = true;
     const { finalElevation, elevationChanges } = fly
-      ? this._trackElevationChangesWithFlight(startElevation, currState)
-      : this._trackElevationChanges(startElevation, currState);
+      ? this._trackElevationChangesWithFlight(currE, currState)
+      : this._trackElevationChanges(currE, currState);
     out.finalElevation = finalElevation;
     out.elevationChanges = elevationChanges;
     return out;
@@ -517,11 +528,11 @@ export class TravelElevation {
    */
   #locateNextTileObstacle(currTile, tileIxs, ix, currE) {
     // Find next point at which the token could fall through a tile hole, if any.
-    const tilePt = this._findTileHole(currTile, ix.t0);
+    const tilePt = this._findTileHole(currTile, ix.t0 + this.#stepT);
     if ( tilePt ) this.#addIx(tileIxs, tilePt, { color: Draw.COLORS.yellow });
 
     // Find next location where terrain pokes through tile, if any.
-    const terrainPt = this._findElevatedTerrain(currE, ix.t0);
+    const terrainPt = this._findElevatedTerrain(currE, ix.t0 + this.#stepT);
     if ( terrainPt ) this.#addIx(tileIxs, terrainPt, { color: Draw.COLORS.green });
   }
 
@@ -541,25 +552,22 @@ export class TravelElevation {
       }
 
       case FLY: {
-        // Check for tile or terrain that we will run into at this flying elevation.
-        const travelRay = this.travelRay;
-        const destRay = new Ray(ix, travelRay.B);
-
-        // Find the tile intersections
+        // Check for tiles or terrain that we will run into at this flying elevation.
         const maxE = currE;
         const minE = currE - tileStep;
         const tilesWithinE = this.tiles.filter(tile => almostBetween(tile.elevationE, minE, maxE) );
         const ixs = [];
+        const startT = ix.t0 + this.#stepT;
         for ( const tile of tilesWithinE ) {
           const cache = tile._textureData?._evPixelCache;
           if ( !cache ) return null;
 
-          const tileIxs = cache.rayIntersectsBoundary(destRay, this.alphaThreshold);
-          if ( tileIxs.length && tileIxs[0].t0 > ix.t0 ) ixs.push(tileIxs[0]);
+          const ix = this._findTileStart(tile, startT);
+          if ( ix ) ixs.push(ix);
         }
 
         // Find the elevation intersection.
-        const terrainPt = this._findElevatedTerrain(minE, ix.t0);
+        const terrainPt = this._findElevatedTerrain(minE, ix.t0 + this.#stepT);
         if ( terrainPt ) this.#addIx(tileIxs, terrainPt, { color: Draw.COLORS.green });
 
         // If any intersections, add the first one encountered along the travel ray.
@@ -664,7 +672,59 @@ export class TravelElevation {
 
     // Function to test if the given pixel is under the threshold.
     const pixelThreshold = alphaThreshold * TravelElevation.#maximumPixelValue;
-    const cmp = value => value < pixelThreshold;
+    const cmp = value => value <= pixelThreshold;
+
+    const opts = { stepT, startT };
+    if ( this.averageTiles ) {
+      opts.frame = this.token.bounds;
+      opts.skip = this.averageTile;
+    }
+
+    const ix = cache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
+    if ( !ix ) return null;
+    const pt3d = new Point3d(ix.x, ix.y, tile.elevationZ);
+    pt3d.e = tile.elevationE;
+    pt3d.t0 = ix.t0;
+    pt3d.tile = tile;
+    return pt3d;
+  }
+
+  /**
+   * Search for a non-transparent tile location along the ray beginning at a specified point.
+   * @param {Tile} tile           Tile to test
+   * @param {number} [startT=0]   Starting point along the travel ray. A = 0; B = 1.
+   * @returns {Point|undefined} First transparent tile point or undefined if none found.
+   */
+  _findTileStart(tile, startT=0) {
+    const { travelRay, alphaThreshold } = this;
+    const stepT = this.#stepT;
+
+    const cache = tile._textureData?._evPixelCache;
+    if ( !cache ) return null;
+
+    // Test starting location based on alpha boundary of the tile.
+    const { ixs, aInside, bInside } = cache.rayIntersectsBoundary(travelRay, alphaThreshold);
+    if ( ixs.length ) {
+      if ( aInside ) {
+        // Intersection is where tile becomes transparent along ray.
+        if ( startT >= ixs[0].t0 ) return null;
+      } else if ( bInside ) {
+        // Intersection is where tile becomes solid along ray.
+        // Use set steps to avoid issues with rounding.
+        const quotient = ~~(ixs[0].t0 / stepT);
+        startT = Math.max(stepT * quotient, startT);
+
+      } else {
+        // Neither inside; first intersection becomes solid; second becomes transparent.
+        if ( startT > ixs[1].t0 ) return null;
+        const quotient = ~~(ixs[0].t0 / stepT);
+        startT = Math.max(stepT * quotient, startT);
+      }
+    }
+
+    // Function to test if the given pixel is within the threshold.
+    const pixelThreshold = alphaThreshold * TravelElevation.#maximumPixelValue;
+    const cmp = value => value > pixelThreshold;
 
     const opts = { stepT, startT };
     if ( this.averageTiles ) {
@@ -713,11 +773,24 @@ export class TravelElevation {
    * @param {number} [options.tokenElevation]   Elevation of the token
    * @returns {TOKEN_ELEVATION_STATE}
    */
-  static currentTokenState(token, { tokenCenter, tokenElevation }) {
-    if ( isTokenOnTile(token, { tokenCenter, tokenElevation }) ) return TILE;
-    if ( isTokenOnGround(token,
-      { tokenCenter, tokenElevation, considerTiles: false }) ) return TERRAIN;
-    return FLY;
+  currentTokenState({ tokenCenter, tokenElevation } = {}) {
+    const { token, tileStep, terrainStep, averageTiles, alphaThreshold, tiles } = this;
+    const matchingTile = tileAtTokenElevation(token, {
+        tokenCenter,
+        tokenElevation,
+        averageTiles,
+        alphaThreshold,
+        tiles });
+
+    if ( matchingTile ) {
+      const tileE = matchingTile.elevationE;
+      if ( almostBetween(tileE, tokenElevation - tileStep, tokenElevation) ) return { currE: tileE, currState: TILE };
+    }
+
+    const terrainE = tokenTerrainElevation(token, { tokenCenter });
+    if ( almostBetween(terrainE, tokenElevation - terrainStep, tokenElevation) ) return { currE: terrainE, currState: TERRAIN };
+
+    return { currE: tokenElevation, currState: FLY };
   }
 
   /**
@@ -743,29 +816,20 @@ export class TravelElevation {
    * @returns {Point[]}
    */
   _tileRayIntersections() {
-    const { tiles, travelRay, alphaThreshold } = this;
     const tileIxs = [];
-
-    for ( const tile of tiles ) {
+    for ( const tile of this.tiles ) {
       const cache = tile._textureData?._evPixelCache;
       if ( !cache ) continue;
 
-      const ixs = cache.rayIntersectsBoundary(travelRay, alphaThreshold);
-      if ( ixs.length < 2 ) continue;
-
-      const ix = ixs[0];
-      const pt3d = new Point3d(ix.x, ix.y, tile.elevationZ);
-      pt3d.e = tile.elevationE;
-      pt3d.t0 = ix.t0;
-      pt3d.tile = tile;
-      tileIxs.push(pt3d);
+      const ix = this._findTileStart(tile);
+      if ( ix ) tileIxs.push(ix);
     }
 
     // Closest intersection to A is last in the queue, so we can pop it.
     tileIxs.sort((a, b) => b.t0 - a.t0);
 
     // Add the start (and end?) of the travel ray.
-    //tileIxs.unshift(this.travelRay.B);
+    // tileIxs.unshift(this.travelRay.B);
     tileIxs.push(this.travelRay.A);
 
     return tileIxs;

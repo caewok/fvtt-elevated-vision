@@ -367,10 +367,11 @@ export function tileSupports(tile, tokenCenter, tokenElevation, averageTiles, al
   // But the hard case makes us iterate over both tile and terrain at once,
   // b/c otherwise we cannot tell where the overlaps occur. E.g., 30% tile, 20% terrain?
   const evCache = canvas.elevation.elevationPixelCache;
-  const pixelE = canvas.elevation.elevationToPixelValue(tileE)
+  const pixelE = canvas.elevation.elevationToPixelValue(tileE);
+  const pixelThreshold = canvas.elevation.maximumPixelValue * alphaThreshold;
   let sum = 0;
   const countFn = (value, _i, localX, localY) => {
-     if ( value > alphaThreshold ) return sum += 1;
+     if ( value > pixelThreshold ) return sum += 1;
      const canvas = cache._toCanvasCoordinates(localX, localY);
      const terrainValue = evCache.pixelAtCanvas(canvas.x, canvas.y);
      if ( terrainValue.almostEqual(pixelE) ) return sum += 1;

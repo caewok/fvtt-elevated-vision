@@ -324,47 +324,23 @@ function updateTileHook(document, change, _options, _userId) {
   if ( change.overhead ) {
     document.object._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(document.object);
   } else if ( document.overhead ) {
-    let updated = false;
     const cache = document.object._textureData._evPixelCache;
 
-    if ( Object.hasOwn(change, "x") ) {
-      updated = true;
-      cache.x = change.x;
+    if ( Object.hasOwn(change, "x")
+      || Object.hasOwn(change, "y")
+      || Object.hasOwn(change, "width")
+      || Object.hasOwn(change, "height") ) {
+      cache._resize();
     }
 
-    if ( Object.hasOwn(change, "y") ) {
-      updated = true;
-      cache.y = change.y;
+    if ( Object.hasOwn(change, "rotation")
+      || Object.hasOwn(change, "texture")
+      || (change.texture
+        && (Object.hasOwn(change.texture, "scaleX")
+        ||  Object.hasOwn(change.texture, "scaleY"))) ) {
+
+      cache.clearTransforms();
     }
-
-    if ( Object.hasOwn(change, "width") ) {
-      updated = true;
-      cache.width = change.width;
-    }
-
-    if ( Object.hasOwn(change, "height") ) {
-      updated = true;
-      cache.height = change.height;
-    }
-
-    if ( Object.hasOwn(change, "rotation") ) {
-      updated = true;
-      cache.rotationDegrees = change.rotation;
-    }
-
-    if ( Object.hasOwn(change, "texture") ) {
-      if ( Object.hasOwn(change.texture, "scaleX") ) {
-        updated = true;
-        cache.scaleX = change.texture.scaleX;
-      }
-
-      if ( Object.hasOwn(change.texture, "scaleY") ) {
-        updated = true;
-        cache.scaleY = change.texture.scaleY;
-      }
-    }
-
-    if ( updated ) cache.clearTransforms();
   }
 }
 
