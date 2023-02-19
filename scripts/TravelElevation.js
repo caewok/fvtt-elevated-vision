@@ -794,6 +794,35 @@ export class TravelElevation {
   }
 
   /**
+   * Determine the current state of this token
+   * @param {object} [options]    Options that modify the token parameters
+   * @param {Point} [options.tokenCenter]       Center of the token
+   * @param {number} [options.tokenElevation]   Elevation of the token
+   * @returns {TOKEN_ELEVATION_STATE}
+   */
+  static currentTokenState(token, { tokenCenter, tokenElevation, })  {
+    tokenCenter ??= token.center;
+    tokenElevation ??= token.bottomE;
+    const matchingTile = tileAtTokenElevation(token, {
+        tokenCenter,
+        tokenElevation });
+
+    const tokenHeight = token.topE - token.bottomE;
+    const terrainStep = CONFIG[MODULE_ID]?.terrainStep ?? (tokenHeight || canvas.elevation.elevationStep);
+    if ( matchingTile ) {
+      const tileStep = CONFIG[MODULE_ID]?.tileStep ?? (tokenHeight || canvas.elevation.elevationStep);
+      const tileE = matchingTile.elevationE;
+      if ( almostBetween(tileE, tokenElevation - tileStep, tokenElevation) ) return { currE: tileE, currState: TILE };
+    }
+
+    const terrainE = tokenTerrainElevation(token, { tokenCenter });
+    if ( almostBetween(terrainE, tokenElevation - terrainStep, tokenElevation) ) return { currE: terrainE, currState: TERRAIN };
+
+    return { currE: tokenElevation, currState: FLY };
+  }
+
+
+  /**
    * Find overhead elevation tiles along a line segment (ray).
    * @param {Ray} ray
    * @returns {Tile[]}

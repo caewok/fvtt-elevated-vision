@@ -6,7 +6,7 @@ CONFIG
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { log, almostLessThan } from "./util.js";
+import { log, almostLessThan, almostGreaterThan } from "./util.js";
 import { MODULE_ID } from "./const.js";
 import { getSceneSetting, getSetting, SETTINGS, averageTilesSetting } from "./settings.js";
 import { TravelElevation } from "./TravelElevation.js";
@@ -191,7 +191,14 @@ export function cloneToken(wrapper) {
   if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return clone;
 
   const tokenCenter = { x: this.center.x, y: this.center.y };
-  if ( !isTokenOnGround(this, { tokenCenter }) && !TravelElevation.autoElevationFly() ) return clone;
+  if ( !TravelElevation.autoElevationFly() ) {
+    const { currState } = TravelElevation.currentTokenState(this, { tokenCenter });
+    if ( currState === TravelElevation.TOKEN_ELEVATION_STATE.FLY ) return clone;
+  }
+
+  const { currState } = TravelElevation.currentTokenState(this, { tokenCenter });
+  if ( currState === TravelElevation.TOKEN_ELEVATION_STATE.FLY
+    && !TravelElevation.autoElevationFly() ) return clone;
 
   log(`cloneToken ${this.name} at elevation ${this.document?.elevation}: setting adjust elevation to true`);
 
@@ -331,9 +338,14 @@ export function tileAtTokenElevation(token,
     ? canvas.elevation._tokenShape(token.getTopLeft(tokenCenter.x, tokenCenter.y), token.w, token.h)
     : undefined;
 
+  // If token is below ground, tiles must be below ground, and vice-versa.
   const terrainE = canvas.elevation.elevationAt(tokenCenter);
+  const excludeTileFn = almostGreaterThan(tokenElevation, terrainE)
+    ? tileE => tileE < terrainE // Token is above ground; exclude below
+    : tileE => almostGreaterThan(tileE, terrainE); // Token is below ground
+
   for ( const tile of tiles ) {
-    if ( tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, terrainE, tokenShape) ) {
+    if ( tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, excludeTileFn, tokenShape) ) {
       return tile;
     }
   }
@@ -351,22 +363,17 @@ export function tileAtTokenElevation(token,
  * @param {number} averageTiles                       Positive integer to skip pixels when averaging.
  *                                                    0 if point-based.
  * @param {number} alphaThreshold                     Threshold to determine transparency
- * @param {number} terrainE                           Terrain elevation at this point
+ * @param {function} excludeTileFn                    Test to exclude tile
  * @param {PIXI.Rectangle|PIXI.Polygon} [tokenShape]  Shape representing a token boundary
  *                                                    Required if not averaging
  * @returns {boolean}
  */
-export function tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, terrainE, tokenShape) {
+function tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, excludeTileFn, tokenShape) {
   const cache = tile._textureData?._evPixelCache;
   if ( !cache ) return false;
   const tileE = tile.elevationE;
+  if ( excludeTileFn(tileE) ) return false;
   if ( !almostLessThan(tileE, tokenElevation) || !tile.bounds.contains(tokenCenter.x, tokenCenter.y) ) return false;
-
-  // Ignore underground tiles if token is above-ground, and vice-versa.
-  if ( tokenElevation < terrainE ) { // Token is below-ground.
-    if ( tileE >= terrainE ) return false;
-  } else if ( tileE <= terrainE ) return false; // Token is above-ground.
-
   if ( !averageTiles ) return cache.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold);
 
   // This is tricky, b/c we want terrain to count if it is the same height as the tile.
