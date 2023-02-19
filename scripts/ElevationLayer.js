@@ -443,6 +443,8 @@ export class ElevationLayer extends InteractionLayer {
   /** @inheritdoc */
   async _tearDown(options) {
     log("_tearDown Elevation Layer");
+    if ( this._requiresSave ) await this.saveSceneElevationData();
+
     // Probably need to figure out how to destroy and/or remove these objects
     //     this._graphicsContainer.destroy({children: true});
     //     this._graphicsContainer = null;
@@ -1261,6 +1263,7 @@ export class ElevationLayer extends InteractionLayer {
    * Destroy elevation data when changing scenes or clearing data.
    */
   #destroy() {
+    this._clearElevationPixelCache();
     this._backgroundElevation.destroy();
     this._backgroundElevation = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
 
