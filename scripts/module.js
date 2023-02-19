@@ -107,6 +107,15 @@ Hooks.once("init", function() {
     elevationTextureSize: 4096,
 
     /**
+     * ElevationLayer.
+     * Resolution to use for the layer, as a percentage between 0 and 1.
+     * 1 means the texture will be the same size as the canvas.
+     * Texture will still be limited by elevationTextureSize; resolution may be rounded.
+     * @type {number}
+     */
+    resolution: 0.25,
+
+    /**
      * TravelElevation.
      * Permitted step size to allow tokens to move between tiles of similar elevations before flying.
      * If undefined, will use token height.

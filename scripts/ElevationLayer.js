@@ -534,10 +534,7 @@ export class ElevationLayer extends InteractionLayer {
     let width = dims.sceneWidth;
     let height = dims.sceneHeight;
 
-    // Use the same method as wall sub-grid to determine elevation resolution.
-    // 8 or 16 elevation measurements per grid space.
-    const gridPrecision = size >= 128 ? 16 : 8;
-    let resolution = gridPrecision / size;
+    let resolution = Math.clamped(CONFIG[MODULE_ID]?.resolution ?? 0.25, .01, 1);
     const maxSize = Math.min(
       ElevationLayer.#MAXIMUM_ELEVATION_TEXTURE_SIZE,
       resolution * Math.max(width, height));
