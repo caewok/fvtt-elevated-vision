@@ -330,8 +330,10 @@ export function tileAtTokenElevation(token,
   tokenShape ??= averageTiles
     ? canvas.elevation._tokenShape(token.getTopLeft(tokenCenter.x, tokenCenter.y), token.w, token.h)
     : undefined;
+
+  const terrainE = canvas.elevation.elevationAt(tokenCenter);
   for ( const tile of tiles ) {
-    if ( tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, tokenShape) ) {
+    if ( tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, terrainE, tokenShape) ) {
       return tile;
     }
   }
@@ -349,15 +351,22 @@ export function tileAtTokenElevation(token,
  * @param {number} averageTiles                       Positive integer to skip pixels when averaging.
  *                                                    0 if point-based.
  * @param {number} alphaThreshold                     Threshold to determine transparency
+ * @param {number} terrainE                           Terrain elevation at this point
  * @param {PIXI.Rectangle|PIXI.Polygon} [tokenShape]  Shape representing a token boundary
  *                                                    Required if not averaging
  * @returns {boolean}
  */
-export function tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, tokenShape) {
+export function tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, terrainE, tokenShape) {
   const cache = tile._textureData?._evPixelCache;
   if ( !cache ) return false;
   const tileE = tile.elevationE;
   if ( !almostLessThan(tileE, tokenElevation) || !tile.bounds.contains(tokenCenter.x, tokenCenter.y) ) return false;
+
+  // Ignore underground tiles if token is above-ground, and vice-versa.
+  if ( tokenElevation < terrainE ) { // Token is below-ground.
+    if ( tileE >= terrainE ) return false;
+  } else if ( tileE <= terrainE ) return false; // Token is above-ground.
+
   if ( !averageTiles ) return cache.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold);
 
   // This is tricky, b/c we want terrain to count if it is the same height as the tile.
