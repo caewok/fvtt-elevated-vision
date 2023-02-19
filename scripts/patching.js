@@ -11,7 +11,7 @@ canvas
 // Patches
 
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
-import { getSetting, SETTINGS } from "./settings.js";
+import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
 
 import {
   defaultOptionsAmbientSoundConfig,
@@ -198,11 +198,12 @@ function deregisterShadowPatches() {
 export function registerShadowPatches() {
   deregisterShadowPatches();
 
-  const shaderAlgorithm = canvas.scene?.flags?.[MODULE_ID]?.algorithm ?? SETTINGS.SHADING.TYPES.NONE;
-  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.NONE ) return;
+  const { ALGORITHM, TYPES } = SETTINGS.SHADING;
+  const shaderAlgorithm = getSceneSetting(ALGORITHM) ?? TYPES.NONE;
+  if ( shaderAlgorithm === TYPES.NONE ) return;
 
   // ----- Drawing shadows for vision source LOS, fog  ----- //
-  const use_shader = shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL;
+  const use_shader = shaderAlgorithm === TYPES.WEBGL;
   const shader_choice = use_shader | (MODULES_ACTIVE.PERFECT_VISION << 1);
 
   if ( use_shader ) {
