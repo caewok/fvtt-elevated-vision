@@ -43,7 +43,7 @@ export async function setSetting(settingName, value) {
 }
 
 export function getSceneSetting(settingName) {
-  return canvas.scene.flags[MODULE_ID][settingName];
+  return canvas.scene.flags[MODULE_ID]?.[settingName];
 }
 
 export async function setSceneSetting(settingName, value) {
