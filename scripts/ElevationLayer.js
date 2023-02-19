@@ -466,6 +466,7 @@ export class ElevationLayer extends InteractionLayer {
     log("Initializing elevation layer");
 
     this._initialized = false;
+    this._clearElevationPixelCache()
     this.#textureConfiguration = this._configureElevationTexture();
 
     // Initialize container to hold the elevation data and GM modifications
@@ -756,6 +757,13 @@ export class ElevationLayer extends InteractionLayer {
     // TODO: This needs to handle textures with resolutions less than 1.
     const { sceneX: x, sceneY: y } = canvas.dimensions;
     return PixelCache.fromTexture(this._elevationTexture, { x, y });
+  }
+
+  /**
+   * Clear the pixel cache
+   */
+  _clearElevationPixelCache() {
+    this.#elevationPixelCache = undefined;
   }
 
 
