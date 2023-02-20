@@ -35,12 +35,7 @@ import { registerElevationAdditions } from "./elevation.js";
 // For elevation layer registration and API
 import { ElevationLayer } from "./ElevationLayer.js";
 
-// Elevation Layer control tools
-import {
-  addElevationLayerSceneControls,
-  addElevationLayerSubControls,
-  renderElevationLayerSubControls
-} from "./controls.js";
+
 
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
@@ -49,6 +44,7 @@ import { SETTINGS, getSetting, registerSettings, getSceneSetting, setSceneSettin
 import "./changelog.js";
 import "./tokens.js";
 import "./renderConfig.js";
+import "./controls.js";
 
 const FLY_CONTROL = {
   name: SETTINGS.FLY_BUTTON,
@@ -223,9 +219,6 @@ Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(MODULE_ID);
 });
 
-Hooks.on("getSceneControlButtons", addElevationLayerSceneControls);
-Hooks.on("renderSceneControls", addElevationLayerSubControls);
-Hooks.on("renderTerrainLayerToolBar", renderElevationLayerSubControls);
 
 function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
