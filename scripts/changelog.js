@@ -44,7 +44,9 @@ Hooks.once("ready", () => {
                 - **Elevation Resolution:** Elevation data is saved, by default, at 25% of the scene size. It is also
                   limited to a maximum of 4096 pixels width/height (same as *Fog of War*). Should be faster and allow
                   *Elevated Vision* to work with larger scenes. When first loading a scene, the old scene elevation
-                  data will be downloaded in case the conversion to lower resolution fails.`
+                  data will be downloaded in case the conversion to lower resolution fails.
+                - **Levels:** Elevation of basement tiles should now work regardless of the minimum elevation level for
+                  the scene.`
         })
         .build()
         ?.render(true);
