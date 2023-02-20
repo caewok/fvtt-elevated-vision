@@ -4,9 +4,7 @@ game,
 canvas,
 CONFIG,
 renderTemplate,
-Dialog,
 ui,
-Ray,
 foundry
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -47,10 +45,11 @@ import {
 } from "./controls.js";
 
 // Settings, to toggle whether to change elevation on token move
-import { SETTINGS, getSetting, setSetting, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
+import { SETTINGS, getSetting, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
 
-// Self-executing hooks
+// Other self-executing hooks
 import "./changelog.js";
+import "./tokens.js";
 
 const FLY_CONTROL = {
   name: SETTINGS.FLY_BUTTON,
@@ -151,7 +150,7 @@ Hooks.once("init", function() {
      * @type {number}
      */
     averageTiles: 4
-  }
+  };
 });
 
 Hooks.once("libWrapper.Ready", async function() {
@@ -190,7 +189,7 @@ Hooks.on("canvasReady", async function() {
       // Match Levels settings. Prefer Levels settings.
       const levelsE = tile.document?.flag?.levels?.rangeBottom;
       if ( typeof levelsE !== "undefined" ) tile.document.setFlag(MODULE_ID, "elevation", levelsE);
-      else tile.document.update({flags: { levels: { rangeBottom: tile.elevationE } } })
+      else tile.document.update({flags: { levels: { rangeBottom: tile.elevationE } } });
 
       // Cache the tile pixels.
       tile._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(tile);
@@ -233,38 +232,6 @@ function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
 
-
-// Reset the token elevation when moving the token after a cloned drag operation.
-// Token.prototype._refresh is then used to update the elevation as the token is moved.
-Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // eslint-disable-line no-unused-vars
-  const token = tokenD.object;
-  log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
-  log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
-
-  token._elevatedVision ??= {};
-  token._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
-  token._elevatedVision.tokenHasAnimated = false;
-
-  if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
-  if ( typeof changes.x === "undefined" && typeof changes.y === "undefined" ) return;
-
-  const tokenCenter = token.center;
-  const tokenDestination = token.getCenter(changes.x ? changes.x : tokenD.x, changes.y ? changes.y : tokenD.y );
-  const travelRay = new Ray(tokenCenter, tokenDestination);
-  const te = new TravelElevation(token, travelRay);
-  const travel = token._elevatedVision.travel = te.calculateElevationAlongRay(token.document.elevation);
-  if ( !travel.adjustElevation ) return;
-
-  if ( tokenD.elevation !== travel.finalElevation ) changes.elevation = travel.finalElevation;
-  tokenD.object._elevatedVision.tokenAdjustElevation = true;
-});
-
-Hooks.on("updateToken", function(tokenD, changes, _options, _userId) {
-  const token = tokenD.object;
-  log(`updateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
-
-});
-
 // Hook when a tile changes elevation.
 // Track for Levels, to ensure minimum elevation for the scene is met.
 Hooks.on("createTile", createTileHook);
@@ -272,8 +239,6 @@ Hooks.on("preUpdateTile", preUpdateTileHook);
 Hooks.on("updateTile", updateTileHook);
 
 function createTileHook(document, _options, _userId) {
-//   if ( !canvas.elevation?._initialized ) return;
-
   const elevationMin = canvas.elevation.elevationMin;
   const rangeBottom = document.flags?.levels?.rangeBottom ?? document.elevation ?? elevationMin;
   const rangeTop = document.flags?.levels?.rangeTop ?? document.elevation ?? elevationMin;
@@ -285,28 +250,14 @@ function createTileHook(document, _options, _userId) {
   }
 }
 
-function preUpdateTileHook(document, changes, options, userId) {
+function preUpdateTileHook(document, changes, _options, _userId) {
   const updateData = {};
   if ( changes.flags?.levels?.rangeBottom ) updateData[`flags.${MODULE_ID}.elevation`] = changes.flags.levels.rangeBottom;
-  else if ( changes.flags?.[MODULE_ID]?.elevation) updateData[`flags.levels.rangeBottom`] = changes.flags[MODULE_ID].elevation;
+  else if ( changes.flags?.[MODULE_ID]?.elevation) updateData["flags.levels.rangeBottom"] = changes.flags[MODULE_ID].elevation;
   foundry.utils.mergeObject(changes, updateData, {inplace: true});
 }
 
 function updateTileHook(document, change, _options, _userId) {
-//   if ( !canvas.elevation?._initialized ) return;
-
-//   const elevationMin = canvas.elevation.elevationMin;
-//   const rangeBottom = change.flags?.levels?.rangeBottom ?? document.elevation ?? elevationMin;
-//   const rangeTop = change.flags?.levels?.rangeTop ?? document.elevation ?? elevationMin;
-//   const min = Math.min(rangeBottom, rangeTop);
-
-
-
-//   if ( min < elevationMin ) {
-//     canvas.elevation.elevationMin = min;
-//     ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on tile minimum elevation range.`);
-//   }
-
   if ( change.overhead ) {
     document.object._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(document.object);
   } else if ( document.overhead ) {
@@ -323,7 +274,7 @@ function updateTileHook(document, change, _options, _userId) {
       || Object.hasOwn(change, "texture")
       || (change.texture
         && (Object.hasOwn(change.texture, "scaleX")
-        ||  Object.hasOwn(change.texture, "scaleY"))) ) {
+        || Object.hasOwn(change.texture, "scaleY"))) ) {
 
       cache.clearTransforms();
     }

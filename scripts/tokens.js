@@ -1,7 +1,8 @@
 /* globals
 canvas,
 Ray,
-CONFIG
+CONFIG,
+Hooks
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -114,6 +115,32 @@ Animating for any given location:
   - fly: use fly elevation
 */
 
+
+// Reset the token elevation when moving the token after a cloned drag operation.
+// Token.prototype._refresh is then used to update the elevation as the token is moved.
+Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // eslint-disable-line no-unused-vars
+  const token = tokenD.object;
+  log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
+  log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
+
+  token._elevatedVision ??= {};
+  token._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
+  token._elevatedVision.tokenHasAnimated = false;
+
+  if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
+  if ( typeof changes.x === "undefined" && typeof changes.y === "undefined" ) return;
+
+  const tokenCenter = token.center;
+  const tokenDestination = token.getCenter(changes.x ? changes.x : tokenD.x, changes.y ? changes.y : tokenD.y );
+  const travelRay = new Ray(tokenCenter, tokenDestination);
+  const te = new TravelElevation(token, travelRay);
+  const travel = token._elevatedVision.travel = te.calculateElevationAlongRay(token.document.elevation);
+  if ( !travel.adjustElevation ) return;
+
+  if ( tokenD.elevation !== travel.finalElevation ) changes.elevation = travel.finalElevation;
+  tokenD.object._elevatedVision.tokenAdjustElevation = true;
+});
+
 /**
  * Wrap Token.prototype._refresh
  * Adjust elevation as the token moves.
@@ -134,8 +161,8 @@ export function _refreshToken(wrapper, options) {
 
   const ev = this._elevatedVision;
   if ( !ev || !ev.tokenAdjustElevation ) {
-   log(`Token _refresh: Adjust elevation is false.`);
-   return wrapper(options);
+    log("Token _refresh: Adjust elevation is false.");
+    return wrapper(options);
   }
 
   if ( this._original ) {
@@ -152,7 +179,7 @@ export function _refreshToken(wrapper, options) {
 
   } else if ( this._animation ) {
     // Adjust the elevation as the token is moved by locating where we are on the travel ray.
-    log(`token _refresh: animation`);
+    log("token _refresh: animation");
     const tokenCenter = this.center;
     const { travelRay, elevationChanges } = ev.travel;
     const currT = travelRay.tConversion(tokenCenter);
@@ -310,7 +337,8 @@ export function tokenTerrainElevation(token, { tokenCenter, useAveraging } = {})
  * @param {Point} [options.tokenCenter]       Position to use for the token center.
  * @param {number} [options.tokenElevation]   Elevation of the token
  * @param {PIXI.Rectangle|PIXI.Polygon} [tokenShape]  Shape representing a token boundary
- * @param {number} [options.averageTiles]     0 for no averaging. Otherwise an integer for every N pixels to test in average
+ * @param {number} [options.averageTiles]     0 for no averaging.
+ *                                            Otherwise an integer for every N pixels to test in average
  * @param {number} [options.alphaThreshold]   Percent minimum pixel value before considered transparent
  * @param {Tile[]} [options.tiles]            Array of tiles to test
  * @return {Tile|null} Return the tile. Elevation can then be easily determined: tile.elevationE;
@@ -387,12 +415,12 @@ function tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThre
   const pixelThreshold = canvas.elevation.maximumPixelValue * alphaThreshold;
   let sum = 0;
   const countFn = (value, _i, localX, localY) => {
-     if ( value > pixelThreshold ) return sum += 1;
-     const canvas = cache._toCanvasCoordinates(localX, localY);
-     const terrainValue = evCache.pixelAtCanvas(canvas.x, canvas.y);
-     if ( terrainValue.almostEqual(pixelE) ) return sum += 1;
-     return;
-  }
+    if ( value > pixelThreshold ) return sum += 1;
+    const canvas = cache._toCanvasCoordinates(localX, localY);
+    const terrainValue = evCache.pixelAtCanvas(canvas.x, canvas.y);
+    if ( terrainValue.almostEqual(pixelE) ) return sum += 1;
+    return sum;
+  };
   const denom = cache.applyFunctionToShape(countFn, tokenShape, averageTiles);
   const percentCoverage = sum / denom;
   return percentCoverage > 0.5;
