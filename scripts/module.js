@@ -3,11 +3,7 @@ Hooks,
 game,
 canvas,
 CONFIG,
-renderTemplate,
-Dialog,
-ui,
-Ray,
-foundry
+ui
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -17,9 +13,6 @@ import { log } from "./util.js";
 
 // Patches
 import { patchTile } from "./patches/Tile.js";
-
-// Rendering configs
-import { renderAmbientLightConfigHook, renderAmbientSoundConfigHook, renderTileConfigHook } from "./renderConfig.js";
 
 // API imports
 import * as util from "./util.js";
@@ -39,25 +32,18 @@ import { registerElevationAdditions } from "./elevation.js";
 // For elevation layer registration and API
 import { ElevationLayer } from "./ElevationLayer.js";
 
-// Elevation Layer control tools
-import {
-  addElevationLayerSceneControls,
-  addElevationLayerSubControls,
-  renderElevationLayerSubControls
-} from "./controls.js";
-
 // Settings, to toggle whether to change elevation on token move
-import { SETTINGS, getSetting, setSetting, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
+import { SETTINGS, getSetting, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
 
-// Self-executing hooks
+import { updateFlyTokenControl } from "./scenes.js";
+
+// Other self-executing hooks
 import "./changelog.js";
-
-const FLY_CONTROL = {
-  name: SETTINGS.FLY_BUTTON,
-  title: `${MODULE_ID}.controls.${SETTINGS.FLY_BUTTON}.name`,
-  icon: "fa-solid fa-plane-lock",
-  toggle: true
-};
+import "./tokens.js";
+import "./renderConfig.js";
+import "./controls.js";
+import "./tiles.js";
+// Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
@@ -75,8 +61,6 @@ Hooks.once("init", function() {
     TilePixelCache,
     TravelElevation
   };
-
-  FLY_CONTROL.title = game.i18n.localize(FLY_CONTROL.title);
 
   // These methods need to be registered early
   registerGeometry();
@@ -151,7 +135,7 @@ Hooks.once("init", function() {
      * @type {number}
      */
     averageTiles: 4
-  }
+  };
 });
 
 Hooks.once("libWrapper.Ready", async function() {
@@ -190,7 +174,7 @@ Hooks.on("canvasReady", async function() {
       // Match Levels settings. Prefer Levels settings.
       const levelsE = tile.document?.flag?.levels?.rangeBottom;
       if ( typeof levelsE !== "undefined" ) tile.document.setFlag(MODULE_ID, "elevation", levelsE);
-      else tile.document.update({flags: { levels: { rangeBottom: tile.elevationE } } })
+      else tile.document.update({flags: { levels: { rangeBottom: tile.elevationE } } });
 
       // Cache the tile pixels.
       tile._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(tile);
@@ -225,188 +209,6 @@ Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(MODULE_ID);
 });
 
-Hooks.on("getSceneControlButtons", addElevationLayerSceneControls);
-Hooks.on("renderSceneControls", addElevationLayerSubControls);
-Hooks.on("renderTerrainLayerToolBar", renderElevationLayerSubControls);
-
 function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
-
-
-// Reset the token elevation when moving the token after a cloned drag operation.
-// Token.prototype._refresh is then used to update the elevation as the token is moved.
-Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // eslint-disable-line no-unused-vars
-  const token = tokenD.object;
-  log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
-  log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
-
-  token._elevatedVision ??= {};
-  token._elevatedVision.tokenAdjustElevation = false; // Just a placeholder
-  token._elevatedVision.tokenHasAnimated = false;
-
-  if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
-  if ( typeof changes.x === "undefined" && typeof changes.y === "undefined" ) return;
-
-  const tokenCenter = token.center;
-  const tokenDestination = token.getCenter(changes.x ? changes.x : tokenD.x, changes.y ? changes.y : tokenD.y );
-  const travelRay = new Ray(tokenCenter, tokenDestination);
-  const te = new TravelElevation(token, travelRay);
-  const travel = token._elevatedVision.travel = te.calculateElevationAlongRay(token.document.elevation);
-  if ( !travel.adjustElevation ) return;
-
-  if ( tokenD.elevation !== travel.finalElevation ) changes.elevation = travel.finalElevation;
-  tokenD.object._elevatedVision.tokenAdjustElevation = true;
-});
-
-Hooks.on("updateToken", function(tokenD, changes, _options, _userId) {
-  const token = tokenD.object;
-  log(`updateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
-
-});
-
-// Hook when a tile changes elevation.
-// Track for Levels, to ensure minimum elevation for the scene is met.
-Hooks.on("createTile", createTileHook);
-Hooks.on("preUpdateTile", preUpdateTileHook);
-Hooks.on("updateTile", updateTileHook);
-
-function createTileHook(document, _options, _userId) {
-//   if ( !canvas.elevation?._initialized ) return;
-
-  const elevationMin = canvas.elevation.elevationMin;
-  const rangeBottom = document.flags?.levels?.rangeBottom ?? document.elevation ?? elevationMin;
-  const rangeTop = document.flags?.levels?.rangeTop ?? document.elevation ?? elevationMin;
-  const min = Math.min(rangeBottom, rangeTop);
-
-  if ( min < elevationMin ) {
-    canvas.elevation.elevationMin = min;
-    ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on tile minimum elevation range.`);
-  }
-}
-
-function preUpdateTileHook(document, changes, options, userId) {
-  const updateData = {};
-  if ( changes.flags?.levels?.rangeBottom ) updateData[`flags.${MODULE_ID}.elevation`] = changes.flags.levels.rangeBottom;
-  else if ( changes.flags?.[MODULE_ID]?.elevation) updateData[`flags.levels.rangeBottom`] = changes.flags[MODULE_ID].elevation;
-  foundry.utils.mergeObject(changes, updateData, {inplace: true});
-}
-
-function updateTileHook(document, change, _options, _userId) {
-//   if ( !canvas.elevation?._initialized ) return;
-
-//   const elevationMin = canvas.elevation.elevationMin;
-//   const rangeBottom = change.flags?.levels?.rangeBottom ?? document.elevation ?? elevationMin;
-//   const rangeTop = change.flags?.levels?.rangeTop ?? document.elevation ?? elevationMin;
-//   const min = Math.min(rangeBottom, rangeTop);
-
-
-
-//   if ( min < elevationMin ) {
-//     canvas.elevation.elevationMin = min;
-//     ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${min} based on tile minimum elevation range.`);
-//   }
-
-  if ( change.overhead ) {
-    document.object._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(document.object);
-  } else if ( document.overhead ) {
-    const cache = document.object._textureData._evPixelCache;
-
-    if ( Object.hasOwn(change, "x")
-      || Object.hasOwn(change, "y")
-      || Object.hasOwn(change, "width")
-      || Object.hasOwn(change, "height") ) {
-      cache._resize();
-    }
-
-    if ( Object.hasOwn(change, "rotation")
-      || Object.hasOwn(change, "texture")
-      || (change.texture
-        && (Object.hasOwn(change.texture, "scaleX")
-        ||  Object.hasOwn(change.texture, "scaleY"))) ) {
-
-      cache.clearTransforms();
-    }
-  }
-}
-
-Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
-Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
-Hooks.on("renderTileConfig", renderTileConfigHook);
-
-Hooks.on("getSceneControlButtons", controls => {
-  if ( !canvas.scene || !getSetting(SETTINGS.FLY_BUTTON) || !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
-
-  const tokenTools = controls.find(c => c.name === "token");
-  tokenTools.tools.push(FLY_CONTROL);
-});
-
-/**
- * Update data for pull-down algorithm menu for the scene config.
- */
-Hooks.on("renderSceneConfig", renderSceneConfigHook);
-
-async function renderSceneConfigHook(app, html, data) {
-  util.log("SceneConfig", app, html, data);
-
-  const renderData = {};
-  renderData[MODULE_ID] = { algorithms: SETTINGS.SHADING.LABELS };
-
-  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.ELEVATION_MINIMUM) === "undefined" ) {
-    renderData[`data.flags.${MODULE_ID}.${SETTINGS.ELEVATION_MINIMUM}`] = getSetting(SETTINGS.ELEVATION_MINIMUM) ?? 0;
-  }
-
-  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.ELEVATION_INCREMENT) === "undefined" ) {
-    renderData[`data.flags.${MODULE_ID}.${SETTINGS.ELEVATION_INCREMENT}`] = getSetting(SETTINGS.ELEVATION_INCREMENT) ?? canvas.dimensions.distance;
-  }
-
-  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.AUTO_ELEVATION) === "undefined" ) {
-    renderData[`data.flags.${MODULE_ID}.${SETTINGS.AUTO_ELEVATION}`] = getSetting(SETTINGS.AUTO_ELEVATION) ?? true;
-  }
-
-  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.SHADING.ALGORITHM) === "undefined" ) {
-    renderData[`data.flags.${MODULE_ID}.${SETTINGS.SHADING.ALGORITHM}`] = getSetting(SETTINGS.SHADING.ALGORITHM) ?? SETTINGS.SHADING.TYPES.WEBGL;
-  }
-
-  foundry.utils.mergeObject(data, renderData, {inplace: true});
-
-  const form = html.find(`input[name="initial.scale"]`).closest(".form-group");
-  const snippet = await renderTemplate(`modules/${MODULE_ID}/templates/scene-elevation-config.html`, data);
-  form.append(snippet);
-  app.setPosition({ height: "auto" });
-}
-
-/**
- * Monitor whether EV has been enabled or disabled for a scene.
- */
-Hooks.on("updateScene", updateSceneHook);
-
-async function updateSceneHook(document, change, _options, _userId) {
-  if ( canvas.scene.id !== document.id ) return;
-
-  // If the updated scene is currently the active scene, then update patches and fly controls.
-  const autoelevate = change.flags?.[MODULE_ID]?.[SETTINGS.AUTO_ELEVATION];
-  if ( typeof autoelevate !== "undefined" ) {
-    updateFlyTokenControl(autoelevate);
-    if ( autoelevate === true ) ui.notifications.notify("Elevated Vision autoelevate enabled for scene.");
-    else if ( autoelevate === false ) ui.notifications.notify("Elevated Vision autoelevate disabled for scene.");
-  }
-
-  const algorithm = change.flags?.[MODULE_ID]?.[SETTINGS.SHADING.ALGORITHM];
-  if ( algorithm ) {
-    registerShadowPatches();
-    await canvas.draw();
-    const label = game.i18n.localize(SETTINGS.SHADING.LABELS[algorithm]);
-    ui.notifications.notify(`Elevated Vision scene shadows switched to ${label}.`);
-  }
-}
-
-function updateFlyTokenControl(enable) {
-  enable ??= getSceneSetting(SETTINGS.AUTO_ELEVATION);
-  const tokenTools = ui.controls.controls.find(c => c.name === "token");
-  const flyIndex = tokenTools.tools.findIndex(b => b.name === SETTINGS.FLY_BUTTON);
-  if ( enable && !~flyIndex ) tokenTools.tools.push(FLY_CONTROL);
-  else if ( ~flyIndex ) tokenTools.tools.splice(flyIndex, 1);
-  ui.controls.render(true);
-}
-

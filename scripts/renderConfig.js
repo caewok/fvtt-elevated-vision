@@ -1,17 +1,23 @@
 /* globals
 renderTemplate,
-Hooks
+Hooks,
+foundry,
+canvas,
+game,
+FormDataExtended
 */
-
 "use strict";
 
-import { log } from "./util.js";
 import { MODULE_ID } from "./const.js";
+
+Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
+Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
+Hooks.on("renderTileConfig", renderTileConfigHook);
 
 /**
  * Inject html to add controls to the ambient light configuration to allow user to set elevation.
  */
-export async function renderAmbientLightConfigHook(app, html, data) {
+async function renderAmbientLightConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-ambient-source-config.html`;
   const findString = "div[data-tab='basic']:last";
   await injectConfiguration(app, html, data, template, findString);
@@ -20,7 +26,7 @@ export async function renderAmbientLightConfigHook(app, html, data) {
 /**
  * Inject html to add controls to the ambient sound configuration to allow user to set elevation.
  */
-export async function renderAmbientSoundConfigHook(app, html, data) {
+async function renderAmbientSoundConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-ambient-source-config.html`;
   const findString = ".form-group:last";
   await injectConfiguration(app, html, data, template, findString);
@@ -29,7 +35,7 @@ export async function renderAmbientSoundConfigHook(app, html, data) {
 /**
  * Inject html to add controls to the tile configuration to allow user to set elevation.
  */
-export async function renderTileConfigHook(app, html, data) {
+async function renderTileConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-tile-config.html`;
   const findString = "div[data-tab='basic']:last";
   await injectConfiguration(app, html, data, template, findString);
