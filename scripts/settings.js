@@ -29,9 +29,7 @@ export const SETTINGS = {
   ELEVATION_MINIMUM: "elevationmin",
   ELEVATION_INCREMENT: "elevationstep",
 
-  WELCOME_DIALOG: {
-    v020: "welcome-dialog-v0-20"
-  }
+  CHANGELOG: "changelog"
 };
 
 export function getSetting(settingName) {

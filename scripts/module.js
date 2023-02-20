@@ -49,6 +49,9 @@ import {
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, setSetting, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
 
+// Self-executing hooks
+import "./changelog.js";
+
 const FLY_CONTROL = {
   name: SETTINGS.FLY_BUTTON,
   title: `${MODULE_ID}.controls.${SETTINGS.FLY_BUTTON}.name`,
