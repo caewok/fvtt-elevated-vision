@@ -457,9 +457,7 @@ layout(location = 0) out highp vec4 fragColor_${this.#unique}_o;
      * @returns {this}
      */
     #addVariable(name, type, value) {
-        // Strip any [] from the name for purposes of the ifdef.
-        const nameClean = name.replace(/\[.*/, "");
-        return this.#preprocess().prependBlock(`#ifndef ${nameClean}_${this.#unique}_d\n#define ${nameClean}_${this.#unique}_d\n${type} ${name}${value !== undefined ? ` = ${value}` : ""};\n#endif\n`);
+        return this.#preprocess().prependBlock(`#ifndef ${name}_${this.#unique}_d\n#define ${name}_${this.#unique}_d\n${type} ${name}${value !== undefined ? ` = ${value}` : ""};\n#endif\n`);
     }
 
     /**
@@ -570,5 +568,3 @@ layout(location = 0) out highp vec4 fragColor_${this.#unique}_o;
       return this.#preprocess().prependBlock(`#ifndef ${name}_${this.#unique}_d\n#define ${name}_${this.#unique}_d\n${type} ${name}(${paramStr}) {\n${body}\n}\n#endif\n`);
     }
 }
-
-
