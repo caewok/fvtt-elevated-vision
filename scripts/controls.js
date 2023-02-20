@@ -81,7 +81,7 @@ export function addElevationLayerSceneControls(controls) {
             type: "image",
             displayMode: "thumbs",
             tileSize: false,
-            callback: canvas.elevation.importFromImageFile
+            callback: (file) => { canvas.elevation.importFromImageFile(file) }
           }).render(true);
         }
       },
