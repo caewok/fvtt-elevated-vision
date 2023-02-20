@@ -97,7 +97,7 @@ const FN_RAY_QUAD_INTERSECTION =
   if (beta < 0.0) return -1.0;
   if (beta > 1.0) return -1.0;
 
-  // Reject rays using the barycentric coordinates of the intersection point with respect to T'
+  // Reject rays using the barycentric coordinates of the intersection point with respect to T prime
   if ((alpha + beta) > 1.0) {
     vec3 E23 = v3 - v2;
     vec3 E21 = v1 - v2;
@@ -202,7 +202,6 @@ vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
 
 vec2 evTextureCoord = (vUvs.xy - EV_sceneDims.xy) / EV_sceneDims.zw;
 backgroundElevation = texture2D(EV_elevationSampler, evTextureCoord);
-//backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
 
 float percentDistanceFromWall;
 float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
@@ -224,7 +223,6 @@ if ( vUvs.x < sceneLeft
   terrainWallsToProcess = 0;
 
 } else if ( pixelElevation > EV_sourceLocation.z ) {
-// if ( pixelElevation > EV_sourceLocation.z ) {
 
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
