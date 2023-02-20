@@ -129,14 +129,6 @@ export function registerSettings() {
     requiresReload: true,
     type: Boolean
   });
-
-
-  game.settings.register(MODULE_ID, SETTINGS.WELCOME_DIALOG.v020, {
-    scope: "world",
-    config: false,
-    default: false,
-    type: Boolean
-  });
 }
 
 /**
