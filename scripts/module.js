@@ -16,8 +16,6 @@ import { log } from "./util.js";
 // Patches
 import { patchTile } from "./patches/Tile.js";
 
-// Rendering configs
-import { renderAmbientLightConfigHook, renderAmbientSoundConfigHook, renderTileConfigHook } from "./renderConfig.js";
 
 // API imports
 import * as util from "./util.js";
@@ -50,6 +48,7 @@ import { SETTINGS, getSetting, registerSettings, getSceneSetting, setSceneSettin
 // Other self-executing hooks
 import "./changelog.js";
 import "./tokens.js";
+import "./renderConfig.js";
 
 const FLY_CONTROL = {
   name: SETTINGS.FLY_BUTTON,
@@ -281,9 +280,6 @@ function updateTileHook(document, change, _options, _userId) {
   }
 }
 
-Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
-Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
-Hooks.on("renderTileConfig", renderTileConfigHook);
 
 Hooks.on("getSceneControlButtons", controls => {
   if ( !canvas.scene || !getSetting(SETTINGS.FLY_BUTTON) || !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
