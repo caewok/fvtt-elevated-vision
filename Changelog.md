@@ -13,6 +13,8 @@ The new auto-elevation allows for use of bridges over canyons and tiles with tra
 
 Possible fix for multiple changes to the minimum elevation when using Levels 3D. Auto-elevation and shading will be disabled when a scene is using 3D.
 
+Use the changelog dialog from Perfect Vision.
+
 ## 0.3.5
 Fix for enhanced LOS when limited walls or walls with defined heights are present.
 

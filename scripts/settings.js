@@ -29,9 +29,7 @@ export const SETTINGS = {
   ELEVATION_MINIMUM: "elevationmin",
   ELEVATION_INCREMENT: "elevationstep",
 
-  WELCOME_DIALOG: {
-    v020: "welcome-dialog-v0-20"
-  }
+  CHANGELOG: "changelog"
 };
 
 export function getSetting(settingName) {
@@ -129,14 +127,6 @@ export function registerSettings() {
     config: true,
     default: false,
     requiresReload: true,
-    type: Boolean
-  });
-
-
-  game.settings.register(MODULE_ID, SETTINGS.WELCOME_DIALOG.v020, {
-    scope: "world",
-    config: false,
-    default: false,
     type: Boolean
   });
 }

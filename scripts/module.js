@@ -49,6 +49,9 @@ import {
 // Settings, to toggle whether to change elevation on token move
 import { SETTINGS, getSetting, setSetting, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
 
+// Self-executing hooks
+import "./changelog.js";
+
 const FLY_CONTROL = {
   name: SETTINGS.FLY_BUTTON,
   title: `${MODULE_ID}.controls.${SETTINGS.FLY_BUTTON}.name`,
@@ -157,47 +160,6 @@ Hooks.once("libWrapper.Ready", async function() {
 
 Hooks.once("setup", async function() {
   registerPatches();
-});
-
-
-Hooks.once("ready", async function() {
-  if ( !getSetting(SETTINGS.WELCOME_DIALOG.v020) ) {
-		Dialog.prompt({
-			title: "Elevated Vision v0.2.0 Changes!",
-			content: `
-<p>
-As of version 0.2.0, Elevated Vision no longer adjusts token visibility. You can install one or more of the
-following modules if you need more functionality regarding 3d token visibility:
-<ul>
-  <li><a href="https://github.com/caewok/fvtt-token-visibility">Alternative Token Visibility</a></li>
-  <li><a href="https://github.com/dev7355608/perfect-vision">Perfect Vision</a></li>
-  <li><a href="https://github.com/theripper93/Levels">Levels</a></li>
-</ul>
-These modules should work together; please report bugs to the relevant git issue page!
-</p>
-
-<p>
-Elevated Vision also no longer strictly requires, but still very strongly recommends, the <a href="https://foundryvtt.com/packages/wall-height/">Wall Height</a> module.
-With Wall Height, you can set walls and lights to have defined heights. Elevated Vision will create shadows for elevated lights cast on lower walls,
-block lower-elevation lights from illuminating the higher elevation, and create shadows when elevated tokens look down at lower-elevation walls.
-</p>
-<p>
-Thus, with Wall Height but no other token visibility module installed, tokens in shadows
-(caused by looking down on walls with defined height) will remain visible. Tokens otherwise behind walls
-will be unseen, as expected by default Foundry. Basically, token visibility should be equivalent to
-what you get using the Wall Height module alone; shadows are added but do not affect the visibility calculation.
-</p>
-
-<p>
-<br>
-<em>Clicking the button below will make this message no longer display when FoundryVTT loads. If you
-want to keep seeing this message, please click the close button above.</em>
-</p>
-`,
-			rejectClose: false,
-			callback: () => setSetting(SETTINGS.WELCOME_DIALOG.v020, true)
-		});
-	}
 });
 
 Hooks.on("canvasInit", async function(_canvas) {
