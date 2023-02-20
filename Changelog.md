@@ -15,6 +15,8 @@ Possible fix for multiple changes to the minimum elevation when using Levels 3D.
 
 Use the changelog dialog from Perfect Vision.
 
+Fix upload of elevation files from the EV control panel.
+
 ## 0.3.5
 Fix for enhanced LOS when limited walls or walls with defined heights are present.
 
