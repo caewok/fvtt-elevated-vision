@@ -159,7 +159,7 @@ function regShaderPatch(target, fn, { type, perf_mode } = {}) {
 }
 
 export function registerPatches() {
-  if ( PerfectVision ) PerfectVision.debug = true;
+  // Unneeded with fixes to PV shader patcher: if ( typeof PerfectVision !== "undefined" ) PerfectVision.debug = true;
 
   // ----- Locating edges that create shadows in the LOS ----- //
   regPatch("ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
