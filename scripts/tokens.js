@@ -373,7 +373,7 @@ export function tileAtTokenElevation(token,
     : tileE => almostGreaterThan(tileE, terrainE); // Token is below ground
 
   for ( const tile of tiles ) {
-    if ( excludeTileFn(tile) ) continue;
+    if ( excludeTileFn(tile.elevationE) ) continue;
     if ( tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, tokenShape) ) return tile;
   }
 
