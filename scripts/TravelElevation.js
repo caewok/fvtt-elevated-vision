@@ -114,7 +114,11 @@ commons.js:1729 benchCalc | 1000 iterations | 150.1ms | 0.15009999999999998ms pe
 benchCreation | 1000 iterations | 15.6ms | 0.0156ms per
 commons.js:1729 benchCalc | 1000 iterations | 32.9ms | 0.0329ms per
 
-// Farmhouse: middle --> middle of farmhosue
+// Averaging
+benchCreation | 1000 iterations | 12.3ms | 0.0123ms per
+commons.js:1729 benchCalc | 1000 iterations | 533.3ms | 0.5333ms per
+
+// Farmhouse: middle --> middle of farmhouse
 benchCreation | 1000 iterations | 16.3ms | 0.016300000000000002ms per
 commons.js:1729 benchCalc | 1000 iterations | 279.8ms | 0.2798ms per
 
@@ -122,6 +126,9 @@ commons.js:1729 benchCalc | 1000 iterations | 279.8ms | 0.2798ms per
 benchCreation | 1000 iterations | 15.1ms | 0.015099999999999999ms per
 commons.js:1729 benchCalc | 1000 iterations | 21.6ms | 0.0216ms per
 
+// Averaging
+benchCreation | 1000 iterations | 10.7ms | 0.0107ms per
+commons.js:1729 benchCalc | 1000 iterations | 170.2ms | 0.1702ms per
 
 
 
@@ -373,12 +380,15 @@ export class TravelElevation {
       const local = evCache._nextPixelValueAlongLocalRay(localRay, cmp, stepT, t);
       if ( local ) {
         let pt = evCache._toCanvasCoordinates(local.x, local.y);
-        let e = ev.pixelValueToElevation(local.value);
-        let z = gridUnitsToPixels(e);
-        let pt3d = new Point3d(pt.x, pt.y, z);
-        pt3d.e = e;
-        pt3d.t0 = local.t0;
-        out.push(pt3d);
+
+        // TO-DO: Could use Point3d here and set z value to elevationZ.
+        // May be helpful for flagging difficulty checks for large climbs/falls.
+
+        // let z = gridUnitsToPixels(e);
+        // let pt3d = new Point3d(pt.x, pt.y, z);
+        pt.e = ev.pixelValueToElevation(local.value);
+        pt.t0 = local.t0;
+        out.push(pt);
         t = local.t0 + stepT; // + stepT;
         currValue = local.value;
 
@@ -443,6 +453,7 @@ export class TravelElevation {
   calculateElevationAlongRay(startElevation) {
     const { fly, token, travelRay } = this;
     startElevation ??= token.bottomE;
+    const { currState, currE, currTile } = this.currentTokenState({ tokenCenter: travelRay.A, tokenElevation: startElevation });
 
     // Default TravelElevationResults if no calculations required.
     const out = {
@@ -456,7 +467,6 @@ export class TravelElevation {
       elevationChanges: []
     };
 
-    const { currState, currE } = this.currentTokenState({ tokenCenter: travelRay.A, tokenElevation: startElevation });
     if ( currState === FLY && !fly ) return out;
 
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
@@ -470,22 +480,25 @@ export class TravelElevation {
     // Tiles are present and/or flying is enabled.
     out.trackingRequired = true;
     const { finalElevation, elevationChanges } = fly
-      ? this._trackElevationChangesWithFlight(currE, currState)
-      : this._trackElevationChanges(currE, currState);
+      ? this._trackElevationChangesWithFlight(currE, currState, currTile)
+      : this._trackElevationChanges(currE, currState, currTile);
     out.finalElevation = finalElevation;
     out.elevationChanges = elevationChanges;
+
+    // Add in the starting position and state.
+    const startingIx = travelRay.A;
+    out.elevationChanges.unshift({ix: travelRay.A, currState, currE});
+
     return out;
   }
 
   /**
    * Track elevation changes along a ray
    */
-  _trackElevationChanges(startElevation, currState) {
+  _trackElevationChanges(currE, currState, currTile) {
     const tileIxs = this.tileIxs;
     const ev = canvas.elevation;
 
-    let currE = startElevation;
-    let currTile;
     const elevationChanges = [];
     const stepT = this.#stepT;
 
@@ -522,7 +535,15 @@ export class TravelElevation {
           // Need the next matching tile or terrain; exclude the tile we are on.
           nextTile = this._findMatchingTile(ix, currE, ix.tile);
         }
-      } // else if ( currState === TILE && !ix.tile ) { // Terrain pushing through the current tile.
+      } else if ( currState === TILE && ix.tile === currTile ) {
+        // Started on a tile and ending on that tile.
+        nextTile = currTile;
+      }
+
+      //else if ( currState === TILE && !ix.tile ) {
+        // Terrain pushing through the current tile.
+        //nextTile = undefined;
+      //}
 
 
       if ( nextTile ) [currE, currState, currTile] = [nextTile.elevationE, TILE, nextTile];
@@ -537,7 +558,7 @@ export class TravelElevation {
       elevationChanges.push({ ix, currState, currE });
 
       // (6) Depending on the new current state, look for additional tile or terrain intersections along the ray.
-      if ( currState === TILE ) this.#locateNextTileObstacle(currTile, tileIxs, ix, currE);
+      if ( currState === TILE ) this.#locateNextTileObstacle(currTile, tileIxs, ix.t0, currE);
     }
 
     let finalElevation = currE;
@@ -549,77 +570,108 @@ export class TravelElevation {
   /**
    * Track elevation changes along a ray
    */
-  _trackElevationChangesWithFlight(startElevation, currState) {
+  _trackElevationChangesWithFlight(currE, currState, currTile) {
+    const ev = canvas.elevation;
     const tileIxs = [...this.tileIxs]; // Make a copy that we can modify in the loop.
-    const cliffs = this.terrainCliffs;
-    if ( cliffs.length ) {
-      tileIxs.push(...cliffs);
-      tileIxs.sort((a, b) => b.t0 - a.t0);
-    }
+//     const cliffs = this.terrainCliffs;
+//     if ( cliffs.length ) {
+//       tileIxs.push(...cliffs);
+//       this.#sortIxs(tileIxs);
+//     }
 
-    let currE = startElevation;
-    let currTile;
+    if ( currState !== TILE ) this.#locateNextObstacleWithFlight(currTile, tileIxs, 0, currE, currState)
+
     const elevationChanges = [];
     const stepT = this.#stepT;
-    const { TERRAIN, TILE, FLY } = TravelElevation.TOKEN_ELEVATION_STATE;
+
     const {
       travelRay,
       tileStep,
       terrainStep,
       token } = this;
 
-    // At each intersection group, update the current elevation based on ground unless already on tile.
-    // If the token elevation equals that of the tile, the token is now on the tile.
-    // Keep track of the seen intersections, in case of duplicates.
-    const tSeen = new Set();
     while ( tileIxs.length ) {
       const ix = tileIxs.pop();
-      if ( tSeen.has(ix.t0) ) continue;
-      tSeen.add(ix.t0);
+      let nextTile;
+      let fly = false;
 
-      // Determine the destination type and associated elevation.
-      // (1) Use the immediately prior center terrain elevation or the current elevation as the start
-      const prevT = ix.t0 - stepT;
-      const prevPt = travelRay.project(prevT);
-      const prevE = Math.max(currE, tokenTerrainElevation(token, { tokenCenter: prevPt, useAveraging: false }));
+      if ( currState === TERRAIN && ix.tileStart ) {
+        // Found a tile to possibly move onto.
+        // Immediately prior terrain along the ray sets the elevation for purposes of moving to a tile.
+        const prevT = ix.t0 - stepT;
+        const prevPt = travelRay.project(prevT);
+        const prevE = ev.elevationAt(prevPt);
+        if ( almostBetween(prevE, ix.e - this.tileStep, ix.e) ) nextTile = ix.tile;
 
-      // (2) Locate any tiles at this location with sufficiently near elevation.
-      //     Update the token shape location
-      const matchingTile = this._findMatchingTile(ix, prevE, prevPt);
+      } else if ( currState === TERRAIN && ix.cliff ) {
+        // Fly instead of falling into cliff.
+        fly = true;
 
-      const terrainE = tokenTerrainElevation(token, { tokenCenter: ix });
+      } else if ( currState === TILE && ix.tile && !ix.tileStart ) {
+        // Falling through tile
+        // Either:
+        // 1. Jump to adjacent tile along the ray at nearly the same elevation.
+        // 2. Fall to the next matching tile w/in tileStep.
+        // 3. Fall to terrain w/in terrainStep.
+        // 4. Fly
+        const nextIx = tileIxs[tileIxs.length - 1];
+        if ( nextIx?.tile
+          && almostLessThan(nextIx.t0 - ix.t0, stepT)
+          && almostBetween(currE, ix.e - tileStep, ix.e) ) {
 
-      // (3) Check if we are on a tile
-      if ( matchingTile ) {
-        [currState, currE] = [TILE, matchingTile.elevationE];
-      } else
+          // Jumping to a nearby tile at nearly the same elevation.
+          nextTile = nextIx.tile;
+        } else {
+          // Need the next matching tile or terrain; exclude the tile we are on.
+          nextTile = this._findMatchingTile(ix, currE, ix.tile);
+          if ( nextTile ) {
+            if ( !almostLessThan(currE - nextTile.elevationE, tileStep) ) fly = true;
+          } else {
+            const terrainE = tokenTerrainElevation(this.token, { tokenCenter: ix })
+            if ( !almostLessThan(currE - terrainE, terrainStep) ) fly = true;
+          }
+        }
 
-      // (4) Check if we are flying and "landing"
-      if ( currState === FLY ) {
-        currState = almostLessThan(currE - terrainStep, terrainE) ? TERRAIN : FLY;
-        if ( currState === TERRAIN ) currE = terrainE;
-      } else {
+      } else if ( currState === TILE && (ix.tile === currTile || ix.cliff) ) {
+        // Started on a tile and ending on that tile.
+        nextTile = currTile;
 
-        // (5) If flying is enabled, fly if the movement exceeds the step size.
-        //     If there is a matching tile, we are not flying (move to tile instead)
-        // if ( !matchingTile) {
-        const step = currTile ? tileStep : terrainStep;
-        // If the current state is terrain, get the immediately prior terrain
-        if ( currState === TERRAIN ) currE = prevE;
+      //} else if ( currState === TILE && !ix.tile ) {
+        // Terrain pushing through the current tile.
+        //nextTile = undefined;
 
-        // (6) Otherwise, on terrain.
-        [currState, currE] = ((terrainE + step) < prevE) ? [FLY, currE] : [TERRAIN, terrainE];
+      } else if ( currState === FLY ) {
+        fly = true;
+        // Land if close enough to the tile
+        if ( ix.tile && almostBetween(currE, ix.e - tileStep, ix.e) ) {
+          fly = false;
+          nextTile = ix.tile;
+        } else if ( almostBetween(currE, ix.e - terrainStep, ix.e) ) fly = false; // Land if close enough to terrain
+
       }
 
-      // (5) Remember the current tile for next iteration.
-      currTile = matchingTile;
+      if ( fly ) {
+        // If currently on terrain, get the prior terrain elevation.
+        if ( currState === TERRAIN ) {
+          const prevT = ix.t0 - stepT;
+          const prevPt = travelRay.project(prevT);
+          currE = tokenTerrainElevation(this.token, { tokenCenter: prevPt });
+        }
+        // Do not fall "up". E.g., if in basement, don't move to terrain 0.
+        [currE, currState, currTile] = [currE, FLY, undefined];
+      } else if ( nextTile ) [currE, currState, currTile] = [nextTile.elevationE, TILE, nextTile];
+      else {
+        const terrainE = tokenTerrainElevation(token, { tokenCenter: ix });
 
-      // (6) Update the tracking results.
+        // Do not fall "up". E.g., if in basement, don't move to terrain 0.
+        [currE, currState, currTile] = [Math.min(terrainE, currE), TERRAIN, undefined];
+      }
+
+      // (5) Update the tracking results.
       elevationChanges.push({ ix, currState, currE });
 
-      // (7) Depending on the new current state, look for additional tile or terrain intersections along the ray.
-      //       const startT = ix.t0 + stepT;
-      this.#locateNextObstacleWithFlight(currTile, tileIxs, ix, currE, currState);
+      // (6) Depending on the new current state, look for additional tile or terrain intersections along the ray.
+      if ( currState === TILE ) this.#locateNextObstacleWithFlight(currTile, tileIxs, ix.t0, currE, currState);
     }
 
     let finalElevation = currE;
@@ -655,38 +707,37 @@ export class TravelElevation {
    * @param {Point3d} ix
    * @param {number} currE
    */
-  #locateNextTileObstacle(currTile, tileIxs, ix, currE) {
+  #locateNextTileObstacle(currTile, tileIxs, t, currE) {
     // Find next point at which the token could fall through a tile hole, if any.
-    const tilePt = this._findTileHole(currTile, ix.t0 + this.#stepT);
+    const tilePt = this._findTileHole(currTile, t + this.#stepT);
     if ( tilePt ) this.#addIx(tileIxs, tilePt);
 
     // Find next location where terrain pokes through tile, if any.
-    const terrainPt = this._findElevatedTerrain(currE, ix.t0 + this.#stepT);
+    const terrainPt = this._findElevatedTerrain(currE, t + this.#stepT);
     if ( terrainPt ) this.#addIx(tileIxs, terrainPt);
   }
 
-  #locateNextObstacleWithFlight(currTile, tileIxs, ix, currE, currState) {
-    const { tileStep } = this;
-
+  #locateNextObstacleWithFlight(currTile, tileIxs, t, currE, currState) {
     switch ( currState ) {
-//       case TERRAIN: {
-//         const cliffPt = this._findTerrainCliff(ix.t0);
-//         if ( cliffPt ) this.#addIx(tileIxs, cliffPt, { color: Draw.COLORS.green });
-//         break;
-//       }
+      case TERRAIN: {
+        const cliffPt = this._findTerrainCliff(t);
+        if ( cliffPt ) this.#addIx(tileIxs, cliffPt);
+        break;
+      }
 
       case TILE: {
-        this.#locateNextTileObstacle(currTile, tileIxs, ix, currE);
+        this.#locateNextTileObstacle(currTile, tileIxs, t, currE);
         break;
       }
 
       case FLY: {
         // Check for tiles or terrain that we will run into at this flying elevation.
+        const { tileStep, terrainStep } = this;
         const maxE = currE;
         const minE = currE - tileStep;
         const tilesWithinE = this.tiles.filter(tile => almostBetween(tile.elevationE, minE, maxE) );
         const ixs = [];
-        const startT = ix.t0 + this.#stepT;
+        const startT = t + this.#stepT;
         for ( const tile of tilesWithinE ) {
           const cache = tile._textureData?._evPixelCache;
           if ( !cache ) return null;
@@ -696,12 +747,12 @@ export class TravelElevation {
         }
 
         // Find the elevation intersection.
-        const terrainPt = this._findElevatedTerrain(minE, ix.t0 + this.#stepT);
+        const minTerrainE = currE - terrainStep;
+        const terrainPt = this._findElevatedTerrain(minTerrainE, t + this.#stepT);
         if ( terrainPt ) this.#addIx(tileIxs, terrainPt);
 
         // If any intersections, add the first one encountered along the travel ray.
         if ( !ixs.length ) break;
-        ixs.sort((a, b) => a.t0 - b.t0);
         this.#addIx(tileIxs, ixs[0]);
         break;
       }
@@ -758,6 +809,7 @@ export class TravelElevation {
     const ix = evCache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
     if ( !ix ) return null;
     ix.e = ev.pixelValueToElevation(ix.value);
+    ix.cliff = true;
     return ix;
   }
 
@@ -870,7 +922,12 @@ export class TravelElevation {
       opts.skip = this.averageTerrain;
     }
 
-    return evCache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
+    const ix = evCache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
+    if ( !ix ) return null;
+    // TO-DO: Could use Point3d here and set z value to elevationZ.
+    // May be helpful for flagging difficulty checks for large climbs/falls.
+    ix.e = ev.pixelValueToElevation(ix.value);
+    return ix;
   }
 
   /**
@@ -892,7 +949,7 @@ export class TravelElevation {
     if ( matchingTile ) {
       const tileE = matchingTile.elevationE;
       if ( almostBetween(tileE, tokenElevation - tileStep, tokenElevation) )
-        return { currE: tileE, currState: TILE };
+        return { currE: tileE, currState: TILE, currTile: matchingTile };
     }
 
     const terrainE = tokenTerrainElevation(token, { tokenCenter });
@@ -909,7 +966,7 @@ export class TravelElevation {
    * @param {number} [options.tokenElevation]   Elevation of the token
    * @returns {TOKEN_ELEVATION_STATE}
    */
-  static currentTokenState(token, { tokenCenter, tokenElevation }) {
+  static currentTokenState(token, { tokenCenter, tokenElevation } = {}) {
     tokenCenter ??= token.center;
     tokenElevation ??= token.bottomE;
     const matchingTile = tileAtTokenElevation(token, {
@@ -921,7 +978,7 @@ export class TravelElevation {
     if ( matchingTile ) {
       const tileStep = CONFIG[MODULE_ID]?.tileStep ?? (tokenHeight || canvas.elevation.elevationStep);
       const tileE = matchingTile.elevationE;
-      if ( almostBetween(tileE, tokenElevation - tileStep, tokenElevation) ) return { currE: tileE, currState: TILE };
+      if ( almostBetween(tileE, tokenElevation - tileStep, tokenElevation) ) return { currE: tileE, currState: TILE, currTile: matchingTile };
     }
 
     const terrainE = tokenTerrainElevation(token, { tokenCenter });
@@ -966,10 +1023,6 @@ export class TravelElevation {
 
     // Make closest intersection to A last in the queue, so we can pop it.
     this.#sortIxs(tileIxs);
-
-    // Add the start (and end?) of the travel ray.
-    // tileIxs.unshift(this.travelRay.B);
-    // tileIxs.push(this.travelRay.A);
 
     return tileIxs;
   }
