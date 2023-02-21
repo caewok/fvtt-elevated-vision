@@ -373,9 +373,8 @@ export function tileAtTokenElevation(token,
     : tileE => almostGreaterThan(tileE, terrainE); // Token is below ground
 
   for ( const tile of tiles ) {
-    if ( tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, excludeTileFn, tokenShape) ) {
-      return tile;
-    }
+    if ( excludeTileFn(tile) ) continue;
+    if ( tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, tokenShape) ) return tile;
   }
 
   // No tile matches the criteria
@@ -391,17 +390,32 @@ export function tileAtTokenElevation(token,
  * @param {number} averageTiles                       Positive integer to skip pixels when averaging.
  *                                                    0 if point-based.
  * @param {number} alphaThreshold                     Threshold to determine transparency
- * @param {function} excludeTileFn                    Test to exclude tile
  * @param {PIXI.Rectangle|PIXI.Polygon} [tokenShape]  Shape representing a token boundary
  *                                                    Required if not averaging
  * @returns {boolean}
  */
-function tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, excludeTileFn, tokenShape) {
+export function tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThreshold, tokenShape) {
+  if ( !almostLessThan(tile.elevationE, tokenElevation) ) return false;
+  return tileOpaqueAt(tile, tokenCenter, averageTiles, alphaThreshold, tokenShape);
+}
+
+/**
+ * Determine if a tile is opaque at a given location for a tile.
+ * Opaqueness depends on the alphaThreshold and whether measuring the point or the average.
+ * Token would fall through if tile is transparent unless terrain would fill the gap(s).
+ * @param {Tile} tile                                 Tile to test
+ * @param {Point} tokenCenter                         Center point
+ * @param {number} averageTiles                       Positive integer to skip pixels when averaging.
+ *                                                    0 if point-based.
+ * @param {number} alphaThreshold                     Threshold to determine transparency
+ * @param {PIXI.Rectangle|PIXI.Polygon} [tokenShape]  Shape representing a token boundary
+ *                                                    Required if not averaging
+ * @returns {boolean}
+ */
+export function tileOpaqueAt(tile, tokenCenter, averageTiles, alphaThreshold, tokenShape) {
   const cache = tile._textureData?._evPixelCache;
   if ( !cache ) return false;
   const tileE = tile.elevationE;
-  if ( excludeTileFn(tileE) ) return false;
-  if ( !almostLessThan(tileE, tokenElevation) || !tile.bounds.contains(tokenCenter.x, tokenCenter.y) ) return false;
   if ( !averageTiles ) return cache.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold);
 
   // This is tricky, b/c we want terrain to count if it is the same height as the tile.
@@ -425,3 +439,4 @@ function tileSupports(tile, tokenCenter, tokenElevation, averageTiles, alphaThre
   const percentCoverage = sum / denom;
   return percentCoverage > 0.5;
 }
+
