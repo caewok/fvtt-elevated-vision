@@ -102,9 +102,16 @@ function benchCalc(te) {
   return te.calculateElevationAlongRay();
 }
 
-N = 1000
+function benchFinalCalc(te) {
+  te.clear();
+  return te.calculateFinalElevation();
+}
+
+
+N = 10000
 await foundry.utils.benchmark(benchCreation, N, token, travelRay)
 await foundry.utils.benchmark(benchCalc, N, te)
+await foundry.utils.benchmark(benchFinalCalc, N, te)
 
 // Farmhouse: right side of outhouse --> middle
 benchCreation | 1000 iterations | 18.1ms | 0.0181ms per
@@ -406,7 +413,7 @@ export class TravelElevation {
    */
   calculateFinalElevation(startElevation) {
     const { fly, token, travelRay } = this;
-    const { currState, currE } = this.currentTokenState({ tokenCenter: travelRay.A, tokenElevation: startElevation });
+    const { currState, currE, currTile, terrainE } = this.currentTokenState({ tokenCenter: travelRay.A, tokenElevation: startElevation });
 
     // If token is flying but flying is not enabled, no auto-elevation.
     if ( currState === FLY && !fly ) return startElevation;
@@ -427,8 +434,8 @@ export class TravelElevation {
 
     // Tiles are present and/or flying is enabled.
     const res = fly
-      ? this._trackElevationChangesWithFlight(currE, currState)
-      : this._trackElevationChanges(currE, currState);
+      ? this._trackElevationChangesWithFlight(currE, currState, currTile, terrainE)
+      : this._trackElevationChanges(currE, currState, currTile);
     return res.finalElevation;
   }
 
