@@ -453,7 +453,7 @@ export class TravelElevation {
   calculateElevationAlongRay(startElevation) {
     const { fly, token, travelRay } = this;
     startElevation ??= token.bottomE;
-    const { currState, currE, currTile } = this.currentTokenState({ tokenCenter: travelRay.A, tokenElevation: startElevation });
+    const { currState, currE, currTile, terrainE } = this.currentTokenState({ tokenCenter: travelRay.A, tokenElevation: startElevation });
 
     // Default TravelElevationResults if no calculations required.
     const out = {
@@ -480,14 +480,14 @@ export class TravelElevation {
     // Tiles are present and/or flying is enabled.
     out.trackingRequired = true;
     const { finalElevation, elevationChanges } = fly
-      ? this._trackElevationChangesWithFlight(currE, currState, currTile)
+      ? this._trackElevationChangesWithFlight(currE, currState, currTile, terrainE)
       : this._trackElevationChanges(currE, currState, currTile);
     out.finalElevation = finalElevation;
     out.elevationChanges = elevationChanges;
 
     // Add in the starting position and state.
-    const startingIx = travelRay.A;
-    out.elevationChanges.unshift({ix: travelRay.A, currState, currE});
+//     const startingIx = travelRay.A;
+//     out.elevationChanges.unshift({ix: travelRay.A, currState, currE});
 
     return out;
   }
@@ -505,6 +505,15 @@ export class TravelElevation {
     const {
       travelRay,
       token } = this;
+
+    const startingPoint = travelRay.A;
+    startingPoint.e = currE;
+    if ( currState === TILE ) {
+      startingPoint.tileStart = true;
+      startingPoint.tile = currTile;
+      startingPoint.e = currTile.elevationE;
+    }
+    tileIxs.push(startingPoint);
 
     while ( tileIxs.length ) {
       const ix = tileIxs.pop();
@@ -526,6 +535,7 @@ export class TravelElevation {
         // 3. Fall to terrain.
         const nextIx = tileIxs[tileIxs.length - 1];
         if ( nextIx?.tile
+          && nextIx.tile !== currTile
           && almostLessThan(nextIx.t0 - ix.t0, stepT)
           && almostBetween(currE, ix.e - this.tileStep, ix.e) ) {
 
@@ -570,7 +580,7 @@ export class TravelElevation {
   /**
    * Track elevation changes along a ray
    */
-  _trackElevationChangesWithFlight(currE, currState, currTile) {
+  _trackElevationChangesWithFlight(currE, currState, currTile, terrainE) {
     const ev = canvas.elevation;
     const tileIxs = [...this.tileIxs]; // Make a copy that we can modify in the loop.
 //     const cliffs = this.terrainCliffs;
@@ -579,7 +589,7 @@ export class TravelElevation {
 //       this.#sortIxs(tileIxs);
 //     }
 
-    if ( currState !== TILE ) this.#locateNextObstacleWithFlight(currTile, tileIxs, 0, currE, currState)
+    //if ( currState !== TILE ) this.#locateNextObstacleWithFlight(currTile, tileIxs, 0, currE, currState)
 
     const elevationChanges = [];
     const stepT = this.#stepT;
@@ -589,6 +599,14 @@ export class TravelElevation {
       tileStep,
       terrainStep,
       token } = this;
+
+    const startingPoint = travelRay.A;
+    startingPoint.e = terrainE;
+    if ( currState === TILE ) {
+      startingPoint.tileStart = true;
+      startingPoint.tile = currTile;
+    }
+    tileIxs.push(startingPoint);
 
     while ( tileIxs.length ) {
       const ix = tileIxs.pop();
@@ -616,6 +634,7 @@ export class TravelElevation {
         // 4. Fly
         const nextIx = tileIxs[tileIxs.length - 1];
         if ( nextIx?.tile
+          && nextIx.tile !== currTile
           && almostLessThan(nextIx.t0 - ix.t0, stepT)
           && almostBetween(currE, ix.e - tileStep, ix.e) ) {
 
@@ -671,7 +690,7 @@ export class TravelElevation {
       elevationChanges.push({ ix, currState, currE });
 
       // (6) Depending on the new current state, look for additional tile or terrain intersections along the ray.
-      if ( currState === TILE ) this.#locateNextObstacleWithFlight(currTile, tileIxs, ix.t0, currE, currState);
+      this.#locateNextObstacleWithFlight(currTile, tileIxs, ix.t0, currE, currState);
     }
 
     let finalElevation = currE;
@@ -954,9 +973,9 @@ export class TravelElevation {
 
     const terrainE = tokenTerrainElevation(token, { tokenCenter });
     if ( almostBetween(terrainE, tokenElevation - terrainStep, tokenElevation) )
-      return { currE: terrainE, currState: TERRAIN };
+      return { currE: terrainE, currState: TERRAIN, terrainE };
 
-    return { currE: tokenElevation, currState: FLY };
+    return { currE: tokenElevation, currState: FLY, terrainE };
   }
 
   /**
@@ -983,9 +1002,9 @@ export class TravelElevation {
 
     const terrainE = tokenTerrainElevation(token, { tokenCenter });
     if ( almostBetween(terrainE, tokenElevation - terrainStep, tokenElevation) )
-      return { currE: terrainE, currState: TERRAIN };
+      return { currE: terrainE, currState: TERRAIN, terrainE };
 
-    return { currE: tokenElevation, currState: FLY };
+    return { currE: tokenElevation, currState: FLY, terrainE };
   }
 
 
