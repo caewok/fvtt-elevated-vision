@@ -169,13 +169,16 @@ export function _refreshToken(wrapper, options) {
     log("token _refresh is clone.");
     // This token is a clone in a drag operation.
     // Adjust elevation of the clone by calculating the elevation from origin to line.
-    const { tokenCenter, tokenElevation } = ev;
-    const travelRay = new Ray(tokenCenter, this.center);
-    const te = new TravelElevation(this, travelRay);
-    const travel = te.calculateElevationAlongRay(tokenElevation);
+    const { tokenCenter, tokenElevation, te } = ev;
 
-    log(`{x: ${travelRay.A.x}, y: ${travelRay.A.y}, e: ${tokenElevation} } --> {x: ${travelRay.B.x}, y: ${travelRay.B.y}, e: ${travel.finalElevation} }`, travel);
-    this.document.elevation = travel.finalElevation;
+    // Update the previous travel ray
+    const travelRay = new Ray(tokenCenter, this.center);
+    te.travelRay = travelRay;
+
+    // Determine the new final elevation.
+    const finalElevation = te.calculateFinalElevation(tokenElevation);
+    log(`{x: ${travelRay.A.x}, y: ${travelRay.A.y}, e: ${tokenElevation} } --> {x: ${travelRay.B.x}, y: ${travelRay.B.y}, e: ${finalElevation} }`, te);
+    this.document.elevation = finalElevation;
 
   } else if ( this._animation ) {
     // Adjust the elevation as the token is moved by locating where we are on the travel ray.
@@ -217,21 +220,21 @@ export function cloneToken(wrapper) {
 
   if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return clone;
 
+  const FLY = TravelElevation.TOKEN_ELEVATION_STATE.FLY;
   const tokenCenter = { x: this.center.x, y: this.center.y };
-  if ( !TravelElevation.autoElevationFly() ) {
+  const travelRay = new Ray(tokenCenter, tokenCenter);
+  const te = new TravelElevation(clone, travelRay);
+  if ( !te.fly ) {
     const { currState } = TravelElevation.currentTokenState(this, { tokenCenter });
-    if ( currState === TravelElevation.TOKEN_ELEVATION_STATE.FLY ) return clone;
+    if ( currState === FLY ) return clone;
   }
-
-  const { currState } = TravelElevation.currentTokenState(this, { tokenCenter });
-  if ( currState === TravelElevation.TOKEN_ELEVATION_STATE.FLY
-    && !TravelElevation.autoElevationFly() ) return clone;
 
   log(`cloneToken ${this.name} at elevation ${this.document?.elevation}: setting adjust elevation to true`);
 
   clone._elevatedVision.tokenAdjustElevation = true;
   clone._elevatedVision.tokenCenter = tokenCenter;
   clone._elevatedVision.tokenElevation = this.bottomE;
+  clone._elevatedVision.te = te;
   return clone;
 }
 
@@ -415,7 +418,6 @@ export function tileSupports(tile, tokenCenter, tokenElevation, averageTiles, al
 export function tileOpaqueAt(tile, tokenCenter, averageTiles, alphaThreshold, tokenShape) {
   const cache = tile._textureData?._evPixelCache;
   if ( !cache ) return false;
-  const tileE = tile.elevationE;
   if ( !averageTiles ) return cache.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold);
 
   // This is tricky, b/c we want terrain to count if it is the same height as the tile.
@@ -424,6 +426,7 @@ export function tileOpaqueAt(tile, tokenCenter, averageTiles, alphaThreshold, to
   // In the easy cases, there is 50% coverage for either tile or terrain alone.
   // But the hard case makes us iterate over both tile and terrain at once,
   // b/c otherwise we cannot tell where the overlaps occur. E.g., 30% tile, 20% terrain?
+  const tileE = tile.elevationE;
   const evCache = canvas.elevation.elevationPixelCache;
   const pixelE = canvas.elevation.elevationToPixelValue(tileE);
   const pixelThreshold = canvas.elevation.maximumPixelValue * alphaThreshold;
@@ -440,3 +443,43 @@ export function tileOpaqueAt(tile, tokenCenter, averageTiles, alphaThreshold, to
   return percentCoverage > 0.5;
 }
 
+/**
+ * Determine if a token is supported by a given tile (as opposed to terrain at that elevation).
+ */
+export function tokenSupportedByTile(tile, tokenCenter, averageTiles, alphaThreshold, tokenShape) {
+  const cache = tile._textureData?._evPixelCache;
+  if ( !cache ) return false;
+  if ( !averageTiles ) return cache.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold);
+
+  // This is tricky, b/c we want terrain to count if it is the same height as the tile.
+  // So if a token is 40% on a tile at elevation 30, 40% on terrain elevation 30 and
+  // 20% on transparent tile with elevation 0, the token elevation should be 30.
+  // In the easy cases, there is 50% coverage for either tile or terrain alone.
+  // But the hard case makes us iterate over both tile and terrain at once,
+  // b/c otherwise we cannot tell where the overlaps occur. E.g., 30% tile, 20% terrain?
+  const tileE = tile.elevationE;
+  const pixelThreshold = canvas.elevation.maximumPixelValue * alphaThreshold;
+  let tileSum = 0;
+  const countTileFn = (value, _i, localX, localY) => {
+    if ( value > pixelThreshold ) tileSum += 1;
+  };
+  const denom = cache.applyFunctionToShape(countTileFn, tokenShape, averageTiles);
+  const percentCoverage = tileSum / denom;
+  if ( percentCoverage > 0.5 ) return { tile: percentCoverage }
+
+  // Check the terrain.
+  const evCache = canvas.elevation.elevationPixelCache;
+  const pixelE = canvas.elevation.elevationToPixelValue(tileE);
+  let terrainSum = 0;
+  const countTerrainFn = (value, _i, localX, localY) => {
+    if ( value > pixelThreshold ) return terrainSum += 1;
+    const canvas = cache._toCanvasCoordinates(localX, localY);
+    const terrainValue = evCache.pixelAtCanvas(canvas.x, canvas.y);
+    if ( terrainValue.almostEqual(pixelE) ) return terrainSum += 1;
+    return terrainSum;
+  };
+  cache.applyFunctionToShape(countTerrainFn, tokenShape, averageTiles);
+  const percentWithTerrain = terrainSum / denom;
+  if ( percentWithTerrain > 0.5 ) return { tile: percentCoverage, withTerrain: percentWithTerrain };
+  return null;
+}
