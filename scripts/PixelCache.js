@@ -3,6 +3,7 @@ PIXI,
 canvas,
 Ray
 */
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 /* Pixel Cache
@@ -255,7 +256,15 @@ export class PixelCache extends PIXI.Rectangle {
   }
 
   /** @type {PIXI.Rectangle} */
-  get localFrame() { return this.#localFrame ?? (this.#localFrame = this.#rectangleToLocalCoordinates(this)); }
+  get localFrame() {
+    if ( typeof this.#localFrame === "undefined" ) {
+      const ln = this.pixels.length;
+      const localWidth = this.#localWidth;
+      const localHeight = ~~(ln / localWidth);
+      this.#localFrame = new PIXI.Rectangle(0, 0, localWidth, localHeight);
+    }
+    return this.#localFrame;
+  }
 
   /** @type {Matrix} */
   get toLocalTransform() {
@@ -385,7 +394,7 @@ export class PixelCache extends PIXI.Rectangle {
   _indexAtLocal(x, y) {
     // Use floor to ensure consistency when converting to/from coordinates <--> index.
     return ((~~y) * this.#localWidth) + (~~x);
-    //return (roundFastPositive(y) * this.#localWidth) + roundFastPositive(x);
+    // return (roundFastPositive(y) * this.#localWidth) + roundFastPositive(x);
   }
 
   /**
@@ -480,7 +489,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {PIXI.Circle}
    * @returns {PIXI.Circle}
    */
-  #circleToLocalCoordinates(circle) {
+  _circleToLocalCoordinates(circle) {
     const origin = this._fromCanvasCoordinates(circle.x, circle.y);
 
     // For radius, use two points of equivalent distance to compare.
@@ -494,7 +503,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {PIXI.Ellipse}
    * @returns {PIXI.Ellipse}
    */
-  #ellipseToLocalCoordinates(ellipse) {
+  _ellipseToLocalCoordinates(ellipse) {
     const origin = this._fromCanvasCoordinates(ellipse.x, ellipse.y);
 
     // For halfWidth and halfHeight, use two points of equivalent distance to compare.
@@ -510,7 +519,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {PIXI.Rectangle}
    * @returns {PIXI.Rectangle}
    */
-  #rectangleToLocalCoordinates(rect) {
+  _rectangleToLocalCoordinates(rect) {
     const TL = this._fromCanvasCoordinates(rect.left, rect.top);
     const BR = this._fromCanvasCoordinates(rect.right, rect.bottom);
     return new PIXI.Rectangle(TL.x, TL.y, BR.x - TL.x, BR.y - TL.y);
@@ -521,7 +530,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {PIXI.Polygon}
    * @returns {PIXI.Polygon}
    */
-  #polygonToLocalCoordinates(poly) {
+  _polygonToLocalCoordinates(poly) {
     const points = poly.points;
     const ln = points.length;
     const newPoints = Array(ln);
@@ -551,34 +560,18 @@ export class PixelCache extends PIXI.Rectangle {
   pixelAtCanvas(x, y) { return this.pixels[this._indexAtCanvas(x, y)]; }
 
   /**
-   * Calculate the average pixel value, over an optional framing rectangle.
-   * This could be done using `applyFunction` but instead does the average calculation directly.
-   * Also can be faster for repeated calculations by setting the frame locally elsewhere.
+   * Calculate the average pixel value, over an optional framing shape.
    * @param {object} [options]        Options that affect the calculation
-   * @param {PIXI.Rectangle} [options.frame]  Rectangle, in canvas coordinates, over which to average the pixels
+   * @param {PIXI.Rectangle|PIXI.Polygon} [options.shape]  Shape, in canvas coordinates, over which to average the pixels
    * @param {number} [options.skip=1]         Skip every N pixels in the frame. 1 means test them all.
    *                                          Should be an integer greater than 0 (this is not checked).
    * @returns {number}
    */
-  average({frame, skip = 1 } = {}) {
-    if ( frame ) frame = this.#rectangleToLocalCoordinates(frame);
-    return this._average(frame, skip);
-  }
-
-  _average(frame, skip = 1) {
-    // Don't go outside the cache frame
-    frame = frame ? this.localFrame.intersection(frame) : this.localFrame;
-    const { left, top, right, bottom, width, height } = frame;
+  average(shape, skip = 1) {
     let sum = 0;
-    for ( let ptX = left; ptX < right; ptX += skip ) {
-      for ( let ptY = top; ptY < bottom; ptY += skip ) {
-        const px = this._indexAtLocal(ptX, ptY);
-        sum += this.pixels[px];
-      }
-    }
-
-    const skipInv = 1 / skip;
-    return sum / (width * height * skipInv * skipInv);
+    const averageFn = value => sum += value;
+    const denom = this.applyFunctionToShape(averageFn, shape, skip);
+    return sum / denom;
   }
 
   /**
@@ -588,22 +581,22 @@ export class PixelCache extends PIXI.Rectangle {
    *                                  Frame is in local coordinates
    * @returns {number}  Number of pixels to which the function was applied.
    */
-  applyFunction(fn, frame, skip=1) {
+  _applyFunction(fn, localFrame, skip=1) {
     // Don't go outside the cache frame
-    frame = frame ? this.localFrame.intersection(this.#rectangleToLocalCoordinates(frame))
-      : this.localFrame;
+    localFrame = localFrame ? this.localFrame.intersection(localFrame) : this.localFrame;
 
-    const { left, top, right, bottom, width, height } = frame;
+    // Test each local coordinate.
+    const { left, top, right, bottom } = localFrame;
+    let denom = 0;
     for ( let ptX = left; ptX < right; ptX += skip ) {
       for ( let ptY = top; ptY < bottom; ptY += skip) {
         const px = this._indexAtLocal(ptX, ptY);
         const value = this.pixels[px];
         fn(value, px, ptX, ptY);
+        denom += 1;
       }
     }
-
-    const skipInv = 1 / skip;
-    return width * height * skipInv * skipInv;
+    return denom;
   }
 
   /**
@@ -614,17 +607,17 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {number} Total number of pixels to which the function applied.
    */
   applyFunctionToShape(fn, shape, skip=1) {
-    if ( shape instanceof PIXI.Rectangle ) return this.applyFunction(fn, shape);
-
-    // Limit the pixels tested to the shape boundary.
-    const border = shape.getBounds(shape);
-
     // Shift the shape to texture coordinates; likely faster than converting each pixel to canvas.
-    if ( shape instanceof PIXI.Polygon ) shape = this.#polygonToLocalCoordinates(shape);
-    else if ( shape instanceof PIXI.Circle ) shape = this.#circleToLocalCoordinates(shape);
-    else if ( shape instanceof PIXI.Ellipse ) shape = this.#ellipseToLocalCoordinates(shape);
+    if ( shape instanceof PIXI.Rectangle ) shape = this._rectangleToLocalCoordinates(shape);
+    else if ( shape instanceof PIXI.Polygon ) shape = this._polygonToLocalCoordinates(shape);
+    else if ( shape instanceof PIXI.Circle ) shape = this._circleToLocalCoordinates(shape);
+    else if ( shape instanceof PIXI.Ellipse ) shape = this._ellipseToLocalCoordinates(shape);
+    else console.error("applyFunctionToShape: shape not recognized.");
 
-    // Track number of pixels within the shape.
+    // If shape is still a rectangle, no need to test containment.
+    if ( shape instanceof PIXI.Rectangle ) return this._applyFunction(fn, shape, skip);
+
+    // Track number of pixels contained within the shape.
     let denom = 0;
     const shapeFn = (value, i, localX, localY) => {
       if ( shape.contains(localX, localY) ) {
@@ -632,7 +625,7 @@ export class PixelCache extends PIXI.Rectangle {
         fn(value, i, localX, localY);
       }
     };
-    this.applyFunction(shapeFn, border, skip);
+    this._applyFunction(shapeFn, shape.getBounds(), skip);
     return denom;
   }
 
@@ -663,7 +656,7 @@ export class PixelCache extends PIXI.Rectangle {
       const center = frame.center;
       const dx = pt.x - center.x;
       const dy = pt.y - center.y;
-      frame = this.#rectangleToLocalCoordinates(frame.translate(dx, dy));
+      frame = this._rectangleToLocalCoordinates(frame.translate(dx, dy));
       foundPt = this._nextPixelValueAlongLocalRayAverage(textureRay, cmp, frame, skip, stepT, startT);
     } else foundPt = this._nextPixelValueAlongLocalRay(textureRay, cmp, stepT, startT);
 
@@ -775,7 +768,7 @@ export class PixelCache extends PIXI.Rectangle {
       aInside: bounds._getZone(A) === CSZ.INSIDE,
       bInside: bounds._getZone(B) === CSZ.INSIDE,
       ixs: bounds.segmentIntersections(A, B)
-    }
+    };
   }
 
   /**
@@ -995,6 +988,9 @@ export class TilePixelCache extends PixelCache {
   get rotation() { return Math.toRadians(this.tile.document.rotation); }
 
   /** @type {numeric} */
+  get rotationDegrees() { return this.tile.document.rotation; }
+
+  /** @type {numeric} */
   get proportionalWidth() { return this.tile.document.width / this.tile.texture.width; }
 
   /** @type {numeric} */
@@ -1107,5 +1103,52 @@ export class TilePixelCache extends PixelCache {
 
     // Resolution consistent with `_createTextureData` which divides by 4.
     return new this(tile._textureData.pixels, texWidth, { tile, resolution });
+  }
+
+  /**
+   * Convert a circle to local texture coordinates, taking into account scaling.
+   * @returns {PIXI.Circle|PIXI.Polygon}
+   */
+  _circleToLocalCoordinates(_circle) {
+    console.error("_circleToLocalCoordinates: Not yet implemented for tiles.");
+  }
+
+  /**
+   * Convert an ellipse to local texture coordinates, taking into account scaling.
+   * @returns {PIXI.Ellipse|PIXI.Polygon}
+   */
+  _ellipseToLocalCoordinates(_ellipse) {
+    console.error("_circleToLocalCoordinates: Not yet implemented for tiles.");
+  }
+
+  /**
+   * Convert a rectangle to local texture coordinates, taking into account scaling.
+   * @returns {PIXI.Rectangle|PIXI.Polygon}
+   * @inherits
+   */
+  _rectangleToLocalCoordinates(rect) {
+    switch ( this.rotationDegrees ) {
+      case 0:
+      case 360: return super._rectangleToLocalCoordinates(rect);
+      case 90:
+      case 180:
+      case 270: {
+        // Rotation will change the TL and BR points; adjust accordingly.
+        const { left, right, top, bottom } = rect;
+        const TL = this._fromCanvasCoordinates(left, top);
+        const TR = this._fromCanvasCoordinates(right, top);
+        const BR = this._fromCanvasCoordinates(right, bottom);
+        const BL = this._fromCanvasCoordinates(left, bottom);
+        const localX = Math.minMax(TL.x, TR.x, BR.x, BL.x);
+        const localY = Math.minMax(TL.y, TR.y, BR.y, BL.y);
+        return new PIXI.Rectangle(localX.min, localY.min, localX.max - localX.min, localY.max - localY.min);
+      }
+      default: {
+        // Rotation would form a rotated rectangle-Use polygon instead.
+        const { left, right, top, bottom } = rect;
+        const poly = new PIXI.Polygon([left, top, right, top, right, bottom, left, bottom]);
+        return this._polygonToLocalCoordinates(poly);
+      }
+    }
   }
 }
