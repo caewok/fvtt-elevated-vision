@@ -36,7 +36,9 @@ import {
   isTokenOnTile,
   tokenGroundElevation,
   tileAtTokenElevation,
-  tokenTerrainElevation } from "./tokens.js";
+  tokenTerrainElevation,
+  tileOpaqueAt,
+  tokenSupportedByTile } from "./tokens.js";
 import { setSceneSetting, getSceneSetting, SETTINGS } from "./settings.js";
 
 /* Elevation layer
@@ -82,7 +84,9 @@ export class ElevationLayer extends InteractionLayer {
     tokenTerrainElevation,
     tileAtTokenElevation,
     isTokenOnGround,
-    isTokenOnTile
+    isTokenOnTile,
+    tokenSupportedByTile,
+    tileOpaqueAt
   };
 
   /**
@@ -765,77 +769,6 @@ export class ElevationLayer extends InteractionLayer {
     this.#elevationPixelCache = undefined;
   }
 
-
-  /* -------------------------------------------- */
-  /* NOTE: ELEVATION PIXEL EXTRACTION */
-
-  /**
-   * Pull the pixels from the elevation texture.
-   * @param {PIXI.Rectangle} [frame]      Optional rectangle to limit pixels pulled.
-   * @param {number} [resolution]         Optional value by which to trim the resulting extraction.
-   *                                      Below 1 will shrink the resulting array.
-   * @returns {PixelFrame}
-   */
-//   _extractFromElevationTexture(frame, resolution = 1) {
-//     let { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, frame);
-//     const nPixels = width * height * 4; // RGBA channels are extracted
-//     width *= resolution;
-//     height *= resolution;
-//     const skip = 4 * (1 / resolution); // Need only the red channel, so use every 4th.
-//     const N = width * height;
-//     const arr = new Uint8Array(N);
-//     for ( let i = 0, j = 0; i < nPixels; i += skip, j += 1 ) arr[j] = pixels[i];
-//     return { pixels: arr, width, height };
-//   }
-
-  /**
-   * Pull the pixels from the elevation texture, and simultaneously apply a function to each pixel.
-   * @param {function} fn                 Function to apply. Is passed pixel value and index.
-   * @param {PIXI.Rectangle} [frame]      Optional rectangle to limit pixels pulled.
-   * @param {number} [resolution]         Optional value by which to trim the resulting extraction.
-   *                                      Below 1 will shrink the resulting array.
-   * @returns {PixelFrame}
-   */
-//   _applyFunctionToElevationTexture(fn, frame, resolution = 1) {
-//     let { pixels, width, height } = extractPixels(canvas.app.renderer, this._elevationTexture, frame);
-//     const nPixels = width * height * 4; // RGBA channels are extracted
-//     width *= resolution;
-//     height *= resolution;
-//     const skip = 4 * (1 / resolution); // Need only the red channel, so use every 4th.
-//     const N = width * height;
-//     const arr = new Uint8Array(N);
-//     for ( let i = 0, j = 0; i < nPixels; i += skip, j += 1 ) {
-//       const px = pixels[i];
-//       arr[j] = px;
-//       fn(px, i);
-//     }
-//     return { pixels: arr, width, height };
-//   }
-
-  /**
-   * Retrieve an array representing a rectangular from from the cached pixels.
-   * Fast for small rectangles (e.g., token-sized). For large arrays, `_extractFromElevationTexture`
-   * may be faster.
-   * @param {PIXI.Rectangle} frame
-   * @returns {PixelFrame}
-   */
-//   _extractFromCachedPixels(frame) {
-//     return extractRectangleFromPixelArray(this.elevationPixelValues, this.cacheWidth, frame);
-//   }
-
-  /**
-   * Retrieve an array representing a rectangular from from the cached pixels.
-   * Apply a function to each.
-   * Fast for small rectangles (e.g., token-sized). For large arrays, `_extractFromElevationTexture`
-   * may be faster.
-   * @param {function} fn                 Function to apply. Is passed a pixel value.
-   * @param {PIXI.Rectangle} frame
-   * @returns {PixelFrame}
-   */
-//   _applyFunctionToCachedPixels(fn, frame) {
-//     return applyFunctionToPixelArray(this.elevationPixelValues, this.cacheWidth, frame, fn);
-//   }
-
   /* -------------------------------------------- */
   /* NOTE: ELEVATION VALUES */
 
@@ -850,29 +783,6 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
-   * Calculate the average value of the pixels within a provided rectangle.
-   * @param {PIXI.Rectangle} rect
-   * @returns {number} Average pixel values
-   */
-  averageElevationWithinRectangle(rect) {
-    let sum = 0;
-    const sumFn = px => sum += px;
-    const denom = this.elevationPixelCache.applyFunction(sumFn, rect);
-    return this.pixelValueToElevation(sum / denom);
-  }
-
-  /**
-   * Calculate the average value of the pixels within a provided rectangle.
-   * @param {PIXI.Rectangle} rect
-   * @returns {number} Average pixel values
-   */
-  averageElevationWithinRectangleFast(frame) {
-    const skip = CONFIG[MODULE_ID]?.averageTerrain ?? 1;
-    const value = this.elevationPixelCache.average({ frame, skip });
-    return this.pixelValueToElevation(value);
-  }
-
-  /**
    * Calculate the average value of pixels within a given shape.
    * For rectangles, averageValue will be faster.
    * @param {PIXI.Circle|PIXI.Polygon|PIXI.Rectangle|PIXI.Ellipse} shape
@@ -880,10 +790,8 @@ export class ElevationLayer extends InteractionLayer {
    */
   averageElevationWithinShape(shape) {
     const skip = CONFIG[MODULE_ID]?.averageTerrain ?? 1;
-    let sum = 0;
-    const sumFn = px => sum += px;
-    const denom = this.elevationPixelCache.applyFunctionToShape(sumFn, shape, skip);
-    return this.pixelValueToElevation(sum / denom);
+    const average = this.elevationPixelCache.average(shape, skip);
+    return this.pixelValueToElevation(average);
   }
 
   /**
@@ -907,8 +815,8 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number} Elevation value.
    */
   averageElevationAtGridPoint(pt, { useHex = canvas.grid.isHex } = {}) {
-    if ( useHex ) return this.averageElevationWithinShape(this._hexGridShape(pt));
-    return this.averageElevationWithinRectangle(this._squareGridShape(pt));
+    const shape = useHex ? this._hexGridShape(pt) : this._squareGridShape(pt);
+    return this.averageElevationWithinShape(shape);
   }
 
   /* -------------------------------------------- */
