@@ -83,6 +83,8 @@ te.draw()
 results = te.calculateElevationAlongRay();
 TravelElevation.drawResults(results)
 
+finalE = te.calculateFinalElevation()
+
 te.fly = true;
 results = te.calculateElevationAlongRay();
 TravelElevation.drawResults(results)
@@ -137,6 +139,24 @@ commons.js:1729 benchCalc | 1000 iterations | 21.6ms | 0.0216ms per
 benchCreation | 1000 iterations | 10.7ms | 0.0107ms per
 commons.js:1729 benchCalc | 1000 iterations | 170.2ms | 0.1702ms per
 
+
+
+tile = te.tiles[0];
+tokenCenter = token.center;
+averageTiles = 4;
+alphaThreshold = .75
+tokenShape = te._getTokenShape(tokenCenter)
+
+canvas.elevation.tokens.tileOpaqueAt(tile, tokenCenter, averageTiles, alphaThreshold, tokenShape)
+canvas.elevation.tokens.tokenSupportedByTile(tile, tokenCenter, averageTiles, alphaThreshold, tokenShape)
+
+N = 10000
+await foundry.utils.benchmark(canvas.elevation.tokens.tileOpaqueAt, N, tile, tokenCenter, averageTiles, alphaThreshold, tokenShape)
+await foundry.utils.benchmark(canvas.elevation.tokens.tokenSupportedByTile, N, tile, tokenCenter, averageTiles, alphaThreshold, tokenShape)
+
+50% tile:
+tileOpaqueAt | 10000 iterations | 128.7ms | 0.01287ms per
+tokenSupportedByTile | 10000 iterations | 37.1ms | 0.00371ms per
 
 
 
@@ -198,6 +218,9 @@ export class TravelElevation {
   /** @type {PIXI.Rectangle|PIXI.Polygon} */
   #tokenShape;
 
+  /** @type {Point} */
+  #tokenCenter;
+
   /** @type {Token} */
   token;
 
@@ -209,6 +232,9 @@ export class TravelElevation {
 
   /** @type {number} */
   #stepT = 0.1;
+
+  /** @type {number} */
+  #interval = 1;
 
   // ----- NOTE: Preset Configuration Parameters ----- //
 
@@ -241,6 +267,10 @@ export class TravelElevation {
 
     this.averageTerrain = averageTerrainSetting();
     this.averageTiles = averageTilesSetting();
+
+    // When stepping along the ray, move in steps based on the grid precision.
+    const gridPrecision = canvas.walls.gridPrecision;
+    this.#interval = Math.max(canvas.grid.w / gridPrecision, canvas.grid.h / gridPrecision);
   }
 
   // ----- NOTE: Static Methods ----- //
@@ -280,10 +310,7 @@ export class TravelElevation {
     ray.B.t0 = 1;
 
     // When stepping along the ray, move in steps based on the grid precision.
-    const gridPrecision = canvas.walls.gridPrecision;
-    const interval = Math.max(canvas.grid.w / gridPrecision, canvas.grid.h / gridPrecision);
-
-    this.#stepT = interval / ray.distance;
+    this.#stepT = this.#interval / ray.distance;
     this.#travelRay = ray;
   }
 
@@ -317,16 +344,22 @@ export class TravelElevation {
       const tokenCenter = token.center;
       const tokenTL = token.getTopLeft(tokenCenter.x, tokenCenter.y);
       this.#tokenShape = canvas.elevation._tokenShape(tokenTL, token.w, token.h);
+      this.#tokenCenter = { x: tokenCenter.x, y: tokenCenter.y };
     }
     return this.#tokenShape;
   }
 
+  get tokenCenter() {
+    if ( typeof this.#tokenCenter === "undefined" ) this.tokenShape();
+    return this.#tokenCenter;
+  }
+
   _getTokenShape(currLocation) {
-    const { token, averageTiles } = this;
-    if ( averageTiles ) {
-      const origCenter = token.center;
-      const dx = currLocation.x - origCenter.x;
-      const dy = currLocation.y - origCenter.y;
+    if ( this.averageTiles ) {
+      const tokenShape = this.tokenShape;
+      const tokenCenter = this.#tokenCenter;
+      const dx = currLocation.x - tokenCenter.x;
+      const dy = currLocation.y - tokenCenter.y;
       return this.tokenShape.translate(dx, dy);
     }
     return undefined;
@@ -413,6 +446,7 @@ export class TravelElevation {
    */
   calculateFinalElevation(startElevation) {
     const { fly, token, travelRay } = this;
+    startElevation ??= token.bottomE;
     const { currState, currE, currTile, terrainE } = this.currentTokenState({ tokenCenter: travelRay.A, tokenElevation: startElevation });
 
     // If token is flying but flying is not enabled, no auto-elevation.
