@@ -485,6 +485,17 @@ export class PixelCache extends PIXI.Rectangle {
   }
 
   /**
+   * Convert a ray to local texture coordinates
+   * @param {Ray}
+   * @returns {Ray}
+   */
+  _rayToLocalCoordinates(ray) {
+    return new Ray(
+      this._fromCanvasCoordinates(ray.A.x, ray.A.y),
+      this._fromCanvasCoordinates(ray.B.x, ray.B.y));
+  }
+
+  /**
    * Convert a circle to local texture coordinates
    * @param {PIXI.Circle}
    * @returns {PIXI.Circle}
@@ -516,7 +527,7 @@ export class PixelCache extends PIXI.Rectangle {
 
   /**
    * Convert a rectangle to local texture coordinates
-   * @param {PIXI.Rectangle}
+   * @param {PIXI.Rectangle} rect
    * @returns {PIXI.Rectangle}
    */
   _rectangleToLocalCoordinates(rect) {
@@ -544,6 +555,19 @@ export class PixelCache extends PIXI.Rectangle {
   }
 
   /**
+   * Convert a shape to local coordinates.
+   * @param {PIXI.Rectangle|PIXI.Polygon|PIXI.Circle|PIXI.Ellipse} shape
+   * @returns {PIXI.Rectangle|PIXI.Polygon|PIXI.Circle|PIXI.Ellipse}
+   */
+  _shapeToLocalCoordinates(shape) {
+    if ( shape instanceof PIXI.Rectangle ) return this._rectangleToLocalCoordinates(shape);
+    else if ( shape instanceof PIXI.Polygon ) return this._polygonToLocalCoordinates(shape);
+    else if ( shape instanceof PIXI.Circle ) return this._circleToLocalCoordinates(shape);
+    else if ( shape instanceof PIXI.Ellipse ) return this._ellipseToLocalCoordinates(shape);
+    else console.error("applyFunctionToShape: shape not recognized.");
+  }
+
+  /**
    * Get a pixel value given local coordinates.
    * @param {number} x    Local x coordinate
    * @param {number} y    Local y coordinate
@@ -568,10 +592,29 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {number}
    */
   average(shape, skip = 1) {
-    let sum = 0;
-    const averageFn = value => sum += value;
+    const averageFn = PixelCache.averageFunction();
     const denom = this.applyFunctionToShape(averageFn, shape, skip);
-    return sum / denom;
+    return averageFn.sum / denom;
+  }
+
+  percent(shape, threshold, skip = 1) {
+    const countFn = PixelCache.countFunction(threshold);
+    const denom = this.applyFunctionToShape(countFn, shape, skip);
+    return countFn.sum / denom;
+  }
+
+  static countFunction(threshold) {
+    const countFn = value => {
+      if ( value > threshold ) countFn.sum += 1;
+    }
+    countFn.sum = 0;
+    return countFn;
+  }
+
+  static averageFunction() {
+    const averageFn = value => averageFn.sum += value;
+    averageFn.sum = 0;
+    return averageFn;
   }
 
   /**
@@ -585,17 +628,62 @@ export class PixelCache extends PIXI.Rectangle {
     // Don't go outside the cache frame
     localFrame = localFrame ? this.localFrame.intersection(localFrame) : this.localFrame;
 
+    // Somewhat counter-intuitively, this can be faster than
+    // just looping straight through the points, probably because by centering,
+    // it often hits less points.
+
     // Test each local coordinate.
-    const { left, top, right, bottom } = localFrame;
+    // Center, such that skipping builds a grid out from the center point.
+    const { left, top, right, bottom, width, height } = localFrame;
+    const midX = left + (width * 0.5);
+    const midY = top + (height * 0.5);
+
+    // Test from the center in each direction, avoiding repeats.
+    const xDec = midX - skip;
+    const yDec = midY - skip;
+
     let denom = 0;
-    for ( let ptX = left; ptX < right; ptX += skip ) {
-      for ( let ptY = top; ptY < bottom; ptY += skip) {
+    for ( let ptX = midX; ptX < right; ptX += skip ) {
+      for ( let ptY = midY; ptY < bottom; ptY += skip ) {
+        const px = this._indexAtLocal(ptX, ptY);
+        const value = this.pixels[px];
+        fn(value, px, ptX, ptY);
+        denom += 1;
+      }
+
+      for ( let ptY = yDec; ptY > top; ptY -= skip ) {
         const px = this._indexAtLocal(ptX, ptY);
         const value = this.pixels[px];
         fn(value, px, ptX, ptY);
         denom += 1;
       }
     }
+
+    for ( let ptX = xDec; ptX > left; ptX -= skip ) {
+      for ( let ptY = midY; ptY < bottom; ptY += skip ) {
+        const px = this._indexAtLocal(ptX, ptY);
+        const value = this.pixels[px];
+        fn(value, px, ptX, ptY);
+        denom += 1;
+      }
+
+      for ( let ptY = yDec; ptY > top; ptY -= skip ) {
+        const px = this._indexAtLocal(ptX, ptY);
+        const value = this.pixels[px];
+        fn(value, px, ptX, ptY);
+        denom += 1;
+      }
+    }
+
+//     let denom = 0;
+//     for ( let ptX = leftSkip; ptX < right; ptX += skip ) {
+//       for ( let ptY = topSkip; ptY < bottom; ptY += skip) {
+//         const px = this._indexAtLocal(ptX, ptY);
+//         const value = this.pixels[px];
+//         fn(value, px, ptX, ptY);
+//         denom += 1;
+//       }
+//     }
     return denom;
   }
 
@@ -606,26 +694,25 @@ export class PixelCache extends PIXI.Rectangle {
    *                                  Shape is in canvas coordinates
    * @returns {number} Total number of pixels to which the function applied.
    */
-  applyFunctionToShape(fn, shape, skip=1) {
+  applyFunctionToShape(fn, shape, skip) {
     // Shift the shape to texture coordinates; likely faster than converting each pixel to canvas.
-    if ( shape instanceof PIXI.Rectangle ) shape = this._rectangleToLocalCoordinates(shape);
-    else if ( shape instanceof PIXI.Polygon ) shape = this._polygonToLocalCoordinates(shape);
-    else if ( shape instanceof PIXI.Circle ) shape = this._circleToLocalCoordinates(shape);
-    else if ( shape instanceof PIXI.Ellipse ) shape = this._ellipseToLocalCoordinates(shape);
-    else console.error("applyFunctionToShape: shape not recognized.");
+    shape = this._shapeToLocalCoordinates(shape);
+    return this._applyFunctionToLocalShape(fn, shape, skip);
+  }
 
-    // If shape is still a rectangle, no need to test containment.
-    if ( shape instanceof PIXI.Rectangle ) return this._applyFunction(fn, shape, skip);
+  _applyFunctionToLocalShape(fn, localShape, skip) {
+    // If shape is a rectangle, no need to test containment.
+    if ( localShape instanceof PIXI.Rectangle ) return this._applyFunction(fn, localShape, skip);
 
     // Track number of pixels contained within the shape.
     let denom = 0;
     const shapeFn = (value, i, localX, localY) => {
-      if ( shape.contains(localX, localY) ) {
+      if ( localShape.contains(localX, localY) ) {
         denom += 1;
         fn(value, i, localX, localY);
       }
     };
-    this._applyFunction(shapeFn, shape.getBounds(), skip);
+    this._applyFunction(shapeFn, localShape.getBounds(), skip);
     return denom;
   }
 
@@ -640,25 +727,19 @@ export class PixelCache extends PIXI.Rectangle {
    *                                    and 1 is the B endpoint
    * @returns {Point}   Point, with t0 set to the t value along the ray.
    */
-  nextPixelValueAlongCanvasRay(ray, cmp, { stepT = 0.1, startT = stepT, spacer, frame, skip } = {}) {
-    const { A, B } = ray;
-    const textureRay = new Ray(this._fromCanvasCoordinates(A.x, A.y), this._fromCanvasCoordinates(B.x, B.y));
+  nextPixelValueAlongCanvasRay(ray, cmp, { stepT = 0.1, startT = stepT, spacer, frame, skip, countFn } = {}) {
+    const localRay = this._rayToLocalCoordinates(ray);
     let foundPt;
-
-    if ( spacer ) {
+    if ( frame ) {
+      countFn ??= PixelCache.averageFunction();
+      frame = this._shapeToLocalCoordinates(frame);
+      foundPt = this._nextPixelValueAlongLocalRayAverage(localRay, cmp, frame, countFn, skip, stepT, startT);
+    } else if ( spacer ) {
       spacer = PIXI.Point.distanceBetween(
-        this._fromCanvasCoordinates(0, 0),
-        this._fromCanvasCoordinates(spacer, 0));
-      foundPt = this._nextPixelValueAlongLocalRaySpacer(textureRay, cmp, spacer, stepT, startT);
-    } else if ( frame ) {
-      // Move the frame such that it is centered over the ray at the starting point
-      const pt = ray.project(startT);
-      const center = frame.center;
-      const dx = pt.x - center.x;
-      const dy = pt.y - center.y;
-      frame = this._rectangleToLocalCoordinates(frame.translate(dx, dy));
-      foundPt = this._nextPixelValueAlongLocalRayAverage(textureRay, cmp, frame, skip, stepT, startT);
-    } else foundPt = this._nextPixelValueAlongLocalRay(textureRay, cmp, stepT, startT);
+      this._fromCanvasCoordinates(0, 0),
+      this._fromCanvasCoordinates(spacer, 0));
+      foundPt = this._nextPixelValueAlongLocalRaySpacer(localRay, cmp, spacer, stepT, startT);
+    } else foundPt = this._nextPixelValueAlongLocalRay(localRay, cmp, stepT, startT);
 
     if ( foundPt ) {
       const t0 = foundPt.t0;
@@ -682,11 +763,11 @@ export class PixelCache extends PIXI.Rectangle {
    *
    * @returns {Point}   Point, with t0 set to the t value along the ray.
    */
-  _nextPixelValueAlongLocalRay(ray, cmp, stepT = 0.1, startT = stepT) {
+  _nextPixelValueAlongLocalRay(localRay, cmp, stepT = 0.1, startT = stepT) {
     // Step along the ray until we hit the threshold
     let t = startT;
     while ( t <= 1 ) {
-      const pt = ray.project(t);
+      const pt = localRay.project(t);
       const value = this._pixelAtLocal(pt.x, pt.y);
       if ( cmp(value) ) {
         pt.t0 = t;
@@ -698,13 +779,13 @@ export class PixelCache extends PIXI.Rectangle {
     return null;
   }
 
-  _nextPixelValueAlongLocalRaySpacer(ray, cmp, spacer = 1, stepT = 0.1, startT = stepT) {
-    // Step along the ray until we hit the threshold
+  _nextPixelValueAlongLocalRaySpacer(localRay, cmp, spacer = 1, stepT = 0.1, startT = stepT) {
     const localFrame = this.localFrame;
 
+    // Step along the ray until we hit the threshold
     let t = startT;
     while ( t <= 1 ) {
-      const pt = ray.project(t);
+      const pt = localRay.project(t);
       const testPoints = [
         pt,
         { x: pt.x - spacer, y: pt.y },
@@ -712,36 +793,41 @@ export class PixelCache extends PIXI.Rectangle {
         { x: pt.x, y: pt.y - spacer },
         { x: pt.x, y: pt.y + spacer }];
 
-      let foundValue = false;
       for ( const pt of testPoints ) {
         if ( !localFrame.contains(pt.x, pt.y) ) continue;
         const value = this._pixelAtLocal(pt.x, pt.y);
-        foundValue ||= cmp(value);
-        if ( foundValue ) break;
+        if ( cmp(value) ) {
+          pt.t0 = t;
+          pt.value = value;
+          return pt;
+        }
       }
 
-      if ( foundValue ) {
-        pt.t0 = t;
-        pt.value = foundValue;
-        return pt;
-      }
       t += stepT;
     }
     return null;
   }
 
-  _nextPixelValueAlongLocalRayAverage(ray, cmp, frame, skip = 1, stepT = 0.1, startT = stepT) {
+  _nextPixelValueAlongLocalRayFrame(ray, cmp, localFrame, countFn, skip = 1, stepT = 0.1, startT = stepT) {
     // Step along the ray until we hit the threshold
-    // Each point assumed to be the center of the rectangular frame.
-    const center = frame.center;
+    // Each point assumed to be the center of the frame.
+    const center = localFrame.center;
 
+    // Step along the ray in stepT increments, starting at startT.
     let t = startT;
     while ( t <= 1 ) {
+      // Center the frame over the point on the ray.
       const pt = ray.project(t);
       const dx = pt.x - center.x;
       const dy = pt.y - center.y;
-      const testFrame = frame.translate(dx, dy);
-      const value = this._average(testFrame, skip);
+      const testFrame = localFrame.translate(dx, dy);
+
+      // Calculate the average pixel value in the frame.
+      countFn.sum = 0;
+      const denom = this._applyFunctionToLocalShape(countFn, testFrame, skip);
+      const value = countFn.sum / denom;
+
+      // Return the point if the comparison function is met.
       if ( cmp(value) ) {
         pt.t0 = t;
         pt.value = value;
