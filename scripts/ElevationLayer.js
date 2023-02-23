@@ -31,24 +31,7 @@ import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
-import {
-  tokenElevationOptions,
-  isTokenOnTerrain,
-  isTokenOnATile,
-  isTokenOnGround,
-  tokenOnTile,
-
-  terrainElevationAtToken,
-  findTileBelowToken,
-  groundElevationAtToken,
-  findTileNearToken,
-  findSupportingTileNearToken,
-  tileSupportsToken,
-
-  tileOpaqueAt,
-  tileTerrainOpaqueAverageAt,
-  tileOpaqueAverageAt
-} from "./tokens.js";
+import { TokenElevation } from "./tokens.js";
 
 import { setSceneSetting, getSceneSetting, SETTINGS } from "./settings.js";
 
@@ -90,24 +73,7 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   // Imported methods
-  tokens = {
-    tokenElevationOptions,
-    isTokenOnTerrain,
-    isTokenOnATile,
-    isTokenOnGround,
-    tokenOnTile,
-
-    terrainElevationAtToken,
-    findTileBelowToken,
-    groundElevationAtToken,
-    findTileNearToken,
-    findSupportingTileNearToken,
-    tileSupportsToken,
-
-    tileOpaqueAt,
-    tileTerrainOpaqueAverageAt,
-    tileOpaqueAverageAt
-  };
+  TokenElevation = TokenElevation;
 
   /**
    * Delay in milliseconds before displaying elevation value when mouse hovers.

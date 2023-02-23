@@ -13,7 +13,7 @@ import { almostLessThan, almostBetween } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 // import { Point3d } from "./geometry/3d/Point3d.js";
 import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
-import { tokenElevationOptions, tileOpaqueAt, tileOpaqueAverageAt, findSupportingTileNearToken, findTileNearToken } from "./tokens.js";
+import { TokenElevation, tileOpaqueAt, tileOpaqueAverageAt } from "./tokens.js";
 import { PixelCache } from "./PixelCache.js";
 
 
@@ -261,8 +261,8 @@ export class TravelElevation {
 
   static #maximumPixelValue = 255;
 
-  /** @type {TokenElevationOptions} */
-  tokenElevationOptions;
+  /** @type {TokenElevation} */
+  tokenElevation;
 
   /** @type {Token} */
   token;
@@ -296,11 +296,7 @@ export class TravelElevation {
   constructor(token, travelRay, opts = {}) {
     this.token = token;
     this.travelRay = travelRay;
-
-    // Set the default elevation options for the provided token.
-    // Store the original center so token shape can be shifted.
-    this.#tokenShapeCenter = opts.tokenCenter = travelRay.A;
-    this.tokenElevationOptions = tokenElevationOptions(token, opts);
+    this.tokenElevation = new TokenElevation(token, opts);
 
     // When stepping along the ray, move in steps based on the grid precision.
     const gridPrecision = canvas.walls.gridPrecision;
@@ -367,38 +363,6 @@ export class TravelElevation {
    * @type {Point3d[]}
    */
   get terrainElevations() { return this.calculateTerrainElevationsAlongRay(); }
-
-  _terrainElevationAtLocation(location) {
-    const opts = this.tokenElevationOptions;
-    if ( opts.averageTerrain ) {
-      const tokenShape = this._getTokenShapeForLocation(location);
-      return canvas.elevation.averageElevationWithinShape(tokenShape);
-    }
-    return canvas.elevation.elevationAt(opts.tokenCenter);
-  }
-
-
-  _getTokenShapeForLocation(location) {
-    const tokenShape = this.tokenElevationOptions.tokenShape;
-    if ( tokenShape ) {
-      const dx = location.x - this.#tokenShapeCenter.x;
-      const dy = location.y - this.#tokenShapeCenter.y;
-      return tokenShape.translate(dx, dy);
-    }
-    return undefined;
-  }
-
-  _updateTokenCenter(location) {
-    const tokenShape = this.tokenElevationOptions.tokenShape;
-    if ( tokenShape ) {
-      const dx = location.x - this.#tokenShapeCenter.x;
-      const dy = location.y - this.#tokenShapeCenter.y;
-      this.tokenElevationOptions.tokenShape = tokenShape.translate(dx, dy);
-      this.#tokenShapeCenter = { x: location.x, y: location.y };
-    }
-
-    this.tokenElevationOptions.tokenCenter = { x: location.x, y: location.y };
-  }
 
   /**
    * "Cliffs" whereby terrain drops more than terrainStep
@@ -790,11 +754,11 @@ export class TravelElevation {
    * @param {Point} currPt            Current center of the token
    */
   _findMatchingTile(tokenCenter, tokenElevation, excludeTileId) {
-    const { token, averageTiles, alphaThreshold } = this;
+    const { averageTiles, alphaThreshold } = this;
     const tiles = this.tiles.filter(t => t.id !== excludeTileId);
     if ( !tiles.length ) return null;
     const tokenShape = this._getTokenShape(tokenCenter);
-    return findSupportingTileNearToken(token, {
+    return this.tokenElevation.findSupportingTileNearToken({
       tokenCenter,
       tokenElevation,
       tokenShape,
@@ -1050,7 +1014,7 @@ export class TravelElevation {
     const { token, tileStep, terrainStep, averageTiles, alphaThreshold, tiles } = this;
     tokenCenter ??= token.center;
     tokenElevation ??= token.bottomE;
-    const matchingTile = findTileNearToken(token, {
+    const matchingTile = this.tokenElevation.findTileNearToken({
       tokenCenter,
       tokenElevation,
       averageTiles,
@@ -1080,7 +1044,7 @@ export class TravelElevation {
   static currentTokenState(token, { tokenCenter, tokenElevation } = {}) {
     tokenCenter ??= token.center;
     tokenElevation ??= token.bottomE;
-    const matchingTile = findTileNearToken(token, {
+    const matchingTile = this.tokenElevation.findTileNearToken({
       tokenCenter,
       tokenElevation });
 

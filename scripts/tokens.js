@@ -198,7 +198,7 @@ export function _refreshToken(wrapper, options) {
 
     const TERRAIN = TravelElevation.TOKEN_ELEVATION_STATE.TERRAIN;
     change ??= { currState: TERRAIN };
-    if ( change.currState === TERRAIN ) change.currE = terrainElevationAtToken(this, { tokenCenter });
+    if ( change.currState === TERRAIN ) change.currE = TokenElevation.terrainElevationAtToken(this, { tokenCenter });
     options.elevation ||= this.document.elevation !== change.currE;
 
     this.document.elevation = change.currE;
@@ -287,57 +287,382 @@ D. findSupportingTileNearToken
 
 */
 
-// NOTE: Token elevation options setup
+
+// Class to track and estimate token elevation.
+// Basic usage can rely on static methods.
+// Advanced usage can instantiate the class to avoid re-constructing options repeatedly.
+
+export class TokenElevation {
+
+  /** @type {TokenElevationOptions} */
+  #options = {};
+
+  constructor(token, opts = {}) {
+    this.#options = TokenElevation.tokenElevationOptions(token, opts);
+  }
+
+  // NOTE: Token elevation options setup
+
+  /**
+   * @typedef {object} TokenElevationOptions
+   * @property {Token} token
+   * @property {Point} tokenCenter        Location to use for the token
+   * @property {number} tokenElevation    Elevation to use for the token
+   * @property {number} alphaThreshold    Threshold under which a tile pixel is considered a (transparent) hole.
+   * @property {boolean} useAveraging     Whether or not to average over token shape
+   * @property {number} averageTiles      0 if no averaging; positive number otherwise
+   * @property {number} averageTerrain    0 if no averaging; positive number otherwise
+   * @property {number} tileStep          How far from a tile a token can be and still move to the tile
+   * @property {PIXI.Rectangle|PIXI.Polygon} tokenShape
+   */
+
+  /**
+   * Options repeatedly used in these token elevation methods
+   * @param {Token} token             Token data to pull if not otherwise provided
+   * @param {object} opts             Preset options
+   * @returns {TokenElevationOptions}
+   */
+  static tokenElevationOptions(token, opts = {}) {
+    opts.token = token;
+    opts.tokenCenter ??= token.center;
+    opts.tokenElevation ??= token.bottomE;
+    opts.useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
+    opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
+    opts.averageTiles ??= opts.useAveraging ? averageTilesSetting() : 0;
+    opts.averageTerrain ??= opts.useAveraging ? averageTerrainSetting() : 0;
+    opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep ?? token.topE - token.bottomE;
+
+    // Token shape is expensive, so avoid setting unless we have to.
+    if ( !opts.tokenShape && opts.averageTiles ) {
+      Object.defineProperty(opts, "tokenShape", {
+        get: function() { return this._tokenShape || (this._tokenShape = getTokenShape(this.token, this.tokenCenter)); }
+      });
+    }
+
+    // Locating tiles is expensive, so avoid setting unless we have to.
+    if ( !opts.tiles ) Object.defineProperty(opts, "tiles", {
+      get: function() { return this._tiles || (this._tiles = _locateTiles(this.token)); }
+    });
+
+    return opts;
+  }
+
+  get tokenLocation() { return this.#options.tokenCenter; }
+
+  set tokenLocation(value) {
+    // Move the token shape if it has been created.
+    const tokenShape = this.#options._tokenShape;
+    if ( tokenShape ) {
+      const dx = location.x - this.#options.tokenCenter.x;
+      const dy = location.y - this.#options.tokenCenter.y;
+      this.#options._tokenShape = tokenShape.translate(dx, dy);
+    }
+    this.#options.tokenCenter = { x: value.x, y: value.y };
+  }
+
+  // NOTE: Token functions where elevation is known
+
+  /**
+   * Is the token in contact with the terrain?
+   * @param {Token} token       Token to test
+   * @param {TokenElevationOptions} [options]  Options that affect the calculation
+   * @returns {boolean}
+   */
+  static isTokenOnTerrain(token, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#isTokenOnTerrain(opts);
+  }
+
+  isTokenOnTerrain() {
+    const opts = this.#options;
+    return TokenElevation.#terrainElevationAtToken(opts);
+  }
+
+  static #isTokenOnTerrain(opts) {
+    return this.#terrainElevationAtToken(opts).almostEqual(opts.tokenElevation);
+  }
+
+  /**
+   * Determine whether a token is on a tile, meaning the token is in contact with the tile.
+   * @param {Token} token       Token to test
+   * @param {TokenElevationOptions} [options]  Options that affect the calculation
+   * @returns {boolean}
+   */
+  static isTokenOnATile(token, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#isTokenOnATile(opts);
+  }
+
+  isTokenOnATile() {
+    const opts = this.#options;
+    return TokenElevation.#isTokenOnATile(opts);
+  }
+
+  static #isTokenOnATile(opts) {
+    const tiles = opts.tiles.filter(tile => tile.elevationE.almostEqual(opts.tokenElevation));
+    if ( !tiles.length ) return false;
+
+    // Determine whether the token is on a tile or only on the transparent portions
+    for ( const tile of tiles ) {
+      if ( TokenElevation.#tokenOnTile(tile, opts) ) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Determine whether a token is "on the ground", meaning that the token is in contact
+   * with the ground layer according to elevation of the background terrain.
+   * @param {Token} token       Token to test
+   * @param {object} [opts]  Options that affect the calculation
+   * @returns {boolean}
+   */
+  static isTokenOnGround(token, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#isTokenOnGround(opts);
+  }
+
+  isTokenOnGround() {
+    const opts = this.#options;
+    return TokenElevation.#isTokenOnGround(opts);
+  }
+
+  static #isTokenOnGround(opts) {
+    if ( opts.tiles.length && TokenElevation.#isTokenOnATile(opts) ) return true;
+    const terrainE = TokenElevation.#terrainElevationAtToken(opts);
+    return opts.tokenElevation.almostEqual(terrainE);
+  }
+
+  /**
+   * Is the token on the tile?
+   * Averaging: > 50% on the tile.
+   * Not averaging: not over a hole pixel.
+   * @param {Token} token       Token to test
+   * @param {object} [opts]  Options that affect the calculation
+   * @returns {boolean}
+   */
+  static tokenOnTile(token, tile, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#tokenOnTile(tile, opts);
+  }
+
+  tokenOnTile(tile) {
+    const opts = this.#options;
+    return TokenElevation.#tokenOnTile(tile, opts);
+  }
+
+  static #tokenOnTile(tile, opts) {
+    // If token not at the tile elevation, not on the tile.
+    const tileE = tile.elevationE;
+    if ( !opts.tokenElevation.almostEqual(tileE) ) return false;
+
+    return opts.averageTiles
+      ? tileOpaqueAverageAt(tile, opts.tokenShape, opts.alphaThreshold, opts.averageTiles)
+      : tileOpaqueAt(tile, opts.tokenCenter, opts.alphaThreshold);
+  }
+
+  // NOTE: Token functions where elevation is unknown
+
+  /**
+   * Determine terrain elevation at the token location.
+   * @param {Token} token       Token to test
+   * @param {TokenElevationOptions} [options]  Options that affect the calculation.
+   * @returns {number} Elevation in grid units.
+   */
+  static terrainElevationAtToken(token, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#terrainElevationAtToken(opts);
+  }
+
+  terrainElevationAtToken() {
+    const opts = this.#options;
+    return TokenElevation.#terrainElevationAtToken(opts);
+  }
+
+  static #terrainElevationAtToken(opts) {
+    return opts.averageTerrain
+      ? canvas.elevation.averageElevationWithinShape(opts.tokenShape)
+      : canvas.elevation.elevationAt(opts.tokenCenter);
+  }
+
+  /**
+   * Determine tile under the token location.
+   * This is the highest tile that the token would be on if the token were at that tile elevation.
+   * @param {Token} token   Token to test
+   * @param {TokenElevationOptions} [options]  Options that affect the calculation.
+   * @returns {number} Elevation in grid units.
+   */
+  static findTileBelowToken(token, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#findTileBelowToken(opts);
+  }
+
+  findTileBelowToken() {
+    const opts = this.#options;
+    return TokenElevation.#findTileBelowToken(opts);
+  }
+
+  static #findTileBelowToken(opts) {
+    const excludeFn = excludeUndergroundTilesFn(opts.tokenCenter, opts.tokenElevation);
+    for ( const tile of opts.tiles ) {
+      const tileE = tile.elevationE;
+      if ( excludeFn(tileE) ) continue;
+
+      // If the token was at the tile elevation, would it be on the tile?
+      if ( this.#tokenOnTile(tile, opts) ) return tile;
+    }
+    return null;
+  }
+
+  /**
+   * Determine token elevation for a give canvas location
+   * Will be either the tile elevation, if the token is on the tile, or the terrain elevation.
+   * @param {Token} token       Token to test
+   * @param {object} [opts]     Options that affect the calculation
+   * @returns {number} Elevation in grid units.
+   */
+  static groundElevationAtToken(token, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#groundElevationAtToken(opts);
+  }
+
+  groundElevationAtToken() {
+    const opts = this.#options;
+    return TokenElevation.#groundElevationAtToken(opts);
+  }
+
+  static #groundElevationAtToken(opts) {
+    const matchingTile = this.#findTileBelowToken(opts);
+    const terrainE = this.#terrainElevationAtToken(opts);
+
+    // If the terrain is above the tile, use the terrain elevation. (Math.max(null, 5) returns 5.)
+    return Math.max(terrainE, matchingTile?.elevationE ?? null);
+  }
+
+  /**
+   * Find a tile within tileStep of the token elevation.
+   * Only counts if the token is directly above the opaque portions of the tile.
+   * (See findSupportingTileNearToken for finding tiles adjacent to the token when averaging)
+   * @param {Token} token
+   * @param {TokenElevationOptions} opts
+   * @returns {Tile|null}
+   */
+  static findTileNearToken(token, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#findTileNearToken(opts);
+  }
+
+  findTileNearToken() {
+    const opts = this.#options;
+    return TokenElevation.#findTileNearToken(opts);
+  }
+
+  static #findTileNearToken(opts) {
+    const { tokenElevation, tileStep } = opts;
+    const excludeFn = excludeUndergroundTilesFn(opts.tokenCenter, tokenElevation);
+
+    // Duplicate needed options for tokenOnTile, so elevation can be modified.
+    const dupeOpts = {
+      averageTiles: opts.averageTiles,
+      tokenShape: opts.tokenShape,
+      alphaThreshold: opts.alphaThreshold,
+      tokenCenter: opts.tokenCenter
+    }
+
+    for ( const tile of opts.tiles ) {
+      const tileE = tile.elevationE;
+      if ( excludeFn(tileE) ) continue;
+      if ( !almostBetween(tokenElevation - tileE, 0, tileStep) ) continue;
+
+      // If the token was at the tile elevation, would it be on the tile?
+      dupeOpts.tokenElevation = tileE;
+      if ( this.#tokenOnTile(tile, dupeOpts)) return tile;
+    }
+    return null;
+  }
+
+  /**
+   * Find the closest tile beneath the token that would support the token.
+   * If averaging, a tile sufficiently adjacent to the token, given underlying terrain, will be returned.
+   * @param {Token} token       Token to test; may use token.getBounds() and token.center, depending on options.
+   * @param {TokenElevationOptions} [opts]  Options that affect the tile elevation calculation
+   * @return {Tile|null} Return the tile. Elevation can then be easily determined: tile.elevationE;
+   */
+  static findSupportingTileNearToken(token, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#findSupportingTileNearToken(opts);
+  }
+
+  findSupportingTileNearToken() {
+    const opts = this.#options;
+    return TokenElevation.#findSupportingTileNearToken(opts);
+  }
+
+  static #findSupportingTileNearToken(opts) {
+    const excludeFn = excludeUndergroundTilesFn(opts.tokenCenter, opts.tokenElevation);
+    for ( const tile of opts.tiles ) {
+      const tileE = tile.elevation;
+      if ( excludeFn(tileE) ) continue;
+      if ( this.#tileSupportsToken(tile, opts)) return tile;
+    }
+    return null;
+  }
+
+  /**
+   * Is the token sufficiently near a tile such that it can be considered on the tile?
+   * Token must be at tile elevation or within tileStep of it.
+   * If not averaging, then token center has to be contained by the tile and on a non-transparent pixel.
+   * If averaging, token elevation at terrain + tile portions must be equal to the tile at > 50% of the space.
+   * @param {Token} token   Token to test
+   * @param {Tile} tile     Tile to test
+   * @param {TokenElevationOptions} [opts]  Options that affect the tile elevation calculation
+   * @returns {boolean}
+   */
+  static tileSupportsToken(token, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#tileSupportsToken(opts);
+  }
+
+  tileSupportsToken() {
+    const opts = this.#options;
+    return TokenElevation.#tileSupportsToken(opts);
+  }
+
+  static #tileSupportsToken(tile, opts) {
+    const tileE = tile.elevationE;
+
+    // If token not within tileStep of the tile, tile does not support token.
+    if ( !almostBetween(opts.tokenElevation - tileE, 0, opts.tileStep) ) return false;
+
+    return opts.averageTiles
+      ? tileTerrainOpaqueAverageAt(tile, opts.tokenShape, opts.alphaThreshold, opts.averageTiles)
+      : tileOpaqueAt(tile, opts.tokenCenter, opts.alphaThreshold);
+  }
+}
+
+// NOTE: Helper functions
 
 /**
- * @typedef {object} TokenElevationOptions
- * @property {Token} token
- * @property {Point} tokenCenter        Location to use for the token
- * @property {number} tokenElevation    Elevation to use for the token
- * @property {number} alphaThreshold    Threshold under which a tile pixel is considered a (transparent) hole.
- * @property {boolean} useAveraging     Whether or not to average over token shape
- * @property {number} averageTiles      0 if no averaging; positive number otherwise
- * @property {number} averageTerrain    0 if no averaging; positive number otherwise
- * @property {number} tileStep          How far from a tile a token can be and still move to the tile
- * @property {PIXI.Rectangle|PIXI.Polygon} tokenShape
+ * Function to check whether tiles should be excluded because either the tile or the token
+ * is underground. (tile underground xor token underground)
+ * @param {Point} tokenCenter
+ * @param {number} tokenElevation
+ * @returns {function}
  */
-
-/**
- * Options repeatedly used in these token elevation methods
- * @param {Token} token             Token data to pull if not otherwise provided
- * @param {object} opts             Preset options
- * @returns {TokenElevationOptions}
- */
-export function tokenElevationOptions(token, opts = {}) {
-  opts.token = token;
-  opts.tokenCenter ??= token.center;
-  opts.tokenElevation ??= token.bottomE;
-  opts.useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
-  opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
-  opts.averageTiles ??= opts.useAveraging ? averageTilesSetting() : 0;
-  opts.averageTerrain ??= opts.useAveraging ? averageTerrainSetting() : 0;
-  opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep ?? token.topE - token.bottomE;
-
-  // Token shape is expensive, so avoid setting unless we have to.
-  if ( !opts.tokenShape && opts.averageTiles ) Object.defineProperty(opts, "tokenShape", {
-    get: function() { return getTokenShape(this.token, this.tokenCenter); }
-  });
-
-  // Locating tiles is expensive, so avoid setting unless we have to.
-  if ( !opts.tiles ) Object.defineProperty(opts, "tiles", {
-    get: function() { return _locateTiles(this.token); }
-  });
-
-  return opts;
+function excludeUndergroundTilesFn(tokenCenter, tokenElevation) {
+  // If token is below ground, tiles must be below ground, and vice-versa.
+  const terrainE = canvas.elevation.elevationAt(tokenCenter);
+  return almostGreaterThan(tokenElevation, terrainE)
+    ? tileE => tileE < terrainE // Token is above ground; exclude below
+    : tileE => almostGreaterThan(tileE, terrainE); // Token is below ground
 }
 
 /**
- * Get token shape for a specific token location
+ * Get token shape for the token
  * @param {Token} token
  * @param {Point} [tokenCenter]   Optional location of the token
  * @returns {PIXI.Polygon|PIXI.Rectangle}
  */
-export function getTokenShape(token, tokenCenter) {
+function getTokenShape(token, tokenCenter) {
   tokenCenter ??= token.center;
   const tokenTL = token.getTopLeft(tokenCenter.x, tokenCenter.y);
   return canvas.elevation._tokenShape(tokenTL, token.w, token.h);
@@ -356,232 +681,6 @@ function _locateTiles(token) {
   });
   tiles.sort((a, b) => b.elevationZ - a.elevationZ);
   return tiles;
-}
-
-// NOTE: Token functions where elevation is known
-
-/**
- * Is the token in contact with the terrain?
- * @param {Token} token       Token to test; may use token.getBounds() and token.center, depending on options.
- * @param {TokenElevationOptions} [options]  Options that affect the calculation
- * @returns {boolean}
- */
-export function isTokenOnTerrain(token, opts) {
-  opts = tokenElevationOptions(token, opts);
-  return terrainElevationAtToken(token, opts).almostEqual(opts.tokenElevation);
-}
-
-/**
- * Determine whether a token is on a tile, meaning the token is in contact with the tile.
- * @param {Token} token       Token to test; may use token.getBounds() and token.center, depending on options.
- * @param {object} [options]  Options that affect the calculation
- * @param {Point} [options.tokenCenter]       Canvas coordinates to use for token top center.
- * @param {boolean} [options.useAveraging]    Use averaging instead of exact center point of the token.
- *                                            Defaults to SETTINGS.AUTO_AVERAGING.
- * @param {boolean} [options.considerTiles]   First consider tiles under the token?
- * @return {boolean}
- */
-export function isTokenOnATile(token, opts) {
-  opts = tokenElevationOptions(token, opts);
-  return _isTokenOnATile(opts);
-}
-
-export function _isTokenOnATile(opts) {
-  const tiles = opts.tiles.filter(tile => tile.elevationE.almostEqual(opts.tokenElevation));
-  if ( !tiles.length ) return false;
-
-  // Determine whether the token is on a tile or only on the transparent portions
-  for ( const tile of tiles ) {
-    if ( _tokenOnTile(tile, opts) ) return true;
-  }
-  return false;
-}
-
-/**
- * Determine whether a token is "on the ground", meaning that the token is in contact
- * with the ground layer according to elevation of the background terrain.
- * @param {Token} token       Token to test; may use token.getBounds() and token.center, depending on options.
- * @param {object} [opts]  Options that affect the calculation
- * @return {boolean}
- */
-export function isTokenOnGround(token, opts) {
-  opts = tokenElevationOptions(token, opts);
-  if ( opts.tiles.length ) {
-    if ( _isTokenOnATile(opts) ) return true;
-  }
-  const terrainE = _terrainElevationAtToken(opts.tokenCenter, opts.averageTerrain, opts.tokenShape);
-  return opts.tokenElevation.almostEqual(terrainE);
-}
-
-/**
- * Is the token expressly on the tile, meaning > 50% on the tile if averaging or
- * not over a hole pixel if not.
- */
-export function tokenOnTile(token, tile, opts) {
-  opts = tokenElevationOptions(token, opts);
-  return _tokenOnTile(tile, opts);
-}
-
-function _tokenOnTile(tile, opts) {
-  // If token not at the tile elevation, not on the tile.
-  const tileE = tile.elevationE;
-  if ( !opts.tokenElevation.almostEqual(tileE) ) return false;
-
-  return opts.averageTiles
-    ? tileOpaqueAverageAt(tile, opts.tokenShape, opts.alphaThreshold, opts.averageTiles)
-    : tileOpaqueAt(tile, opts.tokenCenter, opts.alphaThreshold);
-}
-
-// NOTE: Token functions where elevation is unknown
-
-/**
- * Determine terrain elevation at the token location.
- * @param {Token} token       Token to test
- * @param {TokenElevationOptions} [options]  Options that affect the calculation.
- * @returns {number} Elevation in grid units.
- */
-export function terrainElevationAtToken(token, opts) {
-  opts = tokenElevationOptions(token, opts);
-  return _terrainElevationAtToken(opts);
-}
-
-export function _terrainElevationAtToken(opts) {
-  return opts.averageTerrain
-    ? canvas.elevation.averageElevationWithinShape(opts.tokenShape)
-    : canvas.elevation.elevationAt(opts.tokenCenter);
-}
-
-/**
- * Determine tile at the token location.
- * This is the highest tile that the token would be on if the token were at that tile elevation.
- * @param {Token} token   Token to test
- * @param {TokenElevationOptions} [options]  Options that affect the calculation.
- * @returns {number} Elevation in grid units.
- */
-export function findTileBelowToken(token, opts) {
-  opts = tokenElevationOptions(token, opts);
-  return this._findTileBelowToken(opts);
-}
-
-function _findTileBelowToken(opts) {
-  const excludeFn = excludeUndergroundTilesFn(opts.tokenCenter, opts.tokenElevation);
-  for ( const tile of opts.tiles ) {
-    const tileE = tile.elevationE;
-    if ( excludeFn(tileE) ) continue;
-
-    // If the token was at the tile elevation, would it be on the tile?
-    if ( _tokenOnTile(tile, opts) ) return tile;
-  }
-  return null;
-}
-
-/**
- * Function to check whether tiles should be excluded because either the tile or the token
- * is underground. (tile underground xor token underground)
- * @param {Point} tokenCenter
- * @param {number} tokenElevation
- * @returns {function}
- */
-function excludeUndergroundTilesFn(tokenCenter, tokenElevation) {
-  // If token is below ground, tiles must be below ground, and vice-versa.
-  const terrainE = canvas.elevation.elevationAt(tokenCenter);
-  return almostGreaterThan(tokenElevation, terrainE)
-    ? tileE => tileE < terrainE // Token is above ground; exclude below
-    : tileE => almostGreaterThan(tileE, terrainE); // Token is below ground
-}
-
-/**
- * Determine token elevation for a give canvas location
- * Will be either the tile elevation, if the token is on the tile, or the terrain elevation.
- * @param {Token} token       Token to test; may use token.getBounds() and token.center, depending on options.
- * @param {object} [opts]  Options that affect the calculation.
- * @returns {number} Elevation in grid units.
- */
-export function groundElevationAtToken(token, opts) {
-  opts = tokenElevationOptions(token, opts);
-  const matchingTile = _findTileBelowToken(opts);
-  const terrainE = _terrainElevationAtToken(opts);
-
-  // If the terrain is above the tile, use the terrain elevation. (Math.max(null, 5) returns 5.)
-  return Math.max(terrainE, matchingTile?.elevationE);
-}
-
-/**
- * Find a tile within tileStep of the token elevation.
- * Only counts if the token is directly above the opaque portions of the tile.
- * (See findSupportingTileNearToken for finding tiles adjacent to the token when averaging)
- * @param {Token} token
- * @param {TokenElevationOptions} opts
- * @returns {Tile|null}
- */
-export function findTileNearToken(token, opts) {
-  opts = tokenElevationOptions(token, opts);
-  const { tokenElevation, tileStep } = opts;
-  const excludeUndergroundTilesFn = excludeUndergroundTilesFn(opts.tokenCenter, tokenElevation);
-  for ( const tile of opts.tiles ) {
-    const tileE = tile.elevation;
-    if ( excludeUndergroundTilesFn(tileE) ) continue;
-    if ( !almostBetween(tokenElevation - tileE, 0, tileStep) ) continue;
-
-    // If the token was at the tile elevation, would it be on the tile?
-    if ( _tokenOnTile(tile, opts)) return tile;
-  }
-  return null;
-}
-
-/**
- * Find the closest tile beneath the token that would support the token.
- * If averaging, a tile sufficiently adjacent to the token, given underlying terrain, will be returned.
- * @param {Token} token       Token to test; may use token.getBounds() and token.center, depending on options.
- * @param {object} [opts]  Options that affect the tile elevation calculation
- * @return {Tile|null} Return the tile. Elevation can then be easily determined: tile.elevationE;
- */
-export function findSupportingTileNearToken(token, opts) {
-  opts = tokenElevationOptions(token, opts);
-  const excludeUndergroundTilesFn = excludeUndergroundTilesFn(opts.tokenCenter, opts.tokenElevation);
-  for ( const tile of opts.tiles ) {
-    const tileE = tile.elevation;
-    if ( excludeUndergroundTilesFn(tileE) ) continue;
-
-    // If the token was at the tile elevation, would it be supported by the tile?
-    if ( _tileSupportsToken(tile, opts)) return tile;
-  }
-  return null;
-}
-
-/**
- * Is the token sufficiently near a tile such that it can be considered on the tile?
- * Token must be at tile elevation or within tileStep of it.
- * If not averaging, then token center has to be contained by the tile and on a non-transparent pixel.
- * If averaging, token elevation at terrain + tile portions must be equal to the tile at > 50% of the space.
- */
-export function tileSupportsToken(token, tile, opts) {
-  opts = tokenElevationOptions(token, opts);
-  return _tileSupportsToken(tile, opts);
-}
-
-/**
- * Determine if a tile "supports" a token, meaning the token would not fall through.
- * Token would fall through if tile is transparent unless terrain would fill the gap(s).
- * @param {Tile} tile                                 Tile to test
- * @param {Point} tokenCenter                         Center point
- * @param {number} tokenElevation                     Maximum elevation point to test
- * @param {number} averageTiles                       Positive integer to skip pixels when averaging.
- *                                                    0 if point-based.
- * @param {number} alphaThreshold                     Threshold to determine transparency
- * @param {PIXI.Rectangle|PIXI.Polygon} [tokenShape]  Shape representing a token boundary
- *                                                    Required if not averaging
- * @returns {boolean}
- */
-export function _tileSupportsToken(tile, opts) {
-  const tileE = tile.elevationE;
-
-  // If token not within tileStep of the tile, tile does not support token.
-  if ( !almostBetween(opts.tokenElevation - tileE, 0, opts.tileStep) ) return false;
-
-  return opts.averageTiles
-    ? tileTerrainOpaqueAverageAt(tile, opts.tokenShape, opts.alphaThreshold, opts.averageTiles)
-    : tileOpaqueAt(tile, opts.tokenCenter, opts.alphaThreshold);
 }
 
 // NOTE: Measurements of tile opacity / transparency
