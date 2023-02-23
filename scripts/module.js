@@ -122,19 +122,21 @@ Hooks.once("init", function() {
      * TravelElevation.
      * When auto-averaging is enabled, this value will be used to average over terrain when
      * calculating token travel elevation. 0 means do not average, 1+ means test every N pixels.
-     * Should be a positive integer or 0.
+     * Should be a positive number or 0. Decimals are allowed.
+     * Larger numbers will make averaging faster but less precise.
      * @type {number}
      */
-    averageTerrain: 1, // Terrain elevation already compressed, so makes sense to not skip
+    averageTerrain: 2,
 
     /**
      * TravelElevation.
      * When auto-averaging is enabled, this value will be used to average over tiles when
      * calculating token travel elevation. 0 means do not average, 1+ means test every N pixels.
-     * Should be a positive integer or 0.
+     * Should be a positive number or 0. Decimals are allowed.
+     * Larger numbers will make averaging faster but less precise.
      * @type {number}
      */
-    averageTiles: 4
+    averageTiles: 2
   };
 });
 

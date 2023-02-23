@@ -32,13 +32,24 @@ import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
 import {
+  tokenElevationOptions,
+  isTokenOnTerrain,
+  isTokenOnATile,
   isTokenOnGround,
-  isTokenOnTile,
-  tokenGroundElevation,
-  tileAtTokenElevation,
-  tokenTerrainElevation,
+  tokenOnTile,
+
+  terrainElevationAtToken,
+  findTileBelowToken,
+  groundElevationAtToken,
+  findTileNearToken,
+  findSupportingTileNearToken,
+  tileSupportsToken,
+
   tileOpaqueAt,
-  tokenSupportedByTile } from "./tokens.js";
+  tileTerrainOpaqueAverageAt,
+  tileOpaqueAverageAt
+} from "./tokens.js";
+
 import { setSceneSetting, getSceneSetting, SETTINGS } from "./settings.js";
 
 /* Elevation layer
@@ -80,13 +91,22 @@ export class ElevationLayer extends InteractionLayer {
 
   // Imported methods
   tokens = {
-    tokenGroundElevation,
-    tokenTerrainElevation,
-    tileAtTokenElevation,
+    tokenElevationOptions,
+    isTokenOnTerrain,
+    isTokenOnATile,
     isTokenOnGround,
-    isTokenOnTile,
-    tokenSupportedByTile,
-    tileOpaqueAt
+    tokenOnTile,
+
+    terrainElevationAtToken,
+    findTileBelowToken,
+    groundElevationAtToken,
+    findTileNearToken,
+    findSupportingTileNearToken,
+    tileSupportsToken,
+
+    tileOpaqueAt,
+    tileTerrainOpaqueAverageAt,
+    tileOpaqueAverageAt
   };
 
   /**
