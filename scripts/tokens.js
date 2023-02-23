@@ -12,6 +12,49 @@ import { MODULE_ID } from "./const.js";
 import { getSceneSetting, getSetting, SETTINGS, averageTilesSetting, averageTerrainSetting } from "./settings.js";
 import { TravelElevation } from "./TravelElevation.js";
 
+/* Testing
+TokenElevation = canvas.elevation.TokenElevation
+Draw = CONFIG.GeometryLib.Draw
+draw = new Draw()
+
+draw.clearDrawings()
+draw.clearLabels()
+
+
+TokenElevation.isTokenOnATile(_token)
+TokenElevation.isTokenOnGround(_token)
+TokenElevation.isTokenOnTerrain(_token)
+TokenElevation.findSupportingTileNearToken(_token)
+TokenElevation.findTileNearToken(_token)
+TokenElevation.findTileBelowToken(_token)
+TokenElevation.groundElevationAtToken(_token)
+TokenElevation.terrainElevationAtToken(_token)
+
+
+[tile] = canvas.tiles.placeables
+TokenElevation.tileSupportsToken(_token, tile)
+TokenElevation.tokenOnTile(_token, tile)
+
+te = TokenElevation(_token)
+te.isTokenOnATile()
+te.isTokenOnGround()
+te.isTokenOnTerrain()
+te.findSupportingTileNearToken()
+te.findTileNearToken()
+te.findTileBelowToken()
+te.groundElevationAtToken()
+te.terrainElevationAtToken()
+
+[tile] = canvas.tiles.placeables
+TokenElevation.tileSupportsToken(tile)
+TokenElevation.tokenOnTile(tile)
+
+te.tokenLocation = _token.center;
+te.tokenElevation = _token.bottomE;
+
+
+*/
+
 /* Token movement flow:
 
 I. Arrow keys:
@@ -323,8 +366,10 @@ export class TokenElevation {
    * @returns {TokenElevationOptions}
    */
   static tokenElevationOptions(token, opts = {}) {
+    const tokenCenter = token.center;
+
     opts.token = token;
-    opts.tokenCenter ??= token.center;
+    opts.tokenCenter ??= { x: tokenCenter.x, y: tokenCenter.y };
     opts.tokenElevation ??= token.bottomE;
     opts.useAveraging ??= getSetting(SETTINGS.AUTO_AVERAGING);
     opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
@@ -359,6 +404,11 @@ export class TokenElevation {
     }
     this.#options.tokenCenter = { x: value.x, y: value.y };
   }
+
+  get tokenElevation() { return this.#options.tokenElevation; }
+
+  set tokenElevation(value) { this.#options.tokenElevation = value; }
+
 
   // NOTE: Token functions where elevation is known
 
@@ -617,14 +667,14 @@ export class TokenElevation {
    * @param {TokenElevationOptions} [opts]  Options that affect the tile elevation calculation
    * @returns {boolean}
    */
-  static tileSupportsToken(token, opts) {
+  static tileSupportsToken(token, tile, opts) {
     opts = TokenElevation.tokenElevationOptions(token, opts);
-    return TokenElevation.#tileSupportsToken(opts);
+    return TokenElevation.#tileSupportsToken(tile, opts);
   }
 
-  tileSupportsToken() {
+  tileSupportsToken(tile) {
     const opts = this.#options;
-    return TokenElevation.#tileSupportsToken(opts);
+    return TokenElevation.#tileSupportsToken(tile, opts);
   }
 
   static #tileSupportsToken(tile, opts) {
