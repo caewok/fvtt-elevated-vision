@@ -216,13 +216,12 @@ export function _refreshToken(wrapper, options) {
     const { startPosition, startElevation, te } = ev;
 
     // Update the previous travel ray
-    const travelRay = new Ray(startPosition, this.center);
-//     te.travelRay = travelRay;
-    const newTE = new TravelElevation(this, travelRay);
+    te.travelRay = new Ray(startPosition, this.center);
+   // const newTE = new TravelElevation(this, travelRay);
 
     // Determine the new final elevation.
-    const finalElevation = newTE.calculateFinalElevation(startElevation);
-    log(`{x: ${travelRay.A.x}, y: ${travelRay.A.y}, e: ${startElevation} } --> {x: ${travelRay.B.x}, y: ${travelRay.B.y}, e: ${finalElevation} }`, te);
+    const finalElevation = te.calculateFinalElevation(startElevation);
+    log(`{x: ${te.travelRay.A.x}, y: ${te.travelRay.A.y}, e: ${startElevation} } --> {x: ${te.travelRay.B.x}, y: ${te.travelRay.B.y}, e: ${finalElevation} }`, te);
     this.document.elevation = finalElevation;
 
   } else if ( this._animation ) {
@@ -415,7 +414,7 @@ export class TokenElevation {
 
   set tokenElevation(value) { this.#options.tokenElevation = value; }
 
-  get tiles() { return this.#options.tokenElevation; }
+  get tiles() { return this.#options._tiles; }
 
   set tiles(value) { this.#options._tiles = value; }
 

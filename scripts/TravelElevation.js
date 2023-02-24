@@ -80,7 +80,7 @@ travelRay = new Ray(A, B)
 
 te = new TravelElevation(token, travelRay)
 te.draw()
-te.tiles.forEach(tile => draw.shape(tile.bounds, { color: Draw.COLORS.gray }))
+te.tokenElevation.tiles.forEach(tile => draw.shape(tile.bounds, { color: Draw.COLORS.gray }))
 
 results = te.calculateElevationAlongRay();
 TravelElevation.drawResults(results)
