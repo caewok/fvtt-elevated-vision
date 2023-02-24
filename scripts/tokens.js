@@ -35,7 +35,7 @@ TokenElevation.terrainElevationAtToken(_token)
 TokenElevation.tileSupportsToken(_token, tile)
 TokenElevation.tokenOnTile(_token, tile)
 
-te = TokenElevation(_token)
+te = new TokenElevation(_token)
 te.isTokenOnATile()
 te.isTokenOnGround()
 te.isTokenOnTerrain()
@@ -46,10 +46,10 @@ te.groundElevationAtToken()
 te.terrainElevationAtToken()
 
 [tile] = canvas.tiles.placeables
-TokenElevation.tileSupportsToken(tile)
-TokenElevation.tokenOnTile(tile)
+te.tileSupportsToken(tile)
+te.tokenOnTile(tile)
 
-te.tokenLocation = _token.center;
+te.tokenCenter = _token.center;
 te.tokenElevation = _token.bottomE;
 
 
@@ -269,7 +269,7 @@ export function cloneToken(wrapper) {
   const travelRay = new Ray(tokenCenter, tokenCenter);
   const te = new TravelElevation(clone, travelRay);
   if ( !te.fly ) {
-    const { currState } = TravelElevation.currentTokenState(this, { tokenCenter });
+    const { currState } = te.currentTokenState();
     if ( currState === FLY ) return clone;
   }
 
@@ -376,6 +376,7 @@ export class TokenElevation {
     opts.averageTiles ??= opts.useAveraging ? averageTilesSetting() : 0;
     opts.averageTerrain ??= opts.useAveraging ? averageTerrainSetting() : 0;
     opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep ?? token.topE - token.bottomE;
+    opts.terrainStep ??= CONFIG[MODULE_ID]?.terrainStep ?? canvas.elevation.elevationStep;
 
     // Token shape is expensive, so avoid setting unless we have to.
     if ( !opts.tokenShape && opts.averageTiles ) {
@@ -392,14 +393,17 @@ export class TokenElevation {
     return opts;
   }
 
-  get tokenLocation() { return this.#options.tokenCenter; }
+  get tokenCenter() { return this.#options.tokenCenter; }
 
-  set tokenLocation(value) {
+  set tokenCenter(value) {
+    const tokenCenter = this.#options.tokenCenter;
+    if ( tokenCenter.x.almostEqual(value.x) && tokenCenter.y.almostEqual(value.y) ) return;
+
     // Move the token shape if it has been created.
     const tokenShape = this.#options._tokenShape;
     if ( tokenShape ) {
-      const dx = location.x - this.#options.tokenCenter.x;
-      const dy = location.y - this.#options.tokenCenter.y;
+      const dx = location.x - tokenCenter.x;
+      const dy = location.y - tokenCenter.y;
       this.#options._tokenShape = tokenShape.translate(dx, dy);
     }
     this.#options.tokenCenter = { x: value.x, y: value.y };
@@ -408,6 +412,20 @@ export class TokenElevation {
   get tokenElevation() { return this.#options.tokenElevation; }
 
   set tokenElevation(value) { this.#options.tokenElevation = value; }
+
+  get tiles() { return this.#options.tokenElevation; }
+
+  set tiles(value) { this.#options._tiles = value; }
+
+  get terrainStep() { return this.#options.terrainStep; }
+
+  get tileStep() { return this.#options.tileStep; }
+
+  get averageTiles() { return this.#options.averageTiles; }
+
+  get averageTerrain() { return this.#options.averageTerrain; }
+
+  get alphaThreshold() { return this.#options.alphaThreshold; }
 
 
   // NOTE: Token functions where elevation is known
@@ -535,8 +553,37 @@ export class TokenElevation {
   }
 
   /**
-   * Determine tile under the token location.
-   * This is the highest tile that the token would be on if the token were at that tile elevation.
+   * Find highest tile at token location.
+   * @param {Token} token   Token to test
+   * @param {TokenElevationOptions} [options]  Options that affect the calculation.
+   * @returns {number} Elevation in grid units.
+   */
+  static findHighestTileAtToken(token, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#findTileBelowToken(opts);
+  }
+
+  findHighestTileAtToken() {
+    const opts = this.#options;
+    return TokenElevation.#findHighestTileAtToken(opts);
+  }
+
+  static #findHighestTileAtToken(opts) {
+    const tokenElevation = opts.tokenElevation;
+    for ( const tile of opts.tiles ) {
+      const tileE = tile.elevationE;
+      opts.tokenElevation = tileE;
+      if ( this.#tokenOnTile(tile, opts) ) {
+        opts.tokenElevation = tokenElevation;
+        return tile;
+      }
+    }
+    opts.tokenElevation = tokenElevation;
+    return null;
+  }
+
+  /**
+   * Determine tile directly under the token location (tile and token share elevation).
    * @param {Token} token   Token to test
    * @param {TokenElevationOptions} [options]  Options that affect the calculation.
    * @returns {number} Elevation in grid units.
@@ -556,8 +603,6 @@ export class TokenElevation {
     for ( const tile of opts.tiles ) {
       const tileE = tile.elevationE;
       if ( excludeFn(tileE) ) continue;
-
-      // If the token was at the tile elevation, would it be on the tile?
       if ( this.#tokenOnTile(tile, opts) ) return tile;
     }
     return null;
@@ -610,23 +655,19 @@ export class TokenElevation {
     const { tokenElevation, tileStep } = opts;
     const excludeFn = excludeUndergroundTilesFn(opts.tokenCenter, tokenElevation);
 
-    // Duplicate needed options for tokenOnTile, so elevation can be modified.
-    const dupeOpts = {
-      averageTiles: opts.averageTiles,
-      tokenShape: opts.tokenShape,
-      alphaThreshold: opts.alphaThreshold,
-      tokenCenter: opts.tokenCenter
-    }
-
     for ( const tile of opts.tiles ) {
       const tileE = tile.elevationE;
       if ( excludeFn(tileE) ) continue;
-      if ( !almostBetween(tokenElevation - tileE, 0, tileStep) ) continue;
+      if ( !this.withinStep(tokenElevation, tileE, tileStep) ) continue;
 
       // If the token was at the tile elevation, would it be on the tile?
-      dupeOpts.tokenElevation = tileE;
-      if ( this.#tokenOnTile(tile, dupeOpts)) return tile;
+      opts.tokenElevation = tileE;
+      if ( this.#tokenOnTile(tile, opts)) {
+        opts.tokenElevation = tokenElevation;
+        return tile;
+      }
     }
+    opts.tokenElevation = tokenElevation;
     return null;
   }
 
@@ -681,11 +722,64 @@ export class TokenElevation {
     const tileE = tile.elevationE;
 
     // If token not within tileStep of the tile, tile does not support token.
-    if ( !almostBetween(opts.tokenElevation - tileE, 0, opts.tileStep) ) return false;
+    if ( !this.withinStep(opts.tokenElevation, tileE, opts.tileStep) ) return false;
+    return this.tileCouldSupportToken(tile, opts);
+  }
 
+  /**
+   * Token could be supported by tile, assuming elevation step constraint is met.
+   * If not averaging, then token center has to be contained by the tile and on a non-transparent pixel.
+   * If averaging, token elevation at terrain + tile portions must be equal to the tile at > 50% of the space.
+   * @param {Token} token   Token to test
+   * @param {Tile} tile     Tile to test
+   * @param {TokenElevationOptions} [opts]  Options that affect the tile elevation calculation
+   * @returns {boolean}
+   */
+  static tileCouldSupportToken(token, tile, opts) {
+    opts = TokenElevation.tokenElevationOptions(token, opts);
+    return TokenElevation.#tileSupportsToken(tile, opts);
+  }
+
+  tileCouldSupportToken(tile) {
+    const opts = this.#options;
+    return TokenElevation.#tileCouldSupportToken(tile, opts);
+  }
+
+  static #tileCouldSupportToken(tile, opts) {
     return opts.averageTiles
       ? tileTerrainOpaqueAverageAt(tile, opts.tokenShape, opts.alphaThreshold, opts.averageTiles)
       : tileOpaqueAt(tile, opts.tokenCenter, opts.alphaThreshold);
+  }
+
+  /**
+   * Object is within a permitted step from provided elevation.
+   * @param {number} tokenE       Token elevation to test against
+   * @param {number} objE         Object elevation
+   * @param {number} tileStep     Permitted tile step
+   * @returns {boolean}
+   */
+  static withinStep(tokenE, objE, step) { return almostBetween(tokenE, objE, objE + step); }
+
+  /*
+   * Tile is within a permitted step from provided elevation.
+   * @param {Tile} tile           Tile to test
+   * @returns {boolean}
+   */
+  tileWithinStep(tile) {
+    const opts = this.#options;
+    const tileE = tile.elevationE;
+    return almostBetween(opts.tokenElevation, tileE, tileE + opts.tileStep);
+  }
+
+  /*
+   * Terrain is within a permitted step from provided elevation.
+   * @param {number} terrainE     Tile to test
+   * @returns {boolean}
+   */
+  terrainWithinStep(terrainE) {
+    const opts = this.#options;
+    terrainE ??= this.#terrainElevationAtToken(opts);
+    return almostBetween(opts.tokenElevation, terrainE, terrainE + opts.terrainStep);
   }
 }
 
