@@ -213,15 +213,16 @@ export function _refreshToken(wrapper, options) {
     log("token _refresh is clone.");
     // This token is a clone in a drag operation.
     // Adjust elevation of the clone by calculating the elevation from origin to line.
-    const { tokenCenter, tokenElevation, te } = ev;
+    const { startPosition, startElevation, te } = ev;
 
     // Update the previous travel ray
-    const travelRay = new Ray(tokenCenter, this.center);
-    te.travelRay = travelRay;
+    const travelRay = new Ray(startPosition, this.center);
+//     te.travelRay = travelRay;
+    const newTE = new TravelElevation(this, travelRay);
 
     // Determine the new final elevation.
-    const finalElevation = te.calculateFinalElevation(tokenElevation);
-    log(`{x: ${travelRay.A.x}, y: ${travelRay.A.y}, e: ${tokenElevation} } --> {x: ${travelRay.B.x}, y: ${travelRay.B.y}, e: ${finalElevation} }`, te);
+    const finalElevation = newTE.calculateFinalElevation(startElevation);
+    log(`{x: ${travelRay.A.x}, y: ${travelRay.A.y}, e: ${startElevation} } --> {x: ${travelRay.B.x}, y: ${travelRay.B.y}, e: ${finalElevation} }`, te);
     this.document.elevation = finalElevation;
 
   } else if ( this._animation ) {
@@ -256,7 +257,7 @@ export function _refreshToken(wrapper, options) {
  * Determine if the clone should adjust elevation
  */
 export function cloneToken(wrapper) {
-  log(`cloneToken ${this.name} at elevation ${this.document?.elevation}`);
+  log(`cloneToken ${this.name} at elevation ${this.document.elevation}`);
   const clone = wrapper();
 
   clone._elevatedVision ??= {};
@@ -265,19 +266,20 @@ export function cloneToken(wrapper) {
   if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return clone;
 
   const FLY = TravelElevation.TOKEN_ELEVATION_STATE.FLY;
-  const tokenCenter = { x: this.center.x, y: this.center.y };
-  const travelRay = new Ray(tokenCenter, tokenCenter);
+  const {x, y} = clone.center;
+  const travelRay = new Ray({ x, y }, { x, y }); // Copy; don't reference.
   const te = new TravelElevation(clone, travelRay);
+  te.tokenElevation.tokenElevation = this.document.elevation;
   if ( !te.fly ) {
     const { currState } = te.currentTokenState();
     if ( currState === FLY ) return clone;
   }
 
-  log(`cloneToken ${this.name} at elevation ${this.document?.elevation}: setting adjust elevation to true`);
+  log(`cloneToken ${this.name} at elevation ${this.document.elevation}: setting adjust elevation to true`);
 
   clone._elevatedVision.tokenAdjustElevation = true;
-  clone._elevatedVision.tokenCenter = tokenCenter;
-  clone._elevatedVision.tokenElevation = this.bottomE;
+  clone._elevatedVision.startPosition = {x, y};
+  clone._elevatedVision.startElevation = this.document.elevation;
   clone._elevatedVision.te = te;
   return clone;
 }
@@ -402,8 +404,8 @@ export class TokenElevation {
     // Move the token shape if it has been created.
     const tokenShape = this.#options._tokenShape;
     if ( tokenShape ) {
-      const dx = location.x - tokenCenter.x;
-      const dy = location.y - tokenCenter.y;
+      const dx = value.x - tokenCenter.x;
+      const dy = value.y - tokenCenter.y;
       this.#options._tokenShape = tokenShape.translate(dx, dy);
     }
     this.#options.tokenCenter = { x: value.x, y: value.y };
@@ -426,6 +428,8 @@ export class TokenElevation {
   get averageTerrain() { return this.#options.averageTerrain; }
 
   get alphaThreshold() { return this.#options.alphaThreshold; }
+
+  get token() { return this.#options.token; }
 
 
   // NOTE: Token functions where elevation is known
@@ -588,19 +592,20 @@ export class TokenElevation {
    * @param {TokenElevationOptions} [options]  Options that affect the calculation.
    * @returns {number} Elevation in grid units.
    */
-  static findTileBelowToken(token, opts) {
+  static findTileBelowToken(token, opts, excludeTile) {
     opts = TokenElevation.tokenElevationOptions(token, opts);
-    return TokenElevation.#findTileBelowToken(opts);
+    return TokenElevation.#findTileBelowToken(opts, excludeTile);
   }
 
-  findTileBelowToken() {
+  findTileBelowToken(excludeTile) {
     const opts = this.#options;
-    return TokenElevation.#findTileBelowToken(opts);
+    return TokenElevation.#findTileBelowToken(opts, excludeTile);
   }
 
-  static #findTileBelowToken(opts) {
+  static #findTileBelowToken(opts, excludeTile) {
     const excludeFn = excludeUndergroundTilesFn(opts.tokenCenter, opts.tokenElevation);
     for ( const tile of opts.tiles ) {
+      if ( tile === excludeTile ) continue;
       const tileE = tile.elevationE;
       if ( excludeFn(tileE) ) continue;
       if ( this.#tokenOnTile(tile, opts) ) return tile;
@@ -778,7 +783,7 @@ export class TokenElevation {
    */
   terrainWithinStep(terrainE) {
     const opts = this.#options;
-    terrainE ??= this.#terrainElevationAtToken(opts);
+    terrainE ??= TokenElevation.#terrainElevationAtToken(opts);
     return almostBetween(opts.tokenElevation, terrainE, terrainE + opts.terrainStep);
   }
 }
