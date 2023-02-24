@@ -733,7 +733,7 @@ export class PixelCache extends PIXI.Rectangle {
     if ( frame ) {
       countFn ??= PixelCache.averageFunction();
       frame = this._shapeToLocalCoordinates(frame);
-      foundPt = this._nextPixelValueAlongLocalRayAverage(localRay, cmp, frame, countFn, skip, stepT, startT);
+      foundPt = this._nextPixelValueAlongLocalRayFrame(localRay, cmp, frame, countFn, skip, stepT, startT);
     } else if ( spacer ) {
       spacer = PIXI.Point.distanceBetween(
       this._fromCanvasCoordinates(0, 0),
