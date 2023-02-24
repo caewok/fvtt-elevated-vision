@@ -141,7 +141,7 @@ commons.js:1729 benchCalc | 1000 iterations | 21.6ms | 0.0216ms per
 benchCreation | 1000 iterations | 10.7ms | 0.0107ms per
 commons.js:1729 benchCalc | 1000 iterations | 170.2ms | 0.1702ms per
 
-tile = te.tiles[0];
+tile = te.tokenElevation.tiles[0];
 tokenCenter = te.tokenCenter;
 averageTiles = 4;
 alphaThreshold = .75
@@ -266,16 +266,10 @@ export class TravelElevation {
   tokenElevation;
 
   /** @type {Token} */
-  token;
-
-  /** @type {Token} */
   #tokenShapeCenter;
 
   /** @type {Ray} */
   #travelRay;
-
-  /** @type {Tile[]} */
-  #tiles;
 
   /** @type {number} */
   #stepT = 0.1;
@@ -285,9 +279,6 @@ export class TravelElevation {
 
   // ----- NOTE: Preset Configuration Parameters ----- //
 
-  /** @type {number} */
-  alphaThreshold = CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
-
   /** @type {boolean} */
   fly = TravelElevation.autoElevationFly();
 
@@ -295,9 +286,10 @@ export class TravelElevation {
   tilePercentThreshold = 0.5;
 
   constructor(token, travelRay, opts = {}) {
-    this.token = token;
-    this.travelRay = travelRay;
     this.tokenElevation = new TokenElevation(token, opts);
+    this.travelRay = travelRay;
+
+    this.tokenElevation.tiles = this._elevationTilesOnRay();
 
     // When stepping along the ray, move in steps based on the grid precision.
     const gridPrecision = canvas.walls.gridPrecision;
@@ -326,8 +318,6 @@ export class TravelElevation {
   get travelRay() { return this.#travelRay; }
 
   set travelRay(ray) {
-    this.clear();
-
     // Set a function on the ray to transform points to t values.
     const rayTConversion = Math.abs(ray.dx) > Math.abs(ray.dy)
       ? function(pt) { return (pt.x - this.A.x) / this.dx; }
@@ -343,14 +333,9 @@ export class TravelElevation {
     // When stepping along the ray, move in steps based on the grid precision.
     this.#stepT = this.#interval / ray.distance;
     this.#travelRay = ray;
-  }
 
-  /**
-   * Tiles that are within the bounds of the ray.
-   * @type {Tile[]}
-   */
-  get tiles() {
-    return this.#tiles || (this.#tiles = this._elevationTilesOnRay());
+    // Update tiles present based on new ray.
+    this.tokenElevation.tiles = this._elevationTilesOnRay();
   }
 
   /**
@@ -383,11 +368,6 @@ export class TravelElevation {
     }
     return ixs;
   }
-
-  clear() {
-    this.#tiles = undefined;
-  }
-
 
   /**
    * For this ray, determine terrain changes along the path.
@@ -460,7 +440,7 @@ export class TravelElevation {
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
     if ( !fly ) {
       te.tokenCenter = travelRay.B;
-      if ( !this.tiles.length || !te.findHighestTileAtToken() ) return te.terrainElevationAtToken();
+      if ( !te.tiles.length || !te.findHighestTileAtToken() ) return te.terrainElevationAtToken();
     }
 
     // Tiles are present and/or flying is enabled.
@@ -526,7 +506,7 @@ export class TravelElevation {
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
     out.checkTerrain = true;
     out.adjustElevation = true;
-    if ( !fly && !this.tiles.length ) {
+    if ( !fly && !te.tiles.length ) {
       te.tokenCenter = travelRay.B;
       out.finalElevation = te.terrainElevationAtToken();
       return out;
@@ -602,7 +582,7 @@ export class TravelElevation {
         } else {
           // Need the next matching tile or terrain; exclude the tile we are on.
           te.tokenCenter = ix;
-          nextTile = this._findMatchingTile(ix.tile);
+          nextTile = te.findTileBelowToken(ix.tile);
         }
       } else if ( currState === TILE && ix.tile === currTile ) {
         // Started on a tile and ending on that tile.
@@ -692,7 +672,7 @@ export class TravelElevation {
         } else {
           // Need the next matching tile or terrain; exclude the tile we are on.
           te.tokenCenter = ix;
-          nextTile = this._findMatchingTile(ix.tile);
+          nextTile = te.findTileBelowToken(ix.tile);
           if ( nextTile ) {
             if ( !te.tileWithinStep(nextTile) ) fly = true;
           } else {
@@ -771,23 +751,6 @@ export class TravelElevation {
   }
 
   /**
-   * Find the tile, if any, that supports the token at or below the given location and elevation.
-   * @param {number} tokenCenter
-   * @param {number} tokenElevation
-   * @param {Point} currPt            Current center of the token
-   */
-  _findMatchingTile(excludeTileId) {
-    const te = this.tokenElevation;
-    te.tiles = this.tiles.filter(t => t.id !== excludeTileId);
-    const tile = te.findTileBelowToken();
-
-    // Reset the tiles
-    te.tiles = this.tiles;
-
-    return tile;
-  }
-
-  /**
    * Find next tile hole or terrain rising above tile along the ray.
    * @param {Tile} currTile
    * @param {Point3d[]} tileIxs
@@ -819,10 +782,10 @@ export class TravelElevation {
 
       case FLY: {
         // Check for tiles or terrain that we will run into at this flying elevation.
-        const { tileStep, terrainStep } = this.tokenElevation;
+        const { tileStep, terrainStep, tiles } = this.tokenElevation;
         const maxE = currE;
         const minE = currE - tileStep;
-        const tilesWithinE = this.tiles.filter(tile => almostBetween(tile.elevationE, minE, maxE) );
+        const tilesWithinE = tiles.filter(tile => almostBetween(tile.elevationE, minE, maxE) );
         const ixs = [];
         const startT = t + this.#stepT;
         for ( const tile of tilesWithinE ) {
@@ -922,7 +885,7 @@ export class TravelElevation {
     let cmp = value => value <= pixelThreshold;
     const opts = { stepT, startT };
     if ( averageTiles ) {
-      opts.frame = this.token.bounds; // TODO: Keep bounds or move to slower token shape?
+      opts.frame = this.tokenElevation.token.bounds; // TODO: Keep bounds or move to slower token shape?
       opts.skip = averageTiles;
       const percentThreshold = this.tilePercentThreshold; // Default 50%
       opts.countFn = PixelCache.countFunction(pixelThreshold); // Number of pixels greater than threshold
@@ -979,7 +942,7 @@ export class TravelElevation {
 
     const opts = { stepT, startT };
     if ( averageTiles ) {
-      opts.frame = this.token.bounds; // TODO: Keep bounds or move to slower token shape?
+      opts.frame = this.tokenElevation.token.bounds; // TODO: Keep bounds or move to slower token shape?
       opts.skip = averageTiles;
       const percentThreshold = this.tilePercentThreshold; // Default 50%
       opts.countFn = PixelCache.countFunction(pixelThreshold); // Number of pixels greater than threshold
@@ -1016,7 +979,7 @@ export class TravelElevation {
 
     const opts = { stepT, startT };
     if ( averageTerrain ) {
-      opts.frame = this.token.bounds; // TODO: Keep bounds or move to slower token shape?
+      opts.frame = this.tokenElevation.token.bounds; // TODO: Keep bounds or move to slower token shape?
       opts.skip = averageTerrain;
     }
 
@@ -1045,7 +1008,7 @@ export class TravelElevation {
     if ( currTile ) return { currE, currState: TILE, currTile, terrainE };
 
     // If the terrain is sufficiently close, we are on terrain.
-    if ( this._terrainClose(currE, terrainE) ) return { currE, currState: TERRAIN, currTile, terrainE };
+    if ( te.terrainWithinStep() ) return { currE, currState: TERRAIN, currTile, terrainE };
 
     // Must be flying.
     return { currE, currState: FLY, currTile, terrainE };
@@ -1106,7 +1069,7 @@ export class TravelElevation {
    */
   _tileRayIntersections() {
     const tileIxs = [];
-    for ( const tile of this.tiles ) {
+    for ( const tile of this.tokenElevation.tiles ) {
       const cache = tile._textureData?._evPixelCache;
       if ( !cache ) continue;
 
@@ -1125,7 +1088,7 @@ export class TravelElevation {
    */
   draw() {
     Draw.segment(this.travelRay);
-    for ( const tile of this.tiles ) {
+    for ( const tile of this.tokenElevation.tiles ) {
       const cache = tile._textureData?._evPixelCache;
       if ( !cache ) {
         Draw.shape(tile.getBounds, { color: Draw.COLORS.red });
