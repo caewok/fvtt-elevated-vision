@@ -31,8 +31,8 @@ import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
-import { TokenElevation } from "./tokens.js";
-
+import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
+import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
 import { setSceneSetting, getSceneSetting, SETTINGS } from "./settings.js";
 
 /* Elevation layer
@@ -73,7 +73,9 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   // Imported methods
-  TokenElevation = TokenElevation;
+  TokenElevationCalculator = TokenElevationCalculator;
+  TravelElevationCalculator = TravelElevationCalculator;
+
 
   /**
    * Delay in milliseconds before displaying elevation value when mouse hovers.

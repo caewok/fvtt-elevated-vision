@@ -22,7 +22,6 @@ import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { PixelCache, TilePixelCache } from "./PixelCache.js";
-import { TravelElevation } from "./TravelElevation.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -58,8 +57,7 @@ Hooks.once("init", function() {
     WallTracer,
     SCENE_GRAPH,
     PixelCache,
-    TilePixelCache,
-    TravelElevation
+    TilePixelCache
   };
 
   // These methods need to be registered early

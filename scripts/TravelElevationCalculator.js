@@ -11,7 +11,7 @@ import { almostLessThan, almostBetween } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 // import { Point3d } from "./geometry/3d/Point3d.js";
 import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
-import { TokenElevation } from "./tokens.js";
+import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
 import { PixelCache } from "./PixelCache.js";
 
 
@@ -63,7 +63,7 @@ Flight:
 /* Testing
 api = game.modules.get("elevatedvision").api
 TravelElevation = api.TravelElevation
-TokenElevation = canvas.elevation.TokenElevation
+TokenElevationCalculator = canvas.elevation.TokenElevationCalculator
 Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 draw = new Draw()
@@ -82,13 +82,13 @@ te.draw()
 te.tokenElevation.tiles.forEach(tile => draw.shape(tile.bounds, { color: Draw.COLORS.gray }))
 
 results = te.calculateElevationAlongRay();
-TravelElevation.drawResults(results)
+TravelElevationCalculator.drawResults(results)
 
 finalE = te.calculateFinalElevation()
 
 te.fly = true;
 results = te.calculateElevationAlongRay();
-TravelElevation.drawResults(results)
+TravelElevationCalculator.drawResults(results)
 
 // Test tile cache coordinates
 [tile] = canvas.tiles.placeables
@@ -267,7 +267,7 @@ const STATE_COLOR = [Draw.COLORS.green, Draw.COLORS.orange, Draw.COLORS.blue];
 /**
  * Class to handle measuring elevation along a ray, representing a token travel path.
  */
-export class TravelElevation {
+export class TravelElevationCalculator {
   /** @enum {number} */
   static TOKEN_ELEVATION_STATE = {
     TERRAIN: 0, // Important that terrain is set to zero, so it can be checked for true/false.
@@ -277,8 +277,8 @@ export class TravelElevation {
 
   static #maximumPixelValue = 255;
 
-  /** @type {TokenElevation} */
-  tokenElevation;
+  /** @type {TokenElevationCalculator} */
+  TEC;
 
   /** @type {Token} */
   #tokenShapeCenter;
@@ -298,10 +298,10 @@ export class TravelElevation {
   tilePercentThreshold = 0.5;
 
   constructor(token, travelRay, opts = {}) {
-    this.tokenElevation = new TokenElevation(token, opts);
+    this.TEC = new TokenElevationCalculator(token, opts);
     this.travelRay = travelRay;
 
-    this.tokenElevation.tiles = this._elevationTilesOnRay();
+    this.TEC.tiles = this._elevationTilesOnRay();
 
     // When stepping along the ray, move in steps based on the grid precision.
     const gridPrecision = canvas.walls.gridPrecision;
@@ -347,7 +347,7 @@ export class TravelElevation {
     this.#travelRay = ray;
 
     // Update tiles present based on new ray.
-    this.tokenElevation.tiles = this._elevationTilesOnRay();
+    this.TEC.tiles = this._elevationTilesOnRay();
   }
 
   /**
@@ -437,29 +437,29 @@ export class TravelElevation {
    */
   calculateFinalElevation(startElevation) {
     const travelRay = this.travelRay;
-    const fly = TravelElevation.autoElevationFly();
-    const te = this.tokenElevation;
+    const fly = TravelElevationCalculator.autoElevationFly();
+    const tec = this.TEC;
 
-    startElevation ??= te.token.bottomE;
-    te.tokenElevation = startElevation;
-    te.tokenCenter = travelRay.A;
+    startElevation ??= tec.token.bottomE;
+    tec.tokenElevation = startElevation;
+    tec.tokenCenter = travelRay.A;
 
     let { currState, currE, currTile, terrainE } = this.currentTokenState();
-    te.tokenElevation = currE;
+    tec.tokenElevation = currE;
 
     // If token is flying, either freeze elevation or if fly button is available, land the token.
     if ( currState === FLY && !fly ) {
       if ( typeof fly === "undefined" ) return startElevation;
 
       // If the fly control is present, land the token.
-      startElevation = te.tokenElevation = te.groundElevationAtToken();
-      currState = te.isTokenOnATile() ? TILE : TERRAIN;
+      startElevation = tec.tokenElevation = tec.groundElevationAtToken();
+      currState = tec.isTokenOnATile() ? TILE : TERRAIN;
     }
 
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
     if ( !fly ) {
-      te.tokenCenter = travelRay.B;
-      if ( !te.tiles.length || !te.findHighestTileAtToken() ) return te.terrainElevationAtToken();
+      tec.tokenCenter = travelRay.B;
+      if ( !tec.tiles.length || !tec.findHighestTileAtToken() ) return tec.terrainElevationAtToken();
     }
 
     // Tiles are present and/or flying is enabled.
@@ -470,11 +470,11 @@ export class TravelElevation {
   }
 
   _terrainClose(currE, terrainE) {
-    return almostBetween(currE, terrainE, terrainE + this.tokenElevation.terrainStep);
+    return almostBetween(currE, terrainE, terrainE + this.TEC.terrainStep);
   }
 
   _tileClose(currE, tileE) {
-    return almostBetween(currE, tileE, tileE + this.tokenElevation.tileStep);
+    return almostBetween(currE, tileE, tileE + this.TEC.tileStep);
   }
 
   /**
@@ -497,21 +497,21 @@ export class TravelElevation {
    */
   calculateElevationAlongRay(startElevation) {
     const travelRay = this.travelRay;
-    const fly = TravelElevation.autoElevationFly();
-    const te = this.tokenElevation;
-    startElevation ??= te.token.bottomE;
+    const fly = TravelElevationCalculator.autoElevationFly();
+    const tec = this.TEC;
+    startElevation ??= tec.token.bottomE;
 
-    te.tokenElevation = startElevation;
-    te.tokenCenter = travelRay.A;
+    tec.tokenElevation = startElevation;
+    tec.tokenCenter = travelRay.A;
 
     // Adjust the elevation based on the current state.
     // (Could move down to tile or terrain)
     let { currState, currE, currTile } = this.currentTokenState();
-    te.tokenElevation = currE;
+    tec.tokenElevation = currE;
 
     // Default TravelElevationResults if no calculations required.
     const out = {
-      token: te.token,
+      token: tec.token,
       travelRay,
       adjustElevation: false,
       checkTerrain: false,
@@ -523,19 +523,19 @@ export class TravelElevation {
 
     // If token is flying, either freeze elevation or if fly button is available, land the token.
     if ( currState === FLY && !fly ) {
-      if ( typeof fly === "undefined" ) return startElevation;
+      if ( typeof fly === "undefined" ) return out;
 
       // If the fly control is present, land the token.
-      startElevation = te.tokenElevation = te.groundElevationAtToken();
-      currState = te.isTokenOnATile() ? TILE : TERRAIN;
+      startElevation = tec.tokenElevation = tec.groundElevationAtToken();
+      currState = tec.isTokenOnATile() ? TILE : TERRAIN;
     }
 
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
     out.checkTerrain = true;
     out.adjustElevation = true;
-    if ( !fly && !te.tiles.length ) {
-      te.tokenCenter = travelRay.B;
-      out.finalElevation = te.terrainElevationAtToken();
+    if ( !fly && !tec.tiles.length ) {
+      tec.tokenCenter = travelRay.B;
+      out.finalElevation = tec.terrainElevationAtToken();
       return out;
     }
 
@@ -559,13 +559,13 @@ export class TravelElevation {
    */
   _trackElevationChanges(currE, currState, currTile) {
     const elevationChanges = [];
-    const te = this.tokenElevation;
+    const tec = this.TEC;
     const travelRay = this.travelRay;
     const tileIxs = this.tileIxs;
     if ( !tileIxs.length ) {
       // Tile start never encountered; likely moving through only transparent tile portions.
-      te.tokenCenter = travelRay.B;
-      const finalElevation = te.groundElevationAtToken();
+      tec.tokenCenter = travelRay.B;
+      const finalElevation = tec.groundElevationAtToken();
       return { finalElevation, elevationChanges };
     }
 
@@ -581,7 +581,7 @@ export class TravelElevation {
     while ( tileIxs.length ) {
       const ix = tileIxs.pop();
       let nextTile;
-      te.tokenElevation = currE;
+      tec.tokenElevation = currE;
 
       // If on a tile and this intersection is another tile start, ignore.
       if ( currState === TILE && ix.tile && ix.tileStart && ix.tile !== currTile ) continue;
@@ -591,10 +591,10 @@ export class TravelElevation {
         // Immediately prior terrain along the ray sets the elevation for purposes of moving to a tile.
         const prevT = ix.t0 - stepT;
         const prevPt = travelRay.project(prevT);
-        te.tokenCenter = prevPt;
-        te.tokenElevation = te.groundElevationAtToken();
+        tec.tokenCenter = prevPt;
+        tec.tokenElevation = tec.groundElevationAtToken();
 
-        if ( te.tileSupportsToken(ix.tile) ) nextTile = ix.tile;
+        if ( tec.tileSupportsToken(ix.tile) ) nextTile = ix.tile;
 
       } else if ( currState === TILE && ix.tile && !ix.tileStart ) {
         // Falling through tile
@@ -606,14 +606,14 @@ export class TravelElevation {
         if ( nextIx?.tile
           && nextIx.tile !== currTile
           && almostLessThan(nextIx.t0 - ix.t0, stepT)
-          && te.tileWithinStep(nextIx.tile) ) {
+          && tec.tileWithinStep(nextIx.tile) ) {
 
           // Jumping to a nearby tile at nearly the same elevation.
           nextTile = nextIx.tile;
         } else {
           // Need the next matching tile or terrain; exclude the tile we are on.
-          te.tokenCenter = ix;
-          nextTile = te.findTileUnderToken(ix.tile);
+          tec.tokenCenter = ix;
+          nextTile = tec.findTileUnderToken(ix.tile);
         }
       } else if ( currState === TILE && ix.tile === currTile ) {
         // Started on a tile and ending on that tile.
@@ -628,8 +628,8 @@ export class TravelElevation {
 
       if ( nextTile ) [currE, currState, currTile] = [nextTile.elevationE, TILE, nextTile];
       else {
-        te.tokenCenter = ix;
-        const terrainE = te.terrainElevationAtToken();
+        tec.tokenCenter = ix;
+        const terrainE = tec.terrainElevationAtToken();
 
         // Do not fall "up". E.g., if in basement, don't move to terrain 0.
         [currE, currState, currTile] = [Math.min(terrainE, currE), TERRAIN, undefined];
@@ -644,8 +644,8 @@ export class TravelElevation {
 
     let finalElevation = currE;
     if ( currState === TERRAIN ) {
-      te.tokenCenter = travelRay.B;
-      finalElevation = te.terrainElevationAtToken();
+      tec.tokenCenter = travelRay.B;
+      finalElevation = tec.terrainElevationAtToken();
     }
 
     return { finalElevation, elevationChanges };
@@ -656,7 +656,7 @@ export class TravelElevation {
    */
   _trackElevationChangesWithFlight(currE, currState, currTile) {
     const elevationChanges = [];
-    const te = this.tokenElevation;
+    const tec = this.TEC;
     const travelRay = this.travelRay;
     const tileIxs = this.tileIxs; // Even if none present, still may need to check for cliffs.
 
@@ -670,7 +670,7 @@ export class TravelElevation {
     while ( tileIxs.length ) {
       const ix = tileIxs.pop();
       let nextTile;
-      te.tokenElevation = currE;
+      tec.tokenElevation = currE;
       let fly = false;
 
       // If on a tile and this intersection is another tile start, ignore.
@@ -681,8 +681,8 @@ export class TravelElevation {
         // Immediately prior terrain along the ray sets the elevation for purposes of moving to a tile.
         const prevT = ix.t0 - stepT;
         const prevPt = travelRay.project(prevT);
-        te.tokenCenter = prevPt;
-        if ( te.tileSupportsToken(ix.tile) ) nextTile = ix.tile;
+        tec.tokenCenter = prevPt;
+        if ( tec.tileSupportsToken(ix.tile) ) nextTile = ix.tile;
 
       } else if ( currState === TERRAIN && ix.cliff ) {
         // Fly instead of falling into cliff.
@@ -699,18 +699,18 @@ export class TravelElevation {
         if ( nextIx?.tile
           && nextIx.tile !== currTile
           && almostLessThan(nextIx.t0 - ix.t0, stepT)
-          && te.tileWithinStep(nextIx.tile) ) {
+          && tec.tileWithinStep(nextIx.tile) ) {
 
           // Jumping to a nearby tile at nearly the same elevation.
           nextTile = nextIx.tile;
         } else {
           // Need the next matching tile or terrain; exclude the tile we are on.
-          te.tokenCenter = ix;
-          nextTile = te.findTileUnderToken(ix.tile);
+          tec.tokenCenter = ix;
+          nextTile = tec.findTileUnderToken(ix.tile);
           if ( nextTile ) {
-            if ( !te.tileWithinStep(nextTile) ) fly = true;
+            if ( !tec.tileWithinStep(nextTile) ) fly = true;
           } else {
-            if ( !te.terrainWithinStep() ) fly = true;
+            if ( !tec.terrainWithinStep() ) fly = true;
           }
         }
 
@@ -723,14 +723,14 @@ export class TravelElevation {
         // nextTile = undefined;
 
       } else if ( currState === FLY ) {
-        te.tokenCenter = ix;
+        tec.tokenCenter = ix;
 
         fly = true;
         // Land if close enough to the tile
-        if ( ix.tile && te.tileWithinStep(ix.tile) ) {
+        if ( ix.tile && tec.tileWithinStep(ix.tile) ) {
           fly = false;
           nextTile = ix.tile;
-        } else if ( te.terrainWithinStep() ) fly = false; // Land if close enough to terrain
+        } else if ( tec.terrainWithinStep() ) fly = false; // Land if close enough to terrain
 
       }
 
@@ -739,8 +739,8 @@ export class TravelElevation {
         if ( currState === TERRAIN ) {
           const prevT = ix.t0 - stepT;
           const prevPt = travelRay.project(prevT);
-          te.tokenCenter = prevPt;
-          currE = te.groundElevationAtToken(prevPt);
+          tec.tokenCenter = prevPt;
+          currE = tec.groundElevationAtToken(prevPt);
         }
         // Do not fall "up". E.g., if in basement, don't move to terrain 0.
         // currE = currE
@@ -748,8 +748,8 @@ export class TravelElevation {
       } else if ( nextTile ) {
         [currE, currState, currTile] = [nextTile.elevationE, TILE, nextTile];
       } else {
-        te.tokenCenter = ix;
-        const terrainE = te.terrainElevationAtToken();
+        tec.tokenCenter = ix;
+        const terrainE = tec.terrainElevationAtToken();
         // Do not fall "up". E.g., if in basement, don't move to terrain 0.
         [currE, currState, currTile] = [Math.min(terrainE, currE), TERRAIN, undefined];
       }
@@ -763,8 +763,8 @@ export class TravelElevation {
 
     let finalElevation = currE;
     if ( currState === TERRAIN ) {
-      te.tokenCenter = travelRay.B;
-      finalElevation = te.terrainElevationAtToken();
+      tec.tokenCenter = travelRay.B;
+      finalElevation = tec.terrainElevationAtToken();
     }
 
     return { finalElevation, elevationChanges };
@@ -774,13 +774,13 @@ export class TravelElevation {
    * Can the token move to a given tile?
    */
 //   _canMoveOntoTile(tile) {
-//     const te = this.tokenElevation;
-//     if ( te.averageTiles ) return te.tileSupportsToken(tile);
+//     const tec = this.TEC;
+//     if ( tec.averageTiles ) return tec.tileSupportsToken(tile);
 //
 //     // If the terrain at this location is within step of tile, token can move to tile.
-//     const terrainE = canvas.elevation.elevationAt(te.tokenCenter);
-//     te.tokenElevation = terrainE;
-//     return te.tileWithinStep(tile);
+//     const terrainE = canvas.elevation.elevationAt(tec.tokenCenter);
+//     tec.tokenElevation = terrainE;
+//     return tec.tileWithinStep(tile);
 //   }
 
   /**
@@ -815,7 +815,7 @@ export class TravelElevation {
 
       case FLY: {
         // Check for tiles or terrain that we will run into at this flying elevation.
-        const { tileStep, terrainStep, tiles } = this.tokenElevation;
+        const { tileStep, terrainStep, tiles } = this.TEC;
         const maxE = currE;
         const minE = currE - tileStep;
         const tilesWithinE = tiles.filter(tile => almostBetween(tile.elevationE, minE, maxE) );
@@ -863,18 +863,18 @@ export class TravelElevation {
    */
   _findTerrainCliff(startT=0) {
     const travelRay = this.travelRay;
-    const te = this.tokenElevation;
+    const tec = this.TEC;
     const stepT = this.#stepT;
     const ev = canvas.elevation;
     const evCache = ev.elevationPixelCache;
 
     // Don't clamp the jump value so we don't extend beyond the values desired.
-    const maxFallPixel = ev.elevationToPixelValue((te.terrainStep - ev.elevationMin) / ev.elevationStep);
+    const maxFallPixel = ev.elevationToPixelValue((tec.terrainStep - ev.elevationMin) / ev.elevationStep);
 
     // Initialize with the start value
     const pt = travelRay.project(startT);
-    te.tokenCenter = pt;
-    const currE = te.terrainElevationAtToken();
+    tec.tokenCenter = pt;
+    const currE = tec.terrainElevationAtToken();
     startT += stepT;
 
     // Function to test if the given pixel is more than the allowable terrain step.
@@ -886,8 +886,8 @@ export class TravelElevation {
     };
 
     const opts = { stepT, startT };
-    if ( te.averageTerrain ) {
-      opts.frame = te.token.bounds; // TODO: Keep bounds or move to slower token shape?
+    if ( tec.averageTerrain ) {
+      opts.frame = tec.token.bounds; // TODO: Keep bounds or move to slower token shape?
       opts.skip = this.averageTerrain;
     }
 
@@ -906,19 +906,19 @@ export class TravelElevation {
    */
   _findTileHole(tile, startT=0) {
     const travelRay = this.travelRay;
-    const { alphaThreshold, averageTiles } = this.tokenElevation;
+    const { alphaThreshold, averageTiles } = this.TEC;
     const stepT = this.#stepT;
 
     const cache = tile._textureData?._evPixelCache;
     if ( !cache ) return null;
 
     // Function to test if the given pixel is under the threshold.
-    const pixelThreshold = alphaThreshold * TravelElevation.#maximumPixelValue;
+    const pixelThreshold = alphaThreshold * TravelElevationCalculator.#maximumPixelValue;
 
     let cmp = value => value <= pixelThreshold;
     const opts = { stepT, startT };
     if ( averageTiles ) {
-      opts.frame = this.tokenElevation.token.bounds; // TODO: Keep bounds or move to slower token shape?
+      opts.frame = this.TEC.token.bounds; // TODO: Keep bounds or move to slower token shape?
       opts.skip = averageTiles;
       const percentThreshold = this.tilePercentThreshold; // Default 50%
       opts.countFn = PixelCache.countFunction(pixelThreshold); // Number of pixels greater than threshold
@@ -943,7 +943,7 @@ export class TravelElevation {
    */
   _findTileStart(tile, startT=0) {
     const travelRay = this.travelRay;
-    const { alphaThreshold, averageTiles } = this.tokenElevation;
+    const { alphaThreshold, averageTiles } = this.TEC;
     const stepT = this.#stepT;
 
     const cache = tile._textureData?._evPixelCache;
@@ -970,12 +970,12 @@ export class TravelElevation {
     }
 
     // Function to test if the given pixel is within the threshold.
-    const pixelThreshold = alphaThreshold * TravelElevation.#maximumPixelValue;
+    const pixelThreshold = alphaThreshold * TravelElevationCalculator.#maximumPixelValue;
     let cmp = value => value > pixelThreshold;
 
     const opts = { stepT, startT };
     if ( averageTiles ) {
-      opts.frame = this.tokenElevation.token.bounds; // TODO: Keep bounds or move to slower token shape?
+      opts.frame = this.TEC.token.bounds; // TODO: Keep bounds or move to slower token shape?
       opts.skip = averageTiles;
       const percentThreshold = this.tilePercentThreshold; // Default 50%
       opts.countFn = PixelCache.countFunction(pixelThreshold); // Number of pixels greater than threshold
@@ -1005,7 +1005,7 @@ export class TravelElevation {
     if ( elevationThreshold < canvas.elevation.elevationMin ) return null;
 
     const travelRay = this.travelRay;
-    const averageTerrain = this.tokenElevation.averageTerrain;
+    const averageTerrain = this.TEC.averageTerrain;
     const stepT = this.#stepT;
     const ev = canvas.elevation;
     const evCache = ev.elevationPixelCache;
@@ -1015,7 +1015,7 @@ export class TravelElevation {
     const cmp = value => value > pixelThreshold;
     const opts = { stepT, startT };
     if ( averageTerrain ) {
-      opts.frame = this.tokenElevation.token.bounds; // TODO: Keep bounds or move to slower token shape?
+      opts.frame = this.TEC.token.bounds; // TODO: Keep bounds or move to slower token shape?
       opts.skip = averageTerrain;
     }
 
@@ -1032,19 +1032,19 @@ export class TravelElevation {
    * @returns {TOKEN_ELEVATION_STATE}
    */
   currentTokenState() {
-    const te = this.tokenElevation;
-    const currE = te.tokenElevation;
-    const terrainE = te.terrainElevationAtToken();
+    const tec = this.TEC;
+    const currE = tec.tokenElevation;
+    const terrainE = tec.terrainElevationAtToken();
 
     // If the terrain matches token elevation, we are on terrain.
     if ( terrainE.almostEqual(currE) ) return { currE, currState: TERRAIN, terrainE };
 
     // If there is a tile near this elevation, we are on tile.
-    const currTile = te.findTileUnderToken();
+    const currTile = tec.findTileUnderToken();
     if ( currTile ) return { currE, currState: TILE, currTile, terrainE };
 
     // If the terrain is sufficiently close, we are on terrain.
-    if ( te.terrainWithinStep() ) return { currE, currState: TERRAIN, currTile, terrainE };
+    if ( tec.terrainWithinStep() ) return { currE, currState: TERRAIN, currTile, terrainE };
 
     // Must be flying.
     return { currE, currState: FLY, currTile, terrainE };
@@ -1060,7 +1060,7 @@ export class TravelElevation {
 //   static currentTokenState(token, { tokenCenter, tokenElevation } = {}) {
 //     tokenCenter ??= token.center;
 //     tokenElevation ??= token.bottomE;
-//     const matchingTile = this.tokenElevation.findTileUnderToken({
+//     const matchingTile = this.TEC.findTileUnderToken({
 //       tokenCenter,
 //       tokenElevation });
 //
@@ -1105,7 +1105,7 @@ export class TravelElevation {
    */
   _tileRayIntersections() {
     const tileIxs = [];
-    for ( const tile of this.tokenElevation.tiles ) {
+    for ( const tile of this.TEC.tiles ) {
       const cache = tile._textureData?._evPixelCache;
       if ( !cache ) continue;
 
@@ -1124,7 +1124,7 @@ export class TravelElevation {
    */
   draw() {
     Draw.segment(this.travelRay);
-    for ( const tile of this.tokenElevation.tiles ) {
+    for ( const tile of this.TEC.tiles ) {
       const cache = tile._textureData?._evPixelCache;
       if ( !cache ) {
         Draw.shape(tile.getBounds, { color: Draw.COLORS.red });
@@ -1169,4 +1169,4 @@ export class TravelElevation {
   }
 }
 
-const { TERRAIN, TILE, FLY } = TravelElevation.TOKEN_ELEVATION_STATE;
+const { TERRAIN, TILE, FLY } = TravelElevationCalculator.TOKEN_ELEVATION_STATE;
