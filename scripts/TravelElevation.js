@@ -2,18 +2,16 @@
 canvas,
 Ray,
 ui,
-PIXI,
-CONFIG
+PIXI
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
 import { almostLessThan, almostBetween } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 // import { Point3d } from "./geometry/3d/Point3d.js";
 import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
-import { TokenElevation, tileOpaqueAt, tileOpaqueAverageAt } from "./tokens.js";
+import { TokenElevation } from "./tokens.js";
 import { PixelCache } from "./PixelCache.js";
 
 
@@ -157,9 +155,6 @@ await foundry.utils.benchmark(canvas.elevation.tokens.tokenSupportedByTile, N, t
 50% tile:
 tileOpaqueAt | 10000 iterations | 128.7ms | 0.01287ms per
 tokenSupportedByTile | 10000 iterations | 37.1ms | 0.00371ms per
-
-
-
 
 // Test tile transparency
 tile = te.tiles[0]
@@ -515,7 +510,7 @@ export class TravelElevation {
     // Tiles are present and/or flying is enabled.
     out.trackingRequired = true;
     const { finalElevation, elevationChanges } = fly
-      ? this._trackElevationChangesWithFlight(currE, currState, currTile, terrainE)
+      ? this._trackElevationChangesWithFlight(currE, currState, currTile)
       : this._trackElevationChanges(currE, currState, currTile);
     out.finalElevation = finalElevation;
     out.elevationChanges = elevationChanges;
@@ -623,7 +618,7 @@ export class TravelElevation {
   /**
    * Track elevation changes along a ray
    */
-  _trackElevationChangesWithFlight(currE, currState, currTile, terrainE) {
+  _trackElevationChangesWithFlight(currE, currState, currTile) {
     const elevationChanges = [];
     const te = this.tokenElevation;
     const travelRay = this.travelRay;
@@ -647,7 +642,7 @@ export class TravelElevation {
         // Immediately prior terrain along the ray sets the elevation for purposes of moving to a tile.
         const prevT = ix.t0 - stepT;
         const prevPt = travelRay.project(prevT);
-        const prevE = ev.elevationAt(prevPt);
+        te.tokenCenter = prevPt;
         if ( this._canMoveOntoTile(ix.tile) ) nextTile = ix.tile;
 
       } else if ( currState === TERRAIN && ix.cliff ) {
@@ -741,7 +736,6 @@ export class TravelElevation {
    */
   _canMoveOntoTile(tile) {
     const te = this.tokenElevation;
-    const tileE = tile.elevationE;
     if ( te.averageTiles ) return te.tileCouldSupportToken(tile);
 
     // If the terrain at this location is within step of tile, token can move to tile.
@@ -830,7 +824,7 @@ export class TravelElevation {
    */
   _findTerrainCliff(startT=0) {
     const travelRay = this.travelRay;
-    const te = this.tokenElevation
+    const te = this.tokenElevation;
     const stepT = this.#stepT;
     const ev = canvas.elevation;
     const evCache = ev.elevationPixelCache;
@@ -854,7 +848,7 @@ export class TravelElevation {
 
     const opts = { stepT, startT };
     if ( te.averageTerrain ) {
-      opts.frame = this.token.bounds; // TODO: Keep bounds or move to slower token shape?
+      opts.frame = te.token.bounds; // TODO: Keep bounds or move to slower token shape?
       opts.skip = this.averageTerrain;
     }
 
