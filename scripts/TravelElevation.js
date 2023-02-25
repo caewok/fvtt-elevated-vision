@@ -294,9 +294,6 @@ export class TravelElevation {
 
   // ----- NOTE: Preset Configuration Parameters ----- //
 
-  /** @type {boolean} */
-  fly = TravelElevation.autoElevationFly();
-
   /** @type {number} */
   tilePercentThreshold = 0.5;
 
@@ -318,10 +315,10 @@ export class TravelElevation {
    * @returns {boolean}  True if token elevation (flying) is preferred
    */
   static autoElevationFly() {
-    if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) || !getSetting(SETTINGS.FLY_BUTTON) ) return false;
+    if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) || !getSetting(SETTINGS.FLY_BUTTON) ) return undefined;
     const token_controls = ui.controls.controls.find(elem => elem.name === "token");
     const fly = token_controls.tools.find(elem => elem.name === SETTINGS.FLY_BUTTON);
-    return fly?.active;
+    return fly?.active ? true : false;
   }
 
   // ----- NOTE: Getters/Setters ----- //
@@ -439,18 +436,25 @@ export class TravelElevation {
    * @param {number} startElevation   Optional starting elevation of the token
    */
   calculateFinalElevation(startElevation) {
-    const { fly, travelRay } = this;
+    const travelRay = this.travelRay;
+    const fly = TravelElevation.autoElevationFly();
     const te = this.tokenElevation;
 
     startElevation ??= te.token.bottomE;
     te.tokenElevation = startElevation;
     te.tokenCenter = travelRay.A;
 
-    const { currState, currE, currTile, terrainE } = this.currentTokenState();
+    let { currState, currE, currTile, terrainE } = this.currentTokenState();
     te.tokenElevation = currE;
 
-    // If token is flying but flying is not enabled, no auto-elevation.
-    if ( currState === FLY && !fly ) return startElevation;
+    // If token is flying, either freeze elevation or if fly button is available, land the token.
+    if ( currState === FLY && !fly ) {
+      if ( typeof fly === "undefined" ) return startElevation;
+
+      // If the fly control is present, land the token.
+      startElevation = te.tokenElevation = te.groundElevationAtToken();
+      currState = te.isTokenOnATile() ? TILE : TERRAIN;
+    }
 
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
     if ( !fly ) {
@@ -492,7 +496,8 @@ export class TravelElevation {
    * @returns {TravelElevationResults}
    */
   calculateElevationAlongRay(startElevation) {
-    const { fly, travelRay } = this;
+    const travelRay = this.travelRay;
+    const fly = TravelElevation.autoElevationFly();
     const te = this.tokenElevation;
     startElevation ??= te.token.bottomE;
 
@@ -501,7 +506,7 @@ export class TravelElevation {
 
     // Adjust the elevation based on the current state.
     // (Could move down to tile or terrain)
-    const { currState, currE, currTile, terrainE } = this.currentTokenState();
+    let { currState, currE, currTile } = this.currentTokenState();
     te.tokenElevation = currE;
 
     // Default TravelElevationResults if no calculations required.
@@ -516,7 +521,14 @@ export class TravelElevation {
       elevationChanges: []
     };
 
-    if ( currState === FLY && !fly ) return out;
+    // If token is flying, either freeze elevation or if fly button is available, land the token.
+    if ( currState === FLY && !fly ) {
+      if ( typeof fly === "undefined" ) return startElevation;
+
+      // If the fly control is present, land the token.
+      startElevation = te.tokenElevation = te.groundElevationAtToken();
+      currState = te.isTokenOnATile() ? TILE : TERRAIN;
+    }
 
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
     out.checkTerrain = true;
@@ -580,7 +592,7 @@ export class TravelElevation {
         const prevT = ix.t0 - stepT;
         const prevPt = travelRay.project(prevT);
         te.tokenCenter = prevPt;
-        te.tokenElevation = te.groundElevationAtToken()
+        te.tokenElevation = te.groundElevationAtToken();
 
         if ( te.tileSupportsToken(ix.tile) ) nextTile = ix.tile;
 

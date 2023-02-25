@@ -269,7 +269,7 @@ export function cloneToken(wrapper) {
   const travelRay = new Ray({ x, y }, { x, y }); // Copy; don't reference.
   const te = new TravelElevation(clone, travelRay);
   te.tokenElevation.tokenElevation = this.document.elevation;
-  if ( !te.fly ) {
+  if ( typeof TravelElevation.autoElevationFly() === "undefined" ) {
     const { currState } = te.currentTokenState();
     if ( currState === FLY ) return clone;
   }
