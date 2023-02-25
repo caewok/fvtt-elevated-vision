@@ -738,7 +738,7 @@ export class TravelElevation {
    */
 //   _canMoveOntoTile(tile) {
 //     const te = this.tokenElevation;
-//     if ( te.averageTiles ) return te.tileCouldSupportToken(tile);
+//     if ( te.averageTiles ) return te.tileSupportsToken(tile);
 //
 //     // If the terrain at this location is within step of tile, token can move to tile.
 //     const terrainE = canvas.elevation.elevationAt(te.tokenCenter);

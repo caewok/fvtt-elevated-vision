@@ -810,9 +810,13 @@ export class TokenElevation {
   }
 
   static #tileCouldSupportToken(tile, opts) {
-    return opts.averageTiles
-      ? tileTerrainOpaqueAverageAt(tile, opts.tokenShape, opts.alphaThreshold, opts.averageTiles)
-      : tileOpaqueAt(tile, opts.tokenCenter, opts.alphaThreshold);
+    if ( opts.averageTiles ) return tileTerrainOpaqueAverageAt(tile, opts.tokenShape, opts.alphaThreshold, opts.averageTiles);
+
+    // If not averaging, token must be within the tile alpha bounds and on an opaque point
+    // or at terrain level equal to the tile.
+    const terrainE = canvas.elevation.elevationAt(opts.tokenCenter);
+    if ( this.withinStep(terrainE, tile.elevationE, opts.tileStep) ) return true;
+    return tileOpaqueAt(tile, opts.tokenCenter, opts.alphaThreshold); // Do slower test last.
   }
 
   /**
