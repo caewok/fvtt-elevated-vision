@@ -135,12 +135,12 @@ Hooks.on("preUpdateToken", function(tokenD, changes, options, userId) {  // esli
   const tokenCenter = token.center;
   const tokenDestination = token.getCenter(changes.x ? changes.x : tokenD.x, changes.y ? changes.y : tokenD.y );
   const travelRay = new Ray(tokenCenter, tokenDestination);
-  const te = new TravelElevationCalculator(token, travelRay);
+  const te = token._elevatedVision.te = new TravelElevationCalculator(token, travelRay);
   const travel = token._elevatedVision.travel = te.calculateElevationAlongRay(token.document.elevation);
   if ( !travel.adjustElevation ) return;
 
   if ( tokenD.elevation !== travel.finalElevation ) changes.elevation = travel.finalElevation;
-  tokenD.object._elevatedVision.tokenAdjustElevation = true;
+  token._elevatedVision.tokenAdjustElevation = true;
 });
 
 /**
@@ -199,7 +199,11 @@ export function _refreshToken(wrapper, options) {
 
     const TERRAIN = TravelElevationCalculator.TOKEN_ELEVATION_STATE.TERRAIN;
     change ??= { currState: TERRAIN };
-    if ( change.currState === TERRAIN ) change.currE = TokenElevationCalculator.terrainElevationAtToken(this, { tokenCenter });
+    if ( change.currState === TERRAIN ) {
+      const tec = ev.te.TEC;
+      tec.tokenCenter = tokenCenter;
+      change.currE = tec.terrainElevationAtToken();
+    }
     options.elevation ||= this.document.elevation !== change.currE;
 
     this.document.elevation = change.currE;
