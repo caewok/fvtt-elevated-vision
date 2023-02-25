@@ -31,9 +31,10 @@ function preUpdateTileHook(document, changes, _options, _userId) {
  */
 function updateTileHook(document, change, _options, _userId) {
   if ( change.overhead ) {
-    document.object._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(document.object);
+
+    document.object._evPixelCache = TilePixelCache.fromOverheadTileAlpha(document.object);
   } else if ( document.overhead ) {
-    const cache = document.object._textureData._evPixelCache;
+    const cache = document.object._evPixelCache;
 
     if ( Object.hasOwn(change, "x")
       || Object.hasOwn(change, "y")
