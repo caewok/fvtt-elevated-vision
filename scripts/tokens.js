@@ -7,7 +7,7 @@ Hooks
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { log, almostGreaterThan, almostBetween } from "./util.js";
+import { log, almostGreaterThan, almostLessThan, almostBetween } from "./util.js";
 import { MODULE_ID } from "./const.js";
 import { getSceneSetting, getSetting, SETTINGS, averageTilesSetting, averageTerrainSetting } from "./settings.js";
 import { TravelElevation } from "./TravelElevation.js";
@@ -691,11 +691,12 @@ export class TokenElevation {
   }
 
   static #findTileUnderToken(opts, excludeTile) {
-    const excludeFn = excludeUndergroundTilesFn(opts.tokenCenter, opts.tokenElevation);
+    const tokenElevation = opts.tokenElevation
+    const excludeFn = excludeUndergroundTilesFn(opts.tokenCenter, tokenElevation);
     for ( const tile of opts.tiles ) {
       if ( tile === excludeTile ) continue;
       const tileE = tile.elevationE;
-      if ( excludeFn(tileE) ) continue;
+      if ( excludeFn(tileE) || !almostLessThan(tileE, tokenElevation) ) continue;
       if ( this.#tokenOnTile(tile, opts) ) return tile;
     }
     return null;
@@ -709,20 +710,23 @@ export class TokenElevation {
    * @param {TokenElevationOptions} [opts]  Options that affect the tile elevation calculation
    * @return {Tile|null} Return the tile. Elevation can then be easily determined: tile.elevationE;
    */
-  static findSupportingTileUnderToken(token, opts) {
+  static findSupportingTileUnderToken(token, opts, excludeTile) {
     opts = TokenElevation.tokenElevationOptions(token, opts);
-    return TokenElevation.#findSupportingTileUnderToken(opts);
+    return TokenElevation.#findSupportingTileUnderToken(opts, excludeTile);
   }
 
-  findSupportingTileUnderToken() {
+  findSupportingTileUnderToken(excludeTile) {
     const opts = this.#options;
-    return TokenElevation.#findSupportingTileUnderToken(opts);
+    return TokenElevation.#findSupportingTileUnderToken(opts, excludeTile);
   }
 
-  static #findSupportingTileUnderToken(opts) {
-    const excludeFn = excludeUndergroundTilesFn(opts.tokenCenter, opts.tokenElevation);
+  static #findSupportingTileUnderToken(opts, excludeTile) {
+    const tokenElevation = opts.tokenElevation;
+    const excludeFn = excludeUndergroundTilesFn(opts.tokenCenter, tokenElevation);
     for ( const tile of opts.tiles ) {
-      if ( excludeFn(tile.elevationE) ) continue;
+      if ( tile === excludeTile ) continue;
+      const tileE = tile.elevationE;
+      if ( excludeFn(tileE) || !almostLessThan(tileE, tokenElevation) ) continue;
       if ( this.#tileCouldSupportToken(tile, opts)) return tile;
     }
     return null;
