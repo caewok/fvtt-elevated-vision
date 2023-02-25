@@ -63,6 +63,7 @@ Flight:
 /* Testing
 api = game.modules.get("elevatedvision").api
 TravelElevation = api.TravelElevation
+TokenElevation = canvas.elevation.TokenElevation
 Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 draw = new Draw()
@@ -577,7 +578,7 @@ export class TravelElevation {
         } else {
           // Need the next matching tile or terrain; exclude the tile we are on.
           te.tokenCenter = ix;
-          nextTile = te.findTileBelowToken(ix.tile);
+          nextTile = te.findTileUnderToken(ix.tile);
         }
       } else if ( currState === TILE && ix.tile === currTile ) {
         // Started on a tile and ending on that tile.
@@ -667,7 +668,7 @@ export class TravelElevation {
         } else {
           // Need the next matching tile or terrain; exclude the tile we are on.
           te.tokenCenter = ix;
-          nextTile = te.findTileBelowToken(ix.tile);
+          nextTile = te.findTileUnderToken(ix.tile);
           if ( nextTile ) {
             if ( !te.tileWithinStep(nextTile) ) fly = true;
           } else {
@@ -997,8 +998,8 @@ export class TravelElevation {
     // If the terrain matches token elevation, we are on terrain.
     if ( terrainE.almostEqual(currE) ) return { currE, currState: TERRAIN, terrainE };
 
-    // If there is a supporting tile near this elevation, we are on tile.
-    const currTile = te.findTileNearToken();
+    // If there is a tile near this elevation, we are on tile.
+    const currTile = te.findTileUnderToken();
     if ( currTile ) return { currE, currState: TILE, currTile, terrainE };
 
     // If the terrain is sufficiently close, we are on terrain.
@@ -1018,7 +1019,7 @@ export class TravelElevation {
 //   static currentTokenState(token, { tokenCenter, tokenElevation } = {}) {
 //     tokenCenter ??= token.center;
 //     tokenElevation ??= token.bottomE;
-//     const matchingTile = this.tokenElevation.findTileNearToken({
+//     const matchingTile = this.tokenElevation.findTileUnderToken({
 //       tokenCenter,
 //       tokenElevation });
 //
