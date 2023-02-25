@@ -617,7 +617,7 @@ export class TravelElevation {
       if ( nextTile ) [currE, currState, currTile] = [nextTile.elevationE, TILE, nextTile];
       else {
         te.tokenCenter = ix;
-        const terrainE = te.groundElevationAtToken();
+        const terrainE = te.terrainElevationAtToken();
 
         // Do not fall "up". E.g., if in basement, don't move to terrain 0.
         [currE, currState, currTile] = [Math.min(terrainE, currE), TERRAIN, undefined];
@@ -633,7 +633,7 @@ export class TravelElevation {
     let finalElevation = currE;
     if ( currState === TERRAIN ) {
       te.tokenCenter = travelRay.B;
-      finalElevation = te.groundElevationAtToken();
+      finalElevation = te.terrainElevationAtToken();
     }
 
     return { finalElevation, elevationChanges };
@@ -737,7 +737,7 @@ export class TravelElevation {
         [currE, currState, currTile] = [nextTile.elevationE, TILE, nextTile];
       } else {
         te.tokenCenter = ix;
-        const terrainE = te.groundElevationAtToken();
+        const terrainE = te.terrainElevationAtToken();
         // Do not fall "up". E.g., if in basement, don't move to terrain 0.
         [currE, currState, currTile] = [Math.min(terrainE, currE), TERRAIN, undefined];
       }
@@ -752,7 +752,7 @@ export class TravelElevation {
     let finalElevation = currE;
     if ( currState === TERRAIN ) {
       te.tokenCenter = travelRay.B;
-      finalElevation = te.groundElevationAtToken();
+      finalElevation = te.terrainElevationAtToken();
     }
 
     return { finalElevation, elevationChanges };
