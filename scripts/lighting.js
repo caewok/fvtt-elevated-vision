@@ -228,9 +228,10 @@ float sceneBottom = sceneTop + sceneHeight;
 if ( vUvs.x < sceneLeft
   || vUvs.x > sceneRight
   || vUvs.y < sceneTop
-  || vUvs.y > sceneBottom ) {
+  || vUvs.y > sceneBottom
+  || EV_sourceLocation.z < EV_elevationResolution.r ) {
 
-  // Skip if we are outside the scene boundary
+  // Skip if we are outside the scene boundary or below elevation min
   wallsToProcess = 0;
   terrainWallsToProcess = 0;
 

@@ -91,9 +91,10 @@ export class ShadowShader extends PIXI.Shader {
     if ( vUvs.x < sceneLeft
       || vUvs.x > sceneRight
       || vUvs.y < sceneTop
-      || vUvs.y > sceneBottom ) {
+      || vUvs.y > sceneBottom
+      || EV_sourceLocation.z < EV_elevationResolution.r  ) {
 
-      // Skip if we are outside the scene boundary
+      // Skip if we are outside the scene boundary or under minimum scene elevation
       wallsToProcess = 0;
       terrainWallsToProcess = 0;
     } else if ( pixelElevation > EV_sourceLocation.z ) {
