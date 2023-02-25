@@ -62,7 +62,7 @@ Flight:
 
 /* Testing
 api = game.modules.get("elevatedvision").api
-TravelElevation = api.TravelElevation
+TravelElevationCalculator = canvas.elevation.TravelElevationCalculator
 TokenElevationCalculator = canvas.elevation.TokenElevationCalculator
 Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
@@ -77,9 +77,9 @@ B = token2.center
 token = token1
 travelRay = new Ray(A, B)
 
-te = new TravelElevation(token, travelRay)
+te = new TravelElevationCalculator(token, travelRay)
 te.draw()
-te.tokenElevation.tiles.forEach(tile => draw.shape(tile.bounds, { color: Draw.COLORS.gray }))
+te.TEC.tiles.forEach(tile => draw.shape(tile.bounds, { color: Draw.COLORS.gray }))
 
 results = te.calculateElevationAlongRay();
 TravelElevationCalculator.drawResults(results)
@@ -92,12 +92,12 @@ TravelElevationCalculator.drawResults(results)
 
 // Test tile cache coordinates
 [tile] = canvas.tiles.placeables
-cache = tile._textureData._evPixelCache
+cache = tile._evPixelCache
 cache.draw()
 
 // Bench the elevation calculation
 function benchCreation(token, travelRay) {
-  return new TravelElevation(token, travelRay);
+  return new TravelElevationCalculator(token, travelRay);
 }
 
 function benchCalc(te) {
@@ -182,7 +182,7 @@ te._findTileHole(tile)
 
 // Test getting tile average within token
 tile = te.tiles[0]
-cache = tile._textureData._evPixelCache;
+cache = tile._evPixelCache;
 cache.drawLocal();
 rect = _token.bounds;
 localRect = cache._shapeToLocalCoordinates(rect)
@@ -227,7 +227,7 @@ await foundry.utils.benchmark(average, N, _token.bounds, 2)
 
 // Bench getting the next transparent value along a ray
 let [tile] = canvas.tiles.placeables
-cache = tile._textureData._evPixelCache;
+cache = tile._evPixelCache;
 pixelThreshold = 0.90 * 255;
 cmp = value => value < pixelThreshold;
 
@@ -822,7 +822,7 @@ export class TravelElevationCalculator {
         const ixs = [];
         const startT = t + this.#stepT;
         for ( const tile of tilesWithinE ) {
-          const cache = tile._textureData?._evPixelCache;
+          const cache = tile._evPixelCache;
           if ( !cache ) return null;
 
           const ix = this._findTileStart(tile, startT);
@@ -909,7 +909,7 @@ export class TravelElevationCalculator {
     const { alphaThreshold, averageTiles } = this.TEC;
     const stepT = this.#stepT;
 
-    const cache = tile._textureData?._evPixelCache;
+    const cache = tile._evPixelCache;
     if ( !cache ) return null;
 
     // Function to test if the given pixel is under the threshold.
@@ -946,7 +946,7 @@ export class TravelElevationCalculator {
     const { alphaThreshold, averageTiles } = this.TEC;
     const stepT = this.#stepT;
 
-    const cache = tile._textureData?._evPixelCache;
+    const cache = tile._evPixelCache;
     if ( !cache ) return null;
 
     // Test starting location based on alpha boundary of the tile.
@@ -1106,7 +1106,7 @@ export class TravelElevationCalculator {
   _tileRayIntersections() {
     const tileIxs = [];
     for ( const tile of this.TEC.tiles ) {
-      const cache = tile._textureData?._evPixelCache;
+      const cache = tile._evPixelCache;
       if ( !cache ) continue;
 
       const ix = this._findTileStart(tile);
@@ -1125,7 +1125,7 @@ export class TravelElevationCalculator {
   draw() {
     Draw.segment(this.travelRay);
     for ( const tile of this.TEC.tiles ) {
-      const cache = tile._textureData?._evPixelCache;
+      const cache = tile._evPixelCache;
       if ( !cache ) {
         Draw.shape(tile.getBounds, { color: Draw.COLORS.red });
         continue;

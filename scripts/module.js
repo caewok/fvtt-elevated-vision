@@ -177,7 +177,7 @@ Hooks.on("canvasReady", async function() {
       else tile.document.update({flags: { levels: { rangeBottom: tile.elevationE } } });
 
       // Cache the tile pixels.
-      tile._textureData._evPixelCache = TilePixelCache.fromOverheadTileAlpha(tile);
+      tile._evPixelCache = TilePixelCache.fromOverheadTileAlpha(tile);
     }
   }
 });
