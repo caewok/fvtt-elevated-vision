@@ -101,12 +101,12 @@ function benchCreation(token, travelRay) {
 }
 
 function benchCalc(te) {
-  te.clear();
+  // te.clear();
   return te.calculateElevationAlongRay();
 }
 
 function benchFinalCalc(te) {
-  te.clear();
+  // te.clear();
   return te.calculateFinalElevation();
 }
 
@@ -116,17 +116,36 @@ await foundry.utils.benchmark(benchCreation, N, token, travelRay)
 await foundry.utils.benchmark(benchCalc, N, te)
 await foundry.utils.benchmark(benchFinalCalc, N, te)
 
-// Farmhouse: right side of outhouse --> middle
+// I. Farmhouse: right side of outhouse --> middle
 benchCreation | 1000 iterations | 18.1ms | 0.0181ms per
 commons.js:1729 benchCalc | 1000 iterations | 150.1ms | 0.15009999999999998ms per
 
+// I.A. No averaging
+
+// I.A.1. No fly
 // With changes
 benchCreation | 1000 iterations | 15.6ms | 0.0156ms per
 commons.js:1729 benchCalc | 1000 iterations | 32.9ms | 0.0329ms per
 
-// Averaging
+// I.A.2. Fly
+
+// I.B. Averaging
+
+// I.B.1. No fly
 benchCreation | 1000 iterations | 12.3ms | 0.0123ms per
 commons.js:1729 benchCalc | 1000 iterations | 533.3ms | 0.5333ms per
+
+// Need for Speed
+benchCreation | 10000 iterations | 128.4ms | 0.01284ms per
+commons.js:1729 benchCalc | 10000 iterations | 1520.7ms | 0.15207ms per
+commons.js:1729 benchFinalCalc | 10000 iterations | 115.2ms | 0.01152ms per
+
+// I.B.2. Fly
+
+// Need for Speed
+benchCreation | 10000 iterations | 131.6ms | 0.01316ms per
+commons.js:1729 benchCalc | 10000 iterations | 1497.2ms | 0.14972ms per
+commons.js:1729 benchFinalCalc | 10000 iterations | 107.6ms | 0.010759999999999999ms per
 
 // Farmhouse: middle --> middle of farmhouse
 benchCreation | 1000 iterations | 16.3ms | 0.016300000000000002ms per
@@ -420,10 +439,10 @@ export class TravelElevation {
    * @param {number} startElevation   Optional starting elevation of the token
    */
   calculateFinalElevation(startElevation) {
-    const { fly, token, travelRay } = this;
-    startElevation ??= token.bottomE;
-
+    const { fly, travelRay } = this;
     const te = this.tokenElevation;
+
+    startElevation ??= te.token.bottomE;
     te.tokenElevation = startElevation;
     te.tokenCenter = travelRay.A;
 
@@ -552,6 +571,9 @@ export class TravelElevation {
       let nextTile;
       te.tokenElevation = currE;
 
+      // If on a tile and this intersection is another tile start, ignore.
+      if ( currState === TILE && ix.tile && ix.tileStart && ix.tile !== currTile ) continue;
+
       if ( currState === TERRAIN && ix.tileStart ) {
         // Found a tile to possibly move onto.
         // Immediately prior terrain along the ray sets the elevation for purposes of moving to a tile.
@@ -638,6 +660,9 @@ export class TravelElevation {
       let nextTile;
       te.tokenElevation = currE;
       let fly = false;
+
+      // If on a tile and this intersection is another tile start, ignore.
+      if ( currState === TILE && ix.tile && ix.tileStart && ix.tile !== currTile ) continue;
 
       if ( currState === TERRAIN && ix.tileStart ) {
         // Found a tile to possibly move onto.
@@ -963,6 +988,10 @@ export class TravelElevation {
    * @returns {Point|undefined} First point that meets the threshold or undefined if none.
    */
   _findElevatedTerrain(elevationThreshold=0, startT=0) {
+    // If the threshold is less than the minimum, we are in a "basement."
+    // No terrain to check b/c no terrain reaches this point.
+    if ( elevationThreshold < canvas.elevation.elevationMin ) return null;
+
     const travelRay = this.travelRay;
     const averageTerrain = this.tokenElevation.averageTerrain;
     const stepT = this.#stepT;
@@ -972,7 +1001,6 @@ export class TravelElevation {
     // Function to test if the given pixel exceeds the threshold.
     const pixelThreshold = ev.elevationToPixelValue(elevationThreshold);
     const cmp = value => value > pixelThreshold;
-
     const opts = { stepT, startT };
     if ( averageTerrain ) {
       opts.frame = this.tokenElevation.token.bounds; // TODO: Keep bounds or move to slower token shape?
