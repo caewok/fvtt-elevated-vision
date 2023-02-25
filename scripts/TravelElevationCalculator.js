@@ -886,10 +886,14 @@ export class TravelElevationCalculator {
     };
 
     const opts = { stepT, startT };
-    if ( tec.averageTerrain ) {
-      opts.frame = tec.token.bounds; // TODO: Keep bounds or move to slower token shape?
-      opts.skip = this.averageTerrain;
-    }
+    // TODO: Use average terrain with a countFunction?
+//     if ( tec.averageTerrain ) {
+//       opts.frame = tec.token.bounds; // TODO: Keep bounds or move to slower token shape?
+//       opts.skip = tec.averageTerrain;
+//       const percentThreshold = this.tilePercentThreshold; // Default 50%
+//       opts.countFn = PixelCache.countFunction(pixelThreshold);
+//
+//     }
 
     const ix = evCache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
     if ( !ix ) return null;
@@ -1014,10 +1018,11 @@ export class TravelElevationCalculator {
     const pixelThreshold = ev.elevationToPixelValue(elevationThreshold);
     const cmp = value => value > pixelThreshold;
     const opts = { stepT, startT };
-    if ( averageTerrain ) {
-      opts.frame = this.TEC.token.bounds; // TODO: Keep bounds or move to slower token shape?
-      opts.skip = averageTerrain;
-    }
+    // TODO: Use average terrain with a count function?
+//     if ( averageTerrain ) {
+//       opts.frame = this.TEC.token.bounds; // TODO: Keep bounds or move to slower token shape?
+//       opts.skip = averageTerrain;
+//     }
 
     const ix = evCache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
     if ( !ix ) return null;
