@@ -6,13 +6,14 @@
 
 You can use this [Module JSON link](https://github.com/caewok/fvtt-elevated-vision/releases/latest/download/module.json) to install. Requires Foundry v10.
 
-This Foundry VTT module provides an elevation canvas layer that lets the GM modify elevation values for the scene. Elevation maps can be uploaded or downloaded for a scene. Tokens and lights are affected by the elevation settings:
-- Tokens that are currently at the height of the terrain ("on the ground") will change elevation if they move to a higher or lower terrain.
-- Lights create shadows based on wall height and terrain elevation
-- Token vision affected by wall height and terrain elevation
-- Fog of war affected by wall height
+This Foundry VTT module provides an elevation canvas layer that lets the GM modify terrain elevation values for the scene. Elevation maps can be uploaded or downloaded for a scene. An optional auto-elevation setting adjusts token elevation when tokens are dragged or moved in the scene.
 
-This module relies in part on the [Wall Height](https://foundryvtt.com/packages/wall-height/) module to create shadows whenever a token or light is above a wall with a defined height. It also uses the elevation settings for tokens and lights.
+Token elevation, token vision, and lighting can be affected by terrain elevation, depending on settings.
+- Lights can create shadows based on wall height and terrain elevation.
+- Token vision can be shadowed based on wall height and terrain elevation.
+- If auto elevation is enabled, token elevation will be adjusted as tokens are dragged or moved in the scene. 
+- The GM can define elevation for overhead tiles and lighting.
+- Overhead tiles with defined elevation are treated as "floors" or "bridges" that affect a token elevation accordingly.
 
 *This module is still in early development stages. Many things are likely to change, including the image download/upload format.*
 
@@ -38,6 +39,9 @@ Special thanks to:
 - [Levels](https://foundryvtt.com/packages/levels) should now work. When Levels or Perfect Vision are present, Elevated Vision hands off visibility testing to those modules. In theory, visibility tests should be comparable using only Elevated Vision versus using Levels or Perfect Vision. Please report potential discrepancies in the Git issue tracker.
 - If you want real 3d, I recommend [Ripper's 3d Canvas](https://theripper93.com/). Basic testing suggests Elevated Vision can work with 3d Canvas. It should also be possible, in theory, to use Elevated Vision's export function to export a 2d elevation map and use that as a basis to create a black-and-white heightmap, which 3d Canvas can use to warp the 3d geometry. If you figure out how to do this, or run across a bug for this, please open an issue in my Git to discuss and share with others.
 
+## Known issues
+- Something is interfering with radial and token field-of-vision for overhead tile occlusion. (Full tile occlusion works fine.) Sometimes, this works fine—--for example, the barn balcony tile in the Levels Farmhouse demo uses radial occlusion properly. If you can narrow this down or figure out what is different about that barn balcony tile, please submit an issue in the Git!
+
 # Examples
 
 Elevated Vision allows you to designate terrain elevation height, which is then used to inform token elevation and vision.
@@ -47,6 +51,10 @@ https://user-images.githubusercontent.com/1267134/188221018-fdb2fce8-157d-45cf-9
 Elevated Vision also uses wall heights and terrain elevation to create shadows for lighting.
 
 https://user-images.githubusercontent.com/1267134/188221519-d2cca9c2-f665-411f-ab79-603ab2ee6245.mov
+
+You can use overhead tiles as bridges that a token can walk on or under.
+
+https://user-images.githubusercontent.com/1267134/221376968-f5087048-a2ae-4d6d-afdd-29c0e482191c.mov
 
 # Elevation Layer
 Switch to the elevation layer in the controls to modify the elevation data in a given scene.
@@ -118,19 +126,151 @@ Long term, I would like to use a more sophisticated method to render the shadow 
 
 # Scene Settings
 
-In Scene settings, the GM can decide the minimum elevation for the scene and the elevation increment. Currently, elevation data is stored at the pixel level, with values between 0 and 255. Those values are then scaled given a minimum elevation and elevation increment.
+![Scene settings](https://user-images.githubusercontent.com/1267134/221377091-03c88f5f-13f6-4f23-8cc7-15c74f2d0902.jpg)
 
-<img src="https://raw.githubusercontent.com/caewok/fvtt-elevated-vision/feature/screenshots/screenshots/scene_config.webp" width="400" alt="Single wall casting a shadow from a light">
+## Setting elevation
 
-# Settings
+The minimum elevation for the scene is the lowest terrain elevation that can be set. Elevation increment is the "steps" between elevation values. 
 
-Selecting "apply token elevation to token vision" will take into account the scene elevation data for token vision and fog of war. This setting currently can be resource-intensive and so is off by default. If not selected, only the wall heights will be used when calculating token vision and fog of war.
+Levels users—--you have two choices when using tiles as basements as of Elevated Vision v0.4.0. If the basement is below the minimum terrain elevation, the basement will work fine but terrain elevation will be effectively ignored if the token elevation is below the minimum. Alternatively, you can set the minimum elevation to the lowest basement elevation, which would allow you to use terrain elevations in the basement.
 
-Select change token elevation automatically to have tokens change elevation when moving, based on the terrain elevation data. Tokens only change elevation if they are "on the ground" when the movement starts. Meaning, the token's elevation at the start of the move equals the underlying terrain elevation.
+Example: Basement tile at -10, rest of scene 0+ elevation.
 
-GMs can also toggle whether to use the average elevation under a token, or a point measurement of the elevation at the token center.
+Option 1: Set minimum scene elevation to 0.
+- Terrain ignored if token is below elevation 0. 
+- Easy to use the rest of the scene because it is already at 0.
 
-<img src="https://raw.githubusercontent.com/caewok/fvtt-elevated-vision/feature/screenshots/screenshots/settings.webp" width="400" alt="Single wall casting a shadow from a light">
+Option 2: Set minimum scene elevation to -10.
+- Terrain in basement is possible. (Example: underground cavern with a hill going from -10 to -5, or even up to 20.)
+- To set the rest of the scene to 0, you probably want to start by using "Fill" to set everything to 0. Then wall off the basement and fill that portion to -10. 
+
+(Currently, elevation data is stored at the pixel level, with values between 0 and 255. Those values are then scaled given a minimum elevation and elevation increment. Thus, not every elevation value can be represented in a single scene, but a fairly wide range is possible.)
+
+## Auto-elevate tokens
+
+If enabled, tokens will use change elevation based on terrain when moving around the scene. Terrain elevation values will be used, as well as overhead tiles with finite elevation settings. A token is considered "on-the-ground" if its elevation is equal to the terrain or equal to a tile at that point. A token is "flying" if not "on-the-ground."   
+
+If a token's elevation is equal to that of an adjacent tile, it can move onto that tile. While on a tile, the token's elevation will be equal to that of the tile.
+
+Transparent portions of tiles are considered "holes." Token averaging and the transparency threshold, discussed below, modify how transparency affects a token.
+
+The following game settings affect how elevation is calculated:
+
+### No averaging
+- Center point of the token is used for all elevation calculations.
+- Generally more performant.
+- Transparent pixels of a tile can cause a token to "fall" through if the center point is directly over a transparent tile pixel.
+
+### Averaging
+- Entire token shape is used for all elevation calculations.
+- Token elevation can accordingly be rounded to the nearest tenth of a unit.
+- Less performant.
+- Tiles with transparent pixels will only cause a token to "fall" through the hole if a sufficient number of pixels are transparent under the token shape.
+- For purposes of moving to a tile, the tile + terrain elevation is used to determine token elevation.
+
+### No fly button present
+- If token is on-the-ground, elevation will be changed accordingly.
+- If token is not on-the-ground ("flying"), elevation will not change.
+
+### Fly button present
+- If fly button is not enabled, token will be moved to be on-the-ground at the start of its move. 
+- If fly button is enabled: 
+  - Token will not be moved to the ground.
+  - If the token encounters a drop more than its token height, it will "fly" (and keep its current elevation). 
+  - Thus, flying tokens can still increase or decrease elevation when moving along terrain but "fly" when encountering terrain or tile cliffs.
+
+## Display elevation shadows 
+
+This setting controls whether shadows will be created in the scene to give a visual aid as to elevation. 
+- "None" disables all shadows for the scene. This is the most performant option.
+- If the "Polygon" setting is enabled for a scene, token vision is shadowed based on wall height.
+- If the "WebGL" setting is enabled for a scene: 
+  - Lights create shadows based on wall height and terrain elevation.
+  - Token vision is shadowed based on wall height and terrain elevation.
+- Depending on your scene and computer hardware, Polygons may be more performant than WebGL or vice-versa.
+
+# Game Settings
+![Game settings](https://user-images.githubusercontent.com/1267134/221377922-592901d0-91b3-4595-a9fc-179e45e12fc5.jpg)
+
+As of v0.4.0, several settings were moved to be scene-specific. Setting the elevation shadows option, elevation minimum, elevation increment, and automatic token elevation in game settings controls the default for any newly created scenes. 
+
+"Add Fly Token Control" places a "fly" button in Token Controls that affects how auto-elevation works. See discussion above.
+
+"Average token elevation," when enabled, will use the entire token shape to calculate elevation. Otherwise, token center is used. See discussion above.
+
+"Enhance LOS calculation" is, as it says, experimental. It can speed up the vision and lighting calculations for scenes in which a token is in an enclosed room. YMMV. Please report any bugs to the Git issue tracker.
+
+# CONFIG
+
+As of v0.4.0, some advanced configuration options are available in `CONFIG.elevatedvision.` If you want to change these, you should probably use a world script to accomplish that change. Alternatively, you could change the `module.js` file where these configurations are located, but that would not persist through an update. 
+
+```js
+ /**
+  * TravelElevation.
+  * The percent threshold under which a tile should be considered transparent at that pixel.
+  * @type {number}
+  */
+ alphaThreshold: 0.75,
+
+ /**
+  * ElevationLayer.
+  * Delay in milliseconds before displaying elevation values in the layer.
+  * @type {number}
+  */
+ hoverDelay: 500,
+
+ /**
+  * ElevationLayer.
+  * Maximum texture size used to represent elevation values.
+  * @type {number}
+  */
+ elevationTextureSize: 4096,
+
+ /**
+  * ElevationLayer.
+  * Resolution to use for the layer, as a percentage between 0 and 1.
+  * 1 means the texture will be the same size as the canvas.
+  * Texture will still be limited by elevationTextureSize; resolution may be rounded.
+  * @type {number}
+  */
+ resolution: 0.25,
+
+ /**
+  * TravelElevation.
+  * Permitted step size to allow tokens to move between tiles of similar elevations before flying.
+  * If undefined, will use token height.
+  * @type {number|undefined}
+  */
+ tileStep: undefined,
+
+ /**
+  * TravelElevation.
+  * Permitted step size to allow tokens to move between terrains of similar elevations before flying.
+  * If undefined, will use terrain height.
+  * @type {number|undefined}
+  */
+ terrainStep: undefined,
+
+ /**
+  * TravelElevation.
+  * When auto-averaging is enabled, this value will be used to average over terrain when
+  * calculating token travel elevation. 0 means do not average, 1+ means test every N pixels.
+  * Should be a positive number or 0. Decimals are allowed.
+  * Larger numbers will make averaging faster but less precise.
+  * @type {number}
+  */
+ averageTerrain: 2,
+
+ /**
+  * TravelElevation.
+  * When auto-averaging is enabled, this value will be used to average over tiles when
+  * calculating token travel elevation. 0 means do not average, 1+ means test every N pixels.
+  * Should be a positive number or 0. Decimals are allowed.
+  * Larger numbers will make averaging faster but less precise.
+  * @type {number}
+  */
+ averageTiles: 2
+```
 
 # API
 
