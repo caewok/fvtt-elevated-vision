@@ -83,10 +83,12 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
     if ( vTextureCoord.x < sceneLeft
       || vTextureCoord.x > sceneRight
       || vTextureCoord.y < sceneTop
-      || vTextureCoord.y > sceneBottom ) {
+      || vTextureCoord.y > sceneBottom
+      || EV_sourceLocation.z < EV_elevationResolution.r  ) {
 
-      // Skip if we are outside the scene boundary
+      // Skip if we are outside the scene boundary or under minimum scene elevation
       wallsToProcess = 0;
+      terrainWallsToProcess = 0;
     } else if ( pixelElevation > EV_sourceLocation.z ) {
 
       // Pixel higher than source; automatically shadow.
