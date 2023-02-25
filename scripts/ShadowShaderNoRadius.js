@@ -46,6 +46,7 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
   uniform vec3 EV_sourceLocation;
   uniform int EV_numWalls;
   uniform int EV_numTerrainWalls;
+  uniform vec4 EV_sceneDims;
 
   varying vec2 vEVTextureCoord;
 
@@ -60,7 +61,17 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
       discard;
     }
 
-    vec4 backgroundElevation = texture2D(EV_elevationSampler, vEVTextureCoord);
+    float sceneLeft = EV_sceneDims.x;
+    float sceneTop = EV_sceneDims.y;
+    float sceneWidth = EV_sceneDims.z;
+    float sceneHeight = EV_sceneDims.w;
+    float sceneRight = sceneLeft + sceneWidth;
+    float sceneBottom = sceneTop + sceneHeight;
+
+    // Elevation texture spans the scene width/height.
+    vec2 evTextureCoord = (vTextureCoord - EV_sceneDims.xy) / EV_sceneDims.zw;
+    vec4 backgroundElevation = texture2D(EV_elevationSampler, evTextureCoord);
+    //vec4 backgroundElevation = texture2D(EV_elevationSampler, vEVTextureCoord);
     float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
 
     bool inShadow = false;
@@ -68,7 +79,19 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
     int wallsToProcess = EV_numWalls;
     int terrainWallsToProcess = EV_numTerrainWalls;
 
-    if ( pixelElevation > EV_sourceLocation.z ) {
+
+    if ( vTextureCoord.x < sceneLeft
+      || vTextureCoord.x > sceneRight
+      || vTextureCoord.y < sceneTop
+      || vTextureCoord.y > sceneBottom
+      || EV_sourceLocation.z < EV_elevationResolution.r  ) {
+
+      // Skip if we are outside the scene boundary or under minimum scene elevation
+      wallsToProcess = 0;
+      terrainWallsToProcess = 0;
+    } else if ( pixelElevation > EV_sourceLocation.z ) {
+
+      // Pixel higher than source; automatically shadow.
       inShadow = true;
       wallsToProcess = 0;
       terrainWallsToProcess = 0;
@@ -263,6 +286,9 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
     uniforms.EV_wallDistances = wallDistances;
     uniforms.EV_center = [center.x, center.y];
     uniforms.EV_canvasDims = [width, height];
+
+    const { sceneX, sceneY, sceneWidth, sceneHeight } = canvas.dimensions;
+    uniforms.EV_sceneDims = [sceneX, sceneY, sceneWidth, sceneHeight];
   }
 }
 

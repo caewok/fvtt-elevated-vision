@@ -6,8 +6,8 @@ SoundSource,
 Wall,
 Token,
 GlobalLightSource,
+Tile,
 CONFIG
-
 */
 "use strict";
 
@@ -60,6 +60,20 @@ export function registerElevationAdditions() {
       get: zBottom
     });
   }
+
+  // Also need to convert a center point back to the top left point of a token.
+  // Used for automatic elevation determination.
+  Object.defineProperty(Token.prototype, "getTopLeft", {
+    value: function(x, y) {
+      return {
+        x: x - (this.w * 0.5),
+        y: y - (this.h * 0.5)
+      };
+    },
+    writable: true,
+    configurable: true
+  });
+
 
   // ----- WALLS ----- //
   if ( !Object.hasOwn(Wall.prototype, "topE") ) {
@@ -134,6 +148,19 @@ export function registerElevationAdditions() {
 
   if ( !Object.hasOwn(SoundSource.prototype, "elevationZ") ) {
     Object.defineProperty(SoundSource.prototype, "elevationZ", {
+      get: zElevation
+    });
+  }
+
+  // ----- Tile ---- //
+  if ( !Object.hasOwn(Tile.prototype, "elevationE") ) {
+    Object.defineProperty(Tile.prototype, "elevationE", {
+      get: tileElevation
+    });
+  }
+
+  if ( !Object.hasOwn(Tile.prototype, "elevationZ") ) {
+    Object.defineProperty(Tile.prototype, "elevationZ", {
       get: zElevation
     });
   }
@@ -237,4 +264,15 @@ function lightSourceElevation() {
 function soundSourceElevation() {
   if ( this.object instanceof Token ) return this.object.topE;
   return this.object.document.flags?.elevatedvision?.elevation ?? Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Elevation of the sound source.
+ * If attached to a token, use the token losHeight.
+ * @returns {number}  Grid Units
+ *   Default: Positive infinity. When infinite, treat like default Foundry light.
+ */
+function tileElevation() {
+  return this.document.flags?.elevatedvision?.elevation
+      ?? this.document.flags?.levels?.rangeBottom ?? Number.POSITIVE_INFINITY;
 }

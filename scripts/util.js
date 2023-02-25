@@ -10,6 +10,83 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
+export function almostLessThan(a, b) { return a < b || a.almostEqual(b); }
+
+export function almostGreaterThan(a, b) { return a > b || a.almostEqual(b); }
+
+export function almostBetween(value, min, max) {
+  return almostLessThan(value, max) && almostGreaterThan(value, min);
+}
+
+
+/**
+ * Fast rounding for positive numbers
+ * @param {number} n
+ * @returns {number}
+ */
+export function roundFastPositive(n) { return (n + 0.5) << 0; }
+
+/**
+ * @typedef {object} PixelFrame
+ * @property {number[]} pixels
+ * @property {number} width
+ * @property {number} height
+ * @property {number} [resolution]
+ */
+
+/**
+ * Extract a rectangular array of pixels from an array of pixels, representing 2d rectangle of pixels.
+ * @param {number[]} pixels         Pixel array to extract from
+ * @param {number} pxWidth          Width of the pixel array as a 2d rectangle
+ * @param {PIXI.Rectangle} frame    Rectangle to use for the extraction
+ * @returns {PixelFrame}
+ */
+export function extractRectangleFromPixelArray(pixels, pxWidth, frame) {
+  const left = Math.roundFast(frame.left);
+  const top = Math.roundFast(frame.top);
+  const right = frame.right + 1;
+  const bottom = frame.bottom + 1;
+  const N = frame.width * frame.height;
+  const arr = new Uint8Array(N);
+  let j = 0;
+  for ( let ptX = left; ptX < right; ptX += 1 ) {
+    for ( let ptY = top; ptY < bottom; ptY += 1) {
+      const px = (ptY * pxWidth) + ptX
+      arr[j] = pixels[px];
+      j += 1;
+    }
+  }
+  return { pixels: arr, width, height };
+}
+
+/**
+ * Extract a rectangular array of pixels from an array of pixels, representing 2d rectangle of pixels.
+ * @param {number[]} pixels         Pixel array to extract from
+ * @param {number} pxWidth          Width of the pixel array as a 2d rectangle
+ * @param {PIXI.Rectangle} frame    Rectangle to use for the extraction
+ * @param {function} fn             Function to apply to each pixel. Is passed pixel value and index.
+ * @returns {PixelFrame}
+ */
+export function applyFunctionToPixelArray(pixels, pxWidth, frame, fn) {
+  const left = Math.roundFast(frame.left);
+  const top = Math.roundFast(frame.top);
+  const right = frame.right + 1;
+  const bottom = frame.bottom + 1;
+  const N = frame.width * frame.height;
+  const arr = new Uint8Array(N);
+  let j = 0;
+  for ( let ptX = left; ptX < right; ptX += 1 ) {
+    for ( let ptY = top; ptY < bottom; ptY += 1) {
+      const px = (ptY * pxWidth) + ptX
+      const value = pixels[px];
+      arr[j] = value;
+      fn(value, px)
+      j += 1;
+    }
+  }
+  return { pixels: arr, width, height };
+}
+
 /**
  * Combine a PIXI polygon with 1 or more holes contained within (or partially within) the boundary.
  * If no holes, will clean the polygon, which may (rarely) result in holes.

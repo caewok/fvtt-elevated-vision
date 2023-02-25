@@ -2,7 +2,8 @@
 game,
 canvas,
 Dialog,
-FilePicker
+FilePicker,
+Hooks
 */
 "use strict";
 
@@ -21,7 +22,11 @@ Controls:
 import { ElevationLayerToolBar } from "./ElevationLayerToolBar.js";
 import { MODULE_ID } from "./const.js";
 
-export function addElevationLayerSceneControls(controls) {
+Hooks.on("getSceneControlButtons", addElevationLayerSceneControls);
+Hooks.on("renderSceneControls", addElevationLayerSubControls);
+Hooks.on("renderTerrainLayerToolBar", renderElevationLayerSubControls);
+
+function addElevationLayerSceneControls(controls) {
   const isGM = game.user.isGM;
   controls.push({
     name: "elevation",
@@ -81,7 +86,7 @@ export function addElevationLayerSceneControls(controls) {
             type: "image",
             displayMode: "thumbs",
             tileSize: false,
-            callback: canvas.elevation.importFromImageFile
+            callback: file => { canvas.elevation.importFromImageFile(file); }
           }).render(true);
         }
       },
@@ -91,9 +96,7 @@ export function addElevationLayerSceneControls(controls) {
         title: game.i18n.localize(`${MODULE_ID}.controls.download.name`),
         icon: "fas fa-file-arrow-down",
         button: true,
-        onClick: () => {
-          canvas.elevation.downloadElevationData({format: "image/webp"});
-        }
+        onClick: () => { canvas.elevation.downloadElevationData({format: "image/webp"}); }
       },
 
       {
@@ -110,7 +113,7 @@ export function addElevationLayerSceneControls(controls) {
   });
 }
 
-export function addElevationLayerSubControls(controls) {
+function addElevationLayerSubControls(controls) {
   if ( !canvas || !canvas.elevation ) return;
 
   if ( controls.activeControl === "elevation" ) {
@@ -123,7 +126,7 @@ export function addElevationLayerSubControls(controls) {
   }
 }
 
-export function renderElevationLayerSubControls() {
+function renderElevationLayerSubControls() {
   const tools = $(canvas.elevation.toolbar.form).parent();
   if ( !tools ) return;
   const controltools = $("li[data-tool='fill-by-pixel']").closest(".sub-controls");

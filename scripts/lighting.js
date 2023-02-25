@@ -1,10 +1,12 @@
 /* globals
 GlobalLightSource,
 canvas,
-PIXI
+PIXI,
+CONFIG
 */
 "use strict";
 
+import { SETTINGS, getSceneSetting } from "./settings.js";
 import { log } from "./util.js";
 import { ShaderPatcher, applyPatches } from "./perfect-vision/shader-patcher.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
@@ -34,13 +36,25 @@ https://ptb.discord.com/channels/732325252788387980/734082399453052938/100695808
 const MAX_NUM_WALLS = 100;
 const MAX_NUM_WALL_ENDPOINTS = MAX_NUM_WALLS * 2;
 
-const FN_ORIENT2D =
+// Orientation of three 2d points
+const FN_ORIENT2D = {
+  NAME: "orient2d",
+  PARAMS: ["in vec2 a", "in vec2 b", "in vec2 c"],
+  RETURN: "float",
+  get TYPE() { return `${this.RETURN}(${this.PARAMS.join(", ")})`; },
+  BODY:
 `
-return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
-`;
+  return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
+`
+};
 
 // Does segment AB intersect the segment CD?
-const FN_LINE_SEGMENT_INTERSECTS =
+const FN_LINE_SEGMENT_INTERSECTS = {
+  NAME: "lineSegmentIntersects",
+  PARAMS: ["in vec2 a", "in vec2 b", "in vec2 c", "in vec2 d"],
+  RETURN: "bool",
+  get TYPE() { return `${this.RETURN}(${this.PARAMS.join(", ")})`; },
+  BODY:
 `
   float xa = orient2d(a, b, c);
   float xb = orient2d(a, b, d);
@@ -49,10 +63,15 @@ const FN_LINE_SEGMENT_INTERSECTS =
   bool xab = (xa * xb) <= 0.0;
   bool xcd = (orient2d(c, d, a) * orient2d(c, d, b)) <= 0.0;
   return xab && xcd;
-`;
+`};
 
 // Point on line AB that forms perpendicular point to C
-const FN_PERPENDICULAR_POINT =
+const FN_PERPENDICULAR_POINT = {
+  NAME: "perpendicularPoint",
+  PARAMS: ["in vec2 a", "in vec2 b", "in vec2 c"],
+  RETURN: "vec2",
+  get TYPE() { return `${this.RETURN}(${this.PARAMS.join(", ")})`; },
+  BODY:
 `
   vec2 deltaBA = b - a;
 
@@ -62,7 +81,7 @@ const FN_PERPENDICULAR_POINT =
 
   float u = ((deltaCA.x * deltaBA.x) + (deltaCA.y * deltaBA.y)) / dab;
   return vec2(a.x + (u * deltaBA.x), a.y + (u * deltaBA.y));
-`;
+`};
 
 // Calculate the canvas elevation given a pixel value
 // Maps 0–1 to elevation in canvas coordinates.
@@ -70,12 +89,22 @@ const FN_PERPENDICULAR_POINT =
 // r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
 // u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
 
-const FN_CANVAS_ELEVATION_FROM_PIXEL =
+const FN_CANVAS_ELEVATION_FROM_PIXEL = {
+  NAME: "canvasElevationFromPixel",
+  PARAMS: ["in float pixel", "in vec4 EV_elevationResolution"],
+  RETURN: "float",
+  get TYPE() { return `${this.RETURN}(${this.PARAMS.join(", ")})`; },
+  BODY:
 `
   return (EV_elevationResolution.r + (pixel * EV_elevationResolution.b * EV_elevationResolution.g)) * EV_elevationResolution.a;
-`;
+`};
 
-const FN_RAY_QUAD_INTERSECTION =
+const FN_RAY_QUAD_INTERSECTION = {
+  NAME: "rayQuadIntersection",
+  PARAMS: ["in vec3 rayOrigin", "in vec3 rayDirection", "in vec3 v0", "in vec3 v1", "in vec3 v2", "in vec3 v3"],
+  RETURN: "float",
+  get TYPE() { return `${this.RETURN}(${this.PARAMS.join(", ")})`; },
+  BODY:
 `
   // Reject rays using the barycentric coordinates of the intersection point with respect to T
   vec3 E01 = v1 - v0;
@@ -94,7 +123,7 @@ const FN_RAY_QUAD_INTERSECTION =
   if (beta < 0.0) return -1.0;
   if (beta > 1.0) return -1.0;
 
-  // Reject rays using the barycentric coordinates of the intersection point with respect to T'
+  // Reject rays using the barycentric coordinates of the intersection point with respect to T prime
   if ((alpha + beta) > 1.0) {
     vec3 E23 = v3 - v2;
     vec3 E21 = v1 - v2;
@@ -115,10 +144,15 @@ const FN_RAY_QUAD_INTERSECTION =
   float t = dot(E03, Q) / det;
   //if (t < 0.0) return -1.0;
   return t;
-`;
+`};
 
 // Determine if a given location from a wall is in shadow or not.
-const FN_LOCATION_IN_WALL_SHADOW =
+const FN_LOCATION_IN_WALL_SHADOW = {
+  NAME: "locationInWallShadow",
+  PARAMS: ["in vec3 wallTL", "in vec3 wallBR", "in float wallDistance", "in vec3 sourceLocation", "in vec3 pixelLocation", "out float percentDistanceFromWall"],
+  RETURN: "bool",
+  get TYPE() { return `${this.RETURN}(${this.PARAMS.join(", ")})`; },
+  BODY:
 `
   percentDistanceFromWall = 0.0; // Set a default value when returning early.
 
@@ -147,47 +181,28 @@ const FN_LOCATION_IN_WALL_SHADOW =
 
   percentDistanceFromWall = distWP / maxDistWP;
   return true;
-`;
+`};
 
-export const FRAGMENT_FUNCTIONS = `
-float orient2d(in vec2 a, in vec2 b, in vec2 c) {
-  ${FN_ORIENT2D}
+// Export the entire block of helper functions.
+const functionDecs = [];
+const functions = [
+  FN_ORIENT2D,
+  FN_LINE_SEGMENT_INTERSECTS,
+  FN_PERPENDICULAR_POINT,
+  FN_RAY_QUAD_INTERSECTION,
+  FN_CANVAS_ELEVATION_FROM_PIXEL,
+  FN_LOCATION_IN_WALL_SHADOW
+];
+for ( const fn of functions) {
+  functionDecs.push(
+`
+${fn.RETURN} ${fn.NAME}(${fn.PARAMS.join(", ")}) {
+${fn.BODY}
 }
 
-// Does segment AB intersect the segment CD?
-bool lineSegmentIntersects(in vec2 a, in vec2 b, in vec2 c, in vec2 d) {
-  ${FN_LINE_SEGMENT_INTERSECTS}
+`);
 }
-
-// Point on line AB that forms perpendicular point to C
-vec2 perpendicularPoint(in vec2 a, in vec2 b, in vec2 c) {
-  ${FN_PERPENDICULAR_POINT}
-}
-
-float rayQuadIntersection(in vec3 rayOrigin, in vec3 rayDirection, in vec3 v0, in vec3 v1, in vec3 v2, in vec3 v3) {
-  ${FN_RAY_QUAD_INTERSECTION}
-}
-
-// Calculate the canvas elevation given a pixel value
-// Maps 0–1 to elevation in canvas coordinates.
-// EV_elevationResolution:
-// r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
-float canvasElevationFromPixel(in float pixel, in vec4 EV_elevationResolution) {
-  ${FN_CANVAS_ELEVATION_FROM_PIXEL}
-}
-
-// Determine if a given location from a wall is in shadow or not.
-bool locationInWallShadow(
-  in vec3 wallTL,
-  in vec3 wallBR,
-  in float wallDistance, // distance from source location to wall
-  in vec3 sourceLocation,
-  in vec3 pixelLocation,
-  out float percentDistanceFromWall) {
-
-  ${FN_LOCATION_IN_WALL_SHADOW}
-}
-`;
+export const FRAGMENT_FUNCTIONS = functionDecs.join("");
 
 const DEPTH_CALCULATION =
 `
@@ -196,11 +211,32 @@ int wallsToProcess = EV_numWalls;
 int terrainWallsToProcess = EV_numTerrainWalls;
 vec4 backgroundElevation = vec4(0.0, 0.0, 0.0, 1.0);
 vec2 EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
-backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+
+vec2 evTextureCoord = (vUvs.xy - EV_sceneDims.xy) / EV_sceneDims.zw;
+backgroundElevation = texture2D(EV_elevationSampler, evTextureCoord);
 
 float percentDistanceFromWall;
 float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
-if ( pixelElevation > EV_sourceLocation.z ) {
+
+float sceneLeft = EV_sceneDims.x;
+float sceneTop = EV_sceneDims.y;
+float sceneWidth = EV_sceneDims.z;
+float sceneHeight = EV_sceneDims.w;
+float sceneRight = sceneLeft + sceneWidth;
+float sceneBottom = sceneTop + sceneHeight;
+
+if ( vUvs.x < sceneLeft
+  || vUvs.x > sceneRight
+  || vUvs.y < sceneTop
+  || vUvs.y > sceneBottom
+  || EV_sourceLocation.z < EV_elevationResolution.r ) {
+
+  // Skip if we are outside the scene boundary or below elevation min
+  wallsToProcess = 0;
+  terrainWallsToProcess = 0;
+
+} else if ( pixelElevation > EV_sourceLocation.z ) {
+
   // If elevation at this point is above the light, then light cannot hit this pixel.
   depth = 0.0;
   wallsToProcess = 0;
@@ -280,54 +316,25 @@ function addShadowCode(source) {
 
       .addUniform("EV_numWalls", "int")
       .addUniform("EV_numTerrainWalls", "int")
-      .addUniform("EV_terrainWallDistances[MAX_NUM_WALLS]", "float")
-      .addUniform("EV_terrainWallCoords[MAX_NUM_WALL_ENDPOINTS]", "vec3")
-      .addUniform("EV_wallCoords[MAX_NUM_WALL_ENDPOINTS]", "vec3")
-      .addUniform("EV_wallDistances[MAX_NUM_WALLS]", "float")
+      .addUniform("EV_terrainWallDistances", "float[MAX_NUM_WALLS]")
+      .addUniform("EV_terrainWallCoords", "vec3[MAX_NUM_WALL_ENDPOINTS]")
+      .addUniform("EV_wallCoords", "vec3[MAX_NUM_WALL_ENDPOINTS]")
+      .addUniform("EV_wallDistances", "float[MAX_NUM_WALLS]")
       .addUniform("EV_sourceLocation", "vec3")
       .addUniform("EV_isVision", "bool")
       .addUniform("EV_elevationSampler", "sampler2D")
       .addUniform("EV_transform", "vec4")
       .addUniform("EV_elevationResolution", "vec4")
       .addUniform("EV_hasElevationSampler", "bool")
+      .addUniform("EV_sceneDims", "vec4")
 
       // Functions must be in reverse-order of dependency.
-      .addFunction("locationInWallShadow", "bool", FN_LOCATION_IN_WALL_SHADOW, [
-        { qualifier: "in", type: "vec3", name: "wallTL" },
-        { qualifier: "in", type: "vec3", name: "wallBR" },
-        { qualifier: "in", type: "float", name: "wallDistance" },
-        { qualifier: "in", type: "vec3", name: "sourceLocation" },
-        { qualifier: "in", type: "vec3", name: "pixelLocation" },
-        { qualifier: "out", type: "float", name: "percentDistanceFromWall" }
-      ])
-      .addFunction("canvasElevationFromPixel", "float", FN_CANVAS_ELEVATION_FROM_PIXEL, [
-        { qualifier: "in", type: "float", name: "pixel" },
-        { qualifier: "in", type: "vec4", name: "EV_elevationResolution" }
-      ])
-      .addFunction("rayQuadIntersection", "float", FN_RAY_QUAD_INTERSECTION, [
-        { qualifier: "in", type: "vec3", name: "rayOrigin" },
-        { qualifier: "in", type: "vec3", name: "rayDirection" },
-        { qualifier: "in", type: "vec3", name: "v0" },
-        { qualifier: "in", type: "vec3", name: "v1" },
-        { qualifier: "in", type: "vec3", name: "v2" },
-        { qualifier: "in", type: "vec3", name: "v3" }
-      ])
-      .addFunction("perpendicularPoint", "vec2", FN_PERPENDICULAR_POINT, [
-        { qualifier: "in", type: "vec2", name: "a" },
-        { qualifier: "in", type: "vec2", name: "b" },
-        { qualifier: "in", type: "vec2", name: "c" }
-      ])
-      .addFunction("lineSegmentIntersects", "bool", FN_LINE_SEGMENT_INTERSECTS, [
-        { qualifier: "in", type: "vec2", name: "a" },
-        { qualifier: "in", type: "vec2", name: "b" },
-        { qualifier: "in", type: "vec2", name: "c" },
-        { qualifier: "in", type: "vec2", name: "d" }
-      ])
-      .addFunction("orient2d", "float", FN_ORIENT2D, [
-        { qualifier: "in", type: "vec2", name: "a" },
-        { qualifier: "in", type: "vec2", name: "b" },
-        { qualifier: "in", type: "vec2", name: "c" }
-      ])
+      .addFunction(FN_LOCATION_IN_WALL_SHADOW.NAME, FN_LOCATION_IN_WALL_SHADOW.TYPE, FN_LOCATION_IN_WALL_SHADOW.BODY)
+      .addFunction(FN_CANVAS_ELEVATION_FROM_PIXEL.NAME, FN_CANVAS_ELEVATION_FROM_PIXEL.TYPE, FN_CANVAS_ELEVATION_FROM_PIXEL.BODY)
+      .addFunction(FN_RAY_QUAD_INTERSECTION.NAME, FN_RAY_QUAD_INTERSECTION.TYPE, FN_RAY_QUAD_INTERSECTION.BODY)
+      .addFunction(FN_PERPENDICULAR_POINT.NAME, FN_PERPENDICULAR_POINT.TYPE, FN_PERPENDICULAR_POINT.BODY)
+      .addFunction(FN_LINE_SEGMENT_INTERSECTS.NAME, FN_LINE_SEGMENT_INTERSECTS.TYPE, FN_LINE_SEGMENT_INTERSECTS.BODY)
+      .addFunction(FN_ORIENT2D.NAME, FN_ORIENT2D.TYPE, FN_ORIENT2D.BODY)
 
       // Add variable that can be seen by wrapped main
       .addGlobal("inShadow", "bool", "false")
@@ -355,13 +362,22 @@ function addShadowCode(source) {
 
 }
 
+const originalFragmentSource = new Map();
+
 /**
  * Wrap AdaptiveLightShader.prototype.create
  * Modify the code to add shadow depth based on background elevation and walls
  * Add uniforms used by the fragment shader to draw shadows in the color and illumination shaders.
  */
 export function createAdaptiveLightingShader(wrapped, ...args) {
-  log("createAdaptiveLightingShaderPV");
+  log("createAdaptiveLightingShader");
+
+  if ( !originalFragmentSource.has(this.name) ) originalFragmentSource.set(this.name, this.fragmentShader);
+  const shaderAlgorithm = getSceneSetting(SETTINGS.SHADING.ALGORITHM);
+  if ( shaderAlgorithm !== SETTINGS.SHADING.TYPES.WEBGL ) {
+    this.fragmentShader = originalFragmentSource.get(this.name);
+    return wrapped(...args);
+  }
 
   applyPatches(this,
     false,
@@ -459,20 +475,16 @@ export function _updateEVLightUniformsLightSource(mesh) {
 
   const heightWalls = this.los._elevatedvision?.heightWalls || new Set();
   const terrainWalls = this.los._elevatedvision?.terrainWalls || new Set();
-
-  const center = {x, y};
   const r_inv = 1 / radius;
 
   // Radius is .5 in the shader coordinates; adjust elevation accordingly
   const u = shader.uniforms;
   u.EV_sourceLocation = [0.5, 0.5, elevationZ * 0.5 * r_inv];
 
-  const center_shader = {x: 0.5, y: 0.5};
-
   let terrainWallCoords = [];
   let terrainWallDistances = [];
   for ( const w of terrainWalls ) {
-    addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source, r_inv)
+    addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source, r_inv);
   }
   u.EV_numTerrainWalls = terrainWallDistances.length;
 
@@ -535,6 +547,14 @@ export function _updateEVLightUniformsLightSource(mesh) {
     u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
     u.EV_hasElevationSampler = true;
   }
+
+  // Convert scene rectangle to local light coordinates
+  const sceneRect = canvas.dimensions.sceneRect;
+  const sceneLeft = circleCoord(sceneRect.left, radius, x, r_inv);
+  const sceneRight = circleCoord(sceneRect.right, radius, x, r_inv);
+  const sceneTop = circleCoord(sceneRect.top, radius, y, r_inv);
+  const sceneBottom = circleCoord(sceneRect.bottom, radius, y, r_inv);
+  u.EV_sceneDims = [sceneLeft, sceneTop, sceneRight - sceneLeft, sceneBottom - sceneTop];
 }
 
 function addWallDataToShaderArrays(w, wallDistances, wallCoords, source, r_inv = 1 / source.radius) {
@@ -597,12 +617,11 @@ function circleCoord(a, r, c = 0, r_inv = 1 / r) {
  * @returns {number}
  */
 function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-vars
-  // Calc:
-  // ((a - c) / 2r) + 0.5 = p
-  //  ((a - c) / 2r) = p +  0.5
-  //  a - c = (p + 0.5) * 2r
-  //  a = (p + 0.5) * 2r + c
-  return ((p + 0.5) * 2 * r) + c;
+  // ((a - c) * 1/r * 0.5) + 0.5 = p
+  // (a - c) * 1/r = (p - 0.5) / 0.5
+  // a - c = 2 * (p - 0.5) / 1/r = 2 * (p - 0.5) * r
+  // a = 2 * (p - 0.5) * r + c
+  return ((p - 0.5) * r * 2) + c;
 }
 
 /**
