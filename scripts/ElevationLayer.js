@@ -572,11 +572,11 @@ export class ElevationLayer extends InteractionLayer {
 
     // Check if this is an updated version.
     // v0.4.0 added resolution, width, height.
-    if ( isNewerVersion("0.4.0", elevationImage.version) ) {
-      ui.notifications.notify("Detected older version of elevation scene data. Downloading backup in case upgrade goes poorly!");
-      await this.downloadStoredSceneElevationData();
-      neededSave = true;
-    }
+//     if ( isNewerVersion("0.4.0", elevationImage.version) ) {
+//       ui.notifications.notify("Detected older version of elevation scene data. Downloading backup in case upgrade goes poorly!");
+//       await this.downloadStoredSceneElevationData();
+//       neededSave = true;
+//     }
 
     await this.importFromImageFile(elevationImage.imageData, {
       resolution: elevationImage.resolution,
