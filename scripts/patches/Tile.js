@@ -37,8 +37,8 @@ function _createTextureDataTile() {
 
   // Create a temporary Sprite using the Tile texture
   const sprite = new PIXI.Sprite(this.texture);
-  sprite.width = map.aw = this.texture.baseTexture.realWidth / 4;
-  sprite.height = map.ah = this.texture.baseTexture.realHeight / 4;
+  sprite.width = map.aw = Math.round(this.texture.baseTexture.realWidth / 4);
+  sprite.height = map.ah = Math.round(this.texture.baseTexture.realHeight / 4);
   sprite.anchor.set(0.5, 0.5);
   sprite.position.set(map.aw / 2, map.ah / 2);
 
