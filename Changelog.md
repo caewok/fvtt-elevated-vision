@@ -1,5 +1,8 @@
+## 0.4.2
+Update to geometry lib 0.1.5.
+
 ## 0.4.1
-Possible fix for PV error where it expects Tile width and height pixel values to be rounded. 
+Possible fix for PV error where it expects Tile width and height pixel values to be rounded.
 
 ## 0.4.0
 Overhaul the saving and loading of the elevation texture so lower resolution images can be used. Should resolve issue #38 (large maps) and generally improve speed.
