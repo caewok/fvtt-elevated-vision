@@ -1,5 +1,8 @@
-## 0.4.2
+## 0.4.3
 Update to geometry lib 0.1.5.
+
+## 0.4.2
+Permissions fix.
 
 ## 0.4.1
 Possible fix for PV error where it expects Tile width and height pixel values to be rounded.
