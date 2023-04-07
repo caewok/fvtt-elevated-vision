@@ -6,6 +6,7 @@ CONFIG
 */
 "use strict";
 
+import { MODULE_ID } from "./const.js";
 import { SETTINGS, getSceneSetting } from "./settings.js";
 import { log } from "./util.js";
 import { ShaderPatcher, applyPatches } from "./perfect-vision/shader-patcher.js";
@@ -33,8 +34,8 @@ https://ptb.discord.com/channels/732325252788387980/734082399453052938/100695808
 */
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
-const MAX_NUM_WALLS = 100;
-const MAX_NUM_WALL_ENDPOINTS = MAX_NUM_WALLS * 2;
+// const MAX_NUM_WALLS = 100;
+// const MAX_NUM_WALL_ENDPOINTS = MAX_NUM_WALLS * 2;
 
 // Orientation of three 2d points
 const FN_ORIENT2D = {
@@ -310,6 +311,9 @@ const FRAG_COLOR =
 `;
 
 function addShadowCode(source) {
+  const MAX_NUM_WALLS = CONFIG[MODULE_ID].maxShaderWalls;
+  const MAX_NUM_WALL_ENDPOINTS = MAX_NUM_WALLS * 2;
+
   try {
     source = new ShaderPatcher("frag")
       .setSource(source)
@@ -473,9 +477,27 @@ export function _updateEVLightUniformsLightSource(mesh) {
   const source = this;
   const { width, height } = canvas.dimensions;
 
-  const heightWalls = this.los._elevatedvision?.heightWalls || new Set();
-  const terrainWalls = this.los._elevatedvision?.terrainWalls || new Set();
+  let heightWalls = this.los._elevatedvision?.heightWalls || new Set();
+  let terrainWalls = this.los._elevatedvision?.terrainWalls || new Set();
   const r_inv = 1 / radius;
+
+  // Sort the walls from distance to the origin point
+  // This should help when the maximum wall limit is reached.
+  const originPt = {x, y};
+  heightWalls = [...heightWalls];
+  terrainWalls = [...terrainWalls];
+
+  heightWalls.forEach(w => {
+    const pt = foundry.utils.closestPointToSegment(originPt, w.A, w.B);
+    w._distance2 = PIXI.Point.distanceSquaredBetween(originPt, pt);
+  });
+  terrainWalls.forEach(w => {
+    const pt = foundry.utils.closestPointToSegment(originPt, w.A, w.B);
+    w._distance2 = PIXI.Point.distanceSquaredBetween(originPt, pt);
+  });
+
+  heightWalls.sort((a, b) => a._distance2 - b._distance2);
+  terrainWalls.sort((a, b) => a._distance2 - b.distance2);
 
   // Radius is .5 in the shader coordinates; adjust elevation accordingly
   const u = shader.uniforms;
@@ -483,7 +505,8 @@ export function _updateEVLightUniformsLightSource(mesh) {
 
   let terrainWallCoords = [];
   let terrainWallDistances = [];
-  for ( const w of terrainWalls ) {
+  const numWalls = CONFIG[MODULE_ID].numShaderWalls;
+  for ( const w of terrainWalls.slice(0, numWalls) ) {
     addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source, r_inv);
   }
   u.EV_numTerrainWalls = terrainWallDistances.length;
@@ -496,7 +519,7 @@ export function _updateEVLightUniformsLightSource(mesh) {
 
   let wallCoords = [];
   let wallDistances = [];
-  for ( const w of heightWalls ) {
+  for ( const w of heightWalls.slice(0, numWalls) ) {
     addWallDataToShaderArrays(w, wallDistances, wallCoords, source, r_inv);
   }
 
