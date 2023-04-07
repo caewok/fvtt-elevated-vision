@@ -171,11 +171,13 @@ Hooks.on("canvasReady", async function() {
   // Cache overhead tile pixel data.
   for ( const tile of canvas.tiles.placeables ) {
     if ( tile.document.overhead ) {
-      // Match Levels settings. Prefer Levels settings.
-      const levelsE = tile.document?.flag?.levels?.rangeBottom;
-      if ( typeof levelsE !== "undefined" ) tile.document.setFlag(MODULE_ID, "elevation", levelsE);
-      else tile.document.update({flags: { levels: { rangeBottom: tile.elevationE } } });
-
+      
+      if ( game.user.isGM ) {
+        // Match Levels settings. Prefer Levels settings.
+        const levelsE = tile.document?.flag?.levels?.rangeBottom;
+        if ( typeof levelsE !== "undefined" ) tile.document.setFlag(MODULE_ID, "elevation", levelsE);
+        else tile.document.update({flags: { levels: { rangeBottom: tile.elevationE } } });
+      }
       // Cache the tile pixels.
       tile._evPixelCache = TilePixelCache.fromOverheadTileAlpha(tile);
     }

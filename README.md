@@ -36,7 +36,7 @@ Special thanks to:
 
 ## Problematic modules
 - Should be compatible with [Perfect Vision](https://foundryvtt.com/packages/perfect-vision) as of Elevated Vision v0.1.5. Please report any issues to the Elevated Vision git issue tracker.
-- [Levels](https://foundryvtt.com/packages/levels) should now work. When Levels or Perfect Vision are present, Elevated Vision hands off visibility testing to those modules. In theory, visibility tests should be comparable using only Elevated Vision versus using Levels or Perfect Vision. Please report potential discrepancies in the Git issue tracker.
+- [Levels](https://foundryvtt.com/packages/levels) should now work. When Levels or Perfect Vision are present, Elevated Vision hands off visibility testing to those modules. In theory, visibility tests should be comparable using only Elevated Vision versus using Levels or Perfect Vision. Please report potential discrepancies in the Git issue tracker. <b>Note: If you have a "basement" level, you may need to set the elevation of the area in and around the basement to the negative elevation bottom for the basement.</b>
 - If you want real 3d, I recommend [Ripper's 3d Canvas](https://theripper93.com/). Basic testing suggests Elevated Vision can work with 3d Canvas. It should also be possible, in theory, to use Elevated Vision's export function to export a 2d elevation map and use that as a basis to create a black-and-white heightmap, which 3d Canvas can use to warp the 3d geometry. If you figure out how to do this, or run across a bug for this, please open an issue in my Git to discuss and share with others.
 
 ## Known issues
