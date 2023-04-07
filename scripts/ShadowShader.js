@@ -1,16 +1,18 @@
 /* globals
 PIXI,
 canvas,
-foundry
+foundry,
+CONFIG
 */
 "use strict";
 
+import { MODULE_ID } from "./const.js";
 import { FRAGMENT_FUNCTIONS, pointCircleCoord } from "./lighting.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
-const MAX_NUM_WALLS = 100;
-const MAX_NUM_WALL_ENDPOINTS = MAX_NUM_WALLS * 2;
+// const MAX_NUM_WALLS = 100;
+// const MAX_NUM_WALL_ENDPOINTS = MAX_NUM_WALLS * 2;
 
 export class ShadowShader extends PIXI.Shader {
   static vertexShader = `
@@ -39,9 +41,6 @@ export class ShadowShader extends PIXI.Shader {
   `;
 
   static fragmentShader = `
-  #define MAX_NUM_WALLS ${MAX_NUM_WALLS}
-  #define MAX_NUM_WALL_ENDPOINTS ${MAX_NUM_WALL_ENDPOINTS}
-
   varying vec2 vTextureCoord;
   uniform sampler2D sampler;
   uniform float alphaThreshold;
@@ -174,9 +173,17 @@ export class ShadowShader extends PIXI.Shader {
   static #program;
 
   static create(defaultUniforms = {}) {
+    const vShader = ShadowShader.vertexShader;
+    const defines =
+`
+  #define MAX_NUM_WALLS ${CONFIG[MODULE_ID].maxShaderWalls}
+  #define MAX_NUM_WALL_ENDPOINTS ${CONFIG[MODULE_ID].maxShaderWalls * 2}
+`;
+    const fShader = defines + ShadowShader.fragmentShader;
+
     const program = ShadowShader.#program ??= PIXI.Program.from(
-      ShadowShader.vertexShader,
-      ShadowShader.fragmentShader
+      vShader,
+      fShader
     );
     const uniforms = foundry.utils.mergeObject(
       this.defaultUniforms,
@@ -277,15 +284,34 @@ export class ShadowShader extends PIXI.Shader {
     ];
 
     // Construct wall data
-    const center = {x, y};
-    const center_shader = {x: 0.5, y: 0.5};
-    const heightWalls = source.los._elevatedvision?.heightWalls || new Set();
-    const terrainWalls = source.los._elevatedvision?.terrainWalls || new Set();
+    // const center = {x, y};
+    // const center_shader = {x: 0.5, y: 0.5};
+    let heightWalls = source.los._elevatedvision?.heightWalls || new Set();
+    let terrainWalls = source.los._elevatedvision?.terrainWalls || new Set();
+
+    // Sort the walls from distance to the origin point
+    // This should help when the maximum wall limit is reached.
+    const originPt = {x, y};
+    heightWalls = [...heightWalls];
+    terrainWalls = [...terrainWalls]
+
+    heightWalls.forEach(w => {
+      const pt = foundry.utils.closestPointToSegment(originPt, w.A, w.B);
+      w._distance2 = PIXI.Point.distanceSquaredBetween(originPt, pt);
+    });
+    terrainWalls.forEach(w => {
+      const pt = foundry.utils.closestPointToSegment(originPt, w.A, w.B);
+      w._distance2 = PIXI.Point.distanceSquaredBetween(originPt, pt);
+    });
+
+    heightWalls.sort((a, b) => a._distance2 - b._distance2);
+    terrainWalls.sort((a, b) => a._distance2 - b.distance2);
 
     let terrainWallCoords = [];
     let terrainWallDistances = [];
-    for ( const w of terrainWalls ) {
-      addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source, r_inv)
+    const numWalls = CONFIG[MODULE_ID].numShaderWalls;
+    for ( const w of terrainWalls.slice(0, numWalls) ) {
+      addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source, r_inv);
     }
     uniforms.EV_numTerrainWalls = terrainWallDistances.length;
 
@@ -298,7 +324,7 @@ export class ShadowShader extends PIXI.Shader {
 
     let wallCoords = [];
     let wallDistances = [];
-    for ( const w of heightWalls ) {
+    for ( const w of heightWalls.slice(0, numWalls) ) {
       addWallDataToShaderArrays(w, wallDistances, wallCoords, source, r_inv);
     }
 

@@ -45,27 +45,6 @@ import "./tiles.js";
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
-  game.modules.get(MODULE_ID).api = {
-    util,
-    extract,
-    ElevationLayer,
-    ShadowShader,
-    ShadowShaderNoRadius,
-    FILOQueue,
-    WallTracerEdge,
-    WallTracerVertex,
-    WallTracer,
-    SCENE_GRAPH,
-    PixelCache,
-    TilePixelCache
-  };
-
-  // These methods need to be registered early
-  registerGeometry();
-  registerElevationAdditions();
-  registerSettings();
-  registerLayer();
-  registerAdditions();
 
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
@@ -134,8 +113,39 @@ Hooks.once("init", function() {
      * Larger numbers will make averaging faster but less precise.
      * @type {number}
      */
-    averageTiles: 2
+    averageTiles: 2,
+
+    /**
+     * Maximum number of walls passed to the GLSL shader.
+     * This has a performance consequence. Also, even if the number of walls is not
+     * reached in a scene, setting this value too high could result in errors if it
+     * exceeds the maximum permissible number of uniforms that can be sent to the GPU.
+     *
+     */
+    maxShaderWalls: 100
   };
+
+  game.modules.get(MODULE_ID).api = {
+    util,
+    extract,
+    ElevationLayer,
+    ShadowShader,
+    ShadowShaderNoRadius,
+    FILOQueue,
+    WallTracerEdge,
+    WallTracerVertex,
+    WallTracer,
+    SCENE_GRAPH,
+    PixelCache,
+    TilePixelCache
+  };
+
+  // These methods need to be registered early
+  registerGeometry();
+  registerElevationAdditions();
+  registerSettings();
+  registerLayer();
+  registerAdditions();
 });
 
 Hooks.once("libWrapper.Ready", async function() {
@@ -171,7 +181,7 @@ Hooks.on("canvasReady", async function() {
   // Cache overhead tile pixel data.
   for ( const tile of canvas.tiles.placeables ) {
     if ( tile.document.overhead ) {
-      
+
       if ( game.user.isGM ) {
         // Match Levels settings. Prefer Levels settings.
         const levelsE = tile.document?.flag?.levels?.rangeBottom;
