@@ -72,7 +72,7 @@ export class TokenAverageElevationCalculator extends TokenPointElevationCalculat
    * @returns {number}
    */
   terrainElevation() {
-    return canvas.elevation.averageElevationWithinShape(this.tokenShape);
+    return Math.max(canvas.elevation.averageElevationWithinShape(this.tokenShape), this.findHighestETL());
   }
 
   /**
