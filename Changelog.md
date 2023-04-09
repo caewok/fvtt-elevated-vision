@@ -5,6 +5,8 @@ Refactor token elevation calculator class. Now split into three parts:
 3. TokenAverageElevationCalculator: Extends (2) to use averaging over token shape.
 This provides additional tools for Elevation Ruler.
 
+Add automatic elevation support for Enhanced Terrain Layer.
+
 ## 0.4.3
 Update to geometry lib 0.1.5.
 
