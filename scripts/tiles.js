@@ -35,6 +35,7 @@ function updateTileHook(document, change, _options, _userId) {
     document.object._evPixelCache = TilePixelCache.fromOverheadTileAlpha(document.object);
   } else if ( document.overhead ) {
     const cache = document.object._evPixelCache;
+    if ( !cache ) return;
 
     if ( Object.hasOwn(change, "x")
       || Object.hasOwn(change, "y")
