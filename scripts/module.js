@@ -93,7 +93,7 @@ Hooks.once("init", function() {
     /**
      * TravelElevation.
      * Permitted step size to allow tokens to move between terrains of similar elevations before flying.
-     * If undefined, will use terrain height.
+     * If undefined, will use token height or (for coordinate testing) terrain height.
      * @type {number|undefined}
      */
     terrainStep: undefined,
