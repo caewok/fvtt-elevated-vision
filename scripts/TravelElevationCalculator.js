@@ -586,7 +586,7 @@ export class TravelElevationCalculator {
         tec.location = prevPt;
         tec.elevation = tec.groundElevation();
 
-        if ( tec.tileSupportsToken(ix.tile) ) nextTile = ix.tile;
+        if ( tec.tileSupports(ix.tile) ) nextTile = ix.tile;
 
       } else if ( currState === TILE && ix.tile && !ix.tileStart ) {
         // Falling through tile
