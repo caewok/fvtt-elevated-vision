@@ -163,8 +163,8 @@ export class CoordinateElevationCalculator {
    * Determine the terrain or tile elevation at this location.
    * @returns {number} Elevation in grid units
    */
-  static groundElevationAt(point) {
-    const calc = new CoordinateElevationCalculator(point);
+  static groundElevationAt(point, opts) {
+    const calc = new this(point, opts);
     return calc.groundElevation();
   }
 
