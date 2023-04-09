@@ -86,6 +86,7 @@ export class CoordinateElevationCalculator {
   set location(value) {
     this.#point.x = value.x;
     this.#point.y = value.y;
+    this._refreshLocation();
   }
 
   get elevation() {
