@@ -22,7 +22,7 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
    */
   constructor(token, opts = {}) {
     const location = opts.tokenCenter ?? token.center;
-    opts.elevation ??= opts.tokenElevation ?? token.elevationE;
+    opts.elevation ??= opts.tokenElevation ?? token.bottomE;
     super(location, opts);
     this.token = token;
   }
