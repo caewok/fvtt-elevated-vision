@@ -6,7 +6,7 @@ canvas
 
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { averageTilesSetting, averageTerrainSetting } from "./settings.js";
-
+import { MODULE_ID } from "./const.js";
 
 export class TokenAverageElevationCalculator extends TokenPointElevationCalculator {
   /** @type {PIXI.Polygon|PIXI.Rectangle} */
@@ -17,8 +17,9 @@ export class TokenAverageElevationCalculator extends TokenPointElevationCalculat
    * @inheritDocs
    */
   _configure(opts = {}) {
-    opts.averageTiles ??= averageTilesSetting();
-    opts.averageTerrain ??= averageTerrainSetting();
+    // Need this value to be always greater than 0
+    opts.averageTiles ||= CONFIG[MODULE_ID]?.averageTiles || 1;
+    opts.averageTerrain ||= CONFIG[MODULE_ID]?.averageTerrain || 1;
     super._configure(opts);
   }
 
@@ -65,6 +66,7 @@ export class TokenAverageElevationCalculator extends TokenPointElevationCalculat
     return canvas.elevation.averageElevationWithinShape(tokenShape);
   }
 
+
   /**
    * Find the terrain elevation for this token
    * @returns {number}
@@ -80,8 +82,9 @@ export class TokenAverageElevationCalculator extends TokenPointElevationCalculat
    * @returns {bolean}
    */
   isOnTile(tile) {
+    if ( !tile ) return Boolean(this.findTileAtElevation());
     const tileE = tile.elevationE;
-    if ( this.elevation.almostEqual(tileE) ) return false;
+    if ( !this.elevation.almostEqual(tileE) ) return false;
     return tileOpaqueAverageAt(tile, this.tokenShape, this.options.alphaThreshold, this.options.averageTiles);
   }
 
