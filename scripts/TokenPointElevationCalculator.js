@@ -22,19 +22,15 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
   constructor(token, opts = {}) {
     const location = opts.tokenCenter ?? token.center;
     opts.elevation ??= opts.tokenElevation ?? token.bottomE;
-    super(location, opts);
-    this.#token = token;
-  }
 
-  /**
-   * Set tileStep and terrainStep to token height if not otherwise defined.
-   * @inheritDocs
-   */
-  _configure(opts) {
-    const tokenHeight = this.token.topE - this.token.bottomE;
+    // Set tileStep and terrainStep to token height if not otherwise defined.
+    // (Do this here b/c _configure method does not yet have the token set.)
+    const tokenHeight = token.topE - token.bottomE;
     opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep ?? (tokenHeight || 1);
     opts.terrainStep ??= CONFIG[MODULE_ID]?.terrainStep ?? (tokenHeight || canvas.elevation.elevationStep);
-    super._configure(opts);
+
+    super(location, opts);
+    this.#token = token;
   }
 
   /** @type {Token} */
