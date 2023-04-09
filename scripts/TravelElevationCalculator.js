@@ -9,7 +9,6 @@ PIXI
 
 import { almostLessThan, almostBetween } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
-// import { Point3d } from "./geometry/3d/Point3d.js";
 import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
 import { PixelCache } from "./PixelCache.js";
 
@@ -168,8 +167,8 @@ canvas.elevation.tokens.tileOpaqueAt(tile, tokenCenter, averageTiles, alphaThres
 canvas.elevation.tokens.tokenSupportedByTile(tile, tokenCenter, averageTiles, alphaThreshold, tokenShape)
 
 N = 10000
-await foundry.utils.benchmark(canvas.elevation.tokens.tileOpaqueAt, N, tile, tokenCenter, averageTiles, alphaThreshold, tokenShape)
-await foundry.utils.benchmark(canvas.elevation.tokens.tokenSupportedByTile, N, tile, tokenCenter, averageTiles, alphaThreshold, tokenShape)
+await foundry.utils.benchmark(canvas.elevation.tokens.tileOpaqueAt, N, tile, tokenCenter, averageTiles, alphaThreshold, tokenShape);
+await foundry.utils.benchmark(canvas.elevation.tokens.tokenSupportedByTile, N, tile, tokenCenter, averageTiles, alphaThreshold, tokenShape);
 
 50% tile:
 tileOpaqueAt | 10000 iterations | 128.7ms | 0.01287ms per
@@ -297,7 +296,7 @@ export class TravelElevationCalculator {
   tilePercentThreshold = 0.5;
 
   constructor(token, travelRay, opts = {}) {
-    this.TEC = new canvas.elevation.TokenCalculator(token, opts);
+    this.TEC = new canvas.elevation.TokenElevationCalculator(token, opts);
     this.travelRay = travelRay;
 
     this.TEC.tiles = this._elevationTilesOnRay();
@@ -317,7 +316,7 @@ export class TravelElevationCalculator {
     if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) || !getSetting(SETTINGS.FLY_BUTTON) ) return undefined;
     const token_controls = ui.controls.controls.find(elem => elem.name === "token");
     const fly = token_controls.tools.find(elem => elem.name === SETTINGS.FLY_BUTTON);
-    return fly?.active ? true : false;
+    return fly?.active;
   }
 
   // ----- NOTE: Getters/Setters ----- //
@@ -333,8 +332,6 @@ export class TravelElevationCalculator {
     const rayTConversion = Math.abs(ray.dx) > Math.abs(ray.dy)
       ? function(pt) { return (pt.x - this.A.x) / this.dx; }
       : function(pt) { return (pt.y - this.A.y) / this.dy; };
- //      pt => (pt.x - this.A.x) / this.dx
-//       : pt => (pt.y - this.A.y) / this.dy;
     ray.tConversion = rayTConversion;
 
     // Make sure t0 is set on the ray endpoints; used in calculateElevationAlongRay.
@@ -546,10 +543,6 @@ export class TravelElevationCalculator {
     out.finalElevation = finalElevation;
     out.elevationChanges = elevationChanges;
 
-    // Add in the starting position and state.
-//     const startingIx = travelRay.A;
-//     out.elevationChanges.unshift({ix: travelRay.A, currState, currE});
-
     return out;
   }
 
@@ -618,12 +611,6 @@ export class TravelElevationCalculator {
         // Started on a tile and ending on that tile.
         nextTile = currTile;
       }
-
-      //else if ( currState === TILE && !ix.tile ) {
-        // Terrain pushing through the current tile.
-        //nextTile = undefined;
-      //}
-
 
       if ( nextTile ) [currE, currState, currTile] = [nextTile.elevationE, TILE, nextTile];
       else {
@@ -717,10 +704,6 @@ export class TravelElevationCalculator {
         // Started on a tile and ending on that tile.
         nextTile = currTile;
 
-      // } else if ( currState === TILE && !ix.tile ) {
-        // Terrain pushing through the current tile.
-        // nextTile = undefined;
-
       } else if ( currState === FLY ) {
         tec.location = ix;
 
@@ -768,19 +751,6 @@ export class TravelElevationCalculator {
 
     return { finalElevation, elevationChanges };
   }
-
-  /**
-   * Can the token move to a given tile?
-   */
-//   _canMoveOntoTile(tile) {
-//     const tec = this.TEC;
-//     if ( tec.averageTiles ) return tec.tileSupportsToken(tile);
-//
-//     // If the terrain at this location is within step of tile, token can move to tile.
-//     const terrainE = canvas.elevation.elevationAt(tec.tokenCenter);
-//     tec.tokenElevation = terrainE;
-//     return tec.tileWithinStep(tile);
-//   }
 
   /**
    * Find next tile hole or terrain rising above tile along the ray.
@@ -885,15 +855,6 @@ export class TravelElevationCalculator {
     };
 
     const opts = { stepT, startT };
-    // TODO: Use average terrain with a countFunction?
-//     if ( tec.averageTerrain ) {
-//       opts.frame = tec.token.bounds; // TODO: Keep bounds or move to slower token shape?
-//       opts.skip = tec.averageTerrain;
-//       const percentThreshold = this.tilePercentThreshold; // Default 50%
-//       opts.countFn = PixelCache.countFunction(pixelThreshold);
-//
-//     }
-
     const ix = evCache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
     if ( !ix ) return null;
     ix.e = ev.pixelValueToElevation(ix.value);
@@ -1008,7 +969,6 @@ export class TravelElevationCalculator {
     if ( elevationThreshold < canvas.elevation.elevationMin ) return null;
 
     const travelRay = this.travelRay;
-    const averageTerrain = this.TEC.averageTerrain;
     const stepT = this.#stepT;
     const ev = canvas.elevation;
     const evCache = ev.elevationPixelCache;
@@ -1017,14 +977,9 @@ export class TravelElevationCalculator {
     const pixelThreshold = ev.elevationToPixelValue(elevationThreshold);
     const cmp = value => value > pixelThreshold;
     const opts = { stepT, startT };
-    // TODO: Use average terrain with a count function?
-//     if ( averageTerrain ) {
-//       opts.frame = this.TEC.token.bounds; // TODO: Keep bounds or move to slower token shape?
-//       opts.skip = averageTerrain;
-//     }
-
     const ix = evCache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
     if ( !ix ) return null;
+
     // TO-DO: Could use Point3d here and set z value to elevationZ.
     // May be helpful for flagging difficulty checks for large climbs/falls.
     ix.e = ev.pixelValueToElevation(ix.value);
@@ -1053,37 +1008,6 @@ export class TravelElevationCalculator {
     // Must be flying.
     return { currE, currState: FLY, currTile, terrainE };
   }
-
-  /**
-   * Determine the current state of this token
-   * @param {object} [options]    Options that modify the token parameters
-   * @param {Point} [options.tokenCenter]       Center of the token
-   * @param {number} [options.tokenElevation]   Elevation of the token
-   * @returns {TOKEN_ELEVATION_STATE}
-   */
-//   static currentTokenState(token, { tokenCenter, tokenElevation } = {}) {
-//     tokenCenter ??= token.center;
-//     tokenElevation ??= token.bottomE;
-//     const matchingTile = this.TEC.findTileUnderToken({
-//       tokenCenter,
-//       tokenElevation });
-//
-//     const tokenHeight = token.topE - token.bottomE;
-//     const terrainStep = CONFIG[MODULE_ID]?.terrainStep ?? (tokenHeight || canvas.elevation.elevationStep);
-//     if ( matchingTile ) {
-//       const tileStep = CONFIG[MODULE_ID]?.tileStep ?? (tokenHeight || canvas.elevation.elevationStep);
-//       const tileE = matchingTile.elevationE;
-//       if ( almostBetween(tileE, tokenElevation - tileStep, tokenElevation) ) return { currE: tileE, currState: TILE, currTile: matchingTile };
-//     }
-//
-//     const terrainE = this._terrainElevationAtLocation(tokenCenter);
-//     if ( almostBetween(terrainE, tokenElevation - terrainStep, tokenElevation) ) {
-//       return { currE: terrainE, currState: TERRAIN, terrainE };
-//     }
-//
-//     return { currE: tokenElevation, currState: FLY, terrainE };
-//   }
-
 
   /**
    * Find overhead elevation tiles along a line segment (ray).
