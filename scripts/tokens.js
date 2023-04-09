@@ -1,17 +1,13 @@
 /* globals
-canvas,
 Ray,
-CONFIG,
 Hooks
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { log, almostGreaterThan, almostLessThan, almostBetween } from "./util.js";
-import { MODULE_ID } from "./const.js";
-import { getSceneSetting, getSetting, SETTINGS, averageTilesSetting, averageTerrainSetting } from "./settings.js";
+import { log } from "./util.js";
+import { getSceneSetting, SETTINGS } from "./settings.js";
 import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
-import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
 
 /* Token movement flow:
 
@@ -175,7 +171,6 @@ export function _refreshToken(wrapper, options) {
 
     // Update the previous travel ray
     te.travelRay = new Ray(startPosition, this.center);
-    // const newTE = new TravelElevation(this, travelRay);
 
     // Determine the new final elevation.
     const finalElevation = te.calculateFinalElevation(startElevation);
@@ -201,8 +196,8 @@ export function _refreshToken(wrapper, options) {
     change ??= { currState: TERRAIN };
     if ( change.currState === TERRAIN ) {
       const tec = ev.te.TEC;
-      tec.tokenCenter = tokenCenter;
-      change.currE = tec.terrainElevationAtToken();
+      tec.location = tokenCenter;
+      change.currE = tec.terrainElevation();
     }
     options.elevation ||= this.document.elevation !== change.currE;
 
@@ -230,7 +225,7 @@ export function cloneToken(wrapper) {
   const {x, y} = clone.center;
   const travelRay = new Ray({ x, y }, { x, y }); // Copy; don't reference.
   const te = new TravelElevationCalculator(clone, travelRay);
-  te.TEC.tokenElevation = this.document.elevation;
+  te.TEC.elevation = this.document.elevation;
   if ( typeof TravelElevationCalculator.autoElevationFly() === "undefined" ) {
     const { currState } = te.currentTokenState();
     if ( currState === FLY ) return clone;

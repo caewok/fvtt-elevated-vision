@@ -22,6 +22,9 @@ import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { PixelCache, TilePixelCache } from "./PixelCache.js";
+import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
+import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
+import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -90,7 +93,7 @@ Hooks.once("init", function() {
     /**
      * TravelElevation.
      * Permitted step size to allow tokens to move between terrains of similar elevations before flying.
-     * If undefined, will use terrain height.
+     * If undefined, will use token height or (for coordinate testing) terrain height.
      * @type {number|undefined}
      */
     terrainStep: undefined,
@@ -137,7 +140,10 @@ Hooks.once("init", function() {
     WallTracer,
     SCENE_GRAPH,
     PixelCache,
-    TilePixelCache
+    TilePixelCache,
+    CoordinateElevationCalculator,
+    TokenPointElevationCalculator,
+    TokenAverageElevationCalculator
   };
 
   // These methods need to be registered early

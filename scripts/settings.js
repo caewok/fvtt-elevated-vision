@@ -5,6 +5,8 @@ game
 
 import { log } from "./util.js";
 import { MODULE_ID } from "./const.js";
+import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
+import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 
 export const SETTINGS = {
   SHADING: {
@@ -117,7 +119,8 @@ export function registerSettings() {
     config: true,
     default: false,
     type: Boolean,
-    requiresReload: false
+    requiresReload: false,
+    onChange: setTokenCalculator
   });
 
   game.settings.register(MODULE_ID, SETTINGS.CLOCKWISE_SWEEP, {
@@ -129,6 +132,11 @@ export function registerSettings() {
     requiresReload: true,
     type: Boolean
   });
+}
+
+function setTokenCalculator() {
+  canvas.elevation.TokenElevationCalculator = getSetting(SETTINGS.AUTO_AVERAGING)
+      ? TokenAverageElevationCalculator : TokenPointElevationCalculator;
 }
 
 /**
