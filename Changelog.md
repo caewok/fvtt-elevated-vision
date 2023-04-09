@@ -1,3 +1,10 @@
+# 0.4.4
+Refactor token elevation calculator class. Now split into three parts:
+1. CoordinateElevationCalculator: Elevation using a single point.
+2. TokenPointElevationCalculator: Simple wrapper on (1) to accept a token instead of a point. Measured by token center.
+3. TokenAverageElevationCalculator: Extends (2) to use averaging over token shape.
+This provides additional tools for Elevation Ruler.
+
 ## 0.4.3
 Update to geometry lib 0.1.5.
 
