@@ -26,4 +26,7 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
     super(location, opts);
     this.token = token;
   }
+
+  /** @type {Token} */
+  get token() { return token; }
 }
