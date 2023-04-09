@@ -870,7 +870,7 @@ export class TravelElevationCalculator {
    */
   _findTileHole(tile, startT=0) {
     const travelRay = this.travelRay;
-    const { alphaThreshold, averageTiles } = this.TEC;
+    const { alphaThreshold, averageTiles } = this.TEC.options;
     const stepT = this.#stepT;
 
     const cache = tile._evPixelCache;
@@ -882,7 +882,7 @@ export class TravelElevationCalculator {
     let cmp = value => value <= pixelThreshold;
     const opts = { stepT, startT };
     if ( averageTiles ) {
-      opts.frame = this.TEC.token.bounds; // TODO: Keep bounds or move to slower token shape?
+      opts.frame = this.TEC.bounds;
       opts.skip = averageTiles;
       const percentThreshold = this.tilePercentThreshold; // Default 50%
       opts.countFn = PixelCache.countFunction(pixelThreshold); // Number of pixels greater than threshold
@@ -907,7 +907,7 @@ export class TravelElevationCalculator {
    */
   _findTileStart(tile, startT=0) {
     const travelRay = this.travelRay;
-    const { alphaThreshold, averageTiles } = this.TEC;
+    const { alphaThreshold, averageTiles } = this.TEC.options;
     const stepT = this.#stepT;
 
     const cache = tile._evPixelCache;
@@ -939,7 +939,7 @@ export class TravelElevationCalculator {
 
     const opts = { stepT, startT };
     if ( averageTiles ) {
-      opts.frame = this.TEC.token.bounds; // TODO: Keep bounds or move to slower token shape?
+      opts.frame = this.TEC.bounds;
       opts.skip = averageTiles;
       const percentThreshold = this.tilePercentThreshold; // Default 50%
       opts.countFn = PixelCache.countFunction(pixelThreshold); // Number of pixels greater than threshold
