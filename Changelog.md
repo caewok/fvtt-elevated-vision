@@ -1,3 +1,6 @@
+# 0.4.5
+Change to how elevation getters are set on placeables to improve compatibility with Alt. Token Visibility.
+
 # 0.4.4
 Refactor token elevation calculator class. Now split into three parts:
 1. CoordinateElevationCalculator: Elevation using a single point.
