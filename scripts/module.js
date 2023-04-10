@@ -22,6 +22,9 @@ import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { PixelCache, TilePixelCache } from "./PixelCache.js";
+import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
+import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
+import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -45,27 +48,6 @@ import "./tiles.js";
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
-  game.modules.get(MODULE_ID).api = {
-    util,
-    extract,
-    ElevationLayer,
-    ShadowShader,
-    ShadowShaderNoRadius,
-    FILOQueue,
-    WallTracerEdge,
-    WallTracerVertex,
-    WallTracer,
-    SCENE_GRAPH,
-    PixelCache,
-    TilePixelCache
-  };
-
-  // These methods need to be registered early
-  registerGeometry();
-  registerElevationAdditions();
-  registerSettings();
-  registerLayer();
-  registerAdditions();
 
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
@@ -111,7 +93,7 @@ Hooks.once("init", function() {
     /**
      * TravelElevation.
      * Permitted step size to allow tokens to move between terrains of similar elevations before flying.
-     * If undefined, will use terrain height.
+     * If undefined, will use token height or (for coordinate testing) terrain height.
      * @type {number|undefined}
      */
     terrainStep: undefined,
@@ -134,8 +116,42 @@ Hooks.once("init", function() {
      * Larger numbers will make averaging faster but less precise.
      * @type {number}
      */
-    averageTiles: 2
+    averageTiles: 2,
+
+    /**
+     * Maximum number of walls passed to the GLSL shader.
+     * This has a performance consequence. Also, even if the number of walls is not
+     * reached in a scene, setting this value too high could result in errors if it
+     * exceeds the maximum permissible number of uniforms that can be sent to the GPU.
+     *
+     */
+    maxShaderWalls: 100
   };
+
+  game.modules.get(MODULE_ID).api = {
+    util,
+    extract,
+    ElevationLayer,
+    ShadowShader,
+    ShadowShaderNoRadius,
+    FILOQueue,
+    WallTracerEdge,
+    WallTracerVertex,
+    WallTracer,
+    SCENE_GRAPH,
+    PixelCache,
+    TilePixelCache,
+    CoordinateElevationCalculator,
+    TokenPointElevationCalculator,
+    TokenAverageElevationCalculator
+  };
+
+  // These methods need to be registered early
+  registerGeometry();
+  registerElevationAdditions();
+  registerSettings();
+  registerLayer();
+  registerAdditions();
 });
 
 Hooks.once("libWrapper.Ready", async function() {
@@ -171,7 +187,7 @@ Hooks.on("canvasReady", async function() {
   // Cache overhead tile pixel data.
   for ( const tile of canvas.tiles.placeables ) {
     if ( tile.document.overhead ) {
-      
+
       if ( game.user.isGM ) {
         // Match Levels settings. Prefer Levels settings.
         const levelsE = tile.document?.flag?.levels?.rangeBottom;
@@ -184,11 +200,18 @@ Hooks.on("canvasReady", async function() {
   }
 });
 
-Hooks.on("3DCanvasToggleMode", async function(isOn) {
+Hooks.on("3DCanvasSceneReady", function(previewArr) {
+  disableScene();
+});
+
+Hooks.on("3DCanvasToggleMode", function(isOn) {
   // TODO: Do we need to reset the values for the scene? Seems unnecessary, as a 3d canvas
   //       is not likely to be used in a non-3d state and require EV for it.
   if ( !isOn ) return;
+  disableScene();
+});
 
+async function disableScene() {
   const autoelevateDisabled = getSceneSetting(SETTINGS.AUTO_ELEVATION);
   const shadowsDisabled = getSceneSetting(SETTINGS.SHADING.ALGORITHM) !== SETTINGS.SHADING.TYPES.NONE;
 
@@ -196,15 +219,17 @@ Hooks.on("3DCanvasToggleMode", async function(isOn) {
     await setSceneSetting(SETTINGS.AUTO_ELEVATION, false);
     updateFlyTokenControl(false);
   }
-  if ( shadowsDisabled ) await setSceneSetting(SETTINGS.SHADING.ALGORITHM, SETTINGS.SHADING.TYPES.NONE);
-
-  registerShadowPatches();
-  await canvas.draw(canvas.scene);
+  if ( shadowsDisabled ) {
+    await setSceneSetting(SETTINGS.SHADING.ALGORITHM, SETTINGS.SHADING.TYPES.NONE);
+    registerShadowPatches();
+    // await canvas.draw(canvas.scene);
+  }
 
   if ( autoelevateDisabled || shadowsDisabled ) {
-    ui.notifications.notify("Elevated Vision autoelevate and features for the scenes for compatibility with 3D Canvas.");
+    ui.notifications.notify("Elevated Vision autoelevate and features for the scene disabled for compatibility with 3D Canvas.");
   }
-});
+}
+
 
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
 Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {

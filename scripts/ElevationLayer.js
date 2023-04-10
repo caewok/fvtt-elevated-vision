@@ -31,9 +31,11 @@ import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
-import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
+import { setSceneSetting, getSceneSetting, getSetting, SETTINGS } from "./settings.js";
+import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
+import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
+import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
-import { setSceneSetting, getSceneSetting, SETTINGS } from "./settings.js";
 
 /* Elevation layer
 
@@ -73,9 +75,8 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   // Imported methods
-  TokenElevationCalculator = TokenElevationCalculator;
   TravelElevationCalculator = TravelElevationCalculator;
-
+  CoordinateElevationCalculator = CoordinateElevationCalculator;
 
   /**
    * Delay in milliseconds before displaying elevation value when mouse hovers.
@@ -458,6 +459,9 @@ export class ElevationLayer extends InteractionLayer {
    */
   async initialize() {
     log("Initializing elevation layer");
+
+    this.TokenElevationCalculator = getSetting(SETTINGS.AUTO_AVERAGING)
+      ? TokenAverageElevationCalculator : TokenPointElevationCalculator;
 
     this._initialized = false;
     this._clearElevationPixelCache()

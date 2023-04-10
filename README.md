@@ -11,7 +11,7 @@ This Foundry VTT module provides an elevation canvas layer that lets the GM modi
 Token elevation, token vision, and lighting can be affected by terrain elevation, depending on settings.
 - Lights can create shadows based on wall height and terrain elevation.
 - Token vision can be shadowed based on wall height and terrain elevation.
-- If auto elevation is enabled, token elevation will be adjusted as tokens are dragged or moved in the scene. 
+- If auto elevation is enabled, token elevation will be adjusted as tokens are dragged or moved in the scene.
 - The GM can define elevation for overhead tiles and lighting.
 - Overhead tiles with defined elevation are treated as "floors" or "bridges" that affect a token elevation accordingly.
 
@@ -130,25 +130,25 @@ Long term, I would like to use a more sophisticated method to render the shadow 
 
 ## Setting elevation
 
-The minimum elevation for the scene is the lowest terrain elevation that can be set. Elevation increment is the "steps" between elevation values. 
+The minimum elevation for the scene is the lowest terrain elevation that can be set. Elevation increment is the "steps" between elevation values.
 
 Levels users—--you have two choices when using tiles as basements as of Elevated Vision v0.4.0. If the basement is below the minimum terrain elevation, the basement will work fine but terrain elevation will be effectively ignored if the token elevation is below the minimum. Alternatively, you can set the minimum elevation to the lowest basement elevation, which would allow you to use terrain elevations in the basement.
 
 Example: Basement tile at -10, rest of scene 0+ elevation.
 
 Option 1: Set minimum scene elevation to 0.
-- Terrain ignored if token is below elevation 0. 
+- Terrain ignored if token is below elevation 0.
 - Easy to use the rest of the scene because it is already at 0.
 
 Option 2: Set minimum scene elevation to -10.
 - Terrain in basement is possible. (Example: underground cavern with a hill going from -10 to -5, or even up to 20.)
-- To set the rest of the scene to 0, you probably want to start by using "Fill" to set everything to 0. Then wall off the basement and fill that portion to -10. 
+- To set the rest of the scene to 0, you probably want to start by using "Fill" to set everything to 0. Then wall off the basement and fill that portion to -10.
 
 (Currently, elevation data is stored at the pixel level, with values between 0 and 255. Those values are then scaled given a minimum elevation and elevation increment. Thus, not every elevation value can be represented in a single scene, but a fairly wide range is possible.)
 
 ## Auto-elevate tokens
 
-If enabled, tokens will use change elevation based on terrain when moving around the scene. Terrain elevation values will be used, as well as overhead tiles with finite elevation settings. A token is considered "on-the-ground" if its elevation is equal to the terrain or equal to a tile at that point. A token is "flying" if not "on-the-ground."   
+If enabled, tokens will use change elevation based on terrain when moving around the scene. Terrain elevation values will be used, as well as overhead tiles with finite elevation settings. A token is considered "on-the-ground" if its elevation is equal to the terrain or equal to a tile at that point. A token is "flying" if not "on-the-ground."
 
 If a token's elevation is equal to that of an adjacent tile, it can move onto that tile. While on a tile, the token's elevation will be equal to that of the tile.
 
@@ -173,18 +173,18 @@ The following game settings affect how elevation is calculated:
 - If token is not on-the-ground ("flying"), elevation will not change.
 
 ### Fly button present
-- If fly button is not enabled, token will be moved to be on-the-ground at the start of its move. 
-- If fly button is enabled: 
+- If fly button is not enabled, token will be moved to be on-the-ground at the start of its move.
+- If fly button is enabled:
   - Token will not be moved to the ground.
-  - If the token encounters a drop more than its token height, it will "fly" (and keep its current elevation). 
+  - If the token encounters a drop more than its token height, it will "fly" (and keep its current elevation).
   - Thus, flying tokens can still increase or decrease elevation when moving along terrain but "fly" when encountering terrain or tile cliffs.
 
-## Display elevation shadows 
+## Display elevation shadows
 
-This setting controls whether shadows will be created in the scene to give a visual aid as to elevation. 
+This setting controls whether shadows will be created in the scene to give a visual aid as to elevation.
 - "None" disables all shadows for the scene. This is the most performant option.
 - If the "Polygon" setting is enabled for a scene, token vision is shadowed based on wall height.
-- If the "WebGL" setting is enabled for a scene: 
+- If the "WebGL" setting is enabled for a scene:
   - Lights create shadows based on wall height and terrain elevation.
   - Token vision is shadowed based on wall height and terrain elevation.
 - Depending on your scene and computer hardware, Polygons may be more performant than WebGL or vice-versa.
@@ -192,7 +192,7 @@ This setting controls whether shadows will be created in the scene to give a vis
 # Game Settings
 ![Game settings](https://user-images.githubusercontent.com/1267134/221377922-592901d0-91b3-4595-a9fc-179e45e12fc5.jpg)
 
-As of v0.4.0, several settings were moved to be scene-specific. Setting the elevation shadows option, elevation minimum, elevation increment, and automatic token elevation in game settings controls the default for any newly created scenes. 
+As of v0.4.0, several settings were moved to be scene-specific. Setting the elevation shadows option, elevation minimum, elevation increment, and automatic token elevation in game settings controls the default for any newly created scenes.
 
 "Add Fly Token Control" places a "fly" button in Token Controls that affects how auto-elevation works. See discussion above.
 
@@ -202,7 +202,7 @@ As of v0.4.0, several settings were moved to be scene-specific. Setting the elev
 
 # CONFIG
 
-As of v0.4.0, some advanced configuration options are available in `CONFIG.elevatedvision.` If you want to change these, you should probably use a world script to accomplish that change. Alternatively, you could change the `module.js` file where these configurations are located, but that would not persist through an update. 
+As of v0.4.0, some advanced configuration options are available in `CONFIG.elevatedvision.` If you want to change these, you should probably use a world script to accomplish that change. Alternatively, you could change the `module.js` file where these configurations are located, but that would not persist through an update.
 
 ```js
  /**
@@ -359,6 +359,54 @@ fillLOS(origin, elevation = 0, { type = "light"} = {})
 fill(origin, elevation)
 
 ```
+
+Also, `canvas.elevation` provides some more sophisticated classes for determining elevation at a point or at a token as well as a calculator for determining token elevation along a ray. (The latter is used in automating elevation.)
+
+```js
+/**
+ * Class to determine elevation at a given point, with methods to test separately for tile
+ * elevation.
+ * @example
+ * pt = {x: 100, y: 200}
+ * canvas.elevation.CoordinateElevationCalculator.terrainElevationAt(pt);
+ *
+ * // Or instantiate for more methods
+ * calc = new canvas.elevation.CoordinateElevationCalculator(pt, { elevation: 20 });
+ * calc.groundElevation(); // Elevation taking into account tiles given the current elevation.
+ */
+canvas.elevation.CoordinateElevationCalculator
+
+/**
+ * Class to determine elevation for a given token.
+ * This is actually a placeholder for two classes, chosen depending on whether
+ * the token averaging setting is enabled.
+ * (`game.modules.get("elevatedvision").api` has both underlying classes available.)
+ * This inherits from the CoordinateElevationCalculator; the major difference is that
+ * token shape and token parameters will be taken into account.
+ * @example
+ * canvas.elevation.TokenElevationCalculator.terrainElevationAt(_token);
+ *
+ * // Or instantiate for more methods
+ * calc = new canvas.elevation.CoordinateElevationCalculator(_token);
+ * calc.groundElevation(); // Elevation taking into account tiles given the current elevation.
+canvas.elevation.TokenElevationCalculator
+
+/**
+ * Class to measure elevation over a ray.
+ * Determines whether terrain elevation changes.
+ * Identifies points along the ray for which a tile causes an elevation change.
+ * Accounts for flying.
+ * @example
+ * A = {x: 500, y: 100}
+ * B = {x: 1000, y: 1000}
+ * travelRay = new Ray(A, B)
+ * tec = new canvas.elevation.TravelElevationCalculator(_token, travelRay)
+ * tec.calculateTerrainElevationsAlongRay(); // Terrain elevation changes only
+ * tec.calculateElevationAlongRay(_token.document.elevation); // With tile elevations
+ */
+canvas.elevation.TravelElevationCalculator
+```
+
 
 # Wishlist for future improvements
 
