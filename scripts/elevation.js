@@ -37,29 +37,28 @@ lights can display with varying canvas elevation.
 
 export function registerElevationAdditions() {
   // ----- TOKENS ----- //
-  if ( !Object.hasOwn(Token.prototype, "topE") ) {
-    Object.defineProperty(Token.prototype, "topE", {
-      get: tokenTopElevation
-    });
-  }
+  Object.defineProperty(Token.prototype, "topE", {
+    get: tokenTopElevation,
+    configurable: true
+  });
 
-  if ( !Object.hasOwn(Token.prototype, "bottomE") ) {
-    Object.defineProperty(Token.prototype, "bottomE", {
-      get: tokenBottomElevation
-    });
-  }
 
-  if ( !Object.hasOwn(Token.prototype, "topZ") ) {
-    Object.defineProperty(Token.prototype, "topZ", {
-      get: zTop
-    });
-  }
+  Object.defineProperty(Token.prototype, "bottomE", {
+    get: tokenBottomElevation,
+    configurable: true
+  });
 
-  if ( !Object.hasOwn(Token.prototype, "bottomZ") ) {
-    Object.defineProperty(Token.prototype, "bottomZ", {
-      get: zBottom
-    });
-  }
+
+  Object.defineProperty(Token.prototype, "topZ", {
+    get: zTop,
+    configurable: true
+  });
+
+
+  Object.defineProperty(Token.prototype, "bottomZ", {
+    get: zBottom,
+    configurable: true
+  });
 
   // Also need to convert a center point back to the top left point of a token.
   // Used for automatic elevation determination.
@@ -76,94 +75,87 @@ export function registerElevationAdditions() {
 
 
   // ----- WALLS ----- //
-  if ( !Object.hasOwn(Wall.prototype, "topE") ) {
-    Object.defineProperty(Wall.prototype, "topE", {
-      get: wallTopElevation
-    });
-  }
+  Object.defineProperty(Wall.prototype, "topE", {
+    get: wallTopElevation,
+    configurable: true
+  });
 
-  if ( !Object.hasOwn(Wall.prototype, "bottomE") ) {
-    Object.defineProperty(Wall.prototype, "bottomE", {
-      get: wallBottomElevation
-    });
-  }
 
-  if ( !Object.hasOwn(Wall.prototype, "topZ") ) {
-    Object.defineProperty(Wall.prototype, "topZ", {
-      get: zTop
-    });
-  }
+  Object.defineProperty(Wall.prototype, "bottomE", {
+    get: wallBottomElevation,
+    configurable: true
+  });
 
-  if ( !Object.hasOwn(Wall.prototype, "bottomZ") ) {
-    Object.defineProperty(Wall.prototype, "bottomZ", {
-      get: zBottom
-    });
-  }
+
+  Object.defineProperty(Wall.prototype, "topZ", {
+    get: zTop,
+    configurable: true
+  });
+
+
+  Object.defineProperty(Wall.prototype, "bottomZ", {
+    get: zBottom,
+    configurable: true
+  });
 
   // ----- MovementSource ----- //
-  if ( !Object.hasOwn(MovementSource.prototype, "elevationE") ) {
-    Object.defineProperty(MovementSource.prototype, "elevationE", {
-      get: movementSourceElevation
-    });
-  }
+  Object.defineProperty(MovementSource.prototype, "elevationE", {
+    get: movementSourceElevation,
+    configurable: true
+  });
 
-  if ( !Object.hasOwn(MovementSource.prototype, "elevationZ") ) {
-    Object.defineProperty(MovementSource.prototype, "elevationZ", {
-      get: zElevation
-    });
-  }
+
+  Object.defineProperty(MovementSource.prototype, "elevationZ", {
+    get: zElevation,
+    configurable: true
+  });
 
   // ----- VisionSource ----- //
-  if ( !Object.hasOwn(VisionSource.prototype, "elevationE") ) {
-    Object.defineProperty(VisionSource.prototype, "elevationE", {
-      get: visionSourceElevation
-    });
-  }
+  Object.defineProperty(VisionSource.prototype, "elevationE", {
+    get: visionSourceElevation,
+    configurable: true
+  });
 
-  if ( !Object.hasOwn(VisionSource.prototype, "elevationZ") ) {
-    Object.defineProperty(VisionSource.prototype, "elevationZ", {
-      get: zElevation
-    });
-  }
+
+  Object.defineProperty(VisionSource.prototype, "elevationZ", {
+    get: zElevation,
+    configurable: true
+  });
 
   // ----- LightSource ----- //
-  if ( !Object.hasOwn(LightSource.prototype, "elevationE") ) {
-    Object.defineProperty(LightSource.prototype, "elevationE", {
-      get: lightSourceElevation
-    });
-  }
+  Object.defineProperty(LightSource.prototype, "elevationE", {
+    get: lightSourceElevation
+  });
 
-  if ( !Object.hasOwn(LightSource.prototype, "elevationZ") ) {
-    Object.defineProperty(LightSource.prototype, "elevationZ", {
-      get: zElevation
-    });
-  }
+
+  Object.defineProperty(LightSource.prototype, "elevationZ", {
+    get: zElevation,
+    configurable: true
+  });
 
   // ----- SoundSource ----- //
-  if ( !Object.hasOwn(SoundSource.prototype, "elevationE") ) {
-    Object.defineProperty(SoundSource.prototype, "elevationE", {
-      get: soundSourceElevation
-    });
-  }
+  Object.defineProperty(SoundSource.prototype, "elevationE", {
+    get: soundSourceElevation,
+    configurable: true
+  });
 
-  if ( !Object.hasOwn(SoundSource.prototype, "elevationZ") ) {
-    Object.defineProperty(SoundSource.prototype, "elevationZ", {
-      get: zElevation
-    });
-  }
+
+  Object.defineProperty(SoundSource.prototype, "elevationZ", {
+    get: zElevation,
+    configurable: true
+  });
 
   // ----- Tile ---- //
-  if ( !Object.hasOwn(Tile.prototype, "elevationE") ) {
-    Object.defineProperty(Tile.prototype, "elevationE", {
-      get: tileElevation
-    });
-  }
+  Object.defineProperty(Tile.prototype, "elevationE", {
+    get: tileElevation,
+    configurable: true
+  });
 
-  if ( !Object.hasOwn(Tile.prototype, "elevationZ") ) {
-    Object.defineProperty(Tile.prototype, "elevationZ", {
-      get: zElevation
-    });
-  }
+
+  Object.defineProperty(Tile.prototype, "elevationZ", {
+    get: zElevation,
+    configurable: true
+  });
 }
 
 /**
