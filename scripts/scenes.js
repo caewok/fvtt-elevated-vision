@@ -46,23 +46,20 @@ function getSceneControlButtonsHook(controls) {
 async function renderSceneConfigHook(app, html, data) {
   log("SceneConfig", app, html, data);
 
+  // Algorithm names for the pull down.
   const renderData = {};
   renderData[MODULE_ID] = { algorithms: SETTINGS.SHADING.LABELS };
 
-  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.ELEVATION_MINIMUM) === "undefined" ) {
-    renderData[`data.flags.${MODULE_ID}.${SETTINGS.ELEVATION_MINIMUM}`] = getSetting(SETTINGS.ELEVATION_MINIMUM) ?? 0;
-  }
+  const scene = app.object;
+  const sceneSettings = [
+    SETTINGS.ELEVATION_MINIMUM,
+    SETTINGS.ELEVATION_INCREMENT,
+    SETTINGS.AUTO_ELEVATION,
+    SETTINGS.SHADING.ALGORITHM
+  ];
 
-  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.ELEVATION_INCREMENT) === "undefined" ) {
-    renderData[`data.flags.${MODULE_ID}.${SETTINGS.ELEVATION_INCREMENT}`] = getSetting(SETTINGS.ELEVATION_INCREMENT) ?? canvas.dimensions.distance;
-  }
-
-  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.AUTO_ELEVATION) === "undefined" ) {
-    renderData[`data.flags.${MODULE_ID}.${SETTINGS.AUTO_ELEVATION}`] = getSetting(SETTINGS.AUTO_ELEVATION) ?? true;
-  }
-
-  if ( typeof data.document.getFlag(MODULE_ID, SETTINGS.SHADING.ALGORITHM) === "undefined" ) {
-    renderData[`data.flags.${MODULE_ID}.${SETTINGS.SHADING.ALGORITHM}`] = getSetting(SETTINGS.SHADING.ALGORITHM) ?? SETTINGS.SHADING.TYPES.WEBGL;
+  for ( const setting of sceneSettings ) {
+    renderData[`data.flags.${MODULE_ID}.${setting}`] = getSceneSetting(setting, scene);
   }
 
   foundry.utils.mergeObject(data, renderData, {inplace: true});
