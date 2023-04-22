@@ -164,17 +164,6 @@ Hooks.once("setup", async function() {
 
 Hooks.on("canvasInit", async function(_canvas) {
   log("canvasInit");
-
-  if ( typeof getSceneSetting(SETTINGS.AUTO_ELEVATION) === "undefined" ) {
-    const autoelevate = getSetting(SETTINGS.AUTO_ELEVATION) ?? true;
-    await setSceneSetting(SETTINGS.AUTO_ELEVATION, autoelevate);
-  }
-
-  if ( typeof getSceneSetting(SETTINGS.SHADING.ALGORITHM) === "undefined" ) {
-    const algorithm = getSetting(SETTINGS.SHADING.ALGORITHM) ?? SETTINGS.SHADING.TYPES.WEBGL;
-    await setSceneSetting(SETTINGS.SHADING.ALGORITHM, algorithm);
-  }
-
   registerShadowPatches();
   updateFlyTokenControl();
 });
