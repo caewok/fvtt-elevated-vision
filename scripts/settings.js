@@ -30,7 +30,6 @@ export const SETTINGS = {
   FLY_BUTTON: "add-fly-button",
   ELEVATION_MINIMUM: "elevationmin",
   ELEVATION_INCREMENT: "elevationstep",
-
   CHANGELOG: "changelog"
 };
 
@@ -44,6 +43,7 @@ export async function setSetting(settingName, value) {
 
 export function getSceneSetting(settingName, scene) {
   scene ??= canvas.scene;
+  if ( canvas.performance.mode === CONST.CANVAS_PERFORMANCE_MODES.LOW ) return SETTINGS.SHADING.NONE;
   return scene.flags[MODULE_ID]?.[settingName] ?? defaultSceneSetting(settingName);
 }
 
