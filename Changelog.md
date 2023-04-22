@@ -1,7 +1,7 @@
 # 0.4.6
 Possible fix for issue #54 (moving to new scenes that do not have EV properties set).
 
-Set shadows algorithm to "None" for the scene if performance mode is set to low.
+Is Potato? Set shadows algorithm to "None" for the scene if performance mode is set to low.
 
 
 
