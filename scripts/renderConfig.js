@@ -39,15 +39,19 @@ async function renderAmbientSoundConfigHook(app, html, data) {
 async function renderTileConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-tile-config.html`;
   const findString = "div[data-tab='basic']:last";
+  await injectConfiguration(app, html, data, template, findString);
+}
 
 /**
  * Inject html to add controls to the wall configuration to allow user to set elevation.
  */
 async function renderWallConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-wall-config.html`;
-  const findString = 'form';
-//   const findString = "button[type='submit']:first";
-  await injectConfiguration(app, html, data, template, findString);
+  const findString = ".form-group:last";
+  const myHTML = await renderTemplate(template, data);
+  const form = html.find(findString).closest(".form-group");
+  form.after(myHTML); // append fails here for mysterious reasons.
+  app.setPosition({ height: "auto" });
 }
 
 /**
@@ -57,7 +61,7 @@ async function injectConfiguration(app, html, data, template, findString) {
   const myHTML = await renderTemplate(template, data);
   const form = html.find(findString);
   form.append(myHTML);
-  app.setPosition(app.position);
+  app.setPosition({ height: "auto" });
 }
 
 /**
