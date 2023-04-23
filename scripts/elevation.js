@@ -203,8 +203,7 @@ function tokenTopElevation() {
  *   If Wall Height is inactive, returns negative infinity.
  */
 function wallBottomElevation() {
-  const e = MODULES_ACTIVE.WALL_HEIGHT ? this.document.flags?.["wall-height"]?.bottom : undefined;
-  return e ?? Number.NEGATIVE_INFINITY;
+  return this.document.flags?.elevatedvision?.elevation?.bottom ?? Number.NEGATIVE_INFINITY;
 }
 
 /**
@@ -213,8 +212,7 @@ function wallBottomElevation() {
  * If Wall Height is inactive, returns positive infinity.
  */
 function wallTopElevation() {
-  const e = MODULES_ACTIVE.WALL_HEIGHT ? this.document.flags?.["wall-height"]?.top : undefined;
-  return e ?? Number.POSITIVE_INFINITY;
+  return this.document.flags?.elevatedvision?.elevation?.top ?? Number.POSITIVE_INFINITY;
 }
 
 /**
@@ -223,7 +221,7 @@ function wallTopElevation() {
  * @returns {number} Grid units
  */
 function movementSourceElevation() {
-  return this.object.bottomE;
+  return this.object.elevation;
 }
 
 /**
