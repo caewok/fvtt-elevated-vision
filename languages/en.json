@@ -1,5 +1,7 @@
 {
-  "elevatedvision.name": "Elevation",
+  "elevatedvision.name": "Elevated Vision",
+
+  "elevatedvision.phrases.elevation": "Elevation",
 
   "elevatedvision.settings.shading-algorithm.name": "Default for elevation shadows",
   "elevatedvision.settings.shading-algorithm.hint": "Set the default shadow method for new scenes. Can adjust per-scene using the scene configuration. Polygons: Represent shadows caused by limited-height walls using polygons for token vision. WebGL: Use WebGL for light shadows and token vision caused by limited height walls. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively.",
@@ -54,11 +56,7 @@
   "elevatedvision.sceneconfig.shading-algorithm.name": "Display Elevation Shadows",
   "elevatedvision.sceneconfig.shading-algorithm.hint": "Polygons: Represent shadows caused by limited-height walls using polygons for token vision. WebGL: Use WebGL for light shadows and token vision caused by limited height walls. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively. Will force scene reload if changed.",
 
-  "elevatedvision.ambientconfig.legendtitle": "Elevated Vision",
-  "elevatedvision.ambientconfig.elevation.name": "Elevation",
-  "elevatedvision.ambientconfig.elevation.hint": "Elevation of this source.",
+  "elevatedvision.wallconfig.elevationTop": "Top Elevation",
+  "elevatedvision.wallconfig.elevationBottom": "Bottom Elevation"
 
-  "elevatedvision.tileconfig.legendtitle": "Elevated Vision",
-  "elevatedvision.tileconfig.elevation.name": "Elevation",
-  "elevatedvision.tileconfig.elevation.hint": "Elevation of this tile. If Levels module is active, this will be linked to the bottom tile elevation for Levels. If elevation is finite, it will override terrain elevation at that point if the token is on or above the tile."
 }

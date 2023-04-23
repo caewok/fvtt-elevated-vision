@@ -1,0 +1,21 @@
+</div>
+<fieldset>
+  <legend>{{ localize "elevatedvision.name" }}</legend>
+
+    <div class="form-group" id="elevatedvision-config-elevationTop">
+      <label>{{ localize "elevatedvision.wallconfig.elevationTop" }} <span class="units">({{gridUnits}})</span></label>
+      <div class="form-fields">
+        <input type="number" placeholder="Infinity" id="elevatedvisionelevationconfig" name="flags.elevatedvision.elevation.top" class="elevatedvision" value="{{ data.flags.elevatedvision.elevation.top }}" />
+      </div>
+    </div>
+
+    <div class="form-group" id="elevatedvision-config-elevationBottom">
+      <label>{{ localize "elevatedvision.wallconfig.elevationBottom" }} <span class="units">({{gridUnits}})</span></label>
+      <div class="form-fields">
+        <input type="number" placeholder="-Infinity" id="elevatedvisionelevationconfig" name="flags.elevatedvision.elevation.bottom" class="elevatedvision" value="{{ data.flags.elevatedvision.elevation.bottom }}" />
+      </div>
+    </div>
+
+  </legend>
+</fieldset>
+<div>

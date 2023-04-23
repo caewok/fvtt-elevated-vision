@@ -16,6 +16,7 @@ import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
 import {
   defaultOptionsAmbientSoundConfig,
   getDataTileConfig,
+  getDataWallConfig,
   _onChangeInputTileConfig
 } from "./renderConfig.js";
 
@@ -171,6 +172,7 @@ export function registerPatches() {
   // ----- Application rendering configurations ----- //
   regPatch("AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig);
   regPatch("TileConfig.prototype.getData", getDataTileConfig);
+  regPatch("WallConfig.prototype.getData", getDataWallConfig);
   regPatch("TileConfig.prototype._onChangeInput", _onChangeInputTileConfig);
 
   // ----- Clockwise sweep enhancements ----- //

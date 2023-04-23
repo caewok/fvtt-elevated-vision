@@ -13,6 +13,7 @@ import { MODULE_ID } from "./const.js";
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
 Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
 Hooks.on("renderTileConfig", renderTileConfigHook);
+Hooks.on("renderWallConfig", renderWallConfigHook);
 
 /**
  * Inject html to add controls to the ambient light configuration to allow user to set elevation.
@@ -42,13 +43,25 @@ async function renderTileConfigHook(app, html, data) {
 }
 
 /**
+ * Inject html to add controls to the wall configuration to allow user to set elevation.
+ */
+async function renderWallConfigHook(app, html, data) {
+  const template = `modules/${MODULE_ID}/templates/elevatedvision-wall-config.html`;
+  const findString = ".form-group:last";
+  const myHTML = await renderTemplate(template, data);
+  const form = html.find(findString).closest(".form-group");
+  form.after(myHTML); // append fails here for mysterious reasons.
+  app.setPosition({ height: "auto" });
+}
+
+/**
  * Helper to inject configuration html into the application config.
  */
 async function injectConfiguration(app, html, data, template, findString) {
   const myHTML = await renderTemplate(template, data);
   const form = html.find(findString);
   form.append(myHTML);
-  app.setPosition(app.position);
+  app.setPosition({ height: "auto" });
 }
 
 /**
@@ -70,6 +83,16 @@ export function defaultOptionsAmbientSoundConfig(wrapper) {
  * Add gridUnits value so units appear with the elevation setting.
  */
 export function getDataTileConfig(wrapper, options={}) {
+  const data = wrapper(options);
+  data.gridUnits = canvas.scene.grid.units || game.i18n.localize("GridUnits");
+  return data;
+}
+
+/**
+ * Wrapper for WallConfig.prototype.getData.
+ * Add gridUnits value so units appear with the elevation setting.
+ */
+export function getDataWallConfig(wrapper, options={}) {
   const data = wrapper(options);
   data.gridUnits = canvas.scene.grid.units || game.i18n.localize("GridUnits");
   return data;
