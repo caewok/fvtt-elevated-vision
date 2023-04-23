@@ -17,6 +17,7 @@ import {
   defaultOptionsAmbientSoundConfig,
   getDataTileConfig,
   getDataWallConfig,
+  getDataTokenConfig,
   _onChangeInputTileConfig
 } from "./renderConfig.js";
 
@@ -173,6 +174,7 @@ export function registerPatches() {
   regPatch("AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig);
   regPatch("TileConfig.prototype.getData", getDataTileConfig);
   regPatch("WallConfig.prototype.getData", getDataWallConfig);
+  regPatch("TokenConfig.prototype.getData", getDataTokenConfig);
   regPatch("TileConfig.prototype._onChangeInput", _onChangeInputTileConfig);
 
   // ----- Clockwise sweep enhancements ----- //

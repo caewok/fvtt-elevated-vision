@@ -125,7 +125,13 @@ Hooks.once("init", function() {
      * exceeds the maximum permissible number of uniforms that can be sent to the GPU.
      *
      */
-    maxShaderWalls: 100
+    maxShaderWalls: 100,
+
+    /**
+     * Name of the prone status in this system.
+     * @type {string}
+     */
+    proneStatus: "prone"
   };
 
   game.modules.get(MODULE_ID).api = {

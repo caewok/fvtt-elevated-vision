@@ -11,7 +11,7 @@ CONFIG
 */
 "use strict";
 
-import { MODULES_ACTIVE } from "./const.js";
+import { MODULES_ACTIVE, MODULE_ID } from "./const.js";
 
 /* Elevation properties for Placeable Objects
 Generally:
@@ -37,12 +37,14 @@ lights can display with varying canvas elevation.
 
 export function registerElevationAdditions() {
   // ----- TOKENS ----- //
+
+  // topE and topZ vary depending on whether token is prone
   Object.defineProperty(Token.prototype, "topE", {
     get: tokenTopElevation,
     configurable: true
   });
 
-
+  // Synonym for token.elevation
   Object.defineProperty(Token.prototype, "bottomE", {
     get: tokenBottomElevation,
     configurable: true
@@ -59,6 +61,19 @@ export function registerElevationAdditions() {
     get: zBottom,
     configurable: true
   });
+
+  // Token height is physical characteristic of token; does not vary.
+  // Auto-calculated or set by user
+  Object.defineProperty(Token.prototype, "heightE", {
+    get: tokenHeight,
+    configurable: true
+  });
+
+  Object.defineProperty(Token.prototype, "heightZ", {
+    get: zHeight,
+    configurable: true
+  });
+
 
   // Also need to convert a center point back to the top left point of a token.
   // Used for automatic elevation determination.
@@ -173,6 +188,13 @@ function zBottom() {
 }
 
 /**
+ * Helper to convert to Z value for height.
+ */
+function zHeight() {
+  return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.heightE);
+}
+
+/**
  * Helper to convert to Z value for an elevationE.
  */
 function zElevation() {
@@ -189,12 +211,34 @@ function tokenBottomElevation() {
 
 /**
  * Top elevation of a token.
+ * If prone, divide by half.
  * @returns {number} In grid units.
- * If Wall Height is active, use the losHeight. Otherwise, use bottomE.
  */
 function tokenTopElevation() {
-  if ( MODULES_ACTIVE.WALL_HEIGHT ) return this.losHeight ?? this.bottomE;
-  return this.bottomE;
+  const proneStatusId = CONFIG[MODULE_ID].proneStatus
+  const isProne = (proneStatusId && this.actor)
+    ? this.actor.effects.some(e => e.getFlag("core", "statusId") === proneStatusId) : false;
+
+  const height = this.heightE;
+  return this.bottomE; + (isProne ? (height * 0.5) : height);
+}
+
+/**
+ * Height of a token.
+ * If not defined by user or set to 0, auto-calculated using token width and height.
+ * See https://github.com/theripper93/wall-height/blob/a3243706f899eacb339f2426d791f0f432b13b9f/scripts/utils.js#L3
+ * @returns {number} In grid units.
+ */
+function tokenHeight() {
+  const { flags, width, height, texture } = this.document;
+  return flags?.elevatedvision?.height || autoTokenHeight(this);
+}
+
+export function autoTokenHeight(token) {
+  const { width, height, texture } = token.document;
+  return canvas.scene.dimensions.distance
+    * Math.max(width, height)
+    * ((Math.abs(texture.scaleX) + Math.abs(texture.scaleY)) / 2);
 }
 
 /**

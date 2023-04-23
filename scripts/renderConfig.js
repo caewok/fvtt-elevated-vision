@@ -9,11 +9,13 @@ FormDataExtended
 "use strict";
 
 import { MODULE_ID } from "./const.js";
+import { autoTokenHeight } from "./elevation.js";
 
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
 Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
 Hooks.on("renderTileConfig", renderTileConfigHook);
 Hooks.on("renderWallConfig", renderWallConfigHook);
+Hooks.on("renderTokenConfig", renderTokenConfigHook);
 
 /**
  * Inject html to add controls to the ambient light configuration to allow user to set elevation.
@@ -52,6 +54,15 @@ async function renderWallConfigHook(app, html, data) {
   const form = html.find(findString).closest(".form-group");
   form.after(myHTML); // append fails here for mysterious reasons.
   app.setPosition({ height: "auto" });
+}
+
+/**
+ * Inject html to add controls to the token configuration to allow user to set height.
+ */
+async function renderTokenConfigHook(app, html, data) {
+  const template = `modules/${MODULE_ID}/templates/elevatedvision-token-config.html`;
+  const findString = "div[data-tab='character']:last";
+  await injectConfiguration(app, html, data, template, findString);
 }
 
 /**
@@ -95,6 +106,17 @@ export function getDataTileConfig(wrapper, options={}) {
 export function getDataWallConfig(wrapper, options={}) {
   const data = wrapper(options);
   data.gridUnits = canvas.scene.grid.units || game.i18n.localize("GridUnits");
+  return data;
+}
+
+/**
+ * Wrapper for TokenConfig.prototype.getData.
+ * Add the auto-calculated token height.
+ */
+export async function getDataTokenConfig(wrapper, options={}) {
+  const data = await wrapper(options);
+  data.evTokenHeightPlaceholder = autoTokenHeight(this.object.object);
+  data.evGridUnits = canvas.scene.grid.units || game.i18n.localize("GridUnits");
   return data;
 }
 
