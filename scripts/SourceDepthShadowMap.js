@@ -343,11 +343,11 @@ export class SourceDepthShadowMap {
     const maxElevation = this.lightPosition.z;
     const minElevation = this.minElevation;
 
-
     for ( let w = 0, j = 0, idx = 0, i = 0; w < nWalls; w += 1, j += 12, idx += 6, i += 4 ) {
       const wall = walls[w];
       const topZ = Math.min(maxElevation, wall.topZ);
       const bottomZ = Math.max(minElevation, wall.bottomZ);
+      if ( topZ <= bottomZ ) continue; // Wall is above or below the viewing box.
 
       // Even vertex (0) is bottom A
       coordinates[j] = wall.A.x;
