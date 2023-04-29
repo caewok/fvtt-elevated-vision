@@ -305,4 +305,3 @@ export function _createMaskLightSourcePV(wrapped) {
   if ( this.constructor.name === "LightingRegionSource" ) return wrapped();
   return this._createEVMask();
 }
-

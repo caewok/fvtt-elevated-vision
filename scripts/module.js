@@ -26,6 +26,11 @@ import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.j
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 
+import { WebGLVector3 } from "./LearnWebGL/WebGLVector3.js";
+import { WebGLVector4 } from "./LearnWebGL/WebGLVector4.js";
+import { WebGLMatrix } from "./LearnWebGL/WebGLMatrix.js";
+import { SourceDepthShadowMap } from "./SourceDepthShadowMap.js";
+
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
@@ -143,7 +148,13 @@ Hooks.once("init", function() {
     TilePixelCache,
     CoordinateElevationCalculator,
     TokenPointElevationCalculator,
-    TokenAverageElevationCalculator
+    TokenAverageElevationCalculator,
+    SourceDepthShadowMap,
+    WebGL: {
+      WebGLVector3,
+      WebGLVector4,
+      WebGLMatrix
+    }
   };
 
   // These methods need to be registered early
