@@ -62,8 +62,6 @@ for ( const v of testPoints ) {
     --> (${vProj.x.toPrecision(3)},${vProj.y.toPrecision(3)},${vProj.z.toPrecision(3)})`);
 }
 
-
-
 */
 
 /**
@@ -210,7 +208,7 @@ function toColMajorArray(mat) {
 // https://thebookofshaders.com/glossary/?search=smoothstep
 function smoothStep(edge0, edge1, x) {
   const t = Math.clamped((x - edge0) / (edge1 - edge0), 0.0, 1.0);
-  return t * t * (3.0 - 2.0 * t);
+  return (t * t) * (3.0 - (2.0 * t));
 }
 
 export class SourceDepthShadowMap {
@@ -322,6 +320,13 @@ export class SourceDepthShadowMap {
     return this.#depthTexture || (this.#depthTexture = this._renderDepth());
   }
 
+  /** @type {number} */
+  get minElevation() {
+    const elevationMin = canvas.elevation.elevationMin;
+    return (this.lightPosition.z > elevationMin)
+      ? elevationMin : this.lightPosition.z - canvas.dimensions.size;
+  }
+
   /**
    * Build the wall coordinates and indices from an array of walls.
    * @param {Wall[]} walls
@@ -332,10 +337,17 @@ export class SourceDepthShadowMap {
     const nWalls = walls.length;
     const coordinates = new Float32Array(nWalls * 12); // Coords: x,y,z for top and bottom A, top and bottom B
     const indices = new Uint16Array(nWalls * 6); // 2 triangles to form a square
+
+    // Need to cut off walls at the top/bottom bounds of the scene, otherwise they
+    // will be given incorrect depth values b/c there is no floor or ceiling.
+    const maxElevation = this.lightPosition.z;
+    const minElevation = this.minElevation;
+
+
     for ( let w = 0, j = 0, idx = 0, i = 0; w < nWalls; w += 1, j += 12, idx += 6, i += 4 ) {
       const wall = walls[w];
-      const topZ = isFinite(wall.topZ) ? wall.topZ : 1e05;
-      const bottomZ = isFinite(wall.bottomZ) ? wall.bottomZ : -1e05;
+      const topZ = Math.min(maxElevation, wall.topZ);
+      const bottomZ = Math.max(minElevation, wall.bottomZ);
 
       // Even vertex (0) is bottom A
       coordinates[j] = wall.A.x;
@@ -571,12 +583,13 @@ export class SourceDepthShadowMap {
 
     const geometryShadowRender = new PIXI.Geometry();
     const sceneRect = canvas.dimensions.sceneRect;
+    const minElevation = this.minElevation;
     geometryShadowRender.addAttribute("aVertexPosition", [
-      sceneRect.left, sceneRect.top,     // TL
-      sceneRect.right, sceneRect.top,    // TR
-      sceneRect.right, sceneRect.bottom, // BR
-      sceneRect.left, sceneRect.bottom   // BL
-    ], 2);
+      sceneRect.left, sceneRect.top, minElevation,      // TL
+      sceneRect.right, sceneRect.top, minElevation,   // TR
+      sceneRect.right, sceneRect.bottom, minElevation, // BR
+      sceneRect.left, sceneRect.bottom, minElevation  // BL
+    ], 3);
 
     // Texture coordinates:
     // BL: 0,0; BR: 1,0; TL: 0,1; TR: 1,1
@@ -598,7 +611,7 @@ export class SourceDepthShadowMap {
       #version 300 es
       precision mediump float;
 
-      in vec2 aVertexPosition;
+      in vec3 aVertexPosition;
       in vec2 texCoord;
       out vec2 vTexCoord;
       out vec4 fragPosLightSpace;
@@ -610,12 +623,10 @@ export class SourceDepthShadowMap {
 
       void main() {
         vTexCoord = texCoord;
-
-        // For now, canvas vertices are at elevation 0.
-        fragPosLightSpace = projectionM * viewM * vec4(aVertexPosition, 0.0, 1.0);
+        fragPosLightSpace = projectionM * viewM * vec4(aVertexPosition, 1.0);
 
         // gl_Position for 2-d canvas vertex calculated as normal
-        gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
+        gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
 
       }
 
