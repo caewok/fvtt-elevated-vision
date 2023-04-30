@@ -253,6 +253,7 @@ export class SourceDepthShadowMap {
       walls ??= canvas.walls.placeables;
       this.wallGeometry = new PIXI.Geometry();
       this.wallGeometry.addAttribute("aVertexPosition", [], 3);
+      this.wallGeometry.addAttribute("aTerrain", [], 1);
       this.wallGeometry.addIndex([]);
     } else {
       this.wallGeometry = wallGeometry;
@@ -261,6 +262,11 @@ export class SourceDepthShadowMap {
       if ( !Object.hasOwn(wallGeometry.attributes, "aVertexPosition") ) {
         console.error("SourceDepthShadowMap|wallGeometry has no aVertexPosition.");
         this.wallGeometry.addAttribute("aVertexPosition", [], 3);
+      }
+
+      if ( !Object.hasOwn(wallGeometry.attributes, "aTerrain") ) {
+        console.error("SourceDepthShadowMap|wallGeometry has no aTerrain.");
+        this.wallGeometry.addAttribute("aTerrain", [], 1);
       }
 
       if ( !wallGeometry.indexBuffer ) {
@@ -335,9 +341,13 @@ export class SourceDepthShadowMap {
    */
   _constructWallCoordinates(walls) {
     // TODO: Filter walls for given light source type and, for point source, the radius?
+    // TODO: Vary according to source type
+    walls = walls.filter(w => w.document["light"] !== CONST.WALL_SENSE_TYPES.NONE);
+
     const nWalls = walls.length;
     const coordinates = new Float32Array(nWalls * 12); // Coords: x,y,z for top and bottom A, top and bottom B
     const indices = new Uint16Array(nWalls * 6); // 2 triangles to form a square
+    const terrain = new Float32Array(nWalls * 4); // 1 per wall coordinate
 
     // Need to cut off walls at the top/bottom bounds of the scene, otherwise they
     // will be given incorrect depth values b/c there is no floor or ceiling.
@@ -372,15 +382,23 @@ export class SourceDepthShadowMap {
 
       // Indices are [0, 1, 2, 1, 3, 2]
       // aBottom -- aTop -- bBottom, aTop -- bTop -- bBottom
-      indices[idx] = i; // Equals: i + 0
+      indices[idx] = i;
       indices[idx + 1] = i + 1;
       indices[idx + 2] = i + 2;
       indices[idx + 3] = i + 1;
       indices[idx + 4] = i + 3;
       indices[idx + 5] = i + 2;
+
+      // Check for terrain walls and mark accordingly
+      // TODO: Vary according to source type
+      const isTerrain = wall.document["light"] === CONST.WALL_SENSE_TYPES.LIMITED;
+      terrain[i] = isTerrain;
+      terrain[i + 1] = isTerrain;
+      terrain[i + 2] = isTerrain;
+      terrain[i + 3] = isTerrain;
     }
 
-    return { coordinates, indices };
+    return { coordinates, indices, terrain };
   }
 
   /**
@@ -388,11 +406,12 @@ export class SourceDepthShadowMap {
    * @param {Wall[]} walls
    */
   _updateWallGeometry(walls) {
-    const { coordinates, indices } = this._constructWallCoordinates(walls);
-    const vertexBuffer = this.wallGeometry.getBuffer("aVertexPosition");
-    vertexBuffer.update(coordinates);
-    const indexBuffer = this.wallGeometry.getIndex();
-    indexBuffer.update(indices);
+    const { coordinates, indices, terrain } = this._constructWallCoordinates(walls);
+
+    // Update the buffer attributes and index.
+    this.wallGeometry.getBuffer("aVertexPosition").update(coordinates);
+    this.wallGeometry.getBuffer("terrain").update(terrain);
+    this.wallGeometry.getIndex().update(indices);
 
     // TODO: Make this an empty matrix instead and fill it? Same for #viewMatrix?
     // TODO: Do we need to destroy or update the texture, mesh, sprite?
