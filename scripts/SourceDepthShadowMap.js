@@ -225,11 +225,15 @@ export class SourceDepthShadowMap {
 
   #depthMesh;
 
+  #terrainDepthMesh;
+
   #depthTexture;
 
   #depthSprite;
 
   #shadowRender;
+
+  #hasTerrainWalls = false;
 
   /**
    * Construct a new SourceDepthShadowMap instance.
@@ -319,7 +323,12 @@ export class SourceDepthShadowMap {
 
   /** @type {PIXI.Mesh} */
   get depthMesh() {
-    return this.#depthMesh || (this.#depthMesh = this._constructDepthMesh());
+    return this.#depthMesh || (this.#depthMesh = this._constructDepthMesh("depthShader"));
+  }
+
+  /** @type {PIXI.Mesh} */
+  get terrainDepthMesh() {
+    return this.#terrainDepthMesh || (this.#terrainDepthMesh = this._constructDepthMesh("terrainDepthShader"));
   }
 
   /** @type {PIXI.Texture} */
@@ -335,11 +344,46 @@ export class SourceDepthShadowMap {
   }
 
   /**
+   * Reset all cached variables related to light.
+   * TODO: distinguish between position, elevation, and type?
+   */
+  _resetLight() {
+    // #lightPosition?
+    // #radius?
+    this.#viewMatrix = undefined; // Defined by light position.
+    this._resetDepth();
+  }
+
+  /**
+   * Reset all cached variables related to walls.
+   */
+  _resetWalls() {
+    // TODO: Make this an empty matrix instead and fill it? Same for #viewMatrix?
+    // TODO: Do we need to destroy or update the texture, mesh, sprite?
+    this.#hasTerrainWalls = false;
+    this.#projectionMatrix = undefined; // Requires wall elevations.
+    this._resetDepth();
+  }
+
+  /**
+   * Reset all cached variables related to depth.
+   */
+  _resetDepth() {
+    this.#depthMesh = undefined; // Requires viewM and projectionM
+    this.#terrainDepthMesh = undefined; // Requires viewM and projectionM
+    this.#depthTexture = undefined; // Requires depthMesh
+    this.#depthSprite = undefined;  // Based on depthTexture
+    this.#shadowRender = undefined; // Based on depthTexture
+  }
+
+  /**
    * Build the wall coordinates and indices from an array of walls.
    * @param {Wall[]} walls
    * @returns {object} { coordinates: {Number[]}, indices: {Number[]}}
    */
   _constructWallCoordinates(walls) {
+    let hasTerrainWalls = false;
+
     // TODO: Filter walls for given light source type and, for point source, the radius?
     // TODO: Vary according to source type
     walls = walls.filter(w => w.document["light"] !== CONST.WALL_SENSE_TYPES.NONE);
@@ -396,9 +440,9 @@ export class SourceDepthShadowMap {
       terrain[i + 1] = isTerrain;
       terrain[i + 2] = isTerrain;
       terrain[i + 3] = isTerrain;
+      hasTerrainWalls ||= isTerrain;
     }
-
-    return { coordinates, indices, terrain };
+    return { coordinates, indices, terrain, hasTerrainWalls };
   }
 
   /**
@@ -406,7 +450,9 @@ export class SourceDepthShadowMap {
    * @param {Wall[]} walls
    */
   _updateWallGeometry(walls) {
-    const { coordinates, indices, terrain } = this._constructWallCoordinates(walls);
+    this._resetWalls();
+    const { coordinates, indices, terrain, hasTerrainWalls } = this._constructWallCoordinates(walls);
+    this.#hasTerrainWalls = hasTerrainWalls;
 
     // Update the buffer attributes and index.
     this.wallGeometry.getBuffer("aVertexPosition").update(coordinates);
@@ -491,9 +537,7 @@ export class SourceDepthShadowMap {
     const coordinates = this.wallGeometry.getBuffer("aVertexPosition").data;
     const zCoords = coordinates.filter((e, i) => (i + 1) % 3 === 0);
     const maxElevation = Math.min(Math.max(...zCoords), this.lightPosition.z); // Don't care about what is above the light
-    const minElevation = -100 + (this.lightPosition.z > canvas.elevation.elevationMin
-      ? canvas.elevation.elevationMin
-      : this.lightPosition.z - canvas.dimensions.size);
+    const minElevation = this.minElevation;
 
     let { top, bottom, left, right } = canvas.dimensions.sceneRect;
     if ( !this.directional ) {
@@ -522,17 +566,18 @@ export class SourceDepthShadowMap {
 
   /**
    * Construct the mesh used by the depth shader for the given geometry.
+   * @param {"depthShader"|"terrainDepthShader"} type
    * @returns {PIXI.Mesh}
    */
-  _constructDepthMesh() {
+  _constructDepthMesh(shaderType = "depthShader") {
     const uniforms = {
       projectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       viewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
-    const { vertexShader, fragmentShader } = SourceDepthShadowMap.depthShader;
-    let depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap[shaderType];
+    const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 
     // TODO: Can we save and update a single PIXI.Mesh?
     return new PIXI.Mesh(this.wallGeometry, depthShader);
@@ -666,8 +711,7 @@ void main() {
   // gl_Position for 2-d canvas vertex calculated as normal
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
 
-}
-`;
+}`;
 
 /**
  * Determine if the fragment position is in shadow by comparing to the depth texture.
@@ -717,8 +761,7 @@ void main() {
   // For testing, just draw the shadow.
   fragColor = vec4(0.0, 0.0, 0.0, shadow * 0.5);
   // fragColor = vec4(vec3(0.0), shadow);
-}
-`;
+}`;
 
 /**
  * Update the depth shader based on wall distance from light, from point of view of the light.
@@ -754,5 +797,37 @@ out vec4 fragColor;
 void main() {
   fragColor = vec4(0.0); // Needed so the fragment shader actually saves the depth values.
   //fragColor = vec4(1.0, 0.0, 0.0, 1.0); // For testing
-}
-`;
+}`;
+
+/**
+ * Sets terrain walls to "transparent"---set z to 1.
+ * If depthShader already used, this will operate only on frontmost vertices / fragments.
+ * Will change the depth of those to 1, meaning they will be at the end.
+ */
+const terrainDepthShader = {};
+
+/**
+ * Project to light view just like with depthShader.
+ * For terrain vertices, set the z value to 1.
+ */
+terrainDepthShader.vertexShader =
+`
+#version 300 es
+precision mediump float;
+
+in vec3 aVertexPosition;
+in float terrain;
+uniform mat4 projectionM;
+uniform mat4 viewM;
+
+void main() {
+  vec4 pos4 = vec4(aVertexPosition, 1.0);
+  vec4 projectedPosition = projectionM * viewM * pos4;
+  if ( terrain == 1.0 ) projectedPosition.z = 1.0;
+  gl_Position = projectedPosition;
+}`;
+
+/**
+ * Same as depthShader; set the depth.
+ */
+terrainDepthShader.fragmentShader = depthShader.fragmentShader;
