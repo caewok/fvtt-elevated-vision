@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONST,
 PIXI
 */
 "use strict";
@@ -511,28 +512,8 @@ export class SourceDepthShadowMap {
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
-
-    let depthShader = PIXI.Shader.from(`
-      #version 300 es
-      precision mediump float;
-
-      in vec3 aVertexPosition;
-      uniform mat4 projectionM;
-      uniform mat4 viewM;
-
-      void main() {
-        vec4 pos4 = vec4(aVertexPosition, 1.0);
-        gl_Position = projectionM * viewM * pos4;
-      }`,
-
-    ` #version 300 es
-      precision mediump float;
-      out vec4 fragColor;
-      void main() {
-        fragColor = vec4(0.0); // Needed so the fragment shader actually saves the depth values.
-        //fragColor = vec4(1.0, 0.0, 0.0, 1.0); // For testing
-      }
-    `, uniforms);
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.depthShader;
+    let depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 
     // TODO: Can we save and update a single PIXI.Mesh?
     return new PIXI.Mesh(this.wallGeometry, depthShader);
@@ -607,73 +588,8 @@ export class SourceDepthShadowMap {
       depthMap: this.depthTexture
     };
 
-    let shadowRenderShader = PIXI.Shader.from(`
-      #version 300 es
-      precision mediump float;
-
-      in vec3 aVertexPosition;
-      in vec2 texCoord;
-      out vec2 vTexCoord;
-      out vec4 fragPosLightSpace;
-
-      uniform mat3 translationMatrix;
-      uniform mat3 projectionMatrix;
-      uniform mat4 projectionM;
-      uniform mat4 viewM;
-
-      void main() {
-        vTexCoord = texCoord;
-        fragPosLightSpace = projectionM * viewM * vec4(aVertexPosition, 1.0);
-
-        // gl_Position for 2-d canvas vertex calculated as normal
-        gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
-
-      }
-
-    `,
-    `
-      #version 300 es
-      precision mediump float;
-
-      in vec2 vTexCoord;
-      in vec4 fragPosLightSpace;
-      out vec4 fragColor;
-
-      uniform sampler2D depthMap;
-
-      float shadowCalculation(in vec4 fragPosLightSpace) {
-        // Perspective divide.
-        // Needed when using perspective projection; does nothing with orthographic projection
-        // Returns light-space position in range [-1, 1].
-        vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-
-        // Transform the NDC coordinates to range [0, 1].
-        // Use to sample the depth map in range [0, 1].
-        vec2 texCoords = projCoords.xy * 0.5 + 0.5;
-
-        // Sample the depth map
-        float closestDepth = texture(depthMap, texCoords).r;
-        // if ( closestDepth == 1.0 ) return 0.0; // Depth 1.0 means no obstacle.
-
-        // Projected vector's z coordinate equals depth of this fragment from light's perspective.
-        // Check whether current position is in shadow.
-        // currentDepth is closer to 1 the further we are from the light.
-        float currentDepth = projCoords.z;
-
-        float shadow = closestDepth != 1.0 && currentDepth < closestDepth ? 1.0 : 0.0;
-        return shadow;
-      }
-
-      void main() {
-        float shadow = shadowCalculation(fragPosLightSpace);
-
-        // For testing, just draw the shadow.
-        fragColor = vec4(0.0, 0.0, 0.0, shadow * 0.5);
-        // fragColor = vec4(vec3(0.0), shadow);
-      }
-
-    `, shadowRenderUniforms);
-
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.shadowRenderShader;
+    const shadowRenderShader = PIXI.Shader.from(vertexShader, fragmentShader, shadowRenderUniforms);
     this.#shadowRender = new PIXI.Mesh(geometryShadowRender, shadowRenderShader);
     canvas.stage.addChild(this.#shadowRender);
   }
@@ -687,5 +603,137 @@ export class SourceDepthShadowMap {
   static orthographicMatrix = orthographicMatrix;
 
   static perspectiveMatrix = perspectiveMatrix;
+
+  static shadowRenderShader = shadowRenderShader;
+
+  static depthShader = depthShader;
+
+
 }
 
+
+// Note: GLSL shaders
+
+/**
+ * For debugging.
+ * Render the shadows on the scene canvas, using the depth texture.
+ */
+const shadowRenderShader = {};
+
+/**
+ * Convert the vertex to light space.
+ * Pass through the texture coordinates to pull from the depth texture.
+ * Translate and project the vector coordinate as usual.
+ */
+shadowRenderShader.vertexShader =
+`
+#version 300 es
+precision mediump float;
+
+in vec3 aVertexPosition;
+in vec2 texCoord;
+out vec2 vTexCoord;
+out vec4 fragPosLightSpace;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+uniform mat4 projectionM;
+uniform mat4 viewM;
+
+void main() {
+  vTexCoord = texCoord;
+  fragPosLightSpace = projectionM * viewM * vec4(aVertexPosition, 1.0);
+
+  // gl_Position for 2-d canvas vertex calculated as normal
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
+
+}
+`;
+
+/**
+ * Determine if the fragment position is in shadow by comparing to the depth texture.
+ * Fragment position is converted by vertex shader to point of view of light.
+ * Set shadow fragments to black, 50% alpha.
+ */
+shadowRenderShader.fragmentShader =
+`
+#version 300 es
+precision mediump float;
+
+in vec2 vTexCoord;
+in vec4 fragPosLightSpace;
+out vec4 fragColor;
+
+uniform sampler2D depthMap;
+
+/**
+ * Determine if the given position, in light space, is in shadow, by comparing to the depth texture.
+ */
+float shadowCalculation(in vec4 fragPosLightSpace) {
+  // Perspective divide.
+  // Needed when using perspective projection; does nothing with orthographic projection
+  // Returns light-space position in range [-1, 1].
+  vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+
+  // Transform the NDC coordinates to range [0, 1].
+  // Use to sample the depth map in range [0, 1].
+  vec2 texCoords = projCoords.xy * 0.5 + 0.5;
+
+  // Sample the depth map
+  float closestDepth = texture(depthMap, texCoords).r;
+  // if ( closestDepth == 1.0 ) return 0.0; // Depth 1.0 means no obstacle.
+
+  // Projected vector's z coordinate equals depth of this fragment from light's perspective.
+  // Check whether current position is in shadow.
+  // currentDepth is closer to 1 the further we are from the light.
+  float currentDepth = projCoords.z;
+
+  float shadow = closestDepth != 1.0 && currentDepth < closestDepth ? 1.0 : 0.0;
+  return shadow;
+}
+
+void main() {
+  float shadow = shadowCalculation(fragPosLightSpace);
+
+  // For testing, just draw the shadow.
+  fragColor = vec4(0.0, 0.0, 0.0, shadow * 0.5);
+  // fragColor = vec4(vec3(0.0), shadow);
+}
+`;
+
+/**
+ * Update the depth shader based on wall distance from light, from point of view of the light.
+ */
+const depthShader = {};
+
+/**
+ * Set z values by converting to the light view, and projecting either orthogonal or perspective.
+ */
+depthShader.vertexShader =
+`
+#version 300 es
+precision mediump float;
+
+in vec3 aVertexPosition;
+uniform mat4 projectionM;
+uniform mat4 viewM;
+
+void main() {
+  vec4 pos4 = vec4(aVertexPosition, 1.0);
+  gl_Position = projectionM * viewM * pos4;
+}`;
+
+/**
+ * Fragment shader simply used to update the fragDepth based on z value from vertex shader.
+ */
+depthShader.fragmentShader =
+`
+#version 300 es
+precision mediump float;
+
+out vec4 fragColor;
+void main() {
+  fragColor = vec4(0.0); // Needed so the fragment shader actually saves the depth values.
+  //fragColor = vec4(1.0, 0.0, 0.0, 1.0); // For testing
+}
+`;
