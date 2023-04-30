@@ -8,6 +8,16 @@ PIXI
 import { Matrix } from "./geometry/Matrix.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
+import {
+  shadowRenderShader,
+  depthShader,
+  terrainDepthShader } from "./shaders.js";
+
+import {
+  perspectiveMatrix,
+  orthographicMatrix,
+  toColMajorArray } from "./util.js";
+
 /* Testing
 // let walls = canvas.walls.placeables;
 // let walls = canvas.walls.controlled;
@@ -28,6 +38,9 @@ map._endShadowRenderTest();
 // update walls
 map._updateWallGeometry(walls);
 
+
+map = new SourceDepthShadowMap(lightOrigin, { walls });
+map._shadowRenderTest();
 
 // view and orthographic matrix for a wall
 wall = walls[0]
@@ -64,153 +77,6 @@ for ( const v of testPoints ) {
 }
 
 */
-
-/**
- * Construct an orthographic matrix.
- * https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/orthographic-projection-matrix.html
- * http://learnwebgl.brown37.net/08_projections/projections_ortho.html
- * Convert a bounding box to range [-1, 1].
- * @param {number} xmin   Left, or minimum x value of the bounding box.
- * @param {number} xmax   Right, or maximum x value of the bounding box.
- * @param {number} ymin   Top, or minimum y value of the bounding box.
- * @param {number} ymax   Bottom, or maximum y value of the bounding box.
- * @param {number} near   Near, or minimum z value of the bounding box.
- * @param {number} far    Far, or maximum y value of the bounding box.
- * @returns {Matrix[4][4]}
- */
-function orthographicMatrix(xmin, xmax, ymin, ymax, near, far) {
-  // http://learnwebgl.brown37.net/08_projections/projections_ortho.html
-  // left = xmin; right = xmax
-  // bottom = ymin; top = ymax
-  // near = zmin; far = zmax
-
-  // 1. Center at the origin.
-  const midX = (xmin + xmax) * 0.5;
-  const midY = (ymin + ymax) * 0.5;
-  const midZ = (-near - far) * 0.5;
-  const centerAroundOrigin = new Matrix([
-    [1, 0, 0, 0],
-    [0, 1, 0, 0],
-    [0, 0, 1, 0],
-    [-midX, -midY, -midZ, 1]
-  ]);
-
-  // 2. Scale the viewing volume to 2 units wide
-  const scaleX = 2 / (xmax - xmin);
-  const scaleY = 2 / (ymax - ymin);
-  const scaleZ = 2 / (far - near);
-  const scaleViewingVolume = new Matrix([
-    [scaleX, 0, 0, 0],
-    [0, scaleY, 0, 0],
-    [0, 0, scaleZ, 0],
-    [0, 0, 0, 1]
-  ]);
-
-  // 3. Flip coordinate system
-  const convertToLeftHanded = new Matrix([
-    [1, 0, 0, 0],
-    [0, 1, 0, 0],
-    [0, 0, -1, 0],
-    [0, 0, 0, 1]
-  ]);
-
-  // TODO: Store out matrix to speed up the multiplications.
-  return centerAroundOrigin.multiply4x4(scaleViewingVolume).multiply4x4(convertToLeftHanded);
-}
-
-/**
- * Construct a perspective matrix.
- * https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/orthographic-projection-matrix.html
- * http://learnwebgl.brown37.net/08_projections/projections_perspective.html
- * Convert a bounding box to range [-1, 1].
- * @param {number} xmin   Left, or minimum x value of the bounding box.
- * @param {number} xmax   Right, or maximum x value of the bounding box.
- * @param {number} ymin   Top, or minimum y value of the bounding box.
- * @param {number} ymax   Bottom, or maximum y value of the bounding box.
- * @param {number} near   Near, or minimum z value of the bounding box.
- * @param {number} far    Far, or maximum y value of the bounding box.
- * @returns {Matrix[4][4]}
- */
-function perspectiveMatrix(xmin, xmax, ymin, ymax, near, far) {
-  // Coordinates:
-  // left = xmin; right = xmax
-  // bottom = ymin; top = ymax
-  // near = zmin; far = zmax
-
-  // 1. Move frustrum apex to the origin
-  const midX = (xmin + xmax) * 0.5;
-  const midY = (ymin + ymax) * 0.5;
-  const centerAroundOrigin = new Matrix([
-    [1, 0, 0, 0],
-    [0, 1, 0, 0],
-    [0, 0, 1, 0],
-    [-midX, -midY, 0, 1]
-  ]);
-
-  // 2. Perspective calculation
-  // Set the w value to the divisor, -z.
-  const perspectiveCalc = new Matrix([
-    [near, 0, 0, 0],
-    [0, near, 0, 0],
-    [0, 0, 1, -1],
-    [0, 0, 0, 0]
-  ]);
-
-  // 3. Scale the view window to between [-1, 1] and [1, 1]
-  const scaleX = 2 / (xmax - xmin);
-  const scaleY = 2 / (ymax - ymin);
-  const scaleViewingVolume = new Matrix([
-    [scaleX, 0, 0, 0],
-    [0, scaleY, 0, 0],
-    [0, 0, 1, 0],
-    [0, 0, 0, 1]
-  ]);
-
-  // 4. Map depth (z-values) to [-1, 1]
-  // non-linear mapping between [-near, -far] and [-1, 1]
-  // use c1 / -z + c2, where c1 and c2 are constants based on range of [-near, -far]
-  // z = -near ==> c1 / -z + c2 == -1
-  // z = -far ==> c1 / -z + c2 == 1
-  const c1 = (2 * far * near) / (near - far);
-  const c2 = (far + near) / (far - near);
-  const depthMap = new Matrix([
-    [1, 0, 0, 0],
-    [0, 1, 0, 0],
-    [0, 0, -c2, -1],
-    [0, 0, c1, 0]
-  ]);
-
-  // Switching direction fo the z axis to match clipping is not necessary.
-  // When mapping the z values to non-linear range, new range was [-1, 1], which
-  // effectively switched the direction of the z axis.
-  // TODO: Store out matrix to speed up the multiplications.
-  return centerAroundOrigin.multiply4x4(perspectiveCalc).multiply4x4(scaleViewingVolume).multiply4x4(depthMap);
-}
-
-/**
- * Convert a Matrix in row-major order to column-major order and return the array.
- * Used to convert Matrix to WebGL format.
- * @param {Matrix[r][c]} mat
- * @returns {Array[r x c]}
- */
-function toColMajorArray(mat) {
-  // Add data to array row-by-row.
-  const nRow = mat.dim1;
-  const nCol = mat.dim2;
-  const arr = new Array(nRow * nCol);
-  for ( let r = 0, i = 0; r < nRow; r += 1 ) {
-    for ( let c = 0; c < nCol; c += 1, i += 1 ) {
-      arr[i] = mat.arr[r][c];
-    }
-  }
-  return arr;
-}
-
-// https://thebookofshaders.com/glossary/?search=smoothstep
-function smoothStep(edge0, edge1, x) {
-  const t = Math.clamped((x - edge0) / (edge1 - edge0), 0.0, 1.0);
-  return (t * t) * (3.0 - (2.0 * t));
-}
 
 export class SourceDepthShadowMap {
   // TODO: Can we make any of these empty and just update the object?
@@ -301,24 +167,21 @@ export class SourceDepthShadowMap {
   get lightPosition() { return this.#lightPosition; }
 
   set lightPosition(value) {
+    this._resetLight();
     this.#lightPosition = value.copy();
 
     if ( !this.directional ) {
       console.error("Not yet implemented.");
       // Need to refilter walls based on light radius and update wall geometry
     }
-
-    this.#viewMatrix = undefined;
-    this.#projectionMatrix = undefined;
   }
 
   /** @type {number} */
   get radius() { return this.#radius; }
 
   set radius(value) {
+    this._resetLight();
     this.#radius = value;
-    this.#viewMatrix = undefined;
-    this.#projectionMatrix = undefined;
   }
 
   /** @type {PIXI.Mesh} */
@@ -456,7 +319,7 @@ export class SourceDepthShadowMap {
 
     // Update the buffer attributes and index.
     this.wallGeometry.getBuffer("aVertexPosition").update(coordinates);
-    this.wallGeometry.getBuffer("terrain").update(terrain);
+    this.wallGeometry.getBuffer("aTerrain").update(terrain);
     this.wallGeometry.getIndex().update(indices);
 
     // TODO: Make this an empty matrix instead and fill it? Same for #viewMatrix?
@@ -580,7 +443,10 @@ export class SourceDepthShadowMap {
     const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 
     // TODO: Can we save and update a single PIXI.Mesh?
-    return new PIXI.Mesh(this.wallGeometry, depthShader);
+    const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
+    mesh.state.depthTest = true;
+    mesh.state.depthMask = true;
+    return mesh;
   }
 
   /**
@@ -588,13 +454,16 @@ export class SourceDepthShadowMap {
    * @returns {PIXI.Texture}
    */
   _renderDepth() {
-    const depthMesh = this.depthMesh;
-    depthMesh.state.depthTest = true;
-    depthMesh.state.depthMask = true;
     const renderTexture = PIXI.RenderTexture.create({width: 1024, height: 1024});
     renderTexture.framebuffer.addDepthTexture();
     renderTexture.framebuffer.enableDepth();
-    canvas.app.renderer.render(depthMesh, { renderTexture });
+    canvas.app.renderer.render(this.depthMesh, { renderTexture });
+
+    if ( this.#hasTerrainWalls ) {
+      // Run a second pass over depth, to set all frontmost terrain walls to
+      // "transparent" (depth = 1).
+      canvas.app.renderer.render(this.terrainDepthMesh, { renderTexture });
+    }
 
     // TODO: Can we store a PIXI.Texture and just update it?
     const depthTex = new PIXI.Texture(renderTexture.framebuffer.depthTexture);
@@ -672,162 +541,5 @@ export class SourceDepthShadowMap {
 
   static depthShader = depthShader;
 
-
+  static terrainDepthShader = terrainDepthShader;
 }
-
-
-// Note: GLSL shaders
-
-/**
- * For debugging.
- * Render the shadows on the scene canvas, using the depth texture.
- */
-const shadowRenderShader = {};
-
-/**
- * Convert the vertex to light space.
- * Pass through the texture coordinates to pull from the depth texture.
- * Translate and project the vector coordinate as usual.
- */
-shadowRenderShader.vertexShader =
-`
-#version 300 es
-precision mediump float;
-
-in vec3 aVertexPosition;
-in vec2 texCoord;
-out vec2 vTexCoord;
-out vec4 fragPosLightSpace;
-
-uniform mat3 translationMatrix;
-uniform mat3 projectionMatrix;
-uniform mat4 projectionM;
-uniform mat4 viewM;
-
-void main() {
-  vTexCoord = texCoord;
-  fragPosLightSpace = projectionM * viewM * vec4(aVertexPosition, 1.0);
-
-  // gl_Position for 2-d canvas vertex calculated as normal
-  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
-
-}`;
-
-/**
- * Determine if the fragment position is in shadow by comparing to the depth texture.
- * Fragment position is converted by vertex shader to point of view of light.
- * Set shadow fragments to black, 50% alpha.
- */
-shadowRenderShader.fragmentShader =
-`
-#version 300 es
-precision mediump float;
-
-in vec2 vTexCoord;
-in vec4 fragPosLightSpace;
-out vec4 fragColor;
-
-uniform sampler2D depthMap;
-
-/**
- * Determine if the given position, in light space, is in shadow, by comparing to the depth texture.
- */
-float shadowCalculation(in vec4 fragPosLightSpace) {
-  // Perspective divide.
-  // Needed when using perspective projection; does nothing with orthographic projection
-  // Returns light-space position in range [-1, 1].
-  vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-
-  // Transform the NDC coordinates to range [0, 1].
-  // Use to sample the depth map in range [0, 1].
-  vec2 texCoords = projCoords.xy * 0.5 + 0.5;
-
-  // Sample the depth map
-  float closestDepth = texture(depthMap, texCoords).r;
-  // if ( closestDepth == 1.0 ) return 0.0; // Depth 1.0 means no obstacle.
-
-  // Projected vector's z coordinate equals depth of this fragment from light's perspective.
-  // Check whether current position is in shadow.
-  // currentDepth is closer to 1 the further we are from the light.
-  float currentDepth = projCoords.z;
-
-  float shadow = closestDepth != 1.0 && currentDepth < closestDepth ? 1.0 : 0.0;
-  return shadow;
-}
-
-void main() {
-  float shadow = shadowCalculation(fragPosLightSpace);
-
-  // For testing, just draw the shadow.
-  fragColor = vec4(0.0, 0.0, 0.0, shadow * 0.5);
-  // fragColor = vec4(vec3(0.0), shadow);
-}`;
-
-/**
- * Update the depth shader based on wall distance from light, from point of view of the light.
- */
-const depthShader = {};
-
-/**
- * Set z values by converting to the light view, and projecting either orthogonal or perspective.
- */
-depthShader.vertexShader =
-`
-#version 300 es
-precision mediump float;
-
-in vec3 aVertexPosition;
-uniform mat4 projectionM;
-uniform mat4 viewM;
-
-void main() {
-  vec4 pos4 = vec4(aVertexPosition, 1.0);
-  gl_Position = projectionM * viewM * pos4;
-}`;
-
-/**
- * Fragment shader simply used to update the fragDepth based on z value from vertex shader.
- */
-depthShader.fragmentShader =
-`
-#version 300 es
-precision mediump float;
-
-out vec4 fragColor;
-void main() {
-  fragColor = vec4(0.0); // Needed so the fragment shader actually saves the depth values.
-  //fragColor = vec4(1.0, 0.0, 0.0, 1.0); // For testing
-}`;
-
-/**
- * Sets terrain walls to "transparent"---set z to 1.
- * If depthShader already used, this will operate only on frontmost vertices / fragments.
- * Will change the depth of those to 1, meaning they will be at the end.
- */
-const terrainDepthShader = {};
-
-/**
- * Project to light view just like with depthShader.
- * For terrain vertices, set the z value to 1.
- */
-terrainDepthShader.vertexShader =
-`
-#version 300 es
-precision mediump float;
-
-in vec3 aVertexPosition;
-in float terrain;
-uniform mat4 projectionM;
-uniform mat4 viewM;
-
-void main() {
-  vec4 pos4 = vec4(aVertexPosition, 1.0);
-  vec4 projectedPosition = projectionM * viewM * pos4;
-  if ( terrain == 1.0 ) projectedPosition.z = 1.0;
-  gl_Position = projectedPosition;
-}`;
-
-/**
- * Same as depthShader; set the depth.
- */
-terrainDepthShader.fragmentShader = depthShader.fragmentShader;

@@ -1,14 +1,16 @@
 /* globals
-game,
-foundry,
 canvas,
 ClipperLib,
+CONFIG,
+foundry,
+game,
 PIXI
 */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
+import { Matrix } from "./geometry/Matrix.js";
 
 export function almostLessThan(a, b) { return a < b || a.almostEqual(b); }
 
@@ -51,12 +53,12 @@ export function extractRectangleFromPixelArray(pixels, pxWidth, frame) {
   let j = 0;
   for ( let ptX = left; ptX < right; ptX += 1 ) {
     for ( let ptY = top; ptY < bottom; ptY += 1) {
-      const px = (ptY * pxWidth) + ptX
+      const px = (ptY * pxWidth) + ptX;
       arr[j] = pixels[px];
       j += 1;
     }
   }
-  return { pixels: arr, width, height };
+  return { pixels: arr, width: frame.width, height: frame.height };
 }
 
 /**
@@ -77,14 +79,14 @@ export function applyFunctionToPixelArray(pixels, pxWidth, frame, fn) {
   let j = 0;
   for ( let ptX = left; ptX < right; ptX += 1 ) {
     for ( let ptY = top; ptY < bottom; ptY += 1) {
-      const px = (ptY * pxWidth) + ptX
+      const px = (ptY * pxWidth) + ptX;
       const value = pixels[px];
       arr[j] = value;
-      fn(value, px)
+      fn(value, px);
       j += 1;
     }
   }
-  return { pixels: arr, width, height };
+  return { pixels: arr, width: frame.width, height: frame.height };
 }
 
 /**
@@ -322,8 +324,6 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
   return ix;
 }
 
-
-
 /**
  * Get the intersection of a 3d line with a wall extended as a plane.
  * See https://stackoverflow.com/questions/5666222/3d-line-plane-intersection
@@ -362,3 +362,149 @@ export function linePlane3dIntersection(a, b, c, d, epsilon = 1e-8) {
   return null;
 }
 
+/**
+ * Construct an orthographic matrix.
+ * https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/orthographic-projection-matrix.html
+ * http://learnwebgl.brown37.net/08_projections/projections_ortho.html
+ * Convert a bounding box to range [-1, 1].
+ * @param {number} xmin   Left, or minimum x value of the bounding box.
+ * @param {number} xmax   Right, or maximum x value of the bounding box.
+ * @param {number} ymin   Top, or minimum y value of the bounding box.
+ * @param {number} ymax   Bottom, or maximum y value of the bounding box.
+ * @param {number} near   Near, or minimum z value of the bounding box.
+ * @param {number} far    Far, or maximum y value of the bounding box.
+ * @returns {Matrix[4][4]}
+ */
+export function orthographicMatrix(xmin, xmax, ymin, ymax, near, far) {
+  // http://learnwebgl.brown37.net/08_projections/projections_ortho.html
+  // left = xmin; right = xmax
+  // bottom = ymin; top = ymax
+  // near = zmin; far = zmax
+
+  // 1. Center at the origin.
+  const midX = (xmin + xmax) * 0.5;
+  const midY = (ymin + ymax) * 0.5;
+  const midZ = (-near - far) * 0.5;
+  const centerAroundOrigin = new Matrix([
+    [1, 0, 0, 0],
+    [0, 1, 0, 0],
+    [0, 0, 1, 0],
+    [-midX, -midY, -midZ, 1]
+  ]);
+
+  // 2. Scale the viewing volume to 2 units wide
+  const scaleX = 2 / (xmax - xmin);
+  const scaleY = 2 / (ymax - ymin);
+  const scaleZ = 2 / (far - near);
+  const scaleViewingVolume = new Matrix([
+    [scaleX, 0, 0, 0],
+    [0, scaleY, 0, 0],
+    [0, 0, scaleZ, 0],
+    [0, 0, 0, 1]
+  ]);
+
+  // 3. Flip coordinate system
+  const convertToLeftHanded = new Matrix([
+    [1, 0, 0, 0],
+    [0, 1, 0, 0],
+    [0, 0, -1, 0],
+    [0, 0, 0, 1]
+  ]);
+
+  // TODO: Store out matrix to speed up the multiplications.
+  return centerAroundOrigin.multiply4x4(scaleViewingVolume).multiply4x4(convertToLeftHanded);
+}
+
+/**
+ * Construct a perspective matrix.
+ * https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/orthographic-projection-matrix.html
+ * http://learnwebgl.brown37.net/08_projections/projections_perspective.html
+ * Convert a bounding box to range [-1, 1].
+ * @param {number} xmin   Left, or minimum x value of the bounding box.
+ * @param {number} xmax   Right, or maximum x value of the bounding box.
+ * @param {number} ymin   Top, or minimum y value of the bounding box.
+ * @param {number} ymax   Bottom, or maximum y value of the bounding box.
+ * @param {number} near   Near, or minimum z value of the bounding box.
+ * @param {number} far    Far, or maximum y value of the bounding box.
+ * @returns {Matrix[4][4]}
+ */
+export function perspectiveMatrix(xmin, xmax, ymin, ymax, near, far) {
+  // Coordinates:
+  // left = xmin; right = xmax
+  // bottom = ymin; top = ymax
+  // near = zmin; far = zmax
+
+  // 1. Move frustrum apex to the origin
+  const midX = (xmin + xmax) * 0.5;
+  const midY = (ymin + ymax) * 0.5;
+  const centerAroundOrigin = new Matrix([
+    [1, 0, 0, 0],
+    [0, 1, 0, 0],
+    [0, 0, 1, 0],
+    [-midX, -midY, 0, 1]
+  ]);
+
+  // 2. Perspective calculation
+  // Set the w value to the divisor, -z.
+  const perspectiveCalc = new Matrix([
+    [near, 0, 0, 0],
+    [0, near, 0, 0],
+    [0, 0, 1, -1],
+    [0, 0, 0, 0]
+  ]);
+
+  // 3. Scale the view window to between [-1, 1] and [1, 1]
+  const scaleX = 2 / (xmax - xmin);
+  const scaleY = 2 / (ymax - ymin);
+  const scaleViewingVolume = new Matrix([
+    [scaleX, 0, 0, 0],
+    [0, scaleY, 0, 0],
+    [0, 0, 1, 0],
+    [0, 0, 0, 1]
+  ]);
+
+  // 4. Map depth (z-values) to [-1, 1]
+  // non-linear mapping between [-near, -far] and [-1, 1]
+  // use c1 / -z + c2, where c1 and c2 are constants based on range of [-near, -far]
+  // z = -near ==> c1 / -z + c2 == -1
+  // z = -far ==> c1 / -z + c2 == 1
+  const c1 = (2 * far * near) / (near - far);
+  const c2 = (far + near) / (far - near);
+  const depthMap = new Matrix([
+    [1, 0, 0, 0],
+    [0, 1, 0, 0],
+    [0, 0, -c2, -1],
+    [0, 0, c1, 0]
+  ]);
+
+  // Switching direction fo the z axis to match clipping is not necessary.
+  // When mapping the z values to non-linear range, new range was [-1, 1], which
+  // effectively switched the direction of the z axis.
+  // TODO: Store out matrix to speed up the multiplications.
+  return centerAroundOrigin.multiply4x4(perspectiveCalc).multiply4x4(scaleViewingVolume).multiply4x4(depthMap);
+}
+
+/**
+ * Convert a Matrix in row-major order to column-major order and return the array.
+ * Used to convert Matrix to WebGL format.
+ * @param {Matrix[r][c]} mat
+ * @returns {Array[r x c]}
+ */
+export function toColMajorArray(mat) {
+  // Add data to array row-by-row.
+  const nRow = mat.dim1;
+  const nCol = mat.dim2;
+  const arr = new Array(nRow * nCol);
+  for ( let r = 0, i = 0; r < nRow; r += 1 ) {
+    for ( let c = 0; c < nCol; c += 1, i += 1 ) {
+      arr[i] = mat.arr[r][c];
+    }
+  }
+  return arr;
+}
+
+// https://thebookofshaders.com/glossary/?search=smoothstep
+export function smoothStep(edge0, edge1, x) {
+  const t = Math.clamped((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+  return (t * t) * (3.0 - (2.0 * t));
+}
