@@ -11,7 +11,8 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 import {
   shadowRenderShader,
   depthShader,
-  terrainDepthShader } from "./shaders.js";
+  terrainDepthShader,
+  terrainRenderShader } from "./shaders.js";
 
 import {
   perspectiveMatrix,
@@ -457,21 +458,57 @@ export class SourceDepthShadowMap {
     const renderTexture = PIXI.RenderTexture.create({width: 1024, height: 1024});
     renderTexture.framebuffer.addDepthTexture();
     renderTexture.framebuffer.enableDepth();
+
+    // Texture to store depth values
+
+
+    // depthMesh
+//     const uniforms = {
+//       projectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
+//       viewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
+//     };
+//
+//     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
+//     const { vertexShader, fragmentShader } = SourceDepthShadowMap[shaderType];
+//     const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+//
+//     // TODO: Can we save and update a single PIXI.Mesh?
+//     const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
+//     mesh.state.depthTest = true;
+//     mesh.state.depthMask = true;
+
+
     canvas.app.renderer.render(this.depthMesh, { renderTexture });
 
-    if ( this.#hasTerrainWalls ) {
-      // Run a second pass over depth, to set all frontmost terrain walls to
-      // "transparent" (depth = 1).
-      canvas.app.renderer.render(this.terrainDepthMesh, { renderTexture });
-    }
-
     // TODO: Can we store a PIXI.Texture and just update it?
-    const depthTex = new PIXI.Texture(renderTexture.framebuffer.depthTexture);
+    let depthTex = new PIXI.Texture(renderTexture.framebuffer.depthTexture);
 
     // Save the frameBuffer to avoid GC
     // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1101602468221173771
     // https://github.com/pixijs/pixijs/pull/9409
     depthTex.framebuffer = renderTexture.framebuffer;
+
+    if ( this.#hasTerrainWalls ) {
+      // Run a second pass over depth, to set all frontmost terrain walls to
+      // "transparent" (depth = 1).
+      const terrainDepthUniforms = {
+        projectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
+        viewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
+        depthMap: depthTex
+      };
+
+      // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
+      const { vertexShader, fragmentShader } = SourceDepthShadowMap.terrainDepthShader;
+      const terrainDepthShader = PIXI.Shader.from(vertexShader, fragmentShader, terrainDepthUniforms);
+
+      // TODO: Can we save and update a single PIXI.Mesh?
+      const terrainDepthMesh = new PIXI.Mesh(this.wallGeometry, terrainDepthShader);
+      terrainDepthMesh.state.depthTest = true;
+      terrainDepthMesh.state.depthMask = true;
+      canvas.app.renderer.render(terrainDepthMesh, { renderTexture });
+      depthTex = new PIXI.Texture(renderTexture.framebuffer.depthTexture);
+      depthTex.framebuffer = renderTexture.framebuffer;
+    }
 
     return depthTex;
   }
@@ -542,4 +579,6 @@ export class SourceDepthShadowMap {
   static depthShader = depthShader;
 
   static terrainDepthShader = terrainDepthShader;
+
+  static terrainRenderShader = terrainRenderShader;
 }
