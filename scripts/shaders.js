@@ -17,8 +17,7 @@ export const shadowRenderShader = {};
  * Translate and project the vector coordinate as usual.
  */
 shadowRenderShader.vertexShader =
-`
-#version 300 es
+`#version 300 es
 precision mediump float;
 
 in vec3 aVertexPosition;
@@ -46,8 +45,7 @@ void main() {
  * Set shadow fragments to black, 50% alpha.
  */
 shadowRenderShader.fragmentShader =
-`
-#version 300 es
+`#version 300 es
 precision mediump float;
 
 in vec2 vTexCoord;
@@ -98,8 +96,7 @@ export const depthShader = {};
  * Set z values by converting to the light view, and projecting either orthogonal or perspective.
  */
 depthShader.vertexShader =
-`
-#version 300 es
+`#version 300 es
 precision mediump float;
 
 in vec3 aVertexPosition;
@@ -115,8 +112,7 @@ void main() {
  * Fragment shader simply used to update the fragDepth based on z value from vertex shader.
  */
 depthShader.fragmentShader =
-`
-#version 300 es
+`#version 300 es
 precision mediump float;
 out vec4 fragColor;
 
@@ -142,8 +138,7 @@ export const terrainRenderShader = {};
  * Translate to canvas position
  */
 terrainRenderShader.vertexShader =
-`
-#version 300 es
+`#version 300 es
 precision mediump float;
 
 uniform mat3 translationMatrix;
@@ -163,8 +158,7 @@ void main() {
  * Draw only if terrain.
  */
 terrainRenderShader.fragmentShader =
-`
-#version 300 es
+`#version 300 es
 precision mediump float;
 
 in float vTerrain;
@@ -186,8 +180,7 @@ export const terrainDepthShader = {};
  *
  */
 terrainDepthShader.vertexShader =
-`
-#version 300 es
+`#version 300 es
 precision mediump float;
 
 in vec3 aVertexPosition;
@@ -205,8 +198,7 @@ void main() {
  * Set the depth; for terrain vertices, set the z value to 1.
  */
 terrainDepthShader.fragmentShader =
-`
-#version 300 es
+`#version 300 es
 precision mediump float;
 
 in float vTerrain;
