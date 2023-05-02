@@ -31,13 +31,27 @@ Point3d = CONFIG.GeometryLib.threeD.Point3d
 lightOrigin = new Point3d(100, 100, 1600);
 
 map = new SourceDepthShadowMap(lightOrigin, { walls });
-map._depthTest();
-map._endDepthTest();
+map._baseDepthTest();
+map._endBaseDepthTest();
+
+map._terrainDepthTest();
+map._endTerrainDepthTest();
+
 map._shadowRenderTest();
 map._endShadowRenderTest();
 
 // update walls
 map._updateWallGeometry(walls);
+
+
+extractPixels = api.extract.extractPixels
+let { pixels, width, height } = extractPixels(canvas.app.renderer, this.baseDepthTexture);
+
+
+let { pixels, width, height } = extractPixels(canvas.app.renderer, this.terrainDepthTexture);
+
+let { pixels, width, height } = extractPixels(canvas.app.renderer, this.depthTexture);
+
 
 
 map = new SourceDepthShadowMap(lightOrigin, { walls });
@@ -96,7 +110,13 @@ export class SourceDepthShadowMap {
 
   #depthTexture;
 
+  #baseDepthTexture;
+
   #depthSprite;
+
+  #terrainDepthTexture;
+
+  #terrainDepthSprite;
 
   #shadowRender;
 
@@ -147,6 +167,13 @@ export class SourceDepthShadowMap {
     }
 
     if ( walls ) this._updateWallGeometry(walls);
+
+    // Add min blending mode
+    if ( typeof PIXI.BLEND_MODES.MIN === "undefined" ) {
+      const renderer = PIXI.autoDetectRenderer();
+      const gl = renderer.gl;
+      PIXI.BLEND_MODES.MIN = renderer.state.blendModes.push([gl.ONE, gl.ONE, gl.ONE, gl.ONE, gl.MIN, gl.MIN]) - 1;
+    }
   }
 
   // Getters / Setters
@@ -185,19 +212,22 @@ export class SourceDepthShadowMap {
     this.#radius = value;
   }
 
-  /** @type {PIXI.Mesh} */
-  get depthMesh() {
-    return this.#depthMesh || (this.#depthMesh = this._constructDepthMesh("depthShader"));
-  }
-
-  /** @type {PIXI.Mesh} */
-  get terrainDepthMesh() {
-    return this.#terrainDepthMesh || (this.#terrainDepthMesh = this._constructDepthMesh("terrainDepthShader"));
+  /** @type {PIXI.Texture} */
+  get depthTexture() {
+    if ( !this.#depthTexture ) this._renderDepth();
+    return this.#depthTexture;
   }
 
   /** @type {PIXI.Texture} */
-  get depthTexture() {
-    return this.#depthTexture || (this.#depthTexture = this._renderDepth());
+  get terrainDepthTexture() {
+    if ( !this.#terrainDepthTexture ) this._renderDepth();
+    return this.#terrainDepthTexture;
+  }
+
+  /** @type {PIXI.Texture} */
+  get baseDepthTexture() {
+    if ( !this.#baseDepthTexture ) this._renderDepth();
+    return this.#baseDepthTexture;
   }
 
   /** @type {number} */
@@ -433,20 +463,40 @@ export class SourceDepthShadowMap {
    * @param {"depthShader"|"terrainDepthShader"} type
    * @returns {PIXI.Mesh}
    */
-  _constructDepthMesh(shaderType = "depthShader") {
+  _constructDepthMesh() {
     const uniforms = {
       projectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       viewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
-    const { vertexShader, fragmentShader } = SourceDepthShadowMap[shaderType];
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.depthShader;
     const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 
     // TODO: Can we save and update a single PIXI.Mesh?
     const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
     mesh.state.depthTest = true;
     mesh.state.depthMask = true;
+    mesh.blendMode = PIXI.BLEND_MODES.MIN;
+    return mesh;
+  }
+
+  _constructTerrainMesh(depthMap) {
+    const uniforms = {
+      projectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
+      viewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
+      depthMap
+    };
+
+    // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.terrainDepthShader;
+    const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+
+    // TODO: Can we save and update a single PIXI.Mesh?
+    const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
+    mesh.state.depthTest = false;
+    mesh.state.depthMask = false;
+    mesh.blendMode = PIXI.BLEND_MODES.MIN;
     return mesh;
   }
 
@@ -455,75 +505,44 @@ export class SourceDepthShadowMap {
    * @returns {PIXI.Texture}
    */
   _renderDepth() {
+    // Render depth for the scene to a texture.
     const renderTexture = PIXI.RenderTexture.create({width: 1024, height: 1024});
-    renderTexture.framebuffer.addDepthTexture();
     renderTexture.framebuffer.enableDepth();
+    const depthMesh = this._constructDepthMesh();
+    canvas.app.renderer.render(depthMesh, { renderTexture });
+    this.#baseDepthTexture = renderTexture;
 
-    // Texture to store depth values
+    // Now render with terrain
+    const renderTextureTerrain = PIXI.RenderTexture.create({width: 1024, height: 1024});
+    renderTextureTerrain.framebuffer.enableDepth();
+    const terrainDepthMesh = this._constructTerrainMesh(renderTexture);
+    canvas.app.renderer.render(terrainDepthMesh, { renderTexture: renderTextureTerrain });
+    this.#terrainDepthTexture = renderTextureTerrain;
 
-
-    // depthMesh
-//     const uniforms = {
-//       projectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
-//       viewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
-//     };
-//
-//     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
-//     const { vertexShader, fragmentShader } = SourceDepthShadowMap[shaderType];
-//     const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
-//
-//     // TODO: Can we save and update a single PIXI.Mesh?
-//     const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
-//     mesh.state.depthTest = true;
-//     mesh.state.depthMask = true;
-
-
-    canvas.app.renderer.render(this.depthMesh, { renderTexture });
-
-    // TODO: Can we store a PIXI.Texture and just update it?
-    let depthTex = new PIXI.Texture(renderTexture.framebuffer.depthTexture);
-
-    // Save the frameBuffer to avoid GC
-    // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1101602468221173771
-    // https://github.com/pixijs/pixijs/pull/9409
-    depthTex.framebuffer = renderTexture.framebuffer;
-
-    if ( this.#hasTerrainWalls ) {
-      // Run a second pass over depth, to set all frontmost terrain walls to
-      // "transparent" (depth = 1).
-      const terrainDepthUniforms = {
-        projectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
-        viewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
-        depthMap: depthTex
-      };
-
-      // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
-      const { vertexShader, fragmentShader } = SourceDepthShadowMap.terrainDepthShader;
-      const terrainDepthShader = PIXI.Shader.from(vertexShader, fragmentShader, terrainDepthUniforms);
-
-      // TODO: Can we save and update a single PIXI.Mesh?
-      const terrainDepthMesh = new PIXI.Mesh(this.wallGeometry, terrainDepthShader);
-      terrainDepthMesh.state.depthTest = true;
-      terrainDepthMesh.state.depthMask = true;
-      canvas.app.renderer.render(terrainDepthMesh, { renderTexture });
-      depthTex = new PIXI.Texture(renderTexture.framebuffer.depthTexture);
-      depthTex.framebuffer = renderTexture.framebuffer;
-    }
-
-    return depthTex;
+    this.#depthTexture = renderTextureTerrain;
   }
 
   /**
    * Render a sprite to the screen to test the depth
    */
-  _depthTest() {
+  _baseDepthTest() {
     if ( this.#depthSprite ) canvas.stage.removeChild(this.#depthSprite);
-    this.#depthSprite = new PIXI.Sprite(this.depthTexture);
+    this.#depthSprite = new PIXI.Sprite(this.baseDepthTexture);
     canvas.stage.addChild(this.#depthSprite);
   }
 
-  _endDepthTest() {
+  _endBaseDepthTest() {
     if ( this.#depthSprite ) canvas.stage.removeChild(this.#depthSprite);
+  }
+
+  _terrainDepthTest() {
+    if ( this.#terrainDepthSprite ) canvas.stage.removeChild(this.#terrainDepthSprite);
+    this.#terrainDepthSprite = new PIXI.Sprite(this.terrainDepthTexture);
+    canvas.stage.addChild(this.#terrainDepthSprite);
+  }
+
+  _endTerrainDepthTest() {
+    if ( this.#terrainDepthSprite ) canvas.stage.removeChild(this.#terrainDepthSprite);
   }
 
   /**

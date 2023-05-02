@@ -67,18 +67,17 @@ float shadowCalculation(in vec4 fragPosLightSpace) {
 
   // Transform the NDC coordinates to range [0, 1].
   // Use to sample the depth map in range [0, 1].
-  vec2 texCoords = projCoords.xy * 0.5 + 0.5;
+  vec2 texCoord = projCoords.xy * 0.5 + 0.5;
 
   // Sample the depth map
-  float closestDepth = texture(depthMap, texCoords).r;
+  float closestDepth = texture(depthMap, texCoord).r;
   // if ( closestDepth == 1.0 ) return 0.0; // Depth 1.0 means no obstacle.
 
   // Projected vector's z coordinate equals depth of this fragment from light's perspective.
   // Check whether current position is in shadow.
-  // currentDepth is closer to 1 the further we are from the light.
-  float currentDepth = projCoords.z;
-
-  float shadow = closestDepth != 1.0 && currentDepth < closestDepth ? 1.0 : 0.0;
+  // fragDepth is closer to 1 the further we are from the light.
+  float fragDepth = projCoords.z * 0.5 + 0.5;
+  float shadow = closestDepth != 1.0 && fragDepth < closestDepth ? 1.0 : 0.0;
   return shadow;
 }
 
@@ -198,11 +197,9 @@ uniform mat4 viewM;
 out float vTerrain;
 
 void main() {
-  vec4 pos4 = vec4(aVertexPosition, 1.0);
-  vec4 projectedPosition = projectionM * viewM * pos4;
   vTerrain = aTerrain;
-  gl_Position = projectedPosition;
-}`;
+  vec4 pos4 = vec4(aVertexPosition, 1.0);
+  gl_Position = projectionM * viewM * pos4;}`;
 
 /**
  * Set the depth; for terrain vertices, set the z value to 1.
@@ -217,19 +214,25 @@ uniform sampler2D depthMap;
 out vec4 fragColor;
 
 void main() {
+  float fragDepth = gl_FragCoord.z * 0.5 + 0.5;
   if ( vTerrain > 0.5 ) {
     // Transform the NDC coordinates to range [0, 1].
     // Use to sample the depth map in range [0, 1].
     vec2 texCoord = gl_FragCoord.xy * 0.5 + 0.5;
 
     // Sample the depth map
-    float previousDepth = texture(depthMap, texCoord).r;
-    if ( previousDepth <= gl_FragCoord.z ) gl_FragDepth = 1.0;
+    float nearestDepth = texture(depthMap, texCoord).r;
+    fragColor = vec4(nearestDepth);
+//     if ( fragDepth <= nearestDepth ) {
+//       discard;
+//     }
+    // fragColor = vec4(1.0);
   } else {
-    gl_FragDepth = gl_FragCoord.z;
+    fragColor = vec4(fragDepth);
   }
 
-  fragColor = vec4(0.0); // Needed so the fragment shader actually saves the depth values.
+  // fragColor = vec4(fragDepth);
+
+  // fragColor = vec4(0.0); // Needed so the fragment shader actually saves the depth values.
   //fragColor = vec4(1.0, 0.0, 0.0, 1.0); // For testing
 }`;
-
