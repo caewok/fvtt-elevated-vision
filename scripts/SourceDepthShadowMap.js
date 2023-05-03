@@ -586,11 +586,14 @@ export class SourceDepthShadowMap {
 
     // Construct uniforms used by the shadow shader
     const { x, y, z } = this.lightPosition;
+
+
     const shadowRenderUniforms = {
-      distanceMap: this.depthTexture,
+      distanceMap: this.terrainDepthTexture,
       uLightPosition: [x, y, z],
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
-      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
+      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
+      uMaxDistance: this.lightPosition.dot(new Point3d(sceneRect.right, sceneRect.bottom, minElevation))
     };
 
     // Construct a quad for the scene.

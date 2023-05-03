@@ -160,6 +160,7 @@ in vec3 vertexPosition;
 out vec4 fragColor;
 
 uniform sampler2D distanceMap;
+uniform float uMaxDistance;
 
 /**
  * Pull the nearest distance for the given position, in light space.
@@ -191,12 +192,14 @@ float nearestDistanceForFragment() {
  */
 float shadowPercentage(in float nearestDistance) {
   float fragDist = dot(lightPosition, vertexPosition);
-  return fragDist > nearestDistance ? 1.0 : 0.0;
+  return fragDist < nearestDistance ? 1.0 : 0.0;
 }
 
 void main() {
   float nearestDistance = nearestDistanceForFragment();
   float shadow = shadowPercentage(nearestDistance);
+
+  nearestDistance = nearestDistance / uMaxDistance;
 
   // For testing, just draw the shadow.
   // fragColor = vec4(0.0, 0.0, 0.0, shadow * 0.5);
