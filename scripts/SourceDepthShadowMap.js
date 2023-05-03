@@ -173,6 +173,7 @@ export class SourceDepthShadowMap {
       const renderer = PIXI.autoDetectRenderer();
       const gl = renderer.gl;
       PIXI.BLEND_MODES.MIN = renderer.state.blendModes.push([gl.ONE, gl.ONE, gl.ONE, gl.ONE, gl.MIN, gl.MIN]) - 1;
+      PIXI.BLEND_MODES.MAX = renderer.state.blendModes.push([gl.ONE, gl.ONE, gl.ONE, gl.ONE, gl.MAX, gl.MAX]) - 1;
     }
   }
 
@@ -494,8 +495,8 @@ export class SourceDepthShadowMap {
 
     // TODO: Can we save and update a single PIXI.Mesh?
     const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
-    mesh.state.depthTest = false;
-    mesh.state.depthMask = false;
+    mesh.state.depthTest = true;
+    mesh.state.depthMask = true;
     mesh.blendMode = PIXI.BLEND_MODES.MIN;
     return mesh;
   }
@@ -506,20 +507,29 @@ export class SourceDepthShadowMap {
    */
   _renderDepth() {
     // Render depth for the scene to a texture.
-    const renderTexture = PIXI.RenderTexture.create({width: 1024, height: 1024});
-    renderTexture.framebuffer.enableDepth();
-    const depthMesh = this._constructDepthMesh();
-    canvas.app.renderer.render(depthMesh, { renderTexture });
-    this.#baseDepthTexture = renderTexture;
-
-    // Now render with terrain
-    const renderTextureTerrain = PIXI.RenderTexture.create({width: 1024, height: 1024});
-    renderTextureTerrain.framebuffer.enableDepth();
-    const terrainDepthMesh = this._constructTerrainMesh(renderTexture);
-    canvas.app.renderer.render(terrainDepthMesh, { renderTexture: renderTextureTerrain });
-    this.#terrainDepthTexture = renderTextureTerrain;
-
-    this.#depthTexture = renderTextureTerrain;
+//     const renderTexture = PIXI.RenderTexture.create({width: 1024, height: 1024});
+//     renderTexture.framebuffer.addDepthTexture();
+//     renderTexture.framebuffer.enableDepth();
+//     const depthMesh = this._constructDepthMesh();
+//     canvas.app.renderer.render(depthMesh, { renderTexture });
+//     this.#baseDepthTexture = renderTexture;
+//
+//     depthTex = new PIXI.Texture(renderTexture.framebuffer.depthTexture);
+//     depthTex.framebuffer = renderTexture.framebuffer;
+//
+//     // Now render with terrain
+//     depthMap = depthTex
+//
+//     terrainBuffer =
+//
+//     const renderTextureTerrain = PIXI.RenderTexture.create({width: 1024, height: 1024});
+//     renderTextureTerrain.framebuffer.addDepthTexture();
+//     renderTextureTerrain.framebuffer.enableDepth();
+//     const terrainDepthMesh = this._constructTerrainMesh(renderTexture);
+//     canvas.app.renderer.render(terrainDepthMesh, { renderTexture: renderTextureTerrain });
+//     this.#terrainDepthTexture = renderTextureTerrain;
+//
+//     this.#depthTexture = renderTextureTerrain;
   }
 
   /**
@@ -601,3 +611,19 @@ export class SourceDepthShadowMap {
 
   static terrainRenderShader = terrainRenderShader;
 }
+
+
+/**
+ * Texture that uses a float array.
+ * See https://github.com/pixijs/pixijs/blob/67ff50884ba0b8c42a1011598e2319ab3039cd1e/packages/core/src/textures/resources/BufferResource.ts#L17
+ * https://github.com/pixijs/pixijs/issues/6436
+ * https://www.html5gamedevs.com/topic/44689-how-bind-webgl-texture-current-to-shader-on-piximesh/
+ */
+class DistanceTexture extends PIXI.Resource {
+  constructor(width, height) {
+    super(width, height);
+
+
+  }
+}
+
