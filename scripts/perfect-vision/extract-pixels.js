@@ -121,3 +121,65 @@ export async function canvasToBase64(canvas, type, quality) {
         }, type, quality);
     });
 }
+
+/**
+ * Extract a rectangular block of pixels from the texture (without unpremultiplying).
+ * @param {PIXI.Renderer} renderer - The renderer.
+ * @param {PIXI.Texture|PIXI.RenderTexture|null} [texture] - The texture the pixels are extracted from; otherwise extract from the renderer.
+ * @param {PIXI.Rectangle} [frame] - The rectangle the pixels are extracted from.
+ * @returns {{pixels: Uint8Array, width: number, height: number}} The extracted pixel data.
+ */
+export function extractPixelsFromFloat(renderer, texture, frame) {
+    const baseTexture = texture?.baseTexture;
+
+    if (texture && (!baseTexture || !baseTexture.valid || baseTexture.parentTextureArray)) {
+        throw new Error("Texture is invalid");
+    }
+
+    const gl = renderer.gl;
+    const readPixels = (frame, resolution) => {
+        const x = Math.round(frame.left * resolution);
+        const y = Math.round(frame.top * resolution);
+        const width = Math.round(frame.right * resolution) - x;
+        const height = Math.round(frame.bottom * resolution) - y;
+        const pixels = new Float32Array(width * height);
+
+        gl.readPixels(x, y, width, height, gl.RED, gl.FLOAT, pixels);
+
+        return { pixels, x, y, width, height };
+    }
+
+    if (!texture) {
+        renderer.renderTexture.bind(null);
+
+        return readPixels(frame ?? renderer.screen, renderer.resolution);
+    } else if (texture instanceof PIXI.RenderTexture) {
+        renderer.renderTexture.bind(texture);
+
+        return readPixels(frame ?? texture.frame, baseTexture.resolution);
+    } else {
+        renderer.texture.bind(texture);
+
+        const framebuffer = gl.createFramebuffer();
+
+        try {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+            gl.framebufferTexture2D(
+                gl.FRAMEBUFFER,
+                gl.COLOR_ATTACHMENT0,
+                gl.TEXTURE_2D,
+                baseTexture._glTextures[renderer.CONTEXT_UID]?.texture,
+                0
+            );
+
+            if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+                throw new Error("Failed to extract pixels from texture");
+            }
+
+            return readPixels(frame ?? texture.frame, baseTexture.resolution);
+        } finally {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.deleteFramebuffer(framebuffer);
+        }
+    }
+}
