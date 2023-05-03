@@ -9,10 +9,9 @@ import { Matrix } from "./geometry/Matrix.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
 import {
-  shadowRenderShader,
-  depthShader,
-  terrainDepthShader,
-  terrainRenderShader } from "./shaders.js";
+  shadowRenderShaderGLSL,
+  depthShaderGLSL,
+  terrainDepthShaderGLSL } from "./shaders.js";
 
 import {
   perspectiveMatrix,
@@ -31,8 +30,8 @@ Point3d = CONFIG.GeometryLib.threeD.Point3d
 lightOrigin = new Point3d(100, 100, 1600);
 
 map = new SourceDepthShadowMap(lightOrigin, { walls });
-map._baseDepthTest();
-map._endBaseDepthTest();
+map._depthTest();
+map._endDepthTest();
 
 map._terrainDepthTest();
 map._endTerrainDepthTest();
@@ -51,8 +50,6 @@ let { pixels, width, height } = extractPixels(canvas.app.renderer, this.baseDept
 let { pixels, width, height } = extractPixels(canvas.app.renderer, this.terrainDepthTexture);
 
 let { pixels, width, height } = extractPixels(canvas.app.renderer, this.depthTexture);
-
-
 
 map = new SourceDepthShadowMap(lightOrigin, { walls });
 map._shadowRenderTest();
@@ -104,21 +101,17 @@ export class SourceDepthShadowMap {
 
   #radius;
 
-  #depthMesh;
-
-  #terrainDepthMesh;
-
+  // Stage 1: Render the depth of walls to a texture
   #depthTexture;
 
-  #baseDepthTexture;
+  #depthSprite; // For debugging
 
-  #depthSprite;
-
+  // Stage 2: Render the depth of walls, accounting for terrain walls, to a texture
   #terrainDepthTexture;
 
-  #terrainDepthSprite;
+  #terrainDepthSprite; // For debugging
 
-  #shadowRender;
+  #shadowRender; // For debugging
 
   #hasTerrainWalls = false;
 
@@ -215,20 +208,12 @@ export class SourceDepthShadowMap {
 
   /** @type {PIXI.Texture} */
   get depthTexture() {
-    if ( !this.#depthTexture ) this._renderDepth();
-    return this.#depthTexture;
+    return this.#depthTexture || (this.#depthTexture = this._renderDepth());
   }
 
   /** @type {PIXI.Texture} */
   get terrainDepthTexture() {
-    if ( !this.#terrainDepthTexture ) this._renderDepth();
-    return this.#terrainDepthTexture;
-  }
-
-  /** @type {PIXI.Texture} */
-  get baseDepthTexture() {
-    if ( !this.#baseDepthTexture ) this._renderDepth();
-    return this.#baseDepthTexture;
+    return this.#terrainDepthTexture || (this.#terrainDepthTexture = this._renderTerrainDepth());
   }
 
   /** @type {number} */
@@ -264,11 +249,13 @@ export class SourceDepthShadowMap {
    * Reset all cached variables related to depth.
    */
   _resetDepth() {
-    this.#depthMesh = undefined; // Requires viewM and projectionM
-    this.#terrainDepthMesh = undefined; // Requires viewM and projectionM
-    this.#depthTexture = undefined; // Requires depthMesh
-    this.#depthSprite = undefined;  // Based on depthTexture
-    this.#shadowRender = undefined; // Based on depthTexture
+    this.#depthTexture = undefined; // Requires viewMatrix, projectionMatrix
+    this.#terrainDepthTexture = undefined; // Requires depthTexture
+
+    // End any debugging tests that may have been active.
+    this._endShadowRenderTest();
+    this._endTerrainDepthTest();
+    this._endDepthTest();
   }
 
   /**
@@ -353,14 +340,6 @@ export class SourceDepthShadowMap {
     this.wallGeometry.getBuffer("aVertexPosition").update(coordinates);
     this.wallGeometry.getBuffer("aTerrain").update(terrain);
     this.wallGeometry.getIndex().update(indices);
-
-    // TODO: Make this an empty matrix instead and fill it? Same for #viewMatrix?
-    // TODO: Do we need to destroy or update the texture, mesh, sprite?
-    this.#projectionMatrix = undefined;
-    this.#depthMesh = undefined;
-    this.#depthTexture = undefined;
-    this.#depthSprite = undefined;
-    this.#shadowRender = undefined;
   }
 
   /**
@@ -461,17 +440,17 @@ export class SourceDepthShadowMap {
 
   /**
    * Construct the mesh used by the depth shader for the given geometry.
-   * @param {"depthShader"|"terrainDepthShader"} type
+   * Treats terrain walls just like any other wall.
    * @returns {PIXI.Mesh}
    */
   _constructDepthMesh() {
     const uniforms = {
-      projectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
-      viewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
+      uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
+      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
-    const { vertexShader, fragmentShader } = SourceDepthShadowMap.depthShader;
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.depthShaderGLSL;
     const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 
     // TODO: Can we save and update a single PIXI.Mesh?
@@ -482,88 +461,140 @@ export class SourceDepthShadowMap {
     return mesh;
   }
 
-  _constructTerrainMesh(depthMap) {
+  _constructTerrainDepthMesh(depthMap) {
+    const { x, y, z } = this.lightPosition;
     const uniforms = {
-      projectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
-      viewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
+      uLightPosition: [x, y, z],
+      uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
+      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
       depthMap
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
-    const { vertexShader, fragmentShader } = SourceDepthShadowMap.terrainDepthShader;
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.terrainDepthShaderGLSL;
     const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 
     // TODO: Can we save and update a single PIXI.Mesh?
     const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
-    mesh.state.depthTest = true;
-    mesh.state.depthMask = true;
+    mesh.state.depthTest = false;
+    mesh.state.depthMask = false;
     mesh.blendMode = PIXI.BLEND_MODES.MIN;
     return mesh;
   }
 
   /**
-   * Render the depth of each wall in the scene, saved to a depth texture.
+   * Render the depth of each wall in the scene.
+   * Phase 1: save z values to a RED float texture.
    * @returns {PIXI.Texture}
    */
   _renderDepth() {
-    // Render depth for the scene to a texture.
-//     const renderTexture = PIXI.RenderTexture.create({width: 1024, height: 1024});
-//     renderTexture.framebuffer.addDepthTexture();
-//     renderTexture.framebuffer.enableDepth();
-//     const depthMesh = this._constructDepthMesh();
-//     canvas.app.renderer.render(depthMesh, { renderTexture });
-//     this.#baseDepthTexture = renderTexture;
-//
-//     depthTex = new PIXI.Texture(renderTexture.framebuffer.depthTexture);
-//     depthTex.framebuffer = renderTexture.framebuffer;
-//
-//     // Now render with terrain
-//     depthMap = depthTex
-//
-//     terrainBuffer =
-//
-//     const renderTextureTerrain = PIXI.RenderTexture.create({width: 1024, height: 1024});
-//     renderTextureTerrain.framebuffer.addDepthTexture();
-//     renderTextureTerrain.framebuffer.enableDepth();
-//     const terrainDepthMesh = this._constructTerrainMesh(renderTexture);
-//     canvas.app.renderer.render(terrainDepthMesh, { renderTexture: renderTextureTerrain });
-//     this.#terrainDepthTexture = renderTextureTerrain;
-//
-//     this.#depthTexture = renderTextureTerrain;
+    // TODO: Can we change the depth render so it also outputs distance?
+    //       Then we can skip the second render if no terrain walls are present.
+
+    const depthMesh = this._constructDepthMesh();
+
+    // TODO: Set width and height more intelligently; handle point light radii.
+    // Get a RenderTexture
+    const renderTexture = PIXI.RenderTexture.create({
+      width: 1024,
+      height: 1024,
+      format: PIXI.FORMATS.RED,
+      type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+      scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+    });
+    renderTexture.framebuffer.enableDepth();
+
+    // Render depth
+    canvas.app.renderer.render(depthMesh, { renderTexture });
+
+    // Extract the texture from the render texture.
+    const depthTex = PIXI.Texture.from(renderTexture.framebuffer.colorTextures[0], {
+      format: PIXI.FORMATS.RED,
+      type: PIXI.TYPES.FLOAT,
+      scaleMode: PIXI.SCALE_MODES.NEAREST
+    });
+    depthTex.framebuffer = renderTexture.framebuffer;
+    return depthTex;
   }
+
+  /**
+   * Render the depth of each wall in the scene.
+   * Phase 2: Depth peel for terrain walls. Save remaining distances from light to RED float texture.
+   * @returns {PIXI.Texture}
+   */
+  _renderTerrainDepth() {
+    const terrainDepthMesh = this._constructTerrainDepthMesh(this.depthTexture);
+
+    // Get a RenderTexture
+    const renderTexture = PIXI.RenderTexture.create({
+      width: 1024,
+      height: 1024,
+      format: PIXI.FORMATS.RED,
+      type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+      scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+    });
+    renderTexture.framebuffer.enableDepth();
+
+    // Render depth
+    canvas.app.renderer.render(terrainDepthMesh, { renderTexture });
+
+    // Extract the texture from the render texture.
+    const depthTex = PIXI.Texture.from(renderTexture.framebuffer.colorTextures[0], {
+      format: PIXI.FORMATS.RED,
+      type: PIXI.TYPES.FLOAT,
+      scaleMode: PIXI.SCALE_MODES.NEAREST
+    });
+    depthTex.framebuffer = renderTexture.framebuffer;
+    return depthTex;
+  }
+
 
   /**
    * Render a sprite to the screen to test the depth
    */
-  _baseDepthTest() {
-    if ( this.#depthSprite ) canvas.stage.removeChild(this.#depthSprite);
-    this.#depthSprite = new PIXI.Sprite(this.baseDepthTexture);
+  _depthTest() {
+    this._endDepthTest();
+    this.#depthSprite = new PIXI.Sprite(this.depthTexture);
     canvas.stage.addChild(this.#depthSprite);
   }
 
-  _endBaseDepthTest() {
+  _endDepthTest() {
     if ( this.#depthSprite ) canvas.stage.removeChild(this.#depthSprite);
+    this.#depthSprite = undefined;
   }
 
   _terrainDepthTest() {
-    if ( this.#terrainDepthSprite ) canvas.stage.removeChild(this.#terrainDepthSprite);
+    this._endTerrainDepthTest();
     this.#terrainDepthSprite = new PIXI.Sprite(this.terrainDepthTexture);
     canvas.stage.addChild(this.#terrainDepthSprite);
   }
 
   _endTerrainDepthTest() {
     if ( this.#terrainDepthSprite ) canvas.stage.removeChild(this.#terrainDepthSprite);
+    this.#terrainDepthSprite = undefined;
   }
 
   /**
    * Render a test of the shadows to the canvas
    */
   _shadowRenderTest() {
-    if ( this.#shadowRender ) canvas.stage.removeChild(this.#shadowRender);
+    this._endShadowRenderTest();
 
-    const geometryShadowRender = new PIXI.Geometry();
+    // Constants
     const sceneRect = canvas.dimensions.sceneRect;
     const minElevation = this.minElevation;
+
+    // Construct uniforms used by the shadow shader
+    const { x, y, z } = this.lightPosition;
+    const shadowRenderUniforms = {
+      distanceMap: this.depthTexture,
+      uLightPosition: [x, y, z],
+      uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
+      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
+    };
+
+    // Construct a quad for the scene.
+    const geometryShadowRender = new PIXI.Geometry();
     geometryShadowRender.addAttribute("aVertexPosition", [
       sceneRect.left, sceneRect.top, minElevation,      // TL
       sceneRect.right, sceneRect.top, minElevation,   // TR
@@ -581,20 +612,18 @@ export class SourceDepthShadowMap {
     ], 2);
     geometryShadowRender.addIndex([0, 1, 2, 0, 2, 3]);
 
-    const shadowRenderUniforms = {
-      projectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
-      viewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
-      depthMap: this.depthTexture
-    };
-
-    const { vertexShader, fragmentShader } = SourceDepthShadowMap.shadowRenderShader;
+    // Construct the shader and add it to a mesh.
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.shadowRenderShaderGLSL;
     const shadowRenderShader = PIXI.Shader.from(vertexShader, fragmentShader, shadowRenderUniforms);
     this.#shadowRender = new PIXI.Mesh(geometryShadowRender, shadowRenderShader);
+
+    // Render the mesh to the scene.
     canvas.stage.addChild(this.#shadowRender);
   }
 
   _endShadowRenderTest() {
     if ( this.#shadowRender ) canvas.stage.removeChild(this.#shadowRender);
+    this.#shadowRender = undefined;
   }
 
   static toColMajorArray = toColMajorArray;
@@ -603,13 +632,11 @@ export class SourceDepthShadowMap {
 
   static perspectiveMatrix = perspectiveMatrix;
 
-  static shadowRenderShader = shadowRenderShader;
+  static shadowRenderShaderGLSL = shadowRenderShaderGLSL;
 
-  static depthShader = depthShader;
+  static depthShaderGLSL = depthShaderGLSL;
 
-  static terrainDepthShader = terrainDepthShader;
-
-  static terrainRenderShader = terrainRenderShader;
+  static terrainDepthShaderGLSL = terrainDepthShaderGLSL;
 }
 
 
@@ -619,11 +646,11 @@ export class SourceDepthShadowMap {
  * https://github.com/pixijs/pixijs/issues/6436
  * https://www.html5gamedevs.com/topic/44689-how-bind-webgl-texture-current-to-shader-on-piximesh/
  */
-class DistanceTexture extends PIXI.Resource {
-  constructor(width, height) {
-    super(width, height);
-
-
-  }
-}
+// class DistanceTexture extends PIXI.Resource {
+//   constructor(width, height) {
+//     super(width, height);
+//
+//
+//   }
+// }
 
