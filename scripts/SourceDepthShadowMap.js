@@ -1,6 +1,7 @@
 /* globals
 canvas,
 CONST,
+foundry,
 PIXI
 */
 "use strict";
@@ -11,7 +12,9 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 import {
   shadowRenderShaderGLSL,
   depthShaderGLSL,
-  terrainDepthShaderGLSL } from "./shaders.js";
+  terrainDepthShaderGLSL,
+  wallACoordinatesShaderGLSL,
+  wallBCoordinatesShaderGLSL } from "./shaders.js";
 
 import {
   perspectiveMatrix,
@@ -53,9 +56,6 @@ s.size
 pixels.reduce((curr, acc) => Math.min(curr, acc), Number.POSITIVE_INFINITY)
 pixels.reduce((curr, acc) => Math.max(curr, acc), Number.NEGATIVE_INFINITY)
 pixels.reduce((curr, acc) => acc += curr, 0);
-
-
-
 
 let { pixels, width, height } = extractPixels(canvas.app.renderer, this.baseDepthTexture);
 
@@ -112,6 +112,8 @@ export class SourceDepthShadowMap {
 
   #lightPosition;
 
+  #lightSize;
+
   #radius;
 
   // Stage 1: Render the depth of walls to a texture
@@ -136,9 +138,10 @@ export class SourceDepthShadowMap {
    * @param {PIXI.Geometry} [options.wallGeometry]
    * @param {boolean} [options.directional]
    */
-  constructor(lightPosition, { walls, wallGeometry, directional = true, radius }) {
+  constructor(lightPosition, { walls, wallGeometry, directional = true, radius, size = 1 }) {
     // TODO: Use LightSource instead or alternatively allow as an option?
     this.#lightPosition = lightPosition;
+    this.#lightSize = size;
     this.directional = directional;
 
     if ( !directional && typeof radius === "undefined" ) {
@@ -151,6 +154,8 @@ export class SourceDepthShadowMap {
       this.wallGeometry = new PIXI.Geometry();
       this.wallGeometry.addAttribute("aVertexPosition", [], 3);
       this.wallGeometry.addAttribute("aTerrain", [], 1);
+      this.wallGeometry.addAttribute("aWallA", [], 3);
+      this.wallGeometry.addAttribute("aWallB", [], 3);
       this.wallGeometry.addIndex([]);
     } else {
       this.wallGeometry = wallGeometry;
@@ -164,6 +169,16 @@ export class SourceDepthShadowMap {
       if ( !Object.hasOwn(wallGeometry.attributes, "aTerrain") ) {
         console.error("SourceDepthShadowMap|wallGeometry has no aTerrain.");
         this.wallGeometry.addAttribute("aTerrain", [], 1);
+      }
+
+      if ( !Object.hasOwn(wallGeometry.attributes, "aWallA") ) {
+        console.error("SourceDepthShadowMap|wallGeometry has no aWallA.");
+        this.wallGeometry.addAttribute("aWallA", [], 3);
+      }
+
+      if ( !Object.hasOwn(wallGeometry.attributes, "aWallB") ) {
+        console.error("SourceDepthShadowMap|wallGeometry has no aWallB.");
+        this.wallGeometry.addAttribute("aWallB", [], 3);
       }
 
       if ( !wallGeometry.indexBuffer ) {
@@ -287,6 +302,8 @@ export class SourceDepthShadowMap {
     const coordinates = new Float32Array(nWalls * 12); // Coords: x,y,z for top and bottom A, top and bottom B
     const indices = new Uint16Array(nWalls * 6); // 2 triangles to form a square
     const terrain = new Float32Array(nWalls * 4); // 1 per wall coordinate
+    const wallA = new Float32Array(nWalls * 4 * 3); // 1 per wall coordinate, 3 values
+    const wallB = new Float32Array(nWalls * 4 * 3); // 1 per wall coordinate, 3 values
 
     // Need to cut off walls at the top/bottom bounds of the scene, otherwise they
     // will be given incorrect depth values b/c there is no floor or ceiling.
@@ -295,6 +312,9 @@ export class SourceDepthShadowMap {
 
     for ( let w = 0, j = 0, idx = 0, i = 0; w < nWalls; w += 1, j += 12, idx += 6, i += 4 ) {
       const wall = walls[w];
+      const orientWall = foundry.utils.orient2dFast(wall.A, wall.B, this.lightPosition);
+      if ( orientWall.almostEqual(0) ) continue; // Wall is collinear to the light.
+
       const topZ = Math.min(maxElevation, wall.topZ);
       const bottomZ = Math.max(minElevation, wall.bottomZ);
       if ( topZ <= bottomZ ) continue; // Wall is above or below the viewing box.
@@ -336,8 +356,37 @@ export class SourceDepthShadowMap {
       terrain[i + 2] = isTerrain;
       terrain[i + 3] = isTerrain;
       hasTerrainWalls ||= isTerrain;
+
+      // Record the x and y for the wall
+      // A endpoint is one that makes A --> B --> light CW
+      const [A, B] = orientWall > 0 ? [wall.A, wall.B] : [wall.B, wall.A];
+      wallA[j] = A.x;
+      wallA[j + 1] = A.y;
+      wallA[j + 2] = A.z;
+      wallA[j + 3] = A.x;
+      wallA[j + 4] = A.y;
+      wallA[j + 5] = A.z;
+      wallA[j + 6] = A.x;
+      wallA[j + 7] = A.y;
+      wallA[j + 8] = A.z;
+      wallA[j + 9] = A.x;
+      wallA[j + 10] = A.y;
+      wallA[j + 11] = A.z;
+
+      wallB[j] = B.x;
+      wallB[j + 1] = B.y;
+      wallB[j + 2] = B.z;
+      wallB[j + 3] = B.x;
+      wallB[j + 4] = B.y;
+      wallB[j + 5] = B.z;
+      wallB[j + 6] = B.x;
+      wallB[j + 7] = B.y;
+      wallB[j + 8] = B.z;
+      wallB[j + 9] = B.x;
+      wallB[j + 10] = B.y;
+      wallB[j + 11] = B.z;
     }
-    return { coordinates, indices, terrain, hasTerrainWalls };
+    return { coordinates, indices, terrain, hasTerrainWalls, wallA, wallB };
   }
 
   /**
@@ -346,12 +395,14 @@ export class SourceDepthShadowMap {
    */
   _updateWallGeometry(walls) {
     this._resetWalls();
-    const { coordinates, indices, terrain, hasTerrainWalls } = this._constructWallCoordinates(walls);
+    const { coordinates, indices, terrain, hasTerrainWalls, wallA, wallB } = this._constructWallCoordinates(walls);
     this.#hasTerrainWalls = hasTerrainWalls;
 
     // Update the buffer attributes and index.
     this.wallGeometry.getBuffer("aVertexPosition").update(coordinates);
     this.wallGeometry.getBuffer("aTerrain").update(terrain);
+    this.wallGeometry.getBuffer("aWallA").update(wallA);
+    this.wallGeometry.getBuffer("aWallB").update(wallB);
     this.wallGeometry.getIndex().update(indices);
   }
 
@@ -474,13 +525,13 @@ export class SourceDepthShadowMap {
     return mesh;
   }
 
-  _constructTerrainDepthMesh(depthMap) {
+  _constructTerrainDepthMesh() {
     const { x, y, z } = this.lightPosition;
     const uniforms = {
       uLightPosition: [x, y, z],
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
-      depthMap
+      depthMap: this.depthTexture
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
@@ -492,6 +543,26 @@ export class SourceDepthShadowMap {
     mesh.state.depthTest = false;
     mesh.state.depthMask = false;
     mesh.blendMode = PIXI.BLEND_MODES.MIN;
+    return mesh;
+  }
+
+  _constructWallCoordinatesMesh(endpoint = "A") {
+    const { x, y, z } = this.lightPosition;
+    const uniforms = {
+      uLightPosition: [x, y, z],
+      uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
+      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
+      distanceMap: this.terrainDepthTexture
+    };
+
+    // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.wallCoordinatesShaderGLSL[endpoint];
+    const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+
+    // TODO: Can we save and update a single PIXI.Mesh?
+    const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
+    mesh.state.depthTest = true;
+    mesh.state.depthMask = false;
     return mesh;
   }
 
@@ -536,7 +607,7 @@ export class SourceDepthShadowMap {
    * @returns {PIXI.Texture}
    */
   _renderTerrainDepth() {
-    const terrainDepthMesh = this._constructTerrainDepthMesh(this.depthTexture);
+    const terrainDepthMesh = this._constructTerrainDepthMesh();
 
     // Get a RenderTexture
     const renderTexture = PIXI.RenderTexture.create({
@@ -559,6 +630,14 @@ export class SourceDepthShadowMap {
     });
     depthTex.framebuffer = renderTexture.framebuffer;
     return depthTex;
+  }
+
+  /**
+   * Render the wall coordinates for the closest wall that casts a shadow.
+   * @returns {PIXI.Texture}
+   */
+  _renderWallCoordinates(endpoint = "A") {
+    const wallCoordinatesMesh = this._constructWallCoordinatesMesh()
   }
 
 
@@ -654,6 +733,8 @@ export class SourceDepthShadowMap {
   static depthShaderGLSL = depthShaderGLSL;
 
   static terrainDepthShaderGLSL = terrainDepthShaderGLSL;
+
+  static wallCoordinatesShaderGLSL = { A: wallACoordinatesShaderGLSL, B: wallBCoordinatesShaderGLSL };
 }
 
 
