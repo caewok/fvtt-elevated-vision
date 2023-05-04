@@ -43,7 +43,20 @@ map._endShadowRenderTest();
 map._updateWallGeometry(walls);
 
 
-extractPixels = api.extract.extractPixels
+extractPixelsFromFloat = api.extract.extractPixelsFromFloat
+let { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.terrainDepthTexture);
+s = new Set()
+pixels.forEach(px => s.add(px))
+s
+s.size
+
+pixels.reduce((curr, acc) => Math.min(curr, acc), Number.POSITIVE_INFINITY)
+pixels.reduce((curr, acc) => Math.max(curr, acc), Number.NEGATIVE_INFINITY)
+pixels.reduce((curr, acc) => acc += curr, 0);
+
+
+
+
 let { pixels, width, height } = extractPixels(canvas.app.renderer, this.baseDepthTexture);
 
 
@@ -593,7 +606,8 @@ export class SourceDepthShadowMap {
       uLightPosition: [x, y, z],
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
-      uMaxDistance: this.lightPosition.dot(new Point3d(sceneRect.right, sceneRect.bottom, minElevation))
+      uMaxDistance: this.lightPosition.dot(new Point3d(sceneRect.right, sceneRect.bottom, minElevation)),
+      uLightSize: 100 // TODO: User-defined.
     };
 
     // Construct a quad for the scene.
