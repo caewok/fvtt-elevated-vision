@@ -99,8 +99,10 @@ void main() {
   float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
   if ( vTerrain > 0.5 && nearestDepth >= fragDepth ) {
+    gl_FragDepth = 1.0;
     return;
   } else {
+    gl_FragDepth = fragDepth;
     distance = dot(uLightPosition, vertexPosition);
   }
 }`;
@@ -109,7 +111,7 @@ void main() {
 /**
  * Write the wall coordinates for the wall that shadows.
  */
-wallACoordinatesShaderGLSL = {};
+export const wallACoordinatesShaderGLSL = {};
 
 wallACoordinatesShaderGLSL.vertexShader =
 `#version 300 es
@@ -168,7 +170,7 @@ void main() {
 /**
  * Write the wall coordinates for the wall that shadows.
  */
-wallBCoordinatesShaderGLSL = {};
+export const wallBCoordinatesShaderGLSL = {};
 
 wallBCoordinatesShaderGLSL.vertexShader =
 `#version 300 es

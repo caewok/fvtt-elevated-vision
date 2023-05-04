@@ -236,12 +236,14 @@ export class SourceDepthShadowMap {
 
   /** @type {PIXI.Texture} */
   get depthTexture() {
-    return this.#depthTexture || (this.#depthTexture = this._renderDepth());
+    if ( typeof this.#depthTexture === "undefined" ) this._renderDepth();
+    return this.#depthTexture;
   }
 
   /** @type {PIXI.Texture} */
   get terrainDepthTexture() {
-    return this.#terrainDepthTexture || (this.#terrainDepthTexture = this._renderTerrainDepth());
+    if ( typeof this.#terrainDepthTexture === "undefined" ) this._renderDepth();
+    return this.#terrainDepthTexture;
   }
 
   /** @type {number} */
@@ -540,8 +542,8 @@ export class SourceDepthShadowMap {
 
     // TODO: Can we save and update a single PIXI.Mesh?
     const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
-    mesh.state.depthTest = false;
-    mesh.state.depthMask = false;
+    mesh.state.depthTest = true;
+    mesh.state.depthMask = true;
     mesh.blendMode = PIXI.BLEND_MODES.MIN;
     return mesh;
   }
@@ -586,6 +588,7 @@ export class SourceDepthShadowMap {
       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
     });
+    renderTexture.framebuffer.addDepthTexture();
     renderTexture.framebuffer.enableDepth();
 
     // Render depth
@@ -598,6 +601,31 @@ export class SourceDepthShadowMap {
       scaleMode: PIXI.SCALE_MODES.NEAREST
     });
     depthTex.framebuffer = renderTexture.framebuffer;
+    this.#depthTexture = depthTex;
+
+    // Phase II: Re-run to remove frontmost terrain walls.
+    const terrainDepthMesh = this._constructTerrainDepthMesh();
+    const terrainRenderTexture = PIXI.RenderTexture.create({
+      width: 1024,
+      height: 1024,
+      format: PIXI.FORMATS.RED,
+      type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+      scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+    });
+    terrainRenderTexture.framebuffer.addDepthTexture(renderTexture.framebuffer.depthTexture);
+    renderTexture.framebuffer.enableDepth();
+
+
+    canvas.app.renderer.render(terrainDepthMesh, { renderTexture: terrainRenderTexture });
+
+    const terrainDepthTex = PIXI.Texture.from(terrainRenderTexture.framebuffer.colorTextures[0], {
+      format: PIXI.FORMATS.RED,
+      type: PIXI.TYPES.FLOAT,
+      scaleMode: PIXI.SCALE_MODES.NEAREST
+    });
+    terrainDepthTex.framebuffer = terrainRenderTexture.framebuffer;
+    this.#terrainDepthTexture = terrainDepthTex;
+
     return depthTex;
   }
 
