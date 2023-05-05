@@ -22,15 +22,27 @@ import {
   toColMajorArray } from "./util.js";
 
 /* Testing
+
+
+
 // let walls = canvas.walls.placeables;
 // let walls = canvas.walls.controlled;
 
 api = game.modules.get("elevatedvision").api
+Draw = CONFIG.GeometryLib.Draw;
+Draw.clearDrawings()
+
 SourceDepthShadowMap = api.SourceDepthShadowMap
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 
 
-lightOrigin = new Point3d(100, 100, 1600);
+// lightOrigin = new Point3d(100, 100, 1600);
+lightOrigin = new Point3d(100, canvas.dimensions.height - 100, 1600);
+
+Draw.point(lightOrigin, { color: Draw.COLORS.yellow });
+Draw.segment({A: lightOrigin, B: canvas.dimensions.sceneRect.center })
+
+
 
 map = new SourceDepthShadowMap(lightOrigin, { walls });
 map._depthTest();
@@ -60,7 +72,7 @@ map._updateWallGeometry(walls);
 
 
 extractPixelsFromFloat = api.extract.extractPixelsFromFloat
-let { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.terrainDepthTexture);
+let { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.wallACoordinatesTexture);
 s = new Set()
 pixels.forEach(px => s.add(px))
 s
@@ -69,6 +81,15 @@ s.size
 pixels.reduce((curr, acc) => Math.min(curr, acc), Number.POSITIVE_INFINITY)
 pixels.reduce((curr, acc) => Math.max(curr, acc), Number.NEGATIVE_INFINITY)
 pixels.reduce((curr, acc) => acc += curr, 0);
+
+// Draw x coordinates in s
+s = s.map(x => canvas.dimensions.width * (1 - x))
+
+Draw = CONFIG.GeometryLib.Draw;
+s.forEach(x => Draw.segment({A: {x, y: 0}, B: {x, y: canvas.dimensions.height}}))
+
+
+
 
 let { pixels, width, height } = extractPixels(canvas.app.renderer, this.baseDepthTexture);
 
@@ -177,8 +198,8 @@ export class SourceDepthShadowMap {
       this.wallGeometry = new PIXI.Geometry();
       this.wallGeometry.addAttribute("aVertexPosition", [], 3);
       this.wallGeometry.addAttribute("aTerrain", [], 1);
-      this.wallGeometry.addAttribute("aWallA", [], 3);
-      this.wallGeometry.addAttribute("aWallB", [], 3);
+      this.wallGeometry.addAttribute("aWallA", [], 3, false, 	PIXI.TYPES.INT);
+      this.wallGeometry.addAttribute("aWallB", [], 3, false, 	PIXI.TYPES.INT);
       this.wallGeometry.addIndex([]);
     } else {
       this.wallGeometry = wallGeometry;
@@ -196,12 +217,12 @@ export class SourceDepthShadowMap {
 
       if ( !Object.hasOwn(wallGeometry.attributes, "aWallA") ) {
         console.error("SourceDepthShadowMap|wallGeometry has no aWallA.");
-        this.wallGeometry.addAttribute("aWallA", [], 3);
+        this.wallGeometry.addAttribute("aWallA", [], 3, false, 	PIXI.TYPES.INT);
       }
 
       if ( !Object.hasOwn(wallGeometry.attributes, "aWallB") ) {
         console.error("SourceDepthShadowMap|wallGeometry has no aWallB.");
-        this.wallGeometry.addAttribute("aWallB", [], 3);
+        this.wallGeometry.addAttribute("aWallB", [], 3, false, 	PIXI.TYPES.INT);
       }
 
       if ( !wallGeometry.indexBuffer ) {
@@ -337,8 +358,8 @@ export class SourceDepthShadowMap {
     const coordinates = new Float32Array(nWalls * 12); // Coords: x,y,z for top and bottom A, top and bottom B
     const indices = new Uint16Array(nWalls * 6); // 2 triangles to form a square
     const terrain = new Float32Array(nWalls * 4); // 1 per wall coordinate
-    const wallA = new Float32Array(nWalls * 4 * 3); // 1 per wall coordinate, 3 values
-    const wallB = new Float32Array(nWalls * 4 * 3); // 1 per wall coordinate, 3 values
+    const wallA = new Int32Array(nWalls * 4 * 3); // 1 per wall coordinate, 3 values
+    const wallB = new Int32Array(nWalls * 4 * 3); // 1 per wall coordinate, 3 values
 
     // Need to cut off walls at the top/bottom bounds of the scene, otherwise they
     // will be given incorrect depth values b/c there is no floor or ceiling.
@@ -582,7 +603,6 @@ export class SourceDepthShadowMap {
   }
 
   _constructWallCoordinatesMesh(endpoint = "A") {
-    const { x, y, z } = this.lightPosition;
     const uniforms = {
       depthMap: this.terrainDepthTexture,
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
@@ -595,11 +615,11 @@ export class SourceDepthShadowMap {
 
     // TODO: Can we save and update a single PIXI.Mesh?
     const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
-    mesh.state.depthTest = false;
+    mesh.state.depthTest = true;
     mesh.state.depthMask = false;
     //mesh.blend = false;
     //mesh.blendMode = PIXI.BLEND_MODES.NORMAL;
-    mesh.blendMode = PIXI.BLEND_MODES.MIN;
+    mesh.blendMode = PIXI.BLEND_MODES.MIN; // TODO: Not sure why this works...
     return mesh;
   }
 
@@ -674,6 +694,28 @@ export class SourceDepthShadowMap {
     this.#terrainDepthTexture = terrainDepthTex;
 
     // Test
+//     const wallAMesh = this._constructWallCoordinatesMesh("A");
+//     const wallARenderTexture = PIXI.RenderTexture.create({
+//       width: 1024,
+//       height: 1024,
+//       format: PIXI.FORMATS.RED,
+//       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+//       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+//     });
+//     //wallARenderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
+//     //wallARenderTexture.framebuffer.enableDepth();
+//
+//     canvas.app.renderer.render(wallAMesh, { renderTexture: wallARenderTexture });
+//     const wallATex = PIXI.Texture.from(wallARenderTexture.framebuffer.colorTextures[0], {
+//       format: PIXI.FORMATS.RED,
+//       type: PIXI.TYPES.FLOAT,
+//       scaleMode: PIXI.SCALE_MODES.NEAREST
+//     });
+//     wallATex.framebuffer = wallARenderTexture.framebuffer;
+//     this.#wallACoordinatesTexture = wallATex;
+
+
+    // Phase III.A: Wall endpoint A coordinates
     const wallAMesh = this._constructWallCoordinatesMesh("A");
     const wallARenderTexture = PIXI.RenderTexture.create({
       width: 1024,
@@ -682,8 +724,6 @@ export class SourceDepthShadowMap {
       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
     });
-    //wallARenderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
-    //wallARenderTexture.framebuffer.enableDepth();
 
     canvas.app.renderer.render(wallAMesh, { renderTexture: wallARenderTexture });
     const wallATex = PIXI.Texture.from(wallARenderTexture.framebuffer.colorTextures[0], {
@@ -693,28 +733,6 @@ export class SourceDepthShadowMap {
     });
     wallATex.framebuffer = wallARenderTexture.framebuffer;
     this.#wallACoordinatesTexture = wallATex;
-
-
-    // Phase III.A: Wall endpoint A coordinates
-//     const wallAMesh = this._constructWallCoordinatesMesh("A");
-//     const wallARenderTexture = PIXI.RenderTexture.create({
-//       width: 1024,
-//       height: 1024,
-//       format: PIXI.FORMATS.RGB,
-//       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
-//       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
-//     });
-//     wallARenderTexture.framebuffer.addDepthTexture(terrainRenderTexture.framebuffer.depthTexture);
-//     wallARenderTexture.framebuffer.enableDepth();
-//
-//     canvas.app.renderer.render(wallAMesh, { renderTexture: wallARenderTexture });
-//     const wallATex = PIXI.Texture.from(wallARenderTexture.framebuffer.colorTextures[0], {
-//       format: PIXI.FORMATS.RGB,
-//       type: PIXI.TYPES.FLOAT,
-//       scaleMode: PIXI.SCALE_MODES.NEAREST
-//     });
-//     wallATex.framebuffer = wallARenderTexture.framebuffer;
-//     this.#wallACoordinatesTexture = wallATex;
 
     // Phase III.B: Wall endpoint B coordinates
 //     const wallBMesh = this._constructWallCoordinatesMesh("B");

@@ -124,11 +124,14 @@ uniform mat4 uViewM;
 
 in vec3 aVertexPosition;
 in vec3 aWallA;
+in vec3 aWallB;
 
 out vec3 vWallA;
+out vec3 vWallB;
 
 void main() {
   vWallA = aWallA;
+  vWallB = aWallB;
   gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
 }`;
 
@@ -139,8 +142,9 @@ precision mediump float;
 uniform sampler2D depthMap;
 
 in vec3 vWallA;
-// out vec3 coordinates;
-out float distance;
+in vec3 vWallB;
+// out uvec4 coordinates;
+out float coordinates;
 
 void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
@@ -149,7 +153,8 @@ void main() {
   if ( nearestDepth == 0.0 ) discard;
 
   if ( nearestDepth >= gl_FragCoord.z ) {
-    distance = gl_FragCoord.z;
+    // distance = gl_FragCoord.z;
+    coordinates = 1.0 - (vWallB.x / 6000.0);
   } else {
     discard;
   }
