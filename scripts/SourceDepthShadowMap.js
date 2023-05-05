@@ -22,8 +22,6 @@ import {
 
 /* Testing
 
-
-
 // let walls = canvas.walls.placeables;
 // let walls = canvas.walls.controlled;
 
@@ -40,8 +38,6 @@ lightOrigin = new Point3d(100, 100, 1600);
 
 Draw.point(lightOrigin, { color: Draw.COLORS.yellow });
 Draw.segment({A: lightOrigin, B: canvas.dimensions.sceneRect.center })
-
-
 
 map = new SourceDepthShadowMap(lightOrigin, { walls });
 map._depthTest();
@@ -91,8 +87,6 @@ for ( let i = 1; i < (width * height * 4); i += 4 ) {
   s.add(pixels[i])
 }
 
-
-
 pixels.reduce((curr, acc) => Math.min(curr, acc), Number.POSITIVE_INFINITY)
 pixels.reduce((curr, acc) => Math.max(curr, acc), Number.NEGATIVE_INFINITY)
 pixels.reduce((curr, acc) => acc += curr, 0);
@@ -102,9 +96,6 @@ s = s.map(x => canvas.dimensions.width * (1 - x))
 
 Draw = CONFIG.GeometryLib.Draw;
 s.forEach(x => Draw.segment({A: {x, y: 0}, B: {x, y: canvas.dimensions.height}}))
-
-
-
 
 let { pixels, width, height } = extractPixels(canvas.app.renderer, this.baseDepthTexture);
 
@@ -213,8 +204,8 @@ export class SourceDepthShadowMap {
       this.wallGeometry = new PIXI.Geometry();
       this.wallGeometry.addAttribute("aVertexPosition", [], 3);
       this.wallGeometry.addAttribute("aTerrain", [], 1);
-      this.wallGeometry.addAttribute("aWallA", [], 3, false, 	PIXI.TYPES.INT);
-      this.wallGeometry.addAttribute("aWallB", [], 3, false, 	PIXI.TYPES.INT);
+      this.wallGeometry.addAttribute("aWallA", [], 3, false, PIXI.TYPES.INT);
+      this.wallGeometry.addAttribute("aWallB", [], 3, false, PIXI.TYPES.INT);
       this.wallGeometry.addIndex([]);
     } else {
       this.wallGeometry = wallGeometry;
@@ -232,12 +223,12 @@ export class SourceDepthShadowMap {
 
       if ( !Object.hasOwn(wallGeometry.attributes, "aWallA") ) {
         console.error("SourceDepthShadowMap|wallGeometry has no aWallA.");
-        this.wallGeometry.addAttribute("aWallA", [], 3, false, 	PIXI.TYPES.INT);
+        this.wallGeometry.addAttribute("aWallA", [], 3, false, PIXI.TYPES.INT);
       }
 
       if ( !Object.hasOwn(wallGeometry.attributes, "aWallB") ) {
         console.error("SourceDepthShadowMap|wallGeometry has no aWallB.");
-        this.wallGeometry.addAttribute("aWallB", [], 3, false, 	PIXI.TYPES.INT);
+        this.wallGeometry.addAttribute("aWallB", [], 3, false, PIXI.TYPES.INT);
       }
 
       if ( !wallGeometry.indexBuffer ) {
@@ -621,7 +612,7 @@ export class SourceDepthShadowMap {
     const uniforms = {
       depthMap: this.terrainDepthTexture,
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
-      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
+      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
@@ -632,8 +623,8 @@ export class SourceDepthShadowMap {
     const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
     mesh.state.depthTest = true;
     mesh.state.depthMask = false;
-    //mesh.blend = false;
-    //mesh.blendMode = PIXI.BLEND_MODES.NORMAL;
+    // FAILS: mesh.blend = false;
+    // FAILS: mesh.blendMode = PIXI.BLEND_MODES.NORMAL;
     mesh.blendMode = PIXI.BLEND_MODES.MIN; // TODO: Not sure why this works...
     return mesh;
   }
@@ -651,13 +642,13 @@ export class SourceDepthShadowMap {
     const height = 1024;
 
     this.baseDepthTexture = new PIXI.BaseRenderTexture({
-        scaleMode: PIXI.SCALE_MODES.NEAREST,
-        resolution: 1,
-        width,
-        height,
-        mipmap: PIXI.MIPMAP_MODES.OFF,
-        format: PIXI.FORMATS.DEPTH_COMPONENT,
-        type: PIXI.TYPES.UNSIGNED_SHORT,
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      resolution: 1,
+      width,
+      height,
+      mipmap: PIXI.MIPMAP_MODES.OFF,
+      format: PIXI.FORMATS.DEPTH_COMPONENT,
+      type: PIXI.TYPES.UNSIGNED_SHORT
     });
 
     const depthMesh = this._constructDepthMesh();
@@ -708,26 +699,26 @@ export class SourceDepthShadowMap {
     terrainDepthTex.framebuffer = terrainRenderTexture.framebuffer;
     this.#terrainDepthTexture = terrainDepthTex;
 
-    // Test
-//     const wallAMesh = this._constructWallCoordinatesMesh("A");
-//     const wallARenderTexture = PIXI.RenderTexture.create({
-//       width: 1024,
-//       height: 1024,
-//       format: PIXI.FORMATS.RED,
-//       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
-//       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
-//     });
-//     //wallARenderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
-//     //wallARenderTexture.framebuffer.enableDepth();
-//
-//     canvas.app.renderer.render(wallAMesh, { renderTexture: wallARenderTexture });
-//     const wallATex = PIXI.Texture.from(wallARenderTexture.framebuffer.colorTextures[0], {
-//       format: PIXI.FORMATS.RED,
-//       type: PIXI.TYPES.FLOAT,
-//       scaleMode: PIXI.SCALE_MODES.NEAREST
-//     });
-//     wallATex.framebuffer = wallARenderTexture.framebuffer;
-//     this.#wallACoordinatesTexture = wallATex;
+      // Test
+  //     const wallAMesh = this._constructWallCoordinatesMesh("A");
+  //     const wallARenderTexture = PIXI.RenderTexture.create({
+  //       width: 1024,
+  //       height: 1024,
+  //       format: PIXI.FORMATS.RED,
+  //       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+  //       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+  //     });
+  //     //wallARenderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
+  //     //wallARenderTexture.framebuffer.enableDepth();
+  //
+  //     canvas.app.renderer.render(wallAMesh, { renderTexture: wallARenderTexture });
+  //     const wallATex = PIXI.Texture.from(wallARenderTexture.framebuffer.colorTextures[0], {
+  //       format: PIXI.FORMATS.RED,
+  //       type: PIXI.TYPES.FLOAT,
+  //       scaleMode: PIXI.SCALE_MODES.NEAREST
+  //     });
+  //     wallATex.framebuffer = wallARenderTexture.framebuffer;
+  //     this.#wallACoordinatesTexture = wallATex;
 
 
     // Phase III.A: Wall endpoint A coordinates
@@ -741,13 +732,13 @@ export class SourceDepthShadowMap {
     });
 
     canvas.app.renderer.render(wallAMesh, { renderTexture: wallARenderTexture, clear: false });
-    const wallATex = PIXI.Texture.from(wallARenderTexture.framebuffer.colorTextures[0], {
-      format: PIXI.FORMATS.RGBA_INTEGER,
-      type: PIXI.TYPES.INT,
-      scaleMode: PIXI.SCALE_MODES.NEAREST
-    });
-    wallATex.framebuffer = wallARenderTexture.framebuffer;
-    this.#wallACoordinatesTexture = wallATex;
+    // const wallATex = PIXI.Texture.from(wallARenderTexture.framebuffer.colorTextures[0], {
+//       format: PIXI.FORMATS.RGBA_INTEGER,
+//       type: PIXI.TYPES.INT,
+//       scaleMode: PIXI.SCALE_MODES.NEAREST
+//     });
+//     wallATex.framebuffer = wallARenderTexture.framebuffer;
+    this.#wallACoordinatesTexture = wallARenderTexture;
 
     // Phase III.B: Wall endpoint B coordinates
     const wallBMesh = this._constructWallCoordinatesMesh("B");
@@ -806,9 +797,9 @@ export class SourceDepthShadowMap {
    * Render the wall coordinates for the closest wall that casts a shadow.
    * @returns {PIXI.Texture}
    */
-  _renderWallCoordinates(endpoint = "A") {
-    const wallCoordinatesMesh = this._constructWallCoordinatesMesh()
-  }
+//   _renderWallCoordinates(endpoint = "A") {
+//     const wallCoordinatesMesh = this._constructWallCoordinatesMesh(endpoint);
+//   }
 
 
   /**
@@ -930,6 +921,63 @@ export class SourceDepthShadowMap {
 
   static getWallCoordinatesShaderGLSL = getWallCoordinatesShaderGLSL;
 }
+
+
+/**
+ * Resource using Uint16, 4 channels.
+ * Used to store wall coordinates.
+ */
+class CustomBufferResource extends PIXI.Resource {
+  constructor(source, options = {}) {
+    const { width, height, internalFormat, format, type, samplerType } = options;
+
+    if ( !width || !height || !internalFormat || !format || !type ) {
+      throw new Error("CustomBufferResource width, height, internalFormat, format, or type invalid.");
+    }
+
+    super(width, height);
+
+    this.data = source;
+    this.internalFormat = internalFormat;
+    this.samplerType = samplerType || 0; // PIXI.SAMPLER_TYPES: 0: FLOAT, 1: INT, 2: UINT ?
+    this.format = format;
+    this.type = type;
+  }
+
+  upload(renderer, baseTexture, glTexture) {
+    const gl = renderer.gl;
+
+    glTexture.samplerType = this.samplerType;
+
+    gl.pixelStorei(
+      gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,
+      baseTexture.alphaMode === 1 // PIXI.ALPHA_MODES.UNPACK but `PIXI.ALPHA_MODES` are not exported.
+    );
+
+    glTexture.width = baseTexture.width;
+    glTexture.height = baseTexture.height;
+
+    gl.texImage2D(
+        baseTexture.target,
+        0,
+        gl[this.internalFormat],
+        baseTexture.width,
+        baseTexture.height,
+        0,
+        gl[this.format],
+        gl[this.type],
+        this.data
+    );
+
+    return true;
+  }
+}
+
+/**
+ * Base render texture that takes a data resource.
+ */
+
+
 
 
 /**
