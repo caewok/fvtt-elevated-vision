@@ -729,6 +729,7 @@ export class SourceDepthShadowMap {
           type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
           scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
         });
+        renderTexture.baseTexture.clearColor = [-1, -1, -1, -1];
         renderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
         renderTexture.framebuffer.enableDepth();
         canvas.app.renderer.render(mesh, { renderTexture });
