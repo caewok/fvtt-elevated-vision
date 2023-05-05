@@ -49,8 +49,6 @@ map._endTerrainDepthTest();
 map._wallCoordinateTest("A", "x");
 map._endWallCoordinateTest();
 
-
-
 map._shadowRenderTest();
 map._endShadowRenderTest();
 
@@ -659,14 +657,6 @@ export class SourceDepthShadowMap {
 
     // Render depth and extract the rendered texture
     canvas.app.renderer.render(depthMesh, { renderTexture: depthRenderTexture });
-
-    // Extract the texture from the render texture.
-//     const depthTex = PIXI.Texture.from(renderTexture.framebuffer.colorTextures[0], {
-//       format: PIXI.FORMATS.RED,
-//       type: PIXI.TYPES.FLOAT,
-//       scaleMode: PIXI.SCALE_MODES.NEAREST
-//     });
-    //depthTex.framebuffer = renderTexture.framebuffer;
     this.#depthTexture = depthRenderTexture;
 
     // Phase II: Re-run to remove frontmost terrain walls.
@@ -682,36 +672,7 @@ export class SourceDepthShadowMap {
     terrainRenderTexture.framebuffer.enableDepth();
 
     canvas.app.renderer.render(terrainDepthMesh, { renderTexture: terrainRenderTexture });
-    // Extract the texture from the render texture.
-//     const terrainDepthTex = PIXI.Texture.from(terrainRenderTexture.framebuffer.colorTextures[0], {
-//       format: PIXI.FORMATS.RED,
-//       type: PIXI.TYPES.FLOAT,
-//       scaleMode: PIXI.SCALE_MODES.NEAREST
-//     });
-    //terrainDepthTex.framebuffer = terrainRenderTexture.framebuffer;
     this.#terrainDepthTexture = terrainRenderTexture;
-
-      // Test
-  //     const wallAMesh = this._constructWallCoordinatesMesh("A");
-  //     const wallARenderTexture = PIXI.RenderTexture.create({
-  //       width: 1024,
-  //       height: 1024,
-  //       format: PIXI.FORMATS.RED,
-  //       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
-  //       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
-  //     });
-  //     //wallARenderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
-  //     //wallARenderTexture.framebuffer.enableDepth();
-  //
-  //     canvas.app.renderer.render(wallAMesh, { renderTexture: wallARenderTexture });
-  //     const wallATex = PIXI.Texture.from(wallARenderTexture.framebuffer.colorTextures[0], {
-  //       format: PIXI.FORMATS.RED,
-  //       type: PIXI.TYPES.FLOAT,
-  //       scaleMode: PIXI.SCALE_MODES.NEAREST
-  //     });
-  //     wallATex.framebuffer = wallARenderTexture.framebuffer;
-  //     this.#wallACoordinatesTexture = wallATex;
-
 
     // Phase III: Wall endpoint coordinates
     this.#wallCoordinateTextures = {
@@ -789,15 +750,18 @@ export class SourceDepthShadowMap {
 
 
     const shadowRenderUniforms = {
-      wallAMap: this.wallACoordinatesTexture,
-      wallBMap: this.wallBCoordinatesTexture,
-      distanceMap: this.terrainDepthTexture, // TODO: Do we need this?
       uLightPosition: [x, y, z],
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
       uMaxDistance: this.lightPosition.dot(new Point3d(sceneRect.right, sceneRect.bottom, minElevation)),
       uLightSize: 100 // TODO: User-defined.
     };
+
+    for ( const endpoint of ["A", "B"] ) {
+      for ( const coord of ["x", "y", "z"] ) {
+        shadowRenderUniforms[`wall${endpoint}${coord}`] = this.wallCoordinateTextures[endpoint][coord];
+      }
+    }
 
     // Construct a quad for the scene.
     const geometryShadowRender = new PIXI.Geometry();
@@ -847,7 +811,6 @@ export class SourceDepthShadowMap {
   static getWallCoordinatesShaderGLSL = getWallCoordinatesShaderGLSL;
 }
 
-
 /**
  * Resource using Uint16, 4 channels.
  * Used to store wall coordinates.
@@ -883,15 +846,15 @@ class CustomBufferResource extends PIXI.Resource {
     glTexture.height = baseTexture.height;
 
     gl.texImage2D(
-        baseTexture.target,
-        0,
-        gl[this.internalFormat],
-        baseTexture.width,
-        baseTexture.height,
-        0,
-        gl[this.format],
-        gl[this.type],
-        this.data
+      baseTexture.target,
+      0,
+      gl[this.internalFormat],
+      baseTexture.width,
+      baseTexture.height,
+      0,
+      gl[this.format],
+      gl[this.type],
+      this.data
     );
 
     return true;
