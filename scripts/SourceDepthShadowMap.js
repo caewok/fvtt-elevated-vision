@@ -13,8 +13,7 @@ import {
   shadowRenderShaderGLSL,
   depthShaderGLSL,
   terrainDepthShaderGLSL,
-  wallACoordinatesShaderGLSL,
-  wallBCoordinatesShaderGLSL } from "./shaders.js";
+  getWallCoordinatesShaderGLSL } from "./shaders.js";
 
 import {
   perspectiveMatrix,
@@ -36,8 +35,8 @@ SourceDepthShadowMap = api.SourceDepthShadowMap
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 
 
-// lightOrigin = new Point3d(100, 100, 1600);
-lightOrigin = new Point3d(100, canvas.dimensions.height - 100, 1600);
+lightOrigin = new Point3d(100, 100, 1600);
+// lightOrigin = new Point3d(100, canvas.dimensions.height - 100, 1600);
 
 Draw.point(lightOrigin, { color: Draw.COLORS.yellow });
 Draw.segment({A: lightOrigin, B: canvas.dimensions.sceneRect.center })
@@ -71,12 +70,28 @@ canvas.stage.removeChild(s);
 map._updateWallGeometry(walls);
 
 
+extractPixels = api.extract.extractPixels
 extractPixelsFromFloat = api.extract.extractPixelsFromFloat
 let { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.wallACoordinatesTexture);
 s = new Set()
 pixels.forEach(px => s.add(px))
 s
 s.size
+
+let { pixels, width, height } = extractPixelsFromInt4(canvas.app.renderer, map.wallACoordinatesTexture);
+s = new Set()
+pixels.forEach(px => s.add(px))
+s
+s.size
+
+// Locate non-zero pixels and map
+m = new Map()
+s = new Set()
+for ( let i = 1; i < (width * height * 4); i += 4 ) {
+  s.add(pixels[i])
+}
+
+
 
 pixels.reduce((curr, acc) => Math.min(curr, acc), Number.POSITIVE_INFINITY)
 pixels.reduce((curr, acc) => Math.max(curr, acc), Number.NEGATIVE_INFINITY)
@@ -418,29 +433,29 @@ export class SourceDepthShadowMap {
       const [A, B] = orientWall > 0 ? [wall.A, wall.B] : [wall.B, wall.A];
       wallA[j] = A.x;
       wallA[j + 1] = A.y;
-      wallA[j + 2] = A.z;
+      wallA[j + 2] = topZ;
       wallA[j + 3] = A.x;
       wallA[j + 4] = A.y;
-      wallA[j + 5] = A.z;
+      wallA[j + 5] = topZ;
       wallA[j + 6] = A.x;
       wallA[j + 7] = A.y;
-      wallA[j + 8] = A.z;
+      wallA[j + 8] = topZ;
       wallA[j + 9] = A.x;
       wallA[j + 10] = A.y;
-      wallA[j + 11] = A.z;
+      wallA[j + 11] = topZ;
 
       wallB[j] = B.x;
       wallB[j + 1] = B.y;
-      wallB[j + 2] = B.z;
+      wallB[j + 2] = bottomZ;
       wallB[j + 3] = B.x;
       wallB[j + 4] = B.y;
-      wallB[j + 5] = B.z;
+      wallB[j + 5] = bottomZ;
       wallB[j + 6] = B.x;
       wallB[j + 7] = B.y;
-      wallB[j + 8] = B.z;
+      wallB[j + 8] = bottomZ;
       wallB[j + 9] = B.x;
       wallB[j + 10] = B.y;
-      wallB[j + 11] = B.z;
+      wallB[j + 11] = bottomZ;
     }
     return { coordinates, indices, terrain, hasTerrainWalls, wallA, wallB };
   }
@@ -610,7 +625,7 @@ export class SourceDepthShadowMap {
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
-    const { vertexShader, fragmentShader } = wallACoordinatesShaderGLSL;// SourceDepthShadowMap.wallCoordinatesShaderGLSL[endpoint];
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.getWallCoordinatesShaderGLSL(endpoint);
     const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 
     // TODO: Can we save and update a single PIXI.Mesh?
@@ -720,40 +735,38 @@ export class SourceDepthShadowMap {
     const wallARenderTexture = PIXI.RenderTexture.create({
       width: 1024,
       height: 1024,
-      format: PIXI.FORMATS.RED,
-      type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+      format: PIXI.FORMATS.RGBA_INTEGER,
+      type: PIXI.TYPES.INT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
     });
 
-    canvas.app.renderer.render(wallAMesh, { renderTexture: wallARenderTexture });
+    canvas.app.renderer.render(wallAMesh, { renderTexture: wallARenderTexture, clear: false });
     const wallATex = PIXI.Texture.from(wallARenderTexture.framebuffer.colorTextures[0], {
-      format: PIXI.FORMATS.RED,
-      type: PIXI.TYPES.FLOAT,
+      format: PIXI.FORMATS.RGBA_INTEGER,
+      type: PIXI.TYPES.INT,
       scaleMode: PIXI.SCALE_MODES.NEAREST
     });
     wallATex.framebuffer = wallARenderTexture.framebuffer;
     this.#wallACoordinatesTexture = wallATex;
 
     // Phase III.B: Wall endpoint B coordinates
-//     const wallBMesh = this._constructWallCoordinatesMesh("B");
-//     const wallBRenderTexture = PIXI.RenderTexture.create({
-//       width: 1024,
-//       height: 1024,
-//       format: PIXI.FORMATS.RGB,
-//       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
-//       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
-//     });
-//     wallBRenderTexture.framebuffer.addDepthTexture(wallARenderTexture.framebuffer.depthTexture);
-//     wallBRenderTexture.framebuffer.enableDepth();
-//
-//     canvas.app.renderer.render(wallBMesh, { renderTexture: wallBRenderTexture });
-//     const wallBTex = PIXI.Texture.from(wallBRenderTexture.framebuffer.colorTextures[0], {
-//       format: PIXI.FORMATS.RGB,
-//       type: PIXI.TYPES.FLOAT,
-//       scaleMode: PIXI.SCALE_MODES.NEAREST
-//     });
-//     wallBTex.framebuffer = wallBRenderTexture.framebuffer;
-//     this.#wallBCoordinatesTexture = wallBTex;
+    const wallBMesh = this._constructWallCoordinatesMesh("B");
+    const wallBRenderTexture = PIXI.RenderTexture.create({
+      width: 1024,
+      height: 1024,
+      format: PIXI.FORMATS.RGBA_INTEGER,
+      type: PIXI.TYPES.INT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+      scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+    });
+
+    canvas.app.renderer.render(wallBMesh, { renderTexture: wallBRenderTexture, clear: false });
+    const wallBTex = PIXI.Texture.from(wallBRenderTexture.framebuffer.colorTextures[0], {
+      format: PIXI.FORMATS.RGBA_INTEGER,
+      type: PIXI.TYPES.INT,
+      scaleMode: PIXI.SCALE_MODES.NEAREST
+    });
+    wallBTex.framebuffer = wallBRenderTexture.framebuffer;
+    this.#wallBCoordinatesTexture = wallBTex;
 
     return depthTex;
   }
@@ -860,7 +873,9 @@ export class SourceDepthShadowMap {
 
 
     const shadowRenderUniforms = {
-      distanceMap: this.terrainDepthTexture,
+      wallAMap: this.wallACoordinatesTexture,
+      wallBMap: this.wallBCoordinatesTexture,
+      distanceMap: this.terrainDepthTexture, // TODO: Do we need this?
       uLightPosition: [x, y, z],
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
@@ -913,7 +928,7 @@ export class SourceDepthShadowMap {
 
   static terrainDepthShaderGLSL = terrainDepthShaderGLSL;
 
-  static wallCoordinatesShaderGLSL = { A: wallACoordinatesShaderGLSL, B: wallBCoordinatesShaderGLSL };
+  static getWallCoordinatesShaderGLSL = getWallCoordinatesShaderGLSL;
 }
 
 

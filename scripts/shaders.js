@@ -112,10 +112,12 @@ void main() {
 
 /**
  * Write the wall coordinates for the wall that shadows.
+ * @param {"A"|"B"} endpoint
+ * @returns {object} {vertexShader: {string}, vertexShader: {string}}
  */
-export const wallACoordinatesShaderGLSL = {};
-
-wallACoordinatesShaderGLSL.vertexShader =
+export function getWallCoordinatesShaderGLSL(endpoint = "A") {
+  const wallCoordinatesShaderGLSL = {};
+  wallCoordinatesShaderGLSL.vertexShader =
 `#version 300 es
 precision mediump float;
 
@@ -123,28 +125,24 @@ uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 
 in vec3 aVertexPosition;
-in vec3 aWallA;
-in vec3 aWallB;
+in vec3 aWall${endpoint};
 
-out vec3 vWallA;
-out vec3 vWallB;
+out vec3 vWall;
 
 void main() {
-  vWallA = aWallA;
-  vWallB = aWallB;
+  vWall = aWall${endpoint};
   gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
 }`;
 
-wallACoordinatesShaderGLSL.fragmentShader =
+wallCoordinatesShaderGLSL.fragmentShader =
 `#version 300 es
 precision mediump float;
 
 uniform sampler2D depthMap;
 
-in vec3 vWallA;
-in vec3 vWallB;
-// out uvec4 coordinates;
-out float coordinates;
+in vec3 vWall;
+out ivec4 coordinates;
+//out float coordinates;
 
 void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
@@ -154,48 +152,16 @@ void main() {
 
   if ( nearestDepth >= gl_FragCoord.z ) {
     // distance = gl_FragCoord.z;
-    coordinates = 1.0 - (vWallB.x / 6000.0);
+    // coordinates = 1.0 - (vWall.x / 6000.0);
+    coordinates = ivec4(vWall, 1);
+
   } else {
     discard;
   }
 }`;
 
-/**
- * Write the wall coordinates for the wall that shadows.
- */
-export const wallBCoordinatesShaderGLSL = {};
-
-wallBCoordinatesShaderGLSL.vertexShader =
-`#version 300 es
-precision mediump float;
-
-uniform mat4 uProjectionM;
-uniform mat4 uViewM;
-
-in vec3 aVertexPosition;
-in vec3 aWallB;
-
-out vec3 vertexPosition;
-out float vTerrain;
-out vec3 vWallB;
-
-void main() {
-  vWallB = aWallB;
-  gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
-}`;
-
-wallBCoordinatesShaderGLSL.fragmentShader =
-`#version 300 es
-precision mediump float;
-
-in vec3 vWallB;
-out vec3 coordinates;
-
-void main() {
-  coordinates = vWallB;
-}`;
-
-
+  return wallCoordinatesShaderGLSL;
+}
 
 /**
  * For debugging.
@@ -237,182 +203,153 @@ void main() {
 shadowRenderShaderGLSL.fragmentShader =
 `#version 300 es
 precision mediump float;
+precision mediump isampler2D;
+
+#define EPSILON 1e-12
 
 in vec2 vTexCoord;
 in vec3 vertexPosition;
-in vec3 lightPosition;
 out vec4 fragColor;
 
-uniform vec3 uLightPosition;
+// TODO: Use isampler2DArray or possibly usampler2DArray
+uniform sampler2D wallA;
+uniform sampler2D wallB;
 uniform sampler2D distanceMap;
 uniform float uMaxDistance;
+uniform vec3 uLightPosition;
 uniform float uLightSize;
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 
-struct ShadowPixel {
-  vec3 position;
-  float nearestDistance;
-  bool isShadowed;
+struct Wall {
+  vec3 A;
+  vec3 B;
+  bool shadowsFragment;
 };
 
-bool isShadowAt(float nearestDistance) {
-  return nearestDistance > 0.0;
+/**
+ * Möller-Trumbore intersection algorithm for a triangle.
+ * This function first calculates the edge vectors of the triangle and the determinant
+ * of the triangle using the cross product and dot product. It then uses the Möller–Trumbore
+ * intersection algorithm to calculate the intersection point using barycentric coordinates,
+ * and checks if the intersection point is within the bounds of the triangle. If it is,
+ * the function returns the distance from ray origin to point of intersection.
+ * If the ray is parallel to the triangle or the intersection point is outside of the triangle,
+ * the function returns null.
+ * @param {vec3} rayOrigin
+ * @param {vec3} rayDirection
+ * @param {vec3} v0   First vertex of the triangle
+ * @param {vec3} v1   Second vertex of the triangle
+ * @param {vec3} v2   Third vertex of the triangle
+ * @returns {float} Distance from ray origin to the point of intersection
+ *   Returns -1.0 if no intersection.
+ */
+float rayIntersectionTriangle3d(in vec3 rayOrigin, in vec3 rayDirection, in vec3 v0, in vec3 v1, in vec3 v2) {
+  // Triangle edge vectors.
+  vec3 edge1 = v1 - v0;
+  vec3 edge2 = v2 - v0;
 
-  // if ( shadowPx.nearestDistance <= 0.0 ) return false;
+  // Calculate the determinant of the triangle.
+  vec3 pvec = cross(rayDirection, edge2);
 
-//   float fragDist = dot(uLightPosition, shadowPx.position);
-//   return fragDist < nearestDistance;
+  // If the determinant is near zero, ray lies in plane of triangle.
+  float det = dot(edge1, pvec);
+  if ( det > -EPSILON && det < EPSILON ) return -1.0; // Ray is parallel to triangle.
+  float invDet = 1.0 / det;
+
+  // Calculate the intersection using barycentric coordinates.
+  vec3 tvec = rayOrigin - v0;
+  float u = invDet * dot(tvec, pvec);
+  if ( u < 0.0 || u > 1.0 ) return -1.0; // Intersection point is outside triangle.
+
+  vec3 qvec = cross(tvec, edge1);
+  float v = invDet * dot(rayDirection, qvec);
+  if ( v < 0.0 || (u + v) > 1.0 ) return -1.0; // Intersection point is outside of triangle.
+
+  // Calculate the distance to the intersection point.
+  float t = invDet * dot(edge2, qvec);
+  return t > EPSILON ? t : -1.0;
 }
 
 /**
- * Pull the nearest distance for the given position.
- * Distances are distance-squared.
+ * Möller-Trumbore intersection algorithm for a quad.
+ * Test the two triangles of the quad.
+ * @param {vec3} rayOrigin
+ * @param {vec3} rayDirection
+ * @param {vec3} p0   Upper corner of the quad
+ * @param {vec3} p1   Bottom corner of the quad
+ * @returns {float} Distance from ray origin to the point of intersection
+ *   Returns -1.0 if no intersection.
  */
-ShadowPixel getShadowPixel(in vec3 position) {
+float rayIntersectionQuad3d(in vec3 rayOrigin, in vec3 rayDirection, in vec3 p0, in vec3 p1) {
+  // Quad goes v0 - v1 - v2 - v3
+  vec3 diff = abs(p1 - p0);
+  vec3 minP = min(p0, p1);
+  vec3 maxP = max(p0, p1);
+
+  vec3 v0 = p0;
+  vec3 v1 = vec3(p1.x, p0.y, p0.z);
+  vec3 v2 = p1;
+  vec3 v3 = vec3(p0.x, p1.y, p1.z);
+
+  // Triangles are v0 - v1 - v2, v0 - v2 - v3
+  float t0 = rayIntersectionTriangle3d(rayOrigin, rayDirection, v0, v1, v2);
+  if ( t0 != -1.0 ) return t0;
+
+  float t1 = rayIntersectionTriangle3d(rayOrigin, rayDirection, v0, v2, v3);
+  return t1;
+}
+
+/**
+ * Pull the wall coordinates from the textures.
+ * @returns {Wall}
+ */
+Wall getWallCoordinates(in vec3 position) {
   vec4 lightSpacePosition = uProjectionM * uViewM * vec4(position, 1.0);
 
   // Perspective divide.
-  // Needed when using perspective projection; does nothing with orthographic projection
-  // Returns light-space position in range [-1, 1].
+  // Does nothing with orthographic; needed for perspective projection.
   vec3 projCoord = lightSpacePosition.xyz / lightSpacePosition.w;
 
-  // Transform the NDC coordinates to range [0, 1].
-  // Use to sample the depth map in range [0, 1].
-  vec2 fragCoord = projCoord.xy * 0.5 + 0.5;
+  // Transform the NDC coordinates to range [0, 1]
+  vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
 
-  // Sample the depth map
-  float nearestDistance = texture(distanceMap, fragCoord).r;
+  // Sample the maps
+  vec4 A = texture(wallA, mapCoord);
+  vec4 B = texture(wallB, mapCoord);
 
-  // Sample the depth map
-  // ivec2 fragCoordI = ivec2(projCoord.xy);
-  // float nearestDistance = texelFetch(distanceMap, fragCoordI, 0).r;
-
-  bool isShadowed = isShadowAt(nearestDistance);
-  return ShadowPixel(position, nearestDistance, isShadowed);
-}
-
-
-
-/**
- * Determine penumbra size given distance from light.
- * See https://blog.imaginationtech.com/implementing-fast-ray-traced-soft-shadows-in-a-game-engine/
- * Equation there seems slightly off: really want the ratio of wall to light : frag to wall.
- * A = wall to light (nearest)
- * B = frag to wall (total - nearest)
- * Penumbra radius = light radius * B / A
- */
-float penumbraSize(in ShadowPixel shadowPx) {
-  float totalDist = sqrt(dot(uLightPosition, shadowPx.position));
-  float nearest = sqrt(shadowPx.nearestDistance);
-  float occluderDist = totalDist - nearest;
-  return uLightSize * (occluderDist / nearest);
+  return Wall(vec3(A.xyz), vec3(B.xyz), A.w != 0.0);
 }
 
 /**
- * Percentage distance from wall for the shadow fragment, between 0 and 1.
+ * For testing
+ * @returns {vec4}
  */
-float percentDistanceFromWall(in ShadowPixel shadowPx) {
-  float fragmentDistance = dot(uLightPosition, shadowPx.position);
-  return (shadowPx.nearestDistance - fragmentDistance) / shadowPx.nearestDistance;
-}
+vec4 getCoordinates(in vec3 position) {
+  vec4 lightSpacePosition = uProjectionM * uViewM * vec4(position, 1.0);
 
-/**
- * Search for a valid shadow pixel location from which we can determine penumbra size.
- * Must be a point in shadow.
- *
- */
-ShadowPixel penumbraLocation(in ShadowPixel startingShadowPx) {
-  if ( startingShadowPx.isShadowed ) return startingShadowPx;
+  // Perspective divide.
+  // Does nothing with orthographic; needed for perspective projection.
+  vec3 projCoord = lightSpacePosition.xyz / lightSpacePosition.w;
 
-  // TODO: Check all 4 directions to find max? May not be worth the trouble.
-  // Placeholders
-  vec3 offsetV = vec3(0.0);
-  vec3 position = vec3(0.0);
-  ShadowPixel shadowPx = startingShadowPx;
-  for ( float mult = 1.0; mult < 100.0; mult += 1.0 ) {
-    for ( int x = -1; x < 2; x += 1 ) {
-      for ( int y = -1; y < 2; y += 1 ) {
-        if ( x == 0 && y == 0 ) continue;
-        offsetV = vec3(float(x), float(y), 0.0);
-        position = startingShadowPx.position + (offsetV * mult);
-        shadowPx = getShadowPixel(position);
-        if ( shadowPx.isShadowed ) return shadowPx;
-      }
-    }
-  }
-  return startingShadowPx;
-}
+  // Transform the NDC coordinates to range [0, 1]
+  vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
 
-
-// TODO: Could probably combine penumbraLocation and penumbraBlurForFragment.
-
-/**
- * Set a blur based on the size provided.
- */
-float penumbraBlurForFragment(in ShadowPixel startingShadowPx, in float penumbraSize) {
-  // Each step should be either a 0 or a 1.
-  // Start with the middle point.
-  float numerator = float(startingShadowPx.isShadowed);
-  float denominator = 1.0;
-
-  // Placeholders
-  vec3 offsetV = vec3(0.0);
-  vec3 position = vec3(0.0);
-  ShadowPixel shadowPx = startingShadowPx;
-  for ( float mult = 1.0; mult < penumbraSize; mult += 1.0 ) {
-    for ( int x = -1; x < 2; x += 1 ) {
-      for ( int y = -1; y < 2; y += 1 ) {
-        if ( x == 0 && y == 0 ) continue;
-        offsetV = vec3(float(x), float(y), 0.0);
-        position = startingShadowPx.position + (offsetV[0] * mult);
-        shadowPx = getShadowPixel(position);
-        numerator += float(shadowPx.isShadowed);
-        denominator += 1.0;
-      }
-    }
-  }
-  return numerator / denominator;
-}
-
-/**
- * Calculate the percent shadow for this fragment.
- * Currently 0 or 1 but the distance should allow for penumbra calcs.
- */
-float shadowPercentage(in ShadowPixel fragShadowPx) {
-//   float fragDist = dot(uLightPosition, vertexPosition);
-//   if ( fragDist < nearestDistance ) return 0.0; // Shadows
-//   if ( fragDist > nearestDistance ) return 1.0; // Outside of shadows
-//   if ( fragDist == nearestDistance ) return 0.5; // Never happens
-
-  // Shadows have nearest distance that is not 0.
-  // return nearestDistance == 0.0  ? 0.0 : 1.0;
-  return float(fragShadowPx.isShadowed);
-
-  // ShadowPixel penumbraLocation = penumbraLocation(fragShadowPx);
-  // float penumbraSize = penumbraSize(penumbraLocation);
-  // if ( penumbraSize <= 0.0 ) return 0.0;
-  // if ( penumbraSize <= 1.01 ) return 1.0;
-
-  // return penumbraBlurForFragment(fragShadowPx, penumbraSize);
-
-  // float fragDist = dot(uLightPosition, vertexPosition);
-  // return fragDist < nearestDistance ? 1.0 : 0.0;
+  // return texture(wallA, mapCoord);
+  ivec2 iProjCoord = ivec2(projCoord.xy);
+  return texelFetch(wallA, iProjCoord, 0);
 }
 
 void main() {
-  ShadowPixel fragShadowPx = getShadowPixel(vertexPosition);
-  float shadow = shadowPercentage(fragShadowPx);
+  // Simplest version is to check the w value of a coordinate: will be 0 if not shadowed.
+  // Wall fragWall = getWallCoordinates(vertexPosition);
+  // float shadow = float(fragWall.shadowsFragment);
 
-  // nearestDistance / uMaxDistance: ratio --> 1 as the shadow moves away from walls
-  // But that is all walls -- take the ratio between nearest and fragment distance
-  // (nearestDistance - fragDist) / nearestDistance --> 1 as shadow moves away from a wall
-  float shadowRatioFromWall = percentDistanceFromWall(fragShadowPx);
-  if ( shadow != 0.0 ) {
-    shadow = mix(shadow, 1.0 - shadowRatioFromWall, 0.5);
-  }
+  vec4 coords = getCoordinates(vertexPosition);
+
+  float shadow = 0.0;
+  if ( coords.x > 0.0 ) shadow = 1.0;
 
   fragColor = vec4(0.0, 0.0, 0.0, shadow);
   // fragColor = vec4((nearestDistance - fragDist) / nearestDistance, 0.0, 0.0, shadow);
-
 }`;
