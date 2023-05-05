@@ -212,7 +212,8 @@ in vec3 vertexPosition;
 out vec4 fragColor;
 
 // TODO: Use isampler2DArray or possibly usampler2DArray
-uniform sampler2D wallA;
+uniform isampler2D wallA;
+//uniform sampler2D wallA;
 uniform sampler2D wallB;
 uniform sampler2D distanceMap;
 uniform float uMaxDistance;
@@ -315,17 +316,17 @@ Wall getWallCoordinates(in vec3 position) {
   vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
 
   // Sample the maps
-  vec4 A = texture(wallA, mapCoord);
+  ivec4 A = texture(wallA, mapCoord);
   vec4 B = texture(wallB, mapCoord);
 
-  return Wall(vec3(A.xyz), vec3(B.xyz), A.w != 0.0);
+  return Wall(vec3(A.xyz), vec3(B.xyz), A.w != 0);
 }
 
 /**
  * For testing
  * @returns {vec4}
  */
-vec4 getCoordinates(in vec3 position) {
+ivec4 getCoordinates(in vec3 position) {
   vec4 lightSpacePosition = uProjectionM * uViewM * vec4(position, 1.0);
 
   // Perspective divide.
@@ -345,10 +346,10 @@ void main() {
   // Wall fragWall = getWallCoordinates(vertexPosition);
   // float shadow = float(fragWall.shadowsFragment);
 
-  vec4 coords = getCoordinates(vertexPosition);
+  ivec4 coords = getCoordinates(vertexPosition);
 
   float shadow = 0.0;
-  if ( coords.x > 0.0 ) shadow = 1.0;
+  if ( coords.x > 0 ) shadow = 1.0;
 
   fragColor = vec4(0.0, 0.0, 0.0, shadow);
   // fragColor = vec4((nearestDistance - fragDist) / nearestDistance, 0.0, 0.0, shadow);
