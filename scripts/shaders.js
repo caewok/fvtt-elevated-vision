@@ -115,7 +115,7 @@ void main() {
  * @param {"A"|"B"} endpoint
  * @returns {object} {vertexShader: {string}, vertexShader: {string}}
  */
-export function getWallCoordinatesShaderGLSL(endpoint = "A") {
+export function getWallCoordinatesShaderGLSL(endpoint = "A", coord = "x") {
   const wallCoordinatesShaderGLSL = {};
   wallCoordinatesShaderGLSL.vertexShader =
 `#version 300 es
@@ -141,8 +141,8 @@ precision mediump float;
 uniform sampler2D depthMap;
 
 in vec3 vWall;
-out ivec4 coordinates;
-//out float coordinates;
+//out ivec4 coordinates;
+out float coordinate;
 
 void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
@@ -153,7 +153,9 @@ void main() {
   if ( nearestDepth >= gl_FragCoord.z ) {
     // distance = gl_FragCoord.z;
     // coordinates = 1.0 - (vWall.x / 6000.0);
-    coordinates = ivec4(vWall, 1);
+    coordinate = vWall.${coord};
+
+    // coordinates = ivec4(vWall, 1);
 
   } else {
     discard;
