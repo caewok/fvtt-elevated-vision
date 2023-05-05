@@ -39,8 +39,21 @@ map._endDepthTest();
 map._terrainDepthTest();
 map._endTerrainDepthTest();
 
+map._wallACoordinatesTest();
+map._endWallACoordinatesTest();
+
+map._wallBCoordinatesTest();
+map._endWallACoordinatesTest();
+
 map._shadowRenderTest();
 map._endShadowRenderTest();
+
+
+texture = PIXI.Texture.from(map.baseDepthTexture)
+s = new PIXI.Sprite(texture);
+canvas.stage.addChild(s);
+canvas.stage.removeChild(s);
+
 
 // update walls
 map._updateWallGeometry(walls);
@@ -116,15 +129,25 @@ export class SourceDepthShadowMap {
 
   #radius;
 
-  // Stage 1: Render the depth of walls to a texture
+  // Stage I: Render the depth of walls to a texture
   #depthTexture;
 
   #depthSprite; // For debugging
 
-  // Stage 2: Render the depth of walls, accounting for terrain walls, to a texture
+  // Stage II: Render the depth of walls, accounting for terrain walls, to a texture
   #terrainDepthTexture;
 
   #terrainDepthSprite; // For debugging
+
+  // Stage III: Render wall coordinates for the closest wall
+  #wallACoordinatesTexture;
+
+  #wallBCoordinatesTexture;
+
+  #wallACoordinatesSprite;
+
+  #wallBCoordinatesSprite;
+
 
   #shadowRender; // For debugging
 
@@ -244,6 +267,16 @@ export class SourceDepthShadowMap {
   get terrainDepthTexture() {
     if ( typeof this.#terrainDepthTexture === "undefined" ) this._renderDepth();
     return this.#terrainDepthTexture;
+  }
+
+  get wallACoordinatesTexture() {
+    if ( typeof this.#wallACoordinatesTexture === "undefined" ) this._renderDepth();
+    return this.#wallACoordinatesTexture;
+  }
+
+  get wallBCoordinatesTexture() {
+    if ( typeof this.#wallBCoordinatesTexture === "undefined" ) this._renderDepth();
+    return this.#wallBCoordinatesTexture;
   }
 
   /** @type {number} */
@@ -551,20 +584,22 @@ export class SourceDepthShadowMap {
   _constructWallCoordinatesMesh(endpoint = "A") {
     const { x, y, z } = this.lightPosition;
     const uniforms = {
-      uLightPosition: [x, y, z],
+      depthMap: this.terrainDepthTexture,
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
-      distanceMap: this.terrainDepthTexture
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
-    const { vertexShader, fragmentShader } = SourceDepthShadowMap.wallCoordinatesShaderGLSL[endpoint];
+    const { vertexShader, fragmentShader } = wallACoordinatesShaderGLSL;// SourceDepthShadowMap.wallCoordinatesShaderGLSL[endpoint];
     const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 
     // TODO: Can we save and update a single PIXI.Mesh?
     const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
-    mesh.state.depthTest = true;
+    mesh.state.depthTest = false;
     mesh.state.depthMask = false;
+    //mesh.blend = false;
+    //mesh.blendMode = PIXI.BLEND_MODES.NORMAL;
+    mesh.blendMode = PIXI.BLEND_MODES.MIN;
     return mesh;
   }
 
@@ -577,21 +612,34 @@ export class SourceDepthShadowMap {
     // TODO: Can we change the depth render so it also outputs distance?
     //       Then we can skip the second render if no terrain walls are present.
 
+    const width = 1024;
+    const height = 1024;
+
+    this.baseDepthTexture = new PIXI.BaseRenderTexture({
+        scaleMode: PIXI.SCALE_MODES.NEAREST,
+        resolution: 1,
+        width,
+        height,
+        mipmap: PIXI.MIPMAP_MODES.OFF,
+        format: PIXI.FORMATS.DEPTH_COMPONENT,
+        type: PIXI.TYPES.UNSIGNED_SHORT,
+    });
+
     const depthMesh = this._constructDepthMesh();
 
     // TODO: Set width and height more intelligently; handle point light radii.
     // Get a RenderTexture
     const renderTexture = PIXI.RenderTexture.create({
-      width: 1024,
-      height: 1024,
+      width,
+      height,
       format: PIXI.FORMATS.RED,
       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
     });
-    renderTexture.framebuffer.addDepthTexture();
+    renderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
     renderTexture.framebuffer.enableDepth();
 
-    // Render depth
+    // Render depth and extract the rendered texture
     canvas.app.renderer.render(depthMesh, { renderTexture });
 
     // Extract the texture from the render texture.
@@ -612,12 +660,11 @@ export class SourceDepthShadowMap {
       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
     });
-    terrainRenderTexture.framebuffer.addDepthTexture(renderTexture.framebuffer.depthTexture);
-    renderTexture.framebuffer.enableDepth();
-
+    terrainRenderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
+    terrainRenderTexture.framebuffer.enableDepth();
 
     canvas.app.renderer.render(terrainDepthMesh, { renderTexture: terrainRenderTexture });
-
+    // Extract the texture from the render texture.
     const terrainDepthTex = PIXI.Texture.from(terrainRenderTexture.framebuffer.colorTextures[0], {
       format: PIXI.FORMATS.RED,
       type: PIXI.TYPES.FLOAT,
@@ -625,6 +672,70 @@ export class SourceDepthShadowMap {
     });
     terrainDepthTex.framebuffer = terrainRenderTexture.framebuffer;
     this.#terrainDepthTexture = terrainDepthTex;
+
+    // Test
+    const wallAMesh = this._constructWallCoordinatesMesh("A");
+    const wallARenderTexture = PIXI.RenderTexture.create({
+      width: 1024,
+      height: 1024,
+      format: PIXI.FORMATS.RED,
+      type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+      scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+    });
+    //wallARenderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
+    //wallARenderTexture.framebuffer.enableDepth();
+
+    canvas.app.renderer.render(wallAMesh, { renderTexture: wallARenderTexture });
+    const wallATex = PIXI.Texture.from(wallARenderTexture.framebuffer.colorTextures[0], {
+      format: PIXI.FORMATS.RED,
+      type: PIXI.TYPES.FLOAT,
+      scaleMode: PIXI.SCALE_MODES.NEAREST
+    });
+    wallATex.framebuffer = wallARenderTexture.framebuffer;
+    this.#wallACoordinatesTexture = wallATex;
+
+
+    // Phase III.A: Wall endpoint A coordinates
+//     const wallAMesh = this._constructWallCoordinatesMesh("A");
+//     const wallARenderTexture = PIXI.RenderTexture.create({
+//       width: 1024,
+//       height: 1024,
+//       format: PIXI.FORMATS.RGB,
+//       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+//       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+//     });
+//     wallARenderTexture.framebuffer.addDepthTexture(terrainRenderTexture.framebuffer.depthTexture);
+//     wallARenderTexture.framebuffer.enableDepth();
+//
+//     canvas.app.renderer.render(wallAMesh, { renderTexture: wallARenderTexture });
+//     const wallATex = PIXI.Texture.from(wallARenderTexture.framebuffer.colorTextures[0], {
+//       format: PIXI.FORMATS.RGB,
+//       type: PIXI.TYPES.FLOAT,
+//       scaleMode: PIXI.SCALE_MODES.NEAREST
+//     });
+//     wallATex.framebuffer = wallARenderTexture.framebuffer;
+//     this.#wallACoordinatesTexture = wallATex;
+
+    // Phase III.B: Wall endpoint B coordinates
+//     const wallBMesh = this._constructWallCoordinatesMesh("B");
+//     const wallBRenderTexture = PIXI.RenderTexture.create({
+//       width: 1024,
+//       height: 1024,
+//       format: PIXI.FORMATS.RGB,
+//       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+//       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+//     });
+//     wallBRenderTexture.framebuffer.addDepthTexture(wallARenderTexture.framebuffer.depthTexture);
+//     wallBRenderTexture.framebuffer.enableDepth();
+//
+//     canvas.app.renderer.render(wallBMesh, { renderTexture: wallBRenderTexture });
+//     const wallBTex = PIXI.Texture.from(wallBRenderTexture.framebuffer.colorTextures[0], {
+//       format: PIXI.FORMATS.RGB,
+//       type: PIXI.TYPES.FLOAT,
+//       scaleMode: PIXI.SCALE_MODES.NEAREST
+//     });
+//     wallBTex.framebuffer = wallBRenderTexture.framebuffer;
+//     this.#wallBCoordinatesTexture = wallBTex;
 
     return depthTex;
   }
@@ -692,6 +803,28 @@ export class SourceDepthShadowMap {
   _endTerrainDepthTest() {
     if ( this.#terrainDepthSprite ) canvas.stage.removeChild(this.#terrainDepthSprite);
     this.#terrainDepthSprite = undefined;
+  }
+
+  _wallACoordinatesTest() {
+    this._endWallACoordinatesTest();
+    this.#wallACoordinatesSprite = new PIXI.Sprite(this.wallACoordinatesTexture);
+    canvas.stage.addChild(this.#wallACoordinatesSprite);
+  }
+
+  _endWallACoordinatesTest() {
+    if ( this.#wallACoordinatesSprite ) canvas.stage.removeChild(this.#wallACoordinatesSprite);
+    this.#wallACoordinatesSprite = undefined;
+  }
+
+  _wallBCoordinatesTest() {
+    this._endwallBCoordinatesTest();
+    this.#wallBCoordinatesSprite = new PIXI.Sprite(this.wallBCoordinatesTexture);
+    canvas.stage.addChild(this.#wallBCoordinatesSprite);
+  }
+
+  _endwallBCoordinatesTest() {
+    if ( this.#wallBCoordinatesSprite ) canvas.stage.removeChild(this.#wallBCoordinatesSprite);
+    this.#wallBCoordinatesSprite = undefined;
   }
 
   /**

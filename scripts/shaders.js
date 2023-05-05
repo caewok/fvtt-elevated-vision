@@ -100,10 +100,12 @@ void main() {
 
   if ( vTerrain > 0.5 && nearestDepth >= fragDepth ) {
     gl_FragDepth = 1.0;
-    return;
+    // return;
+    distance = 1.0;
   } else {
-    gl_FragDepth = fragDepth;
-    distance = dot(uLightPosition, vertexPosition);
+    gl_FragDepth = gl_FragCoord.z;
+    // distance = dot(uLightPosition, vertexPosition);
+    distance = gl_FragCoord.z;
   }
 }`;
 
@@ -120,21 +122,13 @@ precision mediump float;
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 
-in float aTerrain;
 in vec3 aVertexPosition;
 in vec3 aWallA;
-in vec3 aWallB;
 
-out vec3 vertexPosition;
-out float vTerrain;
 out vec3 vWallA;
-out vec3 vWallB;
 
 void main() {
-  vTerrain = aTerrain;
   vWallA = aWallA;
-  vWallB = aWallB;
-  vertexPosition = aVertexPosition;
   gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
 }`;
 
@@ -142,29 +136,23 @@ wallACoordinatesShaderGLSL.fragmentShader =
 `#version 300 es
 precision mediump float;
 
-uniform vec3 uLightPosition;
-uniform sampler2D distanceMap;
-in vec3 lightPosition;
-in vec3 vertexPosition;
-in float vTerrain;
+uniform sampler2D depthMap;
+
 in vec3 vWallA;
-in vec3 vWallB;
-out vec3 coordinates;
+// out vec3 coordinates;
+out float distance;
 
 void main() {
-  float fragDepth = gl_FragCoord.z; // 0 – 1
-
-  // Unclear how to use texture correctly here.
-  // vec2 fragCoord = gl_FragCoord.xy * 0.5 + 0.5;
-  //vec2 fragCoord = gl_FragCoord.xy;
-  //float nearestDepth = texture(depthMap, fragCoord.xy).r;
-
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
-  float nearestDistance = texelFetch(distanceMap, fragCoord, 0).r;
-  float thisDistance = dot(uLightPosition, vertexPosition);
+  float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
-  if ( nearestDistance < thisDistance ) return;
-  coordinates = vWallA;
+  if ( nearestDepth == 0.0 ) discard;
+
+  if ( nearestDepth >= gl_FragCoord.z ) {
+    distance = gl_FragCoord.z;
+  } else {
+    discard;
+  }
 }`;
 
 /**
@@ -179,21 +167,15 @@ precision mediump float;
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 
-in float aTerrain;
 in vec3 aVertexPosition;
-in vec3 aWallA;
 in vec3 aWallB;
 
 out vec3 vertexPosition;
 out float vTerrain;
-out vec3 vWallA;
 out vec3 vWallB;
 
 void main() {
-  vTerrain = aTerrain;
-  vWallA = aWallA;
   vWallB = aWallB;
-  vertexPosition = aVertexPosition;
   gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
 }`;
 
@@ -201,30 +183,13 @@ wallBCoordinatesShaderGLSL.fragmentShader =
 `#version 300 es
 precision mediump float;
 
-uniform vec3 uLightPosition;
-uniform sampler2D distanceMap;
-in vec3 lightPosition;
-in vec3 vertexPosition;
-in float vTerrain;
-in vec3 vWallA;
 in vec3 vWallB;
 out vec3 coordinates;
 
 void main() {
-  float fragDepth = gl_FragCoord.z; // 0 – 1
-
-  // Unclear how to use texture correctly here.
-  // vec2 fragCoord = gl_FragCoord.xy * 0.5 + 0.5;
-  //vec2 fragCoord = gl_FragCoord.xy;
-  //float nearestDepth = texture(depthMap, fragCoord.xy).r;
-
-  ivec2 fragCoord = ivec2(gl_FragCoord.xy);
-  float nearestDistance = texelFetch(distanceMap, fragCoord, 0).r;
-  float thisDistance = dot(uLightPosition, vertexPosition);
-
-  if ( nearestDistance < thisDistance ) return;
   coordinates = vWallB;
 }`;
+
 
 
 /**
