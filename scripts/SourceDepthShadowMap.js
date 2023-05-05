@@ -356,6 +356,9 @@ export class SourceDepthShadowMap {
   _constructWallCoordinates(walls) {
     let hasTerrainWalls = false;
 
+    // TODO: Shrink the wall and construct a border around the wall shape to represent the penumbra?
+    //       Mark that separately? Could work for everything except terrain walls...
+
     // TODO: Filter walls for given light source type and, for point source, the radius?
     // TODO: Vary according to source type
     walls = walls.filter(w => w.document["light"] !== CONST.WALL_SENSE_TYPES.NONE);
@@ -655,27 +658,27 @@ export class SourceDepthShadowMap {
 
     // TODO: Set width and height more intelligently; handle point light radii.
     // Get a RenderTexture
-    const renderTexture = PIXI.RenderTexture.create({
+    const depthRenderTexture = PIXI.RenderTexture.create({
       width,
       height,
       format: PIXI.FORMATS.RED,
       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
     });
-    renderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
-    renderTexture.framebuffer.enableDepth();
+    depthRenderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
+    depthRenderTexture.framebuffer.enableDepth();
 
     // Render depth and extract the rendered texture
-    canvas.app.renderer.render(depthMesh, { renderTexture });
+    canvas.app.renderer.render(depthMesh, { renderTexture: depthRenderTexture });
 
     // Extract the texture from the render texture.
-    const depthTex = PIXI.Texture.from(renderTexture.framebuffer.colorTextures[0], {
-      format: PIXI.FORMATS.RED,
-      type: PIXI.TYPES.FLOAT,
-      scaleMode: PIXI.SCALE_MODES.NEAREST
-    });
-    depthTex.framebuffer = renderTexture.framebuffer;
-    this.#depthTexture = depthTex;
+//     const depthTex = PIXI.Texture.from(renderTexture.framebuffer.colorTextures[0], {
+//       format: PIXI.FORMATS.RED,
+//       type: PIXI.TYPES.FLOAT,
+//       scaleMode: PIXI.SCALE_MODES.NEAREST
+//     });
+    //depthTex.framebuffer = renderTexture.framebuffer;
+    this.#depthTexture = depthRenderTexture;
 
     // Phase II: Re-run to remove frontmost terrain walls.
     const terrainDepthMesh = this._constructTerrainDepthMesh();
@@ -691,13 +694,13 @@ export class SourceDepthShadowMap {
 
     canvas.app.renderer.render(terrainDepthMesh, { renderTexture: terrainRenderTexture });
     // Extract the texture from the render texture.
-    const terrainDepthTex = PIXI.Texture.from(terrainRenderTexture.framebuffer.colorTextures[0], {
-      format: PIXI.FORMATS.RED,
-      type: PIXI.TYPES.FLOAT,
-      scaleMode: PIXI.SCALE_MODES.NEAREST
-    });
-    terrainDepthTex.framebuffer = terrainRenderTexture.framebuffer;
-    this.#terrainDepthTexture = terrainDepthTex;
+//     const terrainDepthTex = PIXI.Texture.from(terrainRenderTexture.framebuffer.colorTextures[0], {
+//       format: PIXI.FORMATS.RED,
+//       type: PIXI.TYPES.FLOAT,
+//       scaleMode: PIXI.SCALE_MODES.NEAREST
+//     });
+    //terrainDepthTex.framebuffer = terrainRenderTexture.framebuffer;
+    this.#terrainDepthTexture = terrainRenderTexture;
 
       // Test
   //     const wallAMesh = this._constructWallCoordinatesMesh("A");
@@ -721,7 +724,10 @@ export class SourceDepthShadowMap {
   //     this.#wallACoordinatesTexture = wallATex;
 
 
-    // Phase III.A: Wall endpoint A coordinates
+    // Phase III: Wall endpoint coordinates
+
+
+
     const wallAMesh = this._constructWallCoordinatesMesh("A");
     const wallARenderTexture = PIXI.RenderTexture.create({
       width: 1024,
@@ -758,8 +764,6 @@ export class SourceDepthShadowMap {
     });
     wallBTex.framebuffer = wallBRenderTexture.framebuffer;
     this.#wallBCoordinatesTexture = wallBTex;
-
-    return depthTex;
   }
 
   /**
