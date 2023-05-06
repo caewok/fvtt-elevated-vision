@@ -214,10 +214,12 @@ in vec3 vertexPosition;
 out vec4 fragColor;
 
 // TODO: Use isampler2DArray or possibly usampler2DArray
-uniform isampler2D wallA;
-//uniform sampler2D wallA;
-uniform sampler2D wallB;
-uniform sampler2D distanceMap;
+uniform sampler2D wallAx;
+uniform sampler2D wallAy;
+uniform sampler2D wallAz;
+uniform sampler2D wallBx;
+uniform sampler2D wallBy;
+uniform sampler2D wallBz;
 uniform float uMaxDistance;
 uniform vec3 uLightPosition;
 uniform float uLightSize;
@@ -318,6 +320,17 @@ Wall getWallCoordinates(in vec3 position) {
   vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
 
   // Sample the maps
+  vec3 coordA = vec3(-1.0);
+  vec3 coordB = vec3(-1.0);
+
+  ivec2 iMapCoord = ivec2(mapCoord);
+  coordA.x = texelFetch(mapAx, iMapCoord, 0).r;
+  coordA.y = texelFetch(mapAy, iMapCoord, 0).r;
+  coordA.z = texelFetch(mapAz, iMapCoord, 0).r;
+  coordB.x = texelFetch(mapBx, iMapCoord, 0).r;
+  coordB.y = texelFetch(mapBy, iMapCoord, 0).r;
+  coordB.z = texelFetch(mapBz, iMapCoord, 0).r;
+
   ivec4 A = texture(wallA, mapCoord);
   vec4 B = texture(wallB, mapCoord);
 
