@@ -62,6 +62,14 @@ canvas.stage.removeChild(s);
 // update walls
 map._updateWallGeometry(walls);
 
+extractPixels = api.extract.extractPixels
+extractPixelsFromFloat = api.extract.extractPixelsFromFloat
+let { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.depthTexture);
+s = new Set()
+pixels.forEach(px => s.add(px))
+s
+s.size
+
 
 extractPixels = api.extract.extractPixels
 extractPixelsFromFloat = api.extract.extractPixelsFromFloat
@@ -137,6 +145,11 @@ for ( const v of testPoints ) {
     --> (${vCamera.x.toPrecision(3)},${vCamera.y.toPrecision(3)},${vCamera.z.toPrecision(3)})
     --> (${vProj.x.toPrecision(3)},${vProj.y.toPrecision(3)},${vProj.z.toPrecision(3)})`);
 }
+
+
+// Test the wall projections for the map
+
+
 
 */
 
@@ -794,6 +807,50 @@ export class SourceDepthShadowMap {
   _endShadowRenderTest() {
     if ( this.#shadowRender ) canvas.stage.removeChild(this.#shadowRender);
     this.#shadowRender = undefined;
+  }
+
+  // Test the wall projection calculations.
+  _calculateWallCoordinateProjections() {
+    const project = pt => {
+      const cameraPt = this.viewMatrix.multiplyPoint3d(pt);
+      return this.projectionMatrix.multiplyPoint3d(cameraPt);
+    };
+
+    Point3d.prototype.toString = function() {
+      return `${this.x},${this.y},${this.z}`;
+    }
+
+    // Canvas corners
+    const { rect, sceneRect } = canvas.dimensions
+    const canvasCorners = [
+      new Point3d(rect.left, rect.top, 0),
+      new Point3d(rect.right, rect.top, 0),
+      new Point3d(rect.right, rect.bottom, 0),
+      new Point3d(rect.left, rect.bottom, 0)
+    ];
+
+    // Scene corners
+    const sceneCorners = [
+      new Point3d(sceneRect.left, sceneRect.top, 0),
+      new Point3d(sceneRect.right, sceneRect.top, 0),
+      new Point3d(sceneRect.right, sceneRect.bottom, 0),
+      new Point3d(sceneRect.left, sceneRect.bottom, 0)
+    ];
+
+    const wallCoords = this.wallGeometry.getBuffer("aVertexPosition").data;
+    const wallPts = [];
+    for ( let i = 0; i < wallCoords.length; i += 3 ) {
+      wallPts.push(new Point3d(wallCoords[i], wallCoords[i + 1], wallCoords[i + 2]));
+    }
+
+    console.log("Canvas corners:")
+    canvasCorners.forEach(pt => console.log(`\t${pt} => ${project(pt)}`));
+
+    console.log("Scene corners:")
+    sceneCorners.forEach(pt => console.log(`\t${pt} => ${project(pt)}`));
+
+    console.log("Wall geometry:")
+    wallPts.forEach(pt => console.log(`\t${pt} => ${project(pt)}`));
   }
 
   static toColMajorArray = toColMajorArray;
