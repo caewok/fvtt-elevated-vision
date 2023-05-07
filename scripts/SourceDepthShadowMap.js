@@ -64,11 +64,19 @@ map._updateWallGeometry(walls);
 
 extractPixels = api.extract.extractPixels
 extractPixelsFromFloat = api.extract.extractPixelsFromFloat
-let { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.depthTexture);
+let { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.terrainDepthTexture);
 s = new Set()
 pixels.forEach(px => s.add(px))
 s
 s.size
+
+pixelRange = function(pixels) {
+  return {
+    min: pixels.reduce((curr, acc) => Math.min(curr, acc), Number.POSITIVE_INFINITY),
+    max: pixels.reduce((curr, acc) => Math.max(curr, acc), Number.NEGATIVE_INFINITY)
+  }
+}
+pixelRange(pixels)
 
 
 extractPixels = api.extract.extractPixels
@@ -84,6 +92,27 @@ s = new Set()
 pixels.forEach(px => s.add(px))
 s
 s.size
+
+// Check coordinates for each
+extractPixels = api.extract.extractPixels
+extractPixelsFromFloat = api.extract.extractPixelsFromFloat
+
+
+
+for ( const endpoint of ["A", "B"] ) {
+  console.log(endpoint);
+  for ( const coord of ["x", "y", "z"] ) {
+    console.log(coord);
+    const { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.wallCoordinateTextures[endpoint][coord]);
+    const s = new Set()
+    pixels.forEach(px => s.add(px))
+    const values = [...s].sort((a, b) => a - b);
+    console.table(...values)
+  }
+}
+
+
+
 
 // Locate non-zero pixels and map
 m = new Map()
@@ -101,6 +130,8 @@ s = s.map(x => canvas.dimensions.width * (1 - x))
 
 Draw = CONFIG.GeometryLib.Draw;
 s.forEach(x => Draw.segment({A: {x, y: 0}, B: {x, y: canvas.dimensions.height}}))
+
+s.forEach(y => Draw.segment({A: {x: 0, y}, B: {x: canvas.dimensions.width, y}}))
 
 let { pixels, width, height } = extractPixels(canvas.app.renderer, this.baseDepthTexture);
 
@@ -147,7 +178,36 @@ for ( const v of testPoints ) {
 }
 
 
-// Test the wall projections for the map
+Plane = CONFIG.GeometryLib.threeD.Plane
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+Draw = CONFIG.GeometryLib.Draw
+let [wall] = canvas.walls.controlled
+token = _token
+
+center = token.center
+rayOrigin = new Point3d(center.x, center.y, 0)
+lightPosition = map.lightPosition
+rayDirection = lightPosition.subtract(rayOrigin)
+Draw.segment({A: rayOrigin, B: lightPosition})
+
+
+A = wall.A
+B = wall.B
+
+v0 = new Point3d(A.x, A.y, wall.topZ)
+v1 = new Point3d(B.x, B.y, wall.topZ)
+v2 = new Point3d(B.x, B.y, wall.bottomZ)
+v3 = new Point3d(A.x, A.y, wall.bottomZ)
+
+t1 = Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, v0, v1, v2)
+t2 = Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, v0, v2, v3)
+t = t1 ?? t2
+
+ix = rayOrigin.projectToward(lightPosition, t)
+Draw.point(ix)
+
+
+rayOrigin.add(rayDirection.multiplyScalar(t))
 
 
 
@@ -759,15 +819,16 @@ export class SourceDepthShadowMap {
     const minElevation = this.minElevation;
 
     // Construct uniforms used by the shadow shader
-    const { x, y, z } = this.lightPosition;
-
-
+    const lightDirection = this.lightPosition.subtract(new Point3d(sceneRect.center.x, sceneRect.center.y, minElevation));
     const shadowRenderUniforms = {
-      uLightPosition: [x, y, z],
+      uLightPosition: Object.values(this.lightPosition),
+      uLightDirection: Object.values(lightDirection.normalize()),
+      uOrthogonal: true,
+      uCanvas: [canvas.dimensions.width, canvas.dimensions.height],
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
       uMaxDistance: this.lightPosition.dot(new Point3d(sceneRect.right, sceneRect.bottom, minElevation)),
-      uLightSize: 100 // TODO: User-defined.
+      uLightSize: 100 // TODO: User-defined light property.
     };
 
     for ( const endpoint of ["A", "B"] ) {
