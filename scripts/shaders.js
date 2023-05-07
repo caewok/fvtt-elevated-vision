@@ -36,7 +36,7 @@ precision mediump float;
 out float distance;
 
 void main() {
-  distance = gl_FragCoord.z;
+  distance = gl_FragCoord.z; // [0, 1]
 }`;
 
 /**
@@ -88,13 +88,12 @@ in float vTerrain;
 out float distance;
 
 void main() {
+  // gl_FragCoord.x: [0, texture width (e.g., 1024)]
+  // gl_FragCoord.y: [0, texture height (e.g., 1024)]
+  // gl_FragCoord.z: [0, 1]
+  // depthMap: [0, 1] (see depthShader, above)
+
   float fragDepth = gl_FragCoord.z; // 0 – 1
-
-  // Unclear how to use texture correctly here.
-  // vec2 fragCoord = gl_FragCoord.xy * 0.5 + 0.5;
-  //vec2 fragCoord = gl_FragCoord.xy;
-  //float nearestDepth = texture(depthMap, fragCoord.xy).r;
-
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
   float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
@@ -115,7 +114,7 @@ void main() {
  * @param {"A"|"B"} endpoint
  * @returns {object} {vertexShader: {string}, vertexShader: {string}}
  */
-export function getWallCoordinatesShaderGLSL(endpoint = "A") {
+export function getWallCoordinatesShaderGLSL(endpoint = "A", coord = "x") {
   const wallCoordinatesShaderGLSL = {};
   wallCoordinatesShaderGLSL.vertexShader =
 `#version 300 es
@@ -141,8 +140,8 @@ precision mediump float;
 uniform sampler2D depthMap;
 
 in vec3 vWall;
-out ivec4 coordinates;
-//out float coordinates;
+//out ivec4 coordinates;
+out float coordinate;
 
 void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
@@ -153,7 +152,9 @@ void main() {
   if ( nearestDepth >= gl_FragCoord.z ) {
     // distance = gl_FragCoord.z;
     // coordinates = 1.0 - (vWall.x / 6000.0);
-    coordinates = ivec4(vWall, 1);
+    coordinate = vWall.${coord};
+
+    // coordinates = ivec4(vWall, 1);
 
   } else {
     discard;
@@ -206,21 +207,27 @@ precision mediump float;
 precision mediump isampler2D;
 
 #define EPSILON 1e-12
+#define M_PI 3.1415926535897932384626433832795
 
 in vec2 vTexCoord;
 in vec3 vertexPosition;
 out vec4 fragColor;
 
 // TODO: Use isampler2DArray or possibly usampler2DArray
-uniform isampler2D wallA;
-//uniform sampler2D wallA;
-uniform sampler2D wallB;
-uniform sampler2D distanceMap;
+uniform sampler2D wallAx;
+uniform sampler2D wallAy;
+uniform sampler2D wallAz;
+uniform sampler2D wallBx;
+uniform sampler2D wallBy;
+uniform sampler2D wallBz;
 uniform float uMaxDistance;
 uniform vec3 uLightPosition;
 uniform float uLightSize;
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
+uniform vec2 uCanvas;
+uniform vec3 uLightDirection;
+uniform bool uOrthogonal;
 
 struct Wall {
   vec3 A;
@@ -255,7 +262,8 @@ float rayIntersectionTriangle3d(in vec3 rayOrigin, in vec3 rayDirection, in vec3
 
   // If the determinant is near zero, ray lies in plane of triangle.
   float det = dot(edge1, pvec);
-  if ( det > -EPSILON && det < EPSILON ) return -1.0; // Ray is parallel to triangle.
+  if ( abs(det) < EPSILON ) return -1.0; // Ray is parallel to triangle.
+
   float invDet = 1.0 / det;
 
   // Calculate the intersection using barycentric coordinates.
@@ -269,7 +277,9 @@ float rayIntersectionTriangle3d(in vec3 rayOrigin, in vec3 rayDirection, in vec3
 
   // Calculate the distance to the intersection point.
   float t = invDet * dot(edge2, qvec);
-  return t > EPSILON ? t : -1.0;
+  return abs(t);
+
+  // return t > EPSILON ? t : -1.0;
 }
 
 /**
@@ -282,23 +292,97 @@ float rayIntersectionTriangle3d(in vec3 rayOrigin, in vec3 rayDirection, in vec3
  * @returns {float} Distance from ray origin to the point of intersection
  *   Returns -1.0 if no intersection.
  */
-float rayIntersectionQuad3d(in vec3 rayOrigin, in vec3 rayDirection, in vec3 p0, in vec3 p1) {
-  // Quad goes v0 - v1 - v2 - v3
-  vec3 diff = abs(p1 - p0);
-  vec3 minP = min(p0, p1);
-  vec3 maxP = max(p0, p1);
-
-  vec3 v0 = p0;
-  vec3 v1 = vec3(p1.x, p0.y, p0.z);
-  vec3 v2 = p1;
-  vec3 v3 = vec3(p0.x, p1.y, p1.z);
-
+float rayIntersectionQuad3d(in vec3 rayOrigin, in vec3 rayDirection, in vec3 v0, in vec3 v1, in vec3 v2, in vec3 v3) {
   // Triangles are v0 - v1 - v2, v0 - v2 - v3
   float t0 = rayIntersectionTriangle3d(rayOrigin, rayDirection, v0, v1, v2);
   if ( t0 != -1.0 ) return t0;
 
-  float t1 = rayIntersectionTriangle3d(rayOrigin, rayDirection, v0, v2, v3);
+  float t1 = rayIntersectionTriangle3d(rayOrigin, rayDirection, v1, v2, v3);
   return t1;
+}
+
+
+
+/**
+ * Cross x and y parameters in a vec2.
+ * @param {vec2} a  First vector
+ * @param {vec2} b  Second vector
+ * @returns {float} The cross product
+ */
+float cross2d(in vec2 a, in vec2 b) { return a.x * b.y - a.y * b.x; }
+
+/**
+ * Quad intersect
+ * https://www.shadertoy.com/view/XtlBDs
+ * @param {vec3} ro   Ray origin
+ * @param {vec3} rd   Ray direction
+ * @param {vec3} v0   Corner #0
+ * @param {vec3} v1   Corner #1
+ * @param {vec3} v2   Corner #2
+ * @param {vec3} v3   Corner #3
+ * 0--b--3
+ * |\
+ * a c
+ * |  \
+ * 1    2
+ * @returns {vec3} Returns barycentric coords or vec3(-1.0) if no intersection.
+ */
+const int lut[4] = int[](1, 2, 0, 1);
+
+vec3 quadIntersect(in vec3 ro, in vec3 rd, in vec3 v0, in vec3 v1, in vec3 v2, in vec3 v3) {
+  // Let's make v0 the origin.
+  vec3 a = v1 - v0;
+  vec3 b = v3 - v0;
+  vec3 c = v2 - v0;
+  vec3 p = ro - v0;
+
+  // Intersect plane.
+  vec3 nor = cross(a, b);
+  float t = -dot(p, nor) / dot(rd, nor);
+  if ( t < 0.0 ) return vec3(-1.0); // Parallel to plane
+
+  // Intersection point.
+  vec3 pos = p + (t * rd);
+
+  // See here: https://www.shadertoy.com/view/lsBSDm.
+
+  // Select projection plane.
+  vec3 mor = abs(nor);
+  int id = (mor.x > mor.y && mor.x > mor.z ) ? 0 : (mor.y > mor.z) ? 1 : 2;
+  int idu = lut[id];
+  int idv = lut[id + 1];
+
+  // Project to 2D
+  vec2 kp = vec2(pos[idu], pos[idv]);
+  vec2 ka = vec2(a[idu], a[idv]);
+  vec2 kb = vec2(b[idu], b[idv]);
+  vec2 kc = vec2(c[idu], c[idv]);
+
+  // Find barycentric coords of the quad.
+  vec2 kg = kc - kb - ka;
+  float k0 = cross2d(kp, kb);
+  float k2 = cross2d(kc - kb, ka);  // Alt: float k2 = cross2d(kg, ka);
+  float k1 = cross2d(kp, kg) - nor[id]; // Alt: float k1 = cross(kb, ka) + cross2d(kp, kg);
+
+  float u;
+  float v;
+  if ( abs(k2) < 0.00001 ) { // TODO: use EPSILON?
+    // Edges are parallel; this is a linear equation.
+    v = -k0 / k1;
+    u = cross2d(kp, ka) / k1;
+  } else {
+    // Otherwise, it's a quadratic.
+    float w = (k1 * k1) - (4.0 * k0 * k2);
+    if ( w < 0.0 ) return vec3(-1.0);
+    w = sqrt(w);
+    float ik2 = 1.0 / (2.0 * k2);
+    v = (-k1 - w) * ik2;
+    if ( v < 0.0 || v > 1.0 ) v = (-k1 + w) * ik2;
+    u = (kp.x - (ka.x * v)) / (kb.x + (kg.x * v));
+  }
+
+  if ( u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0 ) return vec3(-1.0);
+  return vec3(t, u, v);
 }
 
 /**
@@ -316,17 +400,27 @@ Wall getWallCoordinates(in vec3 position) {
   vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
 
   // Sample the maps
-  ivec4 A = texture(wallA, mapCoord);
-  vec4 B = texture(wallB, mapCoord);
+  vec3 coordA = vec3(-1.0);
+  vec3 coordB = vec3(-1.0);
 
-  return Wall(vec3(A.xyz), vec3(B.xyz), A.w != 0);
+  coordA.x = texture(wallAx, mapCoord).r;
+
+  // -1.0 signifies no shadow and so no valid coordinates.
+  if ( coordA.x == -1.0 ) return Wall(coordA, coordB, false);
+
+  coordA.y = texture(wallAy, mapCoord).r;
+  coordA.z = texture(wallAz, mapCoord).r;
+  coordB.x = texture(wallBx, mapCoord).r;
+  coordB.y = texture(wallBy, mapCoord).r;
+  coordB.z = texture(wallBz, mapCoord).r;
+  return Wall(coordA, coordB, true);
 }
 
 /**
  * For testing
- * @returns {vec4}
+ * @returns {float}
  */
-ivec4 getCoordinates(in vec3 position) {
+float getCoordinates(in vec3 position) {
   vec4 lightSpacePosition = uProjectionM * uViewM * vec4(position, 1.0);
 
   // Perspective divide.
@@ -336,21 +430,117 @@ ivec4 getCoordinates(in vec3 position) {
   // Transform the NDC coordinates to range [0, 1]
   vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
 
-  // return texture(wallA, mapCoord);
-  ivec2 iProjCoord = ivec2(projCoord.xy);
-  return texelFetch(wallA, iProjCoord, 0);
+  return texture(wallAx, mapCoord).r;
+}
+
+/**
+ * Beta inverse function, avoiding infinity at 0.
+ * Clamps values to between 0 and 1.
+ * @param {float} x
+ * @param {float} alpha
+ * @param {float} beta
+ * @returns {float} Returns 1 / beta(x, alpha, beta)
+ */
+float betaInv(in float x, in float alpha, in float beta) {
+  if ( x <= 0.0 ) return 0.0;
+  float value = 1.0 / (pow(x, alpha - 1.0) * pow(1.0 - x, beta - 1.0));
+  return clamp(value, 0.0, 1.0);
+}
+
+/**
+ * Sin function, clamping between 0 and 1.
+ * @param {float} x
+ * @param {float} amplitude       How high the wave goes (note it will still clamp to 1).
+ * @param {float} frequency       How many times to repeat between 0 and 1.
+ * @param {float} displacement    Shift values up or down along the 0–1 range.
+ * @returns {float} Number [0,1]
+ */
+// As needed, may want to enable one or more of these parameters:
+// float sinBlender(in float x, in float frequency, in float amplitude, in float displacement) {
+//   float value = sin(x * frequency) * amplitude + displacement;
+//   return clamp(value, 0.0, 1.0);
+// }
+
+float sinBlender(in float x, in float frequency, in float amplitude) {
+  float value = sin(x * frequency) * amplitude;
+  return clamp(value, 0.0, 1.0);
 }
 
 void main() {
+
+  Wall fragWall = getWallCoordinates(vertexPosition);
+  // fragColor = vec4(0.0, 0.0, fragWall.B.z / 1600.0 , float(fragWall.shadowsFragment));
+  //fragColor = vec4(fragWall.B.x / 5000.0, 0.0, 0.0, float(fragWall.shadowsFragment));
+  // fragColor = vec4(0.0, fragWall.B.y / 3800.0, 0.0, float(fragWall.shadowsFragment));
+  //fragColor = vec4(fragWall.A.x / 5000.0, fragWall.A.y / 3800.0, fragWall.A.z / 1600.0, float(fragWall.shadowsFragment));
+  //fragColor = vec4(fragWall.B.x / 5000.0, fragWall.B.y / 3800.0, fragWall.B.z / 1600.0, float(fragWall.shadowsFragment));
+  //return;
+
   // Simplest version is to check the w value of a coordinate: will be 0 if not shadowed.
-  // Wall fragWall = getWallCoordinates(vertexPosition);
-  // float shadow = float(fragWall.shadowsFragment);
+  // TODO: Consider terrain elevation
+  //Wall fragWall = getWallCoordinates(vertexPosition);
+  float shadow = float(fragWall.shadowsFragment);
+  float red = 0.0;
+  float blue = 0.0;
+  float green = 0.0;
+  float alpha = shadow;
 
-  ivec4 coords = getCoordinates(vertexPosition);
+//   float coord = getCoordinates(vertexPosition);
+//   float shadow = coord == -1.0 ? 0.0 : coord / 1024.0;
+  if ( shadow != 0.0 ) {
+    // TODO: Consider terrain elevation
+    // TODO: Subtract x, y by 0.5 to shift the vertices to pixel integers instead of pixel middles?
+    // Adjust for flipped y axis in GPU? Not needed currently, as vertexPosition based on canvas.
+    vec3 canvasCenter = vec3(uCanvas * 0.5, 0.0);
+    vec3 rayOrigin = vec3(vertexPosition.x, vertexPosition.y , 0.0);
+    vec3 rayDirection = uOrthogonal ? uLightDirection : (uLightPosition - rayOrigin);
 
-  float shadow = 0.0;
-  if ( coords.x > 0 ) shadow = 1.0;
+    vec3 v0 = fragWall.A;
+    vec3 v1 = vec3(fragWall.A.xy, fragWall.B.z);
+    vec3 v2 = fragWall.B;
+    vec3 v3 = vec3(fragWall.B.xy, fragWall.A.z);
+    // TODO: Why is rayIntersectionQuad3d broken?
+    // float t = rayIntersectionQuad3d(rayOrigin, rayDirection, v0, v1, v2, v3);
+    vec3 bary = quadIntersect(rayOrigin, rayDirection, v0, v1, v2, v3);
+    // float t = bary.x;
 
+    // bary.x: [0–??] distance from fragment to the wall. In grid units.
+    // bary.y: [0–1] where 0 is left-most portion of shadow, 1 is right-most portion
+    //         (where left is left of the ray from fragment towards the light)
+    // bary.z: [0–1] where 1 is nearest to the wall; 0 is furthest.
+    // red = bary.x;
+    // blue = bary.y;
+    // green = bary.z;
+
+    // Split left/right coordinate down middle, so it fades to 0 on either side.
+    float lr = sinBlender(bary.y, M_PI, 2.0);
+    //float lr = 1.0 - (abs(bary.y - 0.5) * 2.0);
+    //lr = betaInv(lr, .01, 1.0);
+
+    // TODO: Switch to gaussian or other mix so shadow remains dark through most of middle
+    // shadow = mix(lr, bary.z, 0.5);
+
+    // If very close to 1, make transparent to remove choppiness for lower-res shadow maps.
+    // If very close to 0, make transparent to remove end choppiness and fade at shadow end.
+    float tb = bary.x < 2.0 ? betaInv(bary.z, 10.0, 0.1) : betaInv(bary.z, 0.1, 5.0);
+
+    shadow = mix(lr, tb, .5);
+
+
+    //shadow = lr;
+
+
+
+//       vec3 ix = rayOrigin + (rayDirection * t);
+//       float nearestDist = distance(uLightPosition, ix);
+//       float fragDist = distance(uLightPosition, rayOrigin);
+//       shadow = (nearestDist - fragDist) / nearestDist;
+
+      // float nearestT = 1.0 - t;
+      // shadow = (nearestT - t) / nearestT;
+
+  }
+  //fragColor = vec4(red, green, blue, shadow);
   fragColor = vec4(0.0, 0.0, 0.0, shadow);
   // fragColor = vec4((nearestDistance - fragDist) / nearestDistance, 0.0, 0.0, shadow);
 }`;
