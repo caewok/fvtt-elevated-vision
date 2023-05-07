@@ -701,8 +701,8 @@ export class SourceDepthShadowMap {
     // TODO: Can we change the depth render so it also outputs distance?
     //       Then we can skip the second render if no terrain walls are present.
 
-    const width = 1024;
-    const height = 1024;
+    const width = 4096; //1024;
+    const height = 4096; //1024;
 
     this.baseDepthTexture = new PIXI.BaseRenderTexture({
       scaleMode: PIXI.SCALE_MODES.NEAREST,
@@ -735,8 +735,8 @@ export class SourceDepthShadowMap {
     // Phase II: Re-run to remove frontmost terrain walls.
     const terrainDepthMesh = this._constructTerrainDepthMesh();
     const terrainRenderTexture = PIXI.RenderTexture.create({
-      width: 1024,
-      height: 1024,
+      width,
+      height,
       format: PIXI.FORMATS.RED,
       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
@@ -757,8 +757,8 @@ export class SourceDepthShadowMap {
       for ( const coord of ["x", "y", "z"] ) {
         const mesh = this._constructWallCoordinatesMesh(endpoint, coord);
         const renderTexture = PIXI.RenderTexture.create({
-          width: 1024,
-          height: 1024,
+          width,
+          height,
           format: PIXI.FORMATS.RED,
           type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
           scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)

@@ -207,6 +207,7 @@ precision mediump float;
 precision mediump isampler2D;
 
 #define EPSILON 1e-12
+#define M_PI 3.1415926535897932384626433832795
 
 in vec2 vTexCoord;
 in vec3 vertexPosition;
@@ -432,6 +433,39 @@ float getCoordinates(in vec3 position) {
   return texture(wallAx, mapCoord).r;
 }
 
+/**
+ * Beta inverse function, avoiding infinity at 0.
+ * Clamps values to between 0 and 1.
+ * @param {float} x
+ * @param {float} alpha
+ * @param {float} beta
+ * @returns {float} Returns 1 / beta(x, alpha, beta)
+ */
+float betaInv(in float x, in float alpha, in float beta) {
+  if ( x <= 0.0 ) return 0.0;
+  float value = 1.0 / (pow(x, alpha - 1.0) * pow(1.0 - x, beta - 1.0));
+  return clamp(value, 0.0, 1.0);
+}
+
+/**
+ * Sin function, clamping between 0 and 1.
+ * @param {float} x
+ * @param {float} amplitude       How high the wave goes (note it will still clamp to 1).
+ * @param {float} frequency       How many times to repeat between 0 and 1.
+ * @param {float} displacement    Shift values up or down along the 0–1 range.
+ * @returns {float} Number [0,1]
+ */
+// As needed, may want to enable one or more of these parameters:
+// float sinBlender(in float x, in float frequency, in float amplitude, in float displacement) {
+//   float value = sin(x * frequency) * amplitude + displacement;
+//   return clamp(value, 0.0, 1.0);
+// }
+
+float sinBlender(in float x, in float frequency, in float amplitude) {
+  float value = sin(x * frequency) * amplitude;
+  return clamp(value, 0.0, 1.0);
+}
+
 void main() {
 
   Wall fragWall = getWallCoordinates(vertexPosition);
@@ -470,12 +504,30 @@ void main() {
     vec3 bary = quadIntersect(rayOrigin, rayDirection, v0, v1, v2, v3);
     // float t = bary.x;
 
+    // bary.x: [0–??] distance from fragment to the wall. In grid units.
+    // bary.y: [0–1] where 0 is left-most portion of shadow, 1 is right-most portion
+    //         (where left is left of the ray from fragment towards the light)
+    // bary.z: [0–1] where 1 is nearest to the wall; 0 is furthest.
+    // red = bary.x;
+    // blue = bary.y;
+    // green = bary.z;
 
-    red = bary.x;
-    blue = bary.y;
-    green = bary.z;
+    // Split left/right coordinate down middle, so it fades to 0 on either side.
+    float lr = sinBlender(bary.y, M_PI, 2.0);
+    //float lr = 1.0 - (abs(bary.y - 0.5) * 2.0);
+    //lr = betaInv(lr, .01, 1.0);
+
+    // TODO: Switch to gaussian or other mix so shadow remains dark through most of middle
+    // shadow = mix(lr, bary.z, 0.5);
+
+    // If very close to 1, make transparent to remove choppiness for lower-res shadow maps.
+    // If very close to 0, make transparent to remove end choppiness and fade at shadow end.
+    float tb = bary.x < 2.0 ? betaInv(bary.z, 10.0, 0.1) : betaInv(bary.z, 0.1, 5.0);
+
+    shadow = mix(lr, tb, .5);
 
 
+    //shadow = lr;
 
 
 
@@ -488,7 +540,7 @@ void main() {
       // shadow = (nearestT - t) / nearestT;
 
   }
-  fragColor = vec4(red, green, blue, shadow);
-  // fragColor = vec4(0.0, 0.0, 0.0, shadow);
+  //fragColor = vec4(red, green, blue, shadow);
+  fragColor = vec4(0.0, 0.0, 0.0, shadow);
   // fragColor = vec4((nearestDistance - fragDist) / nearestDistance, 0.0, 0.0, shadow);
 }`;
