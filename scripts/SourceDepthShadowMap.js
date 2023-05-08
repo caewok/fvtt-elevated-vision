@@ -929,55 +929,7 @@ export class SourceDepthShadowMap {
   static getWallCoordinatesShaderGLSL = getWallCoordinatesShaderGLSL;
 }
 
-/**
- * Resource using Uint16, 4 channels.
- * Used to store wall coordinates.
- */
-class CustomBufferResource extends PIXI.Resource {
-  constructor(source, options = {}) {
-    const { width, height, internalFormat, format, type, samplerType } = options;
 
-    if ( !width || !height || !internalFormat || !format || !type ) {
-      throw new Error("CustomBufferResource width, height, internalFormat, format, or type invalid.");
-    }
-
-    super(width, height);
-
-    this.data = source;
-    this.internalFormat = internalFormat;
-    this.samplerType = samplerType || 0; // PIXI.SAMPLER_TYPES: 0: FLOAT, 1: INT, 2: UINT ?
-    this.format = format;
-    this.type = type;
-  }
-
-  upload(renderer, baseTexture, glTexture) {
-    const gl = renderer.gl;
-
-    glTexture.samplerType = this.samplerType;
-
-    gl.pixelStorei(
-      gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,
-      baseTexture.alphaMode === 1 // PIXI.ALPHA_MODES.UNPACK but `PIXI.ALPHA_MODES` are not exported.
-    );
-
-    glTexture.width = baseTexture.width;
-    glTexture.height = baseTexture.height;
-
-    gl.texImage2D(
-      baseTexture.target,
-      0,
-      gl[this.internalFormat],
-      baseTexture.width,
-      baseTexture.height,
-      0,
-      gl[this.format],
-      gl[this.type],
-      this.data
-    );
-
-    return true;
-  }
-}
 
 /**
  * Base render texture that takes a data resource.
@@ -997,3 +949,47 @@ class CustomBufferResource extends PIXI.Resource {
 //   }
 // }
 
+export class CustomBufferResource extends PIXI.resources.Resource {
+  constructor(source, options) {
+    const { width, height, internalFormat, format, type } = options || {};
+
+    if (!width || !height || !internalFormat || !format || !type) {
+      throw new Error(
+        'CustomBufferResource width, height, internalFormat, format, or type invalid'
+      );
+    }
+
+    super(width, height);
+
+    this.data = source;
+    this.internalFormat = internalFormat;
+    this.format = format;
+    this.type = type;
+  }
+
+  upload(renderer, baseTexture, glTexture) {
+    const gl = renderer.gl;
+
+    gl.pixelStorei(
+      gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,
+      baseTexture.alphaMode === 1 // PIXI.ALPHA_MODES.UNPACK but `PIXI.ALPHA_MODES` are not exported
+    );
+
+    glTexture.width = baseTexture.width;
+    glTexture.height = baseTexture.height;
+
+    gl.texImage2D(
+      baseTexture.target,
+      0,  // level
+      gl[this.internalFormat],
+      baseTexture.width,
+      baseTexture.height,
+      0, // border
+      gl[this.format],
+      gl[this.type],
+      this.data
+    );
+
+    return true;
+  }
+}
