@@ -110,13 +110,11 @@ void main() {
 
 
 /**
- * Write the wall coordinates for the wall that shadows.
- * @param {"A"|"B"} endpoint
- * @returns {object} {vertexShader: {string}, vertexShader: {string}}
+ * Write the wall index for the wall that shadows.
  */
-export function getWallCoordinatesShaderGLSL(endpoint = "A", coord = "x") {
-  const wallCoordinatesShaderGLSL = {};
-  wallCoordinatesShaderGLSL.vertexShader =
+export const wallIndicesShaderGLSL = {};
+
+wallIndicesShaderGLSL.vertexShader =
 `#version 300 es
 precision mediump float;
 
@@ -124,24 +122,23 @@ uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 
 in vec3 aVertexPosition;
-in vec3 aWall${endpoint};
+in float aWallIndex;
 
-out vec3 vWall;
+out float vWallIndex;
 
 void main() {
-  vWall = aWall${endpoint};
+  vWallIndex = aWallIndex;
   gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
 }`;
 
-wallCoordinatesShaderGLSL.fragmentShader =
+wallIndicesShaderGLSL.fragmentShader =
 `#version 300 es
 precision mediump float;
 
 uniform sampler2D depthMap;
 
-in vec3 vWall;
-//out ivec4 coordinates;
-out float coordinate;
+in float vWallIndex;
+out vec4 coordinate;
 
 void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
@@ -150,19 +147,18 @@ void main() {
   if ( nearestDepth == 0.0 ) discard;
 
   if ( nearestDepth >= gl_FragCoord.z ) {
-    // distance = gl_FragCoord.z;
-    // coordinates = 1.0 - (vWall.x / 6000.0);
-    coordinate = vWall.${coord};
-
-    // coordinates = ivec4(vWall, 1);
+    // red: first 256 walls
+    // green: multiplier for each subsequent 256 walls
+    // blue: unused
+    // alpha: 1 if shadow, 0 if not.
+    float r = mod(vWallIndex, 255.0);
+    float g = floor(vWallIndex / 255.0);
+    coordinate = vec4(r / 255.0, g / 255.0, 0.0, 1.0);
 
   } else {
     discard;
   }
 }`;
-
-  return wallCoordinatesShaderGLSL;
-}
 
 /**
  * For debugging.

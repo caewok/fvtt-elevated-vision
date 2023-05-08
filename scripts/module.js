@@ -29,7 +29,7 @@ import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculat
 import { WebGLVector3 } from "./LearnWebGL/WebGLVector3.js";
 import { WebGLVector4 } from "./LearnWebGL/WebGLVector4.js";
 import { WebGLMatrix } from "./LearnWebGL/WebGLMatrix.js";
-import { SourceDepthShadowMap, CustomBufferResource } from "./SourceDepthShadowMap.js";
+import { SourceDepthShadowMap, CustomBufferResource, WallCoordinatesData } from "./SourceDepthShadowMap.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -151,6 +151,7 @@ Hooks.once("init", function() {
     TokenAverageElevationCalculator,
     SourceDepthShadowMap,
     CustomBufferResource,
+    WallCoordinatesData,
     WebGL: {
       WebGLVector3,
       WebGLVector4,

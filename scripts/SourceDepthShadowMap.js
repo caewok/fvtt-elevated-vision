@@ -13,7 +13,7 @@ import {
   shadowRenderShaderGLSL,
   depthShaderGLSL,
   terrainDepthShaderGLSL,
-  getWallCoordinatesShaderGLSL } from "./shaders.js";
+  wallIndicesShaderGLSL } from "./shaders.js";
 
 import {
   perspectiveMatrix,
@@ -37,7 +37,7 @@ lightOrigin = new Point3d(100, 100, 1600);
 // lightOrigin = new Point3d(100, canvas.dimensions.height - 100, 1600);
 
 Draw.point(lightOrigin, { color: Draw.COLORS.yellow });
-Draw.segment({A: lightOrigin, B: canvas.dimensions.sceneRect.center })
+Draw.segment({A: lightOrigin, B: canvas.dimensions.sceneRect.center }, { color: Draw.COLORS.yellow })
 
 map = new SourceDepthShadowMap(lightOrigin, { walls });
 map._depthTest();
@@ -51,6 +51,9 @@ map._endWallCoordinateTest();
 
 map._shadowRenderTest();
 map._endShadowRenderTest();
+
+
+
 
 
 texture = PIXI.Texture.from(map.baseDepthTexture)
@@ -97,22 +100,18 @@ s.size
 extractPixels = api.extract.extractPixels
 extractPixelsFromFloat = api.extract.extractPixelsFromFloat
 
-
-
 for ( const endpoint of ["A", "B"] ) {
   console.log(endpoint);
   for ( const coord of ["x", "y", "z"] ) {
     console.log(coord);
-    const { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.wallCoordinateTextures[endpoint][coord]);
+    const { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer,
+      map.wallCoordinateTextures[endpoint][coord]);
     const s = new Set()
     pixels.forEach(px => s.add(px))
     const values = [...s].sort((a, b) => a - b);
     console.table(...values)
   }
 }
-
-
-
 
 // Locate non-zero pixels and map
 m = new Map()
@@ -206,25 +205,215 @@ t = t1 ?? t2
 ix = rayOrigin.projectToward(lightPosition, t)
 Draw.point(ix)
 
-
 rayOrigin.add(rayDirection.multiplyScalar(t))
-
-
 
 */
 
-export class SourceDepthShadowMap {
-  // TODO: Can we make any of these empty and just update the object?
+const WALL_COORDINATES_DATA = {
+  light: undefined,
+  sight: undefined,
+  move: undefined,
+  sound: undefined
+};
 
+// Store wall data of a given type in an array and build a Uint16Array to store coordinate data.
+export class WallCoordinatesData {
+  /**
+   * @typedef {object} WallCoordinatesObject
+   * @property {Point3d} A      "A" endpoint for the wall
+   * @property {Point3d} B      "B" endpoint for the wall
+   * @property {bool} isTerrain Is the wall limited for this type?
+   * @property {number} index   Index of the wall, for lookup in the data array
+   * @property {Wall} wall      Reference to the wall, mostly for debugging
+   */
+
+  /** @type {[WallCoordinatesObject]} */
+  #coordinates = [];
+
+  /** @type {boolean} */
+  #hasTerrainWalls = false;
+
+  /** @type {Uint16Array} */
+  #data;
+
+  /** @type {PIXI.Texture} */
+  #texture;
+
+  constructor(type = "light") {
+    this.type = type;
+    this.buildCoordinates();
+  }
+
+  /** @type {Map<string, WallCoordinatesObject>} */
+  get coordinates() { return this.#coordinates; }
+
+  /** @type {Uint16Array} */
+  get data() { return this.#data || (this.#data = this._data()); }
+
+  /** @type {bool} */
+  get hasTerrainWalls() { return this.#hasTerrainWalls; }
+
+  /** @type {PIXI.Texture} */
+  get texture() { return this.#texture || (this.#texture = this._texture()); }
+
+  /**
+   * Add objects to a map representing wall data.
+   */
+  buildCoordinates() {
+    const walls = canvas.walls.placeables.filter(w => w.document[this.type] !== CONST.WALL_SENSE_TYPES.NONE);
+    const nWalls = walls.length;
+    const wallCoords = this.#coordinates;
+    wallCoords.length = 0;
+    let hasTerrainWalls = false;
+    for ( let i = 0; i < nWalls; i += 1 ) {
+      const wall = walls[i];
+      const wallObj = this.coordinatesObject(wall);
+      wallCoords.push(wallObj);
+      hasTerrainWalls ||= wallObj.isTerrain;
+    }
+    this.#hasTerrainWalls = hasTerrainWalls;
+    this.#data = undefined;
+  }
+
+  /**
+   * Create object to store relevant wall data, along with the index of the object.
+   * @param {Wall} wall
+   * @returns {WallCoordinatesObject}
+   */
+  coordinatesObject(wall) {
+    const { A, B, topZ, bottomZ } = wall;
+    return {
+      A: new Point3d(A.x, A.y, topZ),
+      B: new Point3d(B.x, B.y, bottomZ),
+      isTerrain: wall.document[this.type] === CONST.WALL_SENSE_TYPES.LIMITED,
+      wall: wall
+    };
+  }
+
+  /**
+   * Data Uint16Array with wall coordinate information. 8 x nWalls.
+   * [A.x, A.y, A.z, isTerrain, B.x, B.y, B.z, 0 (not currently used)]
+   * Range of coords is [0, 65535]
+   * For elevation, set 0 to floor(65535 / 2) = 32767. So elevation range is [-32767, 32768]
+   */
+  _wallDataArray() {
+    const coords = this.coordinates;
+    const nWalls = coords.length;
+    const coordinateData = new Uint16Array(8 * nWalls);
+    for ( let i = 0; i < nWalls; i += 1 ) {
+      const row = i * 8;
+      const wallObj = coords[i];
+      const dat = this._dataForWallObject(wallObj);
+      coordinateData.set(dat, row);
+    }
+    return coordinateData;
+  }
+
+  _dataForWallObject(wallObj) {
+    // TODO: Consider different representation for elevation
+    // Based on the elevation min for the scene?
+    // Use grid elevation instead of pixel?
+    // Either or both would allow a larger range of elevation values
+    const MAX = 65535;
+    const MIN = 0;
+    const ELEVATION_OFFSET = 32767;
+    const minmax = function(x) { return Math.max(Math.min(x, MAX), MIN); };
+    const wallCoordinateData = new Uint16Array(8);
+    wallCoordinateData[0] = minmax(wallObj.A.x);
+    wallCoordinateData[1] = minmax(wallObj.A.y);
+    wallCoordinateData[2] = minmax(wallObj.A.z + ELEVATION_OFFSET);
+    wallCoordinateData[3] = wallObj.isTerrain;
+    wallCoordinateData[4] = minmax(wallObj.B.x);
+    wallCoordinateData[5] = minmax(wallObj.B.y);
+    wallCoordinateData[6] = minmax(wallObj.B.z + ELEVATION_OFFSET);
+    wallCoordinateData[7] = 0;
+    return wallCoordinateData;
+  }
+
+  _texture() {
+    const resource = new CustomBufferResource(this.data, {
+      width: 8,
+      height: this.coordinates.length,
+      internalFormat: "RGBA16UI",
+      format: "RGBA_INTEGER",
+      type: "UNSIGNED_SHORT"
+    });
+
+    const baseDataTexture = new PIXI.BaseTexture(resource, {
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      mipmap: PIXI.MIPMAP_MODES.OFF
+    });
+    baseDataTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
+    const dataTexture = new PIXI.Texture(baseDataTexture);
+    return dataTexture;
+  }
+
+  removeWall(id) {
+    const coordObjs = this.coordinates;
+    const wallObj = coordObjs.find(obj => obj.id === id);
+    if ( !wallObj ) return;
+
+    // Save the index and then remove from the object array
+    const idx = coordObjs.indexOf(wallObj);
+    coordObjs.splice(idx, 1);
+
+    // Update terrain wall status, checking all walls only if necessary.
+    if ( this.#hasTerrainWalls && wallObj.isTerrain ) {
+      this.#hasTerrainWalls = coordObjs.some(obj => obj.isTerrain);
+    }
+
+    // Decrease the size of the data array
+    if ( !this.#data ) return;
+    const newDataArray = new Uint16Array(8 * coordObjs.length);
+    newDataArray.set(this.#data.slice(0, idx), 0);
+    newDataArray.set(this.#data.slice(idx + 1), idx);
+    this.#data = newDataArray;
+  }
+
+  addWall(wall) {
+    const wallObj = this.wallCoordinatesObject(wall);
+    this.coordinates.push(wallObj);
+    this.#hasTerrainWalls ||= wallObj.isTerrain;
+
+    // Increase the size of the data array and append the new wall data.
+    if ( !this.#data ) return;
+    const newDataArray = new Uint16Array(8 * this.coordinates.length);
+    newDataArray.set(this.data, 0);
+    const dat = this._dataForWallObject(wallObj);
+    newDataArray.set(dat, this.data.length);
+    this.#data = newDataArray;
+  }
+
+  updateWall(wall) {
+    const wallObj = this.wallCoordinatesObject(wall);
+    const idx = this.coordinates.findIndex(obj => obj.wall === wall);
+    if ( !~idx ) return this.addWall(wall);
+    this.coordinates[idx] = wallObj;
+    this.#hasTerrainWalls ||= wallObj.isTerrain;
+
+    // Replace the entire row in the data array
+    if ( !this.#data ) return;
+    const dat = this._dataForWallObject(wallObj);
+    this.#data.set(dat, idx);
+  }
+}
+
+export class SourceDepthShadowMap {
+
+  // TODO: Can we make any of these empty objects instead of undefined, and just update the object?
   #viewMatrix;
 
   #projectionMatrix;
+
+  #lightType;
 
   #lightPosition;
 
   #lightSize;
 
-  #radius;
+  #lightRadius;
+
+  #wallGeometry;
 
   // Stage I: Render the depth of walls to a texture
   #depthTexture;
@@ -237,13 +426,15 @@ export class SourceDepthShadowMap {
   #terrainDepthSprite; // For debugging
 
   // Stage III: Render wall coordinates for the closest wall
-  #wallCoordinateTextures;
+  #wallIndicesTexture;
 
-  #wallCoordinateSprite;
+  #wallIndicesSprite;
 
   #shadowRender; // For debugging
 
   #hasTerrainWalls = false;
+
+  #wallCoordinatesData;
 
   /**
    * Construct a new SourceDepthShadowMap instance.
@@ -253,56 +444,19 @@ export class SourceDepthShadowMap {
    * @param {PIXI.Geometry} [options.wallGeometry]
    * @param {boolean} [options.directional]
    */
-  constructor(lightPosition, { walls, wallGeometry, directional = true, radius, size = 1 }) {
+  constructor(lightPosition, { directional = true, lightRadius, lightSize = 1, lightType = "light" }) {
     // TODO: Use LightSource instead or alternatively allow as an option?
     this.#lightPosition = lightPosition;
-    this.#lightSize = size;
+    this.#lightSize = lightSize;
+    this.#lightType = lightType;
     this.directional = directional;
 
-    if ( !directional && typeof radius === "undefined" ) {
-      console.error("SourceDepthShadowMap requires radius for point source.");
-      this.#radius = canvas.dimensions.size;
+    if ( !directional && typeof lightRadius === "undefined" ) {
+      console.error("SourceDepthShadowMap requires lightRadius for point source.");
+      this.#lightRadius = canvas.dimensions.size;
     }
 
-    if ( !wallGeometry ) {
-      walls ??= canvas.walls.placeables;
-      this.wallGeometry = new PIXI.Geometry();
-      this.wallGeometry.addAttribute("aVertexPosition", [], 3);
-      this.wallGeometry.addAttribute("aTerrain", [], 1);
-      this.wallGeometry.addAttribute("aWallA", [], 3, false, PIXI.TYPES.INT);
-      this.wallGeometry.addAttribute("aWallB", [], 3, false, PIXI.TYPES.INT);
-      this.wallGeometry.addIndex([]);
-    } else {
-      this.wallGeometry = wallGeometry;
-
-      // Confirm we have a valid geometry
-      if ( !Object.hasOwn(wallGeometry.attributes, "aVertexPosition") ) {
-        console.error("SourceDepthShadowMap|wallGeometry has no aVertexPosition.");
-        this.wallGeometry.addAttribute("aVertexPosition", [], 3);
-      }
-
-      if ( !Object.hasOwn(wallGeometry.attributes, "aTerrain") ) {
-        console.error("SourceDepthShadowMap|wallGeometry has no aTerrain.");
-        this.wallGeometry.addAttribute("aTerrain", [], 1);
-      }
-
-      if ( !Object.hasOwn(wallGeometry.attributes, "aWallA") ) {
-        console.error("SourceDepthShadowMap|wallGeometry has no aWallA.");
-        this.wallGeometry.addAttribute("aWallA", [], 3, false, PIXI.TYPES.INT);
-      }
-
-      if ( !Object.hasOwn(wallGeometry.attributes, "aWallB") ) {
-        console.error("SourceDepthShadowMap|wallGeometry has no aWallB.");
-        this.wallGeometry.addAttribute("aWallB", [], 3, false, PIXI.TYPES.INT);
-      }
-
-      if ( !wallGeometry.indexBuffer ) {
-        console.error("SourceDepthShadowMap|wallGeometry has no index.");
-        this.wallGeometry.addIndex([]);
-      }
-    }
-
-    if ( walls ) this._updateWallGeometry(walls);
+    this.#wallCoordinatesData = WALL_COORDINATES_DATA[this.#lightType] || new WallCoordinatesData(this.#lightType);
 
     // Add min blending mode
     if ( typeof PIXI.BLEND_MODES.MIN === "undefined" ) {
@@ -342,11 +496,11 @@ export class SourceDepthShadowMap {
   }
 
   /** @type {number} */
-  get radius() { return this.#radius; }
+  get lightRadius() { return this.#lightRadius; }
 
-  set radius(value) {
+  set lightRadius(value) {
     this._resetLight();
-    this.#radius = value;
+    this.#lightRadius = value;
   }
 
   /** @type {PIXI.Texture} */
@@ -361,9 +515,9 @@ export class SourceDepthShadowMap {
     return this.#terrainDepthTexture;
   }
 
-  get wallCoordinateTextures() {
-    if ( typeof this.#wallCoordinateTextures === "undefined" ) this._renderDepth();
-    return this.#wallCoordinateTextures;
+  get wallIndicesTexture() {
+    if ( typeof this.#wallIndicesTexture === "undefined" ) this._renderDepth();
+    return this.#wallIndicesTexture;
   }
 
   /** @type {number} */
@@ -373,163 +527,101 @@ export class SourceDepthShadowMap {
       ? elevationMin : this.lightPosition.z - canvas.dimensions.size;
   }
 
-  /**
-   * Reset all cached variables related to light.
-   * TODO: distinguish between position, elevation, and type?
-   */
-  _resetLight() {
-    // #lightPosition?
-    // #radius?
-    this.#viewMatrix = undefined; // Defined by light position.
-    this._resetDepth();
+  /** @type {PIXI.Geometry} */
+  get wallGeometry() {
+    return this.#wallGeometry || (this.#wallGeometry = this._wallGeometry());
   }
 
-  /**
-   * Reset all cached variables related to walls.
-   */
-  _resetWalls() {
-    // TODO: Make this an empty matrix instead and fill it? Same for #viewMatrix?
-    // TODO: Do we need to destroy or update the texture, mesh, sprite?
-    this.#hasTerrainWalls = false;
-    this.#projectionMatrix = undefined; // Requires wall elevations.
-    this._resetDepth();
-  }
+  get wallCoordinatesData() { return this.#wallCoordinatesData; }
+
+  // TODO: Reset cached getters
 
   /**
-   * Reset all cached variables related to depth.
+   * Build the PIXI.Geometry object for these walls and light.
+   * Attributes:
+   * - aVertexPosition: coordinates for wall endpoint in 3 dimensions. Float32
+   * - aTerrain:  1 if terrain wall
+   * - aWallIndex: index [0–65337] corresponding to the #data array for this wall
    */
-  _resetDepth() {
-    this.#depthTexture = undefined; // Requires viewMatrix, projectionMatrix
-    this.#terrainDepthTexture = undefined; // Requires depthTexture
-
-    // End any debugging tests that may have been active.
-    this._endShadowRenderTest();
-    this._endTerrainDepthTest();
-    this._endDepthTest();
-  }
-
-  /**
-   * Build the wall coordinates and indices from an array of walls.
-   * @param {Wall[]} walls
-   * @returns {object} { coordinates: {Number[]}, indices: {Number[]}}
-   */
-  _constructWallCoordinates(walls) {
-    let hasTerrainWalls = false;
-
+  _wallGeometry() {
     // TODO: Shrink the wall and construct a border around the wall shape to represent the penumbra?
     //       Mark that separately? Could work for everything except terrain walls...
 
-    // TODO: Filter walls for given light source type and, for point source, the radius?
-    // TODO: Vary according to source type
-    walls = walls.filter(w => w.document["light"] !== CONST.WALL_SENSE_TYPES.NONE);
-
-    const nWalls = walls.length;
-    const coordinates = new Float32Array(nWalls * 12); // Coords: x,y,z for top and bottom A, top and bottom B
-    const indices = new Uint16Array(nWalls * 6); // 2 triangles to form a square
-    const terrain = new Float32Array(nWalls * 4); // 1 per wall coordinate
-    const wallA = new Int32Array(nWalls * 4 * 3); // 1 per wall coordinate, 3 values
-    const wallB = new Int32Array(nWalls * 4 * 3); // 1 per wall coordinate, 3 values
+    if ( this.#wallGeometry ) this.#wallGeometry.destroy();
+    const coords = this.#wallCoordinatesData.coordinates;
+    const nWalls = coords.length;
 
     // Need to cut off walls at the top/bottom bounds of the scene, otherwise they
     // will be given incorrect depth values b/c there is no floor or ceiling.
     const maxElevation = this.lightPosition.z;
     const minElevation = this.minElevation;
 
-    for ( let w = 0, j = 0, idx = 0, i = 0; w < nWalls; w += 1, j += 12, idx += 6, i += 4 ) {
-      const wall = walls[w];
-      const orientWall = foundry.utils.orient2dFast(wall.A, wall.B, this.lightPosition);
+    // TODO: Try Uint or other buffers instead of Array.
+    const indices = [];
+    const aVertexPosition = [];
+    const aTerrain = [];
+    const aWallIndex = [];
+    let wallNumber = 0;
+    for ( let i = 0; i < nWalls; i += 1 ) {
+      // TODO: Filter walls for ones within radius of the light, as projected onto canvas.
+      const wallObj = coords[i];
+      const orientWall = foundry.utils.orient2dFast(wallObj.A, wallObj.B, this.lightPosition);
       if ( orientWall.almostEqual(0) ) continue; // Wall is collinear to the light.
 
-      const topZ = Math.min(maxElevation, wall.topZ);
-      const bottomZ = Math.max(minElevation, wall.bottomZ);
+      const topZ = Math.min(maxElevation, wallObj.A.z);
+      const bottomZ = Math.max(minElevation, wallObj.B.z);
       if ( topZ <= bottomZ ) continue; // Wall is above or below the viewing box.
 
+      // Indices are:
+      // 0 1 2
+      // 1 3 2
+      // 4 5 6
+      // 5 7 6
+      const v = wallNumber * 4; // Four vertices per wall
+      indices.push(
+        v,
+        v + 1,
+        v + 2,
+        v + 1,
+        v + 3,
+        v + 2
+      );
+
+      // Arrange so A --> B --> lightPosition is counterclockwise
+      // aBottom -- aTop -- bBottom, aTop -- bTop -- bBottom
+      const [A, B] = orientWall > 0 ? [wallObj.A, wallObj.B] : [wallObj.B, wallObj.A];
+
       // Even vertex (0) is bottom A
-      coordinates[j] = wall.A.x;
-      coordinates[j + 1] = wall.A.y;
-      coordinates[j + 2] = bottomZ;
+      aVertexPosition.push(A.x, A.y, bottomZ);
 
       // Odd vertex (1) is top A
-      coordinates[j + 3] = wall.A.x;
-      coordinates[j + 4] = wall.A.y;
-      coordinates[j + 5] = topZ;
+      aVertexPosition.push(A.x, A.y, topZ);
 
       // Even vertex (2) is bottom B
-      coordinates[j + 6] = wall.B.x;
-      coordinates[j + 7] = wall.B.y;
-      coordinates[j + 8] = bottomZ;
+      aVertexPosition.push(B.x, B.y, bottomZ);
 
       // Odd vertex (3) is top B
-      coordinates[j + 9] = wall.B.x;
-      coordinates[j + 10] = wall.B.y;
-      coordinates[j + 11] = topZ;
+      aVertexPosition.push(B.x, B.y, topZ);
 
-      // Indices are [0, 1, 2, 1, 3, 2]
-      // aBottom -- aTop -- bBottom, aTop -- bTop -- bBottom
-      indices[idx] = i;
-      indices[idx + 1] = i + 1;
-      indices[idx + 2] = i + 2;
-      indices[idx + 3] = i + 1;
-      indices[idx + 4] = i + 3;
-      indices[idx + 5] = i + 2;
+      // 4 vertices, so repeat labels x4.
+      const isTerrain = wallObj.isTerrain;
+      aTerrain.push(isTerrain, isTerrain, isTerrain, isTerrain);
+      aWallIndex.push(i, i, i, i);
 
-      // Check for terrain walls and mark accordingly
-      // TODO: Vary according to source type
-      const isTerrain = wall.document["light"] === CONST.WALL_SENSE_TYPES.LIMITED;
-      terrain[i] = isTerrain;
-      terrain[i + 1] = isTerrain;
-      terrain[i + 2] = isTerrain;
-      terrain[i + 3] = isTerrain;
-      hasTerrainWalls ||= isTerrain;
-
-      // Record the x and y for the wall
-      // A endpoint is one that makes A --> B --> light CW
-      const [A, B] = orientWall > 0 ? [wall.A, wall.B] : [wall.B, wall.A];
-      wallA[j] = A.x;
-      wallA[j + 1] = A.y;
-      wallA[j + 2] = topZ;
-      wallA[j + 3] = A.x;
-      wallA[j + 4] = A.y;
-      wallA[j + 5] = topZ;
-      wallA[j + 6] = A.x;
-      wallA[j + 7] = A.y;
-      wallA[j + 8] = topZ;
-      wallA[j + 9] = A.x;
-      wallA[j + 10] = A.y;
-      wallA[j + 11] = topZ;
-
-      wallB[j] = B.x;
-      wallB[j + 1] = B.y;
-      wallB[j + 2] = bottomZ;
-      wallB[j + 3] = B.x;
-      wallB[j + 4] = B.y;
-      wallB[j + 5] = bottomZ;
-      wallB[j + 6] = B.x;
-      wallB[j + 7] = B.y;
-      wallB[j + 8] = bottomZ;
-      wallB[j + 9] = B.x;
-      wallB[j + 10] = B.y;
-      wallB[j + 11] = bottomZ;
+      // Increment to the next wall.
+      wallNumber += 1;
     }
-    return { coordinates, indices, terrain, hasTerrainWalls, wallA, wallB };
+
+    // TODO: set interleave to true?
+    const geometry = new PIXI.Geometry();
+    geometry.addIndex(indices);
+    geometry.addAttribute("aVertexPosition", aVertexPosition, 3, false);
+    geometry.addAttribute("aTerrain", aTerrain, 1, false); // PIXI.TYPES.INT or some other?
+    geometry.addAttribute("aWallIndex", aWallIndex, 1, false);
+    return geometry;
   }
 
-  /**
-   * Update the wall geometry and reset cached matrices.
-   * @param {Wall[]} walls
-   */
-  _updateWallGeometry(walls) {
-    this._resetWalls();
-    const { coordinates, indices, terrain, hasTerrainWalls, wallA, wallB } = this._constructWallCoordinates(walls);
-    this.#hasTerrainWalls = hasTerrainWalls;
-
-    // Update the buffer attributes and index.
-    this.wallGeometry.getBuffer("aVertexPosition").update(coordinates);
-    this.wallGeometry.getBuffer("aTerrain").update(terrain);
-    this.wallGeometry.getBuffer("aWallA").update(wallA);
-    this.wallGeometry.getBuffer("aWallB").update(wallB);
-    this.wallGeometry.getIndex().update(indices);
-  }
+  // TODO: update wall geometry using updateWall and geometry.getBuffer().update()...
 
   /**
    * Build the view matrix from light to:
@@ -671,7 +763,7 @@ export class SourceDepthShadowMap {
     return mesh;
   }
 
-  _constructWallCoordinatesMesh(endpoint = "A", coord = "x") {
+  _constructWallIndicesMesh() {
     const uniforms = {
       depthMap: this.terrainDepthTexture,
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
@@ -679,7 +771,7 @@ export class SourceDepthShadowMap {
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
-    const { vertexShader, fragmentShader } = SourceDepthShadowMap.getWallCoordinatesShaderGLSL(endpoint, coord);
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.wallIndicesShaderGLSL;
     const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 
     // TODO: Can we save and update a single PIXI.Mesh?
@@ -701,8 +793,10 @@ export class SourceDepthShadowMap {
     // TODO: Can we change the depth render so it also outputs distance?
     //       Then we can skip the second render if no terrain walls are present.
 
-    const width = 4096; //1024;
-    const height = 4096; //1024;
+    performance.mark("render_wall_depth");
+
+    const width = 1024; // 1024? 4096?
+    const height = 1024; // 1024? 4096?
 
     this.baseDepthTexture = new PIXI.BaseRenderTexture({
       scaleMode: PIXI.SCALE_MODES.NEAREST,
@@ -733,6 +827,8 @@ export class SourceDepthShadowMap {
     this.#depthTexture = depthRenderTexture;
 
     // Phase II: Re-run to remove frontmost terrain walls.
+    performance.mark("render_terrain_wall_depth");
+
     const terrainDepthMesh = this._constructTerrainDepthMesh();
     const terrainRenderTexture = PIXI.RenderTexture.create({
       width,
@@ -747,29 +843,26 @@ export class SourceDepthShadowMap {
     canvas.app.renderer.render(terrainDepthMesh, { renderTexture: terrainRenderTexture });
     this.#terrainDepthTexture = terrainRenderTexture;
 
-    // Phase III: Wall endpoint coordinates
-    this.#wallCoordinateTextures = {
-      A: { x: undefined, y: undefined, z: undefined },
-      B: { x: undefined, y: undefined, z: undefined }
-    };
+    // Phase III: Wall index from which we can pull coordinates from the wall data texture.
+    performance.mark("render_wall_indices");
+    const wallMesh = this._constructWallIndicesMesh();
+    const wallRenderTexture = PIXI.RenderTexture.create({
+      width,
+      height,
+      format: PIXI.FORMATS.RGBA,
+      type: PIXI.TYPES.BYTE,
+      scaleMode: PIXI.SCALE_MODES.NEAREST
+    });
+    wallRenderTexture.baseTexture.clearColor = [0, 0, 0, 0];
+    wallRenderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
+    wallRenderTexture.framebuffer.enableDepth();
+    canvas.app.renderer.render(wallMesh, { wallRenderTexture });
+    this.#wallIndicesTexture = wallRenderTexture;
+    performance.mark("finish_render_depth");
 
-    for ( const endpoint of ["A", "B"] ) {
-      for ( const coord of ["x", "y", "z"] ) {
-        const mesh = this._constructWallCoordinatesMesh(endpoint, coord);
-        const renderTexture = PIXI.RenderTexture.create({
-          width,
-          height,
-          format: PIXI.FORMATS.RED,
-          type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
-          scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
-        });
-        renderTexture.baseTexture.clearColor = [-1, -1, -1, -1];
-        renderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
-        renderTexture.framebuffer.enableDepth();
-        canvas.app.renderer.render(mesh, { renderTexture });
-        this.#wallCoordinateTextures[endpoint][coord] = renderTexture;
-      }
-    }
+    performance.measure("Wall-Depth", "render_wall_depth", "render_terrain_wall_depth");
+    performance.measure("Terrain-Depth", "render_terrain_wall_depth", "render_wall_indices");
+    performance.measure("Wall-Indices", "render_wall_indices", "finish_render_depth");
   }
 
   /**
@@ -797,15 +890,15 @@ export class SourceDepthShadowMap {
     this.#terrainDepthSprite = undefined;
   }
 
-  _wallCoordinateTest(endpoint = "A", coord = "x") {
-    this._endWallCoordinateTest();
-    this.#wallCoordinateSprite = new PIXI.Sprite(this.wallCoordinateTextures[endpoint][coord]);
-    canvas.stage.addChild(this.#wallCoordinateSprite);
+  _wallIndicesTest() {
+    this._endWallIndicesTest();
+    this.#wallIndicesSprite = new PIXI.Sprite(this.wallIndicesTexture);
+    canvas.stage.addChild(this.#wallIndicesSprite);
   }
 
-  _endWallCoordinateTest() {
-    if ( this.#wallCoordinateSprite ) canvas.stage.removeChild(this.#wallCoordinateSprite);
-    this.#wallCoordinateSprite = undefined;
+  _endWallIndicesTest() {
+    if ( this.#wallIndicesSprite ) canvas.stage.removeChild(this.#wallIndicesSprite);
+    this.#wallIndicesSprite = undefined;
   }
 
   /**
@@ -815,35 +908,31 @@ export class SourceDepthShadowMap {
     this._endShadowRenderTest();
 
     // Constants
-    const sceneRect = canvas.dimensions.sceneRect;
+    const { left, right, top, bottom, center } = canvas.dimensions.sceneRect;
     const minElevation = this.minElevation;
 
     // Construct uniforms used by the shadow shader
-    const lightDirection = this.lightPosition.subtract(new Point3d(sceneRect.center.x, sceneRect.center.y, minElevation));
+    const lightDirection = this.lightPosition.subtract(new Point3d(center.x, center.y, minElevation));
     const shadowRenderUniforms = {
+      uWallIndices: this.wallIndicesTexture,
+      uWallCoordinates: this.wallCoordinatesData.texture,
       uLightPosition: Object.values(this.lightPosition),
       uLightDirection: Object.values(lightDirection.normalize()),
       uOrthogonal: true,
       uCanvas: [canvas.dimensions.width, canvas.dimensions.height],
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
-      uMaxDistance: this.lightPosition.dot(new Point3d(sceneRect.right, sceneRect.bottom, minElevation)),
+      uMaxDistance: this.lightPosition.dot(new Point3d(right, bottom, minElevation)),
       uLightSize: 100 // TODO: User-defined light property.
     };
-
-    for ( const endpoint of ["A", "B"] ) {
-      for ( const coord of ["x", "y", "z"] ) {
-        shadowRenderUniforms[`wall${endpoint}${coord}`] = this.wallCoordinateTextures[endpoint][coord];
-      }
-    }
 
     // Construct a quad for the scene.
     const geometryShadowRender = new PIXI.Geometry();
     geometryShadowRender.addAttribute("aVertexPosition", [
-      sceneRect.left, sceneRect.top, minElevation,      // TL
-      sceneRect.right, sceneRect.top, minElevation,   // TR
-      sceneRect.right, sceneRect.bottom, minElevation, // BR
-      sceneRect.left, sceneRect.bottom, minElevation  // BL
+      left, top, minElevation,      // TL
+      right, top, minElevation,   // TR
+      right, bottom, minElevation, // BR
+      left, bottom, minElevation  // BL
     ], 3);
 
     // Texture coordinates:
@@ -879,10 +968,10 @@ export class SourceDepthShadowMap {
 
     Point3d.prototype.toString = function() {
       return `${this.x},${this.y},${this.z}`;
-    }
+    };
 
     // Canvas corners
-    const { rect, sceneRect } = canvas.dimensions
+    const { rect, sceneRect } = canvas.dimensions;
     const canvasCorners = [
       new Point3d(rect.left, rect.top, 0),
       new Point3d(rect.right, rect.top, 0),
@@ -904,13 +993,13 @@ export class SourceDepthShadowMap {
       wallPts.push(new Point3d(wallCoords[i], wallCoords[i + 1], wallCoords[i + 2]));
     }
 
-    console.log("Canvas corners:")
+    console.log("Canvas corners:");
     canvasCorners.forEach(pt => console.log(`\t${pt} => ${project(pt)}`));
 
-    console.log("Scene corners:")
+    console.log("Scene corners:");
     sceneCorners.forEach(pt => console.log(`\t${pt} => ${project(pt)}`));
 
-    console.log("Wall geometry:")
+    console.log("Wall geometry:");
     wallPts.forEach(pt => console.log(`\t${pt} => ${project(pt)}`));
   }
 
@@ -926,14 +1015,8 @@ export class SourceDepthShadowMap {
 
   static terrainDepthShaderGLSL = terrainDepthShaderGLSL;
 
-  static getWallCoordinatesShaderGLSL = getWallCoordinatesShaderGLSL;
+  static wallIndicesShaderGLSL = wallIndicesShaderGLSL;
 }
-
-
-
-/**
- * Base render texture that takes a data resource.
- */
 
 /**
  * Texture that uses a float array.
@@ -941,21 +1024,13 @@ export class SourceDepthShadowMap {
  * https://github.com/pixijs/pixijs/issues/6436
  * https://www.html5gamedevs.com/topic/44689-how-bind-webgl-texture-current-to-shader-on-piximesh/
  */
-// class DistanceTexture extends PIXI.Resource {
-//   constructor(width, height) {
-//     super(width, height);
-//
-//
-//   }
-// }
-
 export class CustomBufferResource extends PIXI.resources.Resource {
   constructor(source, options) {
     const { width, height, internalFormat, format, type } = options || {};
 
     if (!width || !height || !internalFormat || !format || !type) {
       throw new Error(
-        'CustomBufferResource width, height, internalFormat, format, or type invalid'
+        "CustomBufferResource width, height, internalFormat, format, or type invalid."
       );
     }
 
@@ -980,11 +1055,11 @@ export class CustomBufferResource extends PIXI.resources.Resource {
 
     gl.texImage2D(
       baseTexture.target,
-      0,  // level
+      0,  // Level
       gl[this.internalFormat],
       baseTexture.width,
       baseTexture.height,
-      0, // border
+      0, // Border
       gl[this.format],
       gl[this.type],
       this.data
