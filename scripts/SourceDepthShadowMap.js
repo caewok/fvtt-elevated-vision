@@ -251,7 +251,7 @@ export class WallCoordinatesData {
   get coordinates() { return this.#coordinates; }
 
   /** @type {Uint16Array} */
-  get data() { return this.#data || (this.#data = this._data()); }
+  get data() { return this.#data || (this.#data = this._wallDataArray()); }
 
   /** @type {bool} */
   get hasTerrainWalls() { return this.#hasTerrainWalls; }
@@ -335,7 +335,7 @@ export class WallCoordinatesData {
 
   _texture() {
     const resource = new CustomBufferResource(this.data, {
-      width: 8,
+      width: 2,
       height: this.coordinates.length,
       internalFormat: "RGBA16UI",
       format: "RGBA_INTEGER",
@@ -882,6 +882,8 @@ export class SourceDepthShadowMap {
   _shadowRenderTest() {
     this._endShadowRenderTest();
 
+    performance.mark("start_shadow_render");
+
     // Constants
     const { left, right, top, bottom, center } = canvas.dimensions.sceneRect;
     const minElevation = this.minElevation;
@@ -927,6 +929,9 @@ export class SourceDepthShadowMap {
 
     // Render the mesh to the scene.
     canvas.stage.addChild(this.#shadowRender);
+
+    performance.mark("end_shadow_render");
+    performance.measure("Shdow-Render", "start_shadow_render", "end_shadow_render");
   }
 
   _endShadowRenderTest() {
