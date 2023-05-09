@@ -40,21 +40,22 @@ Draw.point(lightOrigin, { color: Draw.COLORS.yellow });
 Draw.segment({A: lightOrigin, B: canvas.dimensions.sceneRect.center }, { color: Draw.COLORS.yellow })
 
 map = new SourceDepthShadowMap(lightOrigin, { walls });
-map._depthTest();
-map._endDepthTest();
 
-map._terrainDepthTest();
-map._endTerrainDepthTest();
+map._testBaseDepthTexture()
+map._endTestBaseDepthTexture()
+
+map._testDepthTexture();
+map._endTestDepthTexture();
+
+map._testWallIndicesTexture()
+map._endTestWallIndicesTexture()
+
 
 map._wallCoordinateTest("A", "x");
 map._endWallCoordinateTest();
 
 map._shadowRenderTest();
 map._endShadowRenderTest();
-
-
-
-
 
 texture = PIXI.Texture.from(map.baseDepthTexture)
 s = new PIXI.Sprite(texture);
@@ -138,6 +139,8 @@ let { pixels, width, height } = extractPixels(canvas.app.renderer, this.baseDept
 let { pixels, width, height } = extractPixels(canvas.app.renderer, this.terrainDepthTexture);
 
 let { pixels, width, height } = extractPixels(canvas.app.renderer, this.depthTexture);
+
+let { pixels, width, height } = extractPixels(canvas.app.renderer, map.wallIndicesTexture);
 
 map = new SourceDepthShadowMap(lightOrigin, { walls });
 map._shadowRenderTest();
@@ -416,16 +419,15 @@ export class SourceDepthShadowMap {
   #wallGeometry;
 
   // Stage I: Render the depth of walls to a texture
+  #baseDepthTexture;
+
+  #baseDepthSprite;
+
   #depthTexture;
 
   #depthSprite; // For debugging
 
-  // Stage II: Render the depth of walls, accounting for terrain walls, to a texture
-  #terrainDepthTexture;
-
-  #terrainDepthSprite; // For debugging
-
-  // Stage III: Render wall coordinates for the closest wall
+  // Stage II: Render wall coordinates of closest wall, accounting for terrain walls, to a texture
   #wallIndicesTexture;
 
   #wallIndicesSprite;
@@ -510,11 +512,6 @@ export class SourceDepthShadowMap {
   }
 
   /** @type {PIXI.Texture} */
-  get terrainDepthTexture() {
-    if ( typeof this.#terrainDepthTexture === "undefined" ) this._renderDepth();
-    return this.#terrainDepthTexture;
-  }
-
   get wallIndicesTexture() {
     if ( typeof this.#wallIndicesTexture === "undefined" ) this._renderDepth();
     return this.#wallIndicesTexture;
@@ -742,13 +739,14 @@ export class SourceDepthShadowMap {
     return mesh;
   }
 
-  _constructTerrainDepthMesh() {
+  _constructTerrainDepthMesh(depthMap) {
+    depthMap ??= this.depthTexture;
     const { x, y, z } = this.lightPosition;
     const uniforms = {
       uLightPosition: [x, y, z],
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
-      depthMap: this.depthTexture
+      depthMap
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
@@ -763,41 +761,28 @@ export class SourceDepthShadowMap {
     return mesh;
   }
 
-  _constructWallIndicesMesh() {
-    const uniforms = {
-      depthMap: this.terrainDepthTexture,
-      uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
-      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
-    };
-
-    // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
-    const { vertexShader, fragmentShader } = SourceDepthShadowMap.wallIndicesShaderGLSL;
-    const depthShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
-
-    // TODO: Can we save and update a single PIXI.Mesh?
-    const mesh = new PIXI.Mesh(this.wallGeometry, depthShader);
-    mesh.state.depthTest = true;
-    mesh.state.depthMask = false;
-    // FAILS: mesh.blend = false;
-    // FAILS: mesh.blendMode = PIXI.BLEND_MODES.NORMAL;
-    mesh.blendMode = PIXI.BLEND_MODES.MIN; // TODO: Not sure why this works...
-    return mesh;
-  }
-
   /**
    * Render the depth of each wall in the scene.
    * Phase 1: save z values to a RED float texture.
    * @returns {PIXI.Texture}
    */
   _renderDepth() {
-    // TODO: Can we change the depth render so it also outputs distance?
-    //       Then we can skip the second render if no terrain walls are present.
+    /* Checking gl parameters
+    gl = canvas.app.renderer;
+    gl.getParameter(gl.DEPTH_TEST)
+    gl.getParameter(gl.DEPTH_WRITEMASK)
+    */
+
+    // TODO: When no terrain walls present, swap the depth mesh for one that renders the wall indices directly.
+    //       Allows skipping of the second terrain wall render.
 
     performance.mark("render_wall_depth");
 
+    // TODO: Adjust width & height to correspond to frustrum for given light
     const width = 1024; // 1024? 4096?
     const height = 1024; // 1024? 4096?
 
+    // Construct a depth texture that can be used for multiple renders.
     this.baseDepthTexture = new PIXI.BaseRenderTexture({
       scaleMode: PIXI.SCALE_MODES.NEAREST,
       resolution: 1,
@@ -810,8 +795,7 @@ export class SourceDepthShadowMap {
 
     const depthMesh = this._constructDepthMesh();
 
-    // TODO: Set width and height more intelligently; handle point light radii.
-    // Get a RenderTexture
+    // Phase I: Depth test all the walls in the scene.
     const depthRenderTexture = PIXI.RenderTexture.create({
       width,
       height,
@@ -826,10 +810,12 @@ export class SourceDepthShadowMap {
     canvas.app.renderer.render(depthMesh, { renderTexture: depthRenderTexture });
     this.#depthTexture = depthRenderTexture;
 
-    // Phase II: Re-run to remove frontmost terrain walls.
+    // Phase II: Re-run depth test to remove frontmost terrain walls (peel 1 depth layer)
+    // Must use a distinct RenderTexture b/c we use depthRenderTexture as a uniform to the mesh.
     performance.mark("render_terrain_wall_depth");
-
     const terrainDepthMesh = this._constructTerrainDepthMesh();
+
+    // TODO: Can we render to an integer texture? Maybe uint16?
     const terrainRenderTexture = PIXI.RenderTexture.create({
       width,
       height,
@@ -840,63 +826,52 @@ export class SourceDepthShadowMap {
     terrainRenderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
     terrainRenderTexture.framebuffer.enableDepth();
 
+    // Set default color to -1 so this render can record wall ids from 0 onward.
+    terrainRenderTexture.baseTexture.clearColor = [-1, -1, -1, -1];
+
     canvas.app.renderer.render(terrainDepthMesh, { renderTexture: terrainRenderTexture });
-    this.#terrainDepthTexture = terrainRenderTexture;
+    this.#wallIndicesTexture = terrainRenderTexture;
 
-    // Phase III: Wall index from which we can pull coordinates from the wall data texture.
-    performance.mark("render_wall_indices");
-    const wallMesh = this._constructWallIndicesMesh();
-    const wallRenderTexture = PIXI.RenderTexture.create({
-      width,
-      height,
-      format: PIXI.FORMATS.RGBA,
-      type: PIXI.TYPES.BYTE,
-      scaleMode: PIXI.SCALE_MODES.NEAREST
-    });
-    wallRenderTexture.baseTexture.clearColor = [0, 0, 0, 0];
-    wallRenderTexture.framebuffer.addDepthTexture(this.baseDepthTexture);
-    wallRenderTexture.framebuffer.enableDepth();
-    canvas.app.renderer.render(wallMesh, { wallRenderTexture });
-    this.#wallIndicesTexture = wallRenderTexture;
     performance.mark("finish_render_depth");
-
     performance.measure("Wall-Depth", "render_wall_depth", "render_terrain_wall_depth");
-    performance.measure("Terrain-Depth", "render_terrain_wall_depth", "render_wall_indices");
-    performance.measure("Wall-Indices", "render_wall_indices", "finish_render_depth");
+    performance.measure("Terrain-Depth", "render_terrain_wall_depth", "finish_render_depth");
   }
 
   /**
-   * Render a sprite to the screen to test the depth
+   * Render a sprite to the screen to test the various render textures.
    */
-  _depthTest() {
-    this._endDepthTest();
+
+  _testBaseDepthTexture() {
+    if ( !this.baseDepthTexture ) this._renderDepth();
+    this._endTestBaseDepthTexture();
+    this.#baseDepthTexture = new PIXI.Texture(this.baseDepthTexture);
+    this.#baseDepthSprite = new PIXI.Sprite(this.#baseDepthTexture);
+    canvas.stage.addChild(this.#baseDepthSprite);
+  }
+
+  _endTestBaseDepthTexture() {
+    if ( this.#baseDepthSprite ) canvas.stage.removeChild(this.#baseDepthSprite);
+    if ( this.#baseDepthTexture ) this.#baseDepthTexture.destroy(false);
+  }
+
+  _testDepthTexture() {
+    this._endTestDepthTexture();
     this.#depthSprite = new PIXI.Sprite(this.depthTexture);
     canvas.stage.addChild(this.#depthSprite);
   }
 
-  _endDepthTest() {
+  _endTestDepthTexture() {
     if ( this.#depthSprite ) canvas.stage.removeChild(this.#depthSprite);
     this.#depthSprite = undefined;
   }
 
-  _terrainDepthTest() {
-    this._endTerrainDepthTest();
-    this.#terrainDepthSprite = new PIXI.Sprite(this.terrainDepthTexture);
-    canvas.stage.addChild(this.#terrainDepthSprite);
-  }
-
-  _endTerrainDepthTest() {
-    if ( this.#terrainDepthSprite ) canvas.stage.removeChild(this.#terrainDepthSprite);
-    this.#terrainDepthSprite = undefined;
-  }
-
-  _wallIndicesTest() {
-    this._endWallIndicesTest();
+  _testWallIndicesTexture() {
+    this._endTestWallIndicesTexture();
     this.#wallIndicesSprite = new PIXI.Sprite(this.wallIndicesTexture);
     canvas.stage.addChild(this.#wallIndicesSprite);
   }
 
-  _endWallIndicesTest() {
+  _endTestWallIndicesTexture() {
     if ( this.#wallIndicesSprite ) canvas.stage.removeChild(this.#wallIndicesSprite);
     this.#wallIndicesSprite = undefined;
   }

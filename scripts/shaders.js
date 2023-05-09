@@ -60,11 +60,14 @@ uniform mat4 uViewM;
 
 in float aTerrain;
 in vec3 aVertexPosition;
+in float aWallIndex;
 
+out float vWallIndex;
 out vec3 vertexPosition;
 out float vTerrain;
 
 void main() {
+  vWallIndex = aWallIndex;
   vTerrain = aTerrain;
   vertexPosition = aVertexPosition;
   gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
@@ -84,6 +87,7 @@ uniform sampler2D depthMap;
 in vec3 lightPosition;
 in vec3 vertexPosition;
 in float vTerrain;
+in float vWallIndex;
 
 out float distance;
 
@@ -97,15 +101,19 @@ void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
   float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
-  if ( vTerrain > 0.5 && nearestDepth >= fragDepth ) {
+  if ( vTerrain > 0.5 && nearestDepth >= fragDepth ) { // Where terrain walls are transparent
     gl_FragDepth = 1.0;
     // return;
-    distance = 1.0;
-  } else {
+    //distance = 2.0;  // Never encountered.
+  } else if ( nearestDepth >= fragDepth ) { //
+    gl_FragDepth = gl_FragCoord.z;
+    //distance = gl_FragCoord.z;
+  } else { // Where terrain walls overlap, causing a shadow
     gl_FragDepth = gl_FragCoord.z;
     // distance = dot(uLightPosition, vertexPosition);
-    distance = gl_FragCoord.z;
+    //distance = 3.0;
   }
+  distance = vWallIndex;
 }`;
 
 
@@ -144,16 +152,21 @@ void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
   float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
+  coordinate = vec4(0.7);
+  return;
+
+  // Drop shadows caused by front-most terrain walls.
   if ( nearestDepth == 0.0 ) discard;
 
-  if ( nearestDepth >= gl_FragCoord.z ) {
+  if ( nearestDepth > gl_FragCoord.z ) {
     // red: first 256 walls
     // green: multiplier for each subsequent 256 walls
     // blue: unused
     // alpha: 1 if shadow, 0 if not.
-    float r = mod(vWallIndex, 255.0);
-    float g = floor(vWallIndex / 255.0);
-    coordinate = vec4(r / 255.0, g / 255.0, 0.0, 1.0);
+    // float r = mod(vWallIndex, 255.0);
+//     float g = floor(vWallIndex / 255.0);
+//     coordinate = vec4(r / 255.0, g / 255.0, 0.0, 1.0);
+    coordinate = vec4(0.7);
 
   } else {
     discard;
