@@ -463,21 +463,30 @@ float sinBlender(in float x, in float frequency, in float amplitude) {
 void main() {
 
   Wall fragWall = getWallCoordinates(vertexPosition);
-  fragColor = vec4(0.0, 0.0, fragWall.A.z / 1600.0 , float(fragWall.shadowsFragment));
+  float shadow = float(fragWall.shadowsFragment);
+
+  // dFdx: 1 - 0, 0 - 0, 1 - 1, or 0 - 1
+  // Same for dFdy
+  // float dx = abs(dFdx(shadow));
+  // float dy = abs(dFdy(shadow));
+  // float alpha = dx > 0.0 && dy > 0.0 ? .75 : dx > 0.0 ? 0.5 : dy > 0.0 ? 0.5 : shadow;
+  float alpha = shadow;
+
+  //fragColor = vec4(0.0, 0.0, fragWall.A.z / 1600.0 , float(fragWall.shadowsFragment));
   // fragColor = vec4(fragWall.B.x / 5000.0, 0.0, 0.0, float(fragWall.shadowsFragment));
   // fragColor = vec4(0.0, fragWall.B.y / 3800.0, 0.0, float(fragWall.shadowsFragment));
   //fragColor = vec4(fragWall.A.x / 5000.0, fragWall.A.y / 3800.0, fragWall.A.z / 1600.0, float(fragWall.shadowsFragment));
-  //fragColor = vec4(fragWall.B.x / 5000.0, fragWall.B.y / 3800.0, fragWall.B.z / 1600.0, float(fragWall.shadowsFragment));
+  fragColor = vec4(fragWall.B.x / 5000.0, fragWall.B.y / 3800.0, fragWall.B.z / 1600.0, alpha);
   return;
 
   // Simplest version is to check the w value of a coordinate: will be 0 if not shadowed.
   // TODO: Consider terrain elevation
   //Wall fragWall = getWallCoordinates(vertexPosition);
-  float shadow = float(fragWall.shadowsFragment);
+  //float shadow = float(fragWall.shadowsFragment);
   float red = 0.0;
   float blue = 0.0;
   float green = 0.0;
-  float alpha = shadow;
+  //float alpha = shadow;
 
 //   float coord = getCoordinates(vertexPosition);
 //   float shadow = coord == -1.0 ? 0.0 : coord / 1024.0;
