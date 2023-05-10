@@ -463,8 +463,8 @@ float sinBlender(in float x, in float frequency, in float amplitude) {
 void main() {
 
   Wall fragWall = getWallCoordinates(vertexPosition);
-  fragColor = vec4(0.0, 0.0, fragWall.B.z / 1600.0 , float(fragWall.shadowsFragment));
-  //fragColor = vec4(fragWall.B.x / 5000.0, 0.0, 0.0, float(fragWall.shadowsFragment));
+  fragColor = vec4(0.0, 0.0, fragWall.A.z / 1600.0 , float(fragWall.shadowsFragment));
+  // fragColor = vec4(fragWall.B.x / 5000.0, 0.0, 0.0, float(fragWall.shadowsFragment));
   // fragColor = vec4(0.0, fragWall.B.y / 3800.0, 0.0, float(fragWall.shadowsFragment));
   //fragColor = vec4(fragWall.A.x / 5000.0, fragWall.A.y / 3800.0, fragWall.A.z / 1600.0, float(fragWall.shadowsFragment));
   //fragColor = vec4(fragWall.B.x / 5000.0, fragWall.B.y / 3800.0, fragWall.B.z / 1600.0, float(fragWall.shadowsFragment));
