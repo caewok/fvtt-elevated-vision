@@ -14,7 +14,7 @@ export const depthShaderGLSL = {};
  */
 depthShaderGLSL.vertexShader =
 `#version 300 es
-precision mediump float;
+precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec3 aVertexPosition;
 uniform mat4 uProjectionM;
@@ -31,7 +31,7 @@ void main() {
  */
 depthShaderGLSL.fragmentShader =
 `#version 300 es
-precision mediump float;
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
 out float distance;
 
@@ -53,18 +53,21 @@ export const terrainDepthShaderGLSL = {};
  */
 terrainDepthShaderGLSL.vertexShader =
 `#version 300 es
-precision mediump float;
+precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 
 in float aTerrain;
 in vec3 aVertexPosition;
+in float aWallIndex;
 
+out float vWallIndex;
 out vec3 vertexPosition;
 out float vTerrain;
 
 void main() {
+  vWallIndex = aWallIndex;
   vTerrain = aTerrain;
   vertexPosition = aVertexPosition;
   gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
@@ -76,7 +79,7 @@ void main() {
  */
 terrainDepthShaderGLSL.fragmentShader =
 `#version 300 es
-precision mediump float;
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
 uniform vec3 uLightPosition;
 uniform sampler2D depthMap;
@@ -84,6 +87,7 @@ uniform sampler2D depthMap;
 in vec3 lightPosition;
 in vec3 vertexPosition;
 in float vTerrain;
+in float vWallIndex;
 
 out float distance;
 
@@ -97,72 +101,77 @@ void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
   float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
-  if ( vTerrain > 0.5 && nearestDepth >= fragDepth ) {
+  if ( vTerrain > 0.5 && nearestDepth >= fragDepth ) { // Where terrain walls are transparent
     gl_FragDepth = 1.0;
     // return;
-    distance = 1.0;
-  } else {
+    //distance = 2.0;  // Never encountered.
+  } else if ( nearestDepth >= fragDepth ) { //
+    gl_FragDepth = gl_FragCoord.z;
+    //distance = gl_FragCoord.z;
+  } else { // Where terrain walls overlap, causing a shadow
     gl_FragDepth = gl_FragCoord.z;
     // distance = dot(uLightPosition, vertexPosition);
-    distance = gl_FragCoord.z;
+    //distance = 3.0;
   }
+  distance = vWallIndex;
 }`;
 
 
 /**
- * Write the wall coordinates for the wall that shadows.
- * @param {"A"|"B"} endpoint
- * @returns {object} {vertexShader: {string}, vertexShader: {string}}
+ * Write the wall index for the wall that shadows.
  */
-export function getWallCoordinatesShaderGLSL(endpoint = "A", coord = "x") {
-  const wallCoordinatesShaderGLSL = {};
-  wallCoordinatesShaderGLSL.vertexShader =
+export const wallIndicesShaderGLSL = {};
+
+wallIndicesShaderGLSL.vertexShader =
 `#version 300 es
-precision mediump float;
+precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 
 in vec3 aVertexPosition;
-in vec3 aWall${endpoint};
+in float aWallIndex;
 
-out vec3 vWall;
+out float vWallIndex;
 
 void main() {
-  vWall = aWall${endpoint};
+  vWallIndex = aWallIndex;
   gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
 }`;
 
-wallCoordinatesShaderGLSL.fragmentShader =
+wallIndicesShaderGLSL.fragmentShader =
 `#version 300 es
-precision mediump float;
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
 uniform sampler2D depthMap;
 
-in vec3 vWall;
-//out ivec4 coordinates;
-out float coordinate;
+in float vWallIndex;
+out vec4 coordinate;
 
 void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
   float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
+  coordinate = vec4(0.7);
+  return;
+
+  // Drop shadows caused by front-most terrain walls.
   if ( nearestDepth == 0.0 ) discard;
 
-  if ( nearestDepth >= gl_FragCoord.z ) {
-    // distance = gl_FragCoord.z;
-    // coordinates = 1.0 - (vWall.x / 6000.0);
-    coordinate = vWall.${coord};
-
-    // coordinates = ivec4(vWall, 1);
+  if ( nearestDepth > gl_FragCoord.z ) {
+    // red: first 256 walls
+    // green: multiplier for each subsequent 256 walls
+    // blue: unused
+    // alpha: 1 if shadow, 0 if not.
+    // float r = mod(vWallIndex, 255.0);
+//     float g = floor(vWallIndex / 255.0);
+//     coordinate = vec4(r / 255.0, g / 255.0, 0.0, 1.0);
+    coordinate = vec4(0.7);
 
   } else {
     discard;
   }
 }`;
-
-  return wallCoordinatesShaderGLSL;
-}
 
 /**
  * For debugging.
@@ -177,7 +186,7 @@ export const shadowRenderShaderGLSL = {};
  */
 shadowRenderShaderGLSL.vertexShader =
 `#version 300 es
-precision mediump float;
+precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec3 aVertexPosition;
 in vec2 texCoord;
@@ -203,23 +212,19 @@ void main() {
  */
 shadowRenderShaderGLSL.fragmentShader =
 `#version 300 es
-precision mediump float;
-precision mediump isampler2D;
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
 
 #define EPSILON 1e-12
 #define M_PI 3.1415926535897932384626433832795
+#define ELEVATION_OFFSET 32767.0
 
 in vec2 vTexCoord;
 in vec3 vertexPosition;
 out vec4 fragColor;
 
-// TODO: Use isampler2DArray or possibly usampler2DArray
-uniform sampler2D wallAx;
-uniform sampler2D wallAy;
-uniform sampler2D wallAz;
-uniform sampler2D wallBx;
-uniform sampler2D wallBy;
-uniform sampler2D wallBz;
+uniform sampler2D uWallIndices;
+uniform usampler2D uWallCoordinates;
 uniform float uMaxDistance;
 uniform vec3 uLightPosition;
 uniform float uLightSize;
@@ -396,41 +401,30 @@ Wall getWallCoordinates(in vec3 position) {
   // Does nothing with orthographic; needed for perspective projection.
   vec3 projCoord = lightSpacePosition.xyz / lightSpacePosition.w;
 
-  // Transform the NDC coordinates to range [0, 1]
+  // Transform the NDC coordinates to range [0, 1].
   vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
 
-  // Sample the maps
-  vec3 coordA = vec3(-1.0);
-  vec3 coordB = vec3(-1.0);
-
-  coordA.x = texture(wallAx, mapCoord).r;
+  // Pull the shadowing wall index for this location.
+  float wallIndex = texture(uWallIndices, mapCoord).r;
 
   // -1.0 signifies no shadow and so no valid coordinates.
-  if ( coordA.x == -1.0 ) return Wall(coordA, coordB, false);
+  vec3 coordA = vec3(-1.0);
+  vec3 coordB = vec3(-1.0);
+  if ( wallIndex == -1.0 ) return Wall(coordA, coordB, false);
 
-  coordA.y = texture(wallAy, mapCoord).r;
-  coordA.z = texture(wallAz, mapCoord).r;
-  coordB.x = texture(wallBx, mapCoord).r;
-  coordB.y = texture(wallBy, mapCoord).r;
-  coordB.z = texture(wallBz, mapCoord).r;
+
+  // Pull the coordinates for this wall.
+  vec4 dat1 = vec4(texture(uWallCoordinates, vec2(0, wallIndex)));
+  vec4 dat2 = vec4(texture(uWallCoordinates, vec2(1, wallIndex)));
+
+  coordA = dat1.xyz;
+  coordB = dat2.xyz;
+
+  // Adjust the elevation coordinate
+  coordA.z -= ELEVATION_OFFSET;
+  coordB.z -= ELEVATION_OFFSET;
+
   return Wall(coordA, coordB, true);
-}
-
-/**
- * For testing
- * @returns {float}
- */
-float getCoordinates(in vec3 position) {
-  vec4 lightSpacePosition = uProjectionM * uViewM * vec4(position, 1.0);
-
-  // Perspective divide.
-  // Does nothing with orthographic; needed for perspective projection.
-  vec3 projCoord = lightSpacePosition.xyz / lightSpacePosition.w;
-
-  // Transform the NDC coordinates to range [0, 1]
-  vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
-
-  return texture(wallAx, mapCoord).r;
 }
 
 /**
@@ -469,12 +463,12 @@ float sinBlender(in float x, in float frequency, in float amplitude) {
 void main() {
 
   Wall fragWall = getWallCoordinates(vertexPosition);
-  // fragColor = vec4(0.0, 0.0, fragWall.B.z / 1600.0 , float(fragWall.shadowsFragment));
-  //fragColor = vec4(fragWall.B.x / 5000.0, 0.0, 0.0, float(fragWall.shadowsFragment));
+  fragColor = vec4(0.0, 0.0, fragWall.A.z / 1600.0 , float(fragWall.shadowsFragment));
+  // fragColor = vec4(fragWall.B.x / 5000.0, 0.0, 0.0, float(fragWall.shadowsFragment));
   // fragColor = vec4(0.0, fragWall.B.y / 3800.0, 0.0, float(fragWall.shadowsFragment));
   //fragColor = vec4(fragWall.A.x / 5000.0, fragWall.A.y / 3800.0, fragWall.A.z / 1600.0, float(fragWall.shadowsFragment));
   //fragColor = vec4(fragWall.B.x / 5000.0, fragWall.B.y / 3800.0, fragWall.B.z / 1600.0, float(fragWall.shadowsFragment));
-  //return;
+  return;
 
   // Simplest version is to check the w value of a coordinate: will be 0 if not shadowed.
   // TODO: Consider terrain elevation
