@@ -69,6 +69,7 @@ Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
 
 
 map = new SourceDepthShadowMap(lightOrigin, { walls, directional, lightRadius, lightSize });
+Draw.shape(new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation), { color: Draw.COLORS.lightyellow})
 
 map._testBaseDepthTexture()
 map._endTestBaseDepthTexture()
@@ -114,7 +115,7 @@ pixelRange(pixels)
 
 extractPixels = api.extract.extractPixels
 extractPixelsFromFloat = api.extract.extractPixelsFromFloat
-let { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.wallCoordinateTextures["A"]["x"]);
+let { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.wallIndicesTexture);
 s = new Set()
 pixels.forEach(px => s.add(px))
 s
@@ -698,6 +699,15 @@ export class SourceDepthShadowMap {
   set lightRadius(value) {
     this._resetLight();
     this.#lightRadius = value;
+  }
+
+  get lightRadiusAtMinElevation() {
+    const radius = this.lightRadius;
+    const height = this.lightPosition.z;
+    if ( height >= radius ) return 0;
+
+    // Pythagoras
+    return Math.sqrt(Math.pow(radius, 2) - Math.pow(height, 2));
   }
 
   /** @type {PIXI.Texture} */

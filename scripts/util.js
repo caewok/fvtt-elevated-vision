@@ -588,7 +588,7 @@ export function perspectiveMatrix3Symmetric(xmin, xmax, ymin, ymax, near, far) {
   // left = xmin; right = xmax
   // bottom = ymin; top = ymax
   // near = zmin; far = zmax
-  const tbDiffInv = 1 / (ymax - ymin);
+  const fnDiffInv = 1 / (far - near);
   return new Matrix([
     [near / xmin, 0, 0, 0],
     [0, near / ymin, 0, 0],

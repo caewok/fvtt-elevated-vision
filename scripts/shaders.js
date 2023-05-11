@@ -414,7 +414,6 @@ Wall getWallCoordinates(in vec3 position) {
   vec3 coordB = vec3(-1.0);
   if ( wallIndex == -1.0 ) return Wall(coordA, coordB, false);
 
-
   // Pull the coordinates for this wall.
   vec4 dat1 = vec4(texture(uWallCoordinates, vec2(0.0, wallIndex)));
   vec4 dat2 = vec4(texture(uWallCoordinates, vec2(1.0, wallIndex)));
@@ -465,135 +464,19 @@ float sinBlender(in float x, in float frequency, in float amplitude) {
 void main() {
   // vertexPosition is in canvas coordinates.
 
-  vec4 lightSpacePosition = uProjectionM * uViewM * vec4(vertexPosition, 1.0);
-  vec3 projCoord = lightSpacePosition.xyz / lightSpacePosition.w;
+  // If the light does not reach the location, no shadow.
+  // Use squared distance.
+  vec3 diff = uLightPosition - vertexPosition;
 
-  // Transform the NDC coordinates to range [0, 1].
-  vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
-
-  // fragColor = vec4(mapCoord.xy, 0.0, 1.0);
-
-  float wallIndex = texture(uWallIndices, mapCoord).r;
-
-  if ( wallIndex == -1.0 ) {
+  if ( !uOrthogonal && dot(diff, diff) > (uLightRadius * uLightRadius) ) {
     fragColor = vec4(0.0);
     return;
   }
 
-  vec4 dat1 = vec4(texture(uWallCoordinates, vec2(0.0, wallIndex)));
-  vec4 dat2 = vec4(texture(uWallCoordinates, vec2(1.0, wallIndex)));
-
-  //if ( wallIndex == 7.0 ) {
-  //  fragColor = vec4(1.0, 0.0, 0.0, 0.7);
-  //} else if ( wallIndex == 8.0 ) {
-  //  fragColor = vec4(0.0, 1.0, 0.0, 0.7);
-  //} else if ( wallIndex == 9.0 ) {
-  //  fragColor = vec4(0.0, 0.0, 1.0, 0.7);
-  //} else {
-  //  fragColor = vec4(0.0);
-  //}
-
-  fragColor = vec4(0.0,0.0,0.0, 0.8);
-
-
-  return;
-
-
-  // fragColor = vec4(vertexPosition.x / uLightRadius * 2.0, vertexPosition.y / uLightRadius * 2.0, 0.0, 0.7);
-
   Wall fragWall = getWallCoordinates(vertexPosition);
-  fragColor = vec4(1.0, 0.0, 0.0, float(fragWall.shadowsFragment));
-  return;
-
-  //vec4 lightSpacePosition = uProjectionM * uViewM * vec4(vertexPosition, 1.0);
-
-  // Perspective divide.
-  // Does nothing with orthographic; needed for perspective projection.
-  // vec3 projCoord = lightSpacePosition.xyz / lightSpacePosition.w;
-  //vec3 projCoord = lightSpacePosition.xyz;
-
-  // Transform the NDC coordinates to range [0, 1].
-  //vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
-  //fragColor = vec4(mapCoord.x, mapCoord.y, 0.0, 0.7);
-
-
-  // Pull the shadowing wall index for this location.
-  // float wallIndex = texture(uWallIndices, mapCoord).r;
-
-
-
-  // fragColor = vec4(0.0, 0.0, fragWall.A.z / 1600.0 , float(fragWall.shadowsFragment));
-  // fragColor = vec4(fragWall.B.x / 5000.0, 0.0, 0.0, float(fragWall.shadowsFragment));
-  // fragColor = vec4(0.0, fragWall.B.y / 3800.0, 0.0, float(fragWall.shadowsFragment));
-  //fragColor = vec4(fragWall.A.x / 5000.0, fragWall.A.y / 3800.0, fragWall.A.z / 1600.0, float(fragWall.shadowsFragment));
-  //fragColor = vec4(fragWall.B.x / 5000.0, fragWall.B.y / 3800.0, fragWall.B.z / 1600.0, float(fragWall.shadowsFragment));
-  return;
-
-  // Simplest version is to check the w value of a coordinate: will be 0 if not shadowed.
-  // TODO: Consider terrain elevation
-  //Wall fragWall = getWallCoordinates(vertexPosition);
-  float shadow = float(fragWall.shadowsFragment);
-  float red = 0.0;
-  float blue = 0.0;
-  float green = 0.0;
-  float alpha = shadow;
-
-//   float coord = getCoordinates(vertexPosition);
-//   float shadow = coord == -1.0 ? 0.0 : coord / 1024.0;
-  if ( shadow != 0.0 ) {
-    // TODO: Consider terrain elevation
-    // TODO: Subtract x, y by 0.5 to shift the vertices to pixel integers instead of pixel middles?
-    // Adjust for flipped y axis in GPU? Not needed currently, as vertexPosition based on canvas.
-    vec3 canvasCenter = vec3(uCanvas * 0.5, 0.0);
-    vec3 rayOrigin = vec3(vertexPosition.x, vertexPosition.y , 0.0);
-    vec3 rayDirection = uOrthogonal ? uLightDirection : (uLightPosition - rayOrigin);
-
-    vec3 v0 = fragWall.A;
-    vec3 v1 = vec3(fragWall.A.xy, fragWall.B.z);
-    vec3 v2 = fragWall.B;
-    vec3 v3 = vec3(fragWall.B.xy, fragWall.A.z);
-    // TODO: Why is rayIntersectionQuad3d broken?
-    // float t = rayIntersectionQuad3d(rayOrigin, rayDirection, v0, v1, v2, v3);
-    vec3 bary = quadIntersect(rayOrigin, rayDirection, v0, v1, v2, v3);
-    // float t = bary.x;
-
-    // bary.x: [0–??] distance from fragment to the wall. In grid units.
-    // bary.y: [0–1] where 0 is left-most portion of shadow, 1 is right-most portion
-    //         (where left is left of the ray from fragment towards the light)
-    // bary.z: [0–1] where 1 is nearest to the wall; 0 is furthest.
-    // red = bary.x;
-    // blue = bary.y;
-    // green = bary.z;
-
-    // Split left/right coordinate down middle, so it fades to 0 on either side.
-    float lr = sinBlender(bary.y, M_PI, 2.0);
-    //float lr = 1.0 - (abs(bary.y - 0.5) * 2.0);
-    //lr = betaInv(lr, .01, 1.0);
-
-    // TODO: Switch to gaussian or other mix so shadow remains dark through most of middle
-    // shadow = mix(lr, bary.z, 0.5);
-
-    // If very close to 1, make transparent to remove choppiness for lower-res shadow maps.
-    // If very close to 0, make transparent to remove end choppiness and fade at shadow end.
-    float tb = bary.x < 2.0 ? betaInv(bary.z, 10.0, 0.1) : betaInv(bary.z, 0.1, 5.0);
-
-    shadow = mix(lr, tb, .5);
-
-
-    //shadow = lr;
-
-
-
-//       vec3 ix = rayOrigin + (rayDirection * t);
-//       float nearestDist = distance(uLightPosition, ix);
-//       float fragDist = distance(uLightPosition, rayOrigin);
-//       shadow = (nearestDist - fragDist) / nearestDist;
-
-      // float nearestT = 1.0 - t;
-      // shadow = (nearestT - t) / nearestT;
-
+  if ( fragWall.shadowsFragment ) {
+    fragColor = vec4(0.0, 0.0, 0.0, 0.7);
+  } else {
+    fragColor = vec4(0.0);
   }
-  //fragColor = vec4(red, green, blue, shadow);
-  fragColor = vec4(0.0, 0.0, 0.0, shadow);
-  // fragColor = vec4((nearestDistance - fragDist) / nearestDistance, 0.0, 0.0, shadow);
 }`;
