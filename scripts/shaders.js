@@ -544,5 +544,5 @@ void main() {
   float tb = sinBlender(bary.z, 1.0, 10.0);
 
 
-  fragColor = vec4(0.0, 0.0, 0.0, lr);
+  fragColor = vec4(0.0, 0.0, 0.0, lr * tb);
 }`;
