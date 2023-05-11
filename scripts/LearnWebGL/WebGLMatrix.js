@@ -497,7 +497,7 @@ export class WebGLMatrix {
       return this.setIdentity(M);
     }
 
-    const half_fovy = self.toRadians(fovy) / 2;
+    const half_fovy = this.toRadians(fovy) / 2;
     const top = near * Math.tan(half_fovy);
     const bottom = -top;
     const right = top * aspect;
