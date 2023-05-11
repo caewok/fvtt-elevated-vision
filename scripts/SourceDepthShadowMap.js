@@ -1248,7 +1248,7 @@ export class SourceDepthShadowMap {
     canvas.stage.addChild(this.#shadowRender);
 
     performance.mark("end_shadow_render");
-    performance.measure("Shdow-Render", "start_shadow_render", "end_shadow_render");
+    performance.measure("Shadow-Render", "start_shadow_render", "end_shadow_render");
   }
 
   _endShadowRenderTest() {
