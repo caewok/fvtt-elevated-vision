@@ -69,7 +69,7 @@ Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
 
 
 map = new SourceDepthShadowMap(lightOrigin, { walls, directional, lightRadius, lightSize });
-Draw.shape(new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation), { color: Draw.COLORS.lightyellow})
+if ( directional ) Draw.shape(new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation), { color: Draw.COLORS.lightyellow})
 
 map._testBaseDepthTexture()
 map._endTestBaseDepthTexture()
@@ -97,18 +97,30 @@ canvas.stage.removeChild(s);
 map._updateWallGeometry(walls);
 
 extractPixels = api.extract.extractPixels
-extractPixelsFromFloat = api.extract.extractPixelsFromFloat
-let { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.terrainDepthTexture);
+let { pixels, width, height } = extractPixels(canvas.app.renderer, map.wallCoordinatesData.texture);
 s = new Set()
 pixels.forEach(px => s.add(px))
 s
 s.size
 
+
+xPixels = pixels.filter((px, idx) => idx % 4 === 0)
+yPixels = pixels.filter((px, idx) => idx % 4 === 1)
+zPixels = pixels.filter((px, idx) => idx % 4 === 2)
+
+zAdjPixels = [...zPixels].map(px => px - 32767)
+
+
+
 pixelRange = function(pixels) {
-  return {
-    min: pixels.reduce((curr, acc) => Math.min(curr, acc), Number.POSITIVE_INFINITY),
-    max: pixels.reduce((curr, acc) => Math.max(curr, acc), Number.NEGATIVE_INFINITY)
-  }
+  const out = {
+    min: pixels.reduce((acc, curr) => Math.min(curr, acc), Number.POSITIVE_INFINITY),
+    max: pixels.reduce((acc, curr) => Math.max(curr, acc), Number.NEGATIVE_INFINITY)
+  };
+
+  out.nextMin = pixels.reduce((acc, curr) => curr > out.min ? Math.min(curr, acc) : acc, Number.POSITIVE_INFINITY);
+  out.nextMax = pixels.reduce((acc, curr) => curr < out.max ? Math.max(curr, acc) : acc, Number.NEGATIVE_INFINITY);
+  return out;
 }
 pixelRange(pixels)
 
@@ -1127,7 +1139,7 @@ export class SourceDepthShadowMap {
       uLightPosition: Object.values(this.lightPosition),
       uLightDirection: Object.values(lightDirection.normalize()),
       uLightRadius: this.directional ? -1 : this.lightRadius,
-      uOrthogonal: this.directional ,
+      uOrthogonal: this.directional,
       uCanvas: [canvas.dimensions.width, canvas.dimensions.height],
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),

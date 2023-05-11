@@ -415,8 +415,9 @@ Wall getWallCoordinates(in vec3 position) {
   if ( wallIndex == -1.0 ) return Wall(coordA, coordB, false);
 
   // Pull the coordinates for this wall.
-  vec4 dat1 = vec4(texture(uWallCoordinates, vec2(0.0, wallIndex)));
-  vec4 dat2 = vec4(texture(uWallCoordinates, vec2(1.0, wallIndex)));
+  // texelFetch is preferable to ensure we get the actual values.
+  vec4 dat1 = vec4(texelFetch(uWallCoordinates, ivec2(0, int(wallIndex)), 0));
+  vec4 dat2 = vec4(texelFetch(uWallCoordinates, ivec2(1, int(wallIndex)), 0));
 
   coordA = dat1.xyz;
   coordB = dat2.xyz;
@@ -467,16 +468,60 @@ void main() {
   // If the light does not reach the location, no shadow.
   // Use squared distance.
   vec3 diff = uLightPosition - vertexPosition;
-
   if ( !uOrthogonal && dot(diff, diff) > (uLightRadius * uLightRadius) ) {
     fragColor = vec4(0.0);
     return;
   }
 
   Wall fragWall = getWallCoordinates(vertexPosition);
-  if ( fragWall.shadowsFragment ) {
-    fragColor = vec4(0.0, 0.0, 0.0, 0.7);
-  } else {
+  if ( !fragWall.shadowsFragment ) {
+    // No wall coordinates provided for non-shadow fragments, so nothing left to do.
     fragColor = vec4(0.0);
+    return;
   }
+
+  //fragColor = vec4(vec3(0.0), 1.0);
+  //return;
+
+  // fragColor = vec4(fragWall.A.x / 5000.0, fragWall.A.y / 3800.0, 0.0, 1.0);
+  // fragColor = vec4(0.0, 0.0, fragWall.A.z / 1600.0, 1.0);
+  // return;
+
+  // if ( fragWall.A.x == 2012.0 ) {
+  //  fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  //} else {
+  //  fragColor = vec4(vec3(0.0), 1.0);
+  //}
+  //return;
+
+
+  // TODO: Consider terrain elevation. Also considered in the initial wall coordinates.
+  vec3 rayOrigin = vec3(vertexPosition.x, vertexPosition.y, 0.0);
+  vec3 rayDirection = uOrthogonal ? uLightDirection : normalize(uLightPosition - rayOrigin);
+
+  vec3 v0 = fragWall.A;
+  vec3 v1 = vec3(fragWall.A.xy, fragWall.B.z);
+  vec3 v2 = fragWall.B;
+  vec3 v3 = vec3(fragWall.B.xy, fragWall.A.z);
+
+  // TODO: Why is rayIntersectionQuad3d broken?
+  // float t = rayIntersectionQuad3d(rayOrigin, rayDirection, v0, v1, v2, v3);
+  vec3 bary = quadIntersect(rayOrigin, rayDirection, v0, v1, v2, v3);
+  if ( bary.x == -1.0 ) {
+    fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    return;
+  }
+
+  // bary.x: [0–??] distance from fragment to the wall. In grid units.
+  // bary.y: [0–1] where 0 is left-most portion of shadow, 1 is right-most portion
+  //         (where left is left of the ray from fragment towards the light)
+  // bary.z: [0–1] where 1 is nearest to the wall; 0 is furthest.
+
+  // Split left/right coordinate down middle, so it fades to 0 on either side.
+  float lr = sinBlender(bary.y, M_PI, 2.0);
+  // Alternative:
+  // float lr = 1.0 - (abs(bary.y - 0.5) * 2.0);
+  // lr = betaInv(lr, .01, 1.0);
+
+  fragColor = vec4(0.0, 0.0, 0.0, lr);
 }`;
