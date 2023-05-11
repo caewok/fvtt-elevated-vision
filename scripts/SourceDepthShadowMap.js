@@ -441,7 +441,7 @@ const WALL_COORDINATES_DATA = {
   sound: undefined
 };
 
-const WALL_OFFSET_PIXELS = 3;
+const WALL_OFFSET_PIXELS = 2;
 
 // Store wall data of a given type in an array and build a Uint16Array to store coordinate data.
 export class WallCoordinatesData {
@@ -520,12 +520,16 @@ export class WallCoordinatesData {
     const top = topZ + WALL_OFFSET_PIXELS;
     const bottom = bottomZ - WALL_OFFSET_PIXELS;
 
-    return {
+    const out = {
       A: new Point3d(adjA.x, adjA.y, top),
       B: new Point3d(adjB.x, adjB.y, bottom),
       isTerrain: wall.document[this.type] === CONST.WALL_SENSE_TYPES.LIMITED,
       wall: wall
     };
+
+    out.A.roundDecimals();
+    out.B.roundDecimals();
+    return out;
   }
 
   /**
