@@ -428,7 +428,7 @@ function betaInv(x, alpha, beta) {
 
 arr = [0, 0.001, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99, 0.999, 1]
 
-arr.map(x => sinBlender(1 - x, 1, 4, 0))
+arr.map(x => sinBlender(x, 1, 4, 0))
 arr.map(x => betaInv(x, .1, 10))
 
 
@@ -520,11 +520,24 @@ export class WallCoordinatesData {
     const top = topZ + WALL_OFFSET_PIXELS;
     const bottom = bottomZ - WALL_OFFSET_PIXELS;
 
+    // Identify walls linked at A and B
+    const linked = wall.getLinkedSegments().walls;
+    const aKey = wall.vertices.a.key;
+    const bKey = wall.vertices.b.key;
+    const linkedA = linked.filter(w => w !== wall
+      && w.wallKeys.has(aKey)
+      && w.document[this.type] !== CONST.WALL_SENSE_TYPES.NONE);
+    const linkedB = linked.filter(w => w !== wall
+      && w.wallKeys.has(bKey)
+      && w.document[this.type] !== CONST.WALL_SENSE_TYPES.NONE);
+
     const out = {
       A: new Point3d(adjA.x, adjA.y, top),
       B: new Point3d(adjB.x, adjB.y, bottom),
       isTerrain: wall.document[this.type] === CONST.WALL_SENSE_TYPES.LIMITED,
-      wall: wall
+      wall: wall,
+      linkedA,
+      linkedB
     };
 
     out.A.roundDecimals();
@@ -569,6 +582,14 @@ export class WallCoordinatesData {
     const top = wallObj.A.z + WALL_OFFSET_PIXELS;
     const bottom = wallObj.B.z - WALL_OFFSET_PIXELS;
 
+    // Are endpoints linked by another wall of this type?
+    // neither: 0
+    // A only: 1
+    // B only: 2
+    // both: 3
+    const aLinked = Number(wallObj.linkedA.length > 0);
+    const bLinked = Number(wallObj.linkedB.length > 0) * 2;
+
     wallCoordinateData[0] = minmax(wallObj.A.x);
     wallCoordinateData[1] = minmax(wallObj.A.y);
     wallCoordinateData[2] = minmax(wallObj.A.z + ELEVATION_OFFSET);
@@ -576,7 +597,7 @@ export class WallCoordinatesData {
     wallCoordinateData[4] = minmax(wallObj.B.x);
     wallCoordinateData[5] = minmax(wallObj.B.y);
     wallCoordinateData[6] = minmax(wallObj.B.z + ELEVATION_OFFSET);
-    wallCoordinateData[7] = 0;
+    wallCoordinateData[7] = aLinked | bLinked;
     return wallCoordinateData;
   }
 

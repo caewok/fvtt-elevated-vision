@@ -218,6 +218,7 @@ precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
 #define EPSILON 1e-12
 #define M_PI 3.1415926535897932384626433832795
 #define ELEVATION_OFFSET 32767.0
+#define M_PI_180 0.017453292519943295
 
 in vec2 vTexCoord;
 in vec3 vertexPosition;
@@ -239,6 +240,7 @@ struct Wall {
   vec3 A;
   vec3 B;
   bool shadowsFragment;
+  uint linked;
 };
 
 /**
@@ -412,7 +414,7 @@ Wall getWallCoordinates(in vec3 position) {
   // -1.0 signifies no shadow and so no valid coordinates.
   vec3 coordA = vec3(-1.0);
   vec3 coordB = vec3(-1.0);
-  if ( wallIndex == -1.0 ) return Wall(coordA, coordB, false);
+  if ( wallIndex == -1.0 ) return Wall(coordA, coordB, false, 0u);
 
   // Pull the coordinates for this wall.
   // texelFetch is preferable to ensure we get the actual values.
@@ -426,7 +428,7 @@ Wall getWallCoordinates(in vec3 position) {
   coordA.z -= ELEVATION_OFFSET;
   coordB.z -= ELEVATION_OFFSET;
 
-  return Wall(coordA, coordB, true);
+  return Wall(coordA, coordB, true, uint(dat2.w));
 }
 
 /**
@@ -518,14 +520,29 @@ void main() {
   // bary.z: [0–1] where 1 is nearest to the wall; 0 is furthest.
 
   // Split left/right coordinate down middle, so it fades to 0 on either side.
-  float lr = sinBlender(bary.y, M_PI, 2.0);
+  // float lr = sinBlender(bary.y, M_PI, 2.0);
   // Alternative:
   // float lr = 1.0 - (abs(bary.y - 0.5) * 2.0);
   // lr = betaInv(lr, .01, 1.0);
+
+  float lr = 1.0;
+
+  // Do not lessen shadow near where two walls connect at an endpoint
+  bool connected = ((fragWall.linked == 1u || fragWall.linked == 3u) && bary.y < 0.1)
+    || ((fragWall.linked == 2u || fragWall.linked == 3u) && bary.y > 0.9);
+
+  if ( !connected ) {
+    // TODO: Set this based on light size?
+    float angle = 1.0 * M_PI_180;
+    float distFromEdge = bary.x * tan(angle);
+    float ratioFromEdge = distFromEdge / distance(fragWall.A.xy, fragWall.B.xy);
+    lr = clamp((bary.y < 0.5 ? bary.y : (1.0 - bary.y)) / ratioFromEdge, 0.0, 1.0);
+    lr = lr < 1.0 ? sinBlender(lr, 1.0, 1.0) : 1.0;
+  }
 
   // If very close to 1, make transparent
   float tb = sinBlender(bary.z, 1.0, 10.0);
 
 
-  fragColor = vec4(0.0, 0.0, 0.0, tb);
+  fragColor = vec4(0.0, 0.0, 0.0, lr);
 }`;
