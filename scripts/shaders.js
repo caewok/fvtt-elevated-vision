@@ -523,5 +523,9 @@ void main() {
   // float lr = 1.0 - (abs(bary.y - 0.5) * 2.0);
   // lr = betaInv(lr, .01, 1.0);
 
-  fragColor = vec4(0.0, 0.0, 0.0, lr);
+  // If very close to 1, make transparent
+  float tb = sinBlender(bary.z, 1.0, 10.0);
+
+
+  fragColor = vec4(0.0, 0.0, 0.0, tb);
 }`;
