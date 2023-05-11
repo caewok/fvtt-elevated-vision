@@ -18,7 +18,8 @@ import {
 import {
   perspectiveMatrix,
   orthographicMatrix,
-  toColMajorArray } from "./util.js";
+  toColMajorArray,
+  perspectiveMatrixFOVY } from "./util.js";
 
 /* Testing
 
@@ -31,15 +32,43 @@ Draw.clearDrawings()
 
 SourceDepthShadowMap = api.SourceDepthShadowMap
 Point3d = CONFIG.GeometryLib.threeD.Point3d
+Matrix = CONFIG.GeometryLib.Matrix
 
-
+/* Directional Light
 lightOrigin = new Point3d(100, 100, 1600);
 // lightOrigin = new Point3d(100, canvas.dimensions.height - 100, 1600);
 
+directional = true;
+lightRadius = undefined;
+lightSize = 1;
+
+Draw.clearDrawings()
 Draw.point(lightOrigin, { color: Draw.COLORS.yellow });
 Draw.segment({A: lightOrigin, B: canvas.dimensions.sceneRect.center }, { color: Draw.COLORS.yellow })
 
-map = new SourceDepthShadowMap(lightOrigin, { walls });
+*/
+
+/* Perspective Light
+[l] = canvas.lighting.placeables;
+source = l.source;
+lightOrigin = new Point3d(source.x, source.y, source.elevationZ);
+directional = false;
+lightRadius = source.radius;
+lightSize = 1;
+
+Draw.clearDrawings()
+Draw.point(lightOrigin, { color: Draw.COLORS.yellow });
+cir = new PIXI.Circle(lightOrigin.x, lightOrigin.y, lightRadius)
+Draw.shape(cir, { color: Draw.COLORS.yellow })
+
+Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
+
+*/
+
+/*
+
+
+map = new SourceDepthShadowMap(lightOrigin, { walls, directional, lightRadius, lightSize });
 
 map._testBaseDepthTexture()
 map._endTestBaseDepthTexture()
@@ -140,13 +169,14 @@ let { pixels, width, height } = extractPixels(canvas.app.renderer, this.terrainD
 
 let { pixels, width, height } = extractPixels(canvas.app.renderer, this.depthTexture);
 
-let { pixels, width, height } = extractPixels(canvas.app.renderer, map.wallIndicesTexture);
+let { pixels, width, height } = extractPixelsFromFloat(canvas.app.renderer, map.wallIndicesTexture);
 
 map = new SourceDepthShadowMap(lightOrigin, { walls });
 map._shadowRenderTest();
 
 // view and orthographic matrix for a wall
 wall = walls[0]
+[wall] = canvas.walls.controlled
 
 topA = new Point3d(wall.A.x, wall.A.y, wall.topZ)
 topB = new Point3d(wall.B.x, wall.B.y, wall.topZ)
@@ -209,6 +239,170 @@ ix = rayOrigin.projectToward(lightPosition, t)
 Draw.point(ix)
 
 rayOrigin.add(rayDirection.multiplyScalar(t))
+
+// Test walls for perspective
+WebGLMatrix = api.WebGL.WebGLMatrix
+
+WebGLMatrix.createPerspective(90, 1, 1, 400)
+
+
+walls = canvas.walls.controlled
+lightPosition = map.lightPosition
+
+wallMap = new Map()
+
+projMatrix = map.projectionMatrix
+
+halfFOV = Math.atan(map.lightRadius / map.lightPosition.z)
+FOV = Math.toDegrees(halfFOV * 2)
+
+
+projMatrix = perspectiveMatrixFOVY(FOV, 1, 1, 400)
+tmp = WebGLMatrix.createPerspective(FOV, 1, 1, 400)
+projMatrix = new Matrix([
+  [tmp[0], tmp[1], tmp[2], tmp[3]],
+  [tmp[4], tmp[5], tmp[6], tmp[7]],
+  [tmp[8], tmp[9], tmp[10], tmp[11]],
+  [tmp[12], tmp[13], tmp[14], tmp[15]]
+])
+
+pts = map._boundaryPoints();
+
+// Get the min/max for the sceneCameraPoints
+cameraPoints = pts.map(pt => map.viewMatrix.multiplyPoint3d(pt));
+xMinMax = Math.minMax(...cameraPoints.map(pt => pt.x));
+yMinMax = Math.minMax(...cameraPoints.map(pt => pt.y));
+zMinMax = Math.minMax(...cameraPoints.map(pt => pt.z));
+SourceDepthShadowMap.perspectiveMatrix(
+  xMinMax.min, xMinMax.max,
+  yMinMax.min, yMinMax.max,
+  -zMinMax.max, -zMinMax.min);
+
+projMatrix = perspectiveMatrix3(
+  xMinMax.min, xMinMax.max,
+  yMinMax.min, yMinMax.max,
+  -zMinMax.max, -zMinMax.min)
+
+projMatrix = perspectiveMatrix3Symmetric(
+  xMinMax.min, xMinMax.max,
+  yMinMax.max, yMinMax.min,
+  -zMinMax.max, -zMinMax.min)
+
+for ( const wall of walls ) {
+  // const topZ = Math.min(wall.topZ, lightPosition.z - 1);
+  const topZ = wall.topZ;
+
+  const bottomZ = Math.max(wall.bottomZ, 0);
+
+  const topA = new Point3d(wall.A.x, wall.A.y, topZ)
+  const topB = new Point3d(wall.B.x, wall.B.y, topZ)
+  const bottomA = new Point3d(wall.A.x, wall.A.y, bottomZ)
+  const bottomB = new Point3d(wall.B.x, wall.B.y, bottomZ)
+
+  const points = [topA, topB, bottomB, bottomA];
+  const cameraPoints = [];
+  const projPoints = [];
+  const perspectivePoints = []
+
+  for ( const v of points ) {
+    const vCamera = map.viewMatrix.multiplyPoint3d(v);
+    //const vProj =  projMatrix.multiplyPoint3d(vCamera);
+    const vProj =  Matrix.fromPoint3d(vCamera).multiply(projMatrix);
+    cameraPoints.push(vCamera);
+    projPoints.push(vProj);
+    perspectivePoints.push(vProj.toPoint3d());
+  }
+
+  obj = { points, cameraPoints, projPoints, perspectivePoints}
+  wallMap.set(wall, obj);
+}
+
+for ( const wallObj of wallMap.values() ) {
+  for ( let i = 0; i < 4; i += 1 ) {
+    const v = wallObj.points[i];
+    const vCamera = wallObj.cameraPoints[i];
+    const vProj = wallObj.projPoints[i];
+
+    console.log(`(${v.x},${v.y},${v.z})
+      --> (${vCamera.x.toPrecision(3)},${vCamera.y.toPrecision(3)},${vCamera.z.toPrecision(3)})
+      --> (${vProj.x.toPrecision(3)},${vProj.y.toPrecision(3)},${vProj.z.toPrecision(3)})`);
+  }
+}
+
+for ( const wallObj of wallMap.values() ) {
+  for ( let i = 0, j = 1; i < 4; i += 1, j += 1 ) {
+    j = j % 4;
+    Draw.point(wallObj.cameraPoints[i], { color: Draw.COLORS.lightblue});
+    Draw.segment({ A: wallObj.cameraPoints[j], B: wallObj.cameraPoints[i] }, { color: Draw.COLORS.blue });
+  }
+}
+
+
+wallObj = [...wallMap.values()][0]
+for ( const wallObj of wallMap.values() ) {
+  for ( let i = 0, j = 1; i < 4; i += 1, j += 1 ) {
+    const color = Draw.COLORS.blue;
+
+
+    j = j % 4;
+    const mult = 100;
+
+    // Draw.point(wallObj.projPoints[i].toPoint3d({homogenous: false}).multiplyScalar(mult), { color });
+
+    Draw.point(wallObj.perspectivePoints[i].multiplyScalar(mult), { color });
+    Draw.point(wallObj.perspectivePoints[j].multiplyScalar(mult), { color });
+    Draw.segment({
+      A: wallObj.perspectivePoints[i].multiplyScalar(mult),
+      B: wallObj.perspectivePoints[j].multiplyScalar(mult) },
+      { color });
+  }
+}
+
+
+
+for ( const wall of walls ) {
+  const top = Math.min(wall.topZ, lightPosition.z - 1);
+
+  const topA = new Point3d(wall.A.x, wall.A.y, top)
+  const topB = new Point3d(wall.B.x, wall.B.y, top)
+  const bottomA = new Point3d(wall.A.x, wall.A.y, wall.bottomZ)
+  const bottomB = new Point3d(wall.B.x, wall.B.y, wall.bottomZ)
+
+  cameraPts = []
+
+  for ( const v of [topA, topB, bottomA, bottomB] ) {
+    const vCamera = map.viewMatrix.multiplyPoint3d(v);
+
+    Draw.point(vCamera)
+
+    const vProj = map.projectionMatrix.multiplyPoint3d(vCamera);
+
+    console.log(`(${v.x},${v.y},${v.z})
+      --> (${vCamera.x.toPrecision(3)},${vCamera.y.toPrecision(3)},${vCamera.z.toPrecision(3)})
+      --> (${vProj.x.toPrecision(3)},${vProj.y.toPrecision(3)},${vProj.z.toPrecision(3)})`);
+  }
+}
+
+
+
+
+topA = new Point3d(wall.A.x, wall.A.y, wall.topZ)
+topB = new Point3d(wall.B.x, wall.B.y, wall.topZ)
+bottomA = new Point3d(wall.A.x, wall.A.y, wall.bottomZ)
+bottomB = new Point3d(wall.B.x, wall.B.y, wall.bottomZ)
+
+for ( const v of [topA, topB, bottomA, bottomB] ) {
+  const vCamera = map.viewMatrix.multiplyPoint3d(v);
+  const vProj = map.projectionMatrix.multiplyPoint3d(vCamera);
+
+  console.log(`(${v.x},${v.y},${v.z})
+    --> (${vCamera.x.toPrecision(3)},${vCamera.y.toPrecision(3)},${vCamera.z.toPrecision(3)})
+    --> (${vProj.x.toPrecision(3)},${vProj.y.toPrecision(3)},${vProj.z.toPrecision(3)})`);
+}
+
+
+
+
 
 */
 
@@ -451,6 +645,7 @@ export class SourceDepthShadowMap {
     this.#lightPosition = lightPosition;
     this.#lightSize = lightSize;
     this.#lightType = lightType;
+    this.#lightRadius = lightRadius;
     this.directional = directional;
 
     if ( !directional && typeof lightRadius === "undefined" ) {
@@ -553,6 +748,13 @@ export class SourceDepthShadowMap {
     const maxElevation = this.lightPosition.z;
     const minElevation = this.minElevation;
 
+    // Point source lights have bounds
+    let lightBounds;
+    if ( !this.directional ) {
+      const { lightPosition, lightRadius } = this;
+      lightBounds = new PIXI.Rectangle(lightPosition.x - lightRadius, lightPosition.y - lightRadius, lightRadius * 2, lightRadius * 2);
+    }
+
     // TODO: Try Uint or other buffers instead of Array.
     const indices = [];
     const aVertexPosition = [];
@@ -565,9 +767,13 @@ export class SourceDepthShadowMap {
       const orientWall = foundry.utils.orient2dFast(wallObj.A, wallObj.B, this.lightPosition);
       if ( orientWall.almostEqual(0) ) continue; // Wall is collinear to the light.
 
-      const topZ = Math.min(maxElevation, wallObj.A.z);
+      const topZ = Math.min(maxElevation, wallObj.A.z, this.lightPosition.z - 1);
       const bottomZ = Math.max(minElevation, wallObj.B.z);
       if ( topZ <= bottomZ ) continue; // Wall is above or below the viewing box.
+
+      // Point source lights are limited to a max radius; drop walls outside the radius
+      if ( !this.directional
+        && !lightBounds.lineSegmentIntersects(wallObj.A, wallObj.B, { inside: true })) continue;
 
       // Indices are:
       // 0 1 2
@@ -664,17 +870,28 @@ export class SourceDepthShadowMap {
    * @returns {Matrix}
    */
   _constructPerspectiveMatrix() {
+    // TODO: Clean up boundaryPoints as only really used for orthogonal.
     const pts = this._boundaryPoints();
 
-    // Get the min/max for the sceneCameraPoints
-    const cameraPoints = pts.map(pt => this.viewMatrix.multiplyPoint3d(pt));
-    const xMinMax = Math.minMax(...cameraPoints.map(pt => pt.x));
-    const yMinMax = Math.minMax(...cameraPoints.map(pt => pt.y));
-    const zMinMax = Math.minMax(...cameraPoints.map(pt => pt.z));
-    return SourceDepthShadowMap.perspectiveMatrix(
-      xMinMax.min, xMinMax.max,
-      yMinMax.min, yMinMax.max,
-      -zMinMax.max, -zMinMax.min);
+    // Determine the near and far planes from the camera, based on scene objects
+    const near = this.lightPosition.z - pts[0].z;
+    const far = this.lightPosition.z - pts[4].z;
+    const FOV = this._perspectiveFOV();
+    const aspect = 1; // Always 1 b/c lights are spherical.
+    return perspectiveMatrixFOVY(FOV, aspect, near, far);
+  }
+
+  /**
+   * For the projection matrix, determine the field-of-view for the light.
+   * Assume we want the light to project onto a square the size of the light radius * 2.
+   * TODO: Technically, the sphere will intersect the plane at less than that distance.
+   *       Could shrink the texture size and FOV accordingly.
+   * @returns {number} field-of-view, in radians
+   */
+  _perspectiveFOV() {
+    // Using radius to estimate a maximum FOV.
+    const halfFOV = Math.atan(this.lightRadius / this.lightPosition.z);
+    return Math.toDegrees(halfFOV * 2);
   }
 
   /**
@@ -684,19 +901,19 @@ export class SourceDepthShadowMap {
    * @returns {Point3d[]}
    */
   _boundaryPoints() {
-    const { lightPosition, radius } = this;
+    const { lightPosition, lightRadius } = this;
 
     const coordinates = this.wallGeometry.getBuffer("aVertexPosition").data;
     const zCoords = coordinates.filter((e, i) => (i + 1) % 3 === 0);
-    const maxElevation = Math.min(Math.max(...zCoords), this.lightPosition.z); // Don't care about what is above the light
+    const maxElevation = Math.min(Math.max(...zCoords), this.lightPosition.z - 1); // Don't care about what is above the light
     const minElevation = this.minElevation;
 
     let { top, bottom, left, right } = canvas.dimensions.sceneRect;
     if ( !this.directional ) {
-      top = lightPosition.y - radius;
-      bottom = lightPosition.y + radius;
-      right = lightPosition.x - radius;
-      left = lightPosition.x + radius;
+      top = lightPosition.y - lightRadius;
+      bottom = lightPosition.y + lightRadius;
+      right = lightPosition.x - lightRadius;
+      left = lightPosition.x + lightRadius;
     }
 
     const bounds = [
@@ -778,9 +995,12 @@ export class SourceDepthShadowMap {
 
     performance.mark("render_wall_depth");
 
-    // TODO: Adjust width & height to correspond to frustrum for given light
-    const width = 1024; // 1024? 4096?
-    const height = 1024; // 1024? 4096?
+    const MAX_WIDTH = 4096;
+    const MAX_HEIGHT = 4096;
+    const { sceneWidth, sceneHeight } = canvas.dimensions;
+
+    const width = Math.min(MAX_WIDTH, this.directional ? sceneWidth : this.lightRadius * 2);
+    const height = Math.min(MAX_HEIGHT, this.directional ? sceneHeight : this.lightRadius * 2);
 
     // Construct a depth texture that can be used for multiple renders.
     this.baseDepthTexture = new PIXI.BaseRenderTexture({
@@ -885,17 +1105,19 @@ export class SourceDepthShadowMap {
     performance.mark("start_shadow_render");
 
     // Constants
-    const { left, right, top, bottom, center } = canvas.dimensions.sceneRect;
+
     const minElevation = this.minElevation;
 
     // Construct uniforms used by the shadow shader
+    const { left, right, top, bottom, center } = canvas.dimensions.sceneRect;
     const lightDirection = this.lightPosition.subtract(new Point3d(center.x, center.y, minElevation));
     const shadowRenderUniforms = {
       uWallIndices: this.wallIndicesTexture,
       uWallCoordinates: this.wallCoordinatesData.texture,
       uLightPosition: Object.values(this.lightPosition),
       uLightDirection: Object.values(lightDirection.normalize()),
-      uOrthogonal: true,
+      uLightRadius: this.directional ? -1 : this.lightRadius,
+      uOrthogonal: this.directional ,
       uCanvas: [canvas.dimensions.width, canvas.dimensions.height],
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
@@ -905,12 +1127,24 @@ export class SourceDepthShadowMap {
 
     // Construct a quad for the scene.
     const geometryShadowRender = new PIXI.Geometry();
-    geometryShadowRender.addAttribute("aVertexPosition", [
-      left, top, minElevation,      // TL
-      right, top, minElevation,   // TR
-      right, bottom, minElevation, // BR
-      left, bottom, minElevation  // BL
-    ], 3);
+    if ( this.directional ) {
+      // Cover the entire scene
+      geometryShadowRender.addAttribute("aVertexPosition", [
+        left, top, minElevation,      // TL
+        right, top, minElevation,   // TR
+        right, bottom, minElevation, // BR
+        left, bottom, minElevation  // BL
+      ], 3);
+    } else {
+      // Cover the light radius
+      const { lightRadius, lightPosition } = this;
+      geometryShadowRender.addAttribute("aVertexPosition", [
+        lightPosition.x - lightRadius, lightPosition.y - lightRadius, minElevation, // TL
+        lightPosition.x + lightRadius, lightPosition.y - lightRadius, minElevation, // TR
+        lightPosition.x + lightRadius, lightPosition.y + lightRadius, minElevation, // BR
+        lightPosition.x - lightRadius, lightPosition.y + lightRadius, minElevation  // BL
+      ], 3);
+    }
 
     // Texture coordinates:
     // BL: 0,0; BR: 1,0; TL: 0,1; TR: 1,1

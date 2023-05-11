@@ -415,6 +415,78 @@ export function orthographicMatrix(xmin, xmax, ymin, ymax, near, far) {
   return centerAroundOrigin.multiply4x4(scaleViewingVolume).multiply4x4(convertToLeftHanded);
 }
 
+
+/**
+ * Construct a perspective matrix based on field-of-view.
+ * https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/opengl-perspective-projection-matrix.html
+ * http://learnwebgl.brown37.net/08_projections/projections_perspective.html
+ * https://webgl2fundamentals.org/webgl/lessons/webgl-3d-perspective.html
+ * @param {number} fovy   The angle between the upper and lower sides of the viewing frustrum
+ * @param {number} aspect The aspect ratio of the view window (width/height)
+ * @param {number} near   Distance to the near clipping plane along the -z axis
+ * @param {number} far    Distance to the far clipping plane along the -z axis
+ * @returns {Matrix}
+ */
+export function perspectiveMatrixFOVY(fovy, aspect, near, far) {
+  if ( !fovy.between(0, 180) || aspect <= 0 || near >= far || near <= 0 ) {
+    console.error("Invalid parameters to perspectiveMatrixFOVY.");
+    return Matrix.identity();
+  }
+
+  const half_fovy = Math.toRadians(fovy) * 0.5;
+  const top = near * Math.tan(half_fovy);
+  const bottom = -top;
+  const right = top * aspect;
+  const left = -right;
+  return perspectiveMatrix(left, right, bottom, top, near, far);
+}
+
+/**
+ * Construct a perspective matrix.
+ * http://learnwebgl.brown37.net/08_projections/projections_perspective.html
+ * Convert a bounding box to range [-1, 1].
+ * @param {number} xmin   Left, or minimum x value of the bounding box.
+ * @param {number} xmax   Right, or maximum x value of the bounding box.
+ * @param {number} ymin   Top, or minimum y value of the bounding box.
+ * @param {number} ymax   Bottom, or maximum y value of the bounding box.
+ * @param {number} near   Near, or minimum z value of the bounding box.
+ * @param {number} far    Far, or maximum y value of the bounding box.
+ * @returns {Matrix[4][4]}
+ */
+export function perspectiveMatrix(xmin, xmax, ymin, ymax, near, far) {
+  // Ensure no division by zero.
+  if ( xmin === xmax || ymin === ymax || near === far ) {
+    console.error("Invalid perspectiveMatrix parameters.");
+    return Matrix.identity();
+  }
+
+  // Ensure correct near/far distances.
+  if ( near <= 0 || far <= 0 ) {
+    console.error("For a perspective projection, the near and far distances must be positive.");
+    return Matrix.identity();
+  }
+
+  const xdiffInv = 1 / (xmax - xmin);
+  const ydiffInv = 1 / (ymax - ymin);
+
+  const sx = 2 * near * xdiffInv;
+  const sy = 2 * near * ydiffInv;
+
+  const c2 = -(far + near) / (far - near);
+  const c1 = (2 * near * far) / (near - far);
+
+  const tx = -near * (xmin + xmax) * xdiffInv;
+  const ty = -near * (ymin + ymax) * ydiffInv;
+
+  return new Matrix([
+    [sx, 0, 0, 0],
+    [0, sy, 0, 0],
+    [0, 0, c2, -1],
+    [tx, ty, c1, 0]
+  ]);
+}
+
+
 /**
  * Construct a perspective matrix.
  * https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/orthographic-projection-matrix.html
@@ -428,7 +500,7 @@ export function orthographicMatrix(xmin, xmax, ymin, ymax, near, far) {
  * @param {number} far    Far, or maximum y value of the bounding box.
  * @returns {Matrix[4][4]}
  */
-export function perspectiveMatrix(xmin, xmax, ymin, ymax, near, far) {
+export function perspectiveMatrix2(xmin, xmax, ymin, ymax, near, far) {
   // Coordinates:
   // left = xmin; right = xmax
   // bottom = ymin; top = ymax
@@ -444,26 +516,7 @@ export function perspectiveMatrix(xmin, xmax, ymin, ymax, near, far) {
     [-midX, -midY, 0, 1]
   ]);
 
-  // 2. Perspective calculation
-  // Set the w value to the divisor, -z.
-  const perspectiveCalc = new Matrix([
-    [near, 0, 0, 0],
-    [0, near, 0, 0],
-    [0, 0, 1, -1],
-    [0, 0, 0, 0]
-  ]);
-
-  // 3. Scale the view window to between [-1, 1] and [1, 1]
-  const scaleX = 2 / (xmax - xmin);
-  const scaleY = 2 / (ymax - ymin);
-  const scaleViewingVolume = new Matrix([
-    [scaleX, 0, 0, 0],
-    [0, scaleY, 0, 0],
-    [0, 0, 1, 0],
-    [0, 0, 0, 1]
-  ]);
-
-  // 4. Map depth (z-values) to [-1, 1]
+  // 2. Map depth (z-values) to [-1, 1]
   // non-linear mapping between [-near, -far] and [-1, 1]
   // use c1 / -z + c2, where c1 and c2 are constants based on range of [-near, -far]
   // z = -near ==> c1 / -z + c2 == -1
@@ -477,11 +530,71 @@ export function perspectiveMatrix(xmin, xmax, ymin, ymax, near, far) {
     [0, 0, c1, 0]
   ]);
 
-  // Switching direction fo the z axis to match clipping is not necessary.
-  // When mapping the z values to non-linear range, new range was [-1, 1], which
-  // effectively switched the direction of the z axis.
+  // 3. Perspective calculation
+  const perspectiveCalc = new Matrix([
+    [near, 0, 0, 0],
+    [0, near, 0, 0],
+    [0, 0, 1, 0],
+    [0, 0, 0, 0]
+  ]);
+
+  // 4. Scale the view window to between [-1, 1] and [1, 1]
+  const scaleX = 2 / (xmax - xmin);
+  const scaleY = 2 / (ymax - ymin);
+  const scaleViewingVolume = new Matrix([
+    [scaleX, 0, 0, 0],
+    [0, scaleY, 0, 0],
+    [0, 0, 1, 0],
+    [0, 0, 0, 1]
+  ]);
+
   // TODO: Store out matrix to speed up the multiplications.
-  return centerAroundOrigin.multiply4x4(perspectiveCalc).multiply4x4(scaleViewingVolume).multiply4x4(depthMap);
+  // Or combine all into one.
+  return centerAroundOrigin.multiply4x4(depthMap).multiply4x4(perspectiveCalc).multiply4x4(scaleViewingVolume);
+}
+
+
+/**
+ * Perspective matrix
+ * http://www.songho.ca/opengl/gl_projectionmatrix.html
+ */
+export function perspectiveMatrix3(xmin, xmax, ymin, ymax, near, far) {
+  // Coordinates:
+  // left = xmin; right = xmax
+  // bottom = ymin; top = ymax
+  // near = zmin; far = zmax
+  const fnDiffInv = 1 / (far - near);
+  const rlDiffInv = 1 / (xmax - xmin);
+  const tbDiffInv = 1 / (ymax - ymin);
+  return new Matrix([
+    [2 * near * rlDiffInv, 0, 0, 0],
+    [0, 2 * near * tbDiffInv, 0, 0],
+    [(xmax + xmin) * rlDiffInv, (ymax + ymin) * tbDiffInv, -(far + near) * fnDiffInv, -1],
+    [0, 0, -2 * far * near * fnDiffInv, 0]
+  ]);
+}
+
+/**
+ * Perspective matrix where the viewing volume is symmetric
+ * http://www.songho.ca/opengl/gl_projectionmatrix.html
+ */
+export function perspectiveMatrix3Symmetric(xmin, xmax, ymin, ymax, near, far) {
+  if ( xmin !== -xmax || ymin !== -ymax ) {
+    console.warn("perspectiveMatrix3Symmetric requirements not met.");
+    return perspectiveMatrix3(xmin, xmax, ymin, ymax, near, far);
+  }
+
+  // Coordinates:
+  // left = xmin; right = xmax
+  // bottom = ymin; top = ymax
+  // near = zmin; far = zmax
+  const tbDiffInv = 1 / (ymax - ymin);
+  return new Matrix([
+    [near / xmin, 0, 0, 0],
+    [0, near / ymin, 0, 0],
+    [0, 0, -(far + near) * fnDiffInv, -1],
+    [0, 0, -2 * far * near * fnDiffInv, 0]
+  ]);
 }
 
 /**

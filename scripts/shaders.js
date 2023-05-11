@@ -228,6 +228,7 @@ uniform usampler2D uWallCoordinates;
 uniform float uMaxDistance;
 uniform vec3 uLightPosition;
 uniform float uLightSize;
+uniform float uLightRadius;
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 uniform vec2 uCanvas;
@@ -400,6 +401,7 @@ Wall getWallCoordinates(in vec3 position) {
   // Perspective divide.
   // Does nothing with orthographic; needed for perspective projection.
   vec3 projCoord = lightSpacePosition.xyz / lightSpacePosition.w;
+  //vec3 projCoord = lightSpacePosition.xyz;
 
   // Transform the NDC coordinates to range [0, 1].
   vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
@@ -414,8 +416,8 @@ Wall getWallCoordinates(in vec3 position) {
 
 
   // Pull the coordinates for this wall.
-  vec4 dat1 = vec4(texture(uWallCoordinates, vec2(0, wallIndex)));
-  vec4 dat2 = vec4(texture(uWallCoordinates, vec2(1, wallIndex)));
+  vec4 dat1 = vec4(texture(uWallCoordinates, vec2(0.0, wallIndex)));
+  vec4 dat2 = vec4(texture(uWallCoordinates, vec2(1.0, wallIndex)));
 
   coordA = dat1.xyz;
   coordB = dat2.xyz;
@@ -461,9 +463,66 @@ float sinBlender(in float x, in float frequency, in float amplitude) {
 }
 
 void main() {
+  // vertexPosition is in canvas coordinates.
+
+  vec4 lightSpacePosition = uProjectionM * uViewM * vec4(vertexPosition, 1.0);
+  vec3 projCoord = lightSpacePosition.xyz / lightSpacePosition.w;
+
+  // Transform the NDC coordinates to range [0, 1].
+  vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
+
+  // fragColor = vec4(mapCoord.xy, 0.0, 1.0);
+
+  float wallIndex = texture(uWallIndices, mapCoord).r;
+
+  if ( wallIndex == -1.0 ) {
+    fragColor = vec4(0.0);
+    return;
+  }
+
+  vec4 dat1 = vec4(texture(uWallCoordinates, vec2(0.0, wallIndex)));
+  vec4 dat2 = vec4(texture(uWallCoordinates, vec2(1.0, wallIndex)));
+
+  //if ( wallIndex == 7.0 ) {
+  //  fragColor = vec4(1.0, 0.0, 0.0, 0.7);
+  //} else if ( wallIndex == 8.0 ) {
+  //  fragColor = vec4(0.0, 1.0, 0.0, 0.7);
+  //} else if ( wallIndex == 9.0 ) {
+  //  fragColor = vec4(0.0, 0.0, 1.0, 0.7);
+  //} else {
+  //  fragColor = vec4(0.0);
+  //}
+
+  fragColor = vec4(0.0,0.0,0.0, 0.8);
+
+
+  return;
+
+
+  // fragColor = vec4(vertexPosition.x / uLightRadius * 2.0, vertexPosition.y / uLightRadius * 2.0, 0.0, 0.7);
 
   Wall fragWall = getWallCoordinates(vertexPosition);
-  fragColor = vec4(0.0, 0.0, fragWall.A.z / 1600.0 , float(fragWall.shadowsFragment));
+  fragColor = vec4(1.0, 0.0, 0.0, float(fragWall.shadowsFragment));
+  return;
+
+  //vec4 lightSpacePosition = uProjectionM * uViewM * vec4(vertexPosition, 1.0);
+
+  // Perspective divide.
+  // Does nothing with orthographic; needed for perspective projection.
+  // vec3 projCoord = lightSpacePosition.xyz / lightSpacePosition.w;
+  //vec3 projCoord = lightSpacePosition.xyz;
+
+  // Transform the NDC coordinates to range [0, 1].
+  //vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
+  //fragColor = vec4(mapCoord.x, mapCoord.y, 0.0, 0.7);
+
+
+  // Pull the shadowing wall index for this location.
+  // float wallIndex = texture(uWallIndices, mapCoord).r;
+
+
+
+  // fragColor = vec4(0.0, 0.0, fragWall.A.z / 1600.0 , float(fragWall.shadowsFragment));
   // fragColor = vec4(fragWall.B.x / 5000.0, 0.0, 0.0, float(fragWall.shadowsFragment));
   // fragColor = vec4(0.0, fragWall.B.y / 3800.0, 0.0, float(fragWall.shadowsFragment));
   //fragColor = vec4(fragWall.A.x / 5000.0, fragWall.A.y / 3800.0, fragWall.A.z / 1600.0, float(fragWall.shadowsFragment));
