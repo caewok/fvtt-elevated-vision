@@ -69,7 +69,7 @@ Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
 
 
 map = new SourceDepthShadowMap(lightOrigin, { walls, directional, lightRadius, lightSize });
-if ( directional ) Draw.shape(new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation), { color: Draw.COLORS.lightyellow})
+if ( !directional ) Draw.shape(new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation), { color: Draw.COLORS.lightyellow})
 
 map._testBaseDepthTexture()
 map._endTestBaseDepthTexture()
@@ -415,6 +415,21 @@ for ( const v of [topA, topB, bottomA, bottomB] ) {
 
 
 
+function sinBlender(x, frequency, amplitude, displacement) {
+  const value = Math.sin(x * frequency) * amplitude + displacement;
+  return Math.clamped(value, 0, 1);
+}
+
+function betaInv(x, alpha, beta) {
+  if ( x <= 0 ) return 0;
+  const value = 1 / Math.pow(x, alpha - 1) * Math.pow(1 - x, beta - 1);
+  return Math.clamped(value, 0, 1);
+}
+
+arr = [0, 0.001, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99, 0.999, 1]
+
+arr.map(x => sinBlender(1 - x, 1, 4, 0))
+arr.map(x => betaInv(x, .1, 10))
 
 
 */
@@ -425,6 +440,8 @@ const WALL_COORDINATES_DATA = {
   move: undefined,
   sound: undefined
 };
+
+const WALL_OFFSET_PIXELS = 3;
 
 // Store wall data of a given type in an array and build a Uint16Array to store coordinate data.
 export class WallCoordinatesData {
@@ -492,9 +509,20 @@ export class WallCoordinatesData {
    */
   coordinatesObject(wall) {
     const { A, B, topZ, bottomZ } = wall;
+
+    // Slightly extend walls to ensure connected walls do not have gaps in shadows
+    const ABDist = PIXI.Point.distanceBetween(A, B)
+    const ptA = new PIXI.Point(A.x, A.y);
+    const ptB = new PIXI.Point(B.x, B.y);
+
+    const adjA = ptB.towardsPoint(ptA, ABDist + WALL_OFFSET_PIXELS)
+    const adjB = ptA.towardsPoint(ptB, ABDist + WALL_OFFSET_PIXELS)
+    const top = topZ + WALL_OFFSET_PIXELS;
+    const bottom = bottomZ - WALL_OFFSET_PIXELS;
+
     return {
-      A: new Point3d(A.x, A.y, topZ),
-      B: new Point3d(B.x, B.y, bottomZ),
+      A: new Point3d(adjA.x, adjA.y, top),
+      B: new Point3d(adjB.x, adjB.y, bottom),
       isTerrain: wall.document[this.type] === CONST.WALL_SENSE_TYPES.LIMITED,
       wall: wall
     };
@@ -529,6 +557,14 @@ export class WallCoordinatesData {
     const ELEVATION_OFFSET = 32767;
     const minmax = function(x) { return Math.max(Math.min(x, MAX), MIN); };
     const wallCoordinateData = new Uint16Array(8);
+
+    // Extend the wall points slightly to ensure overlap at connections.
+    const ABDist = PIXI.Point.distanceBetween(wallObj.A, wallObj.B)
+    const A = wallObj.B.to2d().towardsPoint(wallObj.A.to2d(), ABDist + WALL_OFFSET_PIXELS)
+    const B = wallObj.A.to2d().towardsPoint(wallObj.B.to2d(), ABDist + WALL_OFFSET_PIXELS)
+    const top = wallObj.A.z + WALL_OFFSET_PIXELS;
+    const bottom = wallObj.B.z - WALL_OFFSET_PIXELS;
+
     wallCoordinateData[0] = minmax(wallObj.A.x);
     wallCoordinateData[1] = minmax(wallObj.A.y);
     wallCoordinateData[2] = minmax(wallObj.A.z + ELEVATION_OFFSET);

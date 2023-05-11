@@ -508,7 +508,7 @@ void main() {
   // float t = rayIntersectionQuad3d(rayOrigin, rayDirection, v0, v1, v2, v3);
   vec3 bary = quadIntersect(rayOrigin, rayDirection, v0, v1, v2, v3);
   if ( bary.x == -1.0 ) {
-    fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    fragColor = vec4(0.0);
     return;
   }
 
