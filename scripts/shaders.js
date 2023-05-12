@@ -225,6 +225,7 @@ in vec3 vertexPosition;
 out vec4 fragColor;
 
 uniform sampler2D uWallIndices;
+uniform sampler2D uTerrainMap;
 uniform usampler2D uWallCoordinates;
 uniform float uMaxDistance;
 uniform vec3 uLightPosition;
@@ -235,6 +236,8 @@ uniform mat4 uViewM;
 uniform vec2 uCanvas;
 uniform vec3 uLightDirection;
 uniform bool uOrthogonal;
+uniform vec4 uScene;
+uniform vec4 EV_elevationRes;
 
 struct Wall {
   vec3 A;
@@ -242,6 +245,17 @@ struct Wall {
   bool shadowsFragment;
   uint linked;
 };
+
+/**
+ * Calculate the canvas elevation given a pixel value
+ * Maps 0–1 to elevation in canvas coordinates
+ * EV_elevationRes:
+ * r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
+ * u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+ */
+float canvasElevationFromPixel(in float pixel) {
+  return (EV_elevationRes.r + (pixel * EV_elevationRes.b * EV_elevationRes.g)) * EV_elevationRes.a;
+}
 
 /**
  * Möller-Trumbore intersection algorithm for a triangle.
@@ -467,14 +481,45 @@ float sinBlender(in float x, in float frequency, in float amplitude) {
 void main() {
   // vertexPosition is in canvas coordinates.
 
+  // Retrieve the terrain elevation at this fragment.
+  // Terrain is sized to the scene
+  // uScene is [left, top, width, height]
+  vec2 terrainCoord = (vertexPosition.xy - uScene.xy) / uScene.zw;
+  float terrainZ = 0.0;
+  if ( all(greaterThanEqual(terrainCoord, vec2(0.0))) && all(lessThanEqual(terrainCoord, vec2(1.0))) ) {
+    vec4 terrainPixel = texture(uTerrainMap, terrainCoord);
+    terrainZ = canvasElevationFromPixel(terrainPixel.r);
+  }
+
+  // Canvas position then is the vertex xy at the terrain elevation.
+  vec3 canvasPosition = vec3(vertexPosition.xy, terrainZ);
+
   // If the light does not reach the location, no shadow.
   // Use squared distance.
-  vec3 diff = uLightPosition - vertexPosition;
+  vec3 diff = uLightPosition - canvasPosition;
   if ( !uOrthogonal && dot(diff, diff) > (uLightRadius * uLightRadius) ) {
     fragColor = vec4(0.0);
     return;
   }
 
   Wall fragWall = getWallCoordinates(vertexPosition);
-  fragColor = vec4(vec3(0.0), float(fragWall.shadowsFragment));
+  if ( !fragWall.shadowsFragment ) {
+    fragColor = vec4(0.0);
+    return;
+  }
+
+  // Test for wall intersection given the actual elevation of the terrain.
+  vec3 rayDirection = uOrthogonal ? uLightDirection : normalize(uLightPosition - canvasPosition);
+  vec3 v0 = fragWall.A;
+  vec3 v1 = vec3(fragWall.A.xy, fragWall.B.z);
+  vec3 v2 = fragWall.B;
+  vec3 v3 = vec3(fragWall.B.xy, fragWall.A.z);
+  vec3 bary = quadIntersect(canvasPosition, rayDirection, v0, v1, v2, v3);
+  // bary.x: [0–??] distance from fragment to the wall. In grid units.
+  // bary.y: [0–1] where 0 is left-most portion of shadow, 1 is right-most portion
+  //         (where left is left of the ray from fragment towards the light)
+  // bary.z: [0–1] where 1 is nearest to the wall; 0 is furthest.
+
+  float shadow = bary.x == -1.0 ? 0.0 : 0.8;
+  fragColor = vec4(vec3(0.0), shadow);
 }`;

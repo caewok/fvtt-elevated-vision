@@ -1188,8 +1188,13 @@ export class SourceDepthShadowMap {
     performance.mark("start_shadow_render");
 
     // Constants
+    // TODO: Fix minElevation.
 
     const minElevation = this.minElevation;
+    const { size, distance, width, height, sceneWidth, sceneHeight } = canvas.dimensions;
+    const { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+    const elevationMult = size * (1 / distance);
+    const EV_elevationRes = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
 
     // Construct uniforms used by the shadow shader
     const { left, right, top, bottom, center } = canvas.dimensions.sceneRect;
@@ -1201,11 +1206,14 @@ export class SourceDepthShadowMap {
       uLightDirection: Object.values(lightDirection.normalize()),
       uLightRadius: this.directional ? -1 : this.lightRadius,
       uOrthogonal: this.directional,
-      uCanvas: [canvas.dimensions.width, canvas.dimensions.height],
+      uCanvas: [width, height],
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
       uMaxDistance: this.lightPosition.dot(new Point3d(right, bottom, minElevation)),
-      uLightSize: 100 // TODO: User-defined light property.
+      uLightSize: 100, // TODO: User-defined light property.
+      uTerrainMap: canvas.elevation._elevationTexture,
+      uScene: [left, top, sceneWidth, sceneHeight],
+      EV_elevationRes
     };
 
     // Construct a quad for the scene.
