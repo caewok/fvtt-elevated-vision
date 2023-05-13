@@ -755,7 +755,7 @@ export class PlaceablesCoordinatesData {
   }
 
 
-  _dataForTileObjecxt(tileObj) {
+  _dataForTileObject(tileObj) {
     const { MAX_COORDINATE, MIN_COORDINATE, ELEVATION_OFFSET, NUM_DATA_TEXTURE_COLUMNS } = PlaceablesCoordinatesData;
     const minmax = function(x) { return Math.max(Math.min(x, MAX_COORDINATE), MIN_COORDINATE); };
     const tileCoordinateData = new Uint16Array(NUM_DATA_TEXTURE_COLUMNS);
