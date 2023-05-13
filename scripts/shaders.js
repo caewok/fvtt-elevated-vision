@@ -1,95 +1,155 @@
 /* globals
-
+CONFIG,
+PIXI
 */
 "use strict";
 
-/**
- * Update the depth shader based on wall distance from light, from point of view of the light.
- */
-export const depthShaderGLSL = {};
+import { MODULE_ID } from "./const.js";
+import { PLACEABLE_TYPES } from "./SourceDepthShadowMap.js";
 
 /**
- * Vertex shader
+ * Update the depth shader based on wall distance from light, from point of view of the light.
  * Set z values by converting to the light view, and projecting either orthogonal or perspective.
+ * @param {number} numTileTextures    Number of tile textures passed to the shader.
+ *   Transparent tiles must let depth through, which means referencing the underlying texture.
+ * https://webglfundamentals.org/webgl/lessons/webgl-qna-how-to-bind-an-array-of-textures-to-a-webgl-shader-uniform-.html
+ * @returns {object} {fragmentShader, vertexShader}
  */
-depthShaderGLSL.vertexShader =
+export function depthShaderGLSL(numTileTextures) {
+  const depthShaderGLSL = {};
+  const useTileTextures = numTileTextures ? `#define NUM_TILE_TEXTURES ${numTileTextures}` : "";
+  depthShaderGLSL.vertexShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
+${useTileTextures}
+
 in vec3 aVertexPosition;
+in float aObjType;
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 
+#ifdef NUM_TILE_TEXTURES
+in float aObjType;
+in float aObjIndex;
+in vec2 aTexCoord;
+out float vObjType;
+out float vObjIndex;
+out vec2 vTexCoord;
+#endif
+
 void main() {
+  #ifdef NUM_TILE_TEXTURES
+  vObjType = aObjType;
+  vObjIndex = aObjIndex;
+  vTexCoord = aTexCoord;
+  #endif
   vec4 pos4 = vec4(aVertexPosition, 1.0);
   gl_Position = uProjectionM * uViewM * pos4;
 }`;
 
-/**
- * Fragment shader
- * Update the fragDepth based on z value from vertex shader.
- */
-depthShaderGLSL.fragmentShader =
+  depthShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
+${useTileTextures}
+#define ALPHA_THRESHOLD ${CONFIG[MODULE_ID].alphaThreshold}
+#define TRANSPARENT_TILE ${PLACEABLE_TYPES.TRANSPARENT_TILE}.0
+
 out float distance;
 
+#ifdef NUM_TILE_TEXTURES
+in float vObjType;
+in float vObjIndex;
+in vec2 vTexCoord;
+uniform shader2D uTileTextures[NUM_TILE_TEXTURES];
+#endif
+
+
 void main() {
-  distance = gl_FragCoord.z; // [0, 1]
+  float depth = gl_FragCoord.z; // [0, 1]
+
+  #ifdef NUM_TILE_TEXTURES
+  // Test the fragment against the texture alpha at this location; set depth to 1.0 if transparent.
+  if ( vObjType == TRANSPARENT_TILE ) {
+    // TODO: Do we need to loop here b/c the integer is not constant?
+    float alpha = texture(uTileTextures[int(vObjIndex)], vTexCoord);
+    if ( alpha < ALPHA_THRESHOLD ) depth = 1.0;
+  }
+  #endif
+
+  gl_FragDepth = depth;
+  distance = depth;
 }`;
+  return depthShaderGLSL;
+}
+
 
 /**
  * Sets terrain walls to "transparent"---set z to 1.
  * If depthShader already used, this will operate only on frontmost vertices / fragments.
  * Will change the depth of those to 1, meaning they will be at the end.
  */
-export const terrainDepthShaderGLSL = {};
+export function terrainDepthShaderGLSL(numTileTextures) {
+  const terrainDepthShaderGLSL = {};
+  const useTileTextures = numTileTextures ? `#define NUM_TILE_TEXTURES ${numTileTextures}` : "";
 
-/**
- * Vertex shader.
- * Project to light view just like with depthShader.
- *
- */
-terrainDepthShaderGLSL.vertexShader =
+  terrainDepthShaderGLSL.vertexShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+${useTileTextures}
 
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 
-in float aTerrain;
+in float aObjType;
 in vec3 aVertexPosition;
-in float aWallIndex;
+in float aObjIndex;
 
-out float vWallIndex;
+out float vObjIndex;
 out vec3 vertexPosition;
-out float vTerrain;
+out float vObjType;
+
+#ifdef NUM_TILE_TEXTURES
+in vec2 aTexCoord;
+out vec2 vTexCoord;
+#endif
 
 void main() {
-  vWallIndex = aWallIndex;
-  vTerrain = aTerrain;
+  #ifdef NUM_TILE_TEXTURES
+  vTexCoord = aTexCoord;
+  #endif
+  vObjIndex = aObjIndex;
+  vObjType = aObjType;
   vertexPosition = aVertexPosition;
   gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
 }`;
 
-/**
- * Fragment shader.
- * Set the depth; for terrain vertices, set the z value to 1.
- */
-terrainDepthShaderGLSL.fragmentShader =
+
+  terrainDepthShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+${useTileTextures}
+#define ALPHA_THRESHOLD ${CONFIG[MODULE_ID].alphaThreshold}
+#define TRANSPARENT_TILE ${PLACEABLE_TYPES.TRANSPARENT_TILE}.0
+#define TERRAIN_WALL ${PLACEABLE_TYPES.TERRAIN_WALL}.0
 
 uniform vec3 uLightPosition;
 uniform sampler2D depthMap;
 
 in vec3 lightPosition;
 in vec3 vertexPosition;
-in float vTerrain;
-in float vWallIndex;
+in float vObjType;
+in float vObjIndex;
 
 out float distance;
+
+#ifdef NUM_TILE_TEXTURES
+in vec2 vTexCoord;
+uniform shader2D uTileTextures[NUM_TILE_TEXTURES];
+#endif
 
 void main() {
   // gl_FragCoord.x: [0, texture width (e.g., 1024)]
@@ -101,20 +161,23 @@ void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
   float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
-  if ( vTerrain > 0.5 && nearestDepth >= fragDepth ) { // Where terrain walls are transparent
-    gl_FragDepth = 1.0;
-    // return;
-    //distance = 2.0;  // Never encountered.
-  } else if ( nearestDepth >= fragDepth ) { //
-    gl_FragDepth = gl_FragCoord.z;
-    //distance = gl_FragCoord.z;
-  } else { // Where terrain walls overlap, causing a shadow
-    gl_FragDepth = gl_FragCoord.z;
-    // distance = dot(uLightPosition, vertexPosition);
-    //distance = 3.0;
+  #ifdef NUM_TILE_TEXTURES
+  // Test the fragment against the texture alpha at this location; set depth to 1.0 if transparent.
+  if ( vObjType == TRANSPARENT_TILE ) {
+    float alpha = texture(uTileTextures[int(vObjIndex)], vTexCoord);
+    if ( alpha < ALPHA_THRESHOLD ) fragDepth = 1.0;
   }
-  distance = vWallIndex;
+  #endif
+
+  if ( vObjType == TERRAIN_WALL && nearestDepth >= fragDepth ) { // Where terrain walls are transparent
+    fragDepth = 1.0;
+  }
+
+  gl_FragDepth = fragDepth;
+  distance = vObjIndex;
 }`;
+  return terrainDepthShaderGLSL;
+}
 
 
 /**
@@ -224,9 +287,9 @@ in vec2 vTexCoord;
 in vec3 vertexPosition;
 out vec4 fragColor;
 
-uniform sampler2D uWallIndices;
+uniform sampler2D uObjIndices;
 uniform sampler2D uTerrainMap;
-uniform usampler2D uWallCoordinates;
+uniform usampler2D uObjCoordinates;
 uniform float uMaxDistance;
 uniform vec3 uLightPosition;
 uniform float uLightSize;
@@ -239,11 +302,12 @@ uniform bool uOrthogonal;
 uniform vec4 uScene;
 uniform vec4 EV_elevationRes;
 
-struct Wall {
-  vec3 A;
-  vec3 B;
+struct Placeable {
+  vec3 v0;
+  vec3 v1;
+  vec3 v2;
+  vec3 v3;
   bool shadowsFragment;
-  uint linked;
 };
 
 /**
@@ -409,9 +473,8 @@ vec3 quadIntersect(in vec3 ro, in vec3 rd, in vec3 v0, in vec3 v1, in vec3 v2, i
 
 /**
  * Pull the wall coordinates from the textures.
- * @returns {Wall}
  */
-Wall getWallCoordinates(in vec3 position) {
+Placeable getObjectCoordinates(in vec3 position) {
   vec4 lightSpacePosition = uProjectionM * uViewM * vec4(position, 1.0);
 
   // Perspective divide.
@@ -423,26 +486,26 @@ Wall getWallCoordinates(in vec3 position) {
   vec2 mapCoord = projCoord.xy * 0.5 + 0.5;
 
   // Pull the shadowing wall index for this location.
-  float wallIndex = texture(uWallIndices, mapCoord).r;
+  float objIndex = texture(uObjIndices, mapCoord).r;
 
   // -1.0 signifies no shadow and so no valid coordinates.
-  vec3 coordA = vec3(-1.0);
-  vec3 coordB = vec3(-1.0);
-  if ( wallIndex == -1.0 ) return Wall(coordA, coordB, false, 0u);
+  if ( objIndex == -1.0 ) return Placeable(vec3(-1.0), vec3(-1.0), vec3(-1.0), vec3(-1.0), false);
 
-  // Pull the coordinates for this wall.
   // texelFetch is preferable to ensure we get the actual values.
-  vec4 dat1 = vec4(texelFetch(uWallCoordinates, ivec2(0, int(wallIndex)), 0));
-  vec4 dat2 = vec4(texelFetch(uWallCoordinates, ivec2(1, int(wallIndex)), 0));
-
-  coordA = dat1.xyz;
-  coordB = dat2.xyz;
+  vec4 dat0 = vec4(texelFetch(uObjCoordinates, ivec2(0, int(objIndex)), 0));
+  vec4 dat1 = vec4(texelFetch(uObjCoordinates, ivec2(1, int(objIndex)), 0));
+  vec4 dat2 = vec4(texelFetch(uObjCoordinates, ivec2(2, int(objIndex)), 0));
 
   // Adjust the elevation coordinate
-  coordA.z -= ELEVATION_OFFSET;
-  coordB.z -= ELEVATION_OFFSET;
+  vec2 elevationZ = dat2.rg - ELEVATION_OFFSET;
 
-  return Wall(coordA, coordB, true, uint(dat2.w));
+  // Assign coordinates; see quad
+  vec3 v0 = vec3(dat0.xy, elevationZ.r); // A top (TL)
+  vec3 v1 = vec3(dat1.zw, elevationZ.g); // A bottom (BL)
+  vec3 v2 = vec3(dat1.xy, elevationZ.g); // B bottom (BR)
+  vec3 v3 = vec3(dat0.zw, elevationZ.r); // B top (TR)
+
+  return Placeable(v0, v1, v2, v3, true);
 }
 
 /**
@@ -502,19 +565,15 @@ void main() {
     return;
   }
 
-  Wall fragWall = getWallCoordinates(vertexPosition);
-  if ( !fragWall.shadowsFragment ) {
+  Placeable fragPlaceable = getObjectCoordinates(vertexPosition);
+  if ( !fragPlaceable.shadowsFragment ) {
     fragColor = vec4(0.0);
     return;
   }
 
   // Test for wall intersection given the actual elevation of the terrain.
   vec3 rayDirection = uOrthogonal ? uLightDirection : normalize(uLightPosition - canvasPosition);
-  vec3 v0 = fragWall.A;
-  vec3 v1 = vec3(fragWall.A.xy, fragWall.B.z);
-  vec3 v2 = fragWall.B;
-  vec3 v3 = vec3(fragWall.B.xy, fragWall.A.z);
-  vec3 bary = quadIntersect(canvasPosition, rayDirection, v0, v1, v2, v3);
+  vec3 bary = quadIntersect(canvasPosition, rayDirection, fragPlaceable.v0, fragPlaceable.v1, fragPlaceable.v2, fragPlaceable.v3);
   // bary.x: [0–??] distance from fragment to the wall. In grid units.
   // bary.y: [0–1] where 0 is left-most portion of shadow, 1 is right-most portion
   //         (where left is left of the ray from fragment towards the light)
