@@ -8,232 +8,242 @@ import { MODULE_ID } from "./const.js";
 import { PLACEABLE_TYPES } from "./SourceDepthShadowMap.js";
 
 /**
- * Update the depth shader based on wall distance from light, from point of view of the light.
- * Set z values by converting to the light view, and projecting either orthogonal or perspective.
+ * Project each object (currently walls and tiles) from point of view of the light.
+ * Update the depth buffer with the object z values from that point of view.
  * @param {number} numTileTextures    Number of tile textures passed to the shader.
  *   Transparent tiles must let depth through, which means referencing the underlying texture.
  * https://webglfundamentals.org/webgl/lessons/webgl-qna-how-to-bind-an-array-of-textures-to-a-webgl-shader-uniform-.html
  * @returns {object} {fragmentShader, vertexShader}
  */
-export function depthShaderGLSL(numTileTextures) {
-  const depthShaderGLSL = {};
-  const useTileTextures = numTileTextures ? `#define NUM_TILE_TEXTURES ${numTileTextures}` : "";
-  depthShaderGLSL.vertexShader =
+export const depthShaderGLSL = {};
+/**
+ * Vertex shader.
+ * Convert wall and tile objects to point of view of the light.
+ * @uniform {mat4} uProjectionM         Perspective or orthogonal projection matrix
+ * @uniform {mat4} uViewM               View matrix from point of view of the light
+ * @attribute {vec3} aVertexPosition    Vertices (corners) of the wall or tile
+ */
+depthShaderGLSL.vertexShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-${useTileTextures}
-
-in vec3 aVertexPosition;
-in float aObjType;
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
-
-#ifdef NUM_TILE_TEXTURES
-in float aObjType;
-in float aObjIndex;
-in vec2 aTexCoord;
-out float vObjType;
-out float vObjIndex;
-out vec2 vTexCoord;
-#endif
+in vec3 aVertexPosition;
 
 void main() {
-  #ifdef NUM_TILE_TEXTURES
-  vObjType = aObjType;
-  vObjIndex = aObjIndex;
-  vTexCoord = aTexCoord;
-  #endif
   vec4 pos4 = vec4(aVertexPosition, 1.0);
   gl_Position = uProjectionM * uViewM * pos4;
 }`;
 
-  depthShaderGLSL.fragmentShader =
-`#version 300 es
-precision ${PIXI.settings.PRECISION_FRAGMENT} float;
-
-${useTileTextures}
-#define ALPHA_THRESHOLD ${CONFIG[MODULE_ID].alphaThreshold}
-#define TRANSPARENT_TILE ${PLACEABLE_TYPES.TRANSPARENT_TILE}.0
-
-out float distance;
-
-#ifdef NUM_TILE_TEXTURES
-in float vObjType;
-in float vObjIndex;
-in vec2 vTexCoord;
-uniform shader2D uTileTextures[NUM_TILE_TEXTURES];
-#endif
-
-
-void main() {
-  float depth = gl_FragCoord.z; // [0, 1]
-
-  #ifdef NUM_TILE_TEXTURES
-  // Test the fragment against the texture alpha at this location; set depth to 1.0 if transparent.
-  if ( vObjType == TRANSPARENT_TILE ) {
-    // TODO: Do we need to loop here b/c the integer is not constant?
-    float alpha = texture(uTileTextures[int(vObjIndex)], vTexCoord);
-    if ( alpha < ALPHA_THRESHOLD ) depth = 1.0;
-  }
-  #endif
-
-  gl_FragDepth = depth;
-  distance = depth;
-}`;
-  return depthShaderGLSL;
-}
-
-
 /**
- * Sets terrain walls to "transparent"---set z to 1.
- * If depthShader already used, this will operate only on frontmost vertices / fragments.
- * Will change the depth of those to 1, meaning they will be at the end.
+ * Fragment shader.
+ * Update the depth buffer and render the depth values.
+ * @output {float} distance   Depth value between 0 and 1.
  */
-export function terrainDepthShaderGLSL(numTileTextures) {
-  const terrainDepthShaderGLSL = {};
-  const useTileTextures = numTileTextures ? `#define NUM_TILE_TEXTURES ${numTileTextures}` : "";
-
-  terrainDepthShaderGLSL.vertexShader =
-`#version 300 es
-precision ${PIXI.settings.PRECISION_VERTEX} float;
-
-${useTileTextures}
-
-uniform mat4 uProjectionM;
-uniform mat4 uViewM;
-
-in float aObjType;
-in vec3 aVertexPosition;
-in float aObjIndex;
-
-out float vObjIndex;
-out vec3 vertexPosition;
-out float vObjType;
-
-#ifdef NUM_TILE_TEXTURES
-in vec2 aTexCoord;
-out vec2 vTexCoord;
-#endif
-
-void main() {
-  #ifdef NUM_TILE_TEXTURES
-  vTexCoord = aTexCoord;
-  #endif
-  vObjIndex = aObjIndex;
-  vObjType = aObjType;
-  vertexPosition = aVertexPosition;
-  gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
-}`;
-
-
-  terrainDepthShaderGLSL.fragmentShader =
+depthShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
-${useTileTextures}
-#define ALPHA_THRESHOLD ${CONFIG[MODULE_ID].alphaThreshold}
-#define TRANSPARENT_TILE ${PLACEABLE_TYPES.TRANSPARENT_TILE}.0
-#define TERRAIN_WALL ${PLACEABLE_TYPES.TERRAIN_WALL}.0
-
-uniform vec3 uLightPosition;
-uniform sampler2D depthMap;
-
-in vec3 lightPosition;
-in vec3 vertexPosition;
-in float vObjType;
-in float vObjIndex;
-
 out float distance;
-
-#ifdef NUM_TILE_TEXTURES
-in vec2 vTexCoord;
-uniform shader2D uTileTextures[NUM_TILE_TEXTURES];
-#endif
 
 void main() {
   // gl_FragCoord.x: [0, texture width (e.g., 1024)]
   // gl_FragCoord.y: [0, texture height (e.g., 1024)]
   // gl_FragCoord.z: [0, 1]
-  // depthMap: [0, 1] (see depthShader, above)
 
-  float fragDepth = gl_FragCoord.z; // 0 – 1
-  ivec2 fragCoord = ivec2(gl_FragCoord.xy);
-  float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
-
-  #ifdef NUM_TILE_TEXTURES
-  // Test the fragment against the texture alpha at this location; set depth to 1.0 if transparent.
-  if ( vObjType == TRANSPARENT_TILE ) {
-    float alpha = texture(uTileTextures[int(vObjIndex)], vTexCoord);
-    if ( alpha < ALPHA_THRESHOLD ) fragDepth = 1.0;
-  }
-  #endif
-
-  if ( vObjType == TERRAIN_WALL && nearestDepth >= fragDepth ) { // Where terrain walls are transparent
-    fragDepth = 1.0;
-  }
-
-  gl_FragDepth = fragDepth;
-  distance = vObjIndex;
+  float depth = gl_FragCoord.z; // [0, 1]
+  gl_FragDepth = depth;
+  distance = depth;
 }`;
-  return terrainDepthShaderGLSL;
-}
 
 
 /**
- * Write the wall index for the wall that shadows.
+ * Mark transparent portions of terrain walls by setting them to 1.0 in the depth buffer.
+ * Relies on first running depthShader to set depths based on the light's point of view.
  */
-export const wallIndicesShaderGLSL = {};
-
-wallIndicesShaderGLSL.vertexShader =
+export const terrainWallDepthShaderGLSL = {};
+/**
+ * Vertex shader.
+ * Convert wall and tile objects to point of view of the light.
+ * @uniform {mat4} uProjectionM         Perspective or orthogonal projection matrix
+ * @uniform {mat4} uViewM               View matrix from point of view of the light
+ * @attribute {vec3} aVertexPosition    Vertices (corners) of the wall or tile
+ * @attribute {float} aObjType          Type of object this vertex belongs to. See PLACEABLE_TYPES.
+ * @output {float} vObjType             Conversion of aObjType to varying.
+ */
+terrainWallDepthShaderGLSL.vertexShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
-
 in vec3 aVertexPosition;
-in float aWallIndex;
-
-out float vWallIndex;
+out float vObjType;
 
 void main() {
-  vWallIndex = aWallIndex;
+  vObjType = aObjType;
   gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
 }`;
 
-wallIndicesShaderGLSL.fragmentShader =
+
+/**
+ * Fragment shader.
+ * Test terrain wall fragments against the saved depth texture. Mark the frontmost
+ * terrain wall fragments as depth = 1.0 to make "transparent."
+ * @uniform {sampler2D} depthMap  Saved depth values, usually from running depthShaderGLSL.
+ * @input {float} vObjType        Type of wall for this fragment. See PLACEABLE_TYPES.
+ * @output {float} distance   Depth value between 0 and 1.
+ */
+terrainWallDepthShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
 uniform sampler2D depthMap;
-
-in float vWallIndex;
-out vec4 coordinate;
+in float vObjType;
+out float distance;
 
 void main() {
+  float fragDepth = gl_FragCoord.z;
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
-  float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
+  float depth = texelFetch(depthMap, fragCoord, 0).r;
 
-  coordinate = vec4(0.7);
-  return;
+  // Locate frontmost terrain wall fragments
+  if ( vObjType == TERRAIN_WALL && depth >= fragDepth ) depth = 1.0;
 
-  // Drop shadows caused by front-most terrain walls.
-  if ( nearestDepth == 0.0 ) discard;
+  gl_FragDepth = depth;
+  distance = depth;
+}`;
 
-  if ( nearestDepth > gl_FragCoord.z ) {
-    // red: first 256 walls
-    // green: multiplier for each subsequent 256 walls
-    // blue: unused
-    // alpha: 1 if shadow, 0 if not.
-    // float r = mod(vWallIndex, 255.0);
-//     float g = floor(vWallIndex / 255.0);
-//     coordinate = vec4(r / 255.0, g / 255.0, 0.0, 1.0);
-    coordinate = vec4(0.7);
 
-  } else {
-    discard;
+/**
+ * For a given tile, compare its texture and mark as "transparent" (depth = 1)
+ * any transparent portions of the tile, from point of view of the light.
+ * Relies on first running depthShader to set depths based on the light's point of view.
+ * May be run repeatedly for distinct tiles.
+ * Function so that CONFIG[MODULE_ID].alphaThreshold works.
+ */
+export function tileDepthShaderGLSL() {
+  const tileDepthShaderGLSL = {};
+
+/**
+ * Vertex shader.
+ * Convert vertices to light's point of view. Modify the tex coordinate for the tile accordingly.
+ * @uniform {mat4} uProjectionM         Perspective or orthogonal projection matrix
+ * @uniform {mat4} uViewM               View matrix from point of view of the light
+ * @attribute {vec3} aVertexPosition    Vertices (corners) of the wall or tile
+ * @attribute {float} aObjType          Type of object this vertex belongs to; see PLACEABLE_TYPES
+ * @attribute {vec2} aTexCoord          Texture location associated with the vertex
+ * @output {float} vObjType             Conversion of aObjType to varying
+ * @output {vec2} vTexCoord             Conversion of aTexCoord to varying
+ */
+tileDepthShaderGLSL.vertex =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat4 uProjectionM;
+uniform mat4 uViewM;
+in vec3 aVertexPosition;
+in float aObjType;
+in vec2 aTexCoord;
+out float vObjType;
+out vec2 vTexCoord;
+
+void main() {
+  vTexCoord = aTexCoord;
+  vObjType = aObjType;
+  vertexPosition = aVertexPosition;
+  gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
+}`;
+
+/**
+ * Fragment shader.
+ * Look up the tile texture color at this location. If it meets the transparency threshold,
+ * mark as transparent in the depth buffer. Render the updated depth values.
+ * This is set up to handle a single tile texture, to be run repeatedly.
+ * @uniform {sampler2D} depthMap  Saved depth values, usually from running depthShaderGLSL
+ * @uniform {int} uTileIndex      The placeable object index for the tile.
+ * @input {float} vObjType        Type of placeable for this fragment; see PLACEABLE_TYPES
+ * @input {vec2} vTexCoord        Texture location associated with the fragment
+ * @output {float} distance       Depth value between 0 and 1.
+ */
+tileDepthShaderGLSL.fragment =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+#define ALPHA_THRESHOLD ${CONFIG[MODULE_ID].alphaThreshold}
+#define TRANSPARENT_TILE ${PLACEABLE_TYPES.TRANSPARENT_TILE}.0
+
+uniform sampler2D depthMap;
+uniform int uTileIndex;
+in float vObjType;
+in vec2 vTexCoord;
+out float distance;
+
+void main() {
+  float fragDepth = gl_FragCoord.z;
+  ivec2 fragCoord = ivec2(gl_FragCoord.xy);
+  float depth = texelFetch(depthMap, fragCoord, 0).r;
+
+  // Locate tile texture for this fragment; test for transparency.
+  if ( vObjIndex == float(uTileIndex) ) {
+    float alpha = texture(uTileTextures[uTileIndex], vTexCoord);
+    if ( alpha < ALPHA_THRESHOLD ) depth = 1.0;
   }
+
+  gl_FragDepth = depth;
+  distance = depth;
+}`;
+
+  return tileDepthShaderGLSL;
+}
+
+/**
+ * Write the placeable index for the object that shadows.
+ */
+export const placeableIndicesShaderGLSL = {};
+
+/**
+ * Vertex shader.
+ * Track the placeable object index associated with this vertex.
+ * @uniform {mat4} uProjectionM         Perspective or orthogonal projection matrix
+ * @uniform {mat4} uViewM               View matrix from point of view of the light
+ * @attribute {vec3} aVertexPosition    Vertices (corners) of the wall or tile
+ * @attribute {float} aObjIndex         Index for the placeable object.
+ * @output {float} vObjIndex           Conversion of aObjIndex to varying.
+ */
+placeableIndicesShaderGLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat4 uProjectionM;
+uniform mat4 uViewM;
+in vec3 aVertexPosition;
+in float aObjIndex;
+out float vObjIndex;
+
+void main() {
+  vObjIndex = aObjIndex;
+  gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
+}`;
+
+/**
+ * Fragment shader.
+ * If this is the frontmost fragment according to the buffer, render its index.
+ * Presumes depth testing is working and the depth buffer has been updated.
+ * @input {float} vObjIndex       Index of placeable for this fragment
+ * @output {float} objIndex       Index of placeable
+ */
+placeableIndicesShaderGLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+in float vObjIndex;
+out float objIndex;
+
+void main() {
+  float fragDepth = gl_FragCoord.z;
+  objIndex = vObjIndex;
 }`;
 
 /**
