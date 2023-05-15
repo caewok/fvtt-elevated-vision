@@ -18,7 +18,8 @@ import {
   depthShaderGLSL,
   terrainWallDepthShaderGLSL,
   tileDepthShaderGLSL,
-  placeableIndicesShaderGLSL } from "./shaders.js";
+  placeableIndicesShaderGLSL,
+  PLACEABLE_TYPES } from "./shaders.js";
 
 import {
   perspectiveMatrix,
@@ -77,20 +78,25 @@ map = new SourceDepthShadowMap(lightOrigin, { walls, directional, lightRadius, l
 if ( !directional ) Draw.shape(new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation), { color: Draw.COLORS.lightyellow})
 
 map._testBaseDepthTexture()
-map._endTestBaseDepthTexture()
+map._testBaseDepthTexture(false)
 
 map._testDepthTexture();
-map._endTestDepthTexture();
+map._testDepthTexture(false);
 
-map._testWallIndicesTexture()
-map._endTestWallIndicesTexture()
+map._testTileTexture(0)
+map._testTileTexture(0, false)
 
+map._testTileTexture(1)
+map._testTileTexture(1, false)
 
-map._wallCoordinateTest("A", "x");
-map._endWallCoordinateTest();
+map._testTerrainTexture();
+map._testTerrainTexture(false);
+
+map._testPlaceablesIndicesTexture()
+map._testPlaceablesIndicesTexture()
 
 map._shadowRenderTest();
-map._endShadowRenderTest();
+map._shadowRenderTest(false);
 
 
 // Test locations of the tile texture geometry
@@ -118,10 +124,24 @@ for ( let objI = 0; objI < verticesArr.length; objI += 12 ) {
 
 indicesArr = map.geometry.getIndex().data; // 0 1 2 1 3 2
 
+TL  TR
+
+    BR
+
+TL
+
+BL  BR
+
 
 0 1 2 0 2 3
 
+A bottom
+A top
+B bottom
 
+A bottom
+B bottom
+B top
 
 // update walls
 map._updateWallGeometry(walls);
@@ -454,21 +474,6 @@ arr.map(x => betaInv(x, .1, 10))
 
 */
 
-const PLACEABLES_COORDINATES_DATA = {
-  light: undefined,
-  sight: undefined,
-  move: undefined,
-  sound: undefined
-};
-
-export const PLACEABLE_TYPES = {
-  WALL: 0,
-  TERRAIN_WALL: 1,
-  TILE: 2,
-  TRANSPARENT_TILE: 3
-};
-
-
 // Store data of a given placeable type in an array and build a Uint16Array to store coordinate data.
 // Currently handles wall and tile coordinates.
 export class PlaceablesCoordinatesData {
@@ -605,12 +610,11 @@ export class PlaceablesCoordinatesData {
       hasTransparentTiles ||= tileObj.hasTransparency;
     }
 
-    // Sort so transparent tiles are first, then sorted by tile size
-    // This is critical to making the depth shader work.
-    // Transparent tiles need their texture uploaded, so they need to be indexed; easiest to go first.
-    // Larger tiles are more likely to let light through to another transparent tile, so better to go first.
-    // Particularly if we are not testing every level of tile transparency.
+    // Sort so transparent tiles are first, then sorted by tile elevation (high to low)
+    // Elevation is critical to making the depth shader work.
+    // Transparent tiles need their texture uploaded; easiest to go first.
     tileCoords.sort((a, b) => b.hasTransparency - a.hasTransparency
+      || b.object.elevationZ - a.object.elevationZ
       || (b.object.width * b.object.height) - (a.object.width * a.object.height));
 
     this.#hasTransparentTiles = hasTransparentTiles;
@@ -873,6 +877,16 @@ export class PlaceablesCoordinatesData {
 }
 
 export class SourceDepthShadowMap {
+  /**
+   * Cache the coordinate data for the scene(s).
+   */
+  static PLACEABLES_COORDINATES_DATA = {
+    light: new WeakMap(),
+    sight: new WeakMap(),
+    move: new WeakMap(),
+    sound: new WeakMap()
+  }
+
 
   // TODO: Can we make any of these empty objects instead of undefined, and just update the object?
   #viewMatrix;
@@ -940,9 +954,6 @@ export class SourceDepthShadowMap {
       this.#lightRadius = canvas.dimensions.size;
     }
 
-    this.#placeablesCoordinatesData = PLACEABLES_COORDINATES_DATA[this.#lightType]
-      || new PlaceablesCoordinatesData(this.#lightType);
-
     // Add min blending mode
     if ( typeof PIXI.BLEND_MODES.MIN === "undefined" ) {
       const renderer = PIXI.autoDetectRenderer();
@@ -953,6 +964,26 @@ export class SourceDepthShadowMap {
   }
 
   // Getters / Setters
+  updatePlaceablesCoordinatesData() {
+    const placeablesMap = SourceDepthShadowMap.PLACEABLES_COORDINATES_DATA[this.#lightType];
+    if ( !placeablesMap.has(canvas.scene) ) placeablesMap.set(canvas.scene, new PlaceablesCoordinatesData(this.#lightType));
+    this.#placeablesCoordinatesData = placeablesMap.get(canvas.scene);
+    this.clearGeometry();
+  }
+
+  clearPlaceablesCoordinatesData() {
+    // TODO: Properly destroy the old placeables data
+    const placeablesMap = SourceDepthShadowMap.PLACEABLES_COORDINATES_DATA[this.#lightType];
+    if ( placeablesMap.has(canvas.scene) ) placeablesMap.set(canvas.scene, new PlaceablesCoordinatesData(this.#lightType));
+    this.#placeablesCoordinatesData = undefined;
+    this.clearGeometry();
+  }
+
+  /** @type PlaceablesCoordinatesData */
+  get placeablesCoordinatesData() {
+    if ( !this.#placeablesCoordinatesData ) this.updatePlaceablesCoordinatesData();
+    return this.#placeablesCoordinatesData;
+  }
 
   /** @type {Matrix} */
   get viewMatrix() {
@@ -1039,7 +1070,28 @@ export class SourceDepthShadowMap {
     return this.#geometry || (this.#geometry = this._geometry());
   }
 
-  get placeablesCoordinatesData() { return this.#placeablesCoordinatesData; }
+  clearGeometry() {
+    // TODO: Keep the Geometry object and just update it?
+    if ( this.#geometry ) this.#geometry.destroy();
+    this.#geometry = undefined;
+    this.clearTextures();
+  }
+
+  clearTextures() {
+    // TODO: Keep the textures and just update them?
+    if ( this.#baseDepthTexture ) this.#baseDepthTexture.destroy();
+    if ( this.#depthTexture ) this.#depthTexture.destroy();
+    if ( this.#terrainTexture ) this.#terrainTexture.destroy();
+    if ( this.#placeablesIndicesTexture ) this.#placeablesIndicesTexture.destroy();
+    for ( const tex of this.#tileTextures ) tex.destroy();
+
+    this.#baseDepthTexture = undefined;
+    this.#depthTexture = undefined;
+    this.#terrainTexture = undefined;
+    this.#placeablesIndicesTexture = undefined;
+    this.#tileTextures.length = 0;
+  }
+
 
   // TODO: Reset cached getters
 
@@ -1055,7 +1107,10 @@ export class SourceDepthShadowMap {
     //       Mark that separately? Could work for everything except terrain walls...
 
     if ( this.#geometry ) this.#geometry.destroy();
-    const coords = this.#placeablesCoordinatesData.coordinates;
+    this.#hasTransparentTiles = false;
+    this.#hasTerrainWalls = false;
+
+    const coords = this.placeablesCoordinatesData.coordinates;
     const nObjs = coords.length;
     const { WALL, TERRAIN_WALL, TILE, TRANSPARENT_TILE } = PLACEABLE_TYPES;
 
@@ -1088,17 +1143,17 @@ export class SourceDepthShadowMap {
       // 4 vertices per wall or tile
       // Indices are:
       // 0 1 2
-      // 1 3 2
+      // 0 2 3
       // 4 5 6
-      // 5 7 6
+      // 4 6 7
       const v = objNumber * 4; // Four vertices per wall
       indices.push(
         v,
         v + 1,
         v + 2,
-        v + 1,
-        v + 3,
-        v + 2
+        v + 0,
+        v + 2,
+        v + 3
       );
 
       // Texture coordinates (only actually used for transparent tiles)
@@ -1109,10 +1164,17 @@ export class SourceDepthShadowMap {
         0, 0  // BL
       );
 
+      // Label vertices with the type of object and track transparencies.
+      let objType;
+      if ( isWall ) {
+        objType = obj.isTerrain ? TERRAIN_WALL : WALL;
+        this.#hasTerrainWalls ||= obj.isTerrain;
+      } else { // Is Tile
+        objType = obj.hasTransparency ? TRANSPARENT_TILE : TILE;
+        this.#hasTransparentTiles ||= obj.hasTransparency;
+      }
+
       // 4 vertices, so repeat labels x4.
-      const objType = isWall
-        ? (obj.isTerrain ? TERRAIN_WALL : WALL)
-        : (obj.hasTransparency ? TRANSPARENT_TILE : TILE);
       aObjType.push(objType, objType, objType, objType);
       aObjIndex.push(i, i, i, i);
 
@@ -1150,13 +1212,11 @@ export class SourceDepthShadowMap {
       && !lightBounds.lineSegmentIntersects(wallObj.A, wallObj.B, { inside: true })) return false;
 
     // Arrange so A --> B --> lightPosition is counterclockwise
-    // aBottom -- aTop -- bBottom, aTop -- bTop -- bBottom
-    // Even vertices are bottom; odd vertices are top
     const [A, B] = orientWall > 0 ? [wallObj.A, wallObj.B] : [wallObj.B, wallObj.A];
-    aVertexPosition.push(A.x, A.y, bottomZ);
     aVertexPosition.push(A.x, A.y, topZ);
-    aVertexPosition.push(B.x, B.y, bottomZ);
     aVertexPosition.push(B.x, B.y, topZ);
+    aVertexPosition.push(B.x, B.y, bottomZ);
+    aVertexPosition.push(A.x, A.y, bottomZ);
     return true;
   }
 
@@ -1309,7 +1369,7 @@ export class SourceDepthShadowMap {
     };
 
     if ( this.#hasTransparentTiles ) {
-      uniforms.uTileTextures = this.#placeablesCoordinatesData
+      uniforms.uTileTextures = this.placeablesCoordinatesData.coordinates
         .filter(obj => obj.hasTransparency)
         .map(obj => obj.object.texture);
     }
@@ -1352,7 +1412,8 @@ export class SourceDepthShadowMap {
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
       depthMap,
-      uTileIndex
+      uTileIndex,
+      uTileTexture: this.placeablesCoordinatesData.coordinates[uTileIndex].object.texture
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
@@ -1367,10 +1428,12 @@ export class SourceDepthShadowMap {
     return mesh;
   }
 
-  _constructPlaceablesIndexMesh() {
+  _constructPlaceablesIndexMesh(depthMap) {
+    depthMap ??= this.depthTexture;
     const uniforms = {
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
-      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
+      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
+      depthMap
     };
 
     const { vertexShader, fragmentShader } = SourceDepthShadowMap.placeableIndicesShaderGLSL;
@@ -1379,7 +1442,7 @@ export class SourceDepthShadowMap {
     // TODO: Can we save and update a single PIXI.Mesh?
     const mesh = new PIXI.Mesh(this.geometry, shader);
     mesh.state.depthTest = true;
-    mesh.state.depthMask = false;
+    mesh.state.depthMask = true;
     mesh.blendMode = PIXI.BLEND_MODES.MIN;
     return mesh;
   }
@@ -1399,7 +1462,7 @@ export class SourceDepthShadowMap {
     // TODO: When no terrain walls present, swap the depth mesh for one that renders the wall indices directly.
     //       Allows skipping of the second terrain wall render.
 
-    performance.mark("render_wall_depth");
+    performance.mark("renderDepth");
 
     const MAX_WIDTH = 4096;
     const MAX_HEIGHT = 4096;
@@ -1409,6 +1472,7 @@ export class SourceDepthShadowMap {
     const height = Math.min(MAX_HEIGHT, this.directional ? sceneHeight : this.lightRadius * 2);
 
     // Construct a depth texture that can be used for multiple renders.
+    performance.mark("renderDepth_PhaseI");
     let currentDepthRender;
     this.#baseDepthTexture = new PIXI.BaseRenderTexture({
       scaleMode: PIXI.SCALE_MODES.NEAREST,
@@ -1437,37 +1501,11 @@ export class SourceDepthShadowMap {
     canvas.app.renderer.render(depthMesh, { renderTexture: depthRenderTexture });
     this.#depthTexture = depthRenderTexture;
     currentDepthRender = depthRenderTexture;
+    performance.mark("renderDepth_PhaseI_end");
+    performance.measure("renderDepth-PhaseI", "renderDepth_PhaseI_end", "renderDepth_PhaseI_end");
 
-    performance.mark("render_terrain_wall_depth");
-    if ( this.#hasTerrainWalls ) {
-      // Phase II: Re-run depth test to remove frontmost terrain walls (peel 1 depth layer)
-      // Must use a distinct RenderTexture b/c we use depthRenderTexture as a uniform to the mesh.
-
-      const terrainDepthMesh = this._constructTerrainDepthMesh(currentDepthRender);
-
-      // TODO: Can we render to an integer texture? Maybe uint16?
-      const terrainRenderTexture = PIXI.RenderTexture.create({
-        width,
-        height,
-        format: PIXI.FORMATS.RED,
-        type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
-        scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
-      });
-      terrainRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
-      terrainRenderTexture.framebuffer.enableDepth();
-
-      // Set default color to -1 so this render can record wall ids from 0 onward.
-      terrainRenderTexture.baseTexture.clearColor = [-1, -1, -1, -1];
-
-      canvas.app.renderer.render(terrainDepthMesh, { renderTexture: terrainRenderTexture });
-
-      // TODO: Use a swapping technique for render textures; do not overwrite w/o first destroying.
-      this.#terrainTexture = terrainRenderTexture;
-      currentDepthRender = terrainRenderTexture;
-    }
-
-    performance.mark("render_transparent_tile_depth");
     if ( this.#hasTransparentTiles ) {
+      performance.mark("renderDepth_transparentTiles");
       this.#tileTextures.length = [];
       // Phase III: Re-run depth test to remove transparent tile texture portions
       const coords = this.placeablesCoordinatesData.coordinates;
@@ -1490,18 +1528,47 @@ export class SourceDepthShadowMap {
         tileRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
         tileRenderTexture.framebuffer.enableDepth();
 
-        // Set default color to -1 so this render can record wall ids from 0 onward.
-        tileRenderTexture.baseTexture.clearColor = [-1, -1, -1, -1];
-
         canvas.app.renderer.render(tileDepthMesh, { renderTexture: tileRenderTexture });
-        this.#tileTextures.push = tileRenderTexture;
+        this.#tileTextures.push(tileRenderTexture);
         currentDepthRender = tileRenderTexture;
       }
+      performance.mark("renderDepth_transparentTiles_end");
+      performance.measure("renderDepth-transparentTiles", "renderDepth_transparentTiles", "renderDepth_transparentTiles_end");
+
+    }
+
+    if ( this.#hasTerrainWalls ) {
+      performance.mark("renderDepth_terrainWalls");
+
+      // Phase II: Re-run depth test to remove frontmost terrain walls (peel 1 depth layer)
+      // Must use a distinct RenderTexture b/c we use depthRenderTexture as a uniform to the mesh.
+
+      const terrainDepthMesh = this._constructTerrainWallDepthMesh(currentDepthRender);
+
+      // TODO: Can we render to an integer texture? Maybe uint16?
+      const terrainRenderTexture = PIXI.RenderTexture.create({
+        width,
+        height,
+        format: PIXI.FORMATS.RED,
+        type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+        scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+      });
+      terrainRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
+      terrainRenderTexture.framebuffer.enableDepth();
+
+      canvas.app.renderer.render(terrainDepthMesh, { renderTexture: terrainRenderTexture });
+
+      // TODO: Use a swapping technique for render textures; do not overwrite w/o first destroying.
+      this.#terrainTexture = terrainRenderTexture;
+      currentDepthRender = terrainRenderTexture;
+
+      performance.mark("renderDepth_terrainWalls_end");
+      performance.measure("renderDepth-terrainWalls", "renderDepth_terrainWalls", "renderDepth_terrainWalls_end");
     }
 
     // Phase IV: Render frontmost placeable object indices given depth calculations.
-    performance.mark("render_placeables_index");
-    const placeablesIndexMesh = this._constructPlaceablesIndexMesh();
+    performance.mark("renderDepth_placeablesIndex");
+    const placeablesIndexMesh = this._constructPlaceablesIndexMesh(currentDepthRender);
 
     // TODO: Can we render to an integer texture? Maybe uint16?
     const placeablesIndexRenderTexture = PIXI.RenderTexture.create({
@@ -1520,11 +1587,10 @@ export class SourceDepthShadowMap {
     canvas.app.renderer.render(placeablesIndexMesh, { renderTexture: placeablesIndexRenderTexture });
     this.#placeablesIndicesTexture = placeablesIndexRenderTexture;
 
-    performance.mark("finish_render_depth");
-    performance.measure("Wall-Depth", "render_wall_depth", "render_terrain_wall_depth");
-    performance.measure("Terrain-Depth", "render_terrain_wall_depth", "render_transparent_tile_depth");
-    performance.measure("Tile-Depth", "render_transparent_tile_depth", "render_placeables_index");
-    performance.measure("Placeables-Index", "render_placeables_index", "finish_render_depth");
+    performance.mark("renderDepth_placeablesIndex_end");
+    performance.mark("renderDepth_end");
+    performance.measure("renderDepth-placeablesIndex", "renderDepth_placeablesIndex", "renderDepth_placeablesIndex_end");
+    performance.measure("method-renderDepth", "renderDepth", "renderDepth_end");
   }
 
   /**

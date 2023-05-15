@@ -5,7 +5,55 @@ PIXI
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { PLACEABLE_TYPES } from "./SourceDepthShadowMap.js";
+
+export const PLACEABLE_TYPES = {
+  WALL: 0,
+  TERRAIN_WALL: 1,
+  TILE: 2,
+  TRANSPARENT_TILE: 3
+};
+
+/** Basic approach
+
+(Assume light is at the top, fragment is at the bottom)
+  --********--   tile: z = 0.1
+------           terrain1: z = 0.2
+   ------------- terrain2: z = 0.3
+
+
+Phase I:
+  ------------   tile
+--               terrain1
+              -- terrain2
+2211111111111133 depth
+
+Phase II:
+  ------------   tile
+xx               terrain1
+              xx terrain2
+9911111111111199
+
+Phase III:
+  --xxxxxxxx--  tile
+    --          terrain1
+      ------    terrain2
+9911223333331199
+
+Would require cycling through all tiles and terrain walls as many times as there are tiles + 1.
+
+Simpler version:
+Tiles are set in elevation. A light must be above the tile to count.
+Tiles at same elevation cannot overlap (let's assume!) (If they did, could merge them...)
+Could also render all tiles on the same elevation to a texture...
+
+So sort tiles from highest to lowest. Check terrain walls every time a tile is checked.
+
+If no tiles --> run the basic terrain wall.
+If tiles --> skip basic terrain wall, run tiles
+
+Do we need a final run with just terrain walls after tiles are completed?
+
+*/
 
 /**
  * Project each object (currently walls and tiles) from point of view of the light.
@@ -79,6 +127,7 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 in vec3 aVertexPosition;
+in float aObjType;
 out float vObjType;
 
 void main() {
@@ -99,6 +148,8 @@ terrainWallDepthShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
+#define TERRAIN_WALL ${PLACEABLE_TYPES.TERRAIN_WALL.toFixed(1)}
+
 uniform sampler2D depthMap;
 in float vObjType;
 out float distance;
@@ -106,13 +157,20 @@ out float distance;
 void main() {
   float fragDepth = gl_FragCoord.z;
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
-  float depth = texelFetch(depthMap, fragCoord, 0).r;
+  float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
-  // Locate frontmost terrain wall fragments
-  if ( vObjType == TERRAIN_WALL && depth >= fragDepth ) depth = 1.0;
-
-  gl_FragDepth = depth;
-  distance = depth;
+  if ( fragDepth < nearestDepth ) {
+    // Already handled this layer previously.
+    gl_FragDepth = 1.0;
+    distance = 1.0;
+  } else if ( vObjType == TERRAIN_WALL && nearestDepth >= fragDepth ) {
+    // Frontmost terrain wall fragment
+    gl_FragDepth = 1.0;
+    distance = 1.0;
+  } else {
+    gl_FragDepth = fragDepth;
+    distance = fragDepth;
+  }
 }`;
 
 
@@ -137,7 +195,7 @@ export function tileDepthShaderGLSL() {
  * @output {float} vObjType             Conversion of aObjType to varying
  * @output {vec2} vTexCoord             Conversion of aTexCoord to varying
  */
-tileDepthShaderGLSL.vertex =
+tileDepthShaderGLSL.vertexShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -145,14 +203,16 @@ uniform mat4 uProjectionM;
 uniform mat4 uViewM;
 in vec3 aVertexPosition;
 in float aObjType;
+in float aObjIndex;
 in vec2 aTexCoord;
 out float vObjType;
+out float vObjIndex;
 out vec2 vTexCoord;
 
 void main() {
   vTexCoord = aTexCoord;
   vObjType = aObjType;
-  vertexPosition = aVertexPosition;
+  vObjIndex = aObjIndex;
   gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
 }`;
 
@@ -160,39 +220,59 @@ void main() {
  * Fragment shader.
  * Look up the tile texture color at this location. If it meets the transparency threshold,
  * mark as transparent in the depth buffer. Render the updated depth values.
+ * Also test terrain walls, in case the walls were behind the transparent portion of the tile.
  * This is set up to handle a single tile texture, to be run repeatedly.
+ * To run repeatedly, tiles must be first sorted from high to low elevation.
  * @uniform {sampler2D} depthMap  Saved depth values, usually from running depthShaderGLSL
  * @uniform {int} uTileIndex      The placeable object index for the tile.
  * @input {float} vObjType        Type of placeable for this fragment; see PLACEABLE_TYPES
  * @input {vec2} vTexCoord        Texture location associated with the fragment
  * @output {float} distance       Depth value between 0 and 1.
  */
-tileDepthShaderGLSL.fragment =
+tileDepthShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
-#define ALPHA_THRESHOLD ${CONFIG[MODULE_ID].alphaThreshold}
-#define TRANSPARENT_TILE ${PLACEABLE_TYPES.TRANSPARENT_TILE}.0
+#define ALPHA_THRESHOLD ${CONFIG[MODULE_ID].alphaThreshold.toFixed(1)}
+#define TRANSPARENT_TILE ${PLACEABLE_TYPES.TRANSPARENT_TILE.toFixed(1)}
+#define TERRAIN_WALL ${PLACEABLE_TYPES.TERRAIN_WALL.toFixed(1)}
 
 uniform sampler2D depthMap;
+uniform sampler2D uTileTexture;
 uniform int uTileIndex;
 in float vObjType;
+in float vObjIndex;
 in vec2 vTexCoord;
 out float distance;
 
 void main() {
   float fragDepth = gl_FragCoord.z;
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
-  float depth = texelFetch(depthMap, fragCoord, 0).r;
+  float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
-  // Locate tile texture for this fragment; test for transparency.
-  if ( vObjIndex == float(uTileIndex) ) {
-    float alpha = texture(uTileTextures[uTileIndex], vTexCoord);
-    if ( alpha < ALPHA_THRESHOLD ) depth = 1.0;
+  // Order matters here!
+  if ( fragDepth < nearestDepth ) {
+    // Already handled this layer previously.
+    gl_FragDepth = 1.0;
+    distance = 1.0;
+  } else if ( vObjType == TERRAIN_WALL && nearestDepth >= fragDepth ) {
+    // Frontmost terrain wall fragment
+    gl_FragDepth = 1.0;
+    distance = 1.0;
+  } else if ( vObjIndex == float(uTileIndex) && nearestDepth >= fragDepth ) {
+    // Locate tile texture for this fragment; test for transparency.
+    float alpha = texture(uTileTexture, vTexCoord).a;
+    if ( alpha < ALPHA_THRESHOLD ) {
+      gl_FragDepth = 1.0;
+      distance = 1.0;
+    } else {
+      gl_FragDepth = fragDepth;
+      distance = fragDepth;
+    }
+  } else {
+    gl_FragDepth = fragDepth;
+    distance = fragDepth;
   }
-
-  gl_FragDepth = depth;
-  distance = depth;
 }`;
 
   return tileDepthShaderGLSL;
@@ -231,6 +311,7 @@ void main() {
  * Fragment shader.
  * If this is the frontmost fragment according to the buffer, render its index.
  * Presumes depth testing is working and the depth buffer has been updated.
+ * @uniform {sampler2D} depthMap  Saved depth values, usually from running depthShaderGLSL.
  * @input {float} vObjIndex       Index of placeable for this fragment
  * @output {float} objIndex       Index of placeable
  */
@@ -238,11 +319,22 @@ placeableIndicesShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
+uniform sampler2D depthMap;
 in float vObjIndex;
 out float objIndex;
 
 void main() {
   float fragDepth = gl_FragCoord.z;
+  ivec2 fragCoord = ivec2(gl_FragCoord.xy);
+  float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
+
+  if ( fragDepth < nearestDepth ) {
+    // Already handled this layer previously.
+    gl_FragDepth = 1.0;
+    discard;
+  }
+
+  gl_FragDepth = fragDepth;
   objIndex = vObjIndex;
 }`;
 
