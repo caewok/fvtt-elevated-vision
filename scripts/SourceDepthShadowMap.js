@@ -15,6 +15,7 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 
 import {
   shadowRenderShaderGLSL,
+  terrainFrontShaderGLSL,
   depthShaderGLSL,
   terrainWallDepthShaderGLSL,
   tileDepthShaderGLSL,
@@ -77,8 +78,13 @@ Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
 map = new SourceDepthShadowMap(lightOrigin, { walls, directional, lightRadius, lightSize });
 if ( !directional ) Draw.shape(new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation), { color: Draw.COLORS.lightyellow})
 
+map._renderDepth()
+
 map._testBaseDepthTexture()
 map._testBaseDepthTexture(false)
+
+map._testTerrainFrontTexture();
+map._testTerrainFrontTexture(false)
 
 map._testDepthTexture();
 map._testDepthTexture(false);
@@ -93,7 +99,7 @@ map._testTerrainTexture();
 map._testTerrainTexture(false);
 
 map._testPlaceablesIndicesTexture()
-map._testPlaceablesIndicesTexture()
+map._testPlaceablesIndicesTexture(false)
 
 map._shadowRenderTest();
 map._shadowRenderTest(false);
@@ -912,6 +918,10 @@ export class SourceDepthShadowMap {
 
   #depthSprite;
 
+  #terrainFrontTexture;
+
+  #terrainFrontSprite;
+
   #terrainTexture;
 
   #terrainSprite;
@@ -955,12 +965,12 @@ export class SourceDepthShadowMap {
     }
 
     // Add min blending mode
-    if ( typeof PIXI.BLEND_MODES.MIN === "undefined" ) {
-      const renderer = PIXI.autoDetectRenderer();
-      const gl = renderer.gl;
-      PIXI.BLEND_MODES.MIN = renderer.state.blendModes.push([gl.ONE, gl.ONE, gl.ONE, gl.ONE, gl.MIN, gl.MIN]) - 1;
-      PIXI.BLEND_MODES.MAX = renderer.state.blendModes.push([gl.ONE, gl.ONE, gl.ONE, gl.ONE, gl.MAX, gl.MAX]) - 1;
-    }
+//     if ( typeof PIXI.BLEND_MODES.MIN === "undefined" ) {
+//       const renderer = PIXI.autoDetectRenderer();
+//       const gl = renderer.gl;
+//       PIXI.BLEND_MODES.MIN = renderer.state.blendModes.push([gl.ONE, gl.ONE, gl.ONE, gl.ONE, gl.MIN, gl.MIN]) - 1;
+//       PIXI.BLEND_MODES.MAX = renderer.state.blendModes.push([gl.ONE, gl.ONE, gl.ONE, gl.ONE, gl.MAX, gl.MAX]) - 1;
+//     }
   }
 
   // Getters / Setters
@@ -1158,10 +1168,15 @@ export class SourceDepthShadowMap {
 
       // Texture coordinates (only actually used for transparent tiles)
       aTexCoord.push(
-        0, 1, // TL
-        1, 1, // TR
+        0, 0,  // BL
         1, 0, // BR
-        0, 0  // BL
+        1, 1, // TR
+        0, 1 // TL
+//         1, 0, // BR
+//         0, 0,  // BL
+//         0, 1, // TL
+//         1, 1 // TR
+
       );
 
       // Label vertices with the type of object and track transparencies.
@@ -1356,6 +1371,26 @@ export class SourceDepthShadowMap {
     return bounds;
   }
 
+  _constructTerrainFrontMesh() {
+    const uniforms = {
+      uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
+      uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix)
+    };
+
+    // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.terrainFrontShaderGLSL;
+    const shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+
+    // TODO: Can we save and update a single PIXI.Mesh?
+    const mesh = new PIXI.Mesh(this.geometry, shader);
+//     mesh.state.depthTest = true;
+//     mesh.state.depthMask = true;
+    mesh.blendMode = PIXI.BLEND_MODES.MIN_COLOR;
+
+
+    return mesh;
+  }
+
   /**
    * Construct the mesh used by the depth shader for the given geometry.
    * Treats terrain walls just like any other wall.
@@ -1380,18 +1415,22 @@ export class SourceDepthShadowMap {
 
     // TODO: Can we save and update a single PIXI.Mesh?
     const mesh = new PIXI.Mesh(this.geometry, shader);
-    mesh.state.depthTest = true;
-    mesh.state.depthMask = true;
-    mesh.blendMode = PIXI.BLEND_MODES.MIN;
+//     mesh.state.depthTest = true;
+//     mesh.state.depthMask = true;
+    mesh.blendMode = PIXI.BLEND_MODES.MIN_COLOR;
+
+
+
     return mesh;
   }
 
-  _constructTerrainWallDepthMesh(depthMap) {
+  _constructTerrainWallDepthMesh(depthMap, terrainDepthMap) {
     depthMap ??= this.depthTexture;
     const uniforms = {
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
-      depthMap
+      depthMap,
+      terrainDepthMap
     };
 
     // Depth Map goes from 0 to 1, where 1 is furthest away (the far edge).
@@ -1400,18 +1439,21 @@ export class SourceDepthShadowMap {
 
     // TODO: Can we save and update a single PIXI.Mesh?
     const mesh = new PIXI.Mesh(this.geometry, shader);
-    mesh.state.depthTest = true;
-    mesh.state.depthMask = true;
-    mesh.blendMode = PIXI.BLEND_MODES.MIN;
+//     mesh.state.depthTest = true;
+//     mesh.state.depthMask = true;
+    mesh.blendMode = PIXI.BLEND_MODES.MIN_COLOR;
+
+
     return mesh;
   }
 
-  _constructTileDepthMesh(depthMap, uTileIndex) {
+  _constructTileDepthMesh(depthMap, terrainDepthMap, uTileIndex) {
     depthMap ??= this.depthTexture;
     const uniforms = {
       uProjectionM: SourceDepthShadowMap.toColMajorArray(this.projectionMatrix),
       uViewM: SourceDepthShadowMap.toColMajorArray(this.viewMatrix),
       depthMap,
+      terrainDepthMap,
       uTileIndex,
       uTileTexture: this.placeablesCoordinatesData.coordinates[uTileIndex].object.texture
     };
@@ -1422,9 +1464,10 @@ export class SourceDepthShadowMap {
 
     // TODO: Can we save and update a single PIXI.Mesh?
     const mesh = new PIXI.Mesh(this.geometry, shader);
-    mesh.state.depthTest = true;
-    mesh.state.depthMask = true;
-    mesh.blendMode = PIXI.BLEND_MODES.MIN;
+//     mesh.state.depthTest = true;
+//     mesh.state.depthMask = true;
+   mesh.blendMode = PIXI.BLEND_MODES.MIN_COLOR;
+
     return mesh;
   }
 
@@ -1441,9 +1484,10 @@ export class SourceDepthShadowMap {
 
     // TODO: Can we save and update a single PIXI.Mesh?
     const mesh = new PIXI.Mesh(this.geometry, shader);
-    mesh.state.depthTest = true;
-    mesh.state.depthMask = true;
-    mesh.blendMode = PIXI.BLEND_MODES.MIN;
+//     mesh.state.depthTest = true;
+//     mesh.state.depthMask = true;
+    // mesh.blendMode = PIXI.BLEND_MODES.MIN_ALL;
+
     return mesh;
   }
 
@@ -1459,9 +1503,6 @@ export class SourceDepthShadowMap {
     gl.getParameter(gl.DEPTH_WRITEMASK)
     */
 
-    // TODO: When no terrain walls present, swap the depth mesh for one that renders the wall indices directly.
-    //       Allows skipping of the second terrain wall render.
-
     performance.mark("renderDepth");
 
     const MAX_WIDTH = 4096;
@@ -1472,18 +1513,35 @@ export class SourceDepthShadowMap {
     const height = Math.min(MAX_HEIGHT, this.directional ? sceneHeight : this.lightRadius * 2);
 
     // Construct a depth texture that can be used for multiple renders.
-    performance.mark("renderDepth_PhaseI");
-    let currentDepthRender;
-    this.#baseDepthTexture = new PIXI.BaseRenderTexture({
-      scaleMode: PIXI.SCALE_MODES.NEAREST,
-      resolution: 1,
+//     const gl = canvas.app.renderer.gl;
+//     const priorBlendMode = gl.getParameter(gl.BLEND_EQUATION);
+//     gl.blendEquation(gl.MIN);
+
+    performance.mark("renderDepth_terrainFront");
+    const terrainFrontMesh = this._constructTerrainFrontMesh();
+
+    // Phase I: Depth test all the walls in the scene.
+    let terrainFrontRenderTexture = PIXI.RenderTexture.create({
       width,
       height,
-      mipmap: PIXI.MIPMAP_MODES.OFF,
-      format: PIXI.FORMATS.DEPTH_COMPONENT,
-      type: PIXI.TYPES.UNSIGNED_SHORT
+      format: PIXI.FORMATS.RED,
+      type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+      scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
     });
 
+    terrainFrontRenderTexture.baseTexture.clearColor = [1, 1, 1, 1];
+
+//     depthRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
+//     depthRenderTexture.framebuffer.enableDepth();
+
+    // Render depth and extract the rendered texture
+    canvas.app.renderer.render(terrainFrontMesh, { renderTexture: terrainFrontRenderTexture });
+    this.#terrainFrontTexture = terrainFrontRenderTexture;
+    performance.mark("renderDepth_terrainFront_end");
+    performance.measure("renderDepth-terrainFront", "renderDepth_terrainFront", "renderDepth_terrainFront_end");
+
+    // Construct a depth texture that can be used for multiple renders.
+    performance.mark("renderDepth_PhaseI");
     const depthMesh = this._constructDepthMesh();
 
     // Phase I: Depth test all the walls in the scene.
@@ -1494,13 +1552,14 @@ export class SourceDepthShadowMap {
       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
     });
-    depthRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
-    depthRenderTexture.framebuffer.enableDepth();
+    depthRenderTexture.baseTexture.clearColor = [1, 1, 1, 1];
+//     depthRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
+//     depthRenderTexture.framebuffer.enableDepth();
 
     // Render depth and extract the rendered texture
     canvas.app.renderer.render(depthMesh, { renderTexture: depthRenderTexture });
     this.#depthTexture = depthRenderTexture;
-    currentDepthRender = depthRenderTexture;
+    let currentDepthRender = depthRenderTexture;
     performance.mark("renderDepth_PhaseI_end");
     performance.measure("renderDepth-PhaseI", "renderDepth_PhaseI_end", "renderDepth_PhaseI_end");
 
@@ -1515,7 +1574,7 @@ export class SourceDepthShadowMap {
         const coordObj = coords[i];
         if ( !(coordObj.object instanceof Tile) || !coordObj.hasTransparency ) continue;
 
-        const tileDepthMesh = this._constructTileDepthMesh(currentDepthRender, i);
+        const tileDepthMesh = this._constructTileDepthMesh(currentDepthRender, terrainFrontRenderTexture, i);
 
         // TODO: Can we render to an integer texture? Maybe uint16?
         const tileRenderTexture = PIXI.RenderTexture.create({
@@ -1525,8 +1584,9 @@ export class SourceDepthShadowMap {
           type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
           scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
         });
-        tileRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
-        tileRenderTexture.framebuffer.enableDepth();
+        tileRenderTexture.baseTexture.clearColor = [1, 1, 1, 1];
+//         tileRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
+//         tileRenderTexture.framebuffer.enableDepth();
 
         canvas.app.renderer.render(tileDepthMesh, { renderTexture: tileRenderTexture });
         this.#tileTextures.push(tileRenderTexture);
@@ -1543,7 +1603,7 @@ export class SourceDepthShadowMap {
       // Phase II: Re-run depth test to remove frontmost terrain walls (peel 1 depth layer)
       // Must use a distinct RenderTexture b/c we use depthRenderTexture as a uniform to the mesh.
 
-      const terrainDepthMesh = this._constructTerrainWallDepthMesh(currentDepthRender);
+      const terrainDepthMesh = this._constructTerrainWallDepthMesh(currentDepthRender, terrainFrontRenderTexture);
 
       // TODO: Can we render to an integer texture? Maybe uint16?
       const terrainRenderTexture = PIXI.RenderTexture.create({
@@ -1553,8 +1613,9 @@ export class SourceDepthShadowMap {
         type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
         scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
       });
-      terrainRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
-      terrainRenderTexture.framebuffer.enableDepth();
+      terrainRenderTexture.baseTexture.clearColor = [1, 1, 1, 1];
+//       terrainRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
+//       terrainRenderTexture.framebuffer.enableDepth();
 
       canvas.app.renderer.render(terrainDepthMesh, { renderTexture: terrainRenderTexture });
 
@@ -1578,14 +1639,16 @@ export class SourceDepthShadowMap {
       type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
       scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
     });
-    placeablesIndexRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
-    placeablesIndexRenderTexture.framebuffer.enableDepth();
+//     placeablesIndexRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
+//     placeablesIndexRenderTexture.framebuffer.enableDepth();
 
     // Set default color to -1 so this render can record wall ids from 0 onward.
     placeablesIndexRenderTexture.baseTexture.clearColor = [-1, -1, -1, -1];
 
     canvas.app.renderer.render(placeablesIndexMesh, { renderTexture: placeablesIndexRenderTexture });
     this.#placeablesIndicesTexture = placeablesIndexRenderTexture;
+
+//     gl.blendEquation(priorBlendMode);
 
     performance.mark("renderDepth_placeablesIndex_end");
     performance.mark("renderDepth_end");
@@ -1606,6 +1669,15 @@ export class SourceDepthShadowMap {
     this.#baseDepthTexture = new PIXI.Texture(this.baseDepthTexture);
     this.#baseDepthSprite = new PIXI.Sprite(this.#baseDepthTexture);
     canvas.stage.addChild(this.#baseDepthSprite);
+  }
+
+  _testTerrainFrontTexture(start = true) {
+    if ( this.#terrainFrontSprite ) canvas.stage.removeChild(this.#terrainFrontSprite);
+    this.#terrainFrontSprite = undefined;
+    if ( !start ) return;
+
+    this.#terrainFrontSprite = new PIXI.Sprite(this.#terrainFrontTexture);
+    canvas.stage.addChild(this.#terrainFrontSprite);
   }
 
   _testDepthTexture(start = true) {
@@ -1791,6 +1863,8 @@ export class SourceDepthShadowMap {
   static placeableIndicesShaderGLSL = placeableIndicesShaderGLSL;
 
   static tileDepthShaderGLSL = tileDepthShaderGLSL;
+
+  static terrainFrontShaderGLSL = terrainFrontShaderGLSL;
 }
 
 /**

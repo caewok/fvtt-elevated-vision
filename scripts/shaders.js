@@ -55,6 +55,43 @@ Do we need a final run with just terrain walls after tiles are completed?
 
 */
 
+
+export const terrainFrontShaderGLSL = {};
+terrainFrontShaderGLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat4 uProjectionM;
+uniform mat4 uViewM;
+in vec3 aVertexPosition;
+in float aObjType;
+out float vObjType;
+
+void main() {
+  vObjType = aObjType;
+  vec4 pos4 = vec4(aVertexPosition, 1.0);
+  gl_Position = uProjectionM * uViewM * pos4;
+}`;
+
+terrainFrontShaderGLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+#define TERRAIN_WALL ${PLACEABLE_TYPES.TERRAIN_WALL.toFixed(1)}
+
+in float vObjType;
+out float terrainDepth;
+
+void main() {
+  // gl_FragCoord.x: [0, texture width (e.g., 1024)]
+  // gl_FragCoord.y: [0, texture height (e.g., 1024)]
+  // gl_FragCoord.z: [0, 1]
+
+  float depth = gl_FragCoord.z; // [0, 1]
+  terrainDepth = vObjType == TERRAIN_WALL ? depth : 1.0;
+}`;
+
+
 /**
  * Project each object (currently walls and tiles) from point of view of the light.
  * Update the depth buffer with the object z values from that point of view.
@@ -93,16 +130,14 @@ depthShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
-out float distance;
+out float depth;
 
 void main() {
   // gl_FragCoord.x: [0, texture width (e.g., 1024)]
   // gl_FragCoord.y: [0, texture height (e.g., 1024)]
   // gl_FragCoord.z: [0, 1]
 
-  float depth = gl_FragCoord.z; // [0, 1]
-  gl_FragDepth = depth;
-  distance = depth;
+  depth = gl_FragCoord.z; // [0, 1]
 }`;
 
 
@@ -151,8 +186,9 @@ precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 #define TERRAIN_WALL ${PLACEABLE_TYPES.TERRAIN_WALL.toFixed(1)}
 
 uniform sampler2D depthMap;
+uniform sampler2D terrainDepthMap;
 in float vObjType;
-out float distance;
+out float depth;
 
 void main() {
   float fragDepth = gl_FragCoord.z;
@@ -161,16 +197,19 @@ void main() {
 
   if ( fragDepth < nearestDepth ) {
     // Already handled this layer previously.
-    gl_FragDepth = 1.0;
-    distance = 1.0;
-  } else if ( vObjType == TERRAIN_WALL && nearestDepth >= fragDepth ) {
-    // Frontmost terrain wall fragment
-    gl_FragDepth = 1.0;
-    distance = 1.0;
+    depth = 1.0;
+
+  } else if ( vObjType == TERRAIN_WALL && nearestDepth == fragDepth ) {
+    // Frontmost terrain wall fragment?
+    float frontmostTerrainDepth = texelFetch(terrainDepthMap, fragCoord, 0).r;
+    depth = frontmostTerrainDepth == fragDepth ? 1.0 : fragDepth;
+
   } else {
-    gl_FragDepth = fragDepth;
-    distance = fragDepth;
+    depth = fragDepth;
   }
+
+  // depth = nearestDepth - fragDepth; // nearest depth is always equal to or greater than frag depth
+
 }`;
 
 
@@ -239,11 +278,12 @@ precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
 uniform sampler2D depthMap;
 uniform sampler2D uTileTexture;
+uniform sampler2D terrainDepthMap;
 uniform int uTileIndex;
 in float vObjType;
 in float vObjIndex;
 in vec2 vTexCoord;
-out float distance;
+out float depth;
 
 void main() {
   float fragDepth = gl_FragCoord.z;
@@ -253,25 +293,20 @@ void main() {
   // Order matters here!
   if ( fragDepth < nearestDepth ) {
     // Already handled this layer previously.
-    gl_FragDepth = 1.0;
-    distance = 1.0;
-  } else if ( vObjType == TERRAIN_WALL && nearestDepth >= fragDepth ) {
-    // Frontmost terrain wall fragment
-    gl_FragDepth = 1.0;
-    distance = 1.0;
+    depth = 1.0;
+
+  } else if ( vObjType == TERRAIN_WALL && nearestDepth == fragDepth ) {
+    // Frontmost terrain wall fragment?
+    float frontmostTerrainDepth = texelFetch(terrainDepthMap, fragCoord, 0).r;
+    depth = frontmostTerrainDepth == fragDepth ? 1.0 : fragDepth;
+
   } else if ( vObjIndex == float(uTileIndex) && nearestDepth >= fragDepth ) {
     // Locate tile texture for this fragment; test for transparency.
     float alpha = texture(uTileTexture, vTexCoord).a;
-    if ( alpha < ALPHA_THRESHOLD ) {
-      gl_FragDepth = 1.0;
-      distance = 1.0;
-    } else {
-      gl_FragDepth = fragDepth;
-      distance = fragDepth;
-    }
+    depth = alpha < ALPHA_THRESHOLD ? 1.0 : fragDepth;
+
   } else {
-    gl_FragDepth = fragDepth;
-    distance = fragDepth;
+    depth = fragDepth;
   }
 }`;
 
@@ -328,13 +363,7 @@ void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
   float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
-  if ( fragDepth < nearestDepth ) {
-    // Already handled this layer previously.
-    gl_FragDepth = 1.0;
-    discard;
-  }
-
-  gl_FragDepth = fragDepth;
+  if ( fragDepth != nearestDepth ) discard;
   objIndex = vObjIndex;
 }`;
 
