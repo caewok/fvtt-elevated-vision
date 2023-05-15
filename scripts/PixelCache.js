@@ -291,15 +291,16 @@ export class PixelCache extends PIXI.Rectangle {
 
   /**
    * Matrix that takes a canvas point and transforms to a local point.
+   * @param {number} [resolution]   Change the resolution; default uses the current for this object.
    * @returns {Matrix}
    */
-  _calculateToLocalTransform() {
+  _calculateToLocalTransform(resolution) {
     // Translate so top corner is at 0, 0
     const { x, y, scale } = this;
     const mTranslate = Matrix.translation(-x, -y);
 
     // Scale based on resolution.
-    const resolution = scale.resolution;
+    resolution ??= scale.resolution;
     const mRes = Matrix.scale(resolution, resolution);
 
     // Combine the matrices
@@ -1113,9 +1114,11 @@ export class TilePixelCache extends PixelCache {
 
   /**
    * Transform canvas coordinates into the local pixel rectangle coordinates.
+   * @param {number} [resolution]   Change the resolution; default uses the current for this object.
+   * @returns {Matrix}
    * @inherits
    */
-  _calculateToLocalTransform() {
+  _calculateToLocalTransform(resolution) {
     // 1. Clear the rotation
     // Translate so the center is 0,0
     const { x, y, width, height } = this;
@@ -1142,17 +1145,18 @@ export class TilePixelCache extends PixelCache {
     // (Must have top left corner at 0,0 for this to work properly.)
     const mProportion = Matrix.scale(1 / proportionalWidth, 1 / proportionalHeight);
 
-    // 4. Scale based on resolution of the underlying pixel data
-    const resolution = this.scale.resolution;
+    // 4. Scale based on resolution of the underlying pixel data or the provided resolution.
+    resolution ??= this.resolution;
     const mRes = Matrix.scale(resolution, resolution);
 
-    // Combine the matrices.
+    // Combine the matrices, using outM to store preliminary calculations.
+    const outM = Matrix.empty(3, 3);
     return mCenterTranslate
-      .multiply3x3(mRot)
-      .multiply3x3(mScale)
-      .multiply3x3(mCornerTranslate)
-      .multiply3x3(mProportion)
-      .multiply3x3(mRes);
+      .multiply3x3(mRot, outM)
+      .multiply3x3(mScale, outM)
+      .multiply3x3(mCornerTranslate, outM)
+      .multiply3x3(mProportion, outM)
+      .multiply3x3(mRes, outM)
   }
 
   /**
