@@ -363,9 +363,42 @@ void main() {
   ivec2 fragCoord = ivec2(gl_FragCoord.xy);
   float nearestDepth = texelFetch(depthMap, fragCoord, 0).r;
 
-  if ( fragDepth != nearestDepth ) discard;
-  objIndex = vObjIndex;
+  if ( fragDepth != nearestDepth ) objIndex = -1.0;
+  else objIndex = vObjIndex;
 }`;
+
+/**
+ * For debugging
+ * Render the placeable indices, using a distinct color for each.
+ */
+export const placeableIndicesRenderGLSL = {};
+placeableIndicesRenderGLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat4 uProjectionM;
+uniform mat4 uViewM;
+in vec3 aVertexPosition;
+
+void main() {
+  gl_Position = uProjectionM * uViewM * vec4(aVertexPosition, 1.0);
+}`;
+
+placeableIndicesRenderGLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+uniform sampler2D indicesMap;
+out vec4 color;
+
+void main() {
+  ivec2 fragCoord = ivec2(gl_FragCoord.xy);
+  float index = texelFetch(indicesMap, fragCoord, 0).r;
+
+  if ( index == -1.0 ) discard;
+  color = vec4(mod(index, 10.0) / 10.0, mod(index + 1.0, 10.0) / 10.0, mod(index + 2.0, 10.0) / 10.0, 0.9);
+}`;
+
 
 /**
  * For debugging.

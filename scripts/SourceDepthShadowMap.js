@@ -20,6 +20,7 @@ import {
   terrainWallDepthShaderGLSL,
   tileDepthShaderGLSL,
   placeableIndicesShaderGLSL,
+  placeableIndicesRenderGLSL,
   PLACEABLE_TYPES } from "./shaders.js";
 
 import {
@@ -153,6 +154,7 @@ B top
 map._updateWallGeometry(walls);
 
 extractPixels = api.extract.extractPixels
+let { pixels, width, height } = extractPixels(canvas.app.renderer, map.placeablesIndicesTexture);
 let { pixels, width, height } = extractPixels(canvas.app.renderer, map.placeablesCoordinatesData.texture);
 s = new Set()
 pixels.forEach(px => s.add(px))
@@ -1466,7 +1468,7 @@ export class SourceDepthShadowMap {
     const mesh = new PIXI.Mesh(this.geometry, shader);
 //     mesh.state.depthTest = true;
 //     mesh.state.depthMask = true;
-   mesh.blendMode = PIXI.BLEND_MODES.MIN_COLOR;
+    mesh.blendMode = PIXI.BLEND_MODES.MIN_COLOR;
 
     return mesh;
   }
@@ -1486,7 +1488,7 @@ export class SourceDepthShadowMap {
     const mesh = new PIXI.Mesh(this.geometry, shader);
 //     mesh.state.depthTest = true;
 //     mesh.state.depthMask = true;
-    // mesh.blendMode = PIXI.BLEND_MODES.MIN_ALL;
+    mesh.blendMode = PIXI.BLEND_MODES.MAX_COLOR;
 
     return mesh;
   }
@@ -1563,6 +1565,37 @@ export class SourceDepthShadowMap {
     performance.mark("renderDepth_PhaseI_end");
     performance.measure("renderDepth-PhaseI", "renderDepth_PhaseI_end", "renderDepth_PhaseI_end");
 
+    if ( this.#hasTerrainWalls && this.#hasTransparentTiles ) {
+      performance.mark("renderDepth_terrainWalls1");
+
+      // Phase II: Re-run depth test to remove frontmost terrain walls (peel 1 depth layer)
+      // Must use a distinct RenderTexture b/c we use depthRenderTexture as a uniform to the mesh.
+
+      const terrainDepthMesh = this._constructTerrainWallDepthMesh(currentDepthRender, terrainFrontRenderTexture);
+
+      // TODO: Can we render to an integer texture? Maybe uint16?
+      const terrainRenderTexture = PIXI.RenderTexture.create({
+        width,
+        height,
+        format: PIXI.FORMATS.RED,
+        type: PIXI.TYPES.FLOAT, // Rendering to a float texture is only supported if EXT_color_buffer_float is present (renderer.context.extensions.colorBufferFloat)
+        scaleMode: PIXI.SCALE_MODES.NEAREST // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+      });
+      terrainRenderTexture.baseTexture.clearColor = [1, 1, 1, 1];
+//       terrainRenderTexture.framebuffer.addDepthTexture(this.#baseDepthTexture);
+//       terrainRenderTexture.framebuffer.enableDepth();
+
+      canvas.app.renderer.render(terrainDepthMesh, { renderTexture: terrainRenderTexture });
+
+      // TODO: Use a swapping technique for render textures; do not overwrite w/o first destroying.
+      this.#terrainTexture = terrainRenderTexture;
+      currentDepthRender = terrainRenderTexture;
+
+      performance.mark("renderDepth_terrainWalls1_end");
+      performance.measure("renderDepth-terrainWalls1", "renderDepth_terrainWalls1", "renderDepth_terrainWalls1_end");
+    }
+
+
     if ( this.#hasTransparentTiles ) {
       performance.mark("renderDepth_transparentTiles");
       this.#tileTextures.length = [];
@@ -1598,7 +1631,7 @@ export class SourceDepthShadowMap {
     }
 
     if ( this.#hasTerrainWalls ) {
-      performance.mark("renderDepth_terrainWalls");
+      performance.mark("renderDepth_terrainWalls2");
 
       // Phase II: Re-run depth test to remove frontmost terrain walls (peel 1 depth layer)
       // Must use a distinct RenderTexture b/c we use depthRenderTexture as a uniform to the mesh.
@@ -1623,8 +1656,8 @@ export class SourceDepthShadowMap {
       this.#terrainTexture = terrainRenderTexture;
       currentDepthRender = terrainRenderTexture;
 
-      performance.mark("renderDepth_terrainWalls_end");
-      performance.measure("renderDepth-terrainWalls", "renderDepth_terrainWalls", "renderDepth_terrainWalls_end");
+      performance.mark("renderDepth_terrainWalls2_end");
+      performance.measure("renderDepth-terrainWalls2", "renderDepth_terrainWalls2", "renderDepth_terrainWalls2_end");
     }
 
     // Phase IV: Render frontmost placeable object indices given depth calculations.
@@ -1717,7 +1750,36 @@ export class SourceDepthShadowMap {
     this.#placeablesIndicesSprite = undefined;
     if ( !start ) return;
 
-    this.#placeablesIndicesSprite = new PIXI.Sprite(this.placeablesIndicesTexture);
+    // Construct a quad for the scene.
+    const geometry = new PIXI.Geometry();
+    const minElevation = this.minElevation;
+    const { left, right, top, bottom } = canvas.dimensions.sceneRect;
+    if ( this.directional ) {
+      // Cover the entire scene
+      geometry.addAttribute("aVertexPosition", [
+        left, top, minElevation,      // TL
+        right, top, minElevation,   // TR
+        right, bottom, minElevation, // BR
+        left, bottom, minElevation  // BL
+      ], 3);
+    } else {
+      // Cover the light radius
+      const { lightRadius, lightPosition } = this;
+      geometry.addAttribute("aVertexPosition", [
+        lightPosition.x - lightRadius, lightPosition.y - lightRadius, minElevation, // TL
+        lightPosition.x + lightRadius, lightPosition.y - lightRadius, minElevation, // TR
+        lightPosition.x + lightRadius, lightPosition.y + lightRadius, minElevation, // BR
+        lightPosition.x - lightRadius, lightPosition.y + lightRadius, minElevation  // BL
+      ], 3);
+    }
+
+    const uniforms = { indicesMap: this.placeablesIndicesTexture };
+    const { vertexShader, fragmentShader } = SourceDepthShadowMap.placeableIndicesRenderGLSL;
+    const shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+    const mesh = new PIXI.Mesh(geometry, shader);
+
+    this.#placeablesIndicesSprite = mesh;
+    // this.#placeablesIndicesSprite = new PIXI.Sprite(this.placeablesIndicesTexture);
     canvas.stage.addChild(this.#placeablesIndicesSprite);
   }
 
@@ -1865,6 +1927,8 @@ export class SourceDepthShadowMap {
   static tileDepthShaderGLSL = tileDepthShaderGLSL;
 
   static terrainFrontShaderGLSL = terrainFrontShaderGLSL;
+
+  static placeableIndicesRenderGLSL = placeableIndicesRenderGLSL;
 }
 
 /**
