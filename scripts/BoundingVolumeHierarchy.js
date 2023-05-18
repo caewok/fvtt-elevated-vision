@@ -357,7 +357,7 @@ class PVHWall {
     this.bbox = new PVHBoundingBox(min, max);
   }
 
-  get isLimited() { return this.type === CONST.WALL_RESTRICTION_TYPES.LIMITED; }
+  get isLimited() { return this.wall.document[this.type] === CONST.WALL_SENSE_TYPES.LIMITED; }
 
   /**
    * Test for a hit along a ray.
@@ -739,11 +739,12 @@ function BVHNode() {
   }
 }
 
-function GLSLPlaceable(v0, v1, v2, v3) {
+function GLSLPlaceable(v0, v1, v2, v3, isTerrainWall) {
   this.v0 = v0 ?? new Point3d();
   this.v1 = v1 ?? new Point3d();
   this.v2 = v2 ?? new Point3d();
   this.v3 = v3 ?? new Point3d();
+  this.isTerrainWall = isTerrainWall ?? 0;
 
   this.draw = function(color) {
     Draw.point(this.v0, { color });
@@ -886,6 +887,8 @@ class GLSL_BVH {
     out.v3.y = dat0.w;
     out.v3.z = elevationZ.x;
 
+    out.isTerrainWall = dat2.b;
+
     return out;
   }
 
@@ -902,6 +905,7 @@ class GLSL_BVH {
 
     const MAX_ITER = 100;
     let iter = 0;
+    let hitTerrainWall = false;
     while ( true ) {
       if ( ++iter > MAX_ITER ) {
         console.error("Max iterations reached.");
@@ -924,7 +928,12 @@ class GLSL_BVH {
             if ( this.debug ) prim.draw(Draw.COLORS.red)
             if ( this.debug ) console.log("\thit primitive");
             // TODO: Test for penumbra and umbra; return once full shadow found.
-            return 1.0;
+            if ( !hitTerrainWall && prim.isTerrainWall ) {
+              if ( this.debug ) console.log("\thit terrain wall");
+              hitTerrainWall = true;
+            } else {
+              return 1.0;
+            }
           }
 
           if ( toVisitOffset === 0 ) return 0;
@@ -1131,7 +1140,7 @@ SourceDepthShadowMap = api.SourceDepthShadowMap
 PlaceablesCoordinatesData = api.PlaceablesCoordinatesData
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 Matrix = CONFIG.GeometryLib.Matrix
-Plane = CONFIG.GeometryLib.Plane
+Plane = CONFIG.GeometryLib.threeD.Plane
 
 
 walls = canvas.walls.placeables;
@@ -1197,6 +1206,8 @@ return [...left, ...right];
 
 
 // Test GLSL-type code
+
+/** Directional light
 lightOrigin = new Point3d(100, 100, 1600);
 // lightOrigin = new Point3d(100, canvas.dimensions.height - 100, 1600);
 
@@ -1207,6 +1218,25 @@ lightSize = 1;
 Draw.clearDrawings()
 Draw.point(lightOrigin, { color: Draw.COLORS.yellow });
 Draw.segment({A: lightOrigin, B: canvas.dimensions.sceneRect.center }, { color: Draw.COLORS.yellow })
+
+*/
+
+/** Point light
+[l] = canvas.lighting.placeables;
+source = l.source;
+lightOrigin = new Point3d(source.x, source.y, source.elevationZ);
+directional = false;
+lightRadius = source.radius;
+lightSize = 1;
+
+Draw.clearDrawings()
+Draw.point(lightOrigin, { color: Draw.COLORS.yellow });
+cir = new PIXI.Circle(lightOrigin.x, lightOrigin.y, lightRadius)
+Draw.shape(cir, { color: Draw.COLORS.yellow })
+
+Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
+*/
+
 
 // Set up tree
 placeablesCoords = new PlaceablesCoordinatesData("light"); // For the wall data texture
@@ -1227,7 +1257,7 @@ texBVH = new texture2d(treeData, 2, 4)
 texBVH.printTextureData()
 
 
-texPrimitives = new texture2d(placeablesCoords._wallDataArray(), 3, 4)
+texPrimitives = new texture2d(placeablesCoords.data, 3, 4)
 texPrimitives.printTextureData()
 
 // Build ray to test.

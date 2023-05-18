@@ -786,8 +786,9 @@ export class PlaceablesCoordinatesData {
     wallCoordinateData[8] = minmax(wallObj.topZ + ELEVATION_OFFSET);
     wallCoordinateData[9] = minmax(wallObj.bottomZ + ELEVATION_OFFSET);
 
+    wallCoordinateData[10] = Number(wallObj.isTerrain);
+
     // Currently unused:
-    // wallCoordinateData[10] = wallObj.isTerrain;
     // wallCoordinateData[11] = aLinked | bLinked;
 
     return wallCoordinateData;
