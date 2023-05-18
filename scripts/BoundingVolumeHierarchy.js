@@ -957,12 +957,90 @@ class GLSL_BVH {
     return 0.0;
   }
 
+  /**
+   * Intersection of quad with a ray.
+   * @param {GLSLRay} ray
+   * @param {Point3d} v0
+   * @param {Point3d} v1
+   * @param {Point3d} v2
+   * @param {Point3d} v3
+   * @returns {Point3d} Return barycentric coordinates for intersection
+   */
+  quadIntersect(ray, v0, v1, v2, v3) {
+    const ro = ray.origin;
+    const rd = ray.direction;
+
+    // Let's make v0 the origin.
+    const a = v1.subtract(v0);
+    const b = v3.subtract(v0);
+    const c = v2.subtract(v0);
+    const p = ro.subtract(v0);
+
+    // Intersect plane.
+    const nor = a.cross(b);
+    const t = -p.dot(nor) / rd.dot(nor);
+    if ( t < 0.0 ) return new Point3d(-1, -1, -1); // Parallel to plane
+
+    // Intersection point.
+    const pos = p.add(rd.multiplyScalar(t));
+
+    // See here: https://www.shadertoy.com/view/lsBSDm.
+
+    // Select projection plane.
+    const mor = new Point3d(Math.abs(nor.x), Math.abs(nor.y), Math.abs(nor.z));
+    const id = (mor.x > mor.y && mor.x > mor.z ) ? 0 : (mor.y > mor.z) ? 1 : 2;
+    const lut = [1, 2, 0, 1];
+    const idu = lut[id];
+    const idv = lut[id + 1];
+
+    // Project to 2D
+    const coords = {
+      0: "x",
+      1: "y",
+      2: "z"
+    };
+    const iduStr = coords[idu];
+    const idvStr = coords[idv];
+    const idStr = coords[id];
+    const kp = new PIXI.Point(pos[iduStr], pos[idvStr]);
+    const ka = new PIXI.Point(a[iduStr], a[idvStr]);
+    const kb = new PIXI.Point(b[iduStr], b[idvStr]);
+    const kc = new PIXI.Point(c[iduStr], c[idvStr]);
+
+    // Find barycentric coords of the quad.
+    const kg = kc.subtract(kb).subtract(ka);
+    const cross2d = function(a, b) { return a.x * b.y - a.y * b.x; };
+    const k0 = cross2d(kp, kb);
+    const k2 = cross2d(kc.subtract(kb), ka); // Alt: float k2 = cross2d(kg, ka);
+    const k1 = cross2d(kp, kg) - nor[idStr]; // Alt: float k1 = cross(kb, ka) + cross2d(kp, kg);
+
+    let u;
+    let v;
+    if ( Math.abs(k2) < 0.00001 ) { // TODO: use EPSILON?
+      // Edges are parallel; this is a linear equation.
+      v = -k0 / k1;
+      u = cross2d(kp, ka) / k1;
+    } else {
+      // Otherwise, it's a quadratic.
+      let w = (k1 * k1) - (4.0 * k0 * k2);
+      if ( w < 0.0 ) return new Point3d(-1.0, -1.0, -1.0);
+      w = Math.sqrt(w);
+      const ik2 = 1.0 / (2.0 * k2);
+      v = (-k1 - w) * ik2;
+      if ( v < 0.0 || v > 1.0 ) v = (-k1 + w) * ik2;
+      u = (kp.x - (ka.x * v)) / (kb.x + (kg.x * v));
+    }
+
+    if ( u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0 ) return new Point3d(-1, -1, -1);
+    return new Point3d(t, u, v);
+  }
+
 
   // For now, just test the light center point and ignore barycentric coords.
   rayIntersectsPlaceable(ray, placeable) {
     const { v0, v1, v2, v3 } = placeable;
-    const { origin, direction } = ray;
-    return Plane.rayIntersectionQuad3dLD(origin, direction, v0, v1, v2, v3);
+    const res = this.quadIntersect(ray, v0, v1, v2, v3);
+    return res.x !== -1 && res.y !== -1 && res.z !== -1;
 
     // TODO: Test for terrain walls. Need to pass a counter.
     // TODO: Check for tile transparency. Likely a separate shader for this.
