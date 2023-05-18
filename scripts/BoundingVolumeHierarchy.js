@@ -378,7 +378,7 @@ class PVHWall {
    */
   textureData(index) {
     return {
-      data: [...this.bbox.textureData(), this.coordinateIndex, 0],
+      data: [...this.bbox.textureData(), 0, this.coordinateIndex],
       maxIndex: index
     };
   }
@@ -589,7 +589,7 @@ class PVH {
     // [minX minY maxX maxY] [minZ maxZ 1 2]
     // [minX minY maxX maxY] [minZ maxZ 3 4] ...
     // Leaves:
-    // [minX minY maxX maxY] [minZ maxZ index 0]
+    // [minX minY maxX maxY] [minZ maxZ ]
     // Order is preorder traversal (depth first)
     //
 
@@ -634,47 +634,7 @@ class PVH {
 }
 
 class GLSL {
-  // Helper methods to mimic GLSL methods
-  static vec4(arr) {
-    arr ??= [0, 0, 0, 0];
-    this.x = arr[0];
-    this.y = arr[1];
-    this.z = arr[2];
-    this.w = arr[3];
 
-    Object.defineProperty(this, "r", {
-      get: function() { return this.x; },
-      set: function(value) { this.x = value; }
-    });
-
-    Object.defineProperty(this, "g", {
-      get: function() { return this.y; },
-      set: function(value) { this.y = value; }
-    });
-
-    Object.defineProperty(this, "b", {
-      get: function() { return this.z; },
-      set: function(value) { this.z = value; }
-    });
-
-    Object.defineProperty(this, "a", {
-      get: function() { return this.a; },
-      set: function(value) { this.w = value; }
-    });
-  }
-
-  /**
-   * Mimic GLSL texture object.
-   * @param {number[]} arr            Data for the texture
-   * @param {number} width            Width of the texture
-   * @param {number} [elementSize=4]  How many values at each coordinate position. I.e., vec4 vs float, etc.
-   */
-   static texture2d(arr, width, elementSize = 4) {
-    this.data = arr;
-    this.width = width;
-    this.height = (arr.length / elementSize) / width;
-    this.elementSize = 4;
-  }
 
   /**
    * Mimic GLSL texelFetch
@@ -683,14 +643,18 @@ class GLSL {
    * @returns {vec4}
    */
   static texelFetch(tex, coords) {
-    const { width, elementSize } = tex;
-    const index = coords.y * width * elementSize + (tex.x * elementSize);
-    const dat = tex.data.slice(index, elementSize)
+    const { height, width, elementSize } = tex;
+
+    if ( coords.x > width || coords.x < 0 ) console.error("Out of bounds in x direction.");
+    if ( coords.y > height || coords.y < 0 ) console.error("Out of bounds in y direction.");
+
+    const index = coords.y * width * elementSize + (coords.x * elementSize);
+    const dat = tex.data.slice(index, index + elementSize)
     switch ( elementSize ) {
       case 1: return dat[0];
       case 2: return new PIXI.Point(dat[0], dat[1]);
       case 3: return new Point3d(dat[0], dat[1], dat[2]);
-      case 4: return new this.vec4(dat);
+      case 4: return new vec4(dat);
       default: {
         console.error("Texture size unsupported.");
         return dat;
@@ -711,6 +675,56 @@ class GLSL {
   }
 }
 
+/**
+ * Mimic GLSL texture object.
+ * @param {number[]} arr            Data for the texture
+ * @param {number} width            Width of the texture
+ * @param {number} [elementSize=4]  How many values at each coordinate position. I.e., vec4 vs float, etc.
+ */
+function texture2d(arr, width, elementSize = 4) {
+  this.data = arr;
+  this.width = width;
+  this.height = (arr.length / elementSize) / width;
+  this.elementSize = 4;
+
+  this.printTextureData = function() {
+    const dat = this.data;
+    const output = [];
+    const nRows = this.width * this.elementSize;
+    for ( let i = 0; i < dat.length; i += nRows ) output.push(dat.slice(i, i + nRows));
+    console.table(output)
+  }
+}
+
+function vec4(arr) {
+  arr ??= [0, 0, 0, 0];
+  this.x = arr[0];
+  this.y = arr[1];
+  this.z = arr[2];
+  this.w = arr[3];
+
+  Object.defineProperty(this, "r", {
+    get: function() { return this.x; },
+    set: function(value) { this.x = value; }
+  });
+
+  Object.defineProperty(this, "g", {
+    get: function() { return this.y; },
+    set: function(value) { this.y = value; }
+  });
+
+  Object.defineProperty(this, "b", {
+    get: function() { return this.z; },
+    set: function(value) { this.z = value; }
+  });
+
+  Object.defineProperty(this, "a", {
+    get: function() { return this.a; },
+    set: function(value) { this.w = value; }
+  });
+}
+
+
 // GLSL structures
 function BVHNode() {
   this.min = new Point3d();
@@ -718,18 +732,38 @@ function BVHNode() {
   this.max = new Point3d();
   this.primitiveIndex = 0;
   this.index = 0;
+
+  this.draw = function(color) {
+    const box = new PVHBoundingBox(this.min, this.max);
+    box.draw(color);
+  }
 }
 
-function Placeable() {
-  this.v0 = new Point3d();
-  this.v1 = new Point3d();
-  this.v2 = new Point3d();
-  this.v3 = new Point3d();
+function GLSLPlaceable(v0, v1, v2, v3) {
+  this.v0 = v0 ?? new Point3d();
+  this.v1 = v1 ?? new Point3d();
+  this.v2 = v2 ?? new Point3d();
+  this.v3 = v3 ?? new Point3d();
+
+  this.draw = function(color) {
+    Draw.point(this.v0, { color });
+    Draw.point(this.v1, { color });
+    Draw.point(this.v2, { color });
+    Draw.point(this.v3, { color });
+    Draw.segment({ A: this.v0, B: this.v1 }, { color });
+    Draw.segment({ A: this.v1, B: this.v2 }, { color });
+    Draw.segment({ A: this.v2, B: this.v3 }, { color });
+    Draw.segment({ A: this.v3, B: this.v0 }, { color });
+  }
 }
 
-function Ray() {
-  this.origin = new Point3d();
-  this.direction =  new Point3d();
+function GLSLRay(origin, direction) {
+  this.origin = origin ?? new Point3d();
+  this.direction =  direction ?? new Point3d();
+  this.draw = function(color) {
+    const r = new PVHRay(this.origin, this.direction);
+    r.draw(color);
+  }
 }
 
 class GLSL_BVH {
@@ -750,14 +784,16 @@ class GLSL_BVH {
 
   fragPosition = new Point3d();
 
+  debug = false;
+
   /**
    * Parameter inputs treated as the "uniforms" per GLSL.
    */
   constructor(fragPosition, texBVH, texPrimitives, lightPosition) {
     this.uniforms.texBVH = texBVH;
     this.uniforms.texPrimitives = texPrimitives;
+    this.uniforms.lightPosition = lightPosition;
     this.fragPosition = fragPosition;
-    this.lightPosition = lightPosition;
   }
 
   /**
@@ -798,7 +834,7 @@ class GLSL_BVH {
     const min = new Point3d(minMaxXY.x, minMaxXY.y, 0);
     const max = new Point3d(minMaxXY.z, minMaxXY.w, 0);
 
-    node = new BVHNode();
+    const node = new BVHNode();
     node.min = min;
     node.max = max;
     node.index = currentNodeIndex;
@@ -824,16 +860,16 @@ class GLSL_BVH {
    * Pull primitive coordinates for wall.
    */
   initializePrimitive(primitiveIndex) {
-    const dat0 = texelFetch(this.uniforms.texCoords, new PIXI.Point(0, primitiveIndex));
-    const dat1 = texelFetch(this.uniforms.texCoords, new PIXI.Point(1, primitiveIndex));
-    const dat2 = texelFetch(this.uniforms.texCoords, new PIXI.Point(2, primitiveIndex));
+    const dat0 = GLSL.texelFetch(this.uniforms.texPrimitives, new PIXI.Point(0, primitiveIndex));
+    const dat1 = GLSL.texelFetch(this.uniforms.texPrimitives, new PIXI.Point(1, primitiveIndex));
+    const dat2 = GLSL.texelFetch(this.uniforms.texPrimitives, new PIXI.Point(2, primitiveIndex));
 
     // Adjust the elevation coordinate.
     const elevationZ = new PIXI.Point(dat2.r, dat2.g);
     elevationZ.x -= GLSL_BVH.ELEVATION_OFFSET;
     elevationZ.y -= GLSL_BVH.ELEVATION_OFFSET;
 
-    const out = new Placeable();
+    const out = new GLSLPlaceable();
     out.v0.x = dat0.x;
     out.v0.y = dat0.y;
     out.v0.z = elevationZ.x;
@@ -854,9 +890,11 @@ class GLSL_BVH {
   }
 
   shadowValueForFragment() {
-    const ray = new Ray();
+    const ray = new GLSLRay();
     ray.origin.copyFrom(this.fragPosition);
     ray.direction = this.uniforms.lightPosition.subtract(this.fragPosition);
+    if ( this.debug ) Draw.segment({ A: this.fragPosition, B: this.uniforms.lightPosition}, { color: Draw.COLORS.yellow })
+
 
     let toVisitOffset = 0;
     let currentNodeIndex = 0;
@@ -871,16 +909,31 @@ class GLSL_BVH {
       }
 
       // TODO: Limit by quadrant first.
+      if ( this.debug ) console.log(`currentNodeIndex ${currentNodeIndex}\t toVisitOffset ${toVisitOffset}\t`, [...nodesToVisit]);
       const node = this.initializeNodeXY(currentNodeIndex);
+      if ( this.debug ) node.draw(Draw.COLORS.lightblue);
+
       if ( this.rayIntersectsNodeBounds(ray, node) ) {
+        if ( this.debug ) node.draw(Draw.COLORS.lightred);
+        if ( this.debug ) console.log("\thit bbox");
+
         if ( node.primitiveIndex > 0 ) {
           const prim = this.initializePrimitive(node.primitiveIndex);
-          if ( rayIntersectsPlaceable(prim) ) {
+          if ( this.debug ) prim.draw(Draw.COLORS.blue)
+          if ( this.rayIntersectsPlaceable(ray, prim) ) {
+            if ( this.debug ) prim.draw(Draw.COLORS.red)
+            if ( this.debug ) console.log("\thit primitive");
             // TODO: Test for penumbra and umbra; return once full shadow found.
             return 1.0;
           }
+
           if ( toVisitOffset === 0 ) return 0;
-          currentNodeIndex = nodesToVist[--toVisitOffset];
+          currentNodeIndex = nodesToVisit[--toVisitOffset];
+
+        } else if ( node.offset < 1 ) {
+          // If the primitives are not set (for testing), need this test as if no bounds hit.
+          if ( toVisitOffset === 0 ) return 0;
+          currentNodeIndex = nodesToVisit[--toVisitOffset];
 
         } else {
           // Put far BVH node on stack; advance to near node.
@@ -888,7 +941,7 @@ class GLSL_BVH {
           currentNodeIndex += 1;
         }
       } else {
-        if ( toVisitOffset == 0 ) return 0;
+        if ( toVisitOffset === 0 ) return 0;
         currentNodeIndex = nodesToVisit[--toVisitOffset];
       }
     }
@@ -915,18 +968,17 @@ class GLSL_BVH {
    */
   rayIntersectsNodeBounds(ray, node) {
     // Store t in object to reference as pointers.
-    const t = { tMin = 0, tMax = 1 };
+    const t = { tMin: 0, tMax: 1 };
 
     // Check for XY intersection
     // TODO: Faster to store 1 / ray.direction in a vector and pass to hitForDim.
-    if ( !hitForDim(node.min, node.max, ray, t, "x") ) return false;
-    if ( !hitForDim(node.min, node.max, ray, t, "y") ) return false;
+    if ( !this.hitForDim(node.min, node.max, ray, t, "x") ) return false;
+    if ( !this.hitForDim(node.min, node.max, ray, t, "y") ) return false;
 
     // Check for Z intersection
     this.initializeNodeZ(node);
-    return hitForDim(node.min, node.max, ray, t, "z");
+    return this.hitForDim(node.min, node.max, ray, t, "z");
   }
-
 }
 
 /**
@@ -997,170 +1049,7 @@ function GLSLPointLightQuadrant(lightPosition, fragPosition) {
   return bottom | (right * 2);
 }
 
-function GLSLHitForDim(bboxMin, bboxMax, ray, t, dim = "x") {
-  const invD = 1 / ray.direction[dim];
-  let t0 = (this.minimum[dim] - ray.origin[dim]) * invD;
-  let t1 = (this.maximum[dim] - ray.origin[dim]) * invD;
-  if ( invD < 0 ) [t0, t1] = [t1, t0]; // Swap
-  t.tMin = t0 > t.tMin ? t0 : t.tMin;
-  t.tMax = t1 < t.tMax ? t1 : t.tMax;
-  if ( t.tMax <= t.tMin ) return false;
-}
 
-/**
- * Test hit for a bounding box.
- * @param {Point3d} bboxMin
- * @param {Point3d} bboxMax
- * @param {Point3d} rayOrigin
- * @param {Point3d} rayDirection
- * @param {object}  t   {tMin, tMax}. In GLSL, use inout instead.
- * @returns {bool}
- */
-function GLSLHitBBox2d(bboxMin, bboxMax, ray, t) {
-  for ( const dim of ["x", "y"] ) {
-    const hit = GLSLHitForDim(bboxMin, bboxMax, ray, t, dim);
-    if ( !hit ) return false;
-  }
-  return true;
-}
-
-function GLSLHitBBoxZ(bboxMin, bboxMax, ray, t) {
-  return GLSLHitForDim(bboxMin, bboxMax, ray, t, "z");
-}
-
-
-/**
- * Determine hit for a given fragment and bbox index.
- */
-function GLSLHitBBox(index, ray, BVHTex) {
-  const t = { tMin = 0, tMax = 1 };
-  const bboxMin = new Point3d();
-  const bboxMax = new Point3d();
-
-  const texCoord = new PIXI.Point(index, 1)
-  const width = 8;
-  const xyDat = GLSLTexture(BVHTex, texCoord, width);
-  bboxMin.x = xyDat[0];
-  bboxMin.y = xyDat[1];
-  bboxMax.x = xyDat[2];
-  bboxMax.y = xyDat[3];
-
-  const hit2d = GLSLHitBBox2d(bboxMin, bboxMax, ray, t);
-  if ( !hit2d ) return [-1, -1];
-
-  texCoord.y += 1;
-  const zDat = GLSLTexture(BVHTex, texCoord, width);
-  bboxMin.z = zDat[0];
-  bboxMax.z = zDat[1];
-
-  const hitZ = GLSLHitBBoxZ(bboxMin, bboxMax, ray, t);
-  if ( !hitZ ) return [-1, -1];
-  return [zDat[2], zDat[3]];
-}
-
-
-
-function initializeNodeXY(currentNodeIndex, treeTex) {
-  // Assume the root node is initialized elsewhere.
-  // Needed because the uninitialized root node would have currentNodeIndex = 0.
-  if ( currentNodeIndex === 0 ) return;
-
-  // If node already initialized, skip.
-  const node = Nodes[currentNodeIndex];
-  if ( node.currentNodeIndex === currentNodeIndex ) return;
-
-  // TODO: Need to get the actual node index from the node stack.
-
-  // Pull the relevant XY data from the texture.
-  const texCoord = new PIXI.Point(0, currentNodeIndex);
-  const minMaxXY = GLSLTexture(treeTex, texCoord, 8);
-  node.min.x = minMaxXY.x;
-  node.min.y = minMaxXY.y;
-  node.max.x = minMaxXY.z;
-  node.max.y = minMaxXY.w;
-  node.currentNodeIndex = currentNodeIndex;
-
-  // Zero out rest, in case this is overwriting an old node.
-  node.zInitialized = false;
-  node.rayTested = false;
-}
-
-function initializeNodeZ(currentNodeIndex) {
-  if ( currentNodeIndex === 0 ) return;
-
-  // If node already initialized, skip.
-  const node = Nodes[currentNodeIndex];
-
-  // Just in case the XY values not yet set. Should not happen.
-  if ( node.currentNodeIndex !== currentNodeIndex ) initializeNodeXY(currentNodeIndex, treeTex);
-
-  if ( node.zInitialized ) return;
-
-  // Pull the Z data and indices from the texture.
-  const texCoord = new PIXI.Point(1, currentNodeIndex);
-  const dat = GLSLTexture(treeTex, texCoord, 8);
-  node.min.z = dat.x;
-  node.max.z = dat.y;
-  node.offset = dat.z;
-  node.primitiveIndex = dat.w;
-  node.zInitialized = true;
-}
-
-function rayIntersectsNodeBounds(ray, currentNodeIndex) {
-  // Store t in object to reference as pointers.
-  const t = { tMin = 0, tMax = 1 };
-
-
-
-  // First check XY bounds
-  const node =
-  initializeNodeXY(currentNodeIndex);
-  GLSLHitForDim(bboxMin, bboxMax, ray, t, dim = "x")
-
-
-}
-
-
-
-/**
- * Walk BVH tree.
- */
-function BVHWalk(ray) {
-  // Store position in the BVH tree by using a stack.
-  // See https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies
-
-  // At each node, construct the node if not yet constructed.
-  // Update the position in the stack. Store the other child to be visited.
-  // Construct lazily, in anticipation of jumping out early.
-
-  let nodesToVisit = new Uint16Array(64); // Stack
-  let currentNodeIndex = 0;
-  let toVisitOffset = 0;
-  while ( true ) {
-    const node = BuildNode(currentNodeIndex);
-    if node.bounds intersect the ray {
-      // Primitive(s) to test? Test against ray
-      // If hit, update the shadow value. If shadow value is 1.0, we can break.
-      if ( primitive to test) {
-        if primitive intersects: hit = true; // Set shadow; stop traversal if at 1.0.
-
-        if ( toVisitOffset === 0 ) break;
-        currentNodeIndex = nodesToVisit[--toVisitOffset];
-      } else {
-         // Put far BVH node on the nodesToVist stack; advance to near node.
-         nodesToVisit[toVisitOffset++] = node->secondChildOffset;
-         currentNodeIndex += 1;
-      }
-
-    } else {  // No intersection; move back up the tree.
-      if ( toVisitOffset === 0 ) break;
-      currentNodeIndex = nodesToVisit[--toVisitOffset];
-
-    }
-
-  }
-  return hit;
-}
 
 /*
 
@@ -1236,8 +1125,14 @@ function GLSLHit(, origin, fragPosition) {
 
 
 // Testing
+api = game.modules.get("elevatedvision").api
 Draw = CONFIG.GeometryLib.Draw;
-Point3d = CONFIG.GeometryLib.threeD.Point3d;
+SourceDepthShadowMap = api.SourceDepthShadowMap
+PlaceablesCoordinatesData = api.PlaceablesCoordinatesData
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+Matrix = CONFIG.GeometryLib.Matrix
+Plane = CONFIG.GeometryLib.Plane
+
 
 walls = canvas.walls.placeables;
 objects = walls.map(w => new PVHWall(w));
@@ -1269,32 +1164,8 @@ tree.branchIndex = 0
 objects[0].textureData()
 tree.textureData()
 
-// Print indices
-function printTree(tree, out, level = 0) {
-  if ( !out[level] ) out[level] = [];
-  out[level].push(tree.branchIndex);
 
-  if ( !(tree instanceof PVH) ) return;
 
-  printTree(tree.left, out, level + 1);
-  printTree(tree.right, out, level + 1);
-
-  return out;
-}
-
-out = {}
-printTree(tree, out);
-out;
-
-function printTextureData(tree) {
-  const dat = tree.textureData();
-  const output = [];
-
-  for ( let i = 0; i < dat.length; i += 8 ) {
-    output.push(dat.slice(i, i + 8));
-  }
-  console.table(output)
-}
 
 // Shoot a ray and draw bboxes
 
@@ -1325,4 +1196,122 @@ const right = tree.right.hit(ray, tMin, tMax);
 return [...left, ...right];
 
 
+// Test GLSL-type code
+lightOrigin = new Point3d(100, 100, 1600);
+// lightOrigin = new Point3d(100, canvas.dimensions.height - 100, 1600);
+
+directional = true;
+lightRadius = undefined;
+lightSize = 1;
+
+Draw.clearDrawings()
+Draw.point(lightOrigin, { color: Draw.COLORS.yellow });
+Draw.segment({A: lightOrigin, B: canvas.dimensions.sceneRect.center }, { color: Draw.COLORS.yellow })
+
+// Set up tree
+placeablesCoords = new PlaceablesCoordinatesData("light"); // For the wall data texture
+
+objects = []
+placeablesCoords.coordinates.forEach((obj, idx) => {
+  if ( !(obj.object instanceof Wall) ) return;
+  objects.push(new PVHWall(obj.object, idx));
+})
+
+tree = new PVH(objects);
+tree.draw()
+tree.drawBox()
+
+// Set up textures
+treeData = tree.textureData().data
+texBVH = new texture2d(treeData, 2, 4)
+texBVH.printTextureData()
+
+
+texPrimitives = new texture2d(placeablesCoords._wallDataArray(), 3, 4)
+texPrimitives.printTextureData()
+
+// Build ray to test.
+// Use token center to be the "fragment"
+center = _token.center
+fragPosition = new Point3d(center.x, center.y, 0)
+glslTest = new GLSL_BVH(fragPosition, texBVH, texPrimitives, lightOrigin)
+
+// Test individual nodes for debugging
+ray = new GLSLRay(fragPosition, lightOrigin.subtract(fragPosition))
+node = glslTest.initializeNodeXY(0);
+
+t = {tMin: 0, tMax: 1}
+glslTest.hitForDim(node.min, node.max, ray, t, "x")
+glslTest.hitForDim(node.min, node.max, ray, t, "y")
+
+glslTest.initializeNodeZ(node)
+glslTest.hitForDim(node.min, node.max, ray, t, "z")
+
+glslTest.rayIntersectsNodeBounds(ray, node)
+
+
+// Compare to other JS code
+rayPVH = new PVHRay(ray.origin, ray.direction);
+bboxPVH = new PVHBoundingBox(node.min, node.max);
+bboxPVH.hit(ray, 0, 1, dims = ["x"])
+bboxPVH.hit(ray, 0, 1)
+
+
+// Run the full shadow detection function
+Draw.clearDrawings()
+glslTest = new GLSL_BVH(fragPosition, texBVH, texPrimitives, lightOrigin)
+glslTest.debug = true
+glslTest.shadowValueForFragment()
+
+
+ray = new GLSLRay();
+ray.origin.copyFrom(glslTest.fragPosition);
+ray.direction = glslTest.uniforms.lightPosition.subtract(glslTest.fragPosition);
+if ( glslTest.debug ) Draw.segment({ A: glslTest.fragPosition, B: glslTest.uniforms.lightPosition}, { color: Draw.COLORS.yellow })
+
+
+let toVisitOffset = 0;
+let currentNodeIndex = 0;
+nodesToVisit = new Uint32Array(16); // Allows 2^16 walls. Need one slot per layer.
+
+MAX_ITER = 100;
+let iter = 0;
+while ( true ) {
+  if ( ++iter > MAX_ITER ) {
+    console.error("Max iterations reached.");
+    return 0;
+  }
+
+  // TODO: Limit by quadrant first.
+  let node = glslTest.initializeNodeXY(currentNodeIndex);
+  if ( glslTest.debug ) console.log(`currentNodeIndex ${currentNodeIndex}\t toVisitOffset ${toVisitOffset}\t`, [...nodesToVisit]);
+  if ( glslTest.debug ) node.draw(Draw.COLORS.lightblue);
+
+
+  if ( glslTest.rayIntersectsNodeBounds(ray, node) ) {
+    if ( glslTest.debug ) node.draw(Draw.COLORS.lightred);
+    if ( glslTest.debug ) console.log("\thit bbox");
+
+    if ( node.primitiveIndex > 0 ) {
+      const prim = glslTest.initializePrimitive(node.primitiveIndex);
+      if ( glslTest.debug ) prim.draw(Draw.COLORS.blue)
+      if ( rayIntersectsPlaceable(prim) ) {
+        if ( this.debug ) prim.draw(Draw.COLORS.red)
+        // TODO: Test for penumbra and umbra; return once full shadow found.
+        return 1.0;
+      }
+      if ( toVisitOffset === 0 ) return 0;
+      currentNodeIndex = nodesToVisit[--toVisitOffset];
+
+    } else {
+      // Put far BVH node on stack; advance to near node.
+      nodesToVisit[toVisitOffset++] = node.offset;
+      currentNodeIndex += 1;
+    }
+  } else {
+    if ( toVisitOffset === 0 ) return 0;
+    currentNodeIndex = nodesToVisit[--toVisitOffset];
+  }
+}
+return 0.0;
 
