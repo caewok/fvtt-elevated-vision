@@ -1,6 +1,6 @@
 /* globals
-canvas,
 CONST,
+foundry,
 PIXI
 */
 "use strict";
@@ -101,8 +101,6 @@ size = Math.ceil(16, 28 + 4) = 32.
 Unless the floats can be used in lieu of buffer, in which case:
 size = Math.ceil(16, 20 + 4) = 24.
 
-
-
 They are floats, so could encode the x/y or x/y/z.
 x/y encode:
 [minXY maxXY minMaxZ index] [index] <-- Maybe this would save space? Might use a filler.
@@ -140,14 +138,10 @@ struct BVH {
   float primitiveIndex;
 }
 
-
-
 Wall Tex:
 0: [Ax Ay ...] (D leaf here)
 1: [Ax Ay ...] (E leaf here)
 2: [Ax Ay ...] (C leaf here)
-
-
 
 */
 
@@ -177,10 +171,6 @@ struct WallCompressed {
   float type;   // offset: 16, size: 4
 }
 size = ceil(4, 16 + 4) = 20 bytes
-
-
-
-
 */
 
 /* Tile coordinates for shader
@@ -346,14 +336,23 @@ class PVHWall {
     this.coordinateIndex = coordinateIndex;
     this.type = type;
 
-    const min = new Point3d(
-      Math.min(wall.A.x, wall.B.x),
-      Math.min(wall.A.y, wall.B.y),
-      Math.min(wall.topZ, wall.bottomZ));
-    const max = new Point3d(
-      Math.max(wall.A.x, wall.B.x),
-      Math.max(wall.A.y, wall.B.y),
-      Math.max(wall.topZ, wall.bottomZ));
+    // Ensure the wall bounds are 3-dimensional.
+    // (If not different in z, can be simply ignored as it would not block anything.)
+    const xMinMax = Math.minMax(wall.A.x, wall.B.x);
+    const yMinMax = Math.minMax(wall.A.y, wall.B.y);
+    const zMinMax = Math.minMax(wall.topZ, wall.bottomZ);
+    if ( xMinMax.min === xMinMax.max ) {
+      // Wall is vertical line viewed from overhead.
+      xMinMax.min -= 1;
+      xMinMax.max += 1;
+    } else if ( yMinMax.min === yMinMax.max ) {
+      // Wall is horizontal line viewed from overhead.
+      yMinMax.min -= 1;
+      yMinMax.max += 1;
+    }
+
+    const min = new Point3d(xMinMax.min, yMinMax.min, zMinMax.min);
+    const max = new Point3d(xMinMax.max, yMinMax.max, zMinMax.max);
     this.bbox = new PVHBoundingBox(min, max);
   }
 
@@ -444,9 +443,11 @@ class PVHTile {
     const yMinMax = Math.minMax(TL.y, TR.y, BR.y, BL.y);
     const elevation = tile.elevationZ;
 
+    // Ensure the box is 3-dimensional by incrementing the elevation.
+    // (Tile would have to have different x/y or it would be a line.)
     this.bbox = new PVHBoundingBox(
-      new Point3d(xMinMax.min, yMinMax.min, elevation),
-      new Point3d(xMinMax.max, yMinMax.max, elevation)
+      new Point3d(xMinMax.min, yMinMax.min, elevation - 1),
+      new Point3d(xMinMax.max, yMinMax.max, elevation + 1)
     );
   }
 
@@ -471,7 +472,7 @@ class PVHTile {
     return {
       data: [...this.bbox.textureData(), this.coordinateIndex, 0],
       maxIndex: index
-    }
+    };
   }
 
   /**
@@ -601,7 +602,7 @@ class PVH {
       ...rightData
     ];
 
-    return { data, maxIndex: rightIndex }
+    return { data, maxIndex: rightIndex };
   }
 
   /**
@@ -629,7 +630,7 @@ class PVH {
     const dat = this.textureData().data;
     const output = [];
     for ( let i = 0; i < dat.length; i += 8 ) output.push(dat.slice(i, i + 8));
-    console.table(output)
+    console.table(output);
   }
 }
 
@@ -648,8 +649,8 @@ class GLSL {
     if ( coords.x > width || coords.x < 0 ) console.error("Out of bounds in x direction.");
     if ( coords.y > height || coords.y < 0 ) console.error("Out of bounds in y direction.");
 
-    const index = coords.y * width * elementSize + (coords.x * elementSize);
-    const dat = tex.data.slice(index, index + elementSize)
+    const index = (coords.y * width * elementSize) + (coords.x * elementSize);
+    const dat = tex.data.slice(index, index + elementSize);
     switch ( elementSize ) {
       case 1: return dat[0];
       case 2: return new PIXI.Point(dat[0], dat[1]);
@@ -692,8 +693,8 @@ function texture2d(arr, width, elementSize = 4) {
     const output = [];
     const nRows = this.width * this.elementSize;
     for ( let i = 0; i < dat.length; i += nRows ) output.push(dat.slice(i, i + nRows));
-    console.table(output)
-  }
+    console.table(output);
+  };
 }
 
 function vec4(arr) {
@@ -736,10 +737,10 @@ function BVHNode() {
   this.draw = function(color) {
     const box = new PVHBoundingBox(this.min, this.max);
     box.draw(color);
-  }
+  };
 }
 
-function GLSLPlaceable(v0, v1, v2, v3, isTerrainWall) {
+function GLSLQuad(v0, v1, v2, v3, isTerrainWall) {
   this.v0 = v0 ?? new Point3d();
   this.v1 = v1 ?? new Point3d();
   this.v2 = v2 ?? new Point3d();
@@ -755,22 +756,24 @@ function GLSLPlaceable(v0, v1, v2, v3, isTerrainWall) {
     Draw.segment({ A: this.v1, B: this.v2 }, { color });
     Draw.segment({ A: this.v2, B: this.v3 }, { color });
     Draw.segment({ A: this.v3, B: this.v0 }, { color });
-  }
+  };
 }
 
 function GLSLRay(origin, direction) {
   this.origin = origin ?? new Point3d();
-  this.direction =  direction ?? new Point3d();
+  this.direction = direction ?? new Point3d();
   this.draw = function(color) {
     const r = new PVHRay(this.origin, this.direction);
     r.draw(color);
-  }
+  };
 }
 
 class GLSL_BVH {
   // Values set internally in GLSL
   static TEX_BVH_WIDTH = 8;
+
   static TEX_PRIMITIVES_WIDTH = 12;
+
   static ELEVATION_OFFSET = 32767.0;
 
   /** @type {number} */
@@ -779,7 +782,7 @@ class GLSL_BVH {
     BL: 1,
     TR: 2,
     BR: 3
-  }
+  };
 
   uniforms = {};
 
@@ -790,10 +793,11 @@ class GLSL_BVH {
   /**
    * Parameter inputs treated as the "uniforms" per GLSL.
    */
-  constructor(fragPosition, texBVH, texPrimitives, lightPosition) {
+  constructor(fragPosition, texBVH, texPrimitives, lightPosition, lightSize = 10) {
     this.uniforms.texBVH = texBVH;
     this.uniforms.texPrimitives = texPrimitives;
     this.uniforms.lightPosition = lightPosition;
+    this.uniforms.lightSize = lightSize;
     this.fragPosition = fragPosition;
   }
 
@@ -824,13 +828,13 @@ class GLSL_BVH {
   }
 
   /**
-   * Pull node data for the current node index from the texture.
-   * @param {number} currentNodeIndex
+   * Pull some node data for the node index from the texture.
+   * @param {number} nodeIndex
    * @returns {BVHNode}
    */
-  initializeNodeXY(currentNodeIndex) {
+  initializeNodeXY(nodeIndex) {
     // Pull the relevant XY data from the texture.
-    const texCoord = new PIXI.Point(0, currentNodeIndex);
+    const texCoord = new PIXI.Point(0, nodeIndex);
     const minMaxXY = GLSL.texelFetch(this.uniforms.texBVH, texCoord);
     const min = new Point3d(minMaxXY.x, minMaxXY.y, 0);
     const max = new Point3d(minMaxXY.z, minMaxXY.w, 0);
@@ -838,7 +842,7 @@ class GLSL_BVH {
     const node = new BVHNode();
     node.min = min;
     node.max = max;
-    node.index = currentNodeIndex;
+    node.index = nodeIndex;
     return node;
   }
 
@@ -858,6 +862,15 @@ class GLSL_BVH {
   }
 
   /**
+   * For debugging.
+   * Pull all node data for a given node index.
+   */
+  pullNodeData(nodeIndex) {
+    const node = this.initializeNodeXY(nodeIndex);
+    return this.initializeNodeZ(node);
+  }
+
+  /**
    * Pull primitive coordinates for wall.
    */
   initializePrimitive(primitiveIndex) {
@@ -870,20 +883,20 @@ class GLSL_BVH {
     elevationZ.x -= GLSL_BVH.ELEVATION_OFFSET;
     elevationZ.y -= GLSL_BVH.ELEVATION_OFFSET;
 
-    const out = new GLSLPlaceable();
-    out.v0.x = dat0.x;
+    const out = new GLSLQuad();
+    out.v0.x = dat0.x;            // A top (TL)
     out.v0.y = dat0.y;
     out.v0.z = elevationZ.x;
 
-    out.v1.x = dat1.z;
+    out.v1.x = dat1.z;            // A bottom (BL)
     out.v1.y = dat1.w;
     out.v1.z = elevationZ.y;
 
-    out.v2.x = dat1.x;
+    out.v2.x = dat1.x;            // B bottom (BR)
     out.v2.y = dat1.y;
     out.v2.z = elevationZ.y;
 
-    out.v3.x = dat0.z;
+    out.v3.x = dat0.z;            // B top (TR)
     out.v3.y = dat0.w;
     out.v3.z = elevationZ.x;
 
@@ -892,13 +905,7 @@ class GLSL_BVH {
     return out;
   }
 
-  shadowValueForFragment() {
-    const ray = new GLSLRay();
-    ray.origin.copyFrom(this.fragPosition);
-    ray.direction = this.uniforms.lightPosition.subtract(this.fragPosition);
-    if ( this.debug ) Draw.segment({ A: this.fragPosition, B: this.uniforms.lightPosition}, { color: Draw.COLORS.yellow })
-
-
+  wallShadowsLocation(ray) {
     let toVisitOffset = 0;
     let currentNodeIndex = 0;
     const nodesToVisit = new Uint32Array(16); // Allows 2^16 walls. Need one slot per layer.
@@ -913,6 +920,59 @@ class GLSL_BVH {
       }
 
       // TODO: Limit by quadrant first.
+      const node = this.initializeNodeXY(currentNodeIndex);
+      if ( this.rayIntersectsNodeBounds(ray, node) ) {
+        if ( node.primitiveIndex > 0 ) {
+          const prim = this.initializePrimitive(node.primitiveIndex);
+          if ( this.rayIntersectsQuad(ray, prim) ) {
+            if ( !hitTerrainWall && prim.isTerrainWall ) hitTerrainWall = true;
+            else return 1.0;
+          }
+
+          if ( toVisitOffset === 0 ) break;
+          currentNodeIndex = nodesToVisit[--toVisitOffset];
+
+        } else if ( node.offset < 1 ) {
+          // If the primitives are not set (for testing), need this test as if no bounds hit.
+          if ( toVisitOffset === 0 ) break;
+          currentNodeIndex = nodesToVisit[--toVisitOffset];
+
+        } else {
+          // Put far BVH node on stack; advance to near node.
+          nodesToVisit[toVisitOffset++] = node.offset;
+          currentNodeIndex += 1;
+        }
+      } else {
+        if ( toVisitOffset === 0 ) break;
+        currentNodeIndex = nodesToVisit[--toVisitOffset];
+      }
+    }
+
+    return 0;
+  }
+
+  shadowValueForFragment() {
+    const ray = new GLSLRay();
+    ray.origin.copyFrom(this.fragPosition);
+    ray.direction = this.uniforms.lightPosition.subtract(this.fragPosition);
+    if ( this.debug ) Draw.segment({ A: this.fragPosition, B: this.uniforms.lightPosition}, { color: Draw.COLORS.yellow });
+
+
+    let toVisitOffset = 0;
+    let currentNodeIndex = 0;
+    const nodesToVisit = new Uint32Array(16); // Allows 2^16 walls. Need one slot per layer.
+
+    const MAX_ITER = 100;
+    let iter = 0;
+    let hitTerrainWall = false;
+    let shadow = 0.0;
+    while ( true ) {
+      if ( ++iter > MAX_ITER ) {
+        console.error("Max iterations reached.");
+        return shadow;
+      }
+
+      // TODO: Limit by quadrant first.
       if ( this.debug ) console.log(`currentNodeIndex ${currentNodeIndex}\t toVisitOffset ${toVisitOffset}\t`, [...nodesToVisit]);
       const node = this.initializeNodeXY(currentNodeIndex);
       if ( this.debug ) node.draw(Draw.COLORS.lightblue);
@@ -922,26 +982,30 @@ class GLSL_BVH {
         if ( this.debug ) console.log("\thit bbox");
 
         if ( node.primitiveIndex > 0 ) {
+          if ( this.debug ) console.log(`\ttesting primitive ${node.primitiveIndex}`);
+
           const prim = this.initializePrimitive(node.primitiveIndex);
-          if ( this.debug ) prim.draw(Draw.COLORS.blue)
-          if ( this.rayIntersectsPlaceable(ray, prim) ) {
-            if ( this.debug ) prim.draw(Draw.COLORS.red)
+          if ( this.debug ) prim.draw(Draw.COLORS.blue);
+          const ix = this.rayIntersectsQuad(ray, prim);
+          if ( !(ix.x === -1 && ix.y === -1 && ix.z === -1) ) {
+            if ( this.debug ) prim.draw(Draw.COLORS.red);
             if ( this.debug ) console.log("\thit primitive");
-            // TODO: Test for penumbra and umbra; return once full shadow found.
             if ( !hitTerrainWall && prim.isTerrainWall ) {
               if ( this.debug ) console.log("\thit terrain wall");
               hitTerrainWall = true;
             } else {
-              return 1.0;
+              const penumbra = this.penumbra(prim, ix);
+              shadow += penumbra;
+              if ( shadow >= 1 ) break;
             }
           }
 
-          if ( toVisitOffset === 0 ) return 0;
+          if ( toVisitOffset === 0 ) break;
           currentNodeIndex = nodesToVisit[--toVisitOffset];
 
         } else if ( node.offset < 1 ) {
           // If the primitives are not set (for testing), need this test as if no bounds hit.
-          if ( toVisitOffset === 0 ) return 0;
+          if ( toVisitOffset === 0 ) break;
           currentNodeIndex = nodesToVisit[--toVisitOffset];
 
         } else {
@@ -950,23 +1014,21 @@ class GLSL_BVH {
           currentNodeIndex += 1;
         }
       } else {
-        if ( toVisitOffset === 0 ) return 0;
+        if ( toVisitOffset === 0 ) break;
         currentNodeIndex = nodesToVisit[--toVisitOffset];
       }
     }
-    return 0.0;
+    return Math.clamped(0, 1, shadow);
   }
 
   /**
    * Intersection of quad with a ray.
    * @param {GLSLRay} ray
-   * @param {Point3d} v0
-   * @param {Point3d} v1
-   * @param {Point3d} v2
-   * @param {Point3d} v3
+   * @param {GLSLQuad} quad
    * @returns {Point3d} Return barycentric coordinates for intersection
    */
-  quadIntersect(ray, v0, v1, v2, v3) {
+  quadIntersection(ray, quad) {
+    const { v0, v1, v2, v3 } = quad;
     const ro = ray.origin;
     const rd = ray.direction;
 
@@ -978,6 +1040,7 @@ class GLSL_BVH {
 
     // Intersect plane.
     const nor = a.cross(b);
+    if ( rd.dot(nor) === 0 ) return new Point3d(-1, -1, -1); // In the plane.
     const t = -p.dot(nor) / rd.dot(nor);
     if ( t < 0.0 ) return new Point3d(-1, -1, -1); // Parallel to plane
 
@@ -1009,7 +1072,7 @@ class GLSL_BVH {
 
     // Find barycentric coords of the quad.
     const kg = kc.subtract(kb).subtract(ka);
-    const cross2d = function(a, b) { return a.x * b.y - a.y * b.x; };
+    const cross2d = function(a, b) { return (a.x * b.y) - (a.y * b.x); };
     const k0 = cross2d(kp, kb);
     const k2 = cross2d(kc.subtract(kb), ka); // Alt: float k2 = cross2d(kg, ka);
     const k1 = cross2d(kp, kg) - nor[idStr]; // Alt: float k1 = cross(kb, ka) + cross2d(kp, kg);
@@ -1037,15 +1100,86 @@ class GLSL_BVH {
 
 
   // For now, just test the light center point and ignore barycentric coords.
-  rayIntersectsPlaceable(ray, placeable) {
-    const { v0, v1, v2, v3 } = placeable;
-    const res = this.quadIntersect(ray, v0, v1, v2, v3);
-    return res.x !== -1 && res.y !== -1 && res.z !== -1;
-
-    // TODO: Test for terrain walls. Need to pass a counter.
+  rayIntersectsQuad(ray, quad) {
+    return this.quadIntersection(ray, quad);
     // TODO: Check for tile transparency. Likely a separate shader for this.
   }
 
+
+  /**
+   * Determine whether this fragment is in the penumbra of the given placeable.
+   * Only considers the "inner" penumbra -- between light midpoint line and umbra.
+   * That is because the outer penumbra fragments --> light midpoint do not intersect this wall.
+   * Assumes, but does not strictly test, that the fragment is shadowed by the wall.
+   * @param {GLSLQuad} quad
+   */
+  penumbra(quad, bary) {
+    if ( this.uniforms.lightSize < 1 ) return 1.0;
+
+    const fp = this.fragPosition;
+    const lp = this.uniforms.lightPosition;
+    const lSize = this.uniforms.lightSize;
+
+    // With relation to the placeable quad and light, we need the
+    // - left/right direction
+    // - near/far direction
+    // bary.x: [0–??] distance from fragment to the wall. In grid units.
+    // bary.y: [0–1] where 0 is left-most portion of shadow, 1 is right-most portion
+    //         (where left is left of the ray from fragment towards the light)
+    // bary.z: [0–1] where 1 is nearest to the wall; 0 is furthest.
+
+    // Locate the two directions for this quad: left/right, up/down
+    const dir1 = quad.v1.subtract(quad.v0)
+    const dir2 = quad.v2.subtract(quad.v1)
+
+    // Calculate the projected radius size for the light at this canvas location.
+    const distToLight = Point3d.distanceBetween(fp, lp);
+    const distToEdge = bary.x * distToLight;
+    const distFromEdge = distToLight - distToEdge;
+    const ratio = distToEdge / distFromEdge;
+    const projRadius = lSize * ratio;
+
+    // How far in would the projected radius be along each segment edge?
+    // (May not be strictly accurate, as should probably test the radius against the shadow shape)
+    const radiusRatio01 = projRadius / Point3d.distanceBetween(quad.v0, quad.v1);
+    const radiusRatio12 = projRadius / Point3d.distanceBetween(quad.v1, quad.v2);
+
+    // Based on the directions, draw 4 rays from fragPosition to a shifted light position.
+    // At least 2 will be blocked by the current quad.
+    const dir1N = dir1.normalize();
+    const dir2N = dir2.normalize();
+    const lightPositions = [
+      lp.subtract(dir1N.multiplyScalar(lSize)),
+      lp.add(dir1N.multiplyScalar(lSize)),
+      lp.subtract(dir2N.multiplyScalar(lSize)),
+      lp.add(dir2N.multiplyScalar(lSize))
+    ];
+
+    // TODO: Do we know bary.y is always associated with direction 2 and bary.z/direction 1?
+    const calculateMultiplier = (baryCoord, radiusRatio) => {
+      return baryCoord < radiusRatio
+        ? baryCoord / radiusRatio : (1 - baryCoord) < radiusRatio
+        ? (1 - baryCoord) / radiusRatio : 1.0;
+    }
+    const mult1 = calculateMultiplier(bary.z, radiusRatio01);
+    const mult2 = calculateMultiplier(bary.y, radiusRatio12);
+    const shadowMultipliers = [mult1, mult1, mult2, mult2];
+
+    let shadow = 1;
+    for ( let i = 0; i < 4; i += 1 ) {
+      // Determine if this fragment is near the edge of a shadow.
+      const shadowMult = shadowMultipliers[i];
+      if ( shadowMult === 1 ) continue;
+      const lightPosition = lightPositions[i];
+      const ray = new GLSLRay(fp, lightPosition.subtract(fp));
+      const ix = this.quadIntersection(ray, quad);
+      if ( !(ix.x === -1 && ix.y === -1 && ix.z === -1) ) continue;
+      if ( this.wallShadowsLocation(ray) ) continue;
+      shadow *= shadowMult;
+    }
+
+    return shadow;
+  }
 
   /**
    * Test if the ray intersects the node bounds.
@@ -1074,7 +1208,7 @@ class GLSL_BVH {
  * @param {number} [fill=0]   Value used as "null".
  */
 function GLSLCache(length, fill = 0) {
-  if ( !isPowerOfTwo(length) ) console.error("Length must be power of two.")
+  if ( !isPowerOfTwo(length) ) console.error("Length must be power of two.");
 
   this.length = length;
   this.cache = new Float32Array(length).fill(0);
@@ -1083,7 +1217,7 @@ function GLSLCache(length, fill = 0) {
   this.add = function(value) {
     this.cache[this.nextInsertion] = value;
     this.nextInsertion = bitMod(this.nextInsertion + 1, this.length);
-  }
+  };
 
   this.has = function(value) {
     // Search backwards from the last insertion, assuming it is the most likely.
@@ -1092,12 +1226,12 @@ function GLSLCache(length, fill = 0) {
     }
 
     // Search remainder.
-    for ( let i = this.length - 1; i >= this.nextInsertion; i += 1 ) {
+    for ( let i = this.length - 1; i >= this.nextInsertion; i -= 1 ) {
       if ( this.cache[i] === value ) return true;
     }
 
     return false;
-  }
+  };
 }
 
 // Note: fails for negatives or 0 or (arguably) 1.
@@ -1110,8 +1244,6 @@ function bitMod(n, d) {
   if ( !isPowerOfTwo(length) ) console.error("d must be power of two.");
   return n & (d - 1);
 }
-
-
 
 /**
  * Frag quadrant, relative to center of scene.
@@ -1135,8 +1267,6 @@ function GLSLPointLightQuadrant(lightPosition, fragPosition) {
   const right = Number(fragPosition.x > sceneCenter.x); // Note: use int
   return bottom | (right * 2);
 }
-
-
 
 /*
 
@@ -1175,40 +1305,6 @@ But on average, might reasonably expect to cut testing by 1/3 to 2/3.
 - Usually, first intersected wall is all you need. (This may fail for penumbra testing.)
 - Sorting by distance from light position might help with positional lights.
 */
-
-
-/**
- * Determine shadow amount for a fragment.
- * 1. Test walls for hits on light ray.
- * 2. Test for penumbra and umbra on 2d plane, top-down.
- * 3. Track if we already tested an object; don't retest? Avoid double-counting penumbra.
- * 3. Return the float. 1.0 for shadow; 0.0 for none. Fractional (0, 0.5) for penumbra; [0.5, 1.0) for umbra.
- */
-function GLSLDirectionalShadow(BVHTex, CoordsTex, fragPosition, sceneCenter, lightDirection, lightSize) {
-  // First, determine quadrant.
-  const quadrant = GLSLDirectionalLightQuadrant(sceneCenter, fragPosition);
-
-
-
-
-}
-
-
-function GLSLPointShadow(BVHTex, CoordsTex, fragPosition, lightPosition, lightAngle) {
-  // First, determine quadrant.
-  const quadrant = GLSLPointLightQuadrant(lightPosition, fragPosition);
-}
-
-
-/**
- * Determine whether the ray hits wall(s).
- */
-function GLSLHit(, origin, fragPosition) {
-
-
-}
-
-
 
 
 // Testing
@@ -1369,6 +1465,7 @@ bboxPVH.hit(ray, 0, 1)
 Draw.clearDrawings()
 glslTest = new GLSL_BVH(fragPosition, texBVH, texPrimitives, lightOrigin)
 glslTest.debug = true
+glslTest.uniforms.lightSize = 100
 glslTest.shadowValueForFragment()
 
 
@@ -1384,6 +1481,8 @@ nodesToVisit = new Uint32Array(16); // Allows 2^16 walls. Need one slot per laye
 
 MAX_ITER = 100;
 let iter = 0;
+let hitTerrainWall = false;
+let shadow = 0;
 while ( true ) {
   if ( ++iter > MAX_ITER ) {
     console.error("Max iterations reached.");
@@ -1403,12 +1502,21 @@ while ( true ) {
     if ( node.primitiveIndex > 0 ) {
       const prim = glslTest.initializePrimitive(node.primitiveIndex);
       if ( glslTest.debug ) prim.draw(Draw.COLORS.blue)
-      if ( rayIntersectsPlaceable(prim) ) {
+      ix = glslTest.rayIntersectsQuad(ray, prim);
+      if ( !(ix.x === -1 && ix.y === -1 && ix.z === -1) ) {
         if ( this.debug ) prim.draw(Draw.COLORS.red)
         // TODO: Test for penumbra and umbra; return once full shadow found.
+        if ( !hitTerrainWall && prim.isTerrainWall ) {
+          hitTerrainWall = true;
+        } else {
+          const penumbra = glslTest.penumbra(prim, ix);
+          shadow += penumbra;
+          if ( shadow >= 1 ) break;
+        }
+
         return 1.0;
       }
-      if ( toVisitOffset === 0 ) return 0;
+      if ( toVisitOffset === 0 ) break;
       currentNodeIndex = nodesToVisit[--toVisitOffset];
 
     } else {
@@ -1417,9 +1525,9 @@ while ( true ) {
       currentNodeIndex += 1;
     }
   } else {
-    if ( toVisitOffset === 0 ) return 0;
+    if ( toVisitOffset === 0 ) break;
     currentNodeIndex = nodesToVisit[--toVisitOffset];
   }
 }
-return 0.0;
+return shadow;
 

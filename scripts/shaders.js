@@ -665,7 +665,7 @@ Placeable getObjectCoordinates(in vec3 position) {
 
   // Assign coordinates; see quad
   vec3 v0 = vec3(dat0.xy, elevationZ.r); // A top (TL)
-  vec3 v1 = vec3(dat1.zw, elevationZ.g); // A bottom (BL)
+  vec3 v1 = vec3(dat1.zw, elevationZ.g); // B bottom (BL)
   vec3 v2 = vec3(dat1.xy, elevationZ.g); // B bottom (BR)
   vec3 v3 = vec3(dat0.zw, elevationZ.r); // B top (TR)
 
