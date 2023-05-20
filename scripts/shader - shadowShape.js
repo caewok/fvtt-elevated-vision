@@ -14,11 +14,13 @@ uniform float uCanvasElevation;
 uniform float uLightSize;
 
 in vec3 aVertexPosition;
+in vec2 abCoords;
 out vec3 vertexPosition;
 out vec3 shadowVertexPosition;
 out float radiusAtCanvas;
 out float distanceToWall;
 out float leftRight;
+out float distanceLeftRight;
 
 // Note: lineDirection and planeNormal should be normalized.
 vec3 intersectLineWithPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, inout bool ixFound) {
@@ -40,6 +42,7 @@ void main() {
   shadowVertexPosition = aVertexPosition;
   radiusAtCanvas = 0.0;
   distanceToWall = 0.0;
+  distanceLeftRight = distance(vertexPosition.xy, abCoords);
 
   float id = mod(float(gl_VertexID), 4.0);
   leftRight = float(id == 0.0 || id == 3.0);
@@ -63,6 +66,11 @@ void main() {
       radiusAtCanvas = uLightSize * ratio;
       shadowVertexPosition = ix;
       distanceToWall = 1.0;
+
+      // Project to the other vertex to calculate the distance between the two.
+      vec3 otherLineDirection = normalize(vec3(abCoords, aVertexPosition.z) - uLightPosition);
+      vec3 ixOther = intersectLineWithPlane(uLightPosition, otherLineDirection, planePoint, planeNormal, ixFound);
+      if ( ixFound ) distanceLeftRight = distance(ixOther, ix);
     }
   }
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(shadowVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
@@ -77,11 +85,26 @@ in vec3 shadowVertexPosition;
 in float radiusAtCanvas;
 in float distanceToWall;
 in float leftRight;
+in float distanceLeftRight;
 out vec4 fragColor;
+
 
 void main() {
   // fragColor = vec4(distanceToWall, 0.0, 0.0, 0.5);
-  fragColor = vec4(0.0, leftRight, 0.0, 0.5);
+  // fragColor = vec4(0.0, leftRight, 0.0, 0.5);
+
+  float penumbra = 1.0;
+  float maxLRPenumbraRatio = radiusAtCanvas / distanceLeftRight;
+  if ( leftRight < maxLRPenumbraRatio ) {
+    penumbra = leftRight / maxLRPenumbraRatio;
+  } else if ( (1.0 - leftRight) < maxLRPenumbraRatio ) {
+    penumbra = (1.0 - leftRight) / maxLRPenumbraRatio;
+  }
+
+  // const maxNFPenumbraRatio = radiusAtCanvas / distanceToWall;
+  if ( penumbra < 1.0 ) penumbra = 0.0;
+
+  fragColor = vec4(penumbra, 0.0, 0.0, 0.5);
 }`;
 
 
@@ -99,12 +122,16 @@ source = l.source;
 lightPosition = new Point3d(source.x, source.y, source.elevationZ);
 directional = false;
 lightRadius = source.radius;
-lightSize = 1;
+lightSize = 100;
 
 Draw.clearDrawings()
 Draw.point(lightPosition, { color: Draw.COLORS.yellow });
-cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightPosition)
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightRadius)
 Draw.shape(cir, { color: Draw.COLORS.yellow })
+
+// Draw the light size
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightSize);
+Draw.shape(cir, { color: Draw.COLORS.yellow, fill: Draw.COLORS.yellow, fillAlpha: 0.5 })
 
 Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
 

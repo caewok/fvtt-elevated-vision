@@ -1146,12 +1146,14 @@ export class SourceDepthShadowMap {
     const aObjType = [];
     const aObjIndex = [];
     const aTexCoord = [];
+    const abCoords = [];
     let objNumber = 0;
     for ( let i = 0; i < nObjs; i += 1 ) {
       const obj = coords[i];
       const isWall = obj.object instanceof Wall;
       const method = isWall ? this._wallVertices : this._tileVertices;
-      if ( !method.call(this, obj, aVertexPosition, lightBounds) ) continue;
+      if ( !method.call(this, obj, aVertexPosition, lightBounds, abCoords) ) continue;
+
 
       // 4 vertices per wall or tile
       // Indices are:
@@ -1168,6 +1170,7 @@ export class SourceDepthShadowMap {
         v + 2,
         v + 3
       );
+
 
       // Texture coordinates (only actually used for transparent tiles)
       aTexCoord.push(
@@ -1207,6 +1210,7 @@ export class SourceDepthShadowMap {
     geometry.addAttribute("aObjType", aObjType, 1, false);
     geometry.addAttribute("aObjIndex", aObjIndex, 1, false);
     geometry.addAttribute("aTexCoord", aTexCoord, 2, false);
+    geometry.addAttribute("abCoords", abCoords, 2, false);
     return geometry;
   }
 
@@ -1217,7 +1221,7 @@ export class SourceDepthShadowMap {
    * @param {PIXI.Rectangle|undefined} lightBounds    Boundary box for the light.
    * @returns {boolean} True if vertices were added for this wall object.
    */
-  _wallVertices(wallObj, aVertexPosition, lightBounds) {
+  _wallVertices(wallObj, aVertexPosition, lightBounds, abCoords) {
     const orientWall = foundry.utils.orient2dFast(wallObj.A, wallObj.B, this.lightPosition);
     if ( orientWall.almostEqual(0) ) return false; // Wall is collinear to the light.
 
@@ -1235,6 +1239,14 @@ export class SourceDepthShadowMap {
     aVertexPosition.push(B.x, B.y, topZ);
     aVertexPosition.push(B.x, B.y, bottomZ);
     aVertexPosition.push(A.x, A.y, bottomZ);
+
+    abCoords.push(
+      B.x, B.y,
+      A.x, A.y,
+      A.x, A.y,
+      B.x, B.y
+    );
+
     return true;
   }
 
@@ -1245,7 +1257,7 @@ export class SourceDepthShadowMap {
    * @param {PIXI.Rectangle|undefined} lightBounds    Boundary box for the light.
    * @returns {boolean} True if vertices were added for this tile object.
    */
-  _tileVertices(tileObj, aVertexPosition, lightBounds) {
+  _tileVertices(tileObj, aVertexPosition, lightBounds, abCoords) {
     const elevationZ = tileObj.elevationZ;
     if ( this.lightPosition.z <= elevationZ ) return false; // Tile is collinear to or above the light.
     if ( elevationZ < this.minElevation ) return false; // Tile is below the minimum elevation.
@@ -1262,6 +1274,15 @@ export class SourceDepthShadowMap {
     aVertexPosition.push(tileObj.TR.x, tileObj.TR.y, elevationZ);
     aVertexPosition.push(tileObj.BR.x, tileObj.BR.y, elevationZ);
     aVertexPosition.push(tileObj.BL.x, tileObj.BL.y, elevationZ);
+
+    // Doesn't really work for tiles, so just fill in for now.
+    abCoords.push(
+      tileObj.TR.x, tileObj.TR.y,
+      tileObj.BR.x, tileObj.BR.y,
+      tileObj.BL.x, tileObj.BL.y,
+      tileObj.TL.x, tileObj.TL.y
+    );
+
     return true;
   }
 
