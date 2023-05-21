@@ -14,7 +14,7 @@ function smoothstep(edge0, edge1, x) {
 // Use the map to build the geometry
 // Use 4 triangles per quad so we can blend left/right
 // Center point first then the 4 vertices.
-function wallVertices(map, wallObj, aVertexPosition, lightBounds, abCoords, sideLengths) {
+function wallVertices(map, wallObj, aVertexPosition, lightBounds, sideDirections) {
     const orientWall = foundry.utils.orient2dFast(wallObj.A, wallObj.B, map.lightPosition);
     if ( orientWall.almostEqual(0) ) return false; // Wall is collinear to the light.
 
@@ -26,47 +26,39 @@ function wallVertices(map, wallObj, aVertexPosition, lightBounds, abCoords, side
     if ( !map.directional
       && !lightBounds.lineSegmentIntersects(wallObj.A, wallObj.B, { inside: true })) return false;
 
-    // Calculate the center point of the wall quad.
-    const aT3 = new Point3d(wallObj.A.x, wallObj.A.y, topZ);
-    const bB3 = new Point3d(wallObj.B.x, wallObj.B.y, bottomZ);
-    const center = aT3.projectToward(bB3, 0.5);
-    aVertexPosition.push(center.x, center.y, center.z);
-
     // Arrange so A --> B --> lightPosition is counterclockwise
     // const [A, B] = orientWall > 0 ? [wallObj.A, wallObj.B] : [wallObj.B, wallObj.A];
-    const [A, B] = [wallObj.A, wallObj.B];
-    aVertexPosition.push(A.x, A.y, topZ);
-    aVertexPosition.push(B.x, B.y, topZ);
-    aVertexPosition.push(B.x, B.y, bottomZ);
-    aVertexPosition.push(A.x, A.y, bottomZ);
-
-    abCoords.push(
-      center.x, center.y,
-      B.x, B.y,
-      A.x, A.y,
-      A.x, A.y,
-      B.x, B.y
+    const v0 = new Point3d(wallObj.A.x, wallObj.A.y, topZ);
+    const v1 = new Point3d(wallObj.B.x, wallObj.B.y, topZ);
+    const v2 = new Point3d(wallObj.B.x, wallObj.B.y, bottomZ);
+    const v3 = new Point3d(wallObj.A.x, wallObj.A.y, bottomZ);
+    const center = v0.projectToward(v2);
+    aVertexPosition.push(
+      center.x, center.y, center.z,
+      v0.x, v0.y, v0.z,
+      v1.x, v1.y, v1.z,
+      v2.x, v2.y, v1.z,
+      v3.x, v3.y, v3.z
     );
 
+    // sideDirections
     // vec4 with:
-    // x: 0 --> 1 moving from A to B
-    // y: 0 --> 1 moving from bottom to top
-    // z: distance of AB
-    // w: height
-    const abDist = PIXI.Point.distanceBetween(wallObj.A, wallObj.B);
-    const height = topZ - bottomZ;
-    sideLengths.push(
-      0.5, 0.5, abDist, height, // Center
-      0, 1, abDist, height,     // A top
-      1, 1, abDist, height,     // B top
-      1, 0, abDist, height,     // B bottom
-      0, 0, abDist, height      // A bottom
-    );
+    // x: direction from vertex backwards.
+    // y: direction from vertex forwards.
+    // z: distance backwards
+    // w: distance forwards
+    sideDirections.push(
+      0, 0, 0, 0,
+      v3.subtract(v0).normalize(), v1.subtract(v0).normalize(), Point3d.distanceBetween(v0, v3), Point3d.distanceBetween(v0, v1),
+      v0.subtract(v1).normalize(), v2.subtract(v1).normalize(), Point3d.distanceBetween(v1, v0), Point3d.distanceBetween(v1, v2),
+      v1.subtract(v2).normalize(), v3.subtract(v2).normalize(), Point3d.distanceBetween(v2, v1), Point3d.distanceBetween(v2, v3),
+      v2.subtract(v3).normalize(), v0.subtract(v3).normalize(), Point3d.distanceBetween(v3, v2), Point3d.distanceBetween(v3, v0)
+    )
 
     return true;
 }
 
-function tileVertices(map, tileObj, aVertexPosition, lightBounds, abCoords, sideLengths) {
+function tileVertices(map, tileObj, aVertexPosition, lightBounds, sideDirections) {
     const elevationZ = tileObj.elevationZ;
     if ( map.lightPosition.z <= elevationZ ) return false; // Tile is collinear to or above the light.
     if ( elevationZ < map.minElevation ) return false; // Tile is below the minimum elevation.
@@ -80,38 +72,26 @@ function tileVertices(map, tileObj, aVertexPosition, lightBounds, abCoords, side
 
 
     // Calculate the center point of the wall quad.
-    const center = tileObj.TL.projectToward(tileObj.BR, 0.5);
-    aVertexPosition.push(center.x, center.y, elevationZ);
-
     // Arrange TL --> TR --> BR --> BL
-    aVertexPosition.push(tileObj.TL.x, tileObj.TL.y, elevationZ);
-    aVertexPosition.push(tileObj.TR.x, tileObj.TR.y, elevationZ);
-    aVertexPosition.push(tileObj.BR.x, tileObj.BR.y, elevationZ);
-    aVertexPosition.push(tileObj.BL.x, tileObj.BL.y, elevationZ);
+    const v0 = new Point3d(tileObj.TR.x, tileObj.TR.y, elevationZ);
+    const v1 = new Point3d(tileObj.BR.x, tileObj.BR.y, elevationZ);
+    const v2 = new Point3d(tileObj.BL.x, tileObj.BL.y, elevationZ);
+    const v3 = new Point3d(tileObj.TL.x, tileObj.TL.y, elevationZ);
+    const center = v0.projectToward(v2);
 
-    // Doesn't really work for tiles, so just fill in for now.
-    abCoords.push(
-      center.x, center.y,
-      tileObj.TR.x, tileObj.TR.y,
-      tileObj.BR.x, tileObj.BR.y,
-      tileObj.BL.x, tileObj.BL.y,
-      tileObj.TL.x, tileObj.TL.y
-    );
-
+    // sideDirections
     // vec4 with:
-    // x: 0 --> 1 moving from TL --> TR
-    // y: 0 --> 1 moving from BL --> TL
-    // z: distance of TL --> TR
-    // w: distance of BL --> TL
-    const tltrDist = PIXI.Point.distanceBetween(tileObj.TL, tileObj.TR);
-    const bltlDist = PIXI.Point.distanceBetween(tileObj.BL, tileObj.TL);
-    sideLengths.push(
-      0.5, 0.5, tltrDist, bltlDist, // Center
-      0, 1, tltrDist, bltlDist,     // A top
-      1, 1, tltrDist, bltlDist,     // B top
-      1, 0, tltrDist, bltlDist,     // B bottom
-      0, 0, tltrDist, bltlDist      // A bottom
-    );
+    // x: direction from vertex backwards.
+    // y: direction from vertex forwards.
+    // z: distance backwards
+    // w: distance forwards
+    sideDirections.push(
+      0, 0, 0, 0,
+      v3.subtract(v0).normalize(), v1.subtract(v0).normalize(), Point3d.distanceBetween(v0, v3), Point3d.distanceBetween(v0, v1),
+      v0.subtract(v1).normalize(), v2.subtract(v1).normalize(), Point3d.distanceBetween(v1, v0), Point3d.distanceBetween(v1, v2),
+      v1.subtract(v2).normalize(), v3.subtract(v2).normalize(), Point3d.distanceBetween(v2, v1), Point3d.distanceBetween(v2, v3),
+      v2.subtract(v3).normalize(), v0.subtract(v3).normalize(), Point3d.distanceBetween(v3, v2), Point3d.distanceBetween(v3, v0)
+    )
 
     return true;
   }
@@ -147,14 +127,13 @@ function constructGeometry(map) {
   const aObjType = [];
   const aObjIndex = [];
   const aTexCoord = [];
-  const abCoords = [];
-  const sideLengths = [];
+  const sideDirections = [];
   let objNumber = 0;
   for ( let i = 0; i < nObjs; i += 1 ) {
     const obj = coords[i];
     const isWall = obj.object instanceof Wall;
     const method = isWall ? wallVertices : tileVertices;
-    if ( !method(map, obj, aVertexPosition, lightBounds, abCoords, sideLengths) ) continue;
+    if ( !method(map, obj, aVertexPosition, lightBounds, sideDirections) ) continue;
 
 
     // 5 vertices per wall or tile
@@ -205,8 +184,7 @@ function constructGeometry(map) {
   geometry.addAttribute("aObjType", aObjType, 1, false);
   geometry.addAttribute("aObjIndex", aObjIndex, 1, false);
   geometry.addAttribute("aTexCoord", aTexCoord, 2, false);
-  geometry.addAttribute("abCoords", abCoords, 2, false);
-  geometry.addAttribute("aSideLengths", sideLengths, 4, false);
+  geometry.addAttribute("aSideDirections", sideDirections, 4, false);
   return geometry;
 }
 
@@ -222,9 +200,8 @@ uniform float uCanvasElevation;
 uniform float uLightSize;
 
 in vec3 aVertexPosition;
-in vec2 abCoords;
 in vec2 aTexCoord;
-in vec4 aSideLengths;
+in vec4 aSideDirections;
 out vec3 vertexPosition;
 out vec3 shadowVertexPosition;
 out float radiusAtCanvas;
@@ -235,7 +212,7 @@ out float distanceRatioToEdge;
 out vec2 radiusDistanceRatio;
 flat out float vertexId;
 out vec2 vTexCoord;
-out vec4 vSideLengths;
+out vec4 vSideDirections;
 
 // Note: lineDirection and planeNormal should be normalized.
 vec3 intersectLineWithPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, inout bool ixFound) {
@@ -258,9 +235,8 @@ void main() {
   vTexCoord = aTexCoord;
   radiusAtCanvas = 0.0;
   distanceRatioToWall = 0.0;
-  distanceLeftRight = distance(aVertexPosition.xy, abCoords);
   distanceRatioToEdge = 0.0;
-  vSideLengths = aSideLengths;
+  vSideDirections = aSideDirections;
 
   radiusDistanceRatio = vec2(0.0, 0.0);
   if ( aTexCoord.x == 0.5 ) distanceRatioToEdge = 1.0;
@@ -293,7 +269,7 @@ void main() {
       shadowVertexPosition = ix;
       distanceRatioToWall = 1.0;
 
-      radiusDistanceRatio = radiusAtCanvas / aSideLengths.zw;
+      radiusDistanceRatio = radiusAtCanvas / aSideDirections.zw;
 
       // Project to the other vertex to calculate the distance between the two.
 //       vec3 otherLineDirection = normalize(vec3(abCoords, aVertexPosition.z) - uLightPosition);
@@ -316,7 +292,7 @@ in float leftRight;
 in float distanceLeftRight;
 in vec2 vTexCoord;
 in float distanceRatioToEdge;
-in vec4 vSideLengths;
+in vec4 vSideDirections;
 flat in float vertexId;
 in vec2 radiusDistanceRatio;
 out vec4 fragColor;
@@ -354,8 +330,8 @@ void main() {
   //return;
 
   // Color according to how near the fragment is to an edge.
-  //fragColor = vec4(distanceRatioToEdge, 0.0, 0.0, 0.5);
-  //return;
+  fragColor = vec4(distanceRatioToEdge, 0.0, 0.0, 0.5);
+  return;
 
   // fragColor = vec4(0.0, leftRight, 0.0, 0.5);
   //float lr = radiusDistanceRatio.x * 10.0;
@@ -377,6 +353,7 @@ Draw.clearDrawings()
 SourceDepthShadowMap = api.SourceDepthShadowMap
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 Matrix = CONFIG.GeometryLib.Matrix
+Plane = CONFIG.GeometryLib.threeD.Plane;
 
 
 // Perspective light
@@ -474,7 +451,59 @@ while ( currentIndex < dat.length ) {
   }
   currentIndex += 5 * 3;
 }
+*/
 
+
+/*
+
+Manual calculation of penumbra radius and ratio
+
+let [w] = canvas.walls.controlled;
+canvasPlane = new Plane();
+A = new Point3d(w.A.x, w.A.y, w.topZ);
+B = new Point3d(w.B.x, w.B.y, w.topZ);
+
+Draw.clearDrawings()
+Draw.point(lightPosition, { color: Draw.COLORS.yellow });
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightSize);
+Draw.shape(cir, { color: Draw.COLORS.yellow, fill: Draw.COLORS.yellow, fillAlpha: 0.5 })
+
+// We want point B for now
+Draw.point(A)
+Draw.point(B)
+
+// Can ignore Z for walls here.
+abDist = PIXI.Point.distanceBetween(A, B)
+
+// Assume currently at vertex B
+vertex = B
+
+// Shoot ray from light to vertex and intersect the plane
+function intersectLineWithPlane(linePoint, lineDirection, planePoint, planeNormal) {
+  denom = planeNormal.dot(lineDirection);
+  if ( Math.abs(denom) < 0.0001 ) return false;
+  t = planeNormal.dot(planePoint.subtract(linePoint))  / denom;
+  return linePoint.add(lineDirection.multiplyScalar(t));
+}
+
+ix = intersectLineWithPlane(lightPosition, vertex.subtract(lightPosition).normalize(), canvasPlane.point, canvasPlane.normal)
+Draw.point(ix);
+vertexDist = Point3d.distanceBetween(lightPosition, vertex);
+ixDist = Point3d.distanceBetween(lightPosition, ix);
+
+invSideRatio = ixDist / vertexDist;
+bigABDist = abDist * invSideRatio
+
+// Test calc:
+// Shoot a ray from the ix in the direction of BA for provided distance
+dir = A.subtract(B).normalize()
+bigA = ix.add(dir.multiplyScalar(bigABDist))
+Draw.point(bigA, { color: Draw.COLORS.green })
+
+// Now do the same but for the projected light radius.
+projLightSize = lightSize * (vertexDist / (ixDist - vertexDist))
+lightS = ix.add(dir.multiplyScalar(projLightSize))
+Draw.point(lightS, { color: Draw.COLORS.yellow })
 
 */
 
