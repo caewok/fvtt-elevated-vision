@@ -18,6 +18,10 @@ function linearConversion(x, oldMin, oldMax, newMin, newMax) {
   return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
 }
 
+function mix(x, y, a) {
+  return (x * (1 - a)) + (y * a);
+}
+
 // Set up geometry
 // TODO: Could use triangle fan
 // https://www.html5gamedevs.com/topic/44378-pixidraw_modespoints-doesnt-work/
@@ -151,6 +155,7 @@ out float vWallRatio;
 out vec3 vBary;
 flat out float wallRatio;
 out float vSidePenumbraRatio;
+flat out float sidePenumbraRatio;
 
 // Note: lineDirection and planeNormal should be normalized.
 vec3 intersectLineWithPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, inout bool ixFound) {
@@ -220,6 +225,9 @@ void main() {
   float penumbraRatio = vertexDist / (ixDist - vertexDist);
   float lightSizeProjected = uLightSize * penumbraRatio;
   vSidePenumbraRatio = lightSizeProjected / ABDist;
+  sidePenumbraRatio = vSidePenumbraRatio;
+
+
 
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ix.xy, 1.0)).xy, 0.0, 1.0);
 }`;
@@ -233,6 +241,7 @@ in float vWallRatio;
 flat in float wallRatio;
 in float vSidePenumbraRatio;
 in vec3 vBary;
+flat in float sidePenumbraRatio;
 
 out vec4 fragColor;
 
@@ -293,42 +302,24 @@ void main() {
   float behindWallPercent = linearConversion(vWallRatio, wallRatio, 1.0, 0.0, 1.0);
 
   // float penumbraSideRatio = vSidePenumbraRatio;
-  float penumbraSideRatio = vSidePenumbraRatio * behindWallPercent;
-
-//   if ( penumbraSideRatio <= 0.0 ) {
-//     fragColor = vec4(0.0, 0.0, 0.0, 0.5);
-//   } else if ( penumbraSideRatio < 0.01 ) {
-//     fragColor = vec4(1.0, 0.0, 0.0, 0.5);
-//   } else if ( penumbraSideRatio < 0.05 ) {
-//     fragColor = vec4(1.0, 1.0, 0.0, 0.5);
-//   } else if ( penumbraSideRatio < 0.1 ) {
-//     fragColor = vec4(0.0, 1.0, 0.0, 0.5);
-//   } else if ( penumbraSideRatio < 0.15 ) {
-//     fragColor = vec4(0.0, 1.0, 1.0, 0.5);
-//   } else if ( penumbraSideRatio < 0.20 ) {
-//     fragColor = vec4(0.0, 0.0, 1.0, 0.5);
-//   }
-//   return;
-
-
-
+  // float penumbraSideRatio = vSidePenumbraRatio * behindWallPercent;
+  float penumbraSideRatio = sidePenumbraRatio * behindWallPercent;
   float lrRatio = vBary.z / (vBary.y + vBary.z);
-//   if ( lrRatio < 0.1 ) {
-//     fragColor = vec4(0.0, 0.0, 1.0, 0.5);
-//   } else if ( (1.0 - lrRatio ) < 0.1 ) {
-//     fragColor = vec4(0.0, 0.0, 1.0, 0.5);
-//   } else {
-//     fragColor = vec4(0.0, 0.0, 0.0, 0.5);
-//   }
-//   return;
 
+
+
+  // float shadow = 0.8;
   if ( lrRatio < penumbraSideRatio ) {
-    fragColor = vec4(0.0, 0.0, 1.0, 0.5);
+
+    fragColor = vec4(1.0, 0.0, 0.0, 0.5);
+    // shadow = lrRatio / penumbraSideRatio;
   } else if ( (1.0 - lrRatio) < penumbraSideRatio ) {
-    fragColor = vec4(0.0, 1.0, 0.0, 0.5);
+    fragColor = vec4(0.0, 0.0, 1.0, 0.5);
+    //shadow = (1.0 - lrRatio) / penumbraSideRatio;
   } else {
     fragColor = vec4(0.0, 0.0, 0.0, 0.5);
   }
+
 }`;
 
 
@@ -491,6 +482,14 @@ penumbraRatio = vertexDist / (ixDist - vertexDist)
 lightSizeProjected = lightSize * penumbraRatio
 vSidePenumbraRatio = lightSizeProjected / bigABDist;
 
+// Assume a wall ratio of 0.5 and a penumbra ratio between 0 and .2
+penumbraRatio = [0, 0.05, 0.1, 0.15, 0.2]
+wallRatio = 0.5
+vWallRatio = [0.5, 0.6, 0.7, 0.8, 0.9, 1]
+behindWallPercent = vWallRatio.map(x => linearConversion(x, wallRatio, 1, 0, 1))
+
+penumbraRatio.map(p => p * behindWallPercent[0])
+behindWallPercent.map(x => x * penumbraRatio[1])
 
 // Test calc:
 // Shoot a ray from the ix in the direction of BA for provided distance
