@@ -280,7 +280,8 @@ void main() {
   //return;
 
   if ( vWallRatio < wallRatio ) {
-    fragColor = vec4(1.0, 1.0, 0.0, 0.5);
+    // fragColor = vec4(1.0, 1.0, 0.0, 0.7); // mimic a light
+    fragColor = vec4(0.0);
     return;
   }
 
@@ -297,16 +298,29 @@ void main() {
   float targetRatio = sidePenumbraRatio * squaredTx;
 
   // TODO: Change so that full light = 1.0; full shadow = 0.0. (Add for light, subtract for shadow.)
+  float shadow = 1.0;
+
   if ( vBary.x < nearFarPenumbraRatio ) {
-    fragColor = vec4(0.0, 0.0, 1.0, 0.5);
-  } else if ( lrRatio < targetRatio ) {
-    fragColor = vec4(1.0, 0.0, 0.0, 0.5);
-  } else if ( (1.0 - lrRatio) < targetRatio ) {
-    fragColor = vec4(0.0, 1.0, 0.0, 0.5);
-  } else {
-    fragColor = vec4(0.0, 0.0, 0.0, 0.5);
+    shadow *= vBary.x / nearFarPenumbraRatio;
+
+   // shadow -= (1.0 - (vBary.x / nearFarPenumbraRatio));
+    // fragColor = vec4(0.0, 0.0, 1.0, 0.5);
   }
 
+  if ( lrRatio < targetRatio ) {
+    shadow *= lrRatio / targetRatio;
+    // shadow -= 1.0 - (lrRatio / targetRatio);
+    // fragColor = vec4(1.0, 0.0, 0.0, 0.5);
+  } else if ( (1.0 - lrRatio) < targetRatio ) {
+    shadow *= (1.0 - lrRatio) / targetRatio;
+    // shadow -= 1.0 - ((1.0 - lrRatio) / targetRatio);
+    // fragColor = vec4(0.0, 1.0, 0.0, 0.5);
+  }
+  shadow = clamp(shadow, 0.0, 1.0);
+
+  fragColor = vec4(0.0, 0.0, 0.0, shadow);
+
+  // fragColor = vec4(vec3(0.0), clamp(1.0 - light, 0.0, 1.0));
 }`;
 
 
