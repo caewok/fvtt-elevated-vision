@@ -153,6 +153,7 @@ out float vWallRatio;
 out vec3 vBary;
 flat out float wallRatio;
 flat out float sidePenumbraRatio;
+flat out float nearFarPenumbraRatio;
 
 // Note: lineDirection and planeNormal should be normalized.
 vec3 intersectLineWithPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, inout bool ixFound) {
@@ -222,6 +223,9 @@ void main() {
   float lightSizeProjected = uLightSize * penumbraProjectionRatio;
   sidePenumbraRatio = lightSizeProjected / ABDist;
 
+  // Determine the ratio for near/far using distance to the light.
+  nearFarPenumbraRatio = lightSizeProjected / ixDist;
+
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ix.xy, 1.0)).xy, 0.0, 1.0);
 }`;
 
@@ -233,6 +237,7 @@ in float vWallRatio;
 in vec3 vBary;
 flat in float wallRatio;
 flat in float sidePenumbraRatio;
+flat in float nearFarPenumbraRatio;
 
 out vec4 fragColor;
 
@@ -292,7 +297,9 @@ void main() {
   float targetRatio = sidePenumbraRatio * squaredTx;
 
   // TODO: Change so that full light = 1.0; full shadow = 0.0. (Add for light, subtract for shadow.)
-  if ( lrRatio < targetRatio ) {
+  if ( vBary.x < nearFarPenumbraRatio ) {
+    fragColor = vec4(0.0, 0.0, 1.0, 0.5);
+  } else if ( lrRatio < targetRatio ) {
     fragColor = vec4(1.0, 0.0, 0.0, 0.5);
   } else if ( (1.0 - lrRatio) < targetRatio ) {
     fragColor = vec4(0.0, 1.0, 0.0, 0.5);
