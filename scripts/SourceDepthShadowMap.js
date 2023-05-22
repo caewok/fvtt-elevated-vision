@@ -571,6 +571,10 @@ export class PlaceablesCoordinatesData {
    */
   get coordinates() { return [...this.#tileCoordinates, ...this.#wallCoordinates]; }
 
+  get wallCoordinates() { return this.#wallCoordinates; }
+
+  get tileCoordinates() { return this.#tileCoordinates; }
+
   /** @type {Uint16Array} */
   get data() { return this.#data || (this.#data = this._dataArray()); }
 
