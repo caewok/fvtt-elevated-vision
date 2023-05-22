@@ -11,6 +11,8 @@ import { MODULE_ID } from "./const.js";
 // Take a vertex, light position, and canvas elevation.
 // Project the vertex onto the flat 2d canvas.
 
+let MODULE_ID = "elevatedvision";
+
 function smoothstep(edge0, edge1, x) {
   const t = Math.clamped((x - edge0) / (edge1 - edge0), 0.0, 1.0);
   return t * t * (3.0 - (2.0 * t));
@@ -213,6 +215,8 @@ uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 uniform float uCanvasElevation;
 uniform vec3 uLightPosition;
+uniform float uLightSize;
+uniform float uOffsetPercentage;
 
 in vec3 aVertexPosition;
 in vec2 aTexCoord;
@@ -239,6 +243,18 @@ void main() {
     return;
   }
 
+  // TODO: Make this a define/ifdef
+  // Offset by some percentage of the penumbra radius.
+  if ( uOffsetPercentage > 0.0 ) {
+    float ixDist = distance(uLightPosition, ix);
+    float vertexDist = distance(uLightPosition, aVertexPosition);
+    float penumbraProjectionRatio = vertexDist / (ixDist - vertexDist);
+    float lightSizeProjected = uLightSize * penumbraProjectionRatio;
+    vec3 dir = normalize(aVertexPosition - uLightPosition);
+    float offsetAmount = lightSizeProjected * uOffsetPercentage;
+    ix = uLightPosition + dir * (ixDist + offsetAmount);
+  }
+
   vertexPosition = ix;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ix.xy, 1.0)).xy, 0.0, 1.0);
 }
@@ -251,6 +267,7 @@ precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 #define ALPHA_THRESHOLD ${CONFIG[MODULE_ID].alphaThreshold.toFixed(1)}
 
 uniform sampler2D uTileTexture;
+uniform float uShadowPercentage;
 
 in vec3 vertexPosition;
 in vec2 vTexCoord;
@@ -259,7 +276,7 @@ out vec4 fragColor;
 
 void main() {
   vec4 texColor = texture(uTileTexture, vTexCoord);
-  float shadow = texColor.a < ALPHA_THRESHOLD ? 0.0 : 0.7;
+  float shadow = texColor.a < ALPHA_THRESHOLD ? 0.0 : uShadowPercentage;
   fragColor = vec4(vec3(0.0), shadow);
 }`;
 
@@ -682,7 +699,9 @@ uniforms = {
   uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
   uCanvasElevation: 0,
   uLightSize: lightSize,
-  uTileTexture: map.placeablesCoordinatesData.tileCoordinates[tileNum].object.texture.baseTexture
+  uTileTexture: map.placeablesCoordinatesData.tileCoordinates[tileNum].object.texture.baseTexture,
+  uOffsetPercentage: 0.0,
+  uShadowPercentage: 1.0
 }
 
 let { vertexShader, fragmentShader } = shadowTransparentTileShaderGLSL;
@@ -691,6 +710,147 @@ mesh = new PIXI.Mesh(geometry, shader);
 
 canvas.stage.addChild(mesh);
 canvas.stage.removeChild(mesh)
+
+// Render tile multiple times with offset to approximate a penumbra.
+MAX_WIDTH = 4096;
+MAX_HEIGHT = 4096;
+let { sceneWidth, sceneHeight } = canvas.dimensions;
+width = Math.min(MAX_WIDTH, map.directional ? sceneWidth : map.lightRadius * 2);
+height = Math.min(MAX_HEIGHT, map.directional ? sceneHeight : map.lightRadius * 2);
+c = new PIXI.Container;
+canvas.stage.addChild(c)
+
+// TODO: Maybe use #define to trigger offsetting?
+let { vertexShader, fragmentShader } = shadowTransparentTileShaderGLSL;
+
+uniforms = {
+  uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
+  uCanvasElevation: 0,
+  uLightSize: lightSize,
+  uTileTexture: map.placeablesCoordinatesData.tileCoordinates[tileNum].object.texture.baseTexture,
+  uOffsetPercentage: 0,
+  uShadowPercentage: 1.0
+}
+
+// TODO: Efficiently destroy once combined
+// r0Texture = new PIXI.RenderTexture.create({
+//   width,
+//   height,
+//   scaleMode: PIXI.SCALE_MODES.LINEAR // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+// });
+
+
+r0Uniforms = {
+  uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
+  uCanvasElevation: 0,
+  uLightSize: lightSize,
+  uTileTexture: map.placeablesCoordinatesData.tileCoordinates[tileNum].object.texture.baseTexture,
+  uOffsetPercentage: 0,
+  uShadowPercentage: 1.0
+}
+r0Shader = PIXI.Shader.from(vertexShader, fragmentShader, r0Uniforms);
+r0Mesh = new PIXI.Mesh(geometry, r0Shader);
+// canvas.app.renderer.render(r0Mesh, { renderTexture: r0Texture });
+c.addChild(r0Mesh);
+
+r75Uniforms = {
+  uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
+  uCanvasElevation: 0,
+  uLightSize: lightSize,
+  uTileTexture: map.placeablesCoordinatesData.tileCoordinates[tileNum].object.texture.baseTexture,
+  uOffsetPercentage: 0.75,
+  uShadowPercentage: 0.25
+}
+// r5Texture = new PIXI.RenderTexture.create({
+//   width,
+//   height,
+//   scaleMode: PIXI.SCALE_MODES.LINEAR // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+// });
+
+r75Shader = PIXI.Shader.from(vertexShader, fragmentShader, r75Uniforms);
+r75Mesh = new PIXI.Mesh(geometry, r75Shader);
+// canvas.app.renderer.render(r5Mesh, { renderTexture: r75Texture });
+c.addChild(r75Mesh);
+
+
+
+r5Uniforms = {
+  uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
+  uCanvasElevation: 0,
+  uLightSize: lightSize,
+  uTileTexture: map.placeablesCoordinatesData.tileCoordinates[tileNum].object.texture.baseTexture,
+  uOffsetPercentage: 0.5,
+  uShadowPercentage: 0.5
+}
+// r5Texture = new PIXI.RenderTexture.create({
+//   width,
+//   height,
+//   scaleMode: PIXI.SCALE_MODES.LINEAR // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+// });
+
+r5Shader = PIXI.Shader.from(vertexShader, fragmentShader, r5Uniforms);
+r5Mesh = new PIXI.Mesh(geometry, r5Shader);
+// canvas.app.renderer.render(r5Mesh, { renderTexture: r5Texture });
+c.addChild(r5Mesh);
+
+r25Uniforms = {
+  uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
+  uCanvasElevation: 0,
+  uLightSize: lightSize,
+  uTileTexture: map.placeablesCoordinatesData.tileCoordinates[tileNum].object.texture.baseTexture,
+  uOffsetPercentage: 0.25,
+  uShadowPercentage: 0.75
+}
+// r5Texture = new PIXI.RenderTexture.create({
+//   width,
+//   height,
+//   scaleMode: PIXI.SCALE_MODES.LINEAR // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+// });
+
+r25Shader = PIXI.Shader.from(vertexShader, fragmentShader, r25Uniforms);
+r25Mesh = new PIXI.Mesh(geometry, r25Shader);
+// canvas.app.renderer.render(r5Mesh, { renderTexture: r25Texture });
+c.addChild(r25Mesh);
+
+
+
+// s = new PIXI.Sprite(r5Texture)
+// canvas.stage.addChild(s);
+// canvas.stage.removeChild(s)
+
+canvas.stage.removeChild(c);
+
+// Render container to a texture, then apply a blur
+combinedTexture = new PIXI.RenderTexture.create({
+  width,
+  height,
+  scaleMode: PIXI.SCALE_MODES.LINEAR // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+});
+canvas.app.renderer.render(c, { renderTexture: combinedTexture });
+
+s = new PIXI.Sprite(combinedTexture);
+canvas.stage.addChild(s)
+
+blurFilter = new PIXI.filters.BlurFilter();
+s.filters = [blurFilter]
+blurFilter.blur = 20
+
+canvas.stage.removeChild(s)
+
+
+blurredTexture = new PIXI.RenderTexture.create({
+  width,
+  height,
+  scaleMode: PIXI.SCALE_MODES.LINEAR // LINEAR is only supported if OES_texture_float_linear is present (renderer.context.extensions.floatTextureLinear)
+});
+
+canvas.app.renderer.render(s, { renderTexture: blurredTexture });
+
+sBlurred = new PIXI.Sprite(blurredTexture);
+canvas.stage.addChild(sBlurred)
+canvas.stage.removeChild(sBlurred)
+
 */
+
 
 
