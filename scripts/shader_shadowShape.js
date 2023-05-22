@@ -5,6 +5,8 @@ Wall
 */
 "use strict";
 
+import { MODULE_ID } from "./const.js";
+
 // Draw trapezoidal shape of shadow directly on the canvas.
 // Take a vertex, light position, and canvas elevation.
 // Project the vertex onto the flat 2d canvas.
@@ -133,6 +135,134 @@ function constructWallGeometry(map) {
   geometry.addAttribute("aBary", aBary, 3, false);
   return geometry;
 }
+
+/**
+ * Construct geometry for all opaque overhead tiles in the scene.
+ */
+function constructOpaqueTileGeometry(map) {
+
+}
+
+/**
+ * Construct geometry for a given (transparent) tile in the scene.
+ */
+function constructTileGeometry(map, tileNum) {
+  const tileObj = map.placeablesCoordinatesData.tileCoordinates[tileNum];
+
+  // Need to cut off walls at the top/bottom bounds of the scene, otherwise they
+  // will be given incorrect depth values b/c there is no floor or ceiling.
+  // Point source lights have bounds
+  const lightBounds = getLightBounds(map);
+  const { lightPosition } = map;
+  if ( !renderableTile(map, tileObj, lightBounds) ) return null;
+
+  const indices = [
+    0, 1, 2,
+    0, 2, 3
+  ];
+
+  // Vertices should match texCoord.
+  const { BL, BR, TR, TL, elevationZ } = tileObj;
+  const aVertexPosition = [
+    BL.x, BL.y, elevationZ,
+    BR.x, BR.y, elevationZ,
+    TR.x, TR.y, elevationZ,
+    TL.x, TL.y, elevationZ
+  ];
+
+  const aTexCoord = [
+    0, 1,  // BL
+    1, 1, // BR
+    1, 0, // TR
+    0, 0 // TL
+  ];
+
+  const geometry = new PIXI.Geometry();
+  geometry.addIndex(indices);
+  geometry.addAttribute("aVertexPosition", aVertexPosition, 3, false);
+  geometry.addAttribute("aTexCoord", aTexCoord, 2, false);
+  return geometry;
+}
+
+
+let GLSLFunctions = {};
+GLSLFunctions.intersectLineWithPlane =
+`
+vec3 intersectLineWithPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, inout bool ixFound) {
+  float denom = dot(planeNormal, lineDirection);
+
+  ixFound = false;
+  if (abs(denom) < 0.0001) {
+      // Line is parallel to the plane, no intersection
+      return vec3(-1.0);
+  }
+
+  ixFound = true;
+  float t = dot(planeNormal, planePoint - linePoint) / denom;
+  return linePoint + lineDirection * t;
+}
+`
+
+
+let shadowTransparentTileShaderGLSL = {};
+shadowTransparentTileShaderGLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+uniform float uCanvasElevation;
+uniform vec3 uLightPosition;
+
+in vec3 aVertexPosition;
+in vec2 aTexCoord;
+
+out vec3 vertexPosition;
+out vec2 vTexCoord;
+
+// Note: lineDirection and planeNormal should be normalized.
+${GLSLFunctions.intersectLineWithPlane}
+
+void main() {
+  vTexCoord = aTexCoord;
+  vertexPosition = aVertexPosition;
+
+  // Intersect the canvas plane: Light --> vertex --> plane.
+  bool ixFound;
+  vec3 planeNormal = vec3(0.0, 0.0, 1.0);
+  vec3 planePoint = vec3(0.0);
+  vec3 lineDirection = normalize(aVertexPosition - uLightPosition);
+  vec3 ix = intersectLineWithPlane(uLightPosition, lineDirection, planePoint, planeNormal, ixFound);
+  if ( !ixFound ) {
+    // Shouldn't happen, but...
+    gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
+    return;
+  }
+
+  vertexPosition = ix;
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ix.xy, 1.0)).xy, 0.0, 1.0);
+}
+`;
+
+shadowTransparentTileShaderGLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+#define ALPHA_THRESHOLD ${CONFIG[MODULE_ID].alphaThreshold.toFixed(1)}
+
+uniform sampler2D uTileTexture;
+
+in vec3 vertexPosition;
+in vec2 vTexCoord;
+
+out vec4 fragColor;
+
+void main() {
+  vec4 texColor = texture(uTileTexture, vTexCoord);
+  float shadow = texColor.a < ALPHA_THRESHOLD ? 0.0 : 0.7;
+  fragColor = vec4(vec3(0.0), shadow);
+}`;
+
 
 let shadowShapeShaderGLSL = {};
 shadowShapeShaderGLSL.vertexShader =
@@ -361,7 +491,7 @@ if ( !directional ) Draw.shape(
 uniforms = {
   uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
   uCanvasElevation: 0,
-  uLightSize: 100
+  uLightSize: lightSize
 }
 
 geometry = constructWallGeometry(map)
@@ -504,4 +634,63 @@ lightS = ix.add(dir.multiplyScalar(projLightSize))
 Draw.point(lightS, { color: Draw.COLORS.yellow })
 
 */
+
+
+/* Tile Testing
+MODULE_ID = "elevatedvision";
+api = game.modules.get(MODULE_ID).api
+Draw = CONFIG.GeometryLib.Draw;
+Draw.clearDrawings()
+SourceDepthShadowMap = api.SourceDepthShadowMap
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+Matrix = CONFIG.GeometryLib.Matrix
+Plane = CONFIG.GeometryLib.threeD.Plane;
+
+
+
+// Perspective light
+let [l] = canvas.lighting.placeables;
+source = l.source;
+lightPosition = new Point3d(source.x, source.y, source.elevationZ);
+directional = false;
+lightRadius = source.radius;
+lightSize = 100;
+
+Draw.clearDrawings()
+Draw.point(lightPosition, { color: Draw.COLORS.yellow });
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightRadius)
+Draw.shape(cir, { color: Draw.COLORS.yellow })
+
+// Draw the light size
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightSize);
+Draw.shape(cir, { color: Draw.COLORS.yellow, fill: Draw.COLORS.yellow, fillAlpha: 0.5 })
+
+Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
+
+
+
+map = new SourceDepthShadowMap(lightPosition, { directional, lightRadius, lightSize });
+map.clearPlaceablesCoordinatesData()
+if ( !directional ) Draw.shape(
+  new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation),
+  { color: Draw.COLORS.lightyellow})
+
+
+tileNum = 0;
+geometry = constructTileGeometry(map, tileNum);
+uniforms = {
+  uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
+  uCanvasElevation: 0,
+  uLightSize: lightSize,
+  uTileTexture: map.placeablesCoordinatesData.tileCoordinates[tileNum].object.texture.baseTexture
+}
+
+let { vertexShader, fragmentShader } = shadowTransparentTileShaderGLSL;
+shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+mesh = new PIXI.Mesh(geometry, shader);
+
+canvas.stage.addChild(mesh);
+canvas.stage.removeChild(mesh)
+*/
+
 
