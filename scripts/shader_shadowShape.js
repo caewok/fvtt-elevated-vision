@@ -156,6 +156,9 @@ out vec3 vBary;
 flat out float wallRatio;
 out float vSidePenumbraRatio;
 flat out float sidePenumbraRatio;
+out float vABDist;
+out float vIxDist;
+out vec3 vertexPosition;
 
 // Note: lineDirection and planeNormal should be normalized.
 vec3 intersectLineWithPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, inout bool ixFound) {
@@ -173,10 +176,12 @@ vec3 intersectLineWithPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint,
 }
 
 void main() {
+  vertexPosition = aVertexPosition;
   vTexCoord = aTexCoord;
   vWallRatio = 1.0;
   vSidePenumbraRatio = 0.0;
   vBary = aBary;
+  vABDist = 0.0;
 
   if ( gl_VertexID == 0 ) {
     vWallRatio = 0.0;
@@ -219,22 +224,28 @@ void main() {
   // Use similar triangles to calculate the length of the shadow at the end of the trapezoid.
   float abDist = distance(aOtherCorner.xy, aVertexPosition.xy);
   float ABDist = abDist * (ixDist / vertexDist);
+  vABDist = ABDist;
+  vIxDist = ixDist;
+
 
   // Determine the lightSize circle projected at this vertex.
   // Pass the ratio of lightSize projected / length of shadow to fragment to draw the inner penumbra.
-  float penumbraRatio = vertexDist / (ixDist - vertexDist);
-  float lightSizeProjected = uLightSize * penumbraRatio;
+  float penumbraProjectionRatio = vertexDist / (ixDist - vertexDist);
+  float lightSizeProjected = uLightSize * penumbraProjectionRatio;
   vSidePenumbraRatio = lightSizeProjected / ABDist;
   sidePenumbraRatio = vSidePenumbraRatio;
 
-
+  vertexPosition = ix;
 
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ix.xy, 1.0)).xy, 0.0, 1.0);
 }`;
 
 shadowShapeShaderGLSL.fragmentShader =
 `#version 300 es
-precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform float uLightSize;
+uniform vec3 uLightPosition;
 
 in vec2 vTexCoord;
 in float vWallRatio;
@@ -242,6 +253,9 @@ flat in float wallRatio;
 in float vSidePenumbraRatio;
 in vec3 vBary;
 flat in float sidePenumbraRatio;
+in float vABDist;
+in float vIxDist;
+in vec3 vertexPosition;
 
 out vec4 fragColor;
 
@@ -296,26 +310,36 @@ void main() {
 //     return;
 //   }
 
+//   fragColor = vec4(stepColor(vWallRatio), 0.7);
+//   return;
 
-  // Correct the penumbra side ratio because it starts 0 at the light position.
-  // We want 0 to be the wall position—--i.e., the wallRatio.
-  float behindWallPercent = linearConversion(vWallRatio, wallRatio, 1.0, 0.0, 1.0);
 
-  // float penumbraSideRatio = vSidePenumbraRatio;
-  // float penumbraSideRatio = vSidePenumbraRatio * behindWallPercent;
-  float penumbraSideRatio = sidePenumbraRatio * behindWallPercent;
   float lrRatio = vBary.z / (vBary.y + vBary.z);
+  float linearTx = (vWallRatio - wallRatio) / ( 1.0 - wallRatio);
+  float smoothTx = smoothstep(wallRatio, 1.0, vWallRatio);
+  float squaredTx = sqrt(linearTx);
+  float targetRatio = sidePenumbraRatio * squaredTx;
 
 
 
-  // float shadow = 0.8;
-  if ( lrRatio < penumbraSideRatio ) {
+//   // Calculate the penumbra size at this fragment.
+//   float fragDist = distance(uLightPosition.xy, vertexPosition.xy);
+//
+//
+//
+//   float wallLightDist = fragDist - (fragDist * (vWallRatio / (vWallRatio + wallRatio)));
+//   fragColor = vec4(stepColor(wallLightDist / 600.0), 0.5);
+//   // fragColor = vec4(stepColor(wallLightDist / fragDist), 0.5);
+//   return;
+//
+//   float penumbraProjectionRatio = wallLightDist / (vIxDist - wallLightDist);
+//   float lightSizeProjected = uLightSize * penumbraProjectionRatio;
+//   float targetRatio = lightSizeProjected / vABDist;
 
+  if ( lrRatio < targetRatio ) {
     fragColor = vec4(1.0, 0.0, 0.0, 0.5);
-    // shadow = lrRatio / penumbraSideRatio;
-  } else if ( (1.0 - lrRatio) < penumbraSideRatio ) {
-    fragColor = vec4(0.0, 0.0, 1.0, 0.5);
-    //shadow = (1.0 - lrRatio) / penumbraSideRatio;
+  } else if ( (1.0 - lrRatio) < targetRatio ) {
+    fragColor = vec4(0.0, 1.0, 0.0, 0.5);
   } else {
     fragColor = vec4(0.0, 0.0, 0.0, 0.5);
   }
