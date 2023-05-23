@@ -252,21 +252,64 @@ function constructTileGeometry(map, tileNum) {
 
 
 let GLSLFunctions = {};
-GLSLFunctions.intersectLineWithPlane =
+
+// Calculate the canvas elevation given a pixel value
+// Maps 0–1 to elevation in canvas coordinates.
+// elevationRes:
+// r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
+// u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+GLSLFunctions.canvasElevationFromPixel =
+`
+float canvasElevationFromPixel(in float pixel, in vec4 elevationRes) {
+  return (elevationRes.r + (pixel * elevationRes.b * elevationRes.g)) * elevationRes.a;
+}
+`;
+
+// For debugging.
+GLSLFunctions.stepColor =
+`
+// 0: Black
+// Red is near 0; blue is near 1.
+// 0.5: purple
+vec3 stepColor(in float ratio) {
+  if ( ratio < 0.2 ) return vec3(smoothstep(0.0, 0.2, ratio), 0.0, 0.0);
+  if ( ratio < 0.4 ) return vec3(smoothstep(0.2, 0.4, ratio), smoothstep(0.2, 0.4, ratio), 0.0);
+  if ( ratio == 0.5 ) return vec3(0.5, 0.0, 0.5);
+  if ( ratio < 0.6 ) return vec3(0.0, smoothstep(0.4, 0.6, ratio), 0.0);
+  if ( ratio < 0.8 ) return vec3(0.0, smoothstep(0.6, 0.8, ratio), smoothstep(0.6, 0.8, ratio));
+  return vec3(0.0, 0.0, smoothstep(0.8, 1.0, ratio));
+}`;
+
+GLSLFunctions.intersectRayPlane =
 `
 // Note: lineDirection and planeNormal should be normalized.
-vec3 intersectLineWithPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, inout bool ixFound) {
+bool intersectRayPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, out vec3 ix) {
   float denom = dot(planeNormal, lineDirection);
 
-  ixFound = false;
-  if (abs(denom) < 0.0001) {
-      // Line is parallel to the plane, no intersection
-      return vec3(-1.0);
-  }
+  // Check if line is parallel to the plane; no intersection
+  if (abs(denom) < 0.0001) return false;
 
-  ixFound = true;
   float t = dot(planeNormal, planePoint - linePoint) / denom;
-  return linePoint + lineDirection * t;
+  ix = linePoint + lineDirection * t;
+  return true;
+}`;
+
+GLSLFunctions.intersectRayQuad =
+`
+${GLSLFunctions.intersectRayPlane}
+
+// Note: lineDirection and planeNormal should be normalized.
+bool intersectRayQuad(vec3 linePoint, vec3 lineDirection, vec3 v0, vec3 v1, vec3 v2, vec3 v3, out vec3 ix) {
+  vec3 planePoint = v0;
+  vec3 diff01 = v1 - v0;
+  vec3 diff02 = v2 - v0;
+  vec3 planeNormal = diff01.cross(diff02);
+  if ( !intersectRayPlane(linePoint, lineDirection, planePoint, planeNormal, ix) ) return false;
+
+  // Check if the intersection point is within the bounds of the quad.
+  vec3 quadMin = min(v0, min(v1, min(v2, v3)));
+  vec3 quadMax = max(v0, max(v1, max(v2, v3)));
+  return all(greaterThan(ix, quadMin)) && all(lessThan(ix, quadMax));
 }`;
 
 
@@ -289,18 +332,18 @@ out vec3 vertexPosition;
 out vec2 vTexCoord;
 
 
-${GLSLFunctions.intersectLineWithPlane}
+${GLSLFunctions.intersectRayPlane}
 
 void main() {
   vTexCoord = aTexCoord;
   vertexPosition = aVertexPosition;
 
   // Intersect the canvas plane: Light --> vertex --> plane.
-  bool ixFound;
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
   vec3 planePoint = vec3(0.0);
   vec3 lineDirection = normalize(aVertexPosition - uLightPosition);
-  vec3 ix = intersectLineWithPlane(uLightPosition, lineDirection, planePoint, planeNormal, ixFound);
+  vec3 ix;
+  bool ixFound = intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ix);
   if ( !ixFound ) {
     // Shouldn't happen, but...
     gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
@@ -345,8 +388,8 @@ void main() {
 }`;
 
 
-let shadowShapeShaderGLSL = {};
-shadowShapeShaderGLSL.vertexShader =
+let wallShadowShaderGLSL = {};
+wallShadowShaderGLSL.vertexShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -367,21 +410,10 @@ flat out float wallRatio;
 flat out float sidePenumbraRatio;
 flat out float nearFarPenumbraRatio;
 flat out float isTerrain;
+flat out vec3 corner1;
+flat out vec3 corner2;
 
-// Note: lineDirection and planeNormal should be normalized.
-vec3 intersectLineWithPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, inout bool ixFound) {
-  float denom = dot(planeNormal, lineDirection);
-
-  ixFound = false;
-  if (abs(denom) < 0.0001) {
-      // Line is parallel to the plane, no intersection
-      return vec3(-1.0);
-  }
-
-  ixFound = true;
-  float t = dot(planeNormal, planePoint - linePoint) / denom;
-  return linePoint + lineDirection * t;
-}
+${GLSLFunctions.intersectRayPlane}
 
 void main() {
   vWallRatio = 1.0;
@@ -394,13 +426,15 @@ void main() {
   }
 
   isTerrain = aTerrain;
+  corner1 = aOtherCorner;
+  corner2 = aVertexPosition;
 
   // Intersect the canvas plane: Light --> vertex --> plane.
-  bool ixFound;
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
   vec3 planePoint = vec3(0.0);
   vec3 lineDirection = normalize(aVertexPosition - uLightPosition);
-  vec3 ix = intersectLineWithPlane(uLightPosition, lineDirection, planePoint, planeNormal, ixFound);
+  vec3 ix;
+  bool ixFound = intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ix);
   if ( !ixFound ) {
     // Shouldn't happen, but...
     wallRatio = 1.0;
@@ -419,8 +453,8 @@ void main() {
   if ( aOtherCorner.z > uCanvasElevation ) {
     vec3 nearEndpoint = vec3(aVertexPosition.xy, aOtherCorner.z);
     lineDirection = normalize(nearEndpoint - uLightPosition);
-    vec3 ixNear = intersectLineWithPlane(uLightPosition, lineDirection, planePoint, planeNormal, ixFound);
-    if ( ixFound ) {
+    vec3 ixNear;
+    if ( intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ixNear) ) {
       // Should always happen, but...
       float nearEndpointDist = distance(uLightPosition.xy, ixNear.xy);
       wallRatio = nearEndpointDist / ixDist;
@@ -444,9 +478,13 @@ void main() {
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ix.xy, 1.0)).xy, 0.0, 1.0);
 }`;
 
-shadowShapeShaderGLSL.fragmentShader =
+wallShadowShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform float uCanvasElevation;
+uniform sampler2D uElevationMap;
+uniform vec4 uElevationResolution;
 
 in float vWallRatio;
 in vec3 vBary;
@@ -454,8 +492,13 @@ flat in float wallRatio;
 flat in float sidePenumbraRatio;
 flat in float nearFarPenumbraRatio;
 flat in float isTerrain;
+flat in vec3 corner1;
+flat in vec3 corner2;
 
 out vec4 fragColor;
+
+${GLSLFunctions.intersectRayQuad}
+${GLSLFunctions.canvasElevationFromPixel}
 
 // Linear conversion from one range to another.
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
@@ -475,16 +518,7 @@ float stepRatio(in float ratio, in float numDistinct) {
   }
 }
 
-// For debugging
-// Red is least (0); blue is most (1).
-// Green is near 50%
-vec3 stepColor(in float ratio) {
-  if ( ratio < 0.2 ) return vec3(smoothstep(0.0, 0.2, ratio), 0.0, 0.0);
-  if ( ratio < 0.4 ) return vec3(smoothstep(0.2, 0.4, ratio), smoothstep(0.2, 0.4, ratio), 0.0);
-  if ( ratio < 0.6 ) return vec3(0.0, smoothstep(0.4, 0.6, ratio), 0.0);
-  if ( ratio < 0.8 ) return vec3(0.0, smoothstep(0.6, 0.8, ratio), smoothstep(0.6, 0.8, ratio));
-  return vec3(0.0, 0.0, smoothstep(0.8, 1.0, ratio));
-}
+${GLSLFunctions.stepColor}
 
 void main() {
   // vBary.x is the distance from the light, where 1 = at light; 0 = at edge.
@@ -495,11 +529,23 @@ void main() {
   //fragColor = vec4(stepColor(vBary.z / (vBary.y + vBary.z)), 0.5);
   //return;
 
+  // Options:
+  // - in front of wall---dismiss early
+  // - elevation anywhere: shoot ray at light center
+  // - within the l/r border: shoot ray at outer or inner light radius and check for wall intersection.
+  // - within the t/b border: same
+  // - otherwise can assume full shadow.
+  // If within border, transparency based on ratio.
+
   if ( vWallRatio < wallRatio ) {
-    // fragColor = vec4(1.0, 1.0, 0.0, 0.7); // mimic a light
+    // Fragment is in front of the wall.
     fragColor = vec4(vec3(1.0), 0.0);
     return;
   }
+
+
+
+
 
   // Convert from a constant penumbra ratio that goes to the light to one that
   // goes to zero at the wall endpoint.
@@ -631,6 +677,123 @@ void main() {
   fragColor = vec4(vec3(0.0), 1.0 - lightAmount);
 }`;
 
+renderElevationTestGLSL = {};
+renderElevationTestGLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+in vec3 aVertexPosition;
+out vec3 vVertexPosition;
+
+void main() {
+  vVertexPosition = aVertexPosition;
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
+}`;
+
+renderElevationTestGLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+uniform sampler2D uElevationMap;
+uniform vec4 uElevationResolution;
+uniform vec4 uSceneDims;
+in vec3 vVertexPosition;
+out vec4 fragColor;
+
+${GLSLFunctions.canvasElevationFromPixel}
+${GLSLFunctions.stepColor}
+
+void main () {
+  // Elevation map spans the scene rectangle. Offset from canvas coordinate accordingly.
+  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
+  vec4 ev = texture(uElevationMap, evTexCoord);
+
+  if ( ev.r == 1.0 / 255.0 ) {
+    fragColor = vec4(0.0, 1.0, 0.0, 1.0);
+  } else {
+    fragColor = vec4(0.0, 0.0, 0.0, 0.3);
+  }
+  return;
+
+//   if ( evTexel.r > 0.0 ) {
+//     fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+//   } else if ( evTexel.g > 0.0 ) {
+//     fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+//   } else if ( evTexel.b > 0.0 ) {
+//     fragColor = vec4(0.0, 0.0, 1.0, 1.0);
+//   } else {
+//     fragColor = vec4(0.0);
+//   }
+//
+//   return;
+
+
+  // float elevation = canvasElevationFromPixel(elevationTexel.r, uElevationResolution);
+
+  // For testing, simply color the fragment using a ratio of elevation.
+  // float elevationMin = uElevationResolution.r;
+
+
+
+//   if ( elevation <= elevationMin ) {
+//     fragColor = vec4(0.2);
+//   } else {
+//     fragColor = vec4(stepColor(elevation / 100.0), 0.7);
+//   }
+}`;
+
+renderElevationTest2GLSL = {};
+renderElevationTest2GLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+in vec3 aVertexPosition;
+in vec2 aElevationCoord;
+out vec2 vElevationCoord;
+
+void main() {
+  vElevationCoord = aElevationCoord;
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
+}`;
+
+renderElevationTest2GLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+uniform sampler2D uElevationMap;
+uniform vec4 uElevationResolution;
+in vec2 vElevationCoord;
+out vec4 fragColor;
+
+${GLSLFunctions.canvasElevationFromPixel}
+${GLSLFunctions.stepColor}
+
+void main () {
+  vec4 elevationTexel = texture(uElevationMap, vElevationCoord);
+  float elevation = canvasElevationFromPixel(elevationTexel.r, uElevationResolution);
+
+  // For testing, simply color the fragment using a ratio of elevation.
+  float elevationMin = uElevationResolution.r;
+
+  if ( elevationTexel.r > 0.0 ) {
+    fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  } else if ( elevationTexel.g > 0.0 ) {
+    fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  } else if ( elevationTexel.b > 0.0 ) {
+    fragColor = vec4(0.0, 0.0, 1.0, 1.0);
+  }
+
+//   if ( elevation <= elevationMin ) {
+//     fragColor = vec4(0.2);
+//   } else {
+//     fragColor = vec4(stepColor(elevation / 100.0), 0.7);
+//   }
+}`;
+
 
 function buildShadowMesh(shadowMap, map) {
   geometryQuad = new PIXI.Geometry();
@@ -742,6 +905,12 @@ uniquePixels = function(pixels) {
   return s;
 }
 
+countPixels = function(pixels, value) {
+  let sum = 0;
+  pixels.forEach(px => sum += px === value);
+  return sum;
+}
+
 
 // Perspective light
 let [l] = canvas.lighting.placeables;
@@ -775,7 +944,7 @@ uniforms = {
 
 geometry = constructWallGeometry(map)
 
-let { vertexShader, fragmentShader } = shadowShapeShaderGLSL;
+let { vertexShader, fragmentShader } = wallShadowShaderGLSL;
 shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 mesh = new PIXI.Mesh(geometry, shader);
 mesh.blendMode = PIXI.BLEND_MODES.MULTIPLY;
@@ -846,7 +1015,7 @@ uniforms = {
 
 geometry = constructWallGeometry(map)
 
-let { vertexShader, fragmentShader } = shadowShapeShaderGLSL;
+let { vertexShader, fragmentShader } = wallShadowShaderGLSL;
 shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 mesh = new PIXI.Mesh(geometry, shader);
 //mesh.blendMode = PIXI.BLEND_MODES.ADD
@@ -1038,14 +1207,14 @@ vertex = B
 otherVertex = A
 
 // Shoot ray from light to vertex and intersect the plane
-function intersectLineWithPlane(linePoint, lineDirection, planePoint, planeNormal) {
+function intersectRayPlane(linePoint, lineDirection, planePoint, planeNormal) {
   denom = planeNormal.dot(lineDirection);
   if ( Math.abs(denom) < 0.0001 ) return false;
   t = planeNormal.dot(planePoint.subtract(linePoint))  / denom;
   return linePoint.add(lineDirection.multiplyScalar(t));
 }
 
-ix = intersectLineWithPlane(lightPosition, vertex.subtract(lightPosition).normalize(),
+ix = intersectRayPlane(lightPosition, vertex.subtract(lightPosition).normalize(),
   canvasPlane.point, canvasPlane.normal)
 Draw.point(ix);
 vertexDist = PIXI.Point.distanceBetween(lightPosition, vertex);
@@ -1055,7 +1224,7 @@ invSideRatio = ixDist / vertexDist;
 bigABDist = abDist * invSideRatio
 
 
-ix2 = intersectLineWithPlane(lightPosition, otherVertex.subtract(lightPosition).normalize(),
+ix2 = intersectRayPlane(lightPosition, otherVertex.subtract(lightPosition).normalize(),
   canvasPlane.point, canvasPlane.normal)
 Draw.point(ix2)
 PIXI.Point.distanceBetween(ix, ix2); // Should equal bigABDist
@@ -1287,4 +1456,166 @@ canvas.stage.removeChild(sBlurred)
 */
 
 
+/* Test rendering elevation texture
+let canvasRect = canvas.dimensions.rect;
+let sceneRect = canvas.dimensions.sceneRect;
+elevationMap = canvas.elevation._elevationTexture;
 
+geometryQuad = new PIXI.Geometry();
+
+// Build a quad that equals the light bounds.
+geometryQuad.addAttribute("aVertexPosition", [
+  sceneRect.left, sceneRect.top, 0,
+  sceneRect.right, sceneRect.top, 0,
+  sceneRect.right, sceneRect.bottom, 0,
+  sceneRect.left, sceneRect.bottom, 0
+], 3);
+
+geometryQuad.addIndex([0, 1, 2, 0, 2, 3]);
+
+
+uniforms = { elevationMap };
+let { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+let { size, distance } = canvas.dimensions;
+elevationMult = size * (1 / distance);
+uniforms.uElevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+//uniforms.uSceneDims = [sceneRect.left, sceneRect.top, sceneRect.width, sceneRect.height];
+let { sceneX, sceneY, sceneWidth, sceneHeight } = canvas.dimensions;
+uniforms.uSceneDims = [sceneX, sceneY, sceneWidth, sceneHeight];
+
+let { vertexShader, fragmentShader } = renderElevationTestGLSL;
+shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+mesh = new PIXI.Mesh(geometryQuad, shader);
+
+canvas.stage.addChild(mesh)
+canvas.stage.removeChild(mesh)
+
+
+let { pixels, width, height } = extractPixels(canvas.app.renderer, elevationMap);
+channels = [0];
+channels = channels.map(c => filterPixelsByChannel(pixels, c, 1));
+channels.map(c => pixelRange(c));
+channels.map(c => uniquePixels(c));
+channels.map(c => countPixels(c, 1));
+
+
+*/
+
+
+/* Test rendering the elevation texture over the light area only
+MAX_WIDTH = 4096;
+MAX_HEIGHT = 4096;
+sceneRect = canvas.dimensions.sceneRect;
+let lightFrame;
+let elevationFrame;
+let textureFrame = new PIXI.Rectangle();
+let width;
+let height;
+evTex = canvas.elevation._elevationTexture;
+if ( map.directional ) {
+  width = sceneRect.width;
+  height = sceneRect.height;
+  lightFrame = evTex.frame;
+  elevationFrame = lightFrame;
+} else {
+  lightFrame = l.bounds;
+  width = lightFrame.width;
+  height = lightFrame.height;
+
+  // Need to keep the frame within the texture, and account for ev texture resolution.
+  let frameCorner = map.lightPosition.to2d();
+  frameCorner.subtract({x: sceneRect.width, y: sceneRect.height}, frameCorner);
+  let diffX = frameCorner.x >= 0 ? 0 : -frameCorner.x;
+  let diffY = frameCorner.y >= 0 ? 0 : -frameCorner.y;
+  elevationFrame = new PIXI.Rectangle(frameCorner.x + diffX, frameCorner.y + diffY, width - diffX, height - diffY);
+  textureFrame.copyFrom(elevationFrame);
+
+
+  // Modify resolution
+  elevationFrame.width *= evTex.resolution;
+  elevationFrame.height *= evTex.resolution;
+
+  // Check the extent of width and height
+  elevationFrame.width = Math.min(elevationFrame.width, evTex.baseTexture.width);
+  elevationFrame.height = Math.min(elevationFrame.height, evTex.baseTexture.height)
+
+  textureFrame.width = Math.min(textureFrame.width, canvas.dimensions.width);
+  textureFrame.height = Math.min(textureFrame.height, canvas.dimensions.height);
+
+}
+
+let { pixels } = extractPixels(canvas.app.renderer, evTex);
+channels = [0, 1, 2, 3];
+channels = channels.map(c => filterPixelsByChannel(pixels, c, 4));
+channels.map(c => pixelRange(c));
+channels.map(c => uniquePixels(c));
+
+
+elevationMap = new PIXI.Texture(evTex.baseTexture, elevationFrame)
+
+width = Math.min(width, MAX_WIDTH);
+height = Math.min(height, MAX_HEIGHT);
+
+
+geometryQuad = new PIXI.Geometry();
+
+// Build a quad that equals the light bounds.
+geometryQuad.addAttribute("aVertexPosition", [
+  lightFrame.left, lightFrame.top, 0,
+  lightFrame.right, lightFrame.top, 0,
+  lightFrame.right, lightFrame.bottom, 0,
+  lightFrame.left, lightFrame.bottom, 0
+], 3);
+
+
+
+// Texture coordinates:
+// BL: 0,0; BR: 1,0; TL: 0,1; TR: 1,1
+// Texture needs to equate the bounds with the elevation texture.
+
+ixFrame = lightFrame.intersection(textureFrame);
+texLeft = (ixFrame.left - lightFrame.left) / lightFrame.width;
+texRight = 1 - ((lightFrame.right - lightFrame.right) / lightFrame.width);
+texTop = (ixFrame.top - lightFrame.top) / lightFrame.height;
+texBottom = 1 - ((lightFrame.bottom - lightFrame.bottom) / lightFrame.height);
+
+geometryQuad.addAttribute("aElevationCoord", [
+  texLeft, texBottom,
+  texRight, texBottom,
+  texRight, texTop,
+  texLeft, texTop
+
+//   0, 0, // TL
+//   1, 0, // TR
+//   1, 1, // BR
+//   0, 1 // BL
+], 2);
+geometryQuad.addIndex([0, 1, 2, 0, 2, 3]);
+
+
+uniforms = { elevationMap };
+let { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+let { size, distance } = canvas.dimensions;
+elevationMult = size * (1 / distance);
+uniforms.uElevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+
+let { vertexShader, fragmentShader } = renderElevationTestGLSL;
+shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+mesh = new PIXI.Mesh(geometryQuad, shader);
+
+canvas.stage.addChild(mesh)
+canvas.stage.removeChild(mesh)
+
+const renderTexture = new PIXI.RenderTexture.create({
+  width,
+  height,
+  scaleMode: PIXI.SCALE_MODES.NEAREST
+});
+renderTexture.baseTexture.clearColor = [1, 1, 1, 1];
+renderTexture.baseTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
+canvas.app.renderer.render(mesh, { renderTexture });
+
+
+
+
+*/
