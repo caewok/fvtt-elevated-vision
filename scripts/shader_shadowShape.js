@@ -1474,7 +1474,9 @@ geometryQuad.addAttribute("aVertexPosition", [
 geometryQuad.addIndex([0, 1, 2, 0, 2, 3]);
 
 
-uniforms = { elevationMap };
+
+uniforms = { uElevationMap: elevationMap };
+
 let { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
 let { size, distance } = canvas.dimensions;
 elevationMult = size * (1 / distance);
