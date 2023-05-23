@@ -7,6 +7,67 @@ Wall
 
 import { MODULE_ID } from "./const.js";
 
+
+/* NOTE: Color channel choices
+To avoid weirdness with alpha channel blending, avoid using it to set shadow amount.
+So that shadows can be multiplied together correctly, values actually represent light amount.
+Channels used:
+- red: Light amount, where 1 is full light. (1 - red ==> shadow amount)
+- green: Terrain/limited wall. 1 is normal wall. .5 means one terrain wall; anything less is 2+ walls.
+- blue: Terrain/limited wall light portion. Otherwise 1.0.
+- alpha: 1.0. Unused, but can be temporarily enabled for testing.
+--> vec4(1.0) would be full light.
+--> vec4(vec3(1.0), 0.0) would be ignoring this fragment.
+
+Use BLEND Multiply for combining pixels (i.e., light portions).
+- For red and blue, this means that setting channel to 0 will mean full shadow no matter what.
+- For green, values chosen to work with multiplication.
+  - Setting 1 for a normal wall shadow fragment: does nothing to the terrain wall count.
+  - Setting 0.5 for a terrain wall fragment: If set twice, multiplied to 0.25, or less for more.
+
+We want unpremultiplied alpha in most cases to avoid changing the data values.
+*/
+
+/* NOTE: Terrain and elevation
+Elevation inputs:
+- Lights have a given elevation (plus a lightSize that makes them a sphere)
+- Walls are quads spanning a vertical elevation.
+- Tiles are quads at a given elevation.
+- Canvas elevation or min elevation is the default elevation for rendering shadows.
+- TODO: Terrain elevation is a texture that provides an elevation above the minimum.
+  Fragments at higher terrain elevation have their shadow re-calculated.
+- TODO: Tile objects (textures?) indicate areas of higher terrain.
+  (Or are these incorporated into the terrain elevation?)
+*/
+
+/* NOTE: Shadow map output
+Goal is a shadow map texture for a given light/sound/vision source.
+- Describes the current shadows (light values?) for a given source and terrain,
+  as view from a defined elevation.
+
+Sources above the defined elevation contribute to the light/sound (/vision?)
+Viewing top-down, so shadows mark obscured areas from that elevation.
+Shadow map texture used in light/sound sources to block light at that fragment. (And vision?)
+
+So if on the "first floor" at elevation 10', a light at 19' would get a texture.
+So would a light at 5', which may or may not be seen depending on tiles making up the "floor."
+
+Elevation texture is the terrain plus any tile at or below target elevation.
+So if at elevation 10':
+- tile at 20' does not count.
+- tile at 10' creates elevation at 10', excepting transparent areas.
+- tile at 5' creates elevation at 5', excepting transparent areas.
+
+For given fragment with minElevation assumed here to be 0':
+- If terrain elevation equals or exceeds the light elevation, ignore. TODO: Ignore, or make full shadow?
+- If terrain elevation is above minimum elevation, recalculate by shooting ray to light center.s
+- If fragment not in shadow, let full light through.
+- If fragment in full shadow and not within penumbra area: full shadow.
+- If within penumbra area: Shoot ray to light position, adjusted by wall direction and light size,
+  to determine amount of penumbra, if any.
+*/
+
+
 // Draw trapezoidal shape of shadow directly on the canvas.
 // Take a vertex, light position, and canvas elevation.
 // Project the vertex onto the flat 2d canvas.
@@ -280,7 +341,7 @@ out vec4 fragColor;
 void main() {
   vec4 texColor = texture(uTileTexture, vTexCoord);
   float shadow = texColor.a < ALPHA_THRESHOLD ? 0.0 : uShadowPercentage;
-  fragColor = vec4(vec3(0.0), shadow);
+  fragColor = vec4(1.0 - shadow, vec3(1.0));
 }`;
 
 
@@ -436,7 +497,7 @@ void main() {
 
   if ( vWallRatio < wallRatio ) {
     // fragColor = vec4(1.0, 1.0, 0.0, 0.7); // mimic a light
-    fragColor = vec4(0.0);
+    fragColor = vec4(vec3(1.0), 0.0);
     return;
   }
 
@@ -453,31 +514,35 @@ void main() {
   float targetRatio = sidePenumbraRatio * squaredTx;
 
   // TODO: Change so that full light = 1.0; full shadow = 0.0. (Add for light, subtract for shadow.)
-  float shadow = 1.0;
-
+  float light = 1.0;
   if ( vBary.x < nearFarPenumbraRatio ) {
-    shadow *= vBary.x / nearFarPenumbraRatio;
-
-   // shadow -= (1.0 - (vBary.x / nearFarPenumbraRatio));
-    // fragColor = vec4(0.0, 0.0, 1.0, 0.5);
+    float shadowPercent = vBary.x / nearFarPenumbraRatio;
+    light *= (1.0 - shadowPercent);
   }
 
   if ( lrRatio < targetRatio ) {
-    shadow *= lrRatio / targetRatio;
-    // shadow -= 1.0 - (lrRatio / targetRatio);
-    // fragColor = vec4(1.0, 0.0, 0.0, 0.5);
+    float shadowPercent = lrRatio / targetRatio;
+    light *= (1.0 - shadowPercent);
   } else if ( (1.0 - lrRatio) < targetRatio ) {
-    shadow *= (1.0 - lrRatio) / targetRatio;
-    // shadow -= 1.0 - ((1.0 - lrRatio) / targetRatio);
-    // fragColor = vec4(0.0, 1.0, 0.0, 0.5);
+    float shadowPercent = (1.0 - lrRatio) / targetRatio;
+    light *= (1.0 - shadowPercent);
   }
-  shadow = clamp(shadow, 0.0, 1.0);
 
-  float terrain = isTerrain > 0.0 ? 1.0 : 0.0;
-  //fragColor = vec4(0.0, terrain / 255.0, shadow * terrain, shadow * (1.0 - terrain));
+  // If not on penumbra, this must be a shadow.
+  if ( light == 1.0 ) light = 0.0;
 
-   fragColor = vec4(vec3(0.0), shadow);
-  //fragColor = vec4(vec3(0.0), clamp(1.0 - light, 0.0, 1.0));
+  // isTerrain should be 0.0 or 1.0.
+  float nonTerrainLight = light;
+  float wallType = 1.0;
+  float terrainLight = 1.0;
+
+  if ( isTerrain > 0.5 ) {
+    nonTerrainLight = 1.0;
+    wallType = 0.5;
+    terrainLight = light;
+  }
+
+  fragColor = vec4(nonTerrainLight, wallType, terrainLight, 1.0);
 }`;
 
 let terrainShadowShaderGLSL = {};
@@ -507,17 +572,129 @@ out vec4 fragColor;
 
 void main() {
   // Pull the texel to check for terrain flag.
-  // ivec2 fragCoord = ivec2(gl_FragCoord.xy);
-  // vec4 texel = texelFetch(shadowMap, fragCoord, 0);
   vec4 texel = texture(shadowMap, vTexCoord);
-  //fragColor = texel;
+  float lightAmount = texel.r;
 
   // If more than 1 terrain wall at this point, add to the shadow.
   // If a single terrain wall, ignore.
-  float shadow = texel.a;
-  if ( texel.g > (1.0 / 255.0) ) shadow += texel.b;
-  fragColor = vec4(vec3(0.0), clamp(shadow, 0.0, 1.0));
+  if ( texel.g < 0.3 ) lightAmount *= texel.b;
+  fragColor = vec4(lightAmount, vec3(1.0));
 }`;
+
+
+/**
+ * Primarily for debugging.
+ * Given a shadow map, render the shadow as black area, fading to transparent where only a
+ * partial shadow exists.
+ * This does not handle terrain walls. (See terrainShadowShaderGLSL.)
+ */
+renderShadowShaderGLSL = {};
+renderShadowShaderGLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+in vec3 aVertexPosition;
+in vec2 aTexCoord;
+
+out vec2 vTexCoord;
+
+void main() {
+  vTexCoord = aTexCoord;
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
+}`;
+
+renderShadowShaderGLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+uniform sampler2D shadowMap;
+in vec2 vTexCoord;
+out vec4 fragColor;
+
+void main() {
+  vec4 texel = texture(shadowMap, vTexCoord);
+
+  // If all 1s, then this is simply a light area that we can ignore.
+  if ( all(equal(texel, vec4(1.0))) ) {
+    fragColor = vec4(vec3(1.0), 0.0);
+    return;
+  }
+
+  float lightAmount = texel.r;
+  // If more than 1 terrain wall at this point, add to the shadow.
+  // If a single terrain wall, ignore.
+  if ( texel.g < 0.3 ) lightAmount *= texel.b;
+  fragColor = vec4(vec3(0.0), 1.0 - lightAmount);
+}`;
+
+
+function buildShadowMesh(shadowMap, map) {
+  geometryQuad = new PIXI.Geometry();
+
+  // Render at the shadowMap dimensions and then resize / position
+  const { width, height } = shadowMap;
+  geometryQuad.addAttribute("aVertexPosition", [
+    0, 0, 0,          // TL
+    width, 0, 0,      // TR
+    width, height, 0, // BR
+    0, height, 0      // BL
+  ], 3);
+
+  // Texture coordinates:
+  // BL: 0,0; BR: 1,0; TL: 0,1; TR: 1,1
+  geometryQuad.addAttribute("aTexCoord", [
+    0, 0, // TL
+    1, 0, // TR
+    1, 1, // BR
+    0, 1 // BL
+  ], 2);
+  geometryQuad.addIndex([0, 1, 2, 0, 2, 3]);
+
+  uniforms = { shadowMap };
+  let { vertexShader, fragmentShader } = renderShadowShaderGLSL;
+  shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+  mesh = new PIXI.Mesh(geometryQuad, shader);
+  return mesh;
+}
+
+function renderShadowMesh(mesh, map) {
+  const MAX_WIDTH = 4096;
+  const MAX_HEIGHT = 4096;
+  const { sceneWidth, sceneHeight } = canvas.dimensions;
+  const width = Math.min(MAX_WIDTH, map.directional ? sceneWidth : map.lightRadius * 2);
+  const height = Math.min(MAX_HEIGHT, map.directional ? sceneHeight : map.lightRadius * 2);
+
+  const renderTexture = new PIXI.RenderTexture.create({
+    width,
+    height,
+    scaleMode: PIXI.SCALE_MODES.NEAREST
+  });
+  renderTexture.baseTexture.clearColor = [1, 1, 1, 1];
+  renderTexture.baseTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
+  canvas.app.renderer.render(mesh, { renderTexture });
+  return renderTexture;
+}
+
+function renderShadowShader(mesh, map) {
+  const MAX_WIDTH = 4096;
+  const MAX_HEIGHT = 4096;
+  const { sceneWidth, sceneHeight } = canvas.dimensions;
+  const width = Math.min(MAX_WIDTH, map.directional ? sceneWidth : map.lightRadius * 2);
+  const height = Math.min(MAX_HEIGHT, map.directional ? sceneHeight : map.lightRadius * 2);
+
+  const renderTexture = new PIXI.RenderTexture.create({
+    width,
+    height,
+    scaleMode: PIXI.SCALE_MODES.NEAREST
+  });
+  renderTexture.baseTexture.clearColor = [0, 0, 0, 0];
+  renderTexture.baseTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
+  canvas.app.renderer.render(mesh, { renderTexture });
+  return renderTexture;
+}
+
 
 
 /* Testing
@@ -599,9 +776,30 @@ geometry = constructWallGeometry(map)
 let { vertexShader, fragmentShader } = shadowShapeShaderGLSL;
 shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 mesh = new PIXI.Mesh(geometry, shader);
+mesh.blendMode = PIXI.BLEND_MODES.MULTIPLY;
 
 canvas.stage.addChild(mesh);
 canvas.stage.removeChild(mesh)
+
+shadowTex = renderShadowMesh(mesh, map)
+
+s = new PIXI.Sprite(shadowTex);
+canvas.stage.addChild(s);
+canvas.stage.removeChild(s);
+
+shadowMesh = buildShadowMesh(shadowTex.baseTexture, map)
+renderTex = renderShadowShader(shadowMesh, map)
+
+s = new PIXI.Sprite(renderTex);
+canvas.stage.addChild(s);
+canvas.stage.removeChild(s);
+
+let { pixels } = extractPixels(canvas.app.renderer, shadowTex);
+channels = [0, 1, 2, 3];
+channels = channels.map(c => filterPixelsByChannel(pixels, c, 4));
+channels.map(c => pixelRange(c));
+channels.map(c => uniquePixels(c));
+
 */
 
 /* Test terrain walls
