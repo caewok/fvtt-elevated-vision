@@ -513,23 +513,25 @@ void main() {
   // Using flat sidePenumbraRatio is slightly better -- flatter, less curvy.
   float targetRatio = sidePenumbraRatio * squaredTx;
 
-  // TODO: Change so that full light = 1.0; full shadow = 0.0. (Add for light, subtract for shadow.)
-  float light = 1.0;
+
+  // For corners, need to blend the left/right and the far/near light amounts.
+  // Multiplication is not correct here.
+  float nfShadowPercent = 1.0;
+  float lrShadowPercent = 1.0;
   if ( vBary.x < nearFarPenumbraRatio ) {
-    float shadowPercent = vBary.x / nearFarPenumbraRatio;
-    light *= (1.0 - shadowPercent);
+    nfShadowPercent = vBary.x / nearFarPenumbraRatio;
   }
-
   if ( lrRatio < targetRatio ) {
-    float shadowPercent = lrRatio / targetRatio;
-    light *= (1.0 - shadowPercent);
+    lrShadowPercent = lrRatio / targetRatio;
   } else if ( (1.0 - lrRatio) < targetRatio ) {
-    float shadowPercent = (1.0 - lrRatio) / targetRatio;
-    light *= (1.0 - shadowPercent);
+    lrShadowPercent = (1.0 - lrRatio) / targetRatio;
   }
 
-  // If not on penumbra, this must be a shadow.
-  if ( light == 1.0 ) light = 0.0;
+  // float penumbraShadowPercent = mix(nfShadowPercent, lrShadowPercent, 0.5);
+  float penumbraShadowPercent = min(nfShadowPercent, lrShadowPercent);
+
+  // If not on penumbra, this must be a full shadow.
+  float light = (1.0 - penumbraShadowPercent);
 
   // isTerrain should be 0.0 or 1.0.
   float nonTerrainLight = light;
