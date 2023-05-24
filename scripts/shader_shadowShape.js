@@ -265,6 +265,14 @@ float canvasElevationFromPixel(in float pixel, in vec4 elevationRes) {
 }
 `;
 
+// Orientation just like foundry.utils.orient2dFast
+GLSLFunctions.orient2d =
+`
+float orient2d(in vec2 a, in vec2 b, in vec2 c) {
+  return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
+}
+`;
+
 // For debugging.
 GLSLFunctions.stepColor =
 `
@@ -303,7 +311,7 @@ bool intersectRayQuad(vec3 linePoint, vec3 lineDirection, vec3 v0, vec3 v1, vec3
   vec3 planePoint = v0;
   vec3 diff01 = v1 - v0;
   vec3 diff02 = v2 - v0;
-  vec3 planeNormal = diff01.cross(diff02);
+  vec3 planeNormal = cross(diff01, diff02);
   if ( !intersectRayPlane(linePoint, lineDirection, planePoint, planeNormal, ix) ) return false;
 
   // Check if the intersection point is within the bounds of the quad.
@@ -406,6 +414,7 @@ in float aTerrain;
 
 out float vWallRatio;
 out vec3 vBary;
+out vec3 vVertexPosition;
 flat out float wallRatio;
 flat out float sidePenumbraRatio;
 flat out float nearFarPenumbraRatio;
@@ -418,6 +427,7 @@ ${GLSLFunctions.intersectRayPlane}
 void main() {
   vWallRatio = 1.0;
   vBary = aBary;
+  vVertexPosition = aVertexPosition;
 
   if ( gl_VertexID == 0 ) {
     vWallRatio = 0.0;
@@ -462,19 +472,34 @@ void main() {
   }
 
   // Use similar triangles to calculate the length of the shadow at the end of the trapezoid.
-  float abDist = distance(aOtherCorner.xy, aVertexPosition.xy);
-  float ABDist = abDist * (ixDist / vertexDist);
-
+  // Two similar triangles formed:
+  // 1. E-R-L: wall endpoint -- light radius point -- light
+  // 2. E-C-D: wall endpoint -- penumbra top -- penumbra bottom
+  /*
+  Trapezoid
+           . C
+  L.      /|
+   | \ E/  |
+   |  /º\  |
+   |/     \|
+  Rº       º D
+  */
 
   // Determine the lightSize circle projected at this vertex.
   // Pass the ratio of lightSize projected / length of shadow to fragment to draw the inner penumbra.
-  float penumbraProjectionRatio = vertexDist / (ixDist - vertexDist);
-  float lightSizeProjected = uLightSize * penumbraProjectionRatio;
+  // Ratio of two triangles is k. Use inverse so we can multiply to get lightSizeProjected.
+  float invK = (ixDist - vertexDist) / vertexDist;
+  float lightSizeProjected = uLightSize * invK;
+
+  // Also use similar triangles for the ratio between wall AB and the end of the trapezoid shadow.
+  float abDist = distance(aOtherCorner.xy, aVertexPosition.xy);
+  float ABDist = abDist * (ixDist / vertexDist);
   sidePenumbraRatio = lightSizeProjected / ABDist;
 
   // Determine the ratio for near/far using distance to the light.
   nearFarPenumbraRatio = lightSizeProjected / ixDist;
 
+  vVertexPosition = ix;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ix.xy, 1.0)).xy, 0.0, 1.0);
 }`;
 
@@ -482,12 +507,15 @@ wallShadowShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-uniform float uCanvasElevation;
 uniform sampler2D uElevationMap;
-uniform vec4 uElevationResolution;
+uniform vec4 uElevationResolution; // min, step, maxpixel, multiplier
+uniform vec4 uSceneDims;
+uniform vec3 uLightPosition;
+uniform float uLightSize;
 
 in float vWallRatio;
 in vec3 vBary;
+in vec3 vVertexPosition;
 flat in float wallRatio;
 flat in float sidePenumbraRatio;
 flat in float nearFarPenumbraRatio;
@@ -499,12 +527,13 @@ out vec4 fragColor;
 
 ${GLSLFunctions.intersectRayQuad}
 ${GLSLFunctions.canvasElevationFromPixel}
+${GLSLFunctions.stepColor}
+${GLSLFunctions.orient2d}
 
 // Linear conversion from one range to another.
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
   return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
 }
-
 
 // For debugging
 // Split 0–1 into a set of distinct values.
@@ -518,7 +547,23 @@ float stepRatio(in float ratio, in float numDistinct) {
   }
 }
 
-${GLSLFunctions.stepColor}
+vec4 lightColor(in float light) {
+  float terrain = float(isTerrain > 0.5);
+  float tMinus = 1.0 - terrain;
+
+  // nonTerrainLight, wallType, terrainLight, alpha=1
+  // e.g.
+  // light = .8
+  // terrain = 0: 0.8, 1.0, 1.0
+  // terrain = 1: 1.0, 0.5, 0.8
+
+  // r: (.8 * (1. - terrain)) + terrain
+  // g: 1.0 - (0.5 * terrain)
+  // b: (.8 * terrain) + (1 - terrain)
+
+  return vec4((light * tMinus) + terrain, 1.0 - (0.5 * terrain), (light * terrain) + tMinus, 1.0);
+}
+
 
 void main() {
   // vBary.x is the distance from the light, where 1 = at light; 0 = at edge.
@@ -537,60 +582,141 @@ void main() {
   // - otherwise can assume full shadow.
   // If within border, transparency based on ratio.
 
+  // Check if fragment is in front of the wall.
   if ( vWallRatio < wallRatio ) {
-    // Fragment is in front of the wall.
-    fragColor = vec4(vec3(1.0), 0.0);
+    fragColor = vec4(1.0, 1.0, 0.0, 0.3);
+    //fragColor = vec4(vec3(1.0), 0.0);
     return;
   }
 
+  // What is the terrain elevation of this fragment?
+  float elevation = uElevationResolution.r; // The r is minimum elevation.
+  bool highElevation = false;
+  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
 
+  if ( any(lessThan(evTexCoord, vec2(0.0)))
+    || any(greaterThan(evTexCoord, vec2(1.0))) ) {
+    // Outside the scene bounds.
+    fragColor = vec4(1.0, 0.0, 1.0, 0.7); // debugging
+    return;
+  }
 
+  if ( all(lessThan(evTexCoord, vec2(1.0)))
+    && all(greaterThan(evTexCoord, vec2(0.0))) ) {
+    // Inside the scene bounds. Check elevation texture.
+    vec4 evTexel = texture(uElevationMap, evTexCoord);
+    elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
+    highElevation = elevation > uElevationResolution.r;
+  }
 
-
-  // Convert from a constant penumbra ratio that goes to the light to one that
-  // goes to zero at the wall endpoint.
-  // Have not yet found the mathematical solution, but taking the square root of the
-  // linear transform is pretty close.
+  // Are we possibly within the l/r penumbra border?
+  // (Could be within both if the light size is large or wall is small.)
+  // This border is overly inclusive and so location must be confirmed with additional tests.
   float lrRatio = vBary.z / (vBary.y + vBary.z);
-  float linearTx = (vWallRatio - wallRatio) / ( 1.0 - wallRatio);
-  // float smoothTx = smoothstep(wallRatio, 1.0, vWallRatio); // Bad choice.
-  float squaredTx = sqrt(linearTx);
+  bool withinL = lrRatio < sidePenumbraRatio;
+  bool withinR = (1.0 - lrRatio) < sidePenumbraRatio;
 
-  // Using flat sidePenumbraRatio is slightly better -- flatter, less curvy.
-  float targetRatio = sidePenumbraRatio * squaredTx;
+  // Are we possibly within the far penumbra border?
+  bool withinFar = vBary.x < nearFarPenumbraRatio;
+
+  // If not high terrain and not in penumbra, in full shadow.
+  if ( !withinFar && !withinL && !withinR && !highElevation ) {
+    fragColor = vec4(vec3(0.0), 0.7);
+    //fragColor = lightColor(0.0);
+    return;
+  } // else if ( withinL ) {
+//     fragColor = vec4(1.0, 0.0, 0.0, 0.7);
+//   } else if ( withinR ) {
+//     fragColor = vec4(0.0, 0.0, 1.0, 0.7);
+//   } else if ( withinFar ) {
+//     fragColor = vec4(0.5, 0.0, 0.5, 0.7);
+//   } else if ( highElevation ) {
+//     fragColor = vec4(0.0, 1.0, 0.0, 0.7);
+//   }
+//   return;
+
+  // Find the line from the light sphere (circle) edge through the wall endpoint.
+  // Use orientation test: if on the opposite side of the line from the light, fragment is in penumbra.
+
+  // First endpoint
+  vec2 dirAB = normalize(corner1.xy - corner2.xy);
+  vec2 penumbraLightPoint1 = uLightPosition.xy + (dirAB * uLightSize);
+  float oLight = orient2d(penumbraLightPoint1, corner1.xy, uLightPosition.xy);
+  float oFrag = orient2d(penumbraLightPoint1, corner1.xy, vVertexPosition.xy);
+  withinL = sign(oLight) != sign(oFrag);
+
+  // Second endpoint
+  vec2 penumbraLightPoint2 = uLightPosition.xy - (dirAB * uLightSize);
+  oLight = orient2d(penumbraLightPoint2, corner2.xy, uLightPosition.xy);
+  oFrag = orient2d(penumbraLightPoint2, corner2.xy, vVertexPosition.xy);
+  withinR = sign(oLight) != sign(oFrag);
+
+  // Near/far does not need adjustment. (Right?!?)
+
+  if ( withinL ) {
+    fragColor = vec4(1.0, 0.0, 0.0, 0.7);
+  } else if ( withinR ) {
+    fragColor = vec4(0.0, 0.0, 1.0, 0.7);
+  } else if ( withinFar ) {
+    fragColor = vec4(0.5, 0.0, 0.5, 0.7);
+  } else if ( highElevation ) {
+    fragColor = vec4(0.0, 1.0, 0.0, 0.7);
+  }
+  return;
 
 
-  // For corners, need to blend the left/right and the far/near light amounts.
-  // Multiplication is not correct here.
+  vec3 v0 = corner1; // A top
+  vec3 v1 = vec3(corner2.xy, corner1.z); // B top
+  vec3 v2 = corner2; // B bottom
+  vec3 v3 = vec3(corner1.xy, corner2.z); // A bottom
+  vec3 fragPosition = vec3(vVertexPosition.xy, elevation);
+  vec3 dir = normalize(v1 - v0);
+  vec3 ixPlaceholder;
+
+  // Shoot ray to light center to test if the elevation change results in a lit area.
+  bool isShadowed = true;
+  if ( highElevation ) isShadowed = intersectRayQuad(fragPosition, uLightPosition, v0, v1, v2, v3, ixPlaceholder);
+
+  bool shadowedByL = true;
+  if ( withinL ) {
+    // Test the outer radius of the light in relation to the wall.
+    vec3 leftOfLight = uLightPosition + (dir * -uLightSize);
+    shadowedByL = intersectRayQuad(fragPosition, leftOfLight, v0, v1, v2, v3, ixPlaceholder);
+  }
+
+  bool shadowedByR = true;
+  if ( withinR ) {
+    vec3 rightOfLight = uLightPosition + (dir * uLightSize);
+    shadowedByR = intersectRayQuad(fragPosition, rightOfLight, v0, v1, v2, v3, ixPlaceholder);
+  }
+
+  bool shadowedByT = true;
+  if ( withinFar ) {
+    // Topdown, so we want to go up in elevation on the light.
+    vec3 topOfLight = uLightPosition + (vec3(0.0, 0.0, 1.0) * uLightSize);
+    shadowedByT = intersectRayQuad(fragPosition, topOfLight, v0, v1, v2, v3, ixPlaceholder);
+  }
+
+  if ( isShadowed && shadowedByL && shadowedByR && shadowedByT ) {
+    fragColor = vec4(0.5, 0.5, 0.5, 0.7);
+    // fragColor = lightColor(0.0);
+    return;
+  }
+
+  // Unclear how best to calculate the shadow proportion at this point.
+  // Using sidePenumbraRatio is incorrect (too large) but calculating true size eludes me.
   float nfShadowPercent = 1.0;
   float lrShadowPercent = 1.0;
-  if ( vBary.x < nearFarPenumbraRatio ) {
-    nfShadowPercent = vBary.x / nearFarPenumbraRatio;
+  if ( !shadowedByT ) nfShadowPercent = vBary.x / nearFarPenumbraRatio;
+  if ( !shadowedByL ) {
+    lrShadowPercent = lrRatio / sidePenumbraRatio;
+  } else if ( !shadowedByR ) {
+    lrShadowPercent = (1.0 - lrRatio) / sidePenumbraRatio;
   }
-  if ( lrRatio < targetRatio ) {
-    lrShadowPercent = lrRatio / targetRatio;
-  } else if ( (1.0 - lrRatio) < targetRatio ) {
-    lrShadowPercent = (1.0 - lrRatio) / targetRatio;
-  }
-
-  // float penumbraShadowPercent = mix(nfShadowPercent, lrShadowPercent, 0.5);
   float penumbraShadowPercent = min(nfShadowPercent, lrShadowPercent);
 
-  // If not on penumbra, this must be a full shadow.
-  float light = (1.0 - penumbraShadowPercent);
-
-  // isTerrain should be 0.0 or 1.0.
-  float nonTerrainLight = light;
-  float wallType = 1.0;
-  float terrainLight = 1.0;
-
-  if ( isTerrain > 0.5 ) {
-    nonTerrainLight = 1.0;
-    wallType = 0.5;
-    terrainLight = light;
-  }
-
-  fragColor = vec4(nonTerrainLight, wallType, terrainLight, 1.0);
+  fragColor = vec4(0.0, 0.0, penumbraShadowPercent, 0.7);
+  // fragColor = lightColor(1.0 - penumbraShadowPercent);
 }`;
 
 let terrainShadowShaderGLSL = {};
@@ -938,21 +1064,29 @@ map.clearPlaceablesCoordinatesData()
 if ( !directional ) Draw.shape(
   new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation),
   { color: Draw.COLORS.lightyellow})
+
+geometry = constructWallGeometry(map)
+
+let { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+let { size, distance } = canvas.dimensions;
+elevationMult = size * (1 / distance);
+let { sceneX, sceneY, sceneWidth, sceneHeight } = canvas.dimensions;
 uniforms = {
   uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
   uCanvasElevation: 0,
-  uLightSize: lightSize
+  uLightSize: lightSize,
+  uElevationResolution: [elevationMin, elevationStep, maximumPixelValue, elevationMult],
+  uSceneDims: [sceneX, sceneY, sceneWidth, sceneHeight],
+  uElevationMap: canvas.elevation._elevationTexture
 }
-
-geometry = constructWallGeometry(map)
 
 let { vertexShader, fragmentShader } = wallShadowShaderGLSL;
 shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 mesh = new PIXI.Mesh(geometry, shader);
 mesh.blendMode = PIXI.BLEND_MODES.MULTIPLY;
 
-canvas.stage.addChild(mesh);
-canvas.stage.removeChild(mesh)
+// canvas.stage.addChild(mesh);
+// canvas.stage.removeChild(mesh);
 
 shadowTex = renderShadowMesh(mesh, map)
 
@@ -1188,6 +1322,8 @@ while ( currentIndex < dat.length ) {
 Manual calculation of penumbra radius and ratio
 
 let [w] = canvas.walls.controlled;
+PIXI.Point.distanceBetween(w.A, w.B)
+
 canvasPlane = new Plane();
 A = new Point3d(w.A.x, w.A.y, w.topZ);
 B = new Point3d(w.B.x, w.B.y, w.topZ);
@@ -1196,6 +1332,13 @@ Draw.clearDrawings()
 Draw.point(lightPosition, { color: Draw.COLORS.yellow });
 cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightSize);
 Draw.shape(cir, { color: Draw.COLORS.yellow, fill: Draw.COLORS.yellow, fillAlpha: 0.5 })
+
+// Assume currently at vertex A
+vertex = A
+otherVertex = B
+
+
+
 
 // We want point B for now
 Draw.point(A)
@@ -1222,8 +1365,14 @@ Draw.point(ix);
 vertexDist = PIXI.Point.distanceBetween(lightPosition, vertex);
 ixDist = PIXI.Point.distanceBetween(lightPosition, ix);
 
+vertexDist3 = Point3d.distanceBetween(lightPosition, vertex);
+ixDist3 = Point3d.distanceBetween(lightPosition, ix);
+
 invSideRatio = ixDist / vertexDist;
 bigABDist = abDist * invSideRatio
+
+invSideRatio3 = ixDist3 / vertexDist3;
+bigABDist3 = abDist * invSideRatio3
 
 
 ix2 = intersectRayPlane(lightPosition, otherVertex.subtract(lightPosition).normalize(),
@@ -1231,9 +1380,43 @@ ix2 = intersectRayPlane(lightPosition, otherVertex.subtract(lightPosition).norma
 Draw.point(ix2)
 PIXI.Point.distanceBetween(ix, ix2); // Should equal bigABDist
 
+// Ratio of the two triangles is k
+k = vertexDist / (ixDist - vertexDist)
+
+// Size of the penumbra radius is proportional to the triangles, indicated by k
+lightSizeProjected = lightSize / k;
+
+
+// Flip around so we can multiply instead of divide
+invK = (ixDist - vertexDist) / vertexDist
+lightSizeProjected = lightSize * invK;
+
+invK3 = ixDist3 / vertexDist3
+lightSizeProjected3 = lightSize * invK3;
+
+// Project the point on the end of the shadow trapezoid
+dir = B.subtract(A).normalize()
+penumbraIx = ix.add(dir.multiplyScalar(lightSizeProjected))
+Draw.point(penumbraIx, { color: Draw.COLORS.blue })
+
+penumbraRatio = (ixDist - vertexDist) / vertexDist
 penumbraRatio = vertexDist / (ixDist - vertexDist)
 lightSizeProjected = lightSize * penumbraRatio
 vSidePenumbraRatio = lightSizeProjected / bigABDist;
+
+
+// Orientation test to determine if a point is on the penumbra side of a shadow.
+A2 = A.to2d()
+B2 = B.to2d()
+dirAB = A2.subtract(B2).normalize()
+penumbraLightPoint1 = lightPosition.to2d().add(dirAB.multiplyScalar(lightSize))
+
+// Penumbra line is penumbraLightPoint1 --> A2
+c = _token.center
+foundry.utils.orient2dFast(penumbraLightPoint1, A2, lightPosition);
+foundry.utils.orient2dFast(penumbraLightPoint1, A2, c)
+
+
 
 // Assume a wall ratio of 0.5 and a penumbra ratio between 0 and .2
 penumbraRatio = [0, 0.05, 0.1, 0.15, 0.2]
@@ -1490,6 +1673,7 @@ uniforms.uElevationResolution = [elevationMin, elevationStep, maximumPixelValue,
 //uniforms.uSceneDims = [sceneRect.left, sceneRect.top, sceneRect.width, sceneRect.height];
 let { sceneX, sceneY, sceneWidth, sceneHeight } = canvas.dimensions;
 uniforms.uSceneDims = [sceneX, sceneY, sceneWidth, sceneHeight];
+
 
 let { vertexShader, fragmentShader } = renderElevationTestGLSL;
 shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
