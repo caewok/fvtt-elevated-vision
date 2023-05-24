@@ -708,39 +708,32 @@ ${GLSLFunctions.stepColor}
 void main () {
   // Elevation map spans the scene rectangle. Offset from canvas coordinate accordingly.
   vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
-  vec4 ev = texture(uElevationMap, evTexCoord);
 
-  if ( ev.r == 1.0 / 255.0 ) {
-    fragColor = vec4(0.0, 1.0, 0.0, 1.0);
-  } else {
-    fragColor = vec4(0.0, 0.0, 0.0, 0.3);
+  if ( any(lessThan(evTexCoord, vec2(0.0)))
+    || any(greaterThan(evTexCoord, vec2(1.0))) ) {
+    fragColor = vec4(vec3(0.0), 0.2);
+    return;
   }
-  return;
 
-//   if ( evTexel.r > 0.0 ) {
-//     fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-//   } else if ( evTexel.g > 0.0 ) {
-//     fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-//   } else if ( evTexel.b > 0.0 ) {
-//     fragColor = vec4(0.0, 0.0, 1.0, 1.0);
-//   } else {
-//     fragColor = vec4(0.0);
-//   }
-//
-//   return;
+  vec4 evTexel = texture(uElevationMap, evTexCoord);
+  float elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
 
-
-  // float elevation = canvasElevationFromPixel(elevationTexel.r, uElevationResolution);
+  if ( elevation == 30.0 * uElevationResolution.a ) {
+    fragColor = vec4(0.0, 0.0, 1.0, 0.7);
+  } else if ( elevation == 10.0 * uElevationResolution.a ) {
+    fragColor = vec4(0.0, 1.0, 0.0, 0.7);
+  } else if ( elevation > 0.0 ) {
+    fragColor = vec4(1.0, 0.0, 0.0, 0.7);
+  } else {
+    fragColor = vec4(vec3(0.0), 0.2);
+  }
 
   // For testing, simply color the fragment using a ratio of elevation.
-  // float elevationMin = uElevationResolution.r;
-
-
-
+//   float elevationMin = uElevationResolution.r;
 //   if ( elevation <= elevationMin ) {
-//     fragColor = vec4(0.2);
+//     fragColor = vec4(vec3(0.0), 0.2);
 //   } else {
-//     fragColor = vec4(stepColor(elevation / 100.0), 0.7);
+//     fragColor = vec4(stepColor(elevation / 1000.0), 0.7);
 //   }
 }`;
 
@@ -773,19 +766,28 @@ ${GLSLFunctions.canvasElevationFromPixel}
 ${GLSLFunctions.stepColor}
 
 void main () {
-  vec4 elevationTexel = texture(uElevationMap, vElevationCoord);
-  float elevation = canvasElevationFromPixel(elevationTexel.r, uElevationResolution);
+  if ( any(lessThan(vElevationCoord, vec2(0.0)))
+    || any(greaterThan(vElevationCoord, vec2(1.0))) ) {
+    fragColor = vec4(vec3(0.0), 0.2);
+    return;
+  }
+
+  vec4 evTexel = texture(uElevationMap, vElevationCoord);
+  float elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
 
   // For testing, simply color the fragment using a ratio of elevation.
   float elevationMin = uElevationResolution.r;
 
-  if ( elevationTexel.r > 0.0 ) {
-    fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-  } else if ( elevationTexel.g > 0.0 ) {
-    fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-  } else if ( elevationTexel.b > 0.0 ) {
-    fragColor = vec4(0.0, 0.0, 1.0, 1.0);
+  if ( elevation == 30.0 * uElevationResolution.a ) {
+    fragColor = vec4(0.0, 0.0, 1.0, 0.7);
+  } else if ( elevation == 10.0 * uElevationResolution.a ) {
+    fragColor = vec4(0.0, 1.0, 0.0, 0.7);
+  } else if ( elevation > 0.0 ) {
+    fragColor = vec4(1.0, 0.0, 0.0, 0.7);
+  } else {
+    fragColor = vec4(vec3(0.0), 0.2);
   }
+
 
 //   if ( elevation <= elevationMin ) {
 //     fragColor = vec4(0.2);
@@ -1457,18 +1459,24 @@ canvas.stage.removeChild(sBlurred)
 
 
 /* Test rendering elevation texture
+
+performance.mark("renderEV1_start");
+for ( let i = 0; i < 10000; i += 1 ) {
+
 let canvasRect = canvas.dimensions.rect;
 let sceneRect = canvas.dimensions.sceneRect;
 elevationMap = canvas.elevation._elevationTexture;
+lightFrame = new PIXI.Rectangle();
+lightFrame.copyFrom(map.directional ? sceneRect : l.bounds);
 
 geometryQuad = new PIXI.Geometry();
 
 // Build a quad that equals the light bounds.
 geometryQuad.addAttribute("aVertexPosition", [
-  sceneRect.left, sceneRect.top, 0,
-  sceneRect.right, sceneRect.top, 0,
-  sceneRect.right, sceneRect.bottom, 0,
-  sceneRect.left, sceneRect.bottom, 0
+  lightFrame.left, lightFrame.top, 0,
+  lightFrame.right, lightFrame.top, 0,
+  lightFrame.right, lightFrame.bottom, 0,
+  lightFrame.left, lightFrame.bottom, 0
 ], 3);
 
 geometryQuad.addIndex([0, 1, 2, 0, 2, 3]);
@@ -1490,6 +1498,9 @@ mesh = new PIXI.Mesh(geometryQuad, shader);
 canvas.stage.addChild(mesh)
 canvas.stage.removeChild(mesh)
 
+}
+performance.mark("renderEV1_end");
+performance.measure("renderEV1", "renderEV1_start", "renderEV1_end");
 
 let { pixels, width, height } = extractPixels(canvas.app.renderer, elevationMap);
 channels = [0];
@@ -1503,59 +1514,36 @@ channels.map(c => countPixels(c, 1));
 
 
 /* Test rendering the elevation texture over the light area only
-MAX_WIDTH = 4096;
-MAX_HEIGHT = 4096;
-sceneRect = canvas.dimensions.sceneRect;
-let lightFrame;
-let elevationFrame;
-let textureFrame = new PIXI.Rectangle();
-let width;
-let height;
-evTex = canvas.elevation._elevationTexture;
-if ( map.directional ) {
-  width = sceneRect.width;
-  height = sceneRect.height;
-  lightFrame = evTex.frame;
-  elevationFrame = lightFrame;
-} else {
-  lightFrame = l.bounds;
-  width = lightFrame.width;
-  height = lightFrame.height;
+// The quad we are rendering is the light bounds.
+// Overlay the terrain elevation texture bounds. Upload only the portion of the
+// terrain elevation texture that overlaps.
 
-  // Need to keep the frame within the texture, and account for ev texture resolution.
-  let frameCorner = map.lightPosition.to2d();
-  frameCorner.subtract({x: sceneRect.width, y: sceneRect.height}, frameCorner);
-  let diffX = frameCorner.x >= 0 ? 0 : -frameCorner.x;
-  let diffY = frameCorner.y >= 0 ? 0 : -frameCorner.y;
-  elevationFrame = new PIXI.Rectangle(frameCorner.x + diffX, frameCorner.y + diffY, width - diffX, height - diffY);
-  textureFrame.copyFrom(elevationFrame);
+// This second appears longer.
+performance.mark("renderEV2_start");
+for ( let i = 0; i < 10000; i += 1 ) {
+let canvasRect = canvas.dimensions.rect;
+let sceneRect = canvas.dimensions.sceneRect;
+elevationMap = canvas.elevation._elevationTexture;
 
+lightFrame = new PIXI.Rectangle();
+lightFrame.copyFrom(map.directional ? sceneRect : l.bounds);
 
-  // Modify resolution
-  elevationFrame.width *= evTex.resolution;
-  elevationFrame.height *= evTex.resolution;
+// MAX_WIDTH = 4096;
+// MAX_HEIGHT = 4096;
+// width = Math.min(lightFrame.width, MAX_WIDTH);
+// height = Math.min(lightFrame.height, MAX_HEIGHT);
 
-  // Check the extent of width and height
-  elevationFrame.width = Math.min(elevationFrame.width, evTex.baseTexture.width);
-  elevationFrame.height = Math.min(elevationFrame.height, evTex.baseTexture.height)
+// Elevation map starts at 0,0: shift to scene rect
+elevationFrame = new PIXI.Rectangle();
+elevationFrame.copyFrom(elevationMap.frame);
+elevationFrame.x = sceneRect.x;
+elevationFrame.y = sceneRect.y;
 
-  textureFrame.width = Math.min(textureFrame.width, canvas.dimensions.width);
-  textureFrame.height = Math.min(textureFrame.height, canvas.dimensions.height);
+ixFrame = elevationFrame.intersection(lightFrame)
+ixFrame.x = 0;
+ixFrame.y = 0;
 
-}
-
-let { pixels } = extractPixels(canvas.app.renderer, evTex);
-channels = [0, 1, 2, 3];
-channels = channels.map(c => filterPixelsByChannel(pixels, c, 4));
-channels.map(c => pixelRange(c));
-channels.map(c => uniquePixels(c));
-
-
-elevationMap = new PIXI.Texture(evTex.baseTexture, elevationFrame)
-
-width = Math.min(width, MAX_WIDTH);
-height = Math.min(height, MAX_HEIGHT);
-
+elevationMap = new PIXI.Texture(elevationMap.baseTexture, ixFrame)
 
 geometryQuad = new PIXI.Geometry();
 
@@ -1567,6 +1555,47 @@ geometryQuad.addAttribute("aVertexPosition", [
   lightFrame.left, lightFrame.bottom, 0
 ], 3);
 
+
+// Texture 0 --> 1 maps to the sceneRect.
+// So for a given direction, what percentage of lightFrame do you have to move to get to 0 (or 1). E.g.:
+// What percentage of lightFrame.width do you have to move to get to sceneRect.x?
+// distance between sceneRect.x and lightFrame.x = sceneRect.x - lightFrame.x.
+// Percentage requires dividing by lightFrame.width.
+
+// imagine lightFrame contains sceneRect.x = 0 at midpoint, and sceneRect.x = .75 at the far end
+// so -0.75 at the one end would mean it works linearly.
+
+texRight = (lightFrame.right - sceneRect.left) / sceneRect.width;
+texLeft = (lightFrame.left - sceneRect.left) / sceneRect.width;
+
+texBottom = (lightFrame.bottom - sceneRect.top) / sceneRect.height;
+texTop = (lightFrame.top - sceneRect.top) / sceneRect.height;
+
+
+geometryQuad.addAttribute("aElevationCoord", [
+  texLeft, texTop,
+  texRight, texTop,
+  texRight, texBottom,
+  texLeft, texBottom
+], 2);
+
+geometryQuad.addIndex([0, 1, 2, 0, 2, 3]);
+
+uniforms = { uElevationMap: elevationMap  };
+let { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+let { size, distance } = canvas.dimensions;
+elevationMult = size * (1 / distance);
+uniforms.uElevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+
+let { vertexShader, fragmentShader } = renderElevationTest2GLSL;
+shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+mesh = new PIXI.Mesh(geometryQuad, shader);
+
+canvas.stage.addChild(mesh)
+canvas.stage.removeChild(mesh)
+}
+performance.mark("renderEV2_end");
+performance.measure("renderEV2", "renderEV2_start", "renderEV2_end");
 
 
 // Texture coordinates:
