@@ -7,6 +7,67 @@ Wall
 
 import { MODULE_ID } from "./const.js";
 
+
+/* NOTE: Color channel choices
+To avoid weirdness with alpha channel blending, avoid using it to set shadow amount.
+So that shadows can be multiplied together correctly, values actually represent light amount.
+Channels used:
+- red: Light amount, where 1 is full light. (1 - red ==> shadow amount)
+- green: Terrain/limited wall. 1 is normal wall. .5 means one terrain wall; anything less is 2+ walls.
+- blue: Terrain/limited wall light portion. Otherwise 1.0.
+- alpha: 1.0. Unused, but can be temporarily enabled for testing.
+--> vec4(1.0) would be full light.
+--> vec4(vec3(1.0), 0.0) would be ignoring this fragment.
+
+Use BLEND Multiply for combining pixels (i.e., light portions).
+- For red and blue, this means that setting channel to 0 will mean full shadow no matter what.
+- For green, values chosen to work with multiplication.
+  - Setting 1 for a normal wall shadow fragment: does nothing to the terrain wall count.
+  - Setting 0.5 for a terrain wall fragment: If set twice, multiplied to 0.25, or less for more.
+
+We want unpremultiplied alpha in most cases to avoid changing the data values.
+*/
+
+/* NOTE: Terrain and elevation
+Elevation inputs:
+- Lights have a given elevation (plus a lightSize that makes them a sphere)
+- Walls are quads spanning a vertical elevation.
+- Tiles are quads at a given elevation.
+- Canvas elevation or min elevation is the default elevation for rendering shadows.
+- TODO: Terrain elevation is a texture that provides an elevation above the minimum.
+  Fragments at higher terrain elevation have their shadow re-calculated.
+- TODO: Tile objects (textures?) indicate areas of higher terrain.
+  (Or are these incorporated into the terrain elevation?)
+*/
+
+/* NOTE: Shadow map output
+Goal is a shadow map texture for a given light/sound/vision source.
+- Describes the current shadows (light values?) for a given source and terrain,
+  as view from a defined elevation.
+
+Sources above the defined elevation contribute to the light/sound (/vision?)
+Viewing top-down, so shadows mark obscured areas from that elevation.
+Shadow map texture used in light/sound sources to block light at that fragment. (And vision?)
+
+So if on the "first floor" at elevation 10', a light at 19' would get a texture.
+So would a light at 5', which may or may not be seen depending on tiles making up the "floor."
+
+Elevation texture is the terrain plus any tile at or below target elevation.
+So if at elevation 10':
+- tile at 20' does not count.
+- tile at 10' creates elevation at 10', excepting transparent areas.
+- tile at 5' creates elevation at 5', excepting transparent areas.
+
+For given fragment with minElevation assumed here to be 0':
+- If terrain elevation equals or exceeds the light elevation, ignore. TODO: Ignore, or make full shadow?
+- If terrain elevation is above minimum elevation, recalculate by shooting ray to light center.s
+- If fragment not in shadow, let full light through.
+- If fragment in full shadow and not within penumbra area: full shadow.
+- If within penumbra area: Shoot ray to light position, adjusted by wall direction and light size,
+  to determine amount of penumbra, if any.
+*/
+
+
 // Draw trapezoidal shape of shadow directly on the canvas.
 // Take a vertex, light position, and canvas elevation.
 // Project the vertex onto the flat 2d canvas.
@@ -95,19 +156,20 @@ function constructWallGeometry(map) {
   const aTexCoord = [];
   const aOtherCorner = [];
   const aBary = [];
+  const aTerrain = [];
 
   // First vertex is the light source.
   aVertexPosition.push(lightPosition.x, lightPosition.y, lightPosition.z);
   aTexCoord.push(0, 0);
   aOtherCorner.push(0, 0, 0);
   aBary.push(1, 0, 0);
+  aTerrain.push(0);
 
   let triNumber = 0;
   for ( let i = 0; i < nObjs; i += 1 ) {
     const obj = coords[i];
     const isWall = obj.object instanceof Wall;
     if ( !isWall ) continue;
-    if ( obj.isTerrain ) continue; // Skip terrain walls for now; likely handle separately.
     if ( !renderableWall(map, obj, lightBounds) ) continue;
 
     // A --> B --> light CCW
@@ -121,6 +183,7 @@ function constructWallGeometry(map) {
     aTexCoord.push(1, 0, 1, 1);
     aOtherCorner.push(B.x, B.y, bottomZ, A.x, A.y, bottomZ);
     aBary.push(0, 1, 0, 0, 0, 1);
+    aTerrain.push(obj.isTerrain, obj.isTerrain);
 
     // Two vertices per wall edge, plus light center (0).
     const v = triNumber * 2;
@@ -135,6 +198,7 @@ function constructWallGeometry(map) {
   geometry.addAttribute("aTexCoord", aTexCoord, 2, false);
   geometry.addAttribute("aOtherCorner", aOtherCorner, 3, false);
   geometry.addAttribute("aBary", aBary, 3, false);
+  geometry.addAttribute("aTerrain", aTerrain, 1, false);
   return geometry;
 }
 
@@ -188,22 +252,65 @@ function constructTileGeometry(map, tileNum) {
 
 
 let GLSLFunctions = {};
-GLSLFunctions.intersectLineWithPlane =
+
+// Calculate the canvas elevation given a pixel value
+// Maps 0–1 to elevation in canvas coordinates.
+// elevationRes:
+// r: elevation min; g: elevation step; b: max pixel value (likely 255); a: canvas size / distance
+// u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+GLSLFunctions.canvasElevationFromPixel =
 `
-vec3 intersectLineWithPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, inout bool ixFound) {
+float canvasElevationFromPixel(in float pixel, in vec4 elevationRes) {
+  return (elevationRes.r + (pixel * elevationRes.b * elevationRes.g)) * elevationRes.a;
+}
+`;
+
+// For debugging.
+GLSLFunctions.stepColor =
+`
+// 0: Black
+// Red is near 0; blue is near 1.
+// 0.5: purple
+vec3 stepColor(in float ratio) {
+  if ( ratio < 0.2 ) return vec3(smoothstep(0.0, 0.2, ratio), 0.0, 0.0);
+  if ( ratio < 0.4 ) return vec3(smoothstep(0.2, 0.4, ratio), smoothstep(0.2, 0.4, ratio), 0.0);
+  if ( ratio == 0.5 ) return vec3(0.5, 0.0, 0.5);
+  if ( ratio < 0.6 ) return vec3(0.0, smoothstep(0.4, 0.6, ratio), 0.0);
+  if ( ratio < 0.8 ) return vec3(0.0, smoothstep(0.6, 0.8, ratio), smoothstep(0.6, 0.8, ratio));
+  return vec3(0.0, 0.0, smoothstep(0.8, 1.0, ratio));
+}`;
+
+GLSLFunctions.intersectRayPlane =
+`
+// Note: lineDirection and planeNormal should be normalized.
+bool intersectRayPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, out vec3 ix) {
   float denom = dot(planeNormal, lineDirection);
 
-  ixFound = false;
-  if (abs(denom) < 0.0001) {
-      // Line is parallel to the plane, no intersection
-      return vec3(-1.0);
-  }
+  // Check if line is parallel to the plane; no intersection
+  if (abs(denom) < 0.0001) return false;
 
-  ixFound = true;
   float t = dot(planeNormal, planePoint - linePoint) / denom;
-  return linePoint + lineDirection * t;
-}
+  ix = linePoint + lineDirection * t;
+  return true;
+}`;
+
+GLSLFunctions.intersectRayQuad =
 `
+${GLSLFunctions.intersectRayPlane}
+
+// Note: lineDirection and planeNormal should be normalized.
+bool intersectRayQuad(vec3 linePoint, vec3 lineDirection, vec3 v0, vec3 v1, vec3 v2, vec3 v3, out vec3 ix) {
+  vec3 planePoint = v0;
+  vec3 diff01 = v1 - v0;
+  vec3 diff02 = v2 - v0;
+  vec3 planeNormal = diff01.cross(diff02);
+  if ( !intersectRayPlane(linePoint, lineDirection, planePoint, planeNormal, ix) ) return false;
+
+  // Check if the intersection point is within the bounds of the quad.
+  vec3 quadMin = min(v0, min(v1, min(v2, v3)));
+  vec3 quadMax = max(v0, max(v1, max(v2, v3)));
+  return all(greaterThan(ix, quadMin)) && all(lessThan(ix, quadMax));
+}`;
 
 
 let shadowTransparentTileShaderGLSL = {};
@@ -224,19 +331,19 @@ in vec2 aTexCoord;
 out vec3 vertexPosition;
 out vec2 vTexCoord;
 
-// Note: lineDirection and planeNormal should be normalized.
-${GLSLFunctions.intersectLineWithPlane}
+
+${GLSLFunctions.intersectRayPlane}
 
 void main() {
   vTexCoord = aTexCoord;
   vertexPosition = aVertexPosition;
 
   // Intersect the canvas plane: Light --> vertex --> plane.
-  bool ixFound;
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
   vec3 planePoint = vec3(0.0);
   vec3 lineDirection = normalize(aVertexPosition - uLightPosition);
-  vec3 ix = intersectLineWithPlane(uLightPosition, lineDirection, planePoint, planeNormal, ixFound);
+  vec3 ix;
+  bool ixFound = intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ix);
   if ( !ixFound ) {
     // Shouldn't happen, but...
     gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
@@ -277,12 +384,12 @@ out vec4 fragColor;
 void main() {
   vec4 texColor = texture(uTileTexture, vTexCoord);
   float shadow = texColor.a < ALPHA_THRESHOLD ? 0.0 : uShadowPercentage;
-  fragColor = vec4(vec3(0.0), shadow);
+  fragColor = vec4(1.0 - shadow, vec3(1.0));
 }`;
 
 
-let shadowShapeShaderGLSL = {};
-shadowShapeShaderGLSL.vertexShader =
+let wallShadowShaderGLSL = {};
+wallShadowShaderGLSL.vertexShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -295,27 +402,18 @@ uniform float uLightSize;
 in vec3 aVertexPosition;
 in vec3 aOtherCorner;
 in vec3 aBary;
+in float aTerrain;
 
 out float vWallRatio;
 out vec3 vBary;
 flat out float wallRatio;
 flat out float sidePenumbraRatio;
 flat out float nearFarPenumbraRatio;
+flat out float isTerrain;
+flat out vec3 corner1;
+flat out vec3 corner2;
 
-// Note: lineDirection and planeNormal should be normalized.
-vec3 intersectLineWithPlane(vec3 linePoint, vec3 lineDirection, vec3 planePoint, vec3 planeNormal, inout bool ixFound) {
-  float denom = dot(planeNormal, lineDirection);
-
-  ixFound = false;
-  if (abs(denom) < 0.0001) {
-      // Line is parallel to the plane, no intersection
-      return vec3(-1.0);
-  }
-
-  ixFound = true;
-  float t = dot(planeNormal, planePoint - linePoint) / denom;
-  return linePoint + lineDirection * t;
-}
+${GLSLFunctions.intersectRayPlane}
 
 void main() {
   vWallRatio = 1.0;
@@ -327,12 +425,16 @@ void main() {
     return;
   }
 
+  isTerrain = aTerrain;
+  corner1 = aOtherCorner;
+  corner2 = aVertexPosition;
+
   // Intersect the canvas plane: Light --> vertex --> plane.
-  bool ixFound;
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
   vec3 planePoint = vec3(0.0);
   vec3 lineDirection = normalize(aVertexPosition - uLightPosition);
-  vec3 ix = intersectLineWithPlane(uLightPosition, lineDirection, planePoint, planeNormal, ixFound);
+  vec3 ix;
+  bool ixFound = intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ix);
   if ( !ixFound ) {
     // Shouldn't happen, but...
     wallRatio = 1.0;
@@ -351,8 +453,8 @@ void main() {
   if ( aOtherCorner.z > uCanvasElevation ) {
     vec3 nearEndpoint = vec3(aVertexPosition.xy, aOtherCorner.z);
     lineDirection = normalize(nearEndpoint - uLightPosition);
-    vec3 ixNear = intersectLineWithPlane(uLightPosition, lineDirection, planePoint, planeNormal, ixFound);
-    if ( ixFound ) {
+    vec3 ixNear;
+    if ( intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ixNear) ) {
       // Should always happen, but...
       float nearEndpointDist = distance(uLightPosition.xy, ixNear.xy);
       wallRatio = nearEndpointDist / ixDist;
@@ -376,17 +478,27 @@ void main() {
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ix.xy, 1.0)).xy, 0.0, 1.0);
 }`;
 
-shadowShapeShaderGLSL.fragmentShader =
+wallShadowShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform float uCanvasElevation;
+uniform sampler2D uElevationMap;
+uniform vec4 uElevationResolution;
 
 in float vWallRatio;
 in vec3 vBary;
 flat in float wallRatio;
 flat in float sidePenumbraRatio;
 flat in float nearFarPenumbraRatio;
+flat in float isTerrain;
+flat in vec3 corner1;
+flat in vec3 corner2;
 
 out vec4 fragColor;
+
+${GLSLFunctions.intersectRayQuad}
+${GLSLFunctions.canvasElevationFromPixel}
 
 // Linear conversion from one range to another.
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
@@ -406,16 +518,7 @@ float stepRatio(in float ratio, in float numDistinct) {
   }
 }
 
-// For debugging
-// Red is least (0); blue is most (1).
-// Green is near 50%
-vec3 stepColor(in float ratio) {
-  if ( ratio < 0.2 ) return vec3(smoothstep(0.0, 0.2, ratio), 0.0, 0.0);
-  if ( ratio < 0.4 ) return vec3(smoothstep(0.2, 0.4, ratio), smoothstep(0.2, 0.4, ratio), 0.0);
-  if ( ratio < 0.6 ) return vec3(0.0, smoothstep(0.4, 0.6, ratio), 0.0);
-  if ( ratio < 0.8 ) return vec3(0.0, smoothstep(0.6, 0.8, ratio), smoothstep(0.6, 0.8, ratio));
-  return vec3(0.0, 0.0, smoothstep(0.8, 1.0, ratio));
-}
+${GLSLFunctions.stepColor}
 
 void main() {
   // vBary.x is the distance from the light, where 1 = at light; 0 = at edge.
@@ -426,11 +529,23 @@ void main() {
   //fragColor = vec4(stepColor(vBary.z / (vBary.y + vBary.z)), 0.5);
   //return;
 
+  // Options:
+  // - in front of wall---dismiss early
+  // - elevation anywhere: shoot ray at light center
+  // - within the l/r border: shoot ray at outer or inner light radius and check for wall intersection.
+  // - within the t/b border: same
+  // - otherwise can assume full shadow.
+  // If within border, transparency based on ratio.
+
   if ( vWallRatio < wallRatio ) {
-    // fragColor = vec4(1.0, 1.0, 0.0, 0.7); // mimic a light
-    fragColor = vec4(0.0);
+    // Fragment is in front of the wall.
+    fragColor = vec4(vec3(1.0), 0.0);
     return;
   }
+
+
+
+
 
   // Convert from a constant penumbra ratio that goes to the light to one that
   // goes to zero at the wall endpoint.
@@ -444,34 +559,423 @@ void main() {
   // Using flat sidePenumbraRatio is slightly better -- flatter, less curvy.
   float targetRatio = sidePenumbraRatio * squaredTx;
 
-  // TODO: Change so that full light = 1.0; full shadow = 0.0. (Add for light, subtract for shadow.)
-  float shadow = 1.0;
 
+  // For corners, need to blend the left/right and the far/near light amounts.
+  // Multiplication is not correct here.
+  float nfShadowPercent = 1.0;
+  float lrShadowPercent = 1.0;
   if ( vBary.x < nearFarPenumbraRatio ) {
-    shadow *= vBary.x / nearFarPenumbraRatio;
-
-   // shadow -= (1.0 - (vBary.x / nearFarPenumbraRatio));
-    // fragColor = vec4(0.0, 0.0, 1.0, 0.5);
+    nfShadowPercent = vBary.x / nearFarPenumbraRatio;
   }
-
   if ( lrRatio < targetRatio ) {
-    shadow *= lrRatio / targetRatio;
-    // shadow -= 1.0 - (lrRatio / targetRatio);
-    // fragColor = vec4(1.0, 0.0, 0.0, 0.5);
+    lrShadowPercent = lrRatio / targetRatio;
   } else if ( (1.0 - lrRatio) < targetRatio ) {
-    shadow *= (1.0 - lrRatio) / targetRatio;
-    // shadow -= 1.0 - ((1.0 - lrRatio) / targetRatio);
-    // fragColor = vec4(0.0, 1.0, 0.0, 0.5);
+    lrShadowPercent = (1.0 - lrRatio) / targetRatio;
   }
-  shadow = clamp(shadow, 0.0, 1.0);
 
-  fragColor = vec4(0.0, 0.0, 0.0, shadow);
+  // float penumbraShadowPercent = mix(nfShadowPercent, lrShadowPercent, 0.5);
+  float penumbraShadowPercent = min(nfShadowPercent, lrShadowPercent);
 
-  // fragColor = vec4(vec3(0.0), clamp(1.0 - light, 0.0, 1.0));
+  // If not on penumbra, this must be a full shadow.
+  float light = (1.0 - penumbraShadowPercent);
+
+  // isTerrain should be 0.0 or 1.0.
+  float nonTerrainLight = light;
+  float wallType = 1.0;
+  float terrainLight = 1.0;
+
+  if ( isTerrain > 0.5 ) {
+    nonTerrainLight = 1.0;
+    wallType = 0.5;
+    terrainLight = light;
+  }
+
+  fragColor = vec4(nonTerrainLight, wallType, terrainLight, 1.0);
+}`;
+
+let terrainShadowShaderGLSL = {};
+terrainShadowShaderGLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+in vec3 aVertexPosition;
+in vec2 aTexCoord;
+
+out vec2 vTexCoord;
+
+void main() {
+  vTexCoord = aTexCoord;
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
+}`;
+
+terrainShadowShaderGLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+uniform sampler2D shadowMap;
+in vec2 vTexCoord;
+out vec4 fragColor;
+
+void main() {
+  // Pull the texel to check for terrain flag.
+  vec4 texel = texture(shadowMap, vTexCoord);
+  float lightAmount = texel.r;
+
+  // If more than 1 terrain wall at this point, add to the shadow.
+  // If a single terrain wall, ignore.
+  if ( texel.g < 0.3 ) lightAmount *= texel.b;
+  fragColor = vec4(lightAmount, vec3(1.0));
 }`;
 
 
+/**
+ * Primarily for debugging.
+ * Given a shadow map, render the shadow as black area, fading to transparent where only a
+ * partial shadow exists.
+ * This does not handle terrain walls. (See terrainShadowShaderGLSL.)
+ */
+renderShadowShaderGLSL = {};
+renderShadowShaderGLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+in vec3 aVertexPosition;
+in vec2 aTexCoord;
+
+out vec2 vTexCoord;
+
+void main() {
+  vTexCoord = aTexCoord;
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
+}`;
+
+renderShadowShaderGLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+uniform sampler2D shadowMap;
+in vec2 vTexCoord;
+out vec4 fragColor;
+
+void main() {
+  vec4 texel = texture(shadowMap, vTexCoord);
+
+  // If all 1s, then this is simply a light area that we can ignore.
+  if ( all(equal(texel, vec4(1.0))) ) {
+    fragColor = vec4(vec3(1.0), 0.0);
+    return;
+  }
+
+  float lightAmount = texel.r;
+  // If more than 1 terrain wall at this point, add to the shadow.
+  // If a single terrain wall, ignore.
+  if ( texel.g < 0.3 ) lightAmount *= texel.b;
+  fragColor = vec4(vec3(0.0), 1.0 - lightAmount);
+}`;
+
+renderElevationTestGLSL = {};
+renderElevationTestGLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+in vec3 aVertexPosition;
+out vec3 vVertexPosition;
+
+void main() {
+  vVertexPosition = aVertexPosition;
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
+}`;
+
+renderElevationTestGLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+uniform sampler2D uElevationMap;
+uniform vec4 uElevationResolution;
+uniform vec4 uSceneDims;
+in vec3 vVertexPosition;
+out vec4 fragColor;
+
+${GLSLFunctions.canvasElevationFromPixel}
+${GLSLFunctions.stepColor}
+
+void main () {
+  // Elevation map spans the scene rectangle. Offset from canvas coordinate accordingly.
+  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
+
+  if ( any(lessThan(evTexCoord, vec2(0.0)))
+    || any(greaterThan(evTexCoord, vec2(1.0))) ) {
+    fragColor = vec4(vec3(0.0), 0.2);
+    return;
+  }
+
+  vec4 evTexel = texture(uElevationMap, evTexCoord);
+  float elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
+
+  if ( elevation == 30.0 * uElevationResolution.a ) {
+    fragColor = vec4(0.0, 0.0, 1.0, 0.7);
+  } else if ( elevation == 10.0 * uElevationResolution.a ) {
+    fragColor = vec4(0.0, 1.0, 0.0, 0.7);
+  } else if ( elevation > 0.0 ) {
+    fragColor = vec4(1.0, 0.0, 0.0, 0.7);
+  } else {
+    fragColor = vec4(vec3(0.0), 0.2);
+  }
+
+  // For testing, simply color the fragment using a ratio of elevation.
+//   float elevationMin = uElevationResolution.r;
+//   if ( elevation <= elevationMin ) {
+//     fragColor = vec4(vec3(0.0), 0.2);
+//   } else {
+//     fragColor = vec4(stepColor(elevation / 1000.0), 0.7);
+//   }
+}`;
+
+renderElevationTest2GLSL = {};
+renderElevationTest2GLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+in vec3 aVertexPosition;
+in vec2 aElevationCoord;
+out vec2 vElevationCoord;
+
+void main() {
+  vElevationCoord = aElevationCoord;
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
+}`;
+
+renderElevationTest2GLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+
+uniform sampler2D uElevationMap;
+uniform vec4 uElevationResolution;
+in vec2 vElevationCoord;
+out vec4 fragColor;
+
+${GLSLFunctions.canvasElevationFromPixel}
+${GLSLFunctions.stepColor}
+
+void main () {
+  if ( any(lessThan(vElevationCoord, vec2(0.0)))
+    || any(greaterThan(vElevationCoord, vec2(1.0))) ) {
+    fragColor = vec4(vec3(0.0), 0.2);
+    return;
+  }
+
+  vec4 evTexel = texture(uElevationMap, vElevationCoord);
+  float elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
+
+  // For testing, simply color the fragment using a ratio of elevation.
+  float elevationMin = uElevationResolution.r;
+
+  if ( elevation == 30.0 * uElevationResolution.a ) {
+    fragColor = vec4(0.0, 0.0, 1.0, 0.7);
+  } else if ( elevation == 10.0 * uElevationResolution.a ) {
+    fragColor = vec4(0.0, 1.0, 0.0, 0.7);
+  } else if ( elevation > 0.0 ) {
+    fragColor = vec4(1.0, 0.0, 0.0, 0.7);
+  } else {
+    fragColor = vec4(vec3(0.0), 0.2);
+  }
+
+
+//   if ( elevation <= elevationMin ) {
+//     fragColor = vec4(0.2);
+//   } else {
+//     fragColor = vec4(stepColor(elevation / 100.0), 0.7);
+//   }
+}`;
+
+
+function buildShadowMesh(shadowMap, map) {
+  geometryQuad = new PIXI.Geometry();
+
+  // Render at the shadowMap dimensions and then resize / position
+  const { width, height } = shadowMap;
+  geometryQuad.addAttribute("aVertexPosition", [
+    0, 0, 0,          // TL
+    width, 0, 0,      // TR
+    width, height, 0, // BR
+    0, height, 0      // BL
+  ], 3);
+
+  // Texture coordinates:
+  // BL: 0,0; BR: 1,0; TL: 0,1; TR: 1,1
+  geometryQuad.addAttribute("aTexCoord", [
+    0, 0, // TL
+    1, 0, // TR
+    1, 1, // BR
+    0, 1 // BL
+  ], 2);
+  geometryQuad.addIndex([0, 1, 2, 0, 2, 3]);
+
+  uniforms = { shadowMap };
+  let { vertexShader, fragmentShader } = renderShadowShaderGLSL;
+  shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+  mesh = new PIXI.Mesh(geometryQuad, shader);
+  return mesh;
+}
+
+function renderShadowMesh(mesh, map) {
+  const MAX_WIDTH = 4096;
+  const MAX_HEIGHT = 4096;
+  const { sceneWidth, sceneHeight } = canvas.dimensions;
+  const width = Math.min(MAX_WIDTH, map.directional ? sceneWidth : map.lightRadius * 2);
+  const height = Math.min(MAX_HEIGHT, map.directional ? sceneHeight : map.lightRadius * 2);
+
+  const renderTexture = new PIXI.RenderTexture.create({
+    width,
+    height,
+    scaleMode: PIXI.SCALE_MODES.NEAREST
+  });
+  renderTexture.baseTexture.clearColor = [1, 1, 1, 1];
+  renderTexture.baseTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
+  canvas.app.renderer.render(mesh, { renderTexture });
+  return renderTexture;
+}
+
+function renderShadowShader(mesh, map) {
+  const MAX_WIDTH = 4096;
+  const MAX_HEIGHT = 4096;
+  const { sceneWidth, sceneHeight } = canvas.dimensions;
+  const width = Math.min(MAX_WIDTH, map.directional ? sceneWidth : map.lightRadius * 2);
+  const height = Math.min(MAX_HEIGHT, map.directional ? sceneHeight : map.lightRadius * 2);
+
+  const renderTexture = new PIXI.RenderTexture.create({
+    width,
+    height,
+    scaleMode: PIXI.SCALE_MODES.NEAREST
+  });
+  renderTexture.baseTexture.clearColor = [0, 0, 0, 0];
+  renderTexture.baseTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
+  canvas.app.renderer.render(mesh, { renderTexture });
+  return renderTexture;
+}
+
+
+
 /* Testing
+api = game.modules.get("elevatedvision").api
+Draw = CONFIG.GeometryLib.Draw;
+Draw.clearDrawings()
+SourceDepthShadowMap = api.SourceDepthShadowMap
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+Matrix = CONFIG.GeometryLib.Matrix
+Plane = CONFIG.GeometryLib.threeD.Plane;
+extractPixels = api.extract.extractPixels
+filterPixelsByChannel = function(pixels, channel = 0, numChannels = 4) {
+  if ( numChannels === 1 ) return;
+  if ( channel < 0 || numChannels < 0 ) {
+    console.error("channels and numChannels must be greater than 0.");
+  }
+  if ( channel >= numChannels ) {
+    console.error("channel must be less than numChannels. (First channel is 0.)");
+  }
+
+  const numPixels = pixels.length;
+  const filteredPixels = new Array(Math.floor(numPixels / numChannels));
+  for ( let i = channel, j = 0; i < numPixels; i += numChannels, j += 1 ) {
+    filteredPixels[j] = pixels[i];
+  }
+  return filteredPixels;
+}
+
+
+pixelRange = function(pixels) {
+  const out = {
+    min: pixels.reduce((acc, curr) => Math.min(curr, acc), Number.POSITIVE_INFINITY),
+    max: pixels.reduce((acc, curr) => Math.max(curr, acc), Number.NEGATIVE_INFINITY)
+  };
+
+  out.nextMin = pixels.reduce((acc, curr) => curr > out.min ? Math.min(curr, acc) : acc, Number.POSITIVE_INFINITY);
+  out.nextMax = pixels.reduce((acc, curr) => curr < out.max ? Math.max(curr, acc) : acc, Number.NEGATIVE_INFINITY);
+  return out;
+}
+uniquePixels = function(pixels) {
+  s = new Set();
+  pixels.forEach(px => s.add(px))
+  return s;
+}
+
+countPixels = function(pixels, value) {
+  let sum = 0;
+  pixels.forEach(px => sum += px === value);
+  return sum;
+}
+
+
+// Perspective light
+let [l] = canvas.lighting.placeables;
+source = l.source;
+lightPosition = new Point3d(source.x, source.y, source.elevationZ);
+directional = false;
+lightRadius = source.radius;
+lightSize = 100;
+
+Draw.clearDrawings()
+Draw.point(lightPosition, { color: Draw.COLORS.yellow });
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightRadius)
+Draw.shape(cir, { color: Draw.COLORS.yellow })
+
+// Draw the light size
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightSize);
+Draw.shape(cir, { color: Draw.COLORS.yellow, fill: Draw.COLORS.yellow, fillAlpha: 0.5 })
+
+Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
+
+map = new SourceDepthShadowMap(lightPosition, { directional, lightRadius, lightSize });
+map.clearPlaceablesCoordinatesData()
+if ( !directional ) Draw.shape(
+  new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation),
+  { color: Draw.COLORS.lightyellow})
+uniforms = {
+  uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
+  uCanvasElevation: 0,
+  uLightSize: lightSize
+}
+
+geometry = constructWallGeometry(map)
+
+let { vertexShader, fragmentShader } = wallShadowShaderGLSL;
+shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+mesh = new PIXI.Mesh(geometry, shader);
+mesh.blendMode = PIXI.BLEND_MODES.MULTIPLY;
+
+canvas.stage.addChild(mesh);
+canvas.stage.removeChild(mesh)
+
+shadowTex = renderShadowMesh(mesh, map)
+
+s = new PIXI.Sprite(shadowTex);
+canvas.stage.addChild(s);
+canvas.stage.removeChild(s);
+
+shadowMesh = buildShadowMesh(shadowTex.baseTexture, map)
+renderTex = renderShadowShader(shadowMesh, map)
+
+s = new PIXI.Sprite(renderTex);
+canvas.stage.addChild(s);
+canvas.stage.removeChild(s);
+
+let { pixels } = extractPixels(canvas.app.renderer, shadowTex);
+channels = [0, 1, 2, 3];
+channels = channels.map(c => filterPixelsByChannel(pixels, c, 4));
+channels.map(c => pixelRange(c));
+channels.map(c => uniquePixels(c));
+
+*/
+
+/* Test terrain walls
 api = game.modules.get("elevatedvision").api
 Draw = CONFIG.GeometryLib.Draw;
 Draw.clearDrawings()
@@ -513,12 +1017,113 @@ uniforms = {
 
 geometry = constructWallGeometry(map)
 
-let { vertexShader, fragmentShader } = shadowShapeShaderGLSL;
+let { vertexShader, fragmentShader } = wallShadowShaderGLSL;
 shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 mesh = new PIXI.Mesh(geometry, shader);
+//mesh.blendMode = PIXI.BLEND_MODES.ADD
 
 canvas.stage.addChild(mesh);
 canvas.stage.removeChild(mesh)
+
+MAX_WIDTH = 4096;
+MAX_HEIGHT = 4096;
+let { sceneWidth, sceneHeight } = canvas.dimensions;
+width = Math.min(MAX_WIDTH, map.directional ? sceneWidth : map.lightRadius * 2);
+height = Math.min(MAX_HEIGHT, map.directional ? sceneHeight : map.lightRadius * 2);
+
+width = map.directional ? sceneWidth : map.lightRadius * 2;
+height = map.directional ? sceneHeight : map.lightRadius * 2;
+
+terrainTexture = new PIXI.RenderTexture.create({
+  width,
+  height,
+  scaleMode: PIXI.SCALE_MODES.NEAREST
+});
+terrainTexture.baseTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
+canvas.app.renderer.render(mesh, { renderTexture: terrainTexture });
+
+let { pixels } = extractPixels(canvas.app.renderer, terrainTexture);
+rChannel = filterPixelsByChannel(pixels, 0, 4);
+gChannel = filterPixelsByChannel(pixels, 1, 4);
+bChannel = filterPixelsByChannel(pixels, 2, 4);
+aChannel = filterPixelsByChannel(pixels, 3, 4);
+
+pixelRange(rChannel, 0)
+pixelRange(gChannel, 1)
+pixelRange(bChannel, 2)
+pixelRange(aChannel, 3)
+uniquePixels(rChannel, 0)
+uniquePixels(gChannel, 1)
+uniquePixels(bChannel, 2)
+uniquePixels(aChannel, 3)
+
+s = new PIXI.Sprite(terrainTexture)
+canvas.stage.addChild(s)
+canvas.stage.removeChild(s)
+
+// Construct a quad for the scene.
+geometryQuad = new PIXI.Geometry();
+minElevation = map.minElevation;
+if ( map.directional ) {
+  let { left, right, top, bottom, center } = canvas.dimensions.sceneRect;
+  // Cover the entire scene
+  geometryQuad.addAttribute("aVertexPosition", [
+    left, top, minElevation,      // TL
+    right, top, minElevation,   // TR
+    right, bottom, minElevation, // BR
+    left, bottom, minElevation  // BL
+  ], 3);
+} else {
+  // Cover the light radius
+  let { lightRadius, lightPosition } = map;
+  geometryQuad.addAttribute("aVertexPosition", [
+    lightPosition.x - lightRadius, lightPosition.y - lightRadius, minElevation, // TL
+    lightPosition.x + lightRadius, lightPosition.y - lightRadius, minElevation, // TR
+    lightPosition.x + lightRadius, lightPosition.y + lightRadius, minElevation, // BR
+    lightPosition.x - lightRadius, lightPosition.y + lightRadius, minElevation  // BL
+  ], 3);
+}
+
+// Texture coordinates:
+// BL: 0,0; BR: 1,0; TL: 0,1; TR: 1,1
+geometryQuad.addAttribute("aTexCoord", [
+  0, 0, // TL
+  1, 0, // TR
+  1, 1, // BR
+  0, 1 // BL
+], 2);
+geometryQuad.addIndex([0, 1, 2, 0, 2, 3]);
+
+
+
+
+uniforms = {
+  shadowMap: terrainTexture.baseTexture
+}
+let { vertexShader, fragmentShader } = terrainShadowShaderGLSL;
+terrainShader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+terrainMesh = new PIXI.Mesh(geometryQuad, terrainShader);
+terrainMesh.blendMode = PIXI.BLEND_MODES.ADD
+
+// TODO: WTF is this? Also, need to fix scaling.
+terrainMesh.x = canvas.dimensions.sceneX + canvas.dimensions.size * 0.5;
+terrainMesh.y = canvas.dimensions.sceneY - canvas.dimensions.size * 0.5;
+
+canvas.stage.addChild(terrainMesh)
+canvas.stage.removeChild(terrainMesh)
+
+shadowTexture = new PIXI.RenderTexture.create({
+  width,
+  height,
+  scaleMode: PIXI.SCALE_MODES.NEAREST
+});
+shadowTexture.baseTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
+canvas.app.renderer.render(terrainMesh, { renderTexture: shadowTexture });
+
+
+
+
+
 */
 
 
@@ -604,14 +1209,14 @@ vertex = B
 otherVertex = A
 
 // Shoot ray from light to vertex and intersect the plane
-function intersectLineWithPlane(linePoint, lineDirection, planePoint, planeNormal) {
+function intersectRayPlane(linePoint, lineDirection, planePoint, planeNormal) {
   denom = planeNormal.dot(lineDirection);
   if ( Math.abs(denom) < 0.0001 ) return false;
   t = planeNormal.dot(planePoint.subtract(linePoint))  / denom;
   return linePoint.add(lineDirection.multiplyScalar(t));
 }
 
-ix = intersectLineWithPlane(lightPosition, vertex.subtract(lightPosition).normalize(),
+ix = intersectRayPlane(lightPosition, vertex.subtract(lightPosition).normalize(),
   canvasPlane.point, canvasPlane.normal)
 Draw.point(ix);
 vertexDist = PIXI.Point.distanceBetween(lightPosition, vertex);
@@ -621,7 +1226,7 @@ invSideRatio = ixDist / vertexDist;
 bigABDist = abDist * invSideRatio
 
 
-ix2 = intersectLineWithPlane(lightPosition, otherVertex.subtract(lightPosition).normalize(),
+ix2 = intersectRayPlane(lightPosition, otherVertex.subtract(lightPosition).normalize(),
   canvasPlane.point, canvasPlane.normal)
 Draw.point(ix2)
 PIXI.Point.distanceBetween(ix, ix2); // Should equal bigABDist
@@ -853,4 +1458,193 @@ canvas.stage.removeChild(sBlurred)
 */
 
 
+/* Test rendering elevation texture
 
+performance.mark("renderEV1_start");
+for ( let i = 0; i < 10000; i += 1 ) {
+
+let canvasRect = canvas.dimensions.rect;
+let sceneRect = canvas.dimensions.sceneRect;
+elevationMap = canvas.elevation._elevationTexture;
+lightFrame = new PIXI.Rectangle();
+lightFrame.copyFrom(map.directional ? sceneRect : l.bounds);
+
+geometryQuad = new PIXI.Geometry();
+
+// Build a quad that equals the light bounds.
+geometryQuad.addAttribute("aVertexPosition", [
+  lightFrame.left, lightFrame.top, 0,
+  lightFrame.right, lightFrame.top, 0,
+  lightFrame.right, lightFrame.bottom, 0,
+  lightFrame.left, lightFrame.bottom, 0
+], 3);
+
+geometryQuad.addIndex([0, 1, 2, 0, 2, 3]);
+
+
+uniforms = { uElevationMap: elevationMap };
+let { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+let { size, distance } = canvas.dimensions;
+elevationMult = size * (1 / distance);
+uniforms.uElevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+//uniforms.uSceneDims = [sceneRect.left, sceneRect.top, sceneRect.width, sceneRect.height];
+let { sceneX, sceneY, sceneWidth, sceneHeight } = canvas.dimensions;
+uniforms.uSceneDims = [sceneX, sceneY, sceneWidth, sceneHeight];
+
+let { vertexShader, fragmentShader } = renderElevationTestGLSL;
+shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+mesh = new PIXI.Mesh(geometryQuad, shader);
+
+canvas.stage.addChild(mesh)
+canvas.stage.removeChild(mesh)
+
+}
+performance.mark("renderEV1_end");
+performance.measure("renderEV1", "renderEV1_start", "renderEV1_end");
+
+let { pixels, width, height } = extractPixels(canvas.app.renderer, elevationMap);
+channels = [0];
+channels = channels.map(c => filterPixelsByChannel(pixels, c, 1));
+channels.map(c => pixelRange(c));
+channels.map(c => uniquePixels(c));
+channels.map(c => countPixels(c, 1));
+
+
+*/
+
+
+/* Test rendering the elevation texture over the light area only
+// The quad we are rendering is the light bounds.
+// Overlay the terrain elevation texture bounds. Upload only the portion of the
+// terrain elevation texture that overlaps.
+
+// This second appears longer.
+performance.mark("renderEV2_start");
+for ( let i = 0; i < 10000; i += 1 ) {
+let canvasRect = canvas.dimensions.rect;
+let sceneRect = canvas.dimensions.sceneRect;
+elevationMap = canvas.elevation._elevationTexture;
+
+lightFrame = new PIXI.Rectangle();
+lightFrame.copyFrom(map.directional ? sceneRect : l.bounds);
+
+// MAX_WIDTH = 4096;
+// MAX_HEIGHT = 4096;
+// width = Math.min(lightFrame.width, MAX_WIDTH);
+// height = Math.min(lightFrame.height, MAX_HEIGHT);
+
+// Elevation map starts at 0,0: shift to scene rect
+elevationFrame = new PIXI.Rectangle();
+elevationFrame.copyFrom(elevationMap.frame);
+elevationFrame.x = sceneRect.x;
+elevationFrame.y = sceneRect.y;
+
+ixFrame = elevationFrame.intersection(lightFrame)
+ixFrame.x = 0;
+ixFrame.y = 0;
+
+elevationMap = new PIXI.Texture(elevationMap.baseTexture, ixFrame)
+
+geometryQuad = new PIXI.Geometry();
+
+// Build a quad that equals the light bounds.
+geometryQuad.addAttribute("aVertexPosition", [
+  lightFrame.left, lightFrame.top, 0,
+  lightFrame.right, lightFrame.top, 0,
+  lightFrame.right, lightFrame.bottom, 0,
+  lightFrame.left, lightFrame.bottom, 0
+], 3);
+
+
+// Texture 0 --> 1 maps to the sceneRect.
+// So for a given direction, what percentage of lightFrame do you have to move to get to 0 (or 1). E.g.:
+// What percentage of lightFrame.width do you have to move to get to sceneRect.x?
+// distance between sceneRect.x and lightFrame.x = sceneRect.x - lightFrame.x.
+// Percentage requires dividing by lightFrame.width.
+
+// imagine lightFrame contains sceneRect.x = 0 at midpoint, and sceneRect.x = .75 at the far end
+// so -0.75 at the one end would mean it works linearly.
+
+texRight = (lightFrame.right - sceneRect.left) / sceneRect.width;
+texLeft = (lightFrame.left - sceneRect.left) / sceneRect.width;
+
+texBottom = (lightFrame.bottom - sceneRect.top) / sceneRect.height;
+texTop = (lightFrame.top - sceneRect.top) / sceneRect.height;
+
+
+geometryQuad.addAttribute("aElevationCoord", [
+  texLeft, texTop,
+  texRight, texTop,
+  texRight, texBottom,
+  texLeft, texBottom
+], 2);
+
+geometryQuad.addIndex([0, 1, 2, 0, 2, 3]);
+
+uniforms = { uElevationMap: elevationMap  };
+let { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+let { size, distance } = canvas.dimensions;
+elevationMult = size * (1 / distance);
+uniforms.uElevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+
+let { vertexShader, fragmentShader } = renderElevationTest2GLSL;
+shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+mesh = new PIXI.Mesh(geometryQuad, shader);
+
+canvas.stage.addChild(mesh)
+canvas.stage.removeChild(mesh)
+}
+performance.mark("renderEV2_end");
+performance.measure("renderEV2", "renderEV2_start", "renderEV2_end");
+
+
+// Texture coordinates:
+// BL: 0,0; BR: 1,0; TL: 0,1; TR: 1,1
+// Texture needs to equate the bounds with the elevation texture.
+
+ixFrame = lightFrame.intersection(textureFrame);
+texLeft = (ixFrame.left - lightFrame.left) / lightFrame.width;
+texRight = 1 - ((lightFrame.right - lightFrame.right) / lightFrame.width);
+texTop = (ixFrame.top - lightFrame.top) / lightFrame.height;
+texBottom = 1 - ((lightFrame.bottom - lightFrame.bottom) / lightFrame.height);
+
+geometryQuad.addAttribute("aElevationCoord", [
+  texLeft, texBottom,
+  texRight, texBottom,
+  texRight, texTop,
+  texLeft, texTop
+
+//   0, 0, // TL
+//   1, 0, // TR
+//   1, 1, // BR
+//   0, 1 // BL
+], 2);
+geometryQuad.addIndex([0, 1, 2, 0, 2, 3]);
+
+
+uniforms = { elevationMap };
+let { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+let { size, distance } = canvas.dimensions;
+elevationMult = size * (1 / distance);
+uniforms.uElevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
+
+let { vertexShader, fragmentShader } = renderElevationTestGLSL;
+shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+mesh = new PIXI.Mesh(geometryQuad, shader);
+
+canvas.stage.addChild(mesh)
+canvas.stage.removeChild(mesh)
+
+const renderTexture = new PIXI.RenderTexture.create({
+  width,
+  height,
+  scaleMode: PIXI.SCALE_MODES.NEAREST
+});
+renderTexture.baseTexture.clearColor = [1, 1, 1, 1];
+renderTexture.baseTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
+canvas.app.renderer.render(mesh, { renderTexture });
+
+
+
+
+*/
