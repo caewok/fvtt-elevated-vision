@@ -273,6 +273,34 @@ float orient2d(in vec2 a, in vec2 b, in vec2 c) {
 }
 `;
 
+// Identify closest point on a 2d line to another point, just like foundry.utils.closestPointToSegment.
+// Note: will fail if passed a 0-length ab segment.
+GLSLFunctions.closest2dPointToLine =
+`
+vec2 closest2dPointToLine(in vec2 c, in vec2 a, in vec2 dir, out float u) {
+  float denom = dot(dir, dir);
+  if ( denom == 0.0 ) return a;
+
+  vec2 deltaCA = c - a;
+  u = dot(deltaCA, dir) / denom;
+  return a + (u * dir);
+}
+`;
+
+GLSLFunctions.closest2dPointToSegment =
+`
+${GLSLFunctions.closest2dPointToLine}
+vec2 closest2dPointToSegment(in vec2 c, in vec2 a, in vec2 b) {
+  float u;
+  vec2 out = closest2dPointToLine(c, a, b - a, u);
+
+  if ( u < 0.0 ) return a;
+  if ( u > 1.0 ) return b;
+  return out;
+}
+`;
+
+
 // For debugging.
 GLSLFunctions.stepColor =
 `
@@ -441,7 +469,7 @@ void main() {
 
   // Intersect the canvas plane: Light --> vertex --> plane.
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
-  vec3 planePoint = vec3(0.0);
+  vec3 planePoint = vec3(0.0, 0.0, uCanvasElevation);
   vec3 lineDirection = normalize(aVertexPosition - uLightPosition);
   vec3 ix;
   bool ixFound = intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ix);
@@ -509,6 +537,7 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 uniform sampler2D uElevationMap;
 uniform vec4 uElevationResolution; // min, step, maxpixel, multiplier
+uniform float uCanvasElevation;
 uniform vec4 uSceneDims;
 uniform vec3 uLightPosition;
 uniform float uLightSize;
@@ -529,6 +558,7 @@ ${GLSLFunctions.intersectRayQuad}
 ${GLSLFunctions.canvasElevationFromPixel}
 ${GLSLFunctions.stepColor}
 ${GLSLFunctions.orient2d}
+${GLSLFunctions.closest2dPointToLine}
 
 // Linear conversion from one range to another.
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
@@ -590,7 +620,7 @@ void main() {
   }
 
   // What is the terrain elevation of this fragment?
-  float elevation = uElevationResolution.r; // The r is minimum elevation.
+  float elevation = uCanvasElevation;
   bool highElevation = false;
   vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
 
@@ -606,18 +636,64 @@ void main() {
     // Inside the scene bounds. Check elevation texture.
     vec4 evTexel = texture(uElevationMap, evTexCoord);
     elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
-    highElevation = elevation > uElevationResolution.r;
+    highElevation = elevation > uCanvasElevation;
+  }
+
+  // Input variables that may be adjusted later.
+  float localSidePenumbraRatio = sidePenumbraRatio;
+  float localNearFarPenumbraRatio = nearFarPenumbraRatio;
+  vec3 localBary = vBary;
+
+  // If the terrain of this fragment is above the minimum, adjust calculations accordingly.
+  // 1. Adjust the perceived intersection of the light --> vertex with the canvas.
+  // 2. Adjust sidePenumbraRatio
+  // 3. Adjust nearFarPenumbraRatio
+  // 4. Adjust barymetric x value (near/far from light)
+  // 5. Determine if still in shadow
+
+  if ( highElevation ) {
+     // Intersect the canvas plane: Light --> wall endpoint --> plane
+     vec3 planeNormal = vec3(0.0, 0.0, 1.0);
+     vec3 planePoint = vec3(0.0, 0.0, elevation);
+     vec3 lineDirection = normalize(corner1 - uLightPosition);
+     vec3 ix;
+     bool ixFound = intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ix);
+     if ( !ixFound ) {
+       // Shouldn't happen, but...
+       fragColor = vec4(vec3(1.0), 0.0);
+     }
+
+     float vertexDist = distance(uLightPosition.xy, corner1.xy);
+     float ixDist = distance(uLightPosition.xy, ix.xy);
+
+     float invK = (ixDist - vertexDist) / vertexDist;
+     float lightSizeProjected = uLightSize * invK;
+
+     float abDist = distance(corner1.xy, corner2.xy);
+     float ABDist = abDist * (ixDist / vertexDist);
+     localSidePenumbraRatio = lightSizeProjected / ABDist;
+     localNearFarPenumbraRatio = lightSizeProjected / ixDist;
+
+     // Barymetric.x, where 0 is edge, will change.
+     float origIxDist = vertexDist / wallRatio;
+     float newZeroRatio = 1.0 - (ixDist / origIxDist);
+     localBary.x = linearConversion(localBary.x, newZeroRatio, 1.0, 0.0, 1.0);
+     if ( localBary.z < 0.0 ) {
+       // No longer within the shadow.
+       fragColor = vec4(1.0, 1.0, 0.0, 0.3);
+       //fragColor = vec4(vec3(1.0), 0.0);
+     }
   }
 
   // Are we possibly within the l/r penumbra border?
   // (Could be within both if the light size is large or wall is small.)
   // This border is overly inclusive and so location must be confirmed with additional tests.
-  float lrRatio = vBary.z / (vBary.y + vBary.z);
-  bool withinL = lrRatio < sidePenumbraRatio;
-  bool withinR = (1.0 - lrRatio) < sidePenumbraRatio;
+  float lrRatio = localBary.z / (localBary.y + localBary.z);
+  bool withinL = lrRatio < localSidePenumbraRatio;
+  bool withinR = (1.0 - lrRatio) < localSidePenumbraRatio;
 
   // Are we possibly within the far penumbra border?
-  bool withinFar = vBary.x < nearFarPenumbraRatio;
+  bool withinFar = localBary.x < localNearFarPenumbraRatio;
 
   // If not high terrain and not in penumbra, in full shadow.
   if ( !withinFar && !withinL && !withinR && !highElevation ) {
@@ -634,6 +710,10 @@ void main() {
 //     fragColor = vec4(0.0, 1.0, 0.0, 0.7);
 //   }
 //   return;
+
+
+
+
 
   // Find the line from the light sphere (circle) edge through the wall endpoint.
   // Use orientation test: if on the opposite side of the line from the light, fragment is in penumbra.
@@ -653,69 +733,98 @@ void main() {
 
   // Near/far does not need adjustment. (Right?!?)
 
+//   if ( withinL ) {
+//     fragColor = vec4(1.0, 0.0, 0.0, 0.7);
+//   } else if ( withinR ) {
+//     fragColor = vec4(0.0, 0.0, 1.0, 0.7);
+//   } else if ( withinFar ) {
+//     fragColor = vec4(0.5, 0.0, 0.5, 0.7);
+//   } else if ( highElevation ) {
+//     fragColor = vec4(0.0, 1.0, 0.0, 0.7);
+//   }
+//   return;
+
+  // Use the lines at either edge of the penumbra to calculate a percent shadow for left/right penumbra.
+  // Take the distance to the light edge divided by the total distance.
+  float lShadowPercent = 1.0;
+  float rShadowPercent = 1.0;
+  float fShadowPercent = 1.0;
   if ( withinL ) {
-    fragColor = vec4(1.0, 0.0, 0.0, 0.7);
-  } else if ( withinR ) {
-    fragColor = vec4(0.0, 0.0, 1.0, 0.7);
-  } else if ( withinFar ) {
-    fragColor = vec4(0.5, 0.0, 0.5, 0.7);
-  } else if ( highElevation ) {
-    fragColor = vec4(0.0, 1.0, 0.0, 0.7);
-  }
-  return;
-
-
-  vec3 v0 = corner1; // A top
-  vec3 v1 = vec3(corner2.xy, corner1.z); // B top
-  vec3 v2 = corner2; // B bottom
-  vec3 v3 = vec3(corner1.xy, corner2.z); // A bottom
-  vec3 fragPosition = vec3(vVertexPosition.xy, elevation);
-  vec3 dir = normalize(v1 - v0);
-  vec3 ixPlaceholder;
-
-  // Shoot ray to light center to test if the elevation change results in a lit area.
-  bool isShadowed = true;
-  if ( highElevation ) isShadowed = intersectRayQuad(fragPosition, uLightPosition, v0, v1, v2, v3, ixPlaceholder);
-
-  bool shadowedByL = true;
-  if ( withinL ) {
-    // Test the outer radius of the light in relation to the wall.
-    vec3 leftOfLight = uLightPosition + (dir * -uLightSize);
-    shadowedByL = intersectRayQuad(fragPosition, leftOfLight, v0, v1, v2, v3, ixPlaceholder);
+    float u;
+    vec2 dir1x = uLightPosition.xy - corner1.xy;
+    vec2 dir1p = penumbraLightPoint1 - corner1.xy;
+    vec2 ixShadow = closest2dPointToLine(vVertexPosition.xy, corner1.xy, dir1x, u);
+    vec2 ixLight = closest2dPointToLine(vVertexPosition.xy, corner1.xy, dir1p, u);
+    lShadowPercent = distance(vVertexPosition.xy, ixLight) / distance(ixShadow, ixLight);
   }
 
-  bool shadowedByR = true;
-  if ( withinR ) {
-    vec3 rightOfLight = uLightPosition + (dir * uLightSize);
-    shadowedByR = intersectRayQuad(fragPosition, rightOfLight, v0, v1, v2, v3, ixPlaceholder);
+  if ( withinR) {
+    float u;
+    vec2 dir2x = uLightPosition.xy - corner2.xy;
+    vec2 dir2p = penumbraLightPoint2 - corner2.xy;
+    vec2 ixShadow = closest2dPointToLine(vVertexPosition.xy, corner2.xy, dir2x, u);
+    vec2 ixLight = closest2dPointToLine(vVertexPosition.xy, corner2.xy, dir2p, u);
+    rShadowPercent = distance(vVertexPosition.xy, ixLight) / distance(ixShadow, ixLight);
   }
 
-  bool shadowedByT = true;
-  if ( withinFar ) {
-    // Topdown, so we want to go up in elevation on the light.
-    vec3 topOfLight = uLightPosition + (vec3(0.0, 0.0, 1.0) * uLightSize);
-    shadowedByT = intersectRayQuad(fragPosition, topOfLight, v0, v1, v2, v3, ixPlaceholder);
-  }
+  if ( withinFar ) fShadowPercent = localBary.x / localNearFarPenumbraRatio;
 
-  if ( isShadowed && shadowedByL && shadowedByR && shadowedByT ) {
-    fragColor = vec4(0.5, 0.5, 0.5, 0.7);
-    // fragColor = lightColor(0.0);
-    return;
-  }
-
-  // Unclear how best to calculate the shadow proportion at this point.
-  // Using sidePenumbraRatio is incorrect (too large) but calculating true size eludes me.
-  float nfShadowPercent = 1.0;
-  float lrShadowPercent = 1.0;
-  if ( !shadowedByT ) nfShadowPercent = vBary.x / nearFarPenumbraRatio;
-  if ( !shadowedByL ) {
-    lrShadowPercent = lrRatio / sidePenumbraRatio;
-  } else if ( !shadowedByR ) {
-    lrShadowPercent = (1.0 - lrRatio) / sidePenumbraRatio;
-  }
-  float penumbraShadowPercent = min(nfShadowPercent, lrShadowPercent);
+  float penumbraShadowPercent = min(fShadowPercent, min(lShadowPercent, rShadowPercent));
 
   fragColor = vec4(0.0, 0.0, penumbraShadowPercent, 0.7);
+  // fragColor = lightColor(1.0 - penumbraShadowPercent);
+
+//   vec3 v0 = corner1; // A top
+//   vec3 v1 = vec3(corner2.xy, corner1.z); // B top
+//   vec3 v2 = corner2; // B bottom
+//   vec3 v3 = vec3(corner1.xy, corner2.z); // A bottom
+//   vec3 fragPosition = vec3(vVertexPosition.xy, elevation);
+//   vec3 dir = normalize(v1 - v0);
+//   vec3 ixPlaceholder;
+//
+//   // Shoot ray to light center to test if the elevation change results in a lit area.
+//   bool isShadowed = true;
+//   if ( highElevation ) isShadowed = intersectRayQuad(fragPosition, uLightPosition, v0, v1, v2, v3, ixPlaceholder);
+
+//   bool shadowedByL = true;
+//   if ( withinL ) {
+//     // Test the outer radius of the light in relation to the wall.
+//     vec3 leftOfLight = uLightPosition + (dir * -uLightSize);
+//     shadowedByL = intersectRayQuad(fragPosition, leftOfLight, v0, v1, v2, v3, ixPlaceholder);
+//   }
+//
+//   bool shadowedByR = true;
+//   if ( withinR ) {
+//     vec3 rightOfLight = uLightPosition + (dir * uLightSize);
+//     shadowedByR = intersectRayQuad(fragPosition, rightOfLight, v0, v1, v2, v3, ixPlaceholder);
+//   }
+//
+//   bool shadowedByT = true;
+//   if ( withinFar ) {
+//     // Topdown, so we want to go up in elevation on the light.
+//     vec3 topOfLight = uLightPosition + (vec3(0.0, 0.0, 1.0) * uLightSize);
+//     shadowedByT = intersectRayQuad(fragPosition, topOfLight, v0, v1, v2, v3, ixPlaceholder);
+//   }
+
+//   if ( isShadowed && shadowedByL && shadowedByR && shadowedByT ) {
+//     fragColor = vec4(0.5, 0.5, 0.5, 0.7);
+//     // fragColor = lightColor(0.0);
+//     return;
+//   }
+//
+//   // Unclear how best to calculate the shadow proportion at this point.
+//   // Using sidePenumbraRatio is incorrect (too large) but calculating true size eludes me.
+//   float nfShadowPercent = 1.0;
+//   float lrShadowPercent = 1.0;
+//   if ( !shadowedByT ) nfShadowPercent = vBary.x / nearFarPenumbraRatio;
+//   if ( !shadowedByL ) {
+//     lrShadowPercent = lrRatio / sidePenumbraRatio;
+//   } else if ( !shadowedByR ) {
+//     lrShadowPercent = (1.0 - lrRatio) / sidePenumbraRatio;
+//   }
+//   float penumbraShadowPercent = min(nfShadowPercent, lrShadowPercent);
+//
+//   fragColor = vec4(0.0, 0.0, penumbraShadowPercent, 0.7);
   // fragColor = lightColor(1.0 - penumbraShadowPercent);
 }`;
 
@@ -990,7 +1099,8 @@ function renderShadowShader(mesh, map) {
 
 
 
-/* Testing
+/*
+// NOTE: Testing
 api = game.modules.get("elevatedvision").api
 Draw = CONFIG.GeometryLib.Draw;
 Draw.clearDrawings()
@@ -1109,7 +1219,8 @@ channels.map(c => uniquePixels(c));
 
 */
 
-/* Test terrain walls
+/*
+// NOTE: Test terrain walls
 api = game.modules.get("elevatedvision").api
 Draw = CONFIG.GeometryLib.Draw;
 Draw.clearDrawings()
