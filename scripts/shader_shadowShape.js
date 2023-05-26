@@ -8,7 +8,8 @@ Wall
 import { MODULE_ID } from "./const.js";
 
 
-/* NOTE: Color channel choices
+// NOTE: Color channel choices
+/*
 To avoid weirdness with alpha channel blending, avoid using it to set shadow amount.
 So that shadows can be multiplied together correctly, values actually represent light amount.
 Channels used:
@@ -28,7 +29,8 @@ Use BLEND Multiply for combining pixels (i.e., light portions).
 We want unpremultiplied alpha in most cases to avoid changing the data values.
 */
 
-/* NOTE: Terrain and elevation
+// NOTE: Terrain and elevation
+/*
 Elevation inputs:
 - Lights have a given elevation (plus a lightSize that makes them a sphere)
 - Walls are quads spanning a vertical elevation.
@@ -40,7 +42,8 @@ Elevation inputs:
   (Or are these incorporated into the terrain elevation?)
 */
 
-/* NOTE: Shadow map output
+// NOTE: Shadow map output
+/*
 Goal is a shadow map texture for a given light/sound/vision source.
 - Describes the current shadows (light values?) for a given source and terrain,
   as view from a defined elevation.
@@ -161,6 +164,10 @@ function getLightBounds(map) {
   return lightBounds;
 }
 
+// TODO: Simplified wall geometry that does not calculate penumbra.
+// Possible faster performance setting.
+// Can repeat the light vertex.
+
 function constructWallGeometry(map) {
   const coords = map.placeablesCoordinatesData.coordinates;
   const nObjs = coords.length;
@@ -174,17 +181,9 @@ function constructWallGeometry(map) {
   // TODO: Try Uint or other buffers instead of Array.
   const indices = [];
   const aVertexPosition = [];
-  const aTexCoord = [];
-  const aOtherCorner = [];
-  const aBary = [];
+  const aWallCorner1 = [];
+  const aWallCorner2 = [];
   const aTerrain = [];
-
-  // First vertex is the light source.
-  aVertexPosition.push(lightPosition.x, lightPosition.y, lightPosition.z);
-  aTexCoord.push(0, 0);
-  aOtherCorner.push(0, 0, 0);
-  aBary.push(1, 0, 0);
-  aTerrain.push(0);
 
   let triNumber = 0;
   for ( let i = 0; i < nObjs; i += 1 ) {
@@ -192,6 +191,9 @@ function constructWallGeometry(map) {
     const isWall = obj.object instanceof Wall;
     if ( !isWall ) continue;
     if ( !renderableWall(map, obj, lightBounds) ) continue;
+
+    // First vertex is the light source.
+    aVertexPosition.push(lightPosition.x, lightPosition.y, lightPosition.z);
 
     // A --> B --> light CCW
     // Only draw the triangles that are above minimum elevation and thus cast shadow.
@@ -201,14 +203,28 @@ function constructWallGeometry(map) {
     const [A, B] = orientWall > 0 ? [obj.A, obj.B] : [obj.B, obj.A];
 
     aVertexPosition.push(A.x, A.y, topZ, B.x, B.y, topZ);
-    aTexCoord.push(1, 0, 1, 1);
-    aOtherCorner.push(B.x, B.y, bottomZ, A.x, A.y, bottomZ);
-    aBary.push(0, 1, 0, 0, 0, 1);
-    aTerrain.push(obj.isTerrain, obj.isTerrain);
+
+
+    // Use the same terrain for each vertex.
+    aTerrain.push(obj.isTerrain, obj.isTerrain, obj.isTerrain);
+
+    // Give each vertex the wall coordinates.
+    // Used to calculate shadow penumbra.
+    aWallCorner1.push(
+      A.x, A.y, topZ,
+      A.x, A.y, topZ,
+      A.x, A.y, topZ
+    );
+
+    aWallCorner2.push(
+      B.x, B.y, bottomZ,
+      B.x, B.y, bottomZ,
+      B.x, B.y, bottomZ
+    );
 
     // Two vertices per wall edge, plus light center (0).
     const v = triNumber * 2;
-    indices.push(0, v + 1, v + 2);
+    indices.push(v, v + 1, v + 2);
     triNumber += 1;
   }
 
@@ -216,9 +232,8 @@ function constructWallGeometry(map) {
   const geometry = new PIXI.Geometry();
   geometry.addIndex(indices);
   geometry.addAttribute("aVertexPosition", aVertexPosition, 3, false);
-  geometry.addAttribute("aTexCoord", aTexCoord, 2, false);
-  geometry.addAttribute("aOtherCorner", aOtherCorner, 3, false);
-  geometry.addAttribute("aBary", aBary, 3, false);
+  geometry.addAttribute("aWallCorner1", aWallCorner1, 3, false);
+  geometry.addAttribute("aWallCorner2", aWallCorner2, 3, false);
   geometry.addAttribute("aTerrain", aTerrain, 1, false);
   return geometry;
 }
@@ -291,6 +306,51 @@ GLSLFunctions.orient2d =
 `
 float orient2d(in vec2 a, in vec2 b, in vec2 c) {
   return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
+}
+`;
+
+// Calculate barycentric position within a given triangle
+GLSLFunctions.barycentric3d =
+`
+vec3 barycentric3d(in vec3 p, in vec3 a, in vec3 b, in vec3 c) {
+  vec3 v0 = b - a; // Fixed for given triangle
+  vec3 v1 = c - a; // Fixed for given triangle
+  vec3 v2 = p - a;
+
+  float d00 = dot(v0, v0); // Fixed for given triangle
+  float d01 = dot(v0, v1); // Fixed for given triangle
+  float d11 = dot(v1, v1); // Fixed for given triangle
+  float d20 = dot(v2, v0);
+  float d21 = dot(v2, v1);
+
+  float denomInv = 1.0 / ((d00 * d11) - (d01 * d01)); // Fixed for given triangle
+  float v = ((d11 * d20) - (d01 * d21)) * denomInv;
+  float w = ((d00 * d21) - (d01 * d20)) * denomInv;
+  float u = 1.0 - v - w;
+
+  return vec3(u, v, w);
+}
+`;
+
+GLSLFunctions.barycentric2d =
+`
+vec3 barycentric2d(in vec2 p, in vec2 a, in vec2 b, in vec2 c) {
+  vec2 v0 = b - a;
+  vec2 v1 = c - a;
+  vec2 v2 = p - a;
+
+  float d00 = dot(v0, v0); // Fixed for given triangle
+  float d01 = dot(v0, v1); // Fixed for given triangle
+  float d11 = dot(v1, v1); // Fixed for given triangle
+  float d20 = dot(v2, v0);
+  float d21 = dot(v2, v1);
+
+  float denomInv = 1.0 / ((d00 * d11) - (d01 * d01)); // Fixed for given triangle
+  float v = ((d11 * d20) - (d01 * d21)) * denomInv;
+  float w = ((d00 * d21) - (d01 * d20)) * denomInv;
+  float u = 1.0 - v - w;
+
+  return vec3(u, v, w);
 }
 `;
 
@@ -473,30 +533,27 @@ uniform float uLightSize;
 uniform float uMaxR;
 
 in vec3 aVertexPosition;
-in vec3 aOtherCorner;
-in vec3 aBary;
+in vec3 aWallCorner1;
+in vec3 aWallCorner2;
 in float aTerrain;
 
-out float vWallRatio;
-out vec3 vVertexPosition;
 out vec3 vBary;
-flat out float isTerrain;
-flat out float wallRatio;
+out vec3 vSidePenumbra1;
+out vec3 vSidePenumbra2;
+out float vTerrain; // TODO: Would this be faster as flat or varying?
+out vec3 vVertexPosition; // For setting terrain elevation
 
-// For calculating penumbra shading
-flat out float farUmbraRatio;
-flat out float farMidPenumbraRatio;
+flat out vec3 nearRatios;
+flat out vec3 farRatios;
 
-flat out float sidePenumbraRatio;
-flat out float nearFarPenumbraRatio;
-flat out vec3 corner1;
-flat out vec3 corner2;
-flat out vec2 outerPenumbra1;
-flat out vec2 outerPenumbra2;
-flat out vec2 innerPenumbra1;
-flat out vec2 innerPenumbra2;
+// Debugging
+flat out vec3 testPoint1;
+flat out vec3 testPoint2;
+flat out vec3 testPoint3;
 
 ${GLSLFunctions.intersectRayPlane}
+${GLSLFunctions.barycentric2d}
+${GLSLFunctions.barycentric3d}
 
 void main() {
   // Shadow is constituted of an outer and inner penumbra.
@@ -505,61 +562,56 @@ void main() {
   // Inner penumbra: Fragment cannot see the light center but can see a portion of the light.
   // Full shadow (Umbra): Fragment cannot see the light due to occlusion by the wall.
 
-  vWallRatio = 1.0;
-  vBary = aBary;
-  vVertexPosition = aVertexPosition;
+  // Construct triangles and set different barycentric coordinates for each to test in fragment shader.
+  // 1. Outer triangle ABC
+  //    A: light center
+  //    B: outer penumbra corner 1
+  //    C: outer penumbra corner 2
+  // 2. Side penumbra p1ABC
+  //    p1A: corner 1 (A)
+  //    p1B: inner penumbra corner 1
+  //    p1C: outer penumbra corner 1 (B)
+  // 3. Side penumbra p2ABC. Same as (3) but for corner 2.
 
-  if ( gl_VertexID == 0 ) {
-    vWallRatio = 0.0;
-    gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
-    return;
-  }
+  // Also determine flat values to test against 1.x coordinates:
+  // 1. wall location -- test if a fragment is between the wall and the light.
+  // 2. far mid penumbra
+  // 3. far umbra
+  // 4. near penumbra (if wall bottom is above the minimum elevation)
+  // 5. near mid penumbra
+  // 6. near umbra -- this is equivalent to (1)
 
-  isTerrain = aTerrain;
-  wallRatio = 1.0;
+  // Pass the wall type.
+  vTerrain = aTerrain;
 
-  // If the light is directly above the vertex, no shadow.
-  if ( all(equal(uLightPosition.xy, aVertexPosition.xy)) ) {
-    gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
-    return;
-  }
-
-  // Project three vertices:
-  // 1. Furthest edge of the penumbra
-  // 2. Middle of the penumbra (light center --> wall endpoint --> ix)
-  // 3. Edge of the umbra.
-  // Consider 3 dimensions: x/y create the penumbra; z extends it at the end of the shadow.
-
+  // Plane describing the canvas at elevation.
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
   vec3 planePoint = vec3(0.0, 0.0, uCanvasElevation);
+
+  // Points for the light in the z direction
   vec3 lightTop = uLightPosition + vec3(0.0, 0.0, uLightSize);
   vec3 lightCenter = uLightPosition;
-  vec3 lightBottom = uLightPosition + vec3(0.0, 0.0, min(uCanvasElevation, -uLightSize));
+  vec3 lightBottom = uLightPosition + vec3(0.0, 0.0, -uLightSize);
+  lightBottom.z = max(lightBottom.z, uCanvasElevation);
 
+  // Wall coordinates
+  float wallTopZ = aWallCorner1.z;
+  float wallBottomZ = aWallCorner2.z;
+  vec3 wallTop1 = aWallCorner1;
+  vec3 wallTop2 = vec3(aWallCorner2.xy, aWallCorner1.z);
+  vec3 wallBottom1 = vec3(aWallCorner1.xy, aWallCorner2.z);
+  vec3 wallBottom2 = aWallCorner2;
+
+  // 1. Outer triangle ABC
   // Intersect the canvas plane: Light --> vertex --> plane.
   // If the light is below or equal to the vertex in elevation, the shadow has infinite length, represented here by uMaxR.
-  vec3 maxShadowVertex = lightCenter.add(normalize(aVertexPosition - lightCenter) * uMaxR);
-  vec3 ixFarPenumbra = maxShadowVertex;       // End of penumbra parallel to wall at far end.
-  vec3 ixFarMidPenumbra = maxShadowVertex;    // Midpoint of penumbra parallel to wall at far end.
-  vec3 ixFarUmbra = maxShadowVertex;          // End of full shadow parallel to wall (at far end).
-
-  if ( lightTop.z > aVertexPosition.z ) intersectRayPlane(lightTop, normalize(aVertexPosition - lightTop), planePoint, planeNormal, ixFarUmbra);
-  if ( lightCenter.z > aVertexPosition.z ) intersectRayPlane(lightCenter, normalize(aVertexPosition - lightCenter), planePoint, planeNormal, ixFarMidPenumbra);
-  if ( lightBottom.z > aVertexPosition.z ) intersectRayPlane(lightBottom, normalize(aVertexPosition - lightBottom), planePoint, planeNormal, ixFarPenumbra);
-
-  // Identify the line in barycentric.x at which the far umbra and penumbra are set.
-  // Note: barycentric.x is parallel to the wall as it moves from the end of the shadow (0) to the light (1)
-  // So shifting the sides of the penumbra does not affect barycentric.x
-  // Use the projected 2d distance on the canvas?
-  float distShadow = distance(uLightPosition.ix, ixFarPenumbra.ix);
-  float distMidPenumbra = distance(ixFarMidPenumbra.ix, ixFarPenumbra.ix);
-  float distFarUmbra = distance(ixFarUmbra.ix, ixFarPenumbra.ix);
-  farMidPenumbraRatio = distMidPenumbra / distShadow;
-  farUmbraRatio = distFarUmbra / distShadow;
-
-  // Identify the wall location in barycentric.x
-  float vertexDist = distance(uLightPosition.xy, aVertexPosition.xy);
-  wallRatio = vertexDist / distShadow;
+  vec3 maxShadowVertex = lightCenter + (normalize(aWallCorner1 - lightCenter) * uMaxR);
+  vec3 ixFarPenumbra1 = maxShadowVertex;       // End of penumbra parallel to wall at far end.
+  vec3 ixFarPenumbra2 = maxShadowVertex;       // End of penumbra parallel to wall at far end.
+  if ( lightBottom.z > wallTopZ ) {
+    intersectRayPlane(lightBottom, normalize(wallTop1 - lightBottom), planePoint, planeNormal, ixFarPenumbra1);
+    intersectRayPlane(lightBottom, normalize(wallTop2 - lightBottom), planePoint, planeNormal, ixFarPenumbra2);
+  }
 
   // Use similar triangles to calculate the length of the side penumbra at the end of the trapezoid.
   // Two similar triangles formed:
@@ -580,57 +632,98 @@ void main() {
   // Determine the lightSize circle projected at this vertex.
   // Pass the ratio of lightSize projected / length of shadow to fragment to draw the inner side penumbra.
   // Ratio of two triangles is k. Use inverse so we can multiply to get lightSizeProjected.
-  float vertexDist = distance(uLightPosition.xy, aVertexPosition.xy);
-  float distShadow = distance(uLightPosition.ix, ixFarPenumbra.ix);
-  float invK = (distShadow - vertexDist) / vertexDist;
+  // NOTE: Distances must be 2d in order to obtain the correct ratios.
+  float distWallTop1 = distance(lightCenter.xy, wallTop1.xy);
+  float distShadow = distance(lightCenter.xy, ixFarPenumbra1.xy);
+  float invK = (distShadow - distWallTop1) / distWallTop1;
   float lightSizeProjected = uLightSize * invK;
 
-  vec2 dir = normalize(aVertexPosition.xy - aOtherCorner.xy);
-  vec2 dirSized = dir * lightSizeProjected;
-  ixFarPenumbra = ix.xy + dirSized;
+  // Shift the penumbra by the projected light size.
+  vec3 dir = normalize(wallTop1 - wallTop2);
+  vec3 dirSized = dir * lightSizeProjected;
+  vec3 outerPenumbra1 = ixFarPenumbra1 + dirSized;
+  vec3 outerPenumbra2 = ixFarPenumbra2 - dirSized;
+  vec3 innerPenumbra1 = ixFarPenumbra1 - dirSized;
+  vec3 innerPenumbra2 = ixFarPenumbra2 + dirSized;
 
-  // Find the other endpoints of the penumbra
-  lineDirection = normalize(aOtherCorner - uLightPosition);
-  vec3 ixOther;
-  ixFound = intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ixOther);
+  // Set far and near ratios:
+  // x: penumbra; y: mid-penumbra; z: umbra
+  float wallRatio = 1.0 - (distWallTop1 / distShadow); // mid-penumbra
+  nearRatios = vec3(wallRatio);
+  farRatios = vec3(0.0); // 0.0 is the penumbra value (0 at shadow end)
 
-  // Set flat variables when processing (from perspective of) vertex2
-  corner1 = aOtherCorner;
-  corner2 = aVertexPosition;
-  outerPenumbra2 = newEndpoint;
-  outerPenumbra1 = ixOther.xy - dirSized;
-  innerPenumbra2 = ix.xy - dirSized;
-  innerPenumbra1 = ixOther.xy + dirSized;
+  if ( lightCenter.z > wallTopZ ) {
+    vec3 ixFarMidPenumbra1 = maxShadowVertex;
+    intersectRayPlane(lightCenter, normalize(wallTop1 - lightCenter), planePoint, planeNormal, ixFarMidPenumbra1);
+    farRatios.y = 1.0 - (distance(lightCenter.xy, ixFarMidPenumbra1.xy) / distShadow);
+  }
 
+  if ( lightTop.z > wallTopZ ) {
+    vec3 ixFarUmbra1 = maxShadowVertex;
+    intersectRayPlane(lightTop, normalize(wallTop1 - lightTop), planePoint, planeNormal, ixFarUmbra1);
+    farRatios.z = 1.0 - (distance(lightCenter.xy, ixFarUmbra1.xy) / distShadow);
+  }
 
-  // Also use similar triangles for the ratio between wall AB and the end of the trapezoid shadow.
-  float abDist = distance(aOtherCorner.xy, aVertexPosition.xy);
-  float ABDist = abDist * (ixDist / vertexDist);
-  sidePenumbraRatio = lightSizeProjected / ABDist;
+  if ( wallBottomZ > uCanvasElevation ) {
+    if ( lightTop.z > wallBottomZ ) {
+      vec3 ixNearPenumbra1;
+      intersectRayPlane(lightTop, normalize(wallBottom1 - lightTop), planePoint, planeNormal, ixNearPenumbra1);
+      nearRatios.x = 1.0 - (distance(lightCenter.xy, ixNearPenumbra1.xy) / distShadow);
+    }
 
-  // Determine the ratio for near/far using distance to the light.
-  nearFarPenumbraRatio = lightSizeProjected / ixDist;
+    if ( lightBottom.z > wallBottomZ) {
+      vec3 ixNearUmbra1;
+      intersectRayPlane(lightBottom, normalize(wallBottom1 - lightBottom), planePoint, planeNormal, ixNearUmbra1);
+      nearRatios.z = 1.0 - (distance(lightCenter.xy, ixNearUmbra1.xy) / distShadow);
+    }
+  }
 
-  vVertexPosition = ix;
-  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(newEndpoint.xy, 1.0)).xy, 0.0, 1.0);
+  // Big triangle ABC is the bounds of the potential shadow.
+  // Set by the newVertex varying to the vertices.
+  //   A = lightCenter;
+  //   B = outerPenumbra1;
+  //   C = outerPenumbra2;
 
+  vec3 newVertex;
+  switch ( gl_VertexID % 3 ) {
+    case 0:
+      vBary = vec3(1, 0, 0);
+      newVertex = lightCenter;
+      vSidePenumbra1 = vec3(1.4, -0.2, -0.2);
+      break;
 
+    case 1:
+      vBary = vec3(0, 1, 0);
+      newVertex = outerPenumbra1;
+      vSidePenumbra1 = vec3(0.0, 1.0, 0.0);
+      break;
 
+    case 2:
+      vBary = vec3(0, 0, 1);
+      vSidePenumbra1 = vec3(0.0, -1.73241161390704, 2.732411613907037);
+      newVertex = outerPenumbra2;
+  }
+  vVertexPosition = newVertex;
 
-  // If the bottom of the wall is above the canvas, correct the distance of the near shadow accordingly.
-  // (i.e., move the "wall" away from the light)
-  // Also set near penumbra (z-direction) based on light size.
-//   if ( aOtherCorner.z > uCanvasElevation ) {
-//     vec3 nearEndpoint = vec3(aVertexPosition.xy, aOtherCorner.z);
-//     lineDirection = normalize(nearEndpoint - uLightPosition);
-//     vec3 ixNear;
-//     if ( intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ixNear) ) {
-//       // Should always happen, but...
-//       float nearEndpointDist = distance(uLightPosition.xy, ixNear.xy);
-//       wallRatio = nearEndpointDist / ixDist;
-//     }
-//   }
+  // Penumbra1 triangle
+  vec2 p1A = wallTop1.xy;
+  vec2 p1B = outerPenumbra1.xy;
+  vec2 p1C = innerPenumbra1.xy;
 
+  // Penumbra2 triangle
+  vec2 p2A = wallTop2.xy;
+  vec2 p2B = innerPenumbra2.xy;
+  vec2 p2C = outerPenumbra2.xy;
+
+  //vSidePenumbra1 = barycentric2d(newVertex.xy, p1A, p1B, p1C);
+  vSidePenumbra2 = barycentric2d(newVertex.xy, p2A, p2B, p2C);
+
+  vec3 b = barycentric2d(newVertex.xy, p1A, p1B, p1C);
+  testPoint1 = lightCenter;
+  testPoint2 = outerPenumbra1;
+  testPoint3 = outerPenumbra2;
+
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(newVertex.xy, 1.0)).xy, 0.0, 1.0);
 }`;
 
 wallShadowShaderGLSL.fragmentShader =
@@ -644,21 +737,19 @@ uniform vec4 uSceneDims;
 uniform vec3 uLightPosition;
 uniform float uLightSize;
 
-in float vWallRatio;
 in vec3 vBary;
+in vec3 vSidePenumbra1;
+in vec3 vSidePenumbra2;
+in float vTerrain;
 in vec3 vVertexPosition;
-flat in float wallRatio;
-flat in float isTerrain;
 
-// For calculating penumbra
-flat in float sidePenumbraRatio;
-flat in float nearFarPenumbraRatio;
-flat in vec3 corner1;
-flat in vec3 corner2;
-flat in vec2 outerPenumbra1;
-flat in vec2 outerPenumbra2;
-flat in vec2 innerPenumbra1;
-flat in vec2 innerPenumbra2;
+flat in vec3 nearRatios;
+flat in vec3 farRatios;
+
+// Debugging
+flat in vec3 testPoint1;
+flat in vec3 testPoint2;
+flat in vec3 testPoint3;
 
 out vec4 fragColor;
 
@@ -668,6 +759,8 @@ ${GLSLFunctions.stepColor}
 ${GLSLFunctions.orient2d}
 ${GLSLFunctions.closest2dPointToLine}
 ${GLSLFunctions.lineLineIntersection2d}
+${GLSLFunctions.barycentric2d}
+${GLSLFunctions.barycentric3d}
 
 // Linear conversion from one range to another.
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
@@ -687,7 +780,7 @@ float stepRatio(in float ratio, in float numDistinct) {
 }
 
 vec4 lightColor(in float light) {
-  float terrain = float(isTerrain > 0.5);
+  float terrain = float(vTerrain > 0.5);
   float tMinus = 1.0 - terrain;
 
   // nonTerrainLight, wallType, terrainLight, alpha=1
@@ -703,15 +796,69 @@ vec4 lightColor(in float light) {
   return vec4((light * tMinus) + terrain, 1.0 - (0.5 * terrain), (light * terrain) + tMinus, 1.0);
 }
 
+// For debugging
+bool colorAtPoint(in vec3 targetPoint, in vec3 testPoint, in float tol) {
+  float dist = distance(targetPoint.xy, testPoint.xy);
+  return dist < tol;
+}
 
 void main() {
+
   // vBary.x is the distance from the light, where 1 = at light; 0 = at edge.
   // vBary.y is distance from A endpoint (transposed), where 1 = at A.
   // vBary.z is distance from B endpoint (transposed), where 1 = at B.
 
+  // vSidePenumbra1.x is 1 where the wall line would meet the light center --> corner 1 (a endpoint transposed);
+
+  // fragColor = vec4(vBary, 0.3);
+
+//   if ( colorAtPoint(testPoint1, vVertexPosition, 20.0) ) {
+//     fragColor = vec4(1.0, 0.0, 0.0, 0.8);
+//   } else if ( colorAtPoint(testPoint2, vVertexPosition, 20.0) ) {
+//     fragColor = vec4(0.0, 1.0, 0.0, 0.8);
+//   } else if ( colorAtPoint(testPoint3, vVertexPosition, 20.0) ) {
+//     fragColor = vec4(0.0, 0.0, 1.0, 0.8);
+//   } else {
+//     fragColor = vec4(vec3(0.0), 0.1);
+//   }
+
+//     if ( colorAtPoint(testPoint1, vBary, 0.1) ) {
+//       fragColor = vec4(1.0, 0.0, 0.0, 0.8);
+//     } else if ( colorAtPoint(testPoint2, vBary, 0.1) ) {
+//       fragColor = vec4(0.0, 1.0, 0.0, 0.8);
+//     } else if ( colorAtPoint(testPoint3, vVertexPosition, 20.0) ) {
+//       fragColor = vec4(0.0, 0.0, 1.0, 0.8);
+//     } else {
+//       fragColor = vec4(vec3(0.0), 0.1);
+//     }
+
+
+//   if ( all(greaterThanEqual(vSidePenumbra1, vec3(0.0))) ) fragColor = vec4(vSidePenumbra1, 0.3);
+//   else fragColor = vec4(vec3(0.0), 0.1);
+
+  if ( all(greaterThanEqual(vSidePenumbra2, vec3(0.0))) ) fragColor = vec4(vSidePenumbra2, 0.3);
+  else fragColor = vec4(vec3(0.0), 0.1);
+
+  // fragColor = vec4(float(vVertexPosition.y < fInnerPenumbra1.y), float(vVertexPosition.y < fInnerPenumbra2.y), 0.0, 0.5);
+
+
   // Can get distance from A edge by vBary.z / (vBary.y + vBary.z) ==> 0 at A edge, 1 at B edge
   //fragColor = vec4(stepColor(vBary.z / (vBary.y + vBary.z)), 0.5);
   //return;
+
+//   fragColor = vec4(stepColor(vBary.x), 0.5);
+//   fragColor = vec4(stepColor(vBary.y), 0.5);
+//   fragColor = vec4(stepColor(vBary.z), 0.5);
+//   fragColor = vec4(stepColor(vSidePenumbra1.x), 0.5);
+//   fragColor = vec4(stepColor(vSidePenumbra1.y), 0.5);
+//   fragColor = vec4(stepColor(vSidePenumbra1.z), 0.5);
+//   fragColor = vec4(clamp(vSidePenumbra1, 0.0, 1.0), 0.5);
+
+//      fragColor = vec4(float(vSidePenumbra2.x > 0.5), 0.0, 0.0, 0.5);
+//      fragColor = vec4(float(vBary.y < vSidePenumbra1.y), float(vBary.z < vSidePenumbra1.z), 0.0, 0.5);
+
+//   fragColor = vec4(vec3(lessThan(vec3(vBary.x), nearRatios)), 0.5);
+//   fragColor = vec4(vec3(lessThan(vec3(vBary.x), farRatios)), 0.5);
 
   // Options:
   // - in front of wall---dismiss early
@@ -722,131 +869,96 @@ void main() {
   // If within border, transparency based on ratio.
 
   // Check if fragment is in front of the wall.
-  if ( vWallRatio < wallRatio ) {
-    fragColor = vec4(1.0, 1.0, 0.0, 0.3);
-    //fragColor = vec4(vec3(1.0), 0.0);
-    return;
-  }
-
-  // What is the terrain elevation of this fragment?
-  float elevation = uCanvasElevation;
-  bool highElevation = false;
-  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
-
-  if ( any(lessThan(evTexCoord, vec2(0.0)))
-    || any(greaterThan(evTexCoord, vec2(1.0))) ) {
-    // Outside the scene bounds.
-    fragColor = vec4(1.0, 0.0, 1.0, 0.7); // debugging
-    return;
-  }
-
-  if ( all(lessThan(evTexCoord, vec2(1.0)))
-    && all(greaterThan(evTexCoord, vec2(0.0))) ) {
-    // Inside the scene bounds. Check elevation texture.
-    vec4 evTexel = texture(uElevationMap, evTexCoord);
-    elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
-    highElevation = elevation > uCanvasElevation;
-  }
-
-  // Input variables that may be adjusted later.
-  float localSidePenumbraRatio = sidePenumbraRatio;
-  float localNearFarPenumbraRatio = nearFarPenumbraRatio;
-  vec3 localBary = vBary;
-
-  // If the terrain of this fragment is above the minimum, adjust calculations accordingly.
-  // 1. Adjust the perceived intersection of the light --> vertex with the canvas.
-  // 2. Adjust sidePenumbraRatio
-  // 3. Adjust nearFarPenumbraRatio
-  // 4. Adjust barymetric x value (near/far from light)
-  // 5. Determine if still in shadow
-
-  if ( highElevation ) {
-     // Intersect the canvas plane: Light --> wall endpoint --> plane
-     vec3 planeNormal = vec3(0.0, 0.0, 1.0);
-     vec3 planePoint = vec3(0.0, 0.0, elevation);
-     vec3 lineDirection = normalize(corner1 - uLightPosition);
-     vec3 ix;
-     bool ixFound = intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ix);
-     if ( !ixFound ) {
-       // Shouldn't happen, but...
-       fragColor = vec4(vec3(1.0), 0.0);
-     }
-
-     float vertexDist = distance(uLightPosition.xy, corner1.xy);
-     float ixDist = distance(uLightPosition.xy, ix.xy);
-
-     float invK = (ixDist - vertexDist) / vertexDist;
-     float lightSizeProjected = uLightSize * invK;
-
-     float abDist = distance(corner1.xy, corner2.xy);
-     float ABDist = abDist * (ixDist / vertexDist);
-     localSidePenumbraRatio = lightSizeProjected / ABDist;
-     localNearFarPenumbraRatio = lightSizeProjected / ixDist;
-
-     // Barymetric.x, where 0 is edge, will change.
-     float origIxDist = vertexDist / wallRatio;
-     float newZeroRatio = 1.0 - (ixDist / origIxDist);
-     localBary.x = linearConversion(localBary.x, newZeroRatio, 1.0, 0.0, 1.0);
-     if ( localBary.z < 0.0 ) {
-       // No longer within the shadow.
-       fragColor = vec4(1.0, 1.0, 0.0, 0.3);
-       //fragColor = vec4(vec3(1.0), 0.0);
-     }
-  }
-
-  // Are we possibly within the l/r penumbra border?
-  // (Could be within both if the light size is large or wall is small.)
-  // This border is overly inclusive and so location must be confirmed with additional tests.
-  float lrRatio = localBary.z / (localBary.y + localBary.z);
-  bool withinL = lrRatio < localSidePenumbraRatio;
-  bool withinR = (1.0 - lrRatio) < localSidePenumbraRatio;
-
-  // Are we possibly within the far penumbra border?
-  bool withinFar = localBary.x < localNearFarPenumbraRatio;
-
-  // If not high terrain and not in penumbra, in full shadow.
-  if ( !withinFar && !withinL && !withinR && !highElevation ) {
-    fragColor = vec4(vec3(0.0), 0.7);
-    //fragColor = lightColor(0.0);
-    return;
-  } else if ( withinL ) {
-    fragColor = vec4(1.0, 0.0, 0.0, 0.7);
-  } else if ( withinR ) {
-    fragColor = vec4(0.0, 0.0, 1.0, 0.7);
-  } else if ( withinFar ) {
-    fragColor = vec4(0.5, 0.0, 0.5, 0.7);
-  } else if ( highElevation ) {
-    fragColor = vec4(0.0, 1.0, 0.0, 0.7);
-  }
-  return;
-
-  // If the fragment is not between the two outer penumbra, it is in full light.
-  // (Note: angle of the shadow from the light is always less than 180º, so this holds.)
-  float oOuterPenumbra1 = orient2d(corner1.xy, outerPenumbra1, vVertexPosition.xy);
-  float oOuterPenumbra2 = orient2d(corner2.xy, outerPenumbra2, vVertexPosition.xy);
-  if ( sign(oOuterPenumbra1) != sign(-oOuterPenumbra2) ) {
-    fragColor = vec4(1.0, 1.0, 0.0, 0.3);
-    //fragColor = vec4(vec3(1.0), 0.0);
-    return;
-  }
-
-  // If the fragment is between the two inner penumbra, it is in full shadow unless near trapezoid end.
-  float oInnerPenumbra1 = orient2d(corner1.xy, innerPenumbra1, vVertexPosition.xy);
-  float oInnerPenumbra2 = orient2d(corner2.xy, innerPenumbra2, vVertexPosition.xy);
-  bool withinUmbra = sign(oInnerPenumbra1) == sign(-oInnerPenumbra2);
-  if ( withinUmbra && !withinFar ) {
-    fragColor = vec4(vec3(0.0), 0.7);
-    //fragColor = lightColor(0.0);
-    return;
-  }
-
-  // Fragment within 1 or both penumbra or at the far end of the trapezoid.
-  bool withinPenumbra1 = sign(oInnerPenumbra1) == sign(-oOuterPenumbra1);
-  bool withinPenumbra2 = sign(oInnerPenumbra2) == sign(-oOuterPenumbra2);
-
-//   if ( withinPenumbra1 ) {
+//   if ( vWallRatio < wallRatio ) {
+//     fragColor = vec4(1.0, 1.0, 0.0, 0.3);
+//     //fragColor = vec4(vec3(1.0), 0.0);
+//     return;
+//   }
+//
+//   // What is the terrain elevation of this fragment?
+//   float elevation = uCanvasElevation;
+//   bool highElevation = false;
+//   vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
+//
+//   if ( any(lessThan(evTexCoord, vec2(0.0)))
+//     || any(greaterThan(evTexCoord, vec2(1.0))) ) {
+//     // Outside the scene bounds.
+//     fragColor = vec4(1.0, 0.0, 1.0, 0.7); // debugging
+//     return;
+//   }
+//
+//   if ( all(lessThan(evTexCoord, vec2(1.0)))
+//     && all(greaterThan(evTexCoord, vec2(0.0))) ) {
+//     // Inside the scene bounds. Check elevation texture.
+//     vec4 evTexel = texture(uElevationMap, evTexCoord);
+//     elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
+//     highElevation = elevation > uCanvasElevation;
+//   }
+//
+//   // Input variables that may be adjusted later.
+//   float localSidePenumbraRatio = sidePenumbraRatio;
+//   float localNearFarPenumbraRatio = nearFarPenumbraRatio;
+//   vec3 localBary = vBary;
+//
+//   // If the terrain of this fragment is above the minimum, adjust calculations accordingly.
+//   // 1. Adjust the perceived intersection of the light --> vertex with the canvas.
+//   // 2. Adjust sidePenumbraRatio
+//   // 3. Adjust nearFarPenumbraRatio
+//   // 4. Adjust barymetric x value (near/far from light)
+//   // 5. Determine if still in shadow
+//
+//   if ( highElevation ) {
+//      // Intersect the canvas plane: Light --> wall endpoint --> plane
+//      vec3 planeNormal = vec3(0.0, 0.0, 1.0);
+//      vec3 planePoint = vec3(0.0, 0.0, elevation);
+//      vec3 lineDirection = normalize(corner1 - uLightPosition);
+//      vec3 ix;
+//      bool ixFound = intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ix);
+//      if ( !ixFound ) {
+//        // Shouldn't happen, but...
+//        fragColor = vec4(vec3(1.0), 0.0);
+//      }
+//
+//      float vertexDist = distance(uLightPosition.xy, corner1.xy);
+//      float ixDist = distance(uLightPosition.xy, ix.xy);
+//
+//      float invK = (ixDist - vertexDist) / vertexDist;
+//      float lightSizeProjected = uLightSize * invK;
+//
+//      float abDist = distance(corner1.xy, corner2.xy);
+//      float ABDist = abDist * (ixDist / vertexDist);
+//      localSidePenumbraRatio = lightSizeProjected / ABDist;
+//      localNearFarPenumbraRatio = lightSizeProjected / ixDist;
+//
+//      // Barymetric.x, where 0 is edge, will change.
+//      float origIxDist = vertexDist / wallRatio;
+//      float newZeroRatio = 1.0 - (ixDist / origIxDist);
+//      localBary.x = linearConversion(localBary.x, newZeroRatio, 1.0, 0.0, 1.0);
+//      if ( localBary.z < 0.0 ) {
+//        // No longer within the shadow.
+//        fragColor = vec4(1.0, 1.0, 0.0, 0.3);
+//        //fragColor = vec4(vec3(1.0), 0.0);
+//      }
+//   }
+//
+//   // Are we possibly within the l/r penumbra border?
+//   // (Could be within both if the light size is large or wall is small.)
+//   // This border is overly inclusive and so location must be confirmed with additional tests.
+//   float lrRatio = localBary.z / (localBary.y + localBary.z);
+//   bool withinL = lrRatio < localSidePenumbraRatio;
+//   bool withinR = (1.0 - lrRatio) < localSidePenumbraRatio;
+//
+//   // Are we possibly within the far penumbra border?
+//   bool withinFar = localBary.x < localNearFarPenumbraRatio;
+//
+//   // If not high terrain and not in penumbra, in full shadow.
+//   if ( !withinFar && !withinL && !withinR && !highElevation ) {
+//     fragColor = vec4(vec3(0.0), 0.7);
+//     //fragColor = lightColor(0.0);
+//     return;
+//   } else if ( withinL ) {
 //     fragColor = vec4(1.0, 0.0, 0.0, 0.7);
-//   } else if ( withinPenumbra2 ) {
+//   } else if ( withinR ) {
 //     fragColor = vec4(0.0, 0.0, 1.0, 0.7);
 //   } else if ( withinFar ) {
 //     fragColor = vec4(0.5, 0.0, 0.5, 0.7);
@@ -854,36 +966,71 @@ void main() {
 //     fragColor = vec4(0.0, 1.0, 0.0, 0.7);
 //   }
 //   return;
-
-  // Use the lines at either edge of the penumbra to calculate a percent shadow for left/right penumbra.
-  // Take the distance to the light edge divided by the total distance.
-  // Possible for the fragment to be within all three options...
-  float shadow1Percent = 1.0;
-  float shadow2Percent = 1.0;
-  float shadowFarPercent = 1.0;
-  if ( withinPenumbra1 ) {
-    vec2 outerIx;
-    vec2 innerIx;
-    vec2 dir12 = corner1.xy - corner2.xy;
-    lineLineIntersection2d(corner1.xy, corner1.xy - outerPenumbra1, vVertexPosition.xy, dir12, outerIx);
-    lineLineIntersection2d(corner1.xy, corner1.xy - innerPenumbra1, vVertexPosition.xy, dir12, outerIx);
-    shadow1Percent = distance(vVertexPosition.xy, outerIx) / distance(outerIx, innerIx);
-  }
-
-  if ( withinPenumbra2 ) {
-    vec2 outerIx;
-    vec2 innerIx;
-    vec2 dir12 = corner1.xy - corner2.xy;
-    lineLineIntersection2d(corner2.xy, corner2.xy - outerPenumbra1, vVertexPosition.xy, dir12, outerIx);
-    lineLineIntersection2d(corner2.xy, corner2.xy - innerPenumbra1, vVertexPosition.xy, dir12, outerIx);
-    shadow2Percent = distance(vVertexPosition.xy, outerIx) / distance(outerIx, innerIx);
-  }
-
-  if ( withinFar ) shadowFarPercent = localBary.x / localNearFarPenumbraRatio;
-
-  float penumbraShadowPercent = min(shadowFarPercent, min(shadow1Percent, shadow2Percent));
-
-  fragColor = vec4(0.0, 0.0, 1.0 - penumbraShadowPercent, 0.7);
+//
+//   // If the fragment is not between the two outer penumbra, it is in full light.
+//   // (Note: angle of the shadow from the light is always less than 180º, so this holds.)
+//   float oOuterPenumbra1 = orient2d(corner1.xy, outerPenumbra1, vVertexPosition.xy);
+//   float oOuterPenumbra2 = orient2d(corner2.xy, outerPenumbra2, vVertexPosition.xy);
+//   if ( sign(oOuterPenumbra1) != sign(-oOuterPenumbra2) ) {
+//     fragColor = vec4(1.0, 1.0, 0.0, 0.3);
+//     //fragColor = vec4(vec3(1.0), 0.0);
+//     return;
+//   }
+//
+//   // If the fragment is between the two inner penumbra, it is in full shadow unless near trapezoid end.
+//   float oInnerPenumbra1 = orient2d(corner1.xy, innerPenumbra1, vVertexPosition.xy);
+//   float oInnerPenumbra2 = orient2d(corner2.xy, innerPenumbra2, vVertexPosition.xy);
+//   bool withinUmbra = sign(oInnerPenumbra1) == sign(-oInnerPenumbra2);
+//   if ( withinUmbra && !withinFar ) {
+//     fragColor = vec4(vec3(0.0), 0.7);
+//     //fragColor = lightColor(0.0);
+//     return;
+//   }
+//
+//   // Fragment within 1 or both penumbra or at the far end of the trapezoid.
+//   bool withinPenumbra1 = sign(oInnerPenumbra1) == sign(-oOuterPenumbra1);
+//   bool withinPenumbra2 = sign(oInnerPenumbra2) == sign(-oOuterPenumbra2);
+//
+// //   if ( withinPenumbra1 ) {
+// //     fragColor = vec4(1.0, 0.0, 0.0, 0.7);
+// //   } else if ( withinPenumbra2 ) {
+// //     fragColor = vec4(0.0, 0.0, 1.0, 0.7);
+// //   } else if ( withinFar ) {
+// //     fragColor = vec4(0.5, 0.0, 0.5, 0.7);
+// //   } else if ( highElevation ) {
+// //     fragColor = vec4(0.0, 1.0, 0.0, 0.7);
+// //   }
+// //   return;
+//
+//   // Use the lines at either edge of the penumbra to calculate a percent shadow for left/right penumbra.
+//   // Take the distance to the light edge divided by the total distance.
+//   // Possible for the fragment to be within all three options...
+//   float shadow1Percent = 1.0;
+//   float shadow2Percent = 1.0;
+//   float shadowFarPercent = 1.0;
+//   if ( withinPenumbra1 ) {
+//     vec2 outerIx;
+//     vec2 innerIx;
+//     vec2 dir12 = corner1.xy - corner2.xy;
+//     lineLineIntersection2d(corner1.xy, corner1.xy - outerPenumbra1, vVertexPosition.xy, dir12, outerIx);
+//     lineLineIntersection2d(corner1.xy, corner1.xy - innerPenumbra1, vVertexPosition.xy, dir12, outerIx);
+//     shadow1Percent = distance(vVertexPosition.xy, outerIx) / distance(outerIx, innerIx);
+//   }
+//
+//   if ( withinPenumbra2 ) {
+//     vec2 outerIx;
+//     vec2 innerIx;
+//     vec2 dir12 = corner1.xy - corner2.xy;
+//     lineLineIntersection2d(corner2.xy, corner2.xy - outerPenumbra1, vVertexPosition.xy, dir12, outerIx);
+//     lineLineIntersection2d(corner2.xy, corner2.xy - innerPenumbra1, vVertexPosition.xy, dir12, outerIx);
+//     shadow2Percent = distance(vVertexPosition.xy, outerIx) / distance(outerIx, innerIx);
+//   }
+//
+//   if ( withinFar ) shadowFarPercent = localBary.x / localNearFarPenumbraRatio;
+//
+//   float penumbraShadowPercent = min(shadowFarPercent, min(shadow1Percent, shadow2Percent));
+//
+//   fragColor = vec4(0.0, 0.0, 1.0 - penumbraShadowPercent, 0.7);
   // fragColor = lightColor(1.0 - penumbraShadowPercent);
 }`;
 
@@ -1247,7 +1394,7 @@ uniforms = {
   uElevationResolution: [elevationMin, elevationStep, maximumPixelValue, elevationMult],
   uSceneDims: [sceneX, sceneY, sceneWidth, sceneHeight],
   uElevationMap: canvas.elevation._elevationTexture,
-  uMaxR = canvas.dimensions.maxR
+  uMaxR: canvas.dimensions.maxR
 }
 
 let { vertexShader, fragmentShader } = wallShadowShaderGLSL;
@@ -1497,6 +1644,9 @@ canvasPlane = new Plane();
 A = new Point3d(w.A.x, w.A.y, w.topZ);
 B = new Point3d(w.B.x, w.B.y, w.topZ);
 vVertexPosition = _token.center;
+uCanvasElevation = uniforms.uCanvasElevation
+uLightSize = uniforms.uLightSize
+uMaxR = uniforms.uMaxR
 
 // Shoot ray from light to vertex and intersect the plane
 function intersectRayPlane(linePoint, lineDirection, planePoint, planeNormal) {
@@ -1522,6 +1672,95 @@ Draw.clearDrawings()
 Draw.point(lightPosition, { color: Draw.COLORS.yellow });
 cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightSize);
 Draw.shape(cir, { color: Draw.COLORS.yellow, fill: Draw.COLORS.yellow, fillAlpha: 0.5 })
+
+
+// At vertex 0
+aVertexPosition = lightPosition;
+
+// At vertex 1
+aVertexPosition = A;
+
+// At vertex 2
+aVertexPosition = B;
+
+// All vertices
+aWallCorner1 = A
+aWallCorner2 = B
+
+// Calculate values provided by the vertex shader
+// Points for the light in the z direction
+lightTop = lightPosition.add(new Point3d(0, 0, uLightSize))
+lightCenter = lightPosition
+lightBottom = lightPosition.add(new Point3d(0, 0, -uLightSize))
+lightBottom.z = Math.max(lightBottom.z, uCanvasElevation)
+
+// Wall coordinates
+wallTopZ = aWallCorner1.z;
+wallBottomZ = aWallCorner2.z;
+wallTop1 = aWallCorner1;
+wallTop2 = new Point3d(aWallCorner2.x, aWallCorner2.y, aWallCorner1.z);
+wallBottom1 = new Point3d(aWallCorner1.x, aWallCorner1.y, aWallCorner2.z);
+wallBottom2 = aWallCorner2;
+
+// 1. Outer triangle ABC
+maxShadowVertex = lightCenter.add(aWallCorner1.subtract(lightCenter).normalize().multiplyScalar(uMaxR));
+ixFarPenumbra1 = maxShadowVertex;       // End of penumbra parallel to wall at far end.
+ixFarPenumbra2 = maxShadowVertex;       // End of penumbra parallel to wall at far end.
+if ( lightBottom.z > wallTopZ ) {
+  ixFarPenumbra1 = intersectRayPlane(lightBottom, wallTop1.subtract(lightBottom).normalize(), canvasPlane.point, canvasPlane.normal);
+  ixFarPenumbra2 = intersectRayPlane(lightBottom, wallTop2.subtract(lightBottom).normalize(), canvasPlane.point, canvasPlane.normal);
+}
+
+// Determine the lightSize circle projected at this vertex.
+distWallTop1 = PIXI.Point.distanceBetween(lightCenter, wallTop1);
+distShadow = PIXI.Point.distanceBetween(lightCenter, ixFarPenumbra1);
+invK = (distShadow - distWallTop1) / distWallTop1;
+lightSizeProjected = uLightSize * invK;
+
+// Shift the penumbra by the projected light size.
+dir = wallTop1.subtract(wallTop2).normalize();
+dirSized = dir.multiplyScalar(lightSizeProjected);
+outerPenumbra1 = ixFarPenumbra1.add(dirSized);
+outerPenumbra2 = ixFarPenumbra2.subtract(dirSized);
+innerPenumbra1 = ixFarPenumbra1.subtract(dirSized);
+innerPenumbra2 = ixFarPenumbra2.add(dirSized);
+
+Draw.point(outerPenumbra1, { color: Draw.COLORS.red })
+Draw.point(innerPenumbra1, { color: Draw.COLORS.red })
+Draw.point(outerPenumbra2, { color: Draw.COLORS.blue })
+Draw.point(innerPenumbra2, { color: Draw.COLORS.blue })
+
+// Penumbra1 triangle
+p1A = wallTop1.to2d();
+p1B = outerPenumbra1.to2d();
+p1C = innerPenumbra1.to2d();
+
+// Penumbra2 triangle
+p2A = wallTop2.to2d();
+p2B = innerPenumbra2.to2d();
+p2C = outerPenumbra2.to2d();
+
+Draw.shape(new PIXI.Polygon(p1A, p1B, p1C), { color: Draw.COLORS.red, fill: Draw.COLORS.red, fillAlpha: 0.1 })
+Draw.shape(new PIXI.Polygon(p2A, p2B, p2C), { color: Draw.COLORS.blue, fill: Draw.COLORS.blue, fillAlpha: 0.1 })
+
+// Varyings
+vBary_0 = new Point3d(1, 0, 0)
+newVertex_0 = lightCenter
+vSidePenumbra1_0 = barycentric(newVertex_0, p1A, p1B, p1C);
+vSidePenumbra2_0 = barycentric(newVertex_0, p2A, p2B, p2C);
+
+vBary_1 = new Point3d(0, 1, 0)
+newVertex_1 = outerPenumbra1
+vSidePenumbra1_1 = barycentric(newVertex_1, p1A, p1B, p1C);
+vSidePenumbra2_1 = barycentric(newVertex_1, p2A, p2B, p2C);
+
+vBary_2 = new Point3d(0, 0, 1)
+newVertex_2 = outerPenumbra2
+vSidePenumbra1_2 = barycentric(newVertex_2, p1A, p1B, p1C);
+vSidePenumbra2_2 = barycentric(newVertex_2, p2A, p2B, p2C);
+
+
+
 
 // Calculate values provided by the vertex shader
 // out float vWallRatio;
@@ -1656,6 +1895,21 @@ edgeTest(.6249999999999993, endpointBary)
 edgeTest(.7, endpointBary)
 edgeTest(-1, endpointBary)
 
+// Project from the big triangle to the penumbra triangle.
+corner1 = aOtherCorner;
+corner2 = aVertexPosition;
+outerPenumbra2 = newEndpoint
+outerPenumbra1 = ixOther.to2d().subtract(dirSized);
+innerPenumbra2 = ix.to2d().subtract(dirSized);
+innerPenumbra1 = ixOther.to2d().add(dirSized);
+
+triA = lightPosition.to2d()
+triB = outerPenumbra1
+triC = outerPenumbra2
+
+barycentric(triA, corner1, innerPenumbra1, outerPenumbra1)
+barycentric(triB, corner1, innerPenumbra1, outerPenumbra1)
+barycentric(triC, corner1, innerPenumbra1, outerPenumbra1)
 
 
 // Intersection with light --> wall endpoint
