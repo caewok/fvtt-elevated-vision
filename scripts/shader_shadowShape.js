@@ -689,18 +689,15 @@ void main() {
     case 0:
       vBary = vec3(1, 0, 0);
       newVertex = lightCenter;
-      vSidePenumbra1 = vec3(1.4, -0.2, -0.2);
       break;
 
     case 1:
       vBary = vec3(0, 1, 0);
       newVertex = outerPenumbra1;
-      vSidePenumbra1 = vec3(0.0, 1.0, 0.0);
       break;
 
     case 2:
       vBary = vec3(0, 0, 1);
-      vSidePenumbra1 = vec3(0.0, -1.73241161390704, 2.732411613907037);
       newVertex = outerPenumbra2;
   }
   vVertexPosition = newVertex;
@@ -712,13 +709,12 @@ void main() {
 
   // Penumbra2 triangle
   vec2 p2A = wallTop2.xy;
-  vec2 p2B = innerPenumbra2.xy;
-  vec2 p2C = outerPenumbra2.xy;
+  vec2 p2C = innerPenumbra2.xy;
+  vec2 p2B = outerPenumbra2.xy;
 
-  //vSidePenumbra1 = barycentric2d(newVertex.xy, p1A, p1B, p1C);
+  vSidePenumbra1 = barycentric2d(newVertex.xy, p1A, p1B, p1C);
   vSidePenumbra2 = barycentric2d(newVertex.xy, p2A, p2B, p2C);
 
-  vec3 b = barycentric2d(newVertex.xy, p1A, p1B, p1C);
   testPoint1 = lightCenter;
   testPoint2 = outerPenumbra1;
   testPoint3 = outerPenumbra2;
@@ -833,32 +829,20 @@ void main() {
 //     }
 
 
-//   if ( all(greaterThanEqual(vSidePenumbra1, vec3(0.0))) ) fragColor = vec4(vSidePenumbra1, 0.3);
-//   else fragColor = vec4(vec3(0.0), 0.1);
-
   if ( all(greaterThanEqual(vSidePenumbra2, vec3(0.0))) ) fragColor = vec4(vSidePenumbra2, 0.3);
+  // else if ( all(greaterThanEqual(vSidePenumbra2, vec3(0.0))) ) fragColor = vec4(vSidePenumbra2, 0.3);
+  else if ( vSidePenumbra2.x > 0.0 && vSidePenumbra2.y < 0.0 && vSidePenumbra2.z > 0.0 ) fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  else if ( vSidePenumbra2.x > 0.0 && vSidePenumbra2.y > 0.0 && vSidePenumbra2.z < 0.0 ) fragColor = vec4(0.0, 1.0, 0.0, 1.0);
+  else if ( vSidePenumbra2.x < 0.0 && vSidePenumbra2.y > 0.0 && vSidePenumbra2.z > 0.0 ) fragColor = vec4(0.0, 0.0, 1.0, 1.0);
   else fragColor = vec4(vec3(0.0), 0.1);
 
-  // fragColor = vec4(float(vVertexPosition.y < fInnerPenumbra1.y), float(vVertexPosition.y < fInnerPenumbra2.y), 0.0, 0.5);
 
 
-  // Can get distance from A edge by vBary.z / (vBary.y + vBary.z) ==> 0 at A edge, 1 at B edge
-  //fragColor = vec4(stepColor(vBary.z / (vBary.y + vBary.z)), 0.5);
-  //return;
+//   vSidePenumbra1.xz > 0, vSidePenumbra1.y < 0: In full shadow or outside shadow to the left, incl. some in front of wall
+//   vSidePenumbra1.xy > 0, vSidePenumbra1.z < 0: Outside the penumbra incl. some in front of wall
+//   vSidePenumbra1.yz > 0, vSidePenumbra1.x < 0: Does not occur within the vertex shape (likely past the far shadow line)
 
-//   fragColor = vec4(stepColor(vBary.x), 0.5);
-//   fragColor = vec4(stepColor(vBary.y), 0.5);
-//   fragColor = vec4(stepColor(vBary.z), 0.5);
-//   fragColor = vec4(stepColor(vSidePenumbra1.x), 0.5);
-//   fragColor = vec4(stepColor(vSidePenumbra1.y), 0.5);
-//   fragColor = vec4(stepColor(vSidePenumbra1.z), 0.5);
-//   fragColor = vec4(clamp(vSidePenumbra1, 0.0, 1.0), 0.5);
 
-//      fragColor = vec4(float(vSidePenumbra2.x > 0.5), 0.0, 0.0, 0.5);
-//      fragColor = vec4(float(vBary.y < vSidePenumbra1.y), float(vBary.z < vSidePenumbra1.z), 0.0, 0.5);
-
-//   fragColor = vec4(vec3(lessThan(vec3(vBary.x), nearRatios)), 0.5);
-//   fragColor = vec4(vec3(lessThan(vec3(vBary.x), farRatios)), 0.5);
 
   // Options:
   // - in front of wall---dismiss early
