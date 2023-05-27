@@ -193,7 +193,6 @@ function constructWallGeometry(map) {
     if ( !renderableWall(map, obj, lightBounds) ) continue;
 
     // First vertex is the light source.
-    aVertexPosition.push(lightPosition.x, lightPosition.y, lightPosition.z);
 
     // A --> B --> light CCW
     // Only draw the triangles that are above minimum elevation and thus cast shadow.
@@ -231,11 +230,36 @@ function constructWallGeometry(map) {
   // TODO: set interleave to true?
   const geometry = new PIXI.Geometry();
   geometry.addIndex(indices);
-  geometry.addAttribute("aVertexPosition", aVertexPosition, 3, false);
   geometry.addAttribute("aWallCorner1", aWallCorner1, 3, false);
   geometry.addAttribute("aWallCorner2", aWallCorner2, 3, false);
   geometry.addAttribute("aTerrain", aTerrain, 1, false);
   return geometry;
+}
+
+/**
+ * Construct a simple wall geometry that does not calculate a penumbra.
+ * Used to mask vision, etc.
+ * Possible use as faster performance setting.
+ */
+function constructSimpleWallGeometry(map) {
+  const coords = map.placeablesCoordinatesData.coordinates;
+  const nObjs = coords.length;
+
+  // Need to cut off walls at the top/bottom bounds of the scene, otherwise they
+  // will be given incorrect depth values b/c there is no floor or ceiling.
+  // Point source lights have bounds
+  const lightBounds = getLightBounds(map);
+  const { lightPosition } = map;
+
+  // TODO: Try Uint or other buffers instead of Array.
+  const indices = [];
+  const aVertexPosition = [];
+  const aOtherWallCorner = [];
+  const aWallCorner2 = [];
+  const aTerrain = [];
+
+
+
 }
 
 /**
@@ -532,7 +556,6 @@ uniform vec3 uLightPosition;
 uniform float uLightSize;
 uniform float uMaxR;
 
-in vec3 aVertexPosition;
 in vec3 aWallCorner1;
 in vec3 aWallCorner2;
 in float aTerrain;
