@@ -545,6 +545,7 @@ out vec3 vVertexPosition; // For setting terrain elevation
 
 flat out vec3 nearRatios;
 flat out vec3 farRatios;
+flat out vec4 c; // x: topZ, y: bottomZ, z: shadowDist, a: wallRatio
 
 // Debugging
 flat out vec3 testPoint1;
@@ -646,9 +647,12 @@ void main() {
   vec3 innerPenumbra1 = ixFarPenumbra1 - dirSized;
   vec3 innerPenumbra2 = ixFarPenumbra2 + dirSized;
 
+  // Determine relevant wall dimensions used in terrain calculations in the fragment shader.
+  float wallRatio = 1.0 - (distWallTop1 / distShadow); // mid-penumbra
+  wallDims = vec4(topZ, bottomZ, distShadow, wallRatio);
+
   // Set far and near ratios:
   // x: penumbra; y: mid-penumbra; z: umbra
-  float wallRatio = 1.0 - (distWallTop1 / distShadow); // mid-penumbra
   nearRatios = vec3(wallRatio);
   farRatios = vec3(0.0); // 0.0 is the penumbra value (0 at shadow end)
 
@@ -721,6 +725,8 @@ void main() {
   vSidePenumbra1 = barycentric2d(newVertex.xy, p1A, p1B, p1C);
   vSidePenumbra2 = barycentric2d(newVertex.xy, p2A, p2B, p2C);
 
+
+
   testPoint1 = lightCenter;
   testPoint2 = outerPenumbra1;
   testPoint3 = outerPenumbra2;
@@ -747,6 +753,7 @@ in vec3 vVertexPosition;
 
 flat in vec3 nearRatios;
 flat in vec3 farRatios;
+flat in vec4 wallDims; // x: topZ, y: bottomZ, z: shadowDist, a: wallRatio
 
 // Debugging
 flat in vec3 testPoint1;
@@ -882,6 +889,116 @@ void main() {
     // fragColor = vec4(vec3(1.0), 0.0);
     return;
   }
+
+  // What is the terrain elevation of this fragment?
+  float elevation = uCanvasElevation;
+  bool highElevation = false;
+  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
+  if ( all(lessThan(evTexCoord, vec2(1.0)))
+    && all(greaterThan(evTexCoord, vec2(0.0))) ) {
+    // Inside the scene bounds. Check elevation texture.
+    vec4 evTexel = texture(uElevationMap, evTexCoord);
+    elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
+    highElevation = elevation > uCanvasElevation;
+  }
+
+  // If high elevation, modify the near/far ratios.
+  // Move them proportionally to the height of the elevation vs height of the wall.
+  if ( highElevation ) {
+    float elevationChange = elevation - uCanvasElevation;
+    vec2 wallHeight = wallDims.xy - uCanvasElevation;
+    vec2 elevRatio = 1.0 - (elevationChange / wallHeight);
+
+
+
+
+
+
+    // wallDims = vec4(topZ, bottomZ, distShadow, wallRatio);
+    vec3 lightFar0 = farRatio * wallDims.distShadow
+
+
+    /* Top example:
+
+light at 40', wall top at 25'. light 25' from wall.
+Assume light size radius of 50. Penumbra edge is 57.5' from wall.
+At elevation 0', mid-penumbra would be 37.5' from wall.
+- shadowDist = 25 + 57.5 = 82.5.
+- Mid from Light = 25 + 37.5 = 62.5
+- farRatio.y = (82.5 - 62.5) / 82.5 = .242424...
+- wallRatio = (82.5 - 25) / 82.5 = .6969...
+
+Move to elevation 5'.
+- shadowDist: same for purposes of defining ratios.
+- evRatio = 5' / 25' = 0.2.
+- Shadow edge from wall is 57.5 * (1 - 0.2) = 46'
+- Shadow edge from light is 46 + 25 = 71'
+- mid from wall is 37.5 * 0.8 = 30
+- mid from light is 25 + 30 = 55
+- farRatio.x (penumbra edge) = (82.5 - 71) / 82.5 = .139...
+- farRatio.y (mid) = (82.5 - 55) / 82.5 = .333...
+
+Move to elevation 15'
+- evRatio = 15 / 25 = 0.6
+- Shadow edge from wall is 57.5 * (1 - 0.6) = 23'
+- Shadow edge from light is 23 + 25 = 48'
+- mid from wall is 37.5 * (1 - .6) = 15
+- mid from light is 25 + 15 = 40
+- farRatio.x (penumbra edge) = (82.5 - 48) / 82.5 = 0.41818181818181815
+- farRatio.y (mid) = (82.5 - 40) / 82.5 = 0.5151515151515151
+
+lightWallDist = (1 - wallRatio) = .3030
+farYWall = (1 - farRatio.y) - lightWallDist = 0.4545
+farYWallDist5 = farYWall * (1 - 0.2) = 0.363636
+farYWallDist15 =  farYWall * (1 - 0.6) = 0.1818
+
+farYWallDist5 = (1 - (lightWallDist + farYWallDist5)) /  1 = 0.3333
+farYWallDist15 = (1 - (lightWallDist + farYWallDist15)) = 0.5151
+
+function elevatePenumbraRatio(farRatio, wallRatio, elevation, canvasElevation, wallTopZ) {
+  const elevationChange = elevation - canvasElevation;
+  const wallHeight = wallTopZ - canvasElevation;
+  const elevRatio = elevationChange / wallHeight;
+
+  const lightWallDist = (1 - wallRatio);
+  const farWall = (1 - farRatio) - lightWallDist;
+  const farWallDist = farWall * (1 - elevRatio);
+  // return (1 - (lightWallDist + farWallDist));
+
+  // Simplify:
+  // return wallRatio - (wallRatio - farRatio) * (1 - elevRatio)
+  // return wallRatio - (wallRatio - wallRatio * elevRatio - farRatio + farRatio * elevRatio)
+  // return wallRatio * elevRatio + farRatio - farRatio * elevRatio
+  return farRatio + elevRatio * (wallRatio - farRatio)
+}
+
+elevatePenumbraRatio(farRatio.y, wallRatio, 5, 0, 25)
+
+
+
+ratio5.y = (shadowDist - lightMid5) / shadowDist
+lightMid5 = shadowDist + (wallMid0 * evRatioInv)
+wallMid0 = (shadowDist * (1 - ratio0.y)) - lightWallDist
+
+y = (shadowDist - (shadowDist + (((shadowDist * (1 - ratio0.y)) - lightWallDist) * evRatioInv))) / shadowDist
+shadowDist * y = shadowDist - (shadowDist + (((shadowDist * (1 - ratio0.y)) - lightWallDist) * evRatioInv))
+shadowDist * y = shadowDist - shadowDist + (((shadowDist * (1 - ratio0.y)) - lightWallDist) * evRatioInv)
+shadowDist * y = ((shadowDist * (1 - ratio0.y)) - lightWallDist) * evRatioInv
+(shadowDist * y) / evRatioInv = (shadowDist * (1 - ratio0.y)) - lightWallDist
+((shadowDist * y) / evRatioInv) + lightWallDist = (shadowDist * (1 - ratio0.y)
+shadowDist * y * evRatioInv1 = shadowDist - shadowDist * ratio0.y - lightWallDist
+shadowDist * y * evRatioInv1 - shadowDist + shadowDist * ratio0.y = -lightWallDist
+y * evRatioInv1 - 1 + ratio0.y = -lightWallDist / shadowDist
+y = -lightWallDist * shadowDistInv + 1 - ratio0.y * evRatioInv
+
+ = (-25 * (1 / 82.5)) + 1 - ((82.5 - 55) / 82.5) * .8 = .43030 x nope
+
+
+    */
+
+
+  }
+
 
   bool inSidePenumbra1 = all(greaterThanEqual(vSidePenumbra1, vec3(0.0)));
   bool inSidePenumbra2 = all(greaterThanEqual(vSidePenumbra2, vec3(0.0)));
