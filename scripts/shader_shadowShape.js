@@ -860,14 +860,15 @@ void main() {
   bool inFarPenumbra = vBary.x < farRatios.z; // And vBary.x > 0.0.
   bool inNearPenumbra = vBary.x > nearRatios.z; // And vBary.x <= nearRatios.x; handled by in front of wall test.
 
-  float percentShadow = 1.0;
+  float percentNearFarShadow = 1.0;
+  float percentSideShadow = 1.0;
   if ( inFarPenumbra ) {
     bool inLighterPenumbra = vBary.x < farRatios.y;
     float penumbraPercentShadow = inLighterPenumbra
       ? linearConversion(vBary.x, 0.0, farRatios.y, 0.0, 0.5)
       : linearConversion(vBary.x, farRatios.y, farRatios.z, 0.5, 1.0);
 
-    percentShadow = min(percentShadow, penumbraPercentShadow);
+    percentNearFarShadow = min(percentNearFarShadow, penumbraPercentShadow);
     //percentShadow = mix(percentShadow, penumbraPercentShadow, 1.0 - penumbraPercentShadow);
     //fragColor = vec4(vec3(0.0), penumbraPercentShadow);
   }
@@ -877,7 +878,7 @@ void main() {
     float penumbraPercentShadow = inLighterPenumbra
       ? linearConversion(vBary.x, nearRatios.x, nearRatios.y, 0.0, 0.5)
       : linearConversion(vBary.x, nearRatios.y, nearRatios.z, 0.5, 1.0);
-    percentShadow = min(percentShadow, penumbraPercentShadow);
+    percentNearFarShadow = min(percentNearFarShadow, penumbraPercentShadow);
     //percentShadow = mix(percentShadow, penumbraPercentShadow, 1.0 - penumbraPercentShadow);
 
 //     fragColor = vec4(vec3(0.0), penumbraPercentShadow);
@@ -885,7 +886,7 @@ void main() {
 
   if ( inSidePenumbra1 ) {
     float penumbraPercentShadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
-    percentShadow = min(percentShadow, penumbraPercentShadow);
+    percentSideShadow = min(percentSideShadow, penumbraPercentShadow);
     //percentShadow = mix(percentShadow, penumbraPercentShadow, 1.0 - penumbraPercentShadow);
 
     //fragColor = vec4(vec3(0.0), penumbraPercentShadow);
@@ -893,11 +894,13 @@ void main() {
 
   if ( inSidePenumbra2 ) {
     float penumbraPercentShadow = vSidePenumbra2.z / (vSidePenumbra2.y + vSidePenumbra2.z);
-    percentShadow = min(percentShadow, penumbraPercentShadow);
-    //percentShadow = mix(percentShadow, penumbraPercentShadow, 1.0 - penumbraPercentShadow);
+    percentSideShadow = min(percentSideShadow, penumbraPercentShadow);
+    //percentSideShadow = mix(percentSideShadow, penumbraPercentShadow, 1.0 - penumbraPercentShadow);
 
     //fragColor = vec4(vec3(0.0), penumbraPercentShadow);
   }
+
+  float percentShadow = min(percentNearFarShadow, percentSideShadow);
   fragColor = vec4(vec3(0.0), percentShadow);
 
   // fragColor = lightColor(1.0 - penumbraShadowPercent);
