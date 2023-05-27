@@ -827,168 +827,23 @@ void elevatePenumbraRatios(in vec2 elevRatio, out vec3 nearRatios, out vec3 farR
 
 
 void main() {
+  // Test the easy cases.
+  bool outOfBounds = (vBary.x > fWallDims.z ) // In front of wall
+    || (vSidePenumbra2.x > 0.0 && vSidePenumbra2.y > 0.0 && vSidePenumbra2.z < 0.0) // Outside side penumbra 2
+    || (vSidePenumbra1.x > 0.0 && vSidePenumbra1.y > 0.0 && vSidePenumbra1.z < 0.0); // Outside side penumbra 1
 
-  // vBary.x is the distance from the light, where 1 = at light; 0 = at edge.
-  // vBary.y is distance from A endpoint (transposed), where 1 = at A.
-  // vBary.z is distance from B endpoint (transposed), where 1 = at B.
-
-  // vSidePenumbra1.x is 1 where the wall line would meet the light center --> corner 1 (a endpoint transposed);
-
-//   fragColor = vec4(stepColor(vBary.x), 0.3);
-//   return;
-
-  // nearRatios:
-  // > z: currently at the umbra point
-  // > y: currently at the mid point
-  // > x: currently at the penumbra point (correct)
-
-//   fragColor = vec4(float(vBary.x > nearRatios.z), 0.0, 0.0, 0.5);
-//   // fragColor = vec4(float(vBary.x > nearRatios.z), float(vBary.x > nearRatios.y), float(vBary.x > nearRatios.x), 0.5);
-//   return;
-
-//   fragColor = vec4(vec3(lessThan(vec3(vBary.x), nearRatios)), 0.3);
-//   return;
-
-
-//   if ( colorAtPoint(testPoint1, vVertexPosition, 20.0) ) {
-//     fragColor = vec4(1.0, 0.0, 0.0, 0.8);
-//   } else if ( colorAtPoint(testPoint2, vVertexPosition, 20.0) ) {
-//     fragColor = vec4(0.0, 1.0, 0.0, 0.8);
-//   } else if ( colorAtPoint(testPoint3, vVertexPosition, 20.0) ) {
-//     fragColor = vec4(0.0, 0.0, 1.0, 0.8);
-//   } else {
-//     fragColor = vec4(vec3(0.0), 0.1);
-//   }
-
-//     if ( colorAtPoint(testPoint1, vBary, 0.1) ) {
-//       fragColor = vec4(1.0, 0.0, 0.0, 0.8);
-//     } else if ( colorAtPoint(testPoint2, vBary, 0.1) ) {
-//       fragColor = vec4(0.0, 1.0, 0.0, 0.8);
-//     } else if ( colorAtPoint(testPoint3, vVertexPosition, 20.0) ) {
-//       fragColor = vec4(0.0, 0.0, 1.0, 0.8);
-//     } else {
-//       fragColor = vec4(vec3(0.0), 0.1);
-//     }
-
-
-//   if ( all(greaterThanEqual(vSidePenumbra2, vec3(0.0))) ) fragColor = vec4(vSidePenumbra2, 0.3);
-//   // else if ( all(greaterThanEqual(vSidePenumbra2, vec3(0.0))) ) fragColor = vec4(vSidePenumbra2, 0.3);
-//   else if ( vSidePenumbra2.x > 0.0 && vSidePenumbra2.y < 0.0 && vSidePenumbra2.z > 0.0 ) fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-//   else if ( vSidePenumbra2.x > 0.0 && vSidePenumbra2.y > 0.0 && vSidePenumbra2.z < 0.0 ) fragColor = vec4(0.0, 1.0, 0.0, 1.0);
-//   else if ( vSidePenumbra2.x < 0.0 && vSidePenumbra2.y > 0.0 && vSidePenumbra2.z > 0.0 ) fragColor = vec4(0.0, 0.0, 1.0, 1.0);
-//   else fragColor = vec4(vec3(0.0), 0.1);
-
-
-// Sames for vSidePenumbra2
-//   vSidePenumbra1.xz > 0, vSidePenumbra1.y < 0: In full shadow or outside shadow to the left, incl. some in front of wall
-//   vSidePenumbra1.xy > 0, vSidePenumbra1.z < 0: Outside the penumbra incl. some in front of wall
-//   vSidePenumbra1.yz > 0, vSidePenumbra1.x < 0: Does not occur within the vertex shape (likely past the far shadow line)
-
-  if ( vBary.x > fWallDims.z ) {
-    // Fragment is in front of wall.
+  if ( outOfBounds ) {
     fragColor = vec4(0.0);
-    // fragColor = vec4(vec3(1.0), 0.0);
+    // fragColor = vec4(vec3(1.0), 0.0)
     return;
   }
 
-  if ( vSidePenumbra2.x > 0.0 && vSidePenumbra2.y > 0.0 && vSidePenumbra2.z < 0.0 ) {
-    // Fragment is outside the side penumbras
-    fragColor = vec4(0.0);
-    // fragColor = vec4(vec3(1.0), 0.0);
-    return;
-  }
-
-  if ( vSidePenumbra1.x > 0.0 && vSidePenumbra1.y > 0.0 && vSidePenumbra1.z < 0.0 ) {
-    // Fragment is outside the side penumbras
-    fragColor = vec4(0.0);
-    // fragColor = vec4(vec3(1.0), 0.0);
-    return;
-  }
-
-  // What is the terrain elevation of this fragment?
+  // Check the terrain elevation of this fragment?
   vec2 elevRatio;
   vec3 nearRatios = fNearRatios;
   vec3 farRatios = fFarRatios;
   bool highElevation = highElevationAtFragment(elevRatio);
   if ( highElevation ) elevatePenumbraRatios(elevRatio, nearRatios, farRatios);
-
-    /* Top example:
-
-light at 40', wall top at 25'. light 25' from wall.
-Assume light size radius of 50. Penumbra edge is 57.5' from wall.
-At elevation 0', mid-penumbra would be 37.5' from wall.
-- shadowDist = 25 + 57.5 = 82.5.
-- Mid from Light = 25 + 37.5 = 62.5
-- farRatio.y = (82.5 - 62.5) / 82.5 = .242424...
-- wallRatio = (82.5 - 25) / 82.5 = .6969...
-
-Move to elevation 5'.
-- shadowDist: same for purposes of defining ratios.
-- evRatio = 5' / 25' = 0.2.
-- Shadow edge from wall is 57.5 * (1 - 0.2) = 46'
-- Shadow edge from light is 46 + 25 = 71'
-- mid from wall is 37.5 * 0.8 = 30
-- mid from light is 25 + 30 = 55
-- farRatio.x (penumbra edge) = (82.5 - 71) / 82.5 = .139...
-- farRatio.y (mid) = (82.5 - 55) / 82.5 = .333...
-
-Move to elevation 15'
-- evRatio = 15 / 25 = 0.6
-- Shadow edge from wall is 57.5 * (1 - 0.6) = 23'
-- Shadow edge from light is 23 + 25 = 48'
-- mid from wall is 37.5 * (1 - .6) = 15
-- mid from light is 25 + 15 = 40
-- farRatio.x (penumbra edge) = (82.5 - 48) / 82.5 = 0.41818181818181815
-- farRatio.y (mid) = (82.5 - 40) / 82.5 = 0.5151515151515151
-
-lightWallDist = (1 - wallRatio) = .3030
-farYWall = (1 - farRatio.y) - lightWallDist = 0.4545
-farYWallDist5 = farYWall * (1 - 0.2) = 0.363636
-farYWallDist15 =  farYWall * (1 - 0.6) = 0.1818
-
-farYWallDist5 = (1 - (lightWallDist + farYWallDist5)) /  1 = 0.3333
-farYWallDist15 = (1 - (lightWallDist + farYWallDist15)) = 0.5151
-
-function elevatePenumbraRatio(farRatio, wallRatio, elevation, canvasElevation, wallTopZ) {
-  const elevationChange = elevation - canvasElevation;
-  const wallHeight = wallTopZ - canvasElevation;
-  const elevRatio = elevationChange / wallHeight;
-
-  const lightWallDist = (1 - wallRatio);
-  const farWall = (1 - farRatio) - lightWallDist;
-  const farWallDist = farWall * (1 - elevRatio);
-  // return (1 - (lightWallDist + farWallDist));
-
-  // Simplify:
-  // return wallRatio - (wallRatio - farRatio) * (1 - elevRatio)
-  // return wallRatio - (wallRatio - wallRatio * elevRatio - farRatio + farRatio * elevRatio)
-  // return wallRatio * elevRatio + farRatio - farRatio * elevRatio
-  return farRatio + elevRatio * (wallRatio - farRatio)
-}
-
-elevatePenumbraRatio(farRatio.y, wallRatio, 5, 0, 25)
-
-
-
-ratio5.y = (shadowDist - lightMid5) / shadowDist
-lightMid5 = shadowDist + (wallMid0 * evRatioInv)
-wallMid0 = (shadowDist * (1 - ratio0.y)) - lightWallDist
-
-y = (shadowDist - (shadowDist + (((shadowDist * (1 - ratio0.y)) - lightWallDist) * evRatioInv))) / shadowDist
-shadowDist * y = shadowDist - (shadowDist + (((shadowDist * (1 - ratio0.y)) - lightWallDist) * evRatioInv))
-shadowDist * y = shadowDist - shadowDist + (((shadowDist * (1 - ratio0.y)) - lightWallDist) * evRatioInv)
-shadowDist * y = ((shadowDist * (1 - ratio0.y)) - lightWallDist) * evRatioInv
-(shadowDist * y) / evRatioInv = (shadowDist * (1 - ratio0.y)) - lightWallDist
-((shadowDist * y) / evRatioInv) + lightWallDist = (shadowDist * (1 - ratio0.y)
-shadowDist * y * evRatioInv1 = shadowDist - shadowDist * ratio0.y - lightWallDist
-shadowDist * y * evRatioInv1 - shadowDist + shadowDist * ratio0.y = -lightWallDist
-y * evRatioInv1 - 1 + ratio0.y = -lightWallDist / shadowDist
-y = -lightWallDist * shadowDistInv + 1 - ratio0.y * evRatioInv
-
- = (-25 * (1 / 82.5)) + 1 - ((82.5 - 55) / 82.5) * .8 = .43030 x nope
-
-
-    */
 
   if ( vBary.x > nearRatios.x ) {
     // Fragment is in front of nearest shadow penumbra (which may be the wall).
@@ -997,7 +852,6 @@ y = -lightWallDist * shadowDistInv + 1 - ratio0.y * evRatioInv
     return;
   }
 
-
   bool inSidePenumbra1 = all(greaterThanEqual(vSidePenumbra1, vec3(0.0)));
   bool inSidePenumbra2 = all(greaterThanEqual(vSidePenumbra2, vec3(0.0)));
 
@@ -1005,25 +859,6 @@ y = -lightWallDist * shadowDistInv + 1 - ratio0.y * evRatioInv
   // x: penumbra; y: mid-penumbra; z: umbra
   bool inFarPenumbra = vBary.x < farRatios.z; // And vBary.x > 0.0.
   bool inNearPenumbra = vBary.x > nearRatios.z; // And vBary.x <= nearRatios.x; handled by in front of wall test.
-
-
-//   if ( inFarPenumbra ) {
-//     fragColor = vec4(0.5, 0, 0.5, 0.5);
-//   } else if ( inNearPenumbra ) {
-//     fragColor = vec4(1.0, 0.0, 1.0, 0.5);
-//   } else if ( inSidePenumbra1 ) {
-//     fragColor = vec4(1.0, 0.0, 0.0, 0.7);
-//   } else if ( inSidePenumbra2 ) {
-//     fragColor = vec4(0.0, 0.0, 1.0, 0.7);
-//   } else  {
-//     fragColor = vec4(vec3(1.0), 0.7);
-//   }
-
-//   if ( inSidePenumbra1 ) {
-//     fragColor = vec4(stepColor(vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z)), 0.7);
-//   } else if ( inSidePenumbra2 ) {
-//     fragColor = vec4(stepColor(vSidePenumbra2.z / (vSidePenumbra2.y + vSidePenumbra2.z)), 0.7);
-//   }
 
   float percentShadow = 1.0;
   if ( inFarPenumbra ) {
@@ -1065,182 +900,6 @@ y = -lightWallDist * shadowDistInv + 1 - ratio0.y * evRatioInv
   }
   fragColor = vec4(vec3(0.0), percentShadow);
 
-
-
-
-
-
-  // Options:
-  // - in front of wall---dismiss early
-  // - elevation anywhere: shoot ray at light center
-  // - within the l/r border: shoot ray at outer or inner light radius and check for wall intersection.
-  // - within the t/b border: same
-  // - otherwise can assume full shadow.
-  // If within border, transparency based on ratio.
-
-  // Check if fragment is in front of the wall.
-//   if ( vWallRatio < wallRatio ) {
-//     fragColor = vec4(1.0, 1.0, 0.0, 0.3);
-//     //fragColor = vec4(vec3(1.0), 0.0);
-//     return;
-//   }
-//
-//   // What is the terrain elevation of this fragment?
-//   float elevation = uCanvasElevation;
-//   bool highElevation = false;
-//   vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
-//
-//   if ( any(lessThan(evTexCoord, vec2(0.0)))
-//     || any(greaterThan(evTexCoord, vec2(1.0))) ) {
-//     // Outside the scene bounds.
-//     fragColor = vec4(1.0, 0.0, 1.0, 0.7); // debugging
-//     return;
-//   }
-//
-//   if ( all(lessThan(evTexCoord, vec2(1.0)))
-//     && all(greaterThan(evTexCoord, vec2(0.0))) ) {
-//     // Inside the scene bounds. Check elevation texture.
-//     vec4 evTexel = texture(uElevationMap, evTexCoord);
-//     elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
-//     highElevation = elevation > uCanvasElevation;
-//   }
-//
-//   // Input variables that may be adjusted later.
-//   float localSidePenumbraRatio = sidePenumbraRatio;
-//   float localNearFarPenumbraRatio = nearFarPenumbraRatio;
-//   vec3 localBary = vBary;
-//
-//   // If the terrain of this fragment is above the minimum, adjust calculations accordingly.
-//   // 1. Adjust the perceived intersection of the light --> vertex with the canvas.
-//   // 2. Adjust sidePenumbraRatio
-//   // 3. Adjust nearFarPenumbraRatio
-//   // 4. Adjust barymetric x value (near/far from light)
-//   // 5. Determine if still in shadow
-//
-//   if ( highElevation ) {
-//      // Intersect the canvas plane: Light --> wall endpoint --> plane
-//      vec3 planeNormal = vec3(0.0, 0.0, 1.0);
-//      vec3 planePoint = vec3(0.0, 0.0, elevation);
-//      vec3 lineDirection = normalize(corner1 - uLightPosition);
-//      vec3 ix;
-//      bool ixFound = intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ix);
-//      if ( !ixFound ) {
-//        // Shouldn't happen, but...
-//        fragColor = vec4(vec3(1.0), 0.0);
-//      }
-//
-//      float vertexDist = distance(uLightPosition.xy, corner1.xy);
-//      float ixDist = distance(uLightPosition.xy, ix.xy);
-//
-//      float invK = (ixDist - vertexDist) / vertexDist;
-//      float lightSizeProjected = uLightSize * invK;
-//
-//      float abDist = distance(corner1.xy, corner2.xy);
-//      float ABDist = abDist * (ixDist / vertexDist);
-//      localSidePenumbraRatio = lightSizeProjected / ABDist;
-//      localNearFarPenumbraRatio = lightSizeProjected / ixDist;
-//
-//      // Barymetric.x, where 0 is edge, will change.
-//      float origIxDist = vertexDist / wallRatio;
-//      float newZeroRatio = 1.0 - (ixDist / origIxDist);
-//      localBary.x = linearConversion(localBary.x, newZeroRatio, 1.0, 0.0, 1.0);
-//      if ( localBary.z < 0.0 ) {
-//        // No longer within the shadow.
-//        fragColor = vec4(1.0, 1.0, 0.0, 0.3);
-//        //fragColor = vec4(vec3(1.0), 0.0);
-//      }
-//   }
-//
-//   // Are we possibly within the l/r penumbra border?
-//   // (Could be within both if the light size is large or wall is small.)
-//   // This border is overly inclusive and so location must be confirmed with additional tests.
-//   float lrRatio = localBary.z / (localBary.y + localBary.z);
-//   bool withinL = lrRatio < localSidePenumbraRatio;
-//   bool withinR = (1.0 - lrRatio) < localSidePenumbraRatio;
-//
-//   // Are we possibly within the far penumbra border?
-//   bool withinFar = localBary.x < localNearFarPenumbraRatio;
-//
-//   // If not high terrain and not in penumbra, in full shadow.
-//   if ( !withinFar && !withinL && !withinR && !highElevation ) {
-//     fragColor = vec4(vec3(0.0), 0.7);
-//     //fragColor = lightColor(0.0);
-//     return;
-//   } else if ( withinL ) {
-//     fragColor = vec4(1.0, 0.0, 0.0, 0.7);
-//   } else if ( withinR ) {
-//     fragColor = vec4(0.0, 0.0, 1.0, 0.7);
-//   } else if ( withinFar ) {
-//     fragColor = vec4(0.5, 0.0, 0.5, 0.7);
-//   } else if ( highElevation ) {
-//     fragColor = vec4(0.0, 1.0, 0.0, 0.7);
-//   }
-//   return;
-//
-//   // If the fragment is not between the two outer penumbra, it is in full light.
-//   // (Note: angle of the shadow from the light is always less than 180º, so this holds.)
-//   float oOuterPenumbra1 = orient2d(corner1.xy, outerPenumbra1, vVertexPosition.xy);
-//   float oOuterPenumbra2 = orient2d(corner2.xy, outerPenumbra2, vVertexPosition.xy);
-//   if ( sign(oOuterPenumbra1) != sign(-oOuterPenumbra2) ) {
-//     fragColor = vec4(1.0, 1.0, 0.0, 0.3);
-//     //fragColor = vec4(vec3(1.0), 0.0);
-//     return;
-//   }
-//
-//   // If the fragment is between the two inner penumbra, it is in full shadow unless near trapezoid end.
-//   float oInnerPenumbra1 = orient2d(corner1.xy, innerPenumbra1, vVertexPosition.xy);
-//   float oInnerPenumbra2 = orient2d(corner2.xy, innerPenumbra2, vVertexPosition.xy);
-//   bool withinUmbra = sign(oInnerPenumbra1) == sign(-oInnerPenumbra2);
-//   if ( withinUmbra && !withinFar ) {
-//     fragColor = vec4(vec3(0.0), 0.7);
-//     //fragColor = lightColor(0.0);
-//     return;
-//   }
-//
-//   // Fragment within 1 or both penumbra or at the far end of the trapezoid.
-//   bool withinPenumbra1 = sign(oInnerPenumbra1) == sign(-oOuterPenumbra1);
-//   bool withinPenumbra2 = sign(oInnerPenumbra2) == sign(-oOuterPenumbra2);
-//
-// //   if ( withinPenumbra1 ) {
-// //     fragColor = vec4(1.0, 0.0, 0.0, 0.7);
-// //   } else if ( withinPenumbra2 ) {
-// //     fragColor = vec4(0.0, 0.0, 1.0, 0.7);
-// //   } else if ( withinFar ) {
-// //     fragColor = vec4(0.5, 0.0, 0.5, 0.7);
-// //   } else if ( highElevation ) {
-// //     fragColor = vec4(0.0, 1.0, 0.0, 0.7);
-// //   }
-// //   return;
-//
-//   // Use the lines at either edge of the penumbra to calculate a percent shadow for left/right penumbra.
-//   // Take the distance to the light edge divided by the total distance.
-//   // Possible for the fragment to be within all three options...
-//   float shadow1Percent = 1.0;
-//   float shadow2Percent = 1.0;
-//   float shadowFarPercent = 1.0;
-//   if ( withinPenumbra1 ) {
-//     vec2 outerIx;
-//     vec2 innerIx;
-//     vec2 dir12 = corner1.xy - corner2.xy;
-//     lineLineIntersection2d(corner1.xy, corner1.xy - outerPenumbra1, vVertexPosition.xy, dir12, outerIx);
-//     lineLineIntersection2d(corner1.xy, corner1.xy - innerPenumbra1, vVertexPosition.xy, dir12, outerIx);
-//     shadow1Percent = distance(vVertexPosition.xy, outerIx) / distance(outerIx, innerIx);
-//   }
-//
-//   if ( withinPenumbra2 ) {
-//     vec2 outerIx;
-//     vec2 innerIx;
-//     vec2 dir12 = corner1.xy - corner2.xy;
-//     lineLineIntersection2d(corner2.xy, corner2.xy - outerPenumbra1, vVertexPosition.xy, dir12, outerIx);
-//     lineLineIntersection2d(corner2.xy, corner2.xy - innerPenumbra1, vVertexPosition.xy, dir12, outerIx);
-//     shadow2Percent = distance(vVertexPosition.xy, outerIx) / distance(outerIx, innerIx);
-//   }
-//
-//   if ( withinFar ) shadowFarPercent = localBary.x / localNearFarPenumbraRatio;
-//
-//   float penumbraShadowPercent = min(shadowFarPercent, min(shadow1Percent, shadow2Percent));
-//
-//   fragColor = vec4(0.0, 0.0, 1.0 - penumbraShadowPercent, 0.7);
   // fragColor = lightColor(1.0 - penumbraShadowPercent);
 }`;
 
