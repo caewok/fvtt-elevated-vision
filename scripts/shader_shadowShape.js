@@ -543,14 +543,9 @@ out vec3 vSidePenumbra2;
 out float vTerrain; // TODO: Would this be faster as flat or varying?
 out vec3 vVertexPosition; // For setting terrain elevation
 
-flat out vec3 nearRatios;
-flat out vec3 farRatios;
-flat out vec4 c; // x: topZ, y: bottomZ, z: shadowDist, a: wallRatio
-
-// Debugging
-flat out vec3 testPoint1;
-flat out vec3 testPoint2;
-flat out vec3 testPoint3;
+flat out vec3 fNearRatios; // x: penumbra, y: mid-penumbra, z: umbra
+flat out vec3 fFarRatios;  // x: penumbra, y: mid-penumbra, z: umbra
+flat out vec3 fWallDims;   // x: topZ, y: bottomZ, z: wallRatio
 
 ${GLSLFunctions.intersectRayPlane}
 ${GLSLFunctions.barycentric2d}
@@ -649,42 +644,42 @@ void main() {
 
   // Determine relevant wall dimensions used in terrain calculations in the fragment shader.
   float wallRatio = 1.0 - (distWallTop1 / distShadow); // mid-penumbra
-  wallDims = vec4(topZ, bottomZ, distShadow, wallRatio);
+  fWallDims = vec3(wallTopZ, wallBottomZ, wallRatio);
 
   // Set far and near ratios:
   // x: penumbra; y: mid-penumbra; z: umbra
-  nearRatios = vec3(wallRatio);
-  farRatios = vec3(0.0); // 0.0 is the penumbra value (0 at shadow end)
+  fNearRatios = vec3(wallRatio);
+  fFarRatios = vec3(0.0); // 0.0 is the penumbra value (0 at shadow end)
 
   if ( lightCenter.z > wallTopZ ) {
     vec3 ixFarMidPenumbra1 = maxShadowVertex;
     intersectRayPlane(lightCenter, normalize(wallTop1 - lightCenter), planePoint, planeNormal, ixFarMidPenumbra1);
-    farRatios.y = 1.0 - (distance(lightCenter.xy, ixFarMidPenumbra1.xy) / distShadow);
+    fFarRatios.y = 1.0 - (distance(lightCenter.xy, ixFarMidPenumbra1.xy) / distShadow);
   }
 
   if ( lightTop.z > wallTopZ ) {
     vec3 ixFarUmbra1 = maxShadowVertex;
     intersectRayPlane(lightTop, normalize(wallTop1 - lightTop), planePoint, planeNormal, ixFarUmbra1);
-    farRatios.z = 1.0 - (distance(lightCenter.xy, ixFarUmbra1.xy) / distShadow);
+    fFarRatios.z = 1.0 - (distance(lightCenter.xy, ixFarUmbra1.xy) / distShadow);
   }
 
   if ( wallBottomZ > uCanvasElevation ) {
     if ( lightTop.z > wallBottomZ ) {
       vec3 ixNearPenumbra;
       intersectRayPlane(lightTop, normalize(wallBottom1 - lightTop), planePoint, planeNormal, ixNearPenumbra);
-      nearRatios.x = 1.0 - (distance(lightCenter.xy, ixNearPenumbra.xy) / distShadow);
+      fNearRatios.x = 1.0 - (distance(lightCenter.xy, ixNearPenumbra.xy) / distShadow);
     }
 
     if ( lightCenter.z > wallBottomZ ) {
       vec3 ixNearMidPenumbra;
       intersectRayPlane(lightCenter, normalize(wallBottom1 - lightCenter), planePoint, planeNormal, ixNearMidPenumbra);
-      nearRatios.y = 1.0 - (distance(lightCenter.xy, ixNearMidPenumbra.xy) / distShadow);
+      fNearRatios.y = 1.0 - (distance(lightCenter.xy, ixNearMidPenumbra.xy) / distShadow);
     }
 
     if ( lightBottom.z > wallBottomZ) {
       vec3 ixNearUmbra;
       intersectRayPlane(lightBottom, normalize(wallBottom1 - lightBottom), planePoint, planeNormal, ixNearUmbra);
-      nearRatios.z = 1.0 - (distance(lightCenter.xy, ixNearUmbra.xy) / distShadow);
+      fNearRatios.z = 1.0 - (distance(lightCenter.xy, ixNearUmbra.xy) / distShadow);
     }
   }
 
@@ -725,12 +720,6 @@ void main() {
   vSidePenumbra1 = barycentric2d(newVertex.xy, p1A, p1B, p1C);
   vSidePenumbra2 = barycentric2d(newVertex.xy, p2A, p2B, p2C);
 
-
-
-  testPoint1 = lightCenter;
-  testPoint2 = outerPenumbra1;
-  testPoint3 = outerPenumbra2;
-
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(newVertex.xy, 1.0)).xy, 0.0, 1.0);
 }`;
 
@@ -751,14 +740,9 @@ in vec3 vSidePenumbra2;
 in float vTerrain;
 in vec3 vVertexPosition;
 
-flat in vec3 nearRatios;
-flat in vec3 farRatios;
-flat in vec4 wallDims; // x: topZ, y: bottomZ, z: shadowDist, a: wallRatio
-
-// Debugging
-flat in vec3 testPoint1;
-flat in vec3 testPoint2;
-flat in vec3 testPoint3;
+flat in vec3 fNearRatios;
+flat in vec3 fFarRatios;
+flat in vec3 fWallDims; // x: topZ, y: bottomZ, z: wallRatio
 
 out vec4 fragColor;
 
@@ -810,6 +794,37 @@ bool colorAtPoint(in vec3 targetPoint, in vec3 testPoint, in float tol) {
   float dist = distance(targetPoint.xy, testPoint.xy);
   return dist < tol;
 }
+
+// Get the terrain elevation at this fragment and return the elevation ratio
+// of elevation change / wall height for top and bottom of the wall.
+bool highElevationAtFragment(out vec2 elevRatio) {
+  bool highElevation = false;
+  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
+
+  // Are we outside of the scene bounds?
+  if ( !all(lessThan(evTexCoord, vec2(1.0)))
+    || !all(greaterThan(evTexCoord, vec2(0.0))) ) return false;
+
+  // Inside scene bounds. Check elevation texture.
+  vec4 evTexel = texture(uElevationMap, evTexCoord);
+  float elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
+  if ( elevation <= uCanvasElevation ) return false;
+
+  // Elevation exceeds canvas minimum.
+  // Calculate the proportional elevation change relative to wall height.
+  float elevationChange = elevation - uCanvasElevation;
+  vec2 wallZ = fWallDims.xy;
+  vec2 wallHeight = wallZ - uCanvasElevation;
+  elevRatio = elevationChange / wallHeight;
+  return true;
+}
+
+void elevatePenumbraRatios(in vec2 elevRatio, out vec3 nearRatios, out vec3 farRatios) {
+  float wallRatio = fWallDims.z;
+  nearRatios = fNearRatios + elevRatio.y * (wallRatio - fNearRatios);
+  farRatios = fFarRatios + elevRatio.x * (wallRatio - fFarRatios);
+}
+
 
 void main() {
 
@@ -869,7 +884,7 @@ void main() {
 //   vSidePenumbra1.xy > 0, vSidePenumbra1.z < 0: Outside the penumbra incl. some in front of wall
 //   vSidePenumbra1.yz > 0, vSidePenumbra1.x < 0: Does not occur within the vertex shape (likely past the far shadow line)
 
-  if ( vBary.x > nearRatios.x ) {
+  if ( vBary.x > fWallDims.z ) {
     // Fragment is in front of wall.
     fragColor = vec4(0.0);
     // fragColor = vec4(vec3(1.0), 0.0);
@@ -891,32 +906,11 @@ void main() {
   }
 
   // What is the terrain elevation of this fragment?
-  float elevation = uCanvasElevation;
-  bool highElevation = false;
-  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
-  if ( all(lessThan(evTexCoord, vec2(1.0)))
-    && all(greaterThan(evTexCoord, vec2(0.0))) ) {
-    // Inside the scene bounds. Check elevation texture.
-    vec4 evTexel = texture(uElevationMap, evTexCoord);
-    elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
-    highElevation = elevation > uCanvasElevation;
-  }
-
-  // If high elevation, modify the near/far ratios.
-  // Move them proportionally to the height of the elevation vs height of the wall.
-  if ( highElevation ) {
-    float elevationChange = elevation - uCanvasElevation;
-    vec2 wallHeight = wallDims.xy - uCanvasElevation;
-    vec2 elevRatio = 1.0 - (elevationChange / wallHeight);
-
-
-
-
-
-
-    // wallDims = vec4(topZ, bottomZ, distShadow, wallRatio);
-    vec3 lightFar0 = farRatio * wallDims.distShadow
-
+  vec2 elevRatio;
+  vec3 nearRatios = fNearRatios;
+  vec3 farRatios = fFarRatios;
+  bool highElevation = highElevationAtFragment(elevRatio);
+  if ( highElevation ) elevatePenumbraRatios(elevRatio, nearRatios, farRatios);
 
     /* Top example:
 
@@ -996,7 +990,11 @@ y = -lightWallDist * shadowDistInv + 1 - ratio0.y * evRatioInv
 
     */
 
-
+  if ( vBary.x > nearRatios.x ) {
+    // Fragment is in front of nearest shadow penumbra (which may be the wall).
+    fragColor = vec4(0.0);
+    // fragColor = vec4(vec3(1.0), 0.0);
+    return;
   }
 
 
