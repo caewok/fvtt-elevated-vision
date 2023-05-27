@@ -806,7 +806,12 @@ void main() {
 
   // vSidePenumbra1.x is 1 where the wall line would meet the light center --> corner 1 (a endpoint transposed);
 
-  // fragColor = vec4(vBary, 0.3);
+//   fragColor = vec4(stepColor(vBary.x), 0.3);
+//   return;
+
+//   fragColor = vec4(vec3(lessThan(vec3(vBary.x), nearRatios)), 1.0);
+//   return;
+
 
 //   if ( colorAtPoint(testPoint1, vVertexPosition, 20.0) ) {
 //     fragColor = vec4(1.0, 0.0, 0.0, 0.8);
@@ -829,18 +834,94 @@ void main() {
 //     }
 
 
-  if ( all(greaterThanEqual(vSidePenumbra2, vec3(0.0))) ) fragColor = vec4(vSidePenumbra2, 0.3);
-  // else if ( all(greaterThanEqual(vSidePenumbra2, vec3(0.0))) ) fragColor = vec4(vSidePenumbra2, 0.3);
-  else if ( vSidePenumbra2.x > 0.0 && vSidePenumbra2.y < 0.0 && vSidePenumbra2.z > 0.0 ) fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-  else if ( vSidePenumbra2.x > 0.0 && vSidePenumbra2.y > 0.0 && vSidePenumbra2.z < 0.0 ) fragColor = vec4(0.0, 1.0, 0.0, 1.0);
-  else if ( vSidePenumbra2.x < 0.0 && vSidePenumbra2.y > 0.0 && vSidePenumbra2.z > 0.0 ) fragColor = vec4(0.0, 0.0, 1.0, 1.0);
-  else fragColor = vec4(vec3(0.0), 0.1);
+//   if ( all(greaterThanEqual(vSidePenumbra2, vec3(0.0))) ) fragColor = vec4(vSidePenumbra2, 0.3);
+//   // else if ( all(greaterThanEqual(vSidePenumbra2, vec3(0.0))) ) fragColor = vec4(vSidePenumbra2, 0.3);
+//   else if ( vSidePenumbra2.x > 0.0 && vSidePenumbra2.y < 0.0 && vSidePenumbra2.z > 0.0 ) fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+//   else if ( vSidePenumbra2.x > 0.0 && vSidePenumbra2.y > 0.0 && vSidePenumbra2.z < 0.0 ) fragColor = vec4(0.0, 1.0, 0.0, 1.0);
+//   else if ( vSidePenumbra2.x < 0.0 && vSidePenumbra2.y > 0.0 && vSidePenumbra2.z > 0.0 ) fragColor = vec4(0.0, 0.0, 1.0, 1.0);
+//   else fragColor = vec4(vec3(0.0), 0.1);
 
 
-
+// Sames for vSidePenumbra2
 //   vSidePenumbra1.xz > 0, vSidePenumbra1.y < 0: In full shadow or outside shadow to the left, incl. some in front of wall
 //   vSidePenumbra1.xy > 0, vSidePenumbra1.z < 0: Outside the penumbra incl. some in front of wall
 //   vSidePenumbra1.yz > 0, vSidePenumbra1.x < 0: Does not occur within the vertex shape (likely past the far shadow line)
+
+  if ( vBary.x > nearRatios.x ) {
+    // Fragment is in front of wall.
+    fragColor = vec4(0.0);
+    // fragColor = vec4(vec3(1.0), 0.0);
+    return;
+  }
+
+  if ( vSidePenumbra2.x > 0.0 && vSidePenumbra2.y > 0.0 && vSidePenumbra2.z < 0.0 ) {
+    // Fragment is outside the side penumbras
+    fragColor = vec4(0.0);
+    // fragColor = vec4(vec3(1.0), 0.0);
+    return;
+  }
+
+  if ( vSidePenumbra1.x > 0.0 && vSidePenumbra1.y > 0.0 && vSidePenumbra1.z < 0.0 ) {
+    // Fragment is outside the side penumbras
+    fragColor = vec4(0.0);
+    // fragColor = vec4(vec3(1.0), 0.0);
+    return;
+  }
+
+  bool inSidePenumbra1 = all(greaterThanEqual(vSidePenumbra1, vec3(0.0)));
+  bool inSidePenumbra2 = all(greaterThanEqual(vSidePenumbra2, vec3(0.0)));
+
+  // Near/far penumbra
+  // x: penumbra; y: mid-penumbra; z: umbra
+  bool inFarPenumbra = vBary.x < farRatios.z; // And vBary.x > 0.0.
+  bool inNearPenumbra = vBary.x > nearRatios.z; // And vBary.x <= nearRatios.x; handled by in front of wall test.
+
+//   if ( inFarPenumbra ) {
+//     fragColor = vec4(0.5, 0, 0.5, 0.5);
+//   } else if ( inNearPenumbra ) {
+//     fragColor = vec4(1.0, 0.0, 1.0, 0.5);
+//   } else if ( inSidePenumbra1 ) {
+//     fragColor = vec4(1.0, 0.0, 0.0, 0.7);
+//   } else if ( inSidePenumbra2 ) {
+//     fragColor = vec4(0.0, 0.0, 1.0, 0.7);
+//   } else  {
+//     fragColor = vec4(vec3(1.0), 0.7);
+//   }
+
+//   if ( inSidePenumbra1 ) {
+//     fragColor = vec4(stepColor(vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z)), 0.7);
+//   } else if ( inSidePenumbra2 ) {
+//     fragColor = vec4(stepColor(vSidePenumbra2.z / (vSidePenumbra2.y + vSidePenumbra2.z)), 0.7);
+//   }
+
+  float percentShadow = 1.0;
+  if ( inFarPenumbra ) {
+    bool inLighterPenumbra = vBary.x < farRatios.y;
+    float penumbraPercentShadow = inLighterPenumbra
+      ? linearConversion(vBary.x, 0.0, farRatios.y, 0.0, 0.5)
+      : linearConversion(vBary.x, farRatios.y, farRatios.z, 0.5, 1.0);
+
+    percentShadow = min(percentShadow, penumbraPercentShadow);
+    //fragColor = vec4(vec3(0.0), penumbraPercentShadow);
+  }
+
+  // TODO: inNearPenumbra
+
+  if ( inSidePenumbra1 ) {
+    float penumbraPercentShadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
+    percentShadow = min(percentShadow, penumbraPercentShadow);
+    //fragColor = vec4(vec3(0.0), penumbraPercentShadow);
+  }
+
+  if ( inSidePenumbra2 ) {
+    float penumbraPercentShadow = vSidePenumbra2.z / (vSidePenumbra2.y + vSidePenumbra2.z);
+    percentShadow = min(percentShadow, penumbraPercentShadow);
+    //fragColor = vec4(vec3(0.0), penumbraPercentShadow);
+  }
+  fragColor = vec4(vec3(0.0), percentShadow);
+
+
+
 
 
 
