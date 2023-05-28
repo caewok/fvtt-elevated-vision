@@ -241,7 +241,7 @@ function constructWallGeometry(map) {
  * Used to mask vision, etc.
  * Possible use as faster performance setting.
  */
-function constructSimpleWallGeometry(map) {
+function constructShadowMaskWallGeometry(map) {
   const coords = map.placeablesCoordinatesData.coordinates;
   const nObjs = coords.length;
 
@@ -253,13 +253,40 @@ function constructSimpleWallGeometry(map) {
 
   // TODO: Try Uint or other buffers instead of Array.
   const indices = [];
-  const aVertexPosition = [];
-  const aOtherWallCorner = [];
-  const aWallCorner2 = [];
+  const aWallEndpoint = [];
   const aTerrain = [];
 
+  // First vertex is the light center and is shared.
+  aTerrain.push(0);
+  aWallEndpoint.push(lightPosition.x, lightPosition.y, lightPosition.z, 1);
 
+  let triNumber = 0;
+  for ( let i = 0; i < nObjs; i += 1 ) {
+    const obj = coords[i];
+    const isWall = obj.object instanceof Wall;
+    if ( !isWall ) continue;
+    if ( !renderableWall(map, obj, lightBounds) ) continue;
 
+    // A --> B --> light CCW
+    // Only draw the triangles that are above minimum elevation and thus cast shadow.
+    const topZ = Math.min(obj.topZ, map.lightPosition.z - 1);
+    const bottomZ = Math.max(obj.bottomZ, map.minElevation);
+    const orientWall = foundry.utils.orient2dFast(obj.A, obj.B, this.lightPosition);
+    const [A, B] = orientWall > 0 ? [obj.A, obj.B] : [obj.B, obj.A];
+    aWallEndpoint.push(A.x, A.y, topZ, bottomZ, B.x, B.y, topZ, bottomZ);
+    aTerrain.push(obj.isTerrain, obj.isTerrain);
+
+    // Two vertices per wall edge, plus light center (0).
+    const v = triNumber * 2;
+    indices.push(0, v + 1, v + 2);
+    triNumber += 1;
+  }
+
+  const geometry = new PIXI.Geometry();
+  geometry.addIndex(indices);
+  geometry.addAttribute("aWallEndpoint", aWallEndpoint, 4, false);
+  geometry.addAttribute("aTerrain", aTerrain, 1, false);
+  return geometry;
 }
 
 /**
@@ -541,6 +568,169 @@ void main() {
   vec4 texColor = texture(uTileTexture, vTexCoord);
   float shadow = texColor.a < ALPHA_THRESHOLD ? 0.0 : uShadowPercentage;
   fragColor = vec4(1.0 - shadow, vec3(1.0));
+}`;
+
+let wallShadowMaskShaderGLSL = {};
+wallShadowMaskShaderGLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+uniform float uCanvasElevation;
+uniform vec3 uLightPosition;
+uniform float uMaxR;
+
+in vec4 aWallEndpoint;
+in float aTerrain;
+
+out vec2 vVertexPosition;
+out vec3 vBary;
+out float vTerrain;
+flat out vec4 fWallDims;
+
+${GLSLFunctions.intersectRayPlane}
+
+void main() {
+  // Shadow is a trapezoid formed from the intersection of the wall with the
+  // triangle ABC, where
+  // C is the light position.
+  // A is the intersection of the line light --> wall endpointA --> canvas plane
+  // B is the intersection of the line light --> wall endpointB --> canvas plane
+
+  // Set varyings.
+  vTerrain = aTerrain;  // TODO: Better as a flat variable?
+  vBary = vec3(0.0, 0.0, 0.0);
+  vBary[gl_VertexID] = 1.0;
+
+  // Vertex 0 is the light; can end early.
+  if ( gl_VertexID == 0 ) {
+    vBary = vec3(1, 0, 0);
+    vVertexPosition = aWallEndpoint.xy;
+    gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aWallEndpoint.xy, 1.0)).xy, 0.0, 1.0);
+    return;
+  }
+
+  // Plane describing the canvas at elevation.
+  vec3 planeNormal = vec3(0.0, 0.0, 1.0);
+  vec3 planePoint = vec3(0.0, 0.0, uCanvasElevation);
+
+  // Determine the top and bottom wall coordinates at this vertex.
+  vec3 wallTop = aWallEndpoint.xyz;
+  vec3 wallBottom = aWallEndpoint.xyw;
+
+  // Intersect the canvas plane: light --> vertex --> plane
+  // If the light is below or equal to the vertex in elevation, the shadow has infinite length, represented here by uMaxR.
+  vec3 maxShadowVertex = uLightPosition + (normalize(wallTop - uLightPosition) * uMaxR);
+  vec3 ixFarShadow = maxShadowVertex;
+  if ( uLightPosition.z > wallTop.z) {
+    intersectRayPlane(uLightPosition, normalize(wallTop - uLightPosition), planePoint, planeNormal, ixFarShadow);
+  }
+
+  // Calculate wall dimensions used in terrain calculations in the fragment shader.
+  float distWallTop = distance(uLightPosition.xy, wallTop.xy);
+  float distShadow = distance(uLightPosition.xy, ixFarShadow.xy);
+  float wallRatio = 1.0 - (distWallTop / distShadow);
+  float nearRatio = wallRatio;
+  if ( wallBottom.z > uCanvasElevation ) {
+    // Wall bottom floats above the canvas.
+    if ( uLightPosition.z > wallBottom.z ) {
+      vec3 ixNearPenumbra;
+      intersectRayPlane(uLightPosition, normalize(wallBottom - uLightPosition), planePoint, planeNormal, ixNearPenumbra);
+      nearRatio = 1.0 - (distance(uLightPosition.xy, ixNearPenumbra.xy) / distShadow);
+    }
+  }
+  fWallDims = vec4(wallTop.z, wallBottom.z, wallRatio, nearRatio);
+  vVertexPosition = ixFarShadow.xy;
+
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ixFarShadow.xy, 1.0)).xy, 0.0, 1.0);
+}`;
+
+wallShadowMaskShaderGLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform sampler2D uElevationMap;
+uniform vec4 uElevationResolution; // min, step, maxpixel, multiplier
+uniform float uCanvasElevation;
+uniform vec4 uSceneDims;
+
+in vec2 vVertexPosition;
+in float vTerrain;
+in vec3 vBary;
+
+flat in vec4 fWallDims; // x: topZ, y: bottomZ, z: wallRatio, a: nearShadowRatio
+
+out vec4 fragColor;
+
+${GLSLFunctions.canvasElevationFromPixel}
+${GLSLFunctions.stepColor}
+
+// Get the terrain elevation at this fragment and return the elevation ratio
+// of elevation change / wall height for top and bottom of the wall.
+bool highElevationAtFragment(out vec2 elevRatio) {
+  bool highElevation = false;
+  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
+
+  // Are we outside of the scene bounds?
+  if ( !all(lessThan(evTexCoord, vec2(1.0)))
+    || !all(greaterThan(evTexCoord, vec2(0.0))) ) return false;
+
+  // Inside scene bounds. Check elevation texture.
+  vec4 evTexel = texture(uElevationMap, evTexCoord);
+  float elevation = canvasElevationFromPixel(evTexel.r, uElevationResolution);
+  if ( elevation <= uCanvasElevation ) return false;
+
+  // Elevation exceeds canvas minimum.
+  // Calculate the proportional elevation change relative to wall height.
+  float elevationChange = elevation - uCanvasElevation;
+  vec2 wallZ = fWallDims.xy;
+  vec2 wallHeight = wallZ - uCanvasElevation;
+  elevRatio = elevationChange / wallHeight;
+  return true;
+}
+
+vec2 elevateShadowRatios(in vec2 elevRatio) {
+  float nearShadowRatio = fWallDims.a;
+  float wallRatio = fWallDims.z;
+  float farShadowRatio = 0.0;
+  return vec2(nearShadowRatio + elevRatio.y * (wallRatio - nearShadowRatio),
+              farShadowRatio + elevRatio.x * (wallRatio - farShadowRatio));
+}
+
+void main() {
+  // If in front of the wall, can return early.
+  float wallRatio = fWallDims.z;
+  if ( vBary.x > wallRatio ) {
+    fragColor = vec4(0.0);
+    // fragColor = vec4(vec3(1.0), 0.0)
+    return;
+  }
+
+  // Check the terrain elevation of this fragment.
+  float nearShadowRatio = fWallDims.a;
+  float farShadowRatio = 0.0;
+  vec2 elevRatio;
+  vec2 shadowRatios = vec2(nearShadowRatio, farShadowRatio);
+  bool highElevation = highElevationAtFragment(elevRatio);
+  if ( highElevation ) shadowRatios = elevateShadowRatios(elevRatio);
+
+  if ( vBary.x > shadowRatios.x ) {
+    fragColor = vec4(0.0, 0.0, 1.0, 1.0);
+    return;
+  }
+
+  if ( vBary.x < shadowRatios.y ) {
+    // Fragment is in front of nearest shadow portion (which may be the wall).
+    // or beyond the end of the shadow (due to terrain elevation)
+    fragColor = vec4(0.0, 1.0, 0.0, 1.0);
+    // fragColor = vec4(vec3(1.0), 0.0);
+    return;
+  }
+
+  // Rest is shadow.
+  fragColor = vec4(vec3(0.0), 0.8);
+  // fragColor = lightColor(1.0 - penumbraShadowPercent);
 }`;
 
 
@@ -875,6 +1065,13 @@ void main() {
     return;
   }
 
+  if ( vBary.x < farRatios.x ) {
+    // Fragment is beyond the shadow (due to terrain elevation change).
+    fragColor = vec4(0.0);
+    // fragColor = vec4(vec3(1.0), 0.0);
+    return;
+  }
+
   bool inSidePenumbra1 = all(greaterThanEqual(vSidePenumbra1, vec3(0.0)));
   bool inSidePenumbra2 = all(greaterThanEqual(vSidePenumbra2, vec3(0.0)));
 
@@ -926,8 +1123,8 @@ void main() {
   // fragColor = lightColor(1.0 - penumbraShadowPercent);
 }`;
 
-let terrainShadowShaderGLSL = {};
-terrainShadowShaderGLSL.vertexShader =
+let terrainShaderGLSL = {};
+terrainShaderGLSL.vertexShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -943,7 +1140,7 @@ void main() {
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
 }`;
 
-terrainShadowShaderGLSL.fragmentShader =
+terrainShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
@@ -1196,9 +1393,8 @@ function renderShadowShader(mesh, map) {
 }
 
 
-
+// NOTE: Preliminaries
 /*
-// NOTE: Testing
 api = game.modules.get("elevatedvision").api
 Draw = CONFIG.GeometryLib.Draw;
 Draw.clearDrawings()
@@ -1247,7 +1443,10 @@ countPixels = function(pixels, value) {
   return sum;
 }
 
+*/
 
+// NOTE: Wall testing
+/*
 // Perspective light
 let [l] = canvas.lighting.placeables;
 source = l.source;
@@ -2340,8 +2539,70 @@ const renderTexture = new PIXI.RenderTexture.create({
 renderTexture.baseTexture.clearColor = [1, 1, 1, 1];
 renderTexture.baseTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
 canvas.app.renderer.render(mesh, { renderTexture });
+*/
 
 
+// NOTE: Test simple wall mask
+/*
+
+// Perspective light
+let [l] = canvas.lighting.placeables;
+source = l.source;
+lightPosition = new Point3d(source.x, source.y, source.elevationZ);
+directional = false;
+lightRadius = source.radius;
+lightSize = 100;
+
+Draw.clearDrawings()
+Draw.point(lightPosition, { color: Draw.COLORS.yellow });
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightRadius)
+Draw.shape(cir, { color: Draw.COLORS.yellow })
+
+// Draw the light size
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightSize);
+Draw.shape(cir, { color: Draw.COLORS.yellow, fill: Draw.COLORS.yellow, fillAlpha: 0.5 })
+
+Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
+
+map = new SourceDepthShadowMap(lightPosition, { directional, lightRadius, lightSize });
+map.clearPlaceablesCoordinatesData()
+if ( !directional ) Draw.shape(
+  new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation),
+  { color: Draw.COLORS.lightyellow})
+
+geometry = constructShadowMaskWallGeometry(map)
+
+let { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
+let { size, distance } = canvas.dimensions;
+elevationMult = size * (1 / distance);
+let { sceneX, sceneY, sceneWidth, sceneHeight } = canvas.dimensions;
+uniforms = {
+  uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
+  uCanvasElevation: 0,
+  uElevationResolution: [elevationMin, elevationStep, maximumPixelValue, elevationMult],
+  uSceneDims: [sceneX, sceneY, sceneWidth, sceneHeight],
+  uElevationMap: canvas.elevation._elevationTexture,
+  uMaxR: canvas.dimensions.maxR
+}
+
+let { vertexShader, fragmentShader } = wallShadowMaskShaderGLSL;
+shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+mesh = new PIXI.Mesh(geometry, shader);
+mesh.blendMode = PIXI.BLEND_MODES.MULTIPLY;
+
+// canvas.stage.addChild(mesh);
+// canvas.stage.removeChild(mesh);
 
 
 */
+
+@elevation = 600
+elevation = 600
+wallHeight = new PIXI.Point(502, 198)
+elevRatio = new PIXI.Point(elevation / wallHeight.x, elevation / wallHeight.y)
+nearShadowRatio = 0.4
+wallRatio = 0.3
+
+nearShadowRatio + elevRatio.y * (wallRatio - nearShadowRatio)
+1 + elevRatio.x * (wallRatio - 1)
+
