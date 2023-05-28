@@ -299,7 +299,7 @@ function constructOpaqueTileGeometry(map) {
 /**
  * Construct geometry for a given (transparent) tile in the scene.
  */
-function constructTileGeometry(map, tileNum) {
+function constructShadowMaskTileGeometry(map, tileNum) {
   const tileObj = map.placeablesCoordinatesData.tileCoordinates[tileNum];
 
   // Need to cut off walls at the top/bottom bounds of the scene, otherwise they
@@ -496,8 +496,8 @@ bool intersectRayQuad(vec3 linePoint, vec3 lineDirection, vec3 v0, vec3 v1, vec3
 }`;
 
 
-let shadowTransparentTileShaderGLSL = {};
-shadowTransparentTileShaderGLSL.vertexShader =
+let transparentTileShadowMaskShaderGLSL = {};
+transparentTileShadowMaskShaderGLSL.vertexShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -505,13 +505,11 @@ uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 uniform float uCanvasElevation;
 uniform vec3 uLightPosition;
-uniform float uLightSize;
-uniform float uOffsetPercentage;
 
 in vec3 aVertexPosition;
 in vec2 aTexCoord;
 
-out vec3 vertexPosition;
+out vec2 vertexPosition;
 out vec2 vTexCoord;
 
 
@@ -519,7 +517,6 @@ ${GLSLFunctions.intersectRayPlane}
 
 void main() {
   vTexCoord = aTexCoord;
-  vertexPosition = aVertexPosition;
 
   // Intersect the canvas plane: Light --> vertex --> plane.
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
@@ -529,35 +526,23 @@ void main() {
   bool ixFound = intersectRayPlane(uLightPosition, lineDirection, planePoint, planeNormal, ix);
   if ( !ixFound ) {
     // Shouldn't happen, but...
+    vertexPosition = aVertexPosition.xy;
     gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
     return;
   }
 
-  // TODO: Make this a define/ifdef
-  // Offset by some percentage of the penumbra radius.
-  if ( uOffsetPercentage > 0.0 ) {
-    float ixDist = distance(uLightPosition, ix);
-    float vertexDist = distance(uLightPosition, aVertexPosition);
-    float penumbraProjectionRatio = vertexDist / (ixDist - vertexDist);
-    float lightSizeProjected = uLightSize * penumbraProjectionRatio;
-    vec3 dir = normalize(aVertexPosition - uLightPosition);
-    float offsetAmount = lightSizeProjected * uOffsetPercentage;
-    ix = uLightPosition + dir * (ixDist + offsetAmount);
-  }
-
-  vertexPosition = ix;
+  vertexPosition = ix.xy;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ix.xy, 1.0)).xy, 0.0, 1.0);
 }
 `;
 
-shadowTransparentTileShaderGLSL.fragmentShader =
+transparentTileShadowMaskShaderGLSL.fragmentShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 
 #define ALPHA_THRESHOLD ${CONFIG[MODULE_ID].alphaThreshold.toFixed(1)}
 
 uniform sampler2D uTileTexture;
-uniform float uShadowPercentage;
 
 in vec3 vertexPosition;
 in vec2 vTexCoord;
@@ -566,8 +551,10 @@ out vec4 fragColor;
 
 void main() {
   vec4 texColor = texture(uTileTexture, vTexCoord);
-  float shadow = texColor.a < ALPHA_THRESHOLD ? 0.0 : uShadowPercentage;
-  fragColor = vec4(1.0 - shadow, vec3(1.0));
+  float shadow = texColor.a < ALPHA_THRESHOLD ? 0.0 : 1.0;
+  fragColor = vec4(vec3(0.0), shadow);
+
+  // fragColor = vec4(1.0 - shadow, vec3(1.0));
 }`;
 
 let wallShadowMaskShaderGLSL = {};
@@ -2153,18 +2140,8 @@ Draw.point(lightS, { color: Draw.COLORS.yellow })
 */
 
 
-/* Tile Testing
-MODULE_ID = "elevatedvision";
-api = game.modules.get(MODULE_ID).api
-Draw = CONFIG.GeometryLib.Draw;
-Draw.clearDrawings()
-SourceDepthShadowMap = api.SourceDepthShadowMap
-Point3d = CONFIG.GeometryLib.threeD.Point3d
-Matrix = CONFIG.GeometryLib.Matrix
-Plane = CONFIG.GeometryLib.threeD.Plane;
-
-
-
+// Note: Tile Testing
+/*
 // Perspective light
 let [l] = canvas.lighting.placeables;
 source = l.source;
@@ -2200,11 +2177,9 @@ uniforms = {
   uCanvasElevation: 0,
   uLightSize: lightSize,
   uTileTexture: map.placeablesCoordinatesData.tileCoordinates[tileNum].object.texture.baseTexture,
-  uOffsetPercentage: 0.0,
-  uShadowPercentage: 1.0
 }
 
-let { vertexShader, fragmentShader } = shadowTransparentTileShaderGLSL;
+let { vertexShader, fragmentShader } = transparentTileShadowMaskShaderGLSL;
 shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
 mesh = new PIXI.Mesh(geometry, shader);
 
