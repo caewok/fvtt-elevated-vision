@@ -875,11 +875,38 @@ in vec2 vQuadBottom;
 
 out vec4 fragColor;
 
+// Quadratic of form a x^2 + b^x + c
+struct Quadratic {
+  float a;
+  float b;
+  float c;
+};
+
 ${GLSLFunctions.lineLineIntersection2d}
 
 // Linear conversion from one range to another.
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
   return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+}
+
+// Fit a polynomial to 3 points and return the a, b, c.
+Quadratic fitQuadraticForThreePoints(in vec2 p1, in vec2 p2, in vec2 p3) {
+  mat3 A = mat3(
+    vec3(1, p1.x, p1.x * p1.x),
+    vec3(1, p2.x, p2.x * p2.x),
+    vec3(1, p3.x, p3.x * p3.x));
+
+  vec3 B = vec3(p1.y, p2.y, p3.y);
+  vec3 X = B * inverse(A);
+  float c = X.x;
+  float b = X.y;
+  float a = X.z;
+
+  return Quadratic(a, b, c);
+}
+
+float calculateQuadratic(in Quadratic q, in float x) {
+  return (q.a * x * x) + (q.b * x) + q.c;
 }
 
 void main() {
@@ -888,82 +915,34 @@ void main() {
 //   fragColor = vec4(float(blocks), 0.0, 0.0, 0.5);
 //   return;
 
+  // Fit a curve to the three vQuad points.
+  Quadratic q = fitQuadraticForThreePoints(vQuadTop, vQuadCenter, vQuadBottom);
 
+  // For now, pull 10 points ranging from vQuadTop to vQuadBottom.
+  // TODO: Add uniform to adjust number of pulls.
+  // TODO: Pull randomly between the points.
 
-  // Pull the texture for each rectangle: top, center, bottom.
-  bool topBlocks = false;
-  bool centerBlocks = false;
-  bool bottomBlocks = false;
-  if ( all(greaterThanEqual(vQuadTop, vec2(0.0))) && all(lessThanEqual(vQuadTop, vec2(1.0))) ) {
-    vec4 texColor = texture(uTileTexture, vQuadTop);
-    topBlocks = texColor.a > ALPHA_THRESHOLD;
+  // For each, add shadow in the following increments:
+  // increment = 1 / numPulls = 1 / 10
+  // TODO: Do we need to distinguish between top/center and bottom/center? Or treat differently if center is blocked?
+
+  int numPulls = 100;
+  float shadowIncrement = 1.0 / float(numPulls);
+  float increment = shadowIncrement * (vQuadBottom.x - vQuadTop.x);
+  float shadow = 0.0;
+  float startX = vQuadTop.x;
+  for ( int i = 0; i < numPulls; i += 1 ) {
+    float incX = startX + (increment * float(i));
+    float incY = calculateQuadratic(q, incX);
+    vec2 texCoord = vec2(incX, incY);
+    if ( all(greaterThanEqual(texCoord, vec2(0.0))) && all(lessThanEqual(texCoord, vec2(1.0))) ) {
+      vec4 texColor = texture(uTileTexture, texCoord);
+      bool blocks = texColor.a > ALPHA_THRESHOLD;
+      shadow += shadowIncrement * float(blocks);
+    }
   }
 
-  if ( all(greaterThanEqual(vQuadCenter, vec2(0.0))) && all(lessThanEqual(vQuadCenter, vec2(1.0))) ) {
-    vec4 texColor = texture(uTileTexture, vQuadCenter);
-    centerBlocks = texColor.a > ALPHA_THRESHOLD;
-  }
-
-  if ( all(greaterThanEqual(vQuadBottom, vec2(0.0))) && all(lessThanEqual(vQuadBottom, vec2(1.0))) ) {
-    vec4 texColor = texture(uTileTexture, vQuadBottom);
-    bottomBlocks = texColor.a > ALPHA_THRESHOLD;
-  }
-
-  if ( topBlocks && centerBlocks && bottomBlocks ) {
-    fragColor = vec4(vec3(0.0), 1.0);
-    return;
-  }
-
-  if ( !topBlocks && !centerBlocks && !bottomBlocks ) {
-    fragColor = vec4(0.0);
-    return;
-  }
-
-  // 1 or 2 of topBlocks, centerBlocks, bottomBlocks is true.
-
-  // How far are we from the light center, in multiples of the radius?
-  vec3 fragPosition = vec3(vShadowPosition, 0.0);
-  vec3 lightTop = uLightPosition + vec3(0.0, 0.0, uLightSize);
-  vec3 lightCenter = uLightPosition;
-  vec3 lightBottom = uLightPosition + vec3(0.0, 0.0, -uLightSize);
-  float t = 0.0;
-  lineLineIntersection2d(lightCenter.xz, lightTop.xz - lightCenter.xz, fragPosition.xz, vVertexPosition.xz - fragPosition.xz, t);
-  //   if ( intersectsLight ) {
-//     fragColor = vec4(t, -t, 0.0, 0.7);
-//   } else {
-//     fragColor = vec4(0.0, 0.0, 1.0, 0.3);
-//   }
-//   return;
-
-  if ( centerBlocks && (topBlocks || bottomBlocks) ) {
-    // Close to the umbra. Shadow between 0.5 and 1.0.
-//     float percentShadow = linearConversion(abs(t), 0.0, 1.0, 0.5, 1.0);
-//     fragColor = vec4(vec3(0.0), percentShadow);
-    fragColor = vec4(vec3(0.0), 0.75);
-
-    return;
-  }
-
-  if ( !centerBlocks && (topBlocks || bottomBlocks) ) {
-    // Close to edge of penumbra. Shadow between 0.0 and 0.5.
-//     float percentShadow = linearConversion(abs(t), 0.0, 1.0, 0.5, 0.0);
-//     fragColor = vec4(vec3(0.0), percentShadow);
-    fragColor = vec4(vec3(0.0), 0.25);
-
-    return;
-  }
-
-
-
-  // All situations should be resolved at this point.
-  fragColor = vec4(0.0, 0.0, 0.0, .1);
-
-
-
-  // Testing.
-  // fragColor = vec4(float(topBlocks), float(centerBlocks), float(bottomBlocks), 0.5);
-
-  // fragColor = vec4(vec3(0.0), shadow);
+  fragColor = vec4(vec3(0.0), shadow);
 
   // fragColor = vec4(1.0 - shadow, vec3(1.0));
 }`;
@@ -3333,6 +3312,17 @@ function polynomialForPoints(p1, p2, p3) {
   return x => (a * x * x) + (b * x) + c;
 }
 
+// GLSL
+/*
+[1 1 1]
+[p1.x p2.x p3.x]
+[p1.x * p1.x p2.x * p2.x p3.x * p3.x]
+
+
+*/
+
+
+
 
 p0 = mLocalTop.multiplyPoint2d(center)
 p1 = mLocalCenter.multiplyPoint2d(center)
@@ -3345,6 +3335,15 @@ p2 = mLocalBottom.multiplyPoint2d(ixTops[3].to2d())
 fn = polynomialForPoints(p0, p1, p2)
 
 fn(p0.x)
+
+numPulls = 10
+increment = (1 / 10) * (p2.x - p0.x); // Move from Top --> Bottom
+
+for ( let i = 0; i < 10; i += 1 ) {
+  const x = p0.x + (increment * i);
+  const y = fn(x);
+  console.log(`${i}: ${x},${y}`)
+}
 
 
 pts = [bl, br, tr, tl]
