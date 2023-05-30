@@ -337,6 +337,89 @@ function constructShadowMaskTileGeometry(map, tileNum) {
   return geometry;
 }
 
+/**
+ * Construct geometry for a given (transparent) tile in the scene.
+ */
+function constructShadowTileGeometry(map, tileNum) {
+  const tileObj = map.placeablesCoordinatesData.tileCoordinates[tileNum];
+
+  // Need to cut off walls at the top/bottom bounds of the scene, otherwise they
+  // will be given incorrect depth values b/c there is no floor or ceiling.
+  // Point source lights have bounds
+  const lightBounds = getLightBounds(map);
+  const { lightPosition } = map;
+  if ( !renderableTile(map, tileObj, lightBounds) ) return null;
+
+  // To facilitate shading, construct 4 triangles instead of two for the quad.
+  // First vertex is the center of the quad.
+
+  const indices = [
+    0, 1, 2,
+    0, 2, 3,
+    0, 3, 4,
+    0, 4, 1
+  ];
+
+  // Vertices should match texCoord.
+  const { BL, BR, TR, TL, elevationZ } = tileObj;
+  const center = BL.add(TR).multiplyScalar(0.5);
+  const aVertexPosition = [
+    center.x, center.y, elevationZ,
+    BL.x, BL.y, elevationZ,
+    BR.x, BR.y, elevationZ,
+    TR.x, TR.y, elevationZ,
+    TL.x, TL.y, elevationZ
+  ];
+
+  const aTexCoord = [
+    0.5, 0.5, // center
+    0, 1,  // BL
+    1, 1, // BR
+    1, 0, // TR
+    0, 0 // TL
+  ];
+
+  const geometry = new PIXI.Geometry();
+  geometry.addIndex(indices);
+  geometry.addAttribute("aVertexPosition", aVertexPosition, 3, false);
+  geometry.addAttribute("aTexCoord", aTexCoord, 2, false);
+  return geometry;
+}
+
+function shadowTileUniforms(map, tileNum, uniforms = {}) {
+  const tileObj = map.placeablesCoordinatesData.tileCoordinates[tileNum];
+  const { BL, BR, TR, TL, elevationZ } = tileObj;
+
+  uniforms.uTileXY = [
+    BL.x, BL.y,
+    BR.x, BR.y,
+    TR.x, TR.y,
+    TL.x, TL.y
+  ];
+  uniforms.uTileElevation = elevationZ;
+
+  // Set direction for each vertex, meaning the x/y direction to the next and previous vertices.
+  const dirBLtoBR = BR.subtract(BL);
+  const dirBRtoTR = TR.subtract(BR);
+  const dirTRtoTL = TL.subtract(TR);
+  const dirTLtoBL = BL.subtract(TL);
+  uniforms.uTileDirections = [
+    // BL --> BR; BL --> TL
+    dirBLtoBR.x, dirBLtoBR.y, -dirTLtoBL.x, -dirTLtoBL.y,
+
+    // BR --> TR; BR --> BL
+    dirBRtoTR.x, dirBRtoTR.y, -dirBLtoBR.x, -dirBLtoBR.y,
+
+    // TR --> TL; TR --> BR
+    dirTRtoTL.x, dirTRtoTL.y, -dirBRtoTR.x, -dirBRtoTR.y,
+
+    // TL --> BL; TL --> TR
+    dirTLtoBL.x, dirTLtoBL.y, -dirTRtoTL.x, -dirTRtoTL.y
+  ];
+
+  return uniforms;
+}
+
 
 let GLSLFunctions = {};
 
@@ -363,7 +446,7 @@ float orient2d(in vec2 a, in vec2 b, in vec2 c) {
 // Calculate barycentric position within a given triangle
 GLSLFunctions.barycentric3d =
 `
-vec3 barycentric3d(in vec3 p, in vec3 a, in vec3 b, in vec3 c) {
+vec3 barycentric(in vec3 p, in vec3 a, in vec3 b, in vec3 c) {
   vec3 v0 = b - a; // Fixed for given triangle
   vec3 v1 = c - a; // Fixed for given triangle
   vec3 v2 = p - a;
@@ -385,7 +468,7 @@ vec3 barycentric3d(in vec3 p, in vec3 a, in vec3 b, in vec3 c) {
 
 GLSLFunctions.barycentric2d =
 `
-vec3 barycentric2d(in vec2 p, in vec2 a, in vec2 b, in vec2 c) {
+vec3 barycentric(in vec2 p, in vec2 a, in vec2 b, in vec2 c) {
   vec2 v0 = b - a;
   vec2 v1 = c - a;
   vec2 v2 = p - a;
@@ -433,20 +516,31 @@ vec2 closest2dPointToSegment(in vec2 c, in vec2 a, in vec2 b) {
 }
 `;
 
-GLSLFunctions.lineLineIntersection2d =
+GLSLFunctions.lineLineIntersection2dT =
 `
-bool lineLineIntersection2d(in vec2 a, in vec2 dirA, in vec2 b, in vec2 dirB, out vec2 ix) {
+bool lineLineIntersection2d(in vec2 a, in vec2 dirA, in vec2 b, in vec2 dirB, out float t) {
   float denom = (dirB.y * dirA.x) - (dirB.x * dirA.y);
 
   // If lines are parallel, no intersection.
   if ( abs(denom) < 0.0001 ) return false;
 
   vec2 diff = a - b;
-  float t = ((dirB.x * diff.y) - (dirB.y * diff.x)) / denom;
-  ix = a + (dirA * t);
+  t = ((dirB.x * diff.y) - (dirB.y * diff.x)) / denom;
   return true;
 }
+`;
+
+GLSLFunctions.lineLineIntersection2d =
 `
+${GLSLFunctions.lineLineIntersection2dT}
+
+bool lineLineIntersection2d(in vec2 a, in vec2 dirA, in vec2 b, in vec2 dirB, out vec2 ix) {
+  float t = 0.0;
+  bool ixFound = lineLineIntersection2d(a, dirA, b, dirB, t);
+  ix = a + (dirA * t);
+  return ixFound;
+}
+`;
 
 // For debugging.
 GLSLFunctions.stepColor =
@@ -553,6 +647,315 @@ void main() {
   vec4 texColor = texture(uTileTexture, vTexCoord);
   float shadow = texColor.a < ALPHA_THRESHOLD ? 0.0 : 1.0;
   fragColor = vec4(vec3(0.0), shadow);
+
+  // fragColor = vec4(1.0 - shadow, vec3(1.0));
+}`;
+
+let transparentTileShadowShaderGLSL = {};
+transparentTileShadowShaderGLSL.vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+uniform float uCanvasElevation;
+uniform vec3 uLightPosition;
+uniform float uLightSize;
+uniform vec2[4] uTileXY;
+uniform vec4[4] uTileDirections;
+uniform float uTileElevation;
+
+in vec3 aVertexPosition;
+in vec2 aTexCoord;
+
+out vec3 vVertexPosition;
+out vec2 vShadowPosition;
+out vec2 vQuadTop;
+out vec2 vQuadCenter;
+out vec2 vQuadBottom;
+out vec2 vQuadFarthest;
+
+${GLSLFunctions.intersectRayPlane}
+${GLSLFunctions.lineLineIntersection2d}
+${GLSLFunctions.orient2d}
+
+vec2 farthestPointInDirection(vec2 points[3], vec2 dir) {
+  float farthestDist = dot(points[0], dir);
+  int farthestIndex = 0;
+  for ( int i = 1; i < 3; i += 1 ) {
+    float iDist = dot(points[i], dir);
+    if ( iDist > farthestDist ) {
+      farthestDist = iDist;
+      farthestIndex = i;
+    }
+  }
+  return points[farthestIndex];
+}
+
+// Translate a given x/y amount.
+// [1, 0, x]
+// [0, 1, y]
+// [0, 0, 1]
+mat3 MatrixTranslation(in float x, in float y) {
+  mat3 tMat = mat3(1.0);
+  tMat[2] = vec3(x, y, 1.0);
+  return tMat;
+}
+
+// Scale using x/y value.
+// [x, 0, 0]
+// [0, y, 0]
+// [0, 0, 1]
+mat3 MatrixScale(in float x, in float y) {
+  mat3 scaleMat = mat3(1.0);
+  scaleMat[0][0] = x;
+  scaleMat[1][1] = y;
+  return scaleMat;
+}
+
+// Rotation around the z-axis.
+// [c, -s, 0],
+// [s, c, 0],
+// [0, 0, 1]
+mat3 MatrixRotationZ(in float angle) {
+  float c = cos(angle);
+  float s = sin(angle);
+  mat3 rotMat = mat3(1.0);
+  rotMat[0][0] = c;
+  rotMat[1][1] = c;
+  rotMat[1][0] = -s;
+  rotMat[0][1] = s;
+  return rotMat;
+}
+
+vec2 multiplyMatrixPoint(mat3 m, vec2 pt) {
+  vec3 res = m * vec3(pt, 1.0);
+  return vec2(res.xy / res.z);
+}
+
+mat3 toLocalRectangle(in vec2[4] rect) {
+  // TL is 0, 0.
+  // T --> B : y: 0 --> 1
+  // L --> R : x: 0 --> 1
+  vec2 bl = rect[0];
+  vec2 br = rect[1];
+  vec2 tr = rect[2];
+  vec2 tl = rect[3];
+
+  vec2 delta = tr - tl;
+  float angle = atan(delta.y, delta.x);
+
+  mat3 mTranslate = MatrixTranslation(-tl.x, -tl.y);
+  mat3 mRotate = MatrixRotationZ(-angle);
+
+  mat3 mShift = mRotate * mTranslate;
+  vec2 trShifted = multiplyMatrixPoint(mShift, tr);
+  vec2 blShifted = multiplyMatrixPoint(mShift, bl);
+
+  mat3 mScale = MatrixScale(1.0 / trShifted.x, 1.0 / blShifted.y);
+  return mScale * mShift;
+}
+
+vec2 quadCoordinates(in vec2 pt, in vec2[4] rect) {
+  // TL is 0, 0.
+  // T --> B : y: 0 --> 1
+  // L --> R : x: 0 --> 1
+  vec2 bl = rect[0];
+  vec2 br = rect[1];
+  vec2 tr = rect[2];
+  vec2 tl = rect[3];
+
+  vec2 dirTB = bl - tl;
+  vec2 dirLR = tr - tl;
+  float tTB;
+  float tLR;
+  lineLineIntersection2d(tl, dirTB, pt, pt + dirLR, tTB);
+  lineLineIntersection2d(tl, dirLR, pt, pt + dirTB, tLR);
+  return vec2(tLR, tTB);
+}
+
+void main() {
+  // Set varyings
+  vVertexPosition = aVertexPosition;
+  vQuadFarthest = aTexCoord;
+
+  vec3 lightTop = uLightPosition + vec3(0.0, 0.0, uLightSize);
+  vec3 lightCenter = uLightPosition;
+  vec3 lightBottom = uLightPosition + vec3(0.0, 0.0, -uLightSize);
+  vec3 planeNormal = vec3(0.0, 0.0, 1.0);
+  vec3 planePoint = vec3(0.0);
+
+  vec2[4] ixTops;
+  vec2[4] ixCenters;
+  vec2[4] ixBottoms;
+  vec2[4] ixFarthests;
+  vec2[4] farthest1s;
+  vec2[4] farthest2s;
+
+  for ( int i = 0; i < 4; i += 1 ) {
+    vec3 tileCorner = vec3(uTileXY[i], uTileElevation);
+    vec4 tileDirs = uTileDirections[i];
+
+    // Intersect the canvas plane: Light --> vertex --> plane.
+    vec3 ixTop;
+    vec3 ixCenter;
+    vec3 ixBottom;
+    intersectRayPlane(lightTop, normalize(lightTop - tileCorner), planePoint, planeNormal, ixTop);
+    intersectRayPlane(lightCenter, normalize(lightCenter - tileCorner), planePoint, planeNormal, ixCenter);
+    intersectRayPlane(lightBottom, normalize(lightBottom - tileCorner), planePoint, planeNormal, ixBottom);
+
+    // Locate the farthest point from the tile corner to create an encompassing rectangle of all the points.
+    vec2 points[3] = vec2[](ixTop.xy, ixCenter.xy, ixBottom.xy);
+    vec2 farthest1 = farthestPointInDirection(points, -tileDirs.xy);
+    vec2 farthest2 = farthestPointInDirection(points, -tileDirs.zw);
+    vec2 ixFarthest = farthest1;
+    if ( !all(equal(farthest1, farthest2)) ) lineLineIntersection2d(farthest1, -tileDirs.zw, farthest2, -tileDirs.xy, ixFarthest);
+
+    ixTops[i] = ixTop.xy;
+    ixCenters[i] = ixCenter.xy;
+    ixBottoms[i] = ixBottom.xy;
+    ixFarthests[i] = ixFarthest;
+    farthest1s[i] = farthest1;
+    farthest2s[i] = farthest2;
+  }
+
+  // The vertex position is either the center point of the farthest rectangle or the corresponding farthest point.
+  vec2 ixTop;
+  vec2 ixCenter;
+  vec2 ixBottom;
+  vec2 ixFarthest;
+  vec2 farthest1;
+  vec2 farthest2;
+  if ( gl_VertexID == 0 ) {
+    ixFarthest = (ixFarthests[0] + ixFarthests[2]) * 0.5;
+    ixTop = (ixTops[0] + ixTops[2]) * 0.5;
+    ixCenter = (ixCenters[0] + ixCenters[2]) * 0.5;
+    ixBottom = (ixBottoms[0] + ixBottoms[2]) * 0.5;
+    farthest1 = (farthest1s[0] + farthest1s[2]) * 0.5;
+    farthest2 = (farthest2s[0] + farthest2s[2]) * 0.5;
+  } else {
+    ixFarthest = ixFarthests[gl_VertexID - 1];
+    ixTop = ixTops[gl_VertexID - 1];
+    ixCenter = ixCenters[gl_VertexID - 1];
+    ixBottom = ixBottoms[gl_VertexID - 1];
+    farthest1 = farthest1s[gl_VertexID - 1];
+    farthest2 = farthest2s[gl_VertexID - 1];
+  }
+
+  // Use the farthest rectangle to set quad barymetric coordinates for this vertex.
+  mat3 mTop = toLocalRectangle(ixTops);
+  mat3 mCenter = toLocalRectangle(ixCenters);
+  mat3 mBottom = toLocalRectangle(ixBottoms);
+
+  vQuadTop = multiplyMatrixPoint(mTop, ixFarthest);
+  vQuadCenter = multiplyMatrixPoint(mCenter, ixFarthest);
+  vQuadBottom = multiplyMatrixPoint(mBottom, ixFarthest);
+  vShadowPosition = ixFarthest;
+
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ixFarthest.xy, 1.0)).xy, 0.0, 1.0);
+}
+`;
+
+transparentTileShadowShaderGLSL.fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+#define ALPHA_THRESHOLD ${CONFIG[MODULE_ID].alphaThreshold.toFixed(1)}
+
+uniform sampler2D uTileTexture;
+uniform vec3 uLightPosition;
+uniform float uLightSize;
+
+in vec3 vVertexPosition;
+in vec2 vShadowPosition;
+in vec2 vQuadFarthest;
+in vec2 vQuadTop;
+in vec2 vQuadCenter;
+in vec2 vQuadBottom;
+
+out vec4 fragColor;
+
+${GLSLFunctions.lineLineIntersection2d}
+
+// Linear conversion from one range to another.
+float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
+  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+}
+
+void main() {
+//   vec4 texColor = texture(uTileTexture, vQuadFarthest);
+//   bool blocks = texColor.a > ALPHA_THRESHOLD;
+//   fragColor = vec4(float(blocks), 0.0, 0.0, 0.5);
+//   return;
+
+
+
+  // Pull the texture for each rectangle: top, center, bottom.
+  bool topBlocks = false;
+  bool centerBlocks = false;
+  bool bottomBlocks = false;
+  if ( all(greaterThanEqual(vQuadTop, vec2(0.0))) && all(lessThanEqual(vQuadTop, vec2(1.0))) ) {
+    vec4 texColor = texture(uTileTexture, vQuadTop);
+    topBlocks = texColor.a > ALPHA_THRESHOLD;
+  }
+
+  if ( all(greaterThanEqual(vQuadCenter, vec2(0.0))) && all(lessThanEqual(vQuadCenter, vec2(1.0))) ) {
+    vec4 texColor = texture(uTileTexture, vQuadCenter);
+    centerBlocks = texColor.a > ALPHA_THRESHOLD;
+  }
+
+  if ( all(greaterThanEqual(vQuadBottom, vec2(0.0))) && all(lessThanEqual(vQuadBottom, vec2(1.0))) ) {
+    vec4 texColor = texture(uTileTexture, vQuadBottom);
+    bottomBlocks = texColor.a > ALPHA_THRESHOLD;
+  }
+
+  if ( topBlocks && centerBlocks && bottomBlocks ) {
+    fragColor = vec4(vec3(0.0), 1.0);
+    return;
+  }
+
+  if ( !(topBlocks || centerBlocks || bottomBlocks) ) {
+    fragColor = vec4(0.0);
+    return;
+  }
+
+  // How far are we from the light center, in multiples of the radius?
+  vec3 fragPosition = vec3(vShadowPosition, 0.0);
+  vec3 lightTop = uLightPosition + vec3(0.0, 0.0, uLightSize);
+  vec3 lightCenter = uLightPosition;
+  vec3 lightBottom = uLightPosition + vec3(0.0, 0.0, -uLightSize);
+  float t = 0.0;
+  lineLineIntersection2d(lightCenter.xz, lightTop.xz - lightCenter.xz, fragPosition.xz, vVertexPosition.xz - fragPosition.xz, t);
+  //   if ( intersectsLight ) {
+//     fragColor = vec4(t, -t, 0.0, 0.7);
+//   } else {
+//     fragColor = vec4(0.0, 0.0, 1.0, 0.3);
+//   }
+//   return;
+
+  if ( centerBlocks && (topBlocks || bottomBlocks) ) {
+    // Close to the umbra. Shadow between 0.5 and 1.0.
+    float percentShadow = linearConversion(abs(t), 0.0, 1.0, 0.5, 1.0);
+    fragColor = vec4(vec3(0.0), percentShadow);
+    return;
+  }
+
+  if ( !centerBlocks && (topBlocks || bottomBlocks) ) {
+    // Close to edge of penumbra. Shadow between 0.0 and 0.5.
+    float percentShadow = linearConversion(abs(t), 0.0, 1.0, 0.5, 0.0);
+    fragColor = vec4(vec3(0.0), percentShadow);
+    return;
+  }
+
+  // All situations should be resolved at this point.
+  fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+
+
+
+  // Testing.
+  // fragColor = vec4(float(topBlocks), float(centerBlocks), float(bottomBlocks), 0.5);
+
+  // fragColor = vec4(vec3(0.0), shadow);
 
   // fragColor = vec4(1.0 - shadow, vec3(1.0));
 }`;
@@ -917,8 +1320,8 @@ void main() {
   vec2 p2C = innerPenumbra2.xy;
   vec2 p2B = outerPenumbra2.xy;
 
-  vSidePenumbra1 = barycentric2d(newVertex.xy, p1A, p1B, p1C);
-  vSidePenumbra2 = barycentric2d(newVertex.xy, p2A, p2B, p2C);
+  vSidePenumbra1 = barycentric(newVertex.xy, p1A, p1B, p1C);
+  vSidePenumbra2 = barycentric(newVertex.xy, p2A, p2B, p2C);
 
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(newVertex.xy, 1.0)).xy, 0.0, 1.0);
 }`;
@@ -1713,10 +2116,8 @@ while ( currentIndex < dat.length ) {
 */
 
 
+// NOTE: Testing geometry. Manual calculation of penumbra radius and ratio
 /*
-
-Manual calculation of penumbra radius and ratio
-
 let [w] = canvas.walls.controlled;
 canvasPlane = new Plane();
 A = new Point3d(w.A.x, w.A.y, w.topZ);
@@ -2571,13 +2972,376 @@ mesh.blendMode = PIXI.BLEND_MODES.MULTIPLY;
 
 */
 
-@elevation = 600
-elevation = 600
-wallHeight = new PIXI.Point(502, 198)
-elevRatio = new PIXI.Point(elevation / wallHeight.x, elevation / wallHeight.y)
-nearShadowRatio = 0.4
-wallRatio = 0.3
 
-nearShadowRatio + elevRatio.y * (wallRatio - nearShadowRatio)
-1 + elevRatio.x * (wallRatio - 1)
+// NOTE: Test simple tile mask
+/*
+
+// Perspective light
+let [l] = canvas.lighting.placeables;
+source = l.source;
+lightPosition = new Point3d(source.x, source.y, source.elevationZ);
+directional = false;
+lightRadius = source.radius;
+lightSize = 100;
+
+Draw.clearDrawings()
+Draw.point(lightPosition, { color: Draw.COLORS.yellow });
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightRadius)
+Draw.shape(cir, { color: Draw.COLORS.yellow })
+
+// Draw the light size
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightSize);
+Draw.shape(cir, { color: Draw.COLORS.yellow, fill: Draw.COLORS.yellow, fillAlpha: 0.5 })
+
+Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
+
+
+
+map = new SourceDepthShadowMap(lightPosition, { directional, lightRadius, lightSize });
+map.clearPlaceablesCoordinatesData()
+if ( !directional ) Draw.shape(
+  new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation),
+  { color: Draw.COLORS.lightyellow})
+
+
+tileNum = 0;
+geometry = constructShadowMaskTileGeometry(map, tileNum);
+uniforms = {
+  uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
+  uCanvasElevation: 0,
+  uLightSize: lightSize,
+  uTileTexture: map.placeablesCoordinatesData.tileCoordinates[tileNum].object.texture.baseTexture,
+}
+
+let { vertexShader, fragmentShader } = transparentTileShadowMaskShaderGLSL;
+shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+mesh = new PIXI.Mesh(geometry, shader);
+
+canvas.stage.addChild(mesh);
+canvas.stage.removeChild(mesh)
+*/
+
+// NOTE: Test tile penumbra shadow
+/*
+
+// Perspective light
+let [l] = canvas.lighting.placeables;
+source = l.source;
+lightPosition = new Point3d(source.x, source.y, source.elevationZ);
+directional = false;
+lightRadius = source.radius;
+lightSize = 100;
+
+Draw.clearDrawings()
+Draw.point(lightPosition, { color: Draw.COLORS.yellow });
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightRadius)
+Draw.shape(cir, { color: Draw.COLORS.yellow })
+
+// Draw the light size
+cir = new PIXI.Circle(lightPosition.x, lightPosition.y, lightSize);
+Draw.shape(cir, { color: Draw.COLORS.yellow, fill: Draw.COLORS.yellow, fillAlpha: 0.5 })
+
+Draw.shape(l.bounds, { color: Draw.COLORS.lightblue})
+
+
+
+map = new SourceDepthShadowMap(lightPosition, { directional, lightRadius, lightSize });
+map.clearPlaceablesCoordinatesData()
+if ( !directional ) Draw.shape(
+  new PIXI.Circle(map.lightPosition.x, map.lightPosition.y, map.lightRadiusAtMinElevation),
+  { color: Draw.COLORS.lightyellow})
+
+
+tileNum = 0;
+geometry = constructShadowTileGeometry(map, tileNum);
+uniforms = {
+  uLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
+  uCanvasElevation: 0,
+  uLightSize: lightSize,
+  uTileTexture: map.placeablesCoordinatesData.tileCoordinates[tileNum].object.texture.baseTexture,
+}
+shadowTileUniforms(map, tileNum, uniforms);
+
+
+let { vertexShader, fragmentShader } = transparentTileShadowShaderGLSL;
+shader = PIXI.Shader.from(vertexShader, fragmentShader, uniforms);
+mesh = new PIXI.Mesh(geometry, shader);
+
+canvas.stage.addChild(mesh);
+canvas.stage.removeChild(mesh)
+*/
+
+// NOTE: Test tile geometry
+/*
+function vec4(arr) {
+  arr ??= [0, 0, 0, 0];
+  this.x = arr[0];
+  this.y = arr[1];
+  this.z = arr[2];
+  this.w = arr[3];
+
+  Object.defineProperty(this, "r", {
+    get: function() { return this.x; },
+    set: function(value) { this.x = value; }
+  });
+
+  Object.defineProperty(this, "g", {
+    get: function() { return this.y; },
+    set: function(value) { this.y = value; }
+  });
+
+  Object.defineProperty(this, "b", {
+    get: function() { return this.z; },
+    set: function(value) { this.z = value; }
+  });
+
+  Object.defineProperty(this, "a", {
+    get: function() { return this.a; },
+    set: function(value) { this.w = value; }
+  });
+}
+
+// Shoot ray from light to vertex and intersect the plane
+// lineDirection and planeNormal should be normalized.
+function intersectRayPlane(linePoint, lineDirection, planePoint, planeNormal) {
+  const denom = planeNormal.dot(lineDirection);
+  if ( Math.abs(denom) < 0.0001 ) return false;
+  const t = planeNormal.dot(planePoint.subtract(linePoint))  / denom;
+  return linePoint.add(lineDirection.multiplyScalar(t));
+}
+
+function lineLineIntersection2d(a, dirA, b, dirB) {
+  const denom = (dirB.y * dirA.x) - (dirB.x * dirA.y);
+  if ( Math.abs(denom) < 0.0001 ) return false;
+
+  const diff = a.subtract(b);
+  const t = ((dirB.x * diff.y) - (dirB.y * diff.x)) / denom;
+  const ix = a.add(dirA.multiplyScalar(t));
+  return ix;
+}
+
+function farthestPointInDirection(points, dir) {
+  const ln = points.length;
+  let farthestDist = points[0].dot(dir);
+  let farthestIndex = 0;
+  for ( let i = 1; i < ln; i += 1 ) {
+    const iDist = points[i].dot(dir);
+    if ( iDist > farthestDist ) {
+      farthestDist = iDist;
+      farthestIndex = i;
+    }
+  }
+  return points[farthestIndex]
+}
+
+function distanceInDirection(p, dir) {
+  p.dot(dir)
+}
+
+0, 1,  // BL
+1, 1, // BR
+1, 0, // TR
+0, 0 // TL
+
+function quadCoordinates(pt, bl, br, tr, tl) {
+  // TL is 0, 0.
+  // T --> B : y: 0 --> 1
+  // L --> R : x: 0 --> 1
+
+  const dirTB = bl.subtract(tl);
+  const dirLR = tr.subtract(tl);
+  const ixTB = foundry.utils.lineLineIntersection(tl, bl, pt, pt.add(dirLR));
+  const ixLR = foundry.utils.lineLineIntersection(tl, tr, pt, pt.add(dirTB));
+
+  return new PIXI.Point(ixLR.t0, ixTB.t0);
+}
+
+function toLocalRectangle(bl, br, tr, tl) {
+  // TL is 0, 0.
+  // T --> B : y: 0 --> 1
+  // L --> R : x: 0 --> 1
+
+  const delta = tr.subtract(tl);
+  const angle = Math.atan2(delta.y, delta.x);
+
+  const mTranslate = Matrix.translation(-tl.x, -tl.y);
+  const mRot = Matrix.rotationZ(-angle, false);
+
+  const mShift = mTranslate.multiply(mRot);
+
+  const trShifted = mShift.multiplyPoint2d(tr);
+  const blShifted = mShift.multiplyPoint2d(bl);
+  const mScale = Matrix.scale(1 / trShifted.x, 1 / blShifted.y)
+
+  // return mTranslate.multiply(mRot);
+  return mShift.multiply(mScale);
+}
+
+
+
+function lineLineIntersection2dT(a, dirA, b, dirB) {
+  const denom = (dirB.y * dirA.x) - (dirB.x * dirA.y);
+  if ( Math.abs(denom) < 0.0001 ) return false;
+
+  const diff = a.subtract(b);
+  const t = ((dirB.x * diff.y) - (dirB.y * diff.x)) / denom;
+  return t;
+}
+
+
+orient2d = foundry.utils.orient2dFast;
+
+
+
+geometry = constructShadowTileGeometry(map, tileNum);
+aVertexPositionArr = geometry.getBuffer("aVertexPosition").data
+aTexCoordArr = geometry.getBuffer("aTexCoord").data
+
+let { uLightPosition, uCanvasElevation, uLightSize, uTileDirections, uTileXY, uTileElevation } = uniforms;
+canvasPlane = new Plane();
+
+uLightPosition = new Point3d(uLightPosition[0], uLightPosition[1], uLightPosition[2])
+lightTop = uLightPosition.add(new Point3d(0, 0, uLightSize));
+lightCenter = uLightPosition
+lightBottom = uLightPosition.add(new Point3d(0, 0, -uLightSize));
+
+
+ixTops = new Array(4)
+ixCenters = new Array(4)
+ixBottoms = new Array(4)
+ixFarthests = new Array(4)
+
+for ( let i = 0; i < 4; i += 1) {
+  const j = i * 2;
+  const tileCorner = new Point3d(uTileXY[j], uTileXY[j + 1], uTileElevation);
+  const k = i * 4;
+  const tileDirs = new vec4(uTileDirections.slice(k, k + 4));
+
+  // Intersect the canvas plane: Light --> vertex --> plane.
+  const ixTop = intersectRayPlane(lightTop, lightTop.subtract(tileCorner).normalize(), canvasPlane.point, canvasPlane.normal);
+  const ixCenter = intersectRayPlane(lightCenter, lightCenter.subtract(tileCorner).normalize(), canvasPlane.point, canvasPlane.normal)
+  const ixBottom = intersectRayPlane(lightBottom, lightBottom.subtract(tileCorner).normalize(), canvasPlane.point, canvasPlane.normal);
+
+  // Locate the farthest point from the tile corner to create an encompassing rectangle of all the points.
+  const points = [ixTop.to2d(), ixCenter.to2d(), ixBottom.to2d()];
+  const farthest1 = farthestPointInDirection(points, new PIXI.Point(-tileDirs.x, -tileDirs.y))
+  const farthest2 = farthestPointInDirection(points, new PIXI.Point(-tileDirs.z, -tileDirs.w))
+  let ixFarthest = farthest1;
+  if ( !farthest1.equals(farthest2) ) ixFarthest = lineLineIntersection2d(farthest1, new PIXI.Point(-tileDirs.z, -tileDirs.w), farthest2, new PIXI.Point(-tileDirs.x, -tileDirs.y));
+
+  ixTops[i] = ixTop.to2d();
+  ixCenters[i] = ixCenter.to2d();
+  ixBottoms[i] = ixBottom.to2d();
+  ixFarthests[i] = new PIXI.Point(ixFarthest.x, ixFarthest.y);
+}
+
+
+for ( i = 0, j = 1; i < 4; i += 1, j += 1 ) {
+  k = j % 4;
+  Draw.segment({A: ixCenters[i], B: ixCenters[k]}, { color: Draw.COLORS.red })
+  Draw.segment({A: ixTops[i], B: ixTops[k]}, { color: Draw.COLORS.blue })
+  Draw.segment({A: ixBottoms[i], B: ixBottoms[k]}, { color: Draw.COLORS.green })
+  Draw.segment({A: ixFarthests[i], B: ixFarthests[k]}, { color: Draw.COLORS.yellow })
+}
+
+
+
+
+ixCenter = ixCenters[0]
+ixTop = ixTops[0]
+ixBottom = ixBottoms[0]
+aVertexPosition = vertices[0]
+aDirection = aDirections[0]
+
+
+Draw.segment({A: aVertexPosition, B: aVertexPosition.add(aDirection)})
+
+pt1 = farthestPointInDirection([ixTop.to2d(), ixCenter.to2d(), ixBottom.to2d()], new Point3d(-aDirection.x, -aDirection.y, 0))
+pt2 = farthestPointInDirection([ixTop.to2d(), ixCenter.to2d(), ixBottom.to2d()], new Point3d(-aDirection.z, -aDirection.w, 0))
+
+ixFarthest = pt1.equals(pt2) ? pt1
+  : foundry.utils.lineLineIntersection(pt1, pt1.add(new Point3d(-aDirection.z, -aDirection.w, 0)), pt2, pt2.add(new Point3d(-aDirection.x, -aDirection.y, 0)))
+
+bl = ixTops[0].to2d()
+br = ixTops[1].to2d()
+tr = ixTops[2].to2d()
+tl = ixTops[3].to2d()
+
+center = bl.add(tr).multiplyScalar(0.5)
+
+  dirTB = bl.subtract(tl)
+  dirLR = br.subtract(bl)
+
+
+mLocal = toLocalRectangle2(bl, br, tr, tl)
+
+Draw.point(mLocal.multiplyPoint2d(center))
+
+
+
+
+pts = [bl, br, tr, tl]
+for ( i = 0, j = 1; i < 4; i += 1, j += 1 ) {
+  const k = j % 4;
+
+  const pti = mLocal.multiplyPoint2d(pts[i])
+  const ptk = mLocal.multiplyPoint2d(pts[k])
+
+  Draw.point(pti);
+  Draw.point(ptk);
+  Draw.segment({A: pti, B: ptk}, { color: Draw.COLORS.red})
+}
+
+pts.map(pt => mLocal.multiplyPoint2d(pt))
+
+
+mLocal.multiplyPoint2d(center)
+
+top0 = mLocal.multiplyPoint2d(ixFarthests[0]);
+top1 = mLocal.multiplyPoint2d(ixFarthests[1]);
+top2 = mLocal.multiplyPoint2d(ixFarthests[2]);
+top3 = mLocal.multiplyPoint2d(ixFarthests[3]);
+
+mInv = mLocal.invert()
+mInv.multiplyPoint2d(top0)
+
+quadCoordinates(center, bl, br, tr, tl)
+
+quadCoordinates(tl, bl, br, tr, tl)
+
+quadCoordinates(bl.add(dirLR.multiplyScalar(.75)), bl, br, tr, tl)
+
+// Set the coordinates of the largest quad based on the smaller.
+ixFarthests = ixFarthests.map(pt => new PIXI.Point(pt.x, pt.y))
+top0 = quadCoordinates(ixFarthests[0], ixTops[0], ixTops[1], ixTops[2], ixTops[3])
+top1 = quadCoordinates(ixFarthests[1], ixTops[0], ixTops[1], ixTops[2], ixTops[3])
+top2 = quadCoordinates(ixFarthests[2], ixTops[0], ixTops[1], ixTops[2], ixTops[3])
+top3 = quadCoordinates(ixFarthests[3], ixTops[0], ixTops[1], ixTops[2], ixTops[3])
+
+center = ixFarthests[0].add(ixFarthests[2]).multiplyScalar(0.5)
+Draw.point(center)
+
+
+
+// Test locations
+bl = ixTops[0]
+br = ixTops[1]
+tr = ixTops[2]
+tl = ixTops[3]
+
+dirLR = bl.subtract(tl);
+dirTB = tr.subtract(tl);
+
+pt = new PIXI.Point(
+  tl.add(dirTB.multiplyScalar(top0.x)).x,  // LR
+  tl.add(dirLR.multiplyScalar(top0.y)).y   // TB
+)
+Draw.point(pt, { color: Draw.COLORS.black})
+
+pt = new PIXI.Point(
+  tl.add(dirTB.multiplyScalar(top0.x)).x,  // LR
+  tl.add(dirLR.multiplyScalar(top0.y)).y   // TB
+)
+
+*/
 
