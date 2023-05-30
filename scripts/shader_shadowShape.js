@@ -423,6 +423,25 @@ function shadowTileUniforms(map, tileNum, uniforms = {}) {
 
 let GLSLFunctions = {};
 
+// Pass a value and get a random normalized value between 0 and 1.
+// https://github.com/patriciogonzalezvivo/lygia/blob/main/generative/random.glsl
+GLSLFunctions.random =
+`
+#define RANDOM_SCALE vec4(443.897, 441.423, .0973, .1099)
+
+float random(in float x) {
+  x = fract(x * RANDOM_SCALE.x);
+  x *= x + 33.33;
+  x *= x + x;
+  return fract(x);
+}
+
+vec2 random2(vec2 p) {
+  vec3 p3 = fract(p.xyx * RANDOM_SCALE.xyz);
+  p3 += dot(p3, p3.yzx + 19.19);
+  return fract((p3.xx + p3.yz) * p3.zy);
+}`;
+
 // Calculate the canvas elevation given a pixel value
 // Maps 0–1 to elevation in canvas coordinates.
 // elevationRes:
@@ -883,6 +902,7 @@ struct Quadratic {
 };
 
 ${GLSLFunctions.lineLineIntersection2d}
+${GLSLFunctions.random}
 
 // Linear conversion from one range to another.
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
@@ -909,38 +929,72 @@ float calculateQuadratic(in Quadratic q, in float x) {
   return (q.a * x * x) + (q.b * x) + q.c;
 }
 
+float tileAlphaTest(in vec2 texCoords) {
+  if ( all(greaterThanEqual(texCoords, vec2(0.0))) && all(lessThanEqual(texCoords, vec2(1.0))) ) {
+    vec4 texColor = texture(uTileTexture, texCoords);
+    return float(texColor.a > ALPHA_THRESHOLD);
+  }
+  return 0.0;
+}
+
 void main() {
 //   vec4 texColor = texture(uTileTexture, vQuadFarthest);
 //   bool blocks = texColor.a > ALPHA_THRESHOLD;
 //   fragColor = vec4(float(blocks), 0.0, 0.0, 0.5);
 //   return;
 
+  // Draw texture for the full size.
+  float fullBlocks = tileAlphaTest(vQuadFarthest);
+  if ( fullBlocks == 0.0 ) {
+    fragColor = vec4(0.0);
+    return;
+  }
+
+
+
   // Fit a curve to the three vQuad points.
-  Quadratic q = fitQuadraticForThreePoints(vQuadTop, vQuadCenter, vQuadBottom);
+  // Quadratic q = fitQuadraticForThreePoints(vQuadTop, vQuadCenter, vQuadBottom);
 
-  // For now, pull 10 points ranging from vQuadTop to vQuadBottom.
-  // TODO: Add uniform to adjust number of pulls.
-  // TODO: Pull randomly between the points.
-
-  // For each, add shadow in the following increments:
-  // increment = 1 / numPulls = 1 / 10
-  // TODO: Do we need to distinguish between top/center and bottom/center? Or treat differently if center is blocked?
-
-  int numPulls = 100;
-  float shadowIncrement = 1.0 / float(numPulls);
-  float increment = shadowIncrement * (vQuadBottom.x - vQuadTop.x);
-  float shadow = 0.0;
-  float startX = vQuadTop.x;
-  for ( int i = 0; i < numPulls; i += 1 ) {
-    float incX = startX + (increment * float(i));
-    float incY = calculateQuadratic(q, incX);
-    vec2 texCoord = vec2(incX, incY);
-    if ( all(greaterThanEqual(texCoord, vec2(0.0))) && all(lessThanEqual(texCoord, vec2(1.0))) ) {
-      vec4 texColor = texture(uTileTexture, texCoord);
-      bool blocks = texColor.a > ALPHA_THRESHOLD;
-      shadow += shadowIncrement * float(blocks);
+  // Gaussian blur.
+  // Use the center with radius out to top/bottom
+  // TODO: Really need to split center/top vs center/bottom
+  float shadow = tileAlphaTest(vQuadCenter);
+  float PI2 = 6.28318530718; // Pi*2
+  vec2 radius = vec2(distance(vQuadTop, vQuadCenter));
+  float DIRECTIONS = 16.0;
+  float QUALITY = 4.0;
+  for ( float d = 0.0; d < PI2; d += PI2 / DIRECTIONS ) {
+    for ( float i = 1.0 / QUALITY; i <= 1.0; i += 1.0 / QUALITY ) {
+      vec2 texCoords = vQuadCenter + vec2(cos(d), sin(d)) * radius * i;
+      shadow += tileAlphaTest(texCoords);
     }
   }
+
+  shadow /= QUALITY * DIRECTIONS + ((DIRECTIONS / 2.0) - 1.0);
+  // shadow /= QUALITY * DIRECTIONS - 15.0;
+
+  fragColor = vec4(vec3(0.0), shadow);
+  return;
+
+
+  // Pull the texture for each rectangle: top, center, bottom.
+  float topBlocks = tileAlphaTest(vQuadTop);
+  float centerBlocks = tileAlphaTest(vQuadCenter);
+  float bottomBlocks = tileAlphaTest(vQuadBottom);
+  float blockSum = topBlocks + centerBlocks + bottomBlocks;
+
+  // If nothing blocks, the shadow is minimal.
+  if ( blockSum == 0.0 ) {
+    fragColor = vec4(vec3(0.0), 0.1);
+  }
+
+  // If everything blocks, shadow is maximal.
+  if ( blockSum == 3.0 ) {
+    fragColor = vec4(vec3(0.0), 1.0);
+  }
+
+
+  //float shadow = 0.1 + topBlocks * 0.3 + centerBlocks * 0.3 + bottomBlocks * 0.3;
 
   fragColor = vec4(vec3(0.0), shadow);
 
@@ -3321,7 +3375,7 @@ function polynomialForPoints(p1, p2, p3) {
 
 */
 
-
+/*
 
 
 p0 = mLocalTop.multiplyPoint2d(center)
@@ -3408,6 +3462,69 @@ pt = new PIXI.Point(
   tl.add(dirTB.multiplyScalar(top0.x)).x,  // LR
   tl.add(dirLR.multiplyScalar(top0.y)).y   // TB
 )
+
+
+lightTop = uLightPosition.add(new Point3d(0, 0, uLightSize));
+lightBottom = uLightPosition.subtract(new Point3d(0, 0, uLightSize))
+
+fragPosition = new Point3d(center.x, center.y, 0);
+tileBL = new Point3d(uTileXY[0], uTileXY[1], uTileElevation);
+tileTR = new Point3d(uTileXY[4], uTileXY[5], uTileElevation)
+
+vertexPosition = tileBL.add(tileTR).multiplyScalar(0.5)
+
+lightTopXZ = lightTop.to2d({y: "z"});
+lightBottomXZ = lightBottom.to2d({y: "z"});
+fragPositionXZ = fragPosition.to2d({y: "z"});
+vertexPositionXZ = vertexPosition.to2d({y: "z"});
+lightXZDir = lightBottomXZ.subtract(lightTopXZ);
+fragXZDir = vertexPositionXZ.subtract(fragPositionXZ)
+ix = foundry.utils.lineLineIntersection(lightTopXZ, lightTopXZ.add(lightXZDir), fragPositionXZ, fragPositionXZ.add(fragXZDir))
+tX = lineLineIntersection2dT(lightTopXZ, lightXZDir, fragPositionXZ, fragXZDir)
+
+lightTopYZ = lightTop.to2d({x: "y", y: "z"});
+lightBottomYZ = lightBottom.to2d({x: "y", y: "z"});
+fragPositionYZ = fragPosition.to2d({x: "y", y: "z"});
+vertexPositionYZ = vertexPosition.to2d({x: "y", y: "z"});
+lightYZDir = lightBottomXZ.subtract(lightTopYZ);
+fragYZDir = vertexPositionXZ.subtract(fragPositionYZ)
+ix = foundry.utils.lineLineIntersection(lightTopYZ, lightTopYZ.add(lightYZDir), fragPositionYZ, fragPositionYZ.add(fragYZDir))
+tX = lineLineIntersection2dT(lightTopYZ, lightYZDir, fragPositionYZ, fragYZDir)
+
+
+// https://raytracing.github.io/books/RayTracingInOneWeekend.html#addingasphere/ray-sphereintersection
+function hitSphere(center, radius, rO, rD) {
+  const oc = rO.subtract(center);
+  const a = rD.dot(rD);
+  const b = 2 * oc.dot(rD);
+  const c = oc.dot(oc) - (radius * radius);
+  const discriminant = (b * b) - 4 * a * c;
+
+  if (discriminant < 0) {
+    return -1.0;
+  } else {
+    return (-b - Math.sqrt(discriminant) ) / (2.0 * a);
+  }
+}
+
+rO = fragPosition;
+rD = vertexPosition.subtract(fragPosition).normalize()
+t = hitSphere(uLightPosition, uLightSize, rO, rD)
+
+hitPt = rO.add(rD.multiplyScalar(t))
+
+function fract(x) {
+  return x - Math.floor(x);
+}
+
+function random(x) {
+  const RANDOM_SCALE = new vec4([443.897, 441.423, .0973, .1099]);
+  x = fract(x * RANDOM_SCALE.x);
+  x *= x + 33.33;
+  x *= x + x;
+  return fract(x);
+}
+
 
 */
 
