@@ -914,10 +914,12 @@ void main() {
     return;
   }
 
-  if ( !(topBlocks || centerBlocks || bottomBlocks) ) {
+  if ( !topBlocks && !centerBlocks && !bottomBlocks ) {
     fragColor = vec4(0.0);
     return;
   }
+
+  // 1 or 2 of topBlocks, centerBlocks, bottomBlocks is true.
 
   // How far are we from the light center, in multiples of the radius?
   vec3 fragPosition = vec3(vShadowPosition, 0.0);
@@ -935,20 +937,26 @@ void main() {
 
   if ( centerBlocks && (topBlocks || bottomBlocks) ) {
     // Close to the umbra. Shadow between 0.5 and 1.0.
-    float percentShadow = linearConversion(abs(t), 0.0, 1.0, 0.5, 1.0);
-    fragColor = vec4(vec3(0.0), percentShadow);
+//     float percentShadow = linearConversion(abs(t), 0.0, 1.0, 0.5, 1.0);
+//     fragColor = vec4(vec3(0.0), percentShadow);
+    fragColor = vec4(vec3(0.0), 0.75);
+
     return;
   }
 
   if ( !centerBlocks && (topBlocks || bottomBlocks) ) {
     // Close to edge of penumbra. Shadow between 0.0 and 0.5.
-    float percentShadow = linearConversion(abs(t), 0.0, 1.0, 0.5, 0.0);
-    fragColor = vec4(vec3(0.0), percentShadow);
+//     float percentShadow = linearConversion(abs(t), 0.0, 1.0, 0.5, 0.0);
+//     fragColor = vec4(vec3(0.0), percentShadow);
+    fragColor = vec4(vec3(0.0), 0.25);
+
     return;
   }
 
+
+
   // All situations should be resolved at this point.
-  fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  fragColor = vec4(0.0, 0.0, 0.0, .1);
 
 
 
@@ -3267,17 +3275,76 @@ br = ixTops[1].to2d()
 tr = ixTops[2].to2d()
 tl = ixTops[3].to2d()
 
+bl = ixCenters[0].to2d()
+br = ixCenters[1].to2d()
+tr = ixCenters[2].to2d()
+tl = ixCenters[3].to2d()
+
+bl = ixBottoms[0].to2d()
+br = ixBottoms[1].to2d()
+tr = ixBottoms[2].to2d()
+tl = ixBottoms[3].to2d()
+
 center = bl.add(tr).multiplyScalar(0.5)
 
   dirTB = bl.subtract(tl)
   dirLR = br.subtract(bl)
 
 
-mLocal = toLocalRectangle2(bl, br, tr, tl)
+mLocal = toLocalRectangle(bl, br, tr, tl)
 
 Draw.point(mLocal.multiplyPoint2d(center))
 
 
+function polynomialForPoints(p1, p2, p3) {
+  // Use Lagragne
+  // https://stackoverflow.com/questions/16896577/using-points-to-generate-quadratic-equation-to-interpolate-data
+  const { x: x_1, y: y_1 } = p1;
+  const { x: x_2, y: y_2 } = p2;
+  const { x: x_3, y: y_3 } = p3;
+
+  const a = y_1/((x_1-x_2)*(x_1-x_3)) + y_2/((x_2-x_1)*(x_2-x_3)) + y_3/((x_3-x_1)*(x_3-x_2));
+
+  const b = -y_1*(x_2+x_3)/((x_1-x_2)*(x_1-x_3))
+    -y_2*(x_1+x_3)/((x_2-x_1)*(x_2-x_3))
+    -y_3*(x_1+x_2)/((x_3-x_1)*(x_3-x_2));
+
+  const c = y_1*x_2*x_3/((x_1-x_2)*(x_1-x_3))
+    + y_2*x_1*x_3/((x_2-x_1)*(x_2-x_3))
+    + y_3*x_1*x_2/((x_3-x_1)*(x_3-x_2));
+
+  return x => (a * x * x) + (b * x) + c;
+}
+
+function polynomialForPoints(p1, p2, p3) {
+  const A = new Matrix([
+   [1, p1.x, p1.x * p1.x],
+   [1, p2.x, p2.x * p2.x],
+   [1, p3.x, p3.x * p3.x]
+  ]);
+
+  const B = new Matrix([[p1.y], [p2.y], [p3.y]]);
+
+  const X = A.invert().multiply(B)
+  const c = X.arr[0][0];
+  const b = X.arr[1][0];
+  const a = X.arr[2][0];
+
+  return x => (a * x * x) + (b * x) + c;
+}
+
+
+p0 = mLocalTop.multiplyPoint2d(center)
+p1 = mLocalCenter.multiplyPoint2d(center)
+p2 = mLocalBottom.multiplyPoint2d(center)
+fn = polynomialForPoints(p0, p1, p2)
+
+p0 = mLocalTop.multiplyPoint2d({x: 1960, y: 1630})
+p1 = mLocalCenter.multiplyPoint2d(ixTops[3].to2d())
+p2 = mLocalBottom.multiplyPoint2d(ixTops[3].to2d())
+fn = polynomialForPoints(p0, p1, p2)
+
+fn(p0.x)
 
 
 pts = [bl, br, tr, tl]
