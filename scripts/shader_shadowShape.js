@@ -436,11 +436,15 @@ float random(in float x) {
   return fract(x);
 }
 
-vec2 random2(vec2 p) {
-  vec3 p3 = fract(p.xyx * RANDOM_SCALE.xyz);
+vec2 random2(vec3 p3) {
+  p3 = fract(p3 * RANDOM_SCALE.xyz);
   p3 += dot(p3, p3.yzx + 19.19);
   return fract((p3.xx + p3.yz) * p3.zy);
-}`;
+}
+
+vec2 random2(vec2 p) { return random2(p.xyx); }
+`;
+
 
 // Calculate the canvas elevation given a pixel value
 // Maps 0–1 to elevation in canvas coordinates.
@@ -904,6 +908,12 @@ struct Quadratic {
 ${GLSLFunctions.lineLineIntersection2d}
 ${GLSLFunctions.random}
 
+#ifndef TWO_PI
+#define TWO_PI 6.2831853071795864769252867665590
+#endif
+
+#define NOISEBLUR_GAUSSIAN_K 2.0 // lower values tighten the radius
+
 // Linear conversion from one range to another.
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
   return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
@@ -950,6 +960,43 @@ void main() {
     return;
   }
 
+  // Noise blur
+  // https://github.com/patriciogonzalezvivo/lygia/blob/main/filter/noiseBlur.glsl
+  // TODO: Really need to split center/top vs center/bottom
+  float NOISEBLUR_SAMPLES = 4.0 + 1.0;
+  float radius = distance(vQuadTop, vQuadCenter);
+  vec2 noiseOffset = vQuadCenter;
+
+  // Start with the center pixel.
+  float shadow = tileAlphaTest(vQuadCenter);
+
+  for ( float i = 1.0; i < NOISEBLUR_SAMPLES; i += 1.0 ) {
+    vec2 noiseRand = random2(vec3(noiseOffset.xy, i));
+    noiseOffset = noiseRand;
+    vec2 r = noiseRand;
+    r.x *= TWO_PI;
+
+    // Gaussian
+    #if defined(NOISEBLUR_GAUSSIAN_K)
+    // Box-muller transform to get gaussian distributed sample points in the circle
+    // float GAUSSIAN_BLUR_K = 2.0 // lower values tighten the radius
+    vec2 cr = vec2(sin(r.x), cos(r.x)) * sqrt(-NOISEBLUR_GAUSSIAN_K * log(r.y));
+    #else
+    // Uniform sample the circle
+    vec2 cr = vec2(sin(r.x), cos(r.x)) * sqrt(r.y);
+    #endif
+
+    // TODO: What is "pixel"?
+    float blocked = tileAlphaTest(vQuadCenter + cr * radius);
+
+    // average the samples as we get em
+    // https://blog.demofox.org/2016/08/23/incremental-averaging/
+    shadow = mix(shadow, blocked, 1.0 / (i + 1.0));
+  }
+
+
+  fragColor = vec4(vec3(0.0), shadow);
+  return;
 
 
   // Fit a curve to the three vQuad points.
@@ -958,9 +1005,9 @@ void main() {
   // Gaussian blur.
   // Use the center with radius out to top/bottom
   // TODO: Really need to split center/top vs center/bottom
-  float shadow = tileAlphaTest(vQuadCenter);
+  //float shadow = tileAlphaTest(vQuadCenter);
   float PI2 = 6.28318530718; // Pi*2
-  vec2 radius = vec2(distance(vQuadTop, vQuadCenter));
+  // vec2 radius = vec2(distance(vQuadTop, vQuadCenter));
   float DIRECTIONS = 16.0;
   float QUALITY = 4.0;
   for ( float d = 0.0; d < PI2; d += PI2 / DIRECTIONS ) {
@@ -3524,6 +3571,40 @@ function random(x) {
   x *= x + x;
   return fract(x);
 }
+
+function random2(p) {
+  const RANDOM_SCALE = new vec4([443.897, 441.423, .0973, .1099]);
+  let p3 = new Point3d(
+    fract(p.x * RANDOM_SCALE.x),
+    fract(p.y * RANDOM_SCALE.y),
+    fract(p.x * RANDOM_SCALE.z)
+  );
+
+  const d = p3.dot(new Point3d(p3.y + 19.19, p3.z + 19.19, p3.z + 19.19))
+  p3 = p3.add(new Point3d(d, d, d));
+  return new PIXI.Point(
+    fract((p3.x + p3.y) * p3.z),
+    fract((p3.x + p3.z) * p3.y)
+  );
+}
+
+NOISEBLUR_SAMPLES = 4.0 + 1.0;
+radius = PIXI.Point.distanceBetween(p0, p1);
+noiseOffset = p1
+TWO_PI = 6.2831853071795864769252867665590
+
+i = 1
+noiseRand = random2(new Point3d(noiseOffset.x, noiseOffset.y, i));
+ r = noiseRand;
+ r.x *= TWO_PI;
+cr = new PIXI.Point(
+  Math.sin(r.x),
+  Math.cos(r.x) * Math.sqrt(r.y)
+)
+
+vec2(sin(r.x), cos(r.x)) * sqrt(r.y);
+
+texCoords = p1.add(cr.multiplyScalar(radius))
 
 
 */
