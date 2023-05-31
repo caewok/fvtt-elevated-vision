@@ -15,6 +15,12 @@ export const MODULES_ACTIVE = {
   PERFECT_VISION: false
 };
 
+export const FLAGS = {
+  WALL: {
+    ELEVATION: "elevation"
+  }
+};
+
 // Hook init b/c game.modules is not initialized at start.
 Hooks.once("init", function() {
   MODULES_ACTIVE.WALL_HEIGHT = game.modules.get("wall-height")?.active;
