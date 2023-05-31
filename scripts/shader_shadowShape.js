@@ -1089,7 +1089,9 @@ void main() {
   float tileLightRadius = lightSizeAtTile / max(tileDims.x, tileDims.y);
 
   // Sample randomly at tile locations within the radius. Average to find the shadow value.
-  float NUM_SAMPLES = 64.0;
+  float NUM_SAMPLES = 16.0;
+  float GAUSSIAN_BLUR_K = tileLightRadius; // Lower values tighten the radius.
+
   float shadow = tileAlphaTest(centerIx.yz);
   vec2 randOffset = centerIx.yz;
   for ( float i = 1.0; i < NUM_SAMPLES; i += 1.0 ) {
@@ -1097,8 +1099,8 @@ void main() {
     vec2 r = randOffset;
     r.x *= TWO_PI;
 
-    // Uniformly sample the unit circle
-    vec2 cr = vec2(sin(r.x), cos(r.x)) * sqrt(r.y);
+    // Box-muller transform to get gaussian distributed sample points in the circle
+    vec2 cr = vec2(sin(r.x), cos(r.x)) * sqrt(-GAUSSIAN_BLUR_K * log(r.y));
 
     float blocked = tileAlphaTest(centerIx.yz + cr * tileLightRadius);
 
@@ -1108,15 +1110,6 @@ void main() {
   }
 
   fragColor = vec4(vec3(0.0), shadow);
-
-//
-//   if ( centerIxFound ) {
-//     fragColor = vec4(vec3(0.0), tileAlphaTest(centerIx.yz));
-//   } else {
-//     fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-//   }
-
-  return;
 }`;
 
 let wallShadowMaskShaderGLSL = {};
