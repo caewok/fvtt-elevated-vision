@@ -423,6 +423,75 @@ function shadowTileUniforms(map, tileNum, uniforms = {}) {
 
 let GLSLFunctions = {};
 
+// Matrix helper functions
+GLSLFunctions.matrix =
+`
+// Translate a given x/y amount.
+// [1, 0, x]
+// [0, 1, y]
+// [0, 0, 1]
+mat3 MatrixTranslation(in float x, in float y) {
+  mat3 tMat = mat3(1.0);
+  tMat[2] = vec3(x, y, 1.0);
+  return tMat;
+}
+
+// Scale using x/y value.
+// [x, 0, 0]
+// [0, y, 0]
+// [0, 0, 1]
+mat3 MatrixScale(in float x, in float y) {
+  mat3 scaleMat = mat3(1.0);
+  scaleMat[0][0] = x;
+  scaleMat[1][1] = y;
+  return scaleMat;
+}
+
+// Rotation around the z-axis.
+// [c, -s, 0],
+// [s, c, 0],
+// [0, 0, 1]
+mat3 MatrixRotationZ(in float angle) {
+  float c = cos(angle);
+  float s = sin(angle);
+  mat3 rotMat = mat3(1.0);
+  rotMat[0][0] = c;
+  rotMat[1][1] = c;
+  rotMat[1][0] = -s;
+  rotMat[0][1] = s;
+  return rotMat;
+}
+
+vec2 multiplyMatrixPoint(mat3 m, vec2 pt) {
+  vec3 res = m * vec3(pt, 1.0);
+  return vec2(res.xy / res.z);
+}
+
+mat3 toLocalRectangle(in vec2[4] rect) {
+  // TL is 0, 0.
+  // T --> B : y: 0 --> 1
+  // L --> R : x: 0 --> 1
+  vec2 bl = rect[0];
+  vec2 br = rect[1];
+  vec2 tr = rect[2];
+  vec2 tl = rect[3];
+
+  vec2 delta = tr - tl;
+  float angle = atan(delta.y, delta.x);
+
+  mat3 mTranslate = MatrixTranslation(-tl.x, -tl.y);
+  mat3 mRotate = MatrixRotationZ(-angle);
+
+  mat3 mShift = mRotate * mTranslate;
+  vec2 trShifted = multiplyMatrixPoint(mShift, tr);
+  vec2 blShifted = multiplyMatrixPoint(mShift, bl);
+
+  mat3 mScale = MatrixScale(1.0 / trShifted.x, 1.0 / blShifted.y);
+  return mScale * mShift;
+}
+`;
+
+
 // Pass a value and get a random normalized value between 0 and 1.
 // https://github.com/patriciogonzalezvivo/lygia/blob/main/generative/random.glsl
 GLSLFunctions.random =
@@ -784,11 +853,10 @@ ${GLSLFunctions.intersectRayPlane}
 ${GLSLFunctions.lineLineIntersection2d}
 ${GLSLFunctions.orient2d}
 
-
-vec2 farthestPointInDirection(vec2 points[3], vec2 dir) {
+vec2 farthestPointInDirection(vec2 points[6], vec2 dir) {
   float farthestDist = dot(points[0], dir);
   int farthestIndex = 0;
-  for ( int i = 1; i < 3; i += 1 ) {
+  for ( int i = 1; i < 6; i += 1 ) {
     float iDist = dot(points[i], dir);
     if ( iDist > farthestDist ) {
       farthestDist = iDist;
@@ -798,95 +866,18 @@ vec2 farthestPointInDirection(vec2 points[3], vec2 dir) {
   return points[farthestIndex];
 }
 
-// Translate a given x/y amount.
-// [1, 0, x]
-// [0, 1, y]
-// [0, 0, 1]
-mat3 MatrixTranslation(in float x, in float y) {
-  mat3 tMat = mat3(1.0);
-  tMat[2] = vec3(x, y, 1.0);
-  return tMat;
-}
-
-// Scale using x/y value.
-// [x, 0, 0]
-// [0, y, 0]
-// [0, 0, 1]
-mat3 MatrixScale(in float x, in float y) {
-  mat3 scaleMat = mat3(1.0);
-  scaleMat[0][0] = x;
-  scaleMat[1][1] = y;
-  return scaleMat;
-}
-
-// Rotation around the z-axis.
-// [c, -s, 0],
-// [s, c, 0],
-// [0, 0, 1]
-mat3 MatrixRotationZ(in float angle) {
-  float c = cos(angle);
-  float s = sin(angle);
-  mat3 rotMat = mat3(1.0);
-  rotMat[0][0] = c;
-  rotMat[1][1] = c;
-  rotMat[1][0] = -s;
-  rotMat[0][1] = s;
-  return rotMat;
-}
-
-vec2 multiplyMatrixPoint(mat3 m, vec2 pt) {
-  vec3 res = m * vec3(pt, 1.0);
-  return vec2(res.xy / res.z);
-}
-
-mat3 toLocalRectangle(in vec2[4] rect) {
-  // TL is 0, 0.
-  // T --> B : y: 0 --> 1
-  // L --> R : x: 0 --> 1
-  vec2 bl = rect[0];
-  vec2 br = rect[1];
-  vec2 tr = rect[2];
-  vec2 tl = rect[3];
-
-  vec2 delta = tr - tl;
-  float angle = atan(delta.y, delta.x);
-
-  mat3 mTranslate = MatrixTranslation(-tl.x, -tl.y);
-  mat3 mRotate = MatrixRotationZ(-angle);
-
-  mat3 mShift = mRotate * mTranslate;
-  vec2 trShifted = multiplyMatrixPoint(mShift, tr);
-  vec2 blShifted = multiplyMatrixPoint(mShift, bl);
-
-  mat3 mScale = MatrixScale(1.0 / trShifted.x, 1.0 / blShifted.y);
-  return mScale * mShift;
-}
-
-vec2 quadCoordinates(in vec2 pt, in vec2[4] rect) {
-  // TL is 0, 0.
-  // T --> B : y: 0 --> 1
-  // L --> R : x: 0 --> 1
-  vec2 bl = rect[0];
-  vec2 br = rect[1];
-  vec2 tr = rect[2];
-  vec2 tl = rect[3];
-
-  vec2 dirTB = bl - tl;
-  vec2 dirLR = tr - tl;
-  float tTB;
-  float tLR;
-  lineLineIntersection2d(tl, dirTB, pt, pt + dirLR, tTB);
-  lineLineIntersection2d(tl, dirLR, pt, pt + dirTB, tLR);
-  return vec2(tLR, tTB);
-}
-
 void main() {
   // Set varyings
   vVertexPosition = aVertexPosition;
 
-  vec3 lightCenter = uLightPosition;
+  // Determine the outermost points of the light shape in form of a "+" in 3d.
+  // uTileDirections[0] is BL --> BR; BL --> TL
   vec3 lightUp = uLightPosition + vec3(0.0, 0.0, uLightSize);
   vec3 lightDown = uLightPosition + vec3(0.0, 0.0, -uLightSize);
+  vec3 lightRight = uLightPosition + normalize(vec3(uTileDirections[0].xy, 0.0)) * uLightSize;
+  vec3 lightLeft = uLightPosition - normalize(vec3(uTileDirections[0].xy, 0.0)) * uLightSize;
+  vec3 lightTop = uLightPosition + normalize(vec3(uTileDirections[0].zw, 0.0)) * uLightSize;
+  vec3 lightBottom = uLightPosition - normalize(vec3(uTileDirections[0].zw, 0.0)) * uLightSize;
 
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
   vec3 planePoint = vec3(0.0);
@@ -897,15 +888,22 @@ void main() {
     vec4 tileDirs = uTileDirections[i];
 
     // Intersect the canvas plane: Light --> vertex --> plane.
+    // Don't need to test the center point as it would not be the outermost.
     vec3 ixUp;
-    vec3 ixCenter;
     vec3 ixDown;
+    vec3 ixLeft;
+    vec3 ixRight;
+    vec3 ixTop;
+    vec3 ixBottom;
     intersectRayPlane(lightUp, normalize(lightUp - tileCorner), planePoint, planeNormal, ixUp);
-    intersectRayPlane(lightCenter, normalize(lightCenter - tileCorner), planePoint, planeNormal, ixCenter);
     intersectRayPlane(lightDown, normalize(lightDown - tileCorner), planePoint, planeNormal, ixDown);
+    intersectRayPlane(lightLeft, normalize(lightLeft - tileCorner), planePoint, planeNormal, ixLeft);
+    intersectRayPlane(lightRight, normalize(lightRight - tileCorner), planePoint, planeNormal, ixRight);
+    intersectRayPlane(lightTop, normalize(lightTop - tileCorner), planePoint, planeNormal, ixTop);
+    intersectRayPlane(lightBottom, normalize(lightBottom - tileCorner), planePoint, planeNormal, ixBottom);
 
     // Locate the farthest point from the tile corner to create an encompassing rectangle of all the points.
-    vec2 points[3] = vec2[](ixUp.xy, ixCenter.xy, ixDown.xy);
+    vec2 points[6] = vec2[](ixUp.xy, ixDown.xy, ixLeft.xy, ixRight.xy, ixTop.xy, ixBottom.xy);
     vec2 farthest1 = farthestPointInDirection(points, -tileDirs.xy);
     vec2 farthest2 = farthestPointInDirection(points, -tileDirs.zw);
     vec2 ixFarthest = farthest1;
