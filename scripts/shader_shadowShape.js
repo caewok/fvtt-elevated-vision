@@ -779,10 +779,6 @@ in vec2 aTexCoord;
 
 out vec3 vVertexPosition;
 out vec2 vShadowPosition;
-out vec2 vQuadTop;
-out vec2 vQuadCenter;
-out vec2 vQuadBottom;
-out vec2 vQuadFarthest;
 
 ${GLSLFunctions.intersectRayPlane}
 ${GLSLFunctions.lineLineIntersection2d}
@@ -887,81 +883,43 @@ vec2 quadCoordinates(in vec2 pt, in vec2[4] rect) {
 void main() {
   // Set varyings
   vVertexPosition = aVertexPosition;
-  vQuadFarthest = aTexCoord;
 
-  vec3 lightTop = uLightPosition + vec3(0.0, 0.0, uLightSize);
   vec3 lightCenter = uLightPosition;
-  vec3 lightBottom = uLightPosition + vec3(0.0, 0.0, -uLightSize);
+  vec3 lightUp = uLightPosition + vec3(0.0, 0.0, uLightSize);
+  vec3 lightDown = uLightPosition + vec3(0.0, 0.0, -uLightSize);
+
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
   vec3 planePoint = vec3(0.0);
 
-  vec2[4] ixTops;
-  vec2[4] ixCenters;
-  vec2[4] ixBottoms;
   vec2[4] ixFarthests;
-  vec2[4] farthest1s;
-  vec2[4] farthest2s;
-
   for ( int i = 0; i < 4; i += 1 ) {
     vec3 tileCorner = vec3(uTileXY[i], uTileElevation);
     vec4 tileDirs = uTileDirections[i];
 
     // Intersect the canvas plane: Light --> vertex --> plane.
-    vec3 ixTop;
+    vec3 ixUp;
     vec3 ixCenter;
-    vec3 ixBottom;
-    intersectRayPlane(lightTop, normalize(lightTop - tileCorner), planePoint, planeNormal, ixTop);
+    vec3 ixDown;
+    intersectRayPlane(lightUp, normalize(lightUp - tileCorner), planePoint, planeNormal, ixUp);
     intersectRayPlane(lightCenter, normalize(lightCenter - tileCorner), planePoint, planeNormal, ixCenter);
-    intersectRayPlane(lightBottom, normalize(lightBottom - tileCorner), planePoint, planeNormal, ixBottom);
+    intersectRayPlane(lightDown, normalize(lightDown - tileCorner), planePoint, planeNormal, ixDown);
 
     // Locate the farthest point from the tile corner to create an encompassing rectangle of all the points.
-    vec2 points[3] = vec2[](ixTop.xy, ixCenter.xy, ixBottom.xy);
+    vec2 points[3] = vec2[](ixUp.xy, ixCenter.xy, ixDown.xy);
     vec2 farthest1 = farthestPointInDirection(points, -tileDirs.xy);
     vec2 farthest2 = farthestPointInDirection(points, -tileDirs.zw);
     vec2 ixFarthest = farthest1;
     if ( !all(equal(farthest1, farthest2)) ) lineLineIntersection2d(farthest1, -tileDirs.zw, farthest2, -tileDirs.xy, ixFarthest);
 
-    ixTops[i] = ixTop.xy;
-    ixCenters[i] = ixCenter.xy;
-    ixBottoms[i] = ixBottom.xy;
     ixFarthests[i] = ixFarthest;
-    farthest1s[i] = farthest1;
-    farthest2s[i] = farthest2;
   }
 
   // The vertex position is either the center point of the farthest rectangle or the corresponding farthest point.
-  vec2 ixTop;
-  vec2 ixCenter;
-  vec2 ixBottom;
-  vec2 ixFarthest;
-  vec2 farthest1;
-  vec2 farthest2;
-  if ( gl_VertexID == 0 ) {
-    ixFarthest = (ixFarthests[0] + ixFarthests[2]) * 0.5;
-    ixTop = (ixTops[0] + ixTops[2]) * 0.5;
-    ixCenter = (ixCenters[0] + ixCenters[2]) * 0.5;
-    ixBottom = (ixBottoms[0] + ixBottoms[2]) * 0.5;
-    farthest1 = (farthest1s[0] + farthest1s[2]) * 0.5;
-    farthest2 = (farthest2s[0] + farthest2s[2]) * 0.5;
-  } else {
-    ixFarthest = ixFarthests[gl_VertexID - 1];
-    ixTop = ixTops[gl_VertexID - 1];
-    ixCenter = ixCenters[gl_VertexID - 1];
-    ixBottom = ixBottoms[gl_VertexID - 1];
-    farthest1 = farthest1s[gl_VertexID - 1];
-    farthest2 = farthest2s[gl_VertexID - 1];
-  }
+  vec2 ixFarthest = gl_VertexID == 0
+    ? (ixFarthests[0] + ixFarthests[2]) * 0.5
+    : ixFarthests[gl_VertexID - 1];
 
-  // Use the farthest rectangle to set quad barymetric coordinates for this vertex.
-  mat3 mTop = toLocalRectangle(ixTops);
-  mat3 mCenter = toLocalRectangle(ixCenters);
-  mat3 mBottom = toLocalRectangle(ixBottoms);
-
-  vQuadTop = multiplyMatrixPoint(mTop, ixFarthest);
-  vQuadCenter = multiplyMatrixPoint(mCenter, ixFarthest);
-  vQuadBottom = multiplyMatrixPoint(mBottom, ixFarthest);
   vShadowPosition = ixFarthest;
-
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(ixFarthest.xy, 1.0)).xy, 0.0, 1.0);
 }
 `;
@@ -981,10 +939,6 @@ uniform float uTileElevation;
 
 in vec3 vVertexPosition;
 in vec2 vShadowPosition;
-in vec2 vQuadFarthest;
-in vec2 vQuadTop;
-in vec2 vQuadCenter;
-in vec2 vQuadBottom;
 
 out vec4 fragColor;
 
