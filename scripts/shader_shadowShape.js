@@ -612,6 +612,92 @@ bool intersectRayQuad(vec3 linePoint, vec3 lineDirection, vec3 v0, vec3 v1, vec3
   return all(greaterThan(ix, quadMin)) && all(lessThan(ix, quadMax));
 }`;
 
+GLSLFunctions.quadIntersectBary =
+`
+/**
+ * Cross x and y parameters in a vec2.
+ * @param {vec2} a  First vector
+ * @param {vec2} b  Second vector
+ * @returns {float} The cross product
+ */
+float cross2d(in vec2 a, in vec2 b) { return a.x * b.y - a.y * b.x; }
+
+/**
+ * Quad intersect
+ * https://www.shadertoy.com/view/XtlBDs
+ * @param {vec3} ro   Ray origin
+ * @param {vec3} rd   Ray direction
+ * @param {vec3} v0   Corner #0
+ * @param {vec3} v1   Corner #1
+ * @param {vec3} v2   Corner #2
+ * @param {vec3} v3   Corner #3
+ * 0--b--3
+ * |\
+ * a c
+ * |  \
+ * 1    2
+ * @returns {vec3} Returns barycentric coords or vec3(-1.0) if no intersection.
+ */
+const int lut[4] = int[](1, 2, 0, 1);
+
+bool quadIntersectBary(in vec3 ro, in vec3 rd, in vec3 v0, in vec3 v1, in vec3 v2, in vec3 v3, out vec3 ix) {
+  // Let's make v0 the origin.
+  vec3 a = v1 - v0;
+  vec3 b = v3 - v0;
+  vec3 c = v2 - v0;
+  vec3 p = ro - v0;
+
+  // Intersect plane.
+  vec3 nor = cross(a, b);
+  float t = -dot(p, nor) / dot(rd, nor);
+  if ( t < 0.0 ) return false; // Parallel to plane
+
+  // Intersection point.
+  vec3 pos = p + (t * rd);
+
+  // See here: https://www.shadertoy.com/view/lsBSDm.
+
+  // Select projection plane.
+  vec3 mor = abs(nor);
+  int id = (mor.x > mor.y && mor.x > mor.z ) ? 0 : (mor.y > mor.z) ? 1 : 2;
+  int idu = lut[id];
+  int idv = lut[id + 1];
+
+  // Project to 2D
+  vec2 kp = vec2(pos[idu], pos[idv]);
+  vec2 ka = vec2(a[idu], a[idv]);
+  vec2 kb = vec2(b[idu], b[idv]);
+  vec2 kc = vec2(c[idu], c[idv]);
+
+  // Find barycentric coords of the quad.
+  vec2 kg = kc - kb - ka;
+  float k0 = cross2d(kp, kb);
+  float k2 = cross2d(kc - kb, ka);  // Alt: float k2 = cross2d(kg, ka);
+  float k1 = cross2d(kp, kg) - nor[id]; // Alt: float k1 = cross(kb, ka) + cross2d(kp, kg);
+
+  float u;
+  float v;
+  if ( abs(k2) < 0.00001 ) { // TODO: use EPSILON?
+    // Edges are parallel; this is a linear equation.
+    v = -k0 / k1;
+    u = cross2d(kp, ka) / k1;
+  } else {
+    // Otherwise, it's a quadratic.
+    float w = (k1 * k1) - (4.0 * k0 * k2);
+    if ( w < 0.0 ) return false;
+    w = sqrt(w);
+    float ik2 = 1.0 / (2.0 * k2);
+    v = (-k1 - w) * ik2;
+    if ( v < 0.0 || v > 1.0 ) v = (-k1 + w) * ik2;
+    u = (kp.x - (ka.x * v)) / (kb.x + (kg.x * v));
+  }
+
+  ix = vec3(t, u, v);
+  // if ( u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0 ) return vec3(-1.0);
+  return true;
+}
+`;
+
 
 let transparentTileShadowMaskShaderGLSL = {};
 transparentTileShadowMaskShaderGLSL.vertexShader =
@@ -701,6 +787,7 @@ out vec2 vQuadFarthest;
 ${GLSLFunctions.intersectRayPlane}
 ${GLSLFunctions.lineLineIntersection2d}
 ${GLSLFunctions.orient2d}
+
 
 vec2 farthestPointInDirection(vec2 points[3], vec2 dir) {
   float farthestDist = dot(points[0], dir);
@@ -888,6 +975,9 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 uniform sampler2D uTileTexture;
 uniform vec3 uLightPosition;
 uniform float uLightSize;
+uniform float uCanvasElevation;
+uniform vec2[4] uTileXY;
+uniform float uTileElevation;
 
 in vec3 vVertexPosition;
 in vec2 vShadowPosition;
@@ -907,6 +997,8 @@ struct Quadratic {
 
 ${GLSLFunctions.lineLineIntersection2d}
 ${GLSLFunctions.random}
+${GLSLFunctions.quadIntersectBary}
+${GLSLFunctions.stepColor}
 
 #ifndef PI
 #define PI 3.1415926535897932384626433832795
@@ -952,115 +1044,79 @@ float tileAlphaTest(in vec2 texCoords) {
 }
 
 void main() {
-//   vec4 texColor = texture(uTileTexture, vQuadFarthest);
-//   bool blocks = texColor.a > ALPHA_THRESHOLD;
-//   fragColor = vec4(float(blocks), 0.0, 0.0, 0.5);
-//   return;
+  // Full ray tracer version
+  // Get distance to tile and to light.
+  // Light radius is proportional to the this ratio.
+  vec3 fragPosition = vec3(vShadowPosition, uCanvasElevation);
+  float distToTile = distance(fragPosition, vVertexPosition);
+  float distToLight = distance(fragPosition, uLightPosition);
+  float k = distToTile / distToLight;
 
-  // Draw texture for the full size.
-//   float fullBlocks = tileAlphaTest(vQuadFarthest);
-//   if ( fullBlocks == 0.0 ) {
-//     fragColor = vec4(0.0);
-//     return;
-//   }
+  // k = sizeAtTile / uLightSize
+  float lightSizeAtTile = k * uLightSize;
 
-//    fragColor = vec4(
-//      tileAlphaTest(vQuadTop),
-//      tileAlphaTest(vQuadCenter),
-//      tileAlphaTest(vQuadBottom),
-//      tileAlphaTest(vQuadFarthest) + 0.5);
-//    return;
+//   fragColor = vec4(
+//     float(lightSizeAtTile < 50.0),
+//     float(lightSizeAtTile < 55.0 && lightSizeAtTile >= 50.0),
+//     float(lightSizeAtTile >= 55.0),
+//     0.8);
+//   fragColor = vec4((lightSizeAtTile - 45.0) / (60.0 - 45.0), 0.0, 0.0, 0.8);
+//  return;
 
-//   fragColor = vec4(vec3(0.0), tileAlphaTest(vQuadTop));
-//   return;
+ /*
+ * 0--b--3
+ * |\
+ * a c
+ * |  \
+ * 1    2
+ */
 
-  // Gaussian blur, but pull randomly from the nearby pixels and weight accordingly.
-  float NUM_SAMPLES = 4.0 + 1.0;
-  float radius = max(distance(vQuadTop, vQuadCenter), distance(vQuadTop, vQuadBottom));
+  // Intersect the tile quad at light center
+  vec3 v0 = vec3(uTileXY[3], uTileElevation); // TL
+  vec3 v1 = vec3(uTileXY[0], uTileElevation); // BL
+  vec3 v2 = vec3(uTileXY[1], uTileElevation); // BR
+  vec3 v3 = vec3(uTileXY[2], uTileElevation); // TR
 
-  // Pixels at distance more than 3x sigma have near-zero effect.
-  // See https://en.m.wikipedia.org/wiki/Gaussian_blur
-  float sigma = radius / 3.0;
-  float gaussMult = 1.0 / sqrt(2.0 * PI * sigma * sigma);
-  float gaussDenomInv = 1.0 / (2.0 * sigma * sigma);
+  // centerIx always found but may be outside the 0,1 tile coordinates.
+  // Will be caught by tileAlphaTest.
+  vec3 centerIx;
+  bool centerIxFound = quadIntersectBary(fragPosition, vVertexPosition - fragPosition, v0, v1, v2, v3, centerIx);
 
-  // Start with center.
-  // float weights = gaussMult;
-  // float shadow = tileAlphaTest(vQuadCenter) * gaussMult;
+  // Translate radius size to barycentric ratio based on the tile size.
+  // left/right are x; bottom/top are y
+  // May be an oval, but shrink to smaller circle.
+  vec2 tileDims = vec2(distance(v0, v3), distance(v0, v1)); // TL, TR; TL, BL
+  float tileLightRadius = lightSizeAtTile / max(tileDims.x, tileDims.y);
 
-//   for ( float i = 1.0; i < NUM_SAMPLES; i += 1.0 ) {
-//     // Generate random x/y between -1 and 1
-//     vec2 rand = random2(vec3(vQuadCenter, i));
-//     float length = sqrt(rand.x);
-//     float angle = TWO_PI * rand.y;
-//     vec2 randXY = vec2(length * cos(angle), length * sin(angle));
-//
-//     // Offset from the center coordinate by a maximum of radius in random direction.
-//     vec2 offset = randXY * radius;
-//     vec2 texCoords = vQuadCenter + offset;
-//
-//     // Calculate the Gaussian weight for this location
-//     float weight = gaussMult * exp(-(dot(offset, offset) * gaussDenomInv));
-//     weights += weight;
-//     shadow += tileAlphaTest(texCoords) * weight;
-//   }
+  // Sample randomly at tile locations within the radius. Average to find the shadow value.
+  float NUM_SAMPLES = 64.0;
+  float shadow = tileAlphaTest(centerIx.yz);
+  vec2 randOffset = centerIx.yz;
+  for ( float i = 1.0; i < NUM_SAMPLES; i += 1.0 ) {
+    randOffset = random2(vec3(randOffset, i));
+    vec2 r = randOffset;
+    r.x *= TWO_PI;
 
-  float shadow = 0.0;
-  float weights = 0.0;
+    // Uniformly sample the unit circle
+    vec2 cr = vec2(sin(r.x), cos(r.x)) * sqrt(r.y);
 
-  float weightCenter = 4.0;
-  shadow += tileAlphaTest(vQuadCenter) * weightCenter;
-  weights += weightCenter;
+    float blocked = tileAlphaTest(centerIx.yz + cr * tileLightRadius);
 
-  float weightTop = 1.0;
-  shadow += tileAlphaTest(vQuadTop) * weightTop;
-  weights += weightTop;
-
-  float weightBottom = 1.0;
-  shadow += tileAlphaTest(vQuadBottom) * weightBottom;
-  weights += weightBottom;
-
-
-//   vec2 offsetTop = vQuadTop - vQuadCenter;
-//   float weightTop = gaussMult * exp(-(dot(offsetTop, offsetTop) * gaussDenomInv));
-//   shadow += tileAlphaTest(vQuadTop) * weightTop;
-//   weights += weightTop;
-//
-//   vec2 offsetBottom = vQuadBottom - vQuadCenter;
-//   float weightBottom = gaussMult * exp(-(dot(offsetBottom, offsetBottom) * gaussDenomInv));
-//   shadow += tileAlphaTest(vQuadTop) * weightBottom;
-//   weights += weightBottom;
-
-  shadow /= weights;
+    // Average the samples iteratively.
+    // https://blog.demofox.org/2016/08/23/incremental-averaging/
+    shadow = mix(shadow, blocked, 1.0 / (i + 1.0));
+  }
 
   fragColor = vec4(vec3(0.0), shadow);
+
+//
+//   if ( centerIxFound ) {
+//     fragColor = vec4(vec3(0.0), tileAlphaTest(centerIx.yz));
+//   } else {
+//     fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+//   }
+
   return;
-
-
-
-
-  // Pull the texture for each rectangle: top, center, bottom.
-  float topBlocks = tileAlphaTest(vQuadTop);
-  float centerBlocks = tileAlphaTest(vQuadCenter);
-  float bottomBlocks = tileAlphaTest(vQuadBottom);
-  float blockSum = topBlocks + centerBlocks + bottomBlocks;
-
-  // If nothing blocks, the shadow is minimal.
-  if ( blockSum == 0.0 ) {
-    fragColor = vec4(vec3(0.0), 0.1);
-  }
-
-  // If everything blocks, shadow is maximal.
-  if ( blockSum == 3.0 ) {
-    fragColor = vec4(vec3(0.0), 1.0);
-  }
-
-
-  //float shadow = 0.1 + topBlocks * 0.3 + centerBlocks * 0.3 + bottomBlocks * 0.3;
-
-  fragColor = vec4(vec3(0.0), shadow);
-
-  // fragColor = vec4(1.0 - shadow, vec3(1.0));
 }`;
 
 let wallShadowMaskShaderGLSL = {};
