@@ -879,7 +879,10 @@ export class PixelCache extends PIXI.Rectangle {
     const scalingMethod = opts.scalingMethod ?? this.nearestNeighborScaling;
 
     const { pixels, x: texX, y: texY, width, height } = extractPixels(canvas.app.renderer, texture, opts.frame);
-    const arr = scalingMethod(pixels, width, height, opts.resolution, { channel });
+    const numChannels = Math.floor((pixels.length / (width * height) ));
+    if ( numChannels < channel ) console.error("PixelCache.applyFunctionToTexture encountered unsupported texture or channel combination.");
+
+    const arr = scalingMethod(pixels, width, height, opts.resolution, { channel, skip: numChannels });
     opts.x += texX;
     opts.y += texY;
     opts.resolution *= texture.resolution;
@@ -984,9 +987,12 @@ export class PixelCache extends PIXI.Rectangle {
    */
   static applyFunctionToTexture(texture, fn, { frame, resolution = 1, channel = 0 } = {}) {
     let { pixels, width, height } = extractPixels(canvas.app.renderer, texture, frame);
-    const nPixels = width * height * 4; // RGBA channels are extracted
+    const numChannels = Math.floor((pixels.length / (width * height) ));
+    if ( numChannels < channel ) console.error("PixelCache.applyFunctionToTexture encountered unsupported texture or channel combination.");
+
+    const nPixels = width * height * numChannels; // Multiple channels may be extracted
     const invResolution = 1 / resolution;
-    const skip = 4 * invResolution * invResolution; // Need only one channel, so use every 4th.
+    const skip = numChannels * invResolution * invResolution; // Need only one channel, so use every 4th.
     for ( let i = channel; i < nPixels; i += skip ) fn(pixels[i]);
     return { pixels, width, height, nPixels, resolution };
   }

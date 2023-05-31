@@ -622,7 +622,18 @@ export class ElevationLayer extends InteractionLayer {
       canvas.app.renderer,
       this._elevationTexture);
       //canvas.dimensions.sceneRect);
-    const canvasElement = pixelsToCanvas(pixels, width, height);
+
+    // If necessary, expand to 4 channels to store the image.
+    // Store the data in the red channel
+    let canvasPixels = pixels;
+    if ( pixels.length === (width * height) ) {
+      if ( !(pixels instanceof Uint8Array) ) console.error("_extractElevationImageData has unknown pixel data.");
+      const numPixels = width * height * 4;
+      canvasPixels = new Uint8Array(numPixels);
+      for ( let i = 0, j = 0; i < numPixels; i += 4, j += 1 ) canvasPixels[i] = pixels[j];
+    }
+
+    const canvasElement = pixelsToCanvas(canvasPixels, width, height);
 
     // Depending on format, may need quality = 1 to avoid lossy compression
     return await canvasToBase64(canvasElement, format, quality);
