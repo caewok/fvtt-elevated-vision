@@ -13,17 +13,19 @@ export function extractPixels(renderer, texture, frame) {
       || !baseTexture.valid
       || baseTexture.parentTextureArray)) throw new Error("Texture is invalid");
 
-
-    // TODO: The if/else tests below need to move up to determine a base texture first.
-    const type = PIXI.TYPES[baseTexture.resource?.type] ?? baseTexture.type;
-    const format = PIXI.FORMATS[baseTexture.resource?.format] ?? baseTexture.format;
-
+    const gl = renderer.gl;
+    let type = gl.UNSIGNED_BYTE;
+    let format = gl.RGBA;
+    if ( baseTexture ) {
+      type = PIXI.TYPES[baseTexture.resource?.type] ?? baseTexture.type;
+      format = PIXI.FORMATS[baseTexture.resource?.format] ?? baseTexture.format;
+    }
 
     const typedArray = TYPED_ARRAY[PIXI.TYPES[type]];
     if ( !typedArray ) throw new Error(`Texture type ${type} not supported.`);
     const nComponents = FORMATS_TO_COMPONENTS[format] ?? 1;
 
-    const gl = renderer.gl;
+
     const readPixels = (frame, resolution) => {
         const x = Math.round(frame.left * resolution);
         const y = Math.round(frame.top * resolution);
@@ -38,17 +40,15 @@ export function extractPixels(renderer, texture, frame) {
 
     if (!texture) {
         renderer.renderTexture.bind(null);
-
         return readPixels(frame ?? renderer.screen, renderer.resolution);
+
     } else if (texture instanceof PIXI.RenderTexture) {
         renderer.renderTexture.bind(texture);
-
         return readPixels(frame ?? texture.frame, baseTexture.resolution);
+
     } else {
         renderer.texture.bind(texture);
-
         const framebuffer = gl.createFramebuffer();
-
         try {
             gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
             gl.framebufferTexture2D(
