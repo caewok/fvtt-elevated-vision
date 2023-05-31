@@ -908,6 +908,10 @@ struct Quadratic {
 ${GLSLFunctions.lineLineIntersection2d}
 ${GLSLFunctions.random}
 
+#ifndef PI
+#define PI 3.1415926535897932384626433832795
+#endif
+
 #ifndef TWO_PI
 #define TWO_PI 6.2831853071795864769252867665590
 #endif
@@ -954,74 +958,85 @@ void main() {
 //   return;
 
   // Draw texture for the full size.
-  float fullBlocks = tileAlphaTest(vQuadFarthest);
-  if ( fullBlocks == 0.0 ) {
-    fragColor = vec4(0.0);
-    return;
-  }
+//   float fullBlocks = tileAlphaTest(vQuadFarthest);
+//   if ( fullBlocks == 0.0 ) {
+//     fragColor = vec4(0.0);
+//     return;
+//   }
 
-  // Noise blur
-  // https://github.com/patriciogonzalezvivo/lygia/blob/main/filter/noiseBlur.glsl
-  // TODO: Really need to split center/top vs center/bottom
-  float NOISEBLUR_SAMPLES = 4.0 + 1.0;
-  float radius = distance(vQuadTop, vQuadCenter);
-  vec2 noiseOffset = vQuadCenter;
+//    fragColor = vec4(
+//      tileAlphaTest(vQuadTop),
+//      tileAlphaTest(vQuadCenter),
+//      tileAlphaTest(vQuadBottom),
+//      tileAlphaTest(vQuadFarthest) + 0.5);
+//    return;
 
-  // Start with the center pixel.
-  float shadow = tileAlphaTest(vQuadCenter);
+//   fragColor = vec4(vec3(0.0), tileAlphaTest(vQuadTop));
+//   return;
 
-  for ( float i = 1.0; i < NOISEBLUR_SAMPLES; i += 1.0 ) {
-    vec2 noiseRand = random2(vec3(noiseOffset.xy, i));
-    noiseOffset = noiseRand;
-    vec2 r = noiseRand;
-    r.x *= TWO_PI;
+  // Gaussian blur, but pull randomly from the nearby pixels and weight accordingly.
+  float NUM_SAMPLES = 4.0 + 1.0;
+  float radius = max(distance(vQuadTop, vQuadCenter), distance(vQuadTop, vQuadBottom));
 
-    // Gaussian
-    #if defined(NOISEBLUR_GAUSSIAN_K)
-    // Box-muller transform to get gaussian distributed sample points in the circle
-    // float GAUSSIAN_BLUR_K = 2.0 // lower values tighten the radius
-    vec2 cr = vec2(sin(r.x), cos(r.x)) * sqrt(-NOISEBLUR_GAUSSIAN_K * log(r.y));
-    #else
-    // Uniform sample the circle
-    vec2 cr = vec2(sin(r.x), cos(r.x)) * sqrt(r.y);
-    #endif
+  // Pixels at distance more than 3x sigma have near-zero effect.
+  // See https://en.m.wikipedia.org/wiki/Gaussian_blur
+  float sigma = radius / 3.0;
+  float gaussMult = 1.0 / sqrt(2.0 * PI * sigma * sigma);
+  float gaussDenomInv = 1.0 / (2.0 * sigma * sigma);
 
-    // TODO: What is "pixel"?
-    float blocked = tileAlphaTest(vQuadCenter + cr * radius);
+  // Start with center.
+  // float weights = gaussMult;
+  // float shadow = tileAlphaTest(vQuadCenter) * gaussMult;
 
-    // average the samples as we get em
-    // https://blog.demofox.org/2016/08/23/incremental-averaging/
-    shadow = mix(shadow, blocked, 1.0 / (i + 1.0));
-  }
+//   for ( float i = 1.0; i < NUM_SAMPLES; i += 1.0 ) {
+//     // Generate random x/y between -1 and 1
+//     vec2 rand = random2(vec3(vQuadCenter, i));
+//     float length = sqrt(rand.x);
+//     float angle = TWO_PI * rand.y;
+//     vec2 randXY = vec2(length * cos(angle), length * sin(angle));
+//
+//     // Offset from the center coordinate by a maximum of radius in random direction.
+//     vec2 offset = randXY * radius;
+//     vec2 texCoords = vQuadCenter + offset;
+//
+//     // Calculate the Gaussian weight for this location
+//     float weight = gaussMult * exp(-(dot(offset, offset) * gaussDenomInv));
+//     weights += weight;
+//     shadow += tileAlphaTest(texCoords) * weight;
+//   }
 
+  float shadow = 0.0;
+  float weights = 0.0;
+
+  float weightCenter = 4.0;
+  shadow += tileAlphaTest(vQuadCenter) * weightCenter;
+  weights += weightCenter;
+
+  float weightTop = 1.0;
+  shadow += tileAlphaTest(vQuadTop) * weightTop;
+  weights += weightTop;
+
+  float weightBottom = 1.0;
+  shadow += tileAlphaTest(vQuadBottom) * weightBottom;
+  weights += weightBottom;
+
+
+//   vec2 offsetTop = vQuadTop - vQuadCenter;
+//   float weightTop = gaussMult * exp(-(dot(offsetTop, offsetTop) * gaussDenomInv));
+//   shadow += tileAlphaTest(vQuadTop) * weightTop;
+//   weights += weightTop;
+//
+//   vec2 offsetBottom = vQuadBottom - vQuadCenter;
+//   float weightBottom = gaussMult * exp(-(dot(offsetBottom, offsetBottom) * gaussDenomInv));
+//   shadow += tileAlphaTest(vQuadTop) * weightBottom;
+//   weights += weightBottom;
+
+  shadow /= weights;
 
   fragColor = vec4(vec3(0.0), shadow);
   return;
 
 
-  // Fit a curve to the three vQuad points.
-  // Quadratic q = fitQuadraticForThreePoints(vQuadTop, vQuadCenter, vQuadBottom);
-
-  // Gaussian blur.
-  // Use the center with radius out to top/bottom
-  // TODO: Really need to split center/top vs center/bottom
-  //float shadow = tileAlphaTest(vQuadCenter);
-  float PI2 = 6.28318530718; // Pi*2
-  // vec2 radius = vec2(distance(vQuadTop, vQuadCenter));
-  float DIRECTIONS = 16.0;
-  float QUALITY = 4.0;
-  for ( float d = 0.0; d < PI2; d += PI2 / DIRECTIONS ) {
-    for ( float i = 1.0 / QUALITY; i <= 1.0; i += 1.0 / QUALITY ) {
-      vec2 texCoords = vQuadCenter + vec2(cos(d), sin(d)) * radius * i;
-      shadow += tileAlphaTest(texCoords);
-    }
-  }
-
-  shadow /= QUALITY * DIRECTIONS + ((DIRECTIONS / 2.0) - 1.0);
-  // shadow /= QUALITY * DIRECTIONS - 15.0;
-
-  fragColor = vec4(vec3(0.0), shadow);
-  return;
 
 
   // Pull the texture for each rectangle: top, center, bottom.
