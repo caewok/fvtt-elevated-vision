@@ -1,3 +1,6 @@
+# 0.4.7
+Fix for error thrown with rotated tiles, due to bug in PixelCache.
+
 # 0.4.6
 Possible fix for issue #54 (moving to new scenes that do not have EV properties set).
 
