@@ -395,6 +395,10 @@ export class ElevationLayer extends InteractionLayer {
     this.container.visible = true;
     canvas.walls.objects.visible = true;
     canvas.stage.addChild(this.elevationLabel);
+
+    // TODO: It should be possible to add the wall objects to a container to display them.
+    //       This would allow them to be manipulated and edited.
+    //       But need handling to avoid destroying them or screwing up the walls layer.
   }
 
   /** @override */
