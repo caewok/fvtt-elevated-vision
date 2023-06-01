@@ -7,6 +7,7 @@ import { MODULE_ID, FLAGS } from "./const.js";
 
 // Methods and hooks to track wall updates.
 
+Hooks.on("preUpdateWall", preUpdateWallHook);
 Hooks.on("createWall", createWallHook);
 Hooks.on("updateWall", updateWallHook);
 Hooks.on("deleteWall", deleteWallHook);
@@ -16,8 +17,24 @@ function createWallHook(document, options, userId) {
 
 }
 
+function preUpdateWallHook(document, changes, _options, _userId) {
+  const updateData = {};
+
+  // Update Wall Height data to keep wall elevations in sync.
+  const evFlagChanged = changes.flags?.[MODULE_ID]?.[FLAGS.WALL.ELEVATION];
+  if ( evFlagChanged ) {
+    const topChanged = evFlagChanged.top
+    if ( typeof topChanged !== "undefined" ) updateData[`changes.flags.wall-height.top`] = topChanged;
+
+    const bottomChanged = evFlagChanged.bottom;
+    if ( typeof bottomChanged !== "undefined" ) updateData[`changes.flags.wall-height.bottom`] = bottomChanged;
+  }
+
+  foundry.utils.mergeObject(changes, updateData, {inplace: true});
+}
+
 function updateWallHook(document, change, options, userId) {
-  // Update Levels data to keep wall elevations in sync.
+
 
 
 }
