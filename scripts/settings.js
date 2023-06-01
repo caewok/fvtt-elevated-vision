@@ -30,7 +30,6 @@ export const SETTINGS = {
   FLY_BUTTON: "add-fly-button",
   ELEVATION_MINIMUM: "elevationmin",
   ELEVATION_INCREMENT: "elevationstep",
-
   CHANGELOG: "changelog"
 };
 
@@ -42,12 +41,24 @@ export async function setSetting(settingName, value) {
   return await game.settings.set(MODULE_ID, settingName, value);
 }
 
-export function getSceneSetting(settingName) {
-  return canvas.scene.flags[MODULE_ID]?.[settingName];
+export function getSceneSetting(settingName, scene) {
+  scene ??= canvas.scene;
+  if ( canvas.performance.mode === CONST.CANVAS_PERFORMANCE_MODES.LOW ) return SETTINGS.SHADING.NONE;
+  return scene.flags[MODULE_ID]?.[settingName] ?? defaultSceneSetting(settingName);
 }
 
-export async function setSceneSetting(settingName, value) {
-  return await canvas.scene.setFlag(MODULE_ID, settingName, value);
+export async function setSceneSetting(settingName, value, scene) {
+  scene ??= canvas.scene;
+  return await scene.setFlag(MODULE_ID, settingName, value);
+}
+
+export function defaultSceneSetting(value) {
+  switch ( value ) {
+    case SETTINGS.ELEVATION_MINIMUM: return getSetting(value) ?? 0;
+    case SETTINGS.ELEVATION_INCREMENT: return getSetting(value) ?? 1;
+    case SETTINGS.AUTO_ELEVATION: return getSetting(value) ?? true;
+    case SETTINGS.SHADING.ALGORITHM: return getSetting(value) ?? SETTINGS.SHADING.TYPES.WEBGL;
+  }
 }
 
 

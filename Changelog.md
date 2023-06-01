@@ -1,3 +1,14 @@
+# 0.4.7
+Fix for error thrown with rotated tiles, due to bug in PixelCache.
+Remove unnecessary console warning re PixelCache uneven division.
+
+# 0.4.6
+Possible fix for issue #54 (moving to new scenes that do not have EV properties set).
+
+Is Potato? Set shadows algorithm to "None" for the scene if performance mode is set to low.
+
+Fix for warning about rendering failure with "/" when opening lighting configuration.
+
 # 0.4.5
 Change to how elevation getters are set on placeables to improve compatibility with Alt. Token Visibility.
 

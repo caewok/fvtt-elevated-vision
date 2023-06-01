@@ -226,7 +226,7 @@ export class PixelCache extends PIXI.Rectangle {
     height ??= nPixels / (localWidth * resolution);
 
     if ( !Number.isInteger(height) ) {
-      console.warn(`PixelCache: width ${width} does not evenly divide into ${pixels.length} pixels.`);
+      //console.warn(`PixelCache: width ${width} does not evenly divide into ${pixels.length} pixels.`);
       height = Math.floor(height);
     }
 
@@ -549,7 +549,8 @@ export class PixelCache extends PIXI.Rectangle {
       const x = points[i];
       const y = points[i + 1];
       const local = this._fromCanvasCoordinates(x, y);
-      newPoints.push(local.x, local.y);
+      newPoints[i] = local.x;
+      newPoints[i + 1] = local.y;
     }
     return new PIXI.Polygon(newPoints);
   }
