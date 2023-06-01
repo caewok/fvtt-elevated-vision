@@ -226,7 +226,7 @@ export class PixelCache extends PIXI.Rectangle {
     height ??= nPixels / (localWidth * resolution);
 
     if ( !Number.isInteger(height) ) {
-      console.warn(`PixelCache: width ${width} does not evenly divide into ${pixels.length} pixels.`);
+      //console.warn(`PixelCache: width ${width} does not evenly divide into ${pixels.length} pixels.`);
       height = Math.floor(height);
     }
 
