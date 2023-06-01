@@ -549,7 +549,8 @@ export class PixelCache extends PIXI.Rectangle {
       const x = points[i];
       const y = points[i + 1];
       const local = this._fromCanvasCoordinates(x, y);
-      newPoints.push(local.x, local.y);
+      newPoints[i] = local.x;
+      newPoints[i + 1] = local.y;
     }
     return new PIXI.Polygon(newPoints);
   }
