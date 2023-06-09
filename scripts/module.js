@@ -11,9 +11,6 @@ ui
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
 
-// Patches
-import { patchTile } from "./patches/Tile.js";
-
 // API imports
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
@@ -152,10 +149,6 @@ Hooks.once("init", function() {
   registerSettings();
   registerLayer();
   registerAdditions();
-});
-
-Hooks.once("libWrapper.Ready", async function() {
-  patchTile();
 });
 
 Hooks.once("setup", async function() {
