@@ -82,6 +82,12 @@ export function registerAdditions() {
     configurable: true
   });
 
+  Object.defineProperty(Token.prototype, "getTopLeft", {
+    value: getTopLeftTokenCorner,
+    writable: true,
+    configurable: true
+  });
+
   if ( MODULES_ACTIVE.PERFECT_VISION ) shaderPVAdditions();
   else shaderAdditions();
 }
@@ -184,6 +190,30 @@ export function registerPatches() {
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
 }
+
+/**
+ * Calculate the top left corner location for a token given an assumed center point.
+ * Used for automatic elevation determination.
+ * @param {number} x    Assumed x center coordinate
+ * @param {number} y    Assumed y center coordinate
+ * @returns {PIXI.Point}
+ */
+function getTopLeftTokenCorner(x, y) {
+  return new PIXI.Point(x - (this.w * 0.5), y - (this.h * 0.5));
+}
+
+  // Also need to convert a center point back to the top left point of a token.
+  // Used for automatic elevation determination.
+  Object.defineProperty(Token.prototype, "getTopLeft", {
+    value: function(x, y) {
+      return {
+        x: x - (this.w * 0.5),
+        y: y - (this.h * 0.5)
+      };
+    },
+    writable: true,
+    configurable: true
+  });
 
 /**
  * Deregister shading wrappers.
