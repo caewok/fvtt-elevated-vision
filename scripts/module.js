@@ -26,7 +26,6 @@ import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculat
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
-import { registerElevationAdditions } from "./elevation.js";
 
 // For elevation layer registration and API
 import { ElevationLayer } from "./ElevationLayer.js";
@@ -145,7 +144,6 @@ Hooks.once("init", function() {
 
   // These methods need to be registered early
   registerGeometry();
-  registerElevationAdditions();
   registerSettings();
   registerLayer();
   registerAdditions();
