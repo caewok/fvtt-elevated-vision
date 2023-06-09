@@ -1,9 +1,10 @@
 /* globals
-LightSource,
-VisionSource,
+ClockwiseSweepPolygon,
 libWrapper,
-ClockwiseSweepPolygon
-canvas
+LightSource,
+PIXI,
+Token,
+VisionSource
 */
 
 "use strict";
@@ -63,129 +64,94 @@ const SHADER_SWITCH = {
   PV_SHADER: 3
 };
 
+/**
+ * Helper to wrap methods.
+ * @param {string} method       Method to wrap
+ * @param {function} fn         Function to use for the wrap
+ * @param {object} [options]    Options passed to libWrapper.register. E.g., { perf_mode: libWrapper.PERF_FAST}
+ */
+function wrap(method, fn, options = {}) { libWrapper.register(MODULE_ID, method, fn, libWrapper.WRAPPER, options); }
+
+function mixed(method, fn, options = {}) { libWrapper.register(MODULE_ID, method, fn, libWrapper.MIXED, options); }
+
+function override(method, fn, options = {}) { libWrapper.register(MODULE_ID, method, fn, libWrapper.OVERRIDE, options);}
+
+/**
+ * Helper to add a method to a class.
+ * @param {class} cl      Either Class.prototype or Class
+ * @param {string} name   Name of the method
+ * @param {function} fn   Function to use for the method
+ */
+function addClassMethod(cl, name, fn) {
+  Object.defineProperty(cl, name, {
+    value: fn,
+    writable: true,
+    configurable: true
+  });
+}
+
 export function registerAdditions() {
-  Object.defineProperty(ClockwiseSweepPolygon.prototype, "_drawShadows", {
-    value: _drawShadowsClockwiseSweepPolygon,
-    writable: true,
-    configurable: true
-  });
+  addClassMethod(ClockwiseSweepPolygon.prototype, "_drawShadows", _drawShadowsClockwiseSweepPolygon);
+  addClassMethod(LightSource.prototype, "_updateEVLightUniforms", _updateEVLightUniformsLightSource);
+  addClassMethod(VisionSource.prototype, "_updateEVVisionUniforms", _updateEVLightUniformsLightSource);
+  addClassMethod(Token.prototype, "getTopLeft", getTopLeftTokenCorner);
 
-  Object.defineProperty(LightSource.prototype, "_updateEVLightUniforms", {
-    value: _updateEVLightUniformsLightSource,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(VisionSource.prototype, "_updateEVVisionUniforms", {
-    value: _updateEVLightUniformsLightSource,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(Token.prototype, "getTopLeft", {
-    value: getTopLeftTokenCorner,
-    writable: true,
-    configurable: true
-  });
+  addClassMethod(VisionSource.prototype, "_createEVMask", _createEVMask);
+  addClassMethod(LightSource.prototype, "_createEVMask", _createEVMask);
 
   if ( MODULES_ACTIVE.PERFECT_VISION ) shaderPVAdditions();
   else shaderAdditions();
 }
 
 function shaderAdditions() {
-  Object.defineProperty(VisionSource.prototype, "_createEVMesh", {
-    value: _createEVMeshVisionSource,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(LightSource.prototype, "_createEVMesh", {
-    value: _createEVMeshLightSource,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(VisionSource.prototype, "_createEVMask", {
-    value: _createEVMask,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(LightSource.prototype, "_createEVMask", {
-    value: _createEVMask,
-    writable: true,
-    configurable: true
-  });
-
+  addClassMethod(VisionSource.prototype, "_createEVMesh", _createEVMeshVisionSource);
+  addClassMethod(LightSource.prototype, "_createEVMesh", _createEVMeshLightSource);
 }
 
 function shaderPVAdditions() {
-  Object.defineProperty(VisionSource.prototype, "_createEVMesh", {
-    value: _createEVMeshVisionSourcePV,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(LightSource.prototype, "_createEVMesh", {
-    value: _createEVMeshLightSourcePV,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(VisionSource.prototype, "_createEVMask", {
-    value: _createEVMask,
-    writable: true,
-    configurable: true
-  });
-
-  Object.defineProperty(LightSource.prototype, "_createEVMask", {
-    value: _createEVMask,
-    writable: true,
-    configurable: true
-  });
+  addClassMethod(VisionSource.prototype, "_createEVMesh", _createEVMeshVisionSourcePV);
+  addClassMethod(LightSource.prototype, "_createEVMesh", _createEVMeshLightSourcePV);
 }
 
 // IDs returned by libWrapper.register for the shadow shader patches.
 const libWrapperShaderIds = [];
 
-/**
- * Helper to register libWrapper patches.
- */
-function regPatch(target, fn, { type, perf_mode } = {}) {
-  type ??= libWrapper.WRAPPER;
-  perf_mode ??= libWrapper.PERF_NORMAL;
-  return libWrapper.register(MODULE_ID, target, fn, type, { perf_mode });
-}
 
 /**
- * Helper to register and record libWrapper id for a shader function.
+ * Decorator to register and record libWrapper id for a shader function.
+ * @param {function} fn   A libWrapper registration function
  */
-function regShaderPatch(target, fn, { type, perf_mode } = {}) {
-  libWrapperShaderIds.push(regPatch(target, fn, {type, perf_mode}));
+function regShaderPatch(fn) {
+  return function() { libWrapperShaderIds.push(fn.apply(this, arguments)); };
 }
+
+const shaderWrap = regShaderPatch(wrap);
+const shaderMixed = regShaderPatch(mixed);
+const shaderOverride = regShaderPatch(override);
+
 
 export function registerPatches() {
   // Unneeded with fixes to PV shader patcher: if ( typeof PerfectVision !== "undefined" ) PerfectVision.debug = true;
 
   // ----- Locating edges that create shadows in the LOS ----- //
-  regPatch("ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
+  wrap("ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
 
   // ----- Token animation and elevation change ---- //
-  regPatch("Token.prototype._refresh", _refreshToken, { perf_mode: libWrapper.PERF_FAST });
-  regPatch("Token.prototype.clone", cloneToken, { perf_mode: libWrapper.PERF_FAST });
+  wrap("Token.prototype._refresh", _refreshToken, { perf_mode: libWrapper.PERF_FAST });
+  wrap("Token.prototype.clone", cloneToken, { perf_mode: libWrapper.PERF_FAST });
 
   // ----- Application rendering configurations ----- //
-  regPatch("AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig);
-  regPatch("TileConfig.prototype.getData", getDataTileConfig);
-  regPatch("TileConfig.prototype._onChangeInput", _onChangeInputTileConfig);
+  wrap("AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig);
+  wrap("TileConfig.prototype.getData", getDataTileConfig);
+  wrap("TileConfig.prototype._onChangeInput", _onChangeInputTileConfig);
 
   // ----- Clockwise sweep enhancements ----- //
   if ( getSetting(SETTINGS.CLOCKWISE_SWEEP) ) {
-    regPatch("ClockwiseSweepPolygon.prototype.initialize", initializeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
+    wrap("ClockwiseSweepPolygon.prototype.initialize", initializeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
   }
 
   // ----- Shader code for drawing shadows ----- //
-  regPatch("AdaptiveLightingShader.create", createAdaptiveLightingShader);
+  wrap("AdaptiveLightingShader.create", createAdaptiveLightingShader);
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
@@ -201,19 +167,6 @@ export function registerPatches() {
 function getTopLeftTokenCorner(x, y) {
   return new PIXI.Point(x - (this.w * 0.5), y - (this.h * 0.5));
 }
-
-  // Also need to convert a center point back to the top left point of a token.
-  // Used for automatic elevation determination.
-  Object.defineProperty(Token.prototype, "getTopLeft", {
-    value: function(x, y) {
-      return {
-        x: x - (this.w * 0.5),
-        y: y - (this.h * 0.5)
-      };
-    },
-    writable: true,
-    configurable: true
-  });
 
 /**
  * Deregister shading wrappers.
@@ -240,26 +193,26 @@ export function registerShadowPatches() {
 
   if ( use_shader ) {
     // ----- Drawing shadows for light sources ----- //
-    regShaderPatch("LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, { perf_mode: libWrapper.PERF_FAST });
-    regShaderPatch("LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, { perf_mode: libWrapper.PERF_FAST });
-    regShaderPatch("LightSource.prototype._createPolygon", _createPolygonLightSource, { perf_mode: libWrapper.PERF_FAST });
+    shaderWrap("LightSource.prototype._updateColorationUniforms", _updateColorationUniformsLightSource, { perf_mode: libWrapper.PERF_FAST });
+    shaderWrap("LightSource.prototype._updateIlluminationUniforms", _updateIlluminationUniformsLightSource, { perf_mode: libWrapper.PERF_FAST });
+    shaderWrap("LightSource.prototype._createPolygon", _createPolygonLightSource, { perf_mode: libWrapper.PERF_FAST });
   }
 
   switch ( shader_choice ) {
     case SHADER_SWITCH.NO_SHADER:
-      regShaderPatch("CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, { type: libWrapper.OVERRIDE, perf_mode: libWrapper.PERF_FAST });
+      shaderOverride("CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, { perf_mode: libWrapper.PERF_FAST });
       break;
     case SHADER_SWITCH.SHADER:
-      regShaderPatch("VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSource, { perf_mode: libWrapper.PERF_FAST });
-      regShaderPatch("LightSource.prototype._updateLosGeometry", _updateLosGeometryLightSource, { perf_mode: libWrapper.PERF_FAST });
-      regShaderPatch("CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, { type: libWrapper.OVERRIDE, perf_mode: libWrapper.PERF_FAST });
+      shaderWrap("VisionSource.prototype._updateLosGeometry", _updateLosGeometryVisionSource, { perf_mode: libWrapper.PERF_FAST });
+      shaderWrap("LightSource.prototype._updateLosGeometry", _updateLosGeometryLightSource, { perf_mode: libWrapper.PERF_FAST });
+      shaderOverride("CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, { type: libWrapper.OVERRIDE, perf_mode: libWrapper.PERF_FAST });
       break;
     case SHADER_SWITCH.PV_NO_SHADER:
-      regShaderPatch("CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMaskPV, { perf_mode: libWrapper.PERF_FAST });
+      shaderWrap("CanvasVisionMask.prototype.createVision", createVisionCanvasVisionMaskPV, { perf_mode: libWrapper.PERF_FAST });
       break;
     case SHADER_SWITCH.PV_SHADER:
-      regShaderPatch("VisionSource.prototype._createMask", _createMaskVisionSourcePV, { type: libWrapper.OVERRIDE, perf_mode: libWrapper.PERF_FAST });
-      regShaderPatch("LightSource.prototype._createMask", _createMaskLightSourcePV, { type: libWrapper.MIXED, perf_mode: libWrapper.PERF_FAST });
+      shaderOverride("VisionSource.prototype._createMask", _createMaskVisionSourcePV, { type: libWrapper.OVERRIDE, perf_mode: libWrapper.PERF_FAST });
+      shaderMixed("LightSource.prototype._createMask", _createMaskLightSourcePV, { type: libWrapper.MIXED, perf_mode: libWrapper.PERF_FAST });
       break;
   }
 }
