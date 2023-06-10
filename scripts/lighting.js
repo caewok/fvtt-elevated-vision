@@ -1,8 +1,9 @@
 /* globals
-GlobalLightSource,
 canvas,
-PIXI,
-CONFIG
+CONFIG,
+foundry,
+GlobalLightSource,
+PIXI
 */
 "use strict";
 
@@ -446,7 +447,7 @@ So Oe becomes Oe - pixelE. We = We - pixelE.
 export function _updateColorationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
-  this._updateEVLightUniforms(this.coloration);
+  this._updateEVLightUniforms(this.layers.coloration);
 }
 
 /**
@@ -456,7 +457,7 @@ export function _updateColorationUniformsLightSource(wrapped) {
 export function _updateIlluminationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
-  this._updateEVLightUniforms(this.illumination);
+  this._updateEVLightUniforms(this.layers.illumination);
 }
 
 /**
@@ -471,14 +472,14 @@ export function _updateIlluminationUniformsLightSource(wrapped) {
  * - distance between the wall and the light source center
  * @param {PIXI.Shader} shader
  */
-export function _updateEVLightUniformsLightSource(mesh) {
-  const shader = mesh.shader;
+export function _updateEVLightUniformsLightSource(shader) {
+  if ( !shader ) return;
   const { x, y, radius, elevationZ } = this;
   const source = this;
   const { width, height } = canvas.dimensions;
 
-  let heightWalls = this.los._elevatedvision?.heightWalls || new Set();
-  let terrainWalls = this.los._elevatedvision?.terrainWalls || new Set();
+  let heightWalls = this.los?._elevatedvision?.heightWalls || new Set();
+  let terrainWalls = this.los?._elevatedvision?.terrainWalls || new Set();
   const r_inv = 1 / radius;
 
   // Sort the walls from distance to the origin point
