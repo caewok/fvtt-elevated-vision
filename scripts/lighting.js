@@ -447,7 +447,7 @@ So Oe becomes Oe - pixelE. We = We - pixelE.
 export function _updateColorationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
-  this._updateEVLightUniforms(this.layers.coloration);
+  this._updateEVLightUniforms(this.layers.coloration.shader);
 }
 
 /**
@@ -457,7 +457,7 @@ export function _updateColorationUniformsLightSource(wrapped) {
 export function _updateIlluminationUniformsLightSource(wrapped) {
   wrapped();
   if ( this instanceof GlobalLightSource ) return;
-  this._updateEVLightUniforms(this.layers.illumination);
+  this._updateEVLightUniforms(this.layers.illumination.shader);
 }
 
 /**
