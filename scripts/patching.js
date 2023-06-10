@@ -54,6 +54,8 @@ import {
 
 import { getEVPixelCacheTile } from "./tiles.js";
 
+import { _onMouseMoveCanvas } from "./ElevationLayer.js";
+
 // A: shader / not shader
 // B: PV / not PV
 // A | (B << 1)
@@ -142,6 +144,9 @@ const shaderWrap = regShaderPatch(wrap);
 const shaderOverride = regShaderPatch(override);
 
 export function registerPatches() {
+  // Track mouse events
+  wrap("Canvas.prototype._onMouseMove", _onMouseMoveCanvas, { perf_mode: libWrapper.PERF_FAST });
+
   // ----- Locating edges that create shadows in the LOS ----- //
   wrap("ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
 

@@ -42,8 +42,8 @@ export function roundFastPositive(n) { return (n + 0.5) << 0; }
  * @returns {PixelFrame}
  */
 export function extractRectangleFromPixelArray(pixels, pxWidth, frame) {
-  const left = Math.roundFast(frame.left);
-  const top = Math.roundFast(frame.top);
+  const left = Math.round(frame.left);
+  const top = Math.round(frame.top);
   const right = frame.right + 1;
   const bottom = frame.bottom + 1;
   const N = frame.width * frame.height;
@@ -68,8 +68,8 @@ export function extractRectangleFromPixelArray(pixels, pxWidth, frame) {
  * @returns {PixelFrame}
  */
 export function applyFunctionToPixelArray(pixels, pxWidth, frame, fn) {
-  const left = Math.roundFast(frame.left);
-  const top = Math.roundFast(frame.top);
+  const left = Math.round(frame.left);
+  const top = Math.round(frame.top);
   const right = frame.right + 1;
   const bottom = frame.bottom + 1;
   const N = frame.width * frame.height;

@@ -71,6 +71,11 @@ class FullCanvasContainer extends FullCanvasObjectMixin(PIXI.Container) {
   }
 }
 
+export function _onMouseMoveCanvas(wrapper, event) {
+  wrapper(event);
+  canvas.elevation._onMouseMove(event);
+}
+
 export class ElevationLayer extends InteractionLayer {
   constructor() {
     super();
@@ -93,7 +98,28 @@ export class ElevationLayer extends InteractionLayer {
   /**
    * Activate a listener to display elevation values when the mouse hovers over an area
    * of the canvas in the elevation layer.
+   * See Ruler.prototype._onMouseMove
    */
+  _onMouseMove(event) {
+    if ( !canvas.ready
+      || !canvas.elevation.active
+      || !this.elevationLabel ) return;
+
+    // Extract event data
+    let moveTime = event.now;
+    this.elevationLabel.visible = false;
+    const pos = event.getLocalPosition(canvas.app.stage);
+
+    setTimeout(() => {
+      if ( (Date.now() - moveTime) < this._HOVER_DELAY ) return;
+
+      // For debugging: console.log(`Mouse at ${pos.x},${pos.y}`);
+      this.updateElevationLabel(pos);
+      this.elevationLabel.visible = true;
+    }, this._HOVER_DELAY);
+  }
+
+
   _activateHoverListener() {
     log("activatingHoverListener");
     const textStyle = PreciseText.getTextStyle({
@@ -107,24 +133,6 @@ export class ElevationLayer extends InteractionLayer {
     this.elevationLabel = new PreciseText(undefined, textStyle);
     this.elevationLabel.anchor = {x: 0, y: 1};
     canvas.stage.addChild(this.elevationLabel);
-
-    let moveTime = Date.now();
-    window.addEventListener("mousemove", event => {  // eslint-disable-line no-unused-vars
-      if ( !canvas.ready ) return;
-      if ( !canvas.elevation.active ) return;
-
-      const pos = canvas.app.renderer.plugins.interaction.mouse.getLocalPosition(canvas.app.stage);
-      moveTime = Date.now();
-      this.elevationLabel.visible = false;
-
-      setTimeout(() => {
-        let now = Date.now();
-        if ( now - moveTime < this._HOVER_DELAY ) return;
-        this.updateElevationLabel(pos);
-        this.elevationLabel.visible = true;
-      }, this._HOVER_DELAY);
-
-    }, { passive: true });
   }
 
   /**
@@ -326,7 +334,7 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number}
    */
   pixelValueToElevation(value) {
-    return this.elevationMin + (Math.roundFast(value * this.elevationStep * 10) / 10);
+    return this.elevationMin + (Math.round(value * this.elevationStep * 10) / 10);
   }
 
   /**
