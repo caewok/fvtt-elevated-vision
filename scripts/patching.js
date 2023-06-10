@@ -21,7 +21,6 @@ import {
 } from "./renderConfig.js";
 
 import {
-  _refreshToken,
   cloneToken
 } from "./tokens.js";
 
@@ -137,7 +136,6 @@ export function registerPatches() {
   wrap("ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
 
   // ----- Token animation and elevation change ---- //
-  wrap("Token.prototype._refresh", _refreshToken, { perf_mode: libWrapper.PERF_FAST });
   wrap("Token.prototype.clone", cloneToken, { perf_mode: libWrapper.PERF_FAST });
 
   // ----- Application rendering configurations ----- //
