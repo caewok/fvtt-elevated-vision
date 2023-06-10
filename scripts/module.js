@@ -152,17 +152,17 @@ Hooks.once("init", function() {
   registerAdditions();
 });
 
-Hooks.once("setup", async function() {
+Hooks.once("setup", function() {
   registerPatches();
 });
 
-Hooks.on("canvasInit", async function(_canvas) {
+Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
   registerShadowPatches();
   updateFlyTokenControl();
 });
 
-Hooks.on("canvasReady", async function() {
+Hooks.on("canvasReady", function() {
   // Set the elevation grid now that we know scene dimensions
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
