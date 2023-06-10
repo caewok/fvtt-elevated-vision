@@ -37,12 +37,13 @@ import { updateFlyTokenControl } from "./scenes.js";
 
 // Hooks
 import { preUpdateTokenHook, refreshTokenHook } from "./tokens.js";
+import { updateTileHook } from "./tiles.js";
 
 // Other self-executing hooks
 import "./changelog.js";
 import "./renderConfig.js";
 import "./controls.js";
-import "./tiles.js";
+
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
@@ -165,21 +166,6 @@ Hooks.on("canvasReady", async function() {
   // Set the elevation grid now that we know scene dimensions
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
-
-  // Cache overhead tile pixel data.
-  for ( const tile of canvas.tiles.placeables ) {
-    if ( tile.document.overhead ) {
-
-      if ( game.user.isGM ) {
-        // Match Levels settings. Prefer Levels settings.
-        const levelsE = tile.document?.flag?.levels?.rangeBottom;
-        if ( typeof levelsE !== "undefined" ) tile.document.setFlag(MODULE_ID, "elevation", levelsE);
-        else tile.document.update({flags: { levels: { rangeBottom: tile.elevationE } } });
-      }
-      // Cache the tile pixels.
-      tile._evPixelCache = TilePixelCache.fromOverheadTileAlpha(tile);
-    }
-  }
 });
 
 Hooks.on("3DCanvasSceneReady", function(previewArr) {
@@ -224,3 +210,5 @@ function registerLayer() {
 
 Hooks.on("preUpdateToken", preUpdateTokenHook);
 Hooks.on("refreshToken", refreshTokenHook);
+
+Hooks.on("updateTile", updateTileHook);

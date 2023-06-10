@@ -53,6 +53,8 @@ import {
   initializeClockwiseSweepPolygon
 } from "./clockwise_sweep.js";
 
+import { getEVPixelCacheTile } from "./tiles.js";
+
 // A: shader / not shader
 // B: PV / not PV
 // A | (B << 1)
@@ -89,6 +91,22 @@ function addClassMethod(cl, name, fn) {
   });
 }
 
+/**
+ * Helper to add a getter to a class.
+ * @param {class} cl      Either Class.prototype or Class
+ * @param {string} name   Name of the method
+ * @param {function} fn   Function to use for the method
+ */
+function addClassGetter(cl, name, fn) {
+  if ( !Object.hasOwn(cl, name) ) {
+    Object.defineProperty(cl, name, {
+      get: fn,
+      enumerable: false,
+      configurable: true
+    });
+  }
+}
+
 export function registerAdditions() {
   addClassMethod(ClockwiseSweepPolygon.prototype, "_drawShadows", _drawShadowsClockwiseSweepPolygon);
   addClassMethod(LightSource.prototype, "_updateEVLightUniforms", _updateEVLightUniformsLightSource);
@@ -97,6 +115,9 @@ export function registerAdditions() {
 
   addClassMethod(VisionSource.prototype, "_createEVMask", _createEVMask);
   addClassMethod(LightSource.prototype, "_createEVMask", _createEVMask);
+
+  addClassGetter(Tile.prototype, "evPixelCache", getEVPixelCacheTile);
+  addClassMethod(Tile.prototype, "_evPixelCache", undefined);
 
   if ( MODULES_ACTIVE.PERFECT_VISION ) shaderPVAdditions();
   else shaderAdditions();
