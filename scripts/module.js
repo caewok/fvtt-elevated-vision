@@ -31,13 +31,16 @@ import { registerGeometry } from "./geometry/registration.js";
 import { ElevationLayer } from "./ElevationLayer.js";
 
 // Settings, to toggle whether to change elevation on token move
-import { SETTINGS, getSetting, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
+import { SETTINGS, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
 
 import { updateFlyTokenControl } from "./scenes.js";
 
 // Hooks
 import { preUpdateTokenHook, refreshTokenHook } from "./tokens.js";
 import { updateTileHook } from "./tiles.js";
+import {
+  initializeLightSourceShadersHook,
+  initializeVisionSourceShadersHook } from "./rendered_point_sources.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -47,6 +50,8 @@ import "./controls.js";
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
+  CONFIG.debug.hooks = true;
+
 
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
@@ -168,7 +173,7 @@ Hooks.on("canvasReady", function() {
   canvas.elevation.initialize();
 });
 
-Hooks.on("3DCanvasSceneReady", function(previewArr) {
+Hooks.on("3DCanvasSceneReady", function(_previewArr) {
   disableScene();
 });
 
@@ -190,6 +195,7 @@ async function disableScene() {
   if ( shadowsDisabled ) {
     await setSceneSetting(SETTINGS.SHADING.ALGORITHM, SETTINGS.SHADING.TYPES.NONE);
     registerShadowPatches();
+    // Looks like we don't need to redraw the scene?
     // await canvas.draw(canvas.scene);
   }
 
@@ -212,3 +218,6 @@ Hooks.on("preUpdateToken", preUpdateTokenHook);
 Hooks.on("refreshToken", refreshTokenHook);
 
 Hooks.on("updateTile", updateTileHook);
+
+Hooks.on("initializeVisionSourceShaders", initializeVisionSourceShadersHook);
+Hooks.on("initializeLightSourceShaders", initializeLightSourceShadersHook);

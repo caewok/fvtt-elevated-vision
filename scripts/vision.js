@@ -3,9 +3,7 @@ canvas,
 GlobalLightSource,
 FogManager,
 game,
-PIXI,
-PolygonMesher,
-PointSource
+PIXI
 */
 "use strict";
 
@@ -126,51 +124,6 @@ export function createVisionCanvasVisionMaskPV(wrapper) {
   return vision;
 }
 
-
-/**
- * Wrap VisionSource.prototype._updateLosGeometry
- * Add simple geometry for using ShadowShader without a radius
- */
-export function _updateLosGeometryVisionSource(wrapped, polygon) {
-  wrapped(polygon);
-
-  this._EV_geometry = {}
-
-  // LOS
-  const los_vertices = this.los.points;
-  const los_indices = PIXI.utils.earcut(los_vertices);
-  this._EV_geometry.los = new PIXI.Geometry()
-      .addAttribute("aVertexPosition", los_vertices, 2)
-      .addAttribute("aTextureCoord", [], 2)
-      .addIndex(los_indices);
-
-  // FOV
-  const fov_vertices = this.fov.points;
-  const fov_indices = PIXI.utils.earcut(fov_vertices);
-  this._EV_geometry.fov = new PIXI.Geometry()
-      .addAttribute("aVertexPosition", fov_vertices, 2)
-      .addAttribute("aTextureCoord", [], 2)
-      .addIndex(fov_indices);
-}
-
-/**
- * Wrap LightSource.prototype._updateLosGeometry
- * Add simple geometry for using ShadowShader without a radius
- */
-export function _updateLosGeometryLightSource(wrapped, polygon) {
-  wrapped(polygon);
-
-  this._EV_geometry = {}
-
-  // LOS
-  const los_vertices = this.los.points;
-  const los_indices = PIXI.utils.earcut(los_vertices);
-  this._EV_geometry.los = new PIXI.Geometry()
-      .addAttribute("aVertexPosition", los_vertices, 2)
-      .addAttribute("aTextureCoord", [], 2)
-      .addIndex(los_indices);
-}
-
 export function _createEVMeshVisionSource(type = "los") {
   const mesh = this._createMesh(ShadowShaderNoRadius);
   mesh.geometry = this._EV_geometry[type];
@@ -208,11 +161,6 @@ export function _createEVMeshLightSourcePV() {
  */
 export function _createEVMask(type = "los") {
   const mesh = this._createEVMesh(type);
-
-//   const shader = mesh.shader;
-//   shader.texture = this.texture ?? PIXI.Texture.WHITE;
-//   shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
-//   shader.alphaThreshold = 0.75;
 
   mesh.shader.updateUniforms(this);
 
