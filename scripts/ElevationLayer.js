@@ -383,8 +383,8 @@ export class ElevationLayer extends InteractionLayer {
     // const b = value - 255;
 
     log(`elevationHex elevation ${elevation}, value ${value}`);
-
-    return PIXI.utils.rgb2hex([value / this.#maximumPixelValue, 0, 0]);
+    const c = new PIXI.Color([value / this.#maximumPixelValue, 0, 0]);
+    return c.toNumber();
   }
 
   /**
@@ -1266,7 +1266,7 @@ export class ElevationLayer extends InteractionLayer {
    * @param {PIXI.InteractionEvent} event
    */
   _onClickLeft(event) {
-    const o = event.data.origin;
+    const o = event.interactionData.origin;
     const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
 
