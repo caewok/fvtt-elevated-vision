@@ -478,8 +478,8 @@ export function _updateEVLightUniformsLightSource(shader) {
   const source = this;
   const { width, height } = canvas.dimensions;
 
-  let heightWalls = this.los?._elevatedvision?.heightWalls || new Set();
-  let terrainWalls = this.los?._elevatedvision?.terrainWalls || new Set();
+  let heightWalls = this.shape?._elevatedvision?.heightWalls || new Set();
+  let terrainWalls = this.shape?._elevatedvision?.terrainWalls || new Set();
   const r_inv = 1 / radius;
 
   // Sort the walls from distance to the origin point
