@@ -4,7 +4,6 @@ ui,
 canvas,
 PIXI,
 mergeObject,
-FullCanvasContainer,
 AbstractBaseFilter,
 saveDataToFile,
 Dialog,
@@ -64,6 +63,13 @@ On canvas:
 - Elevation indicated as shaded color going from red (low) to blue (high)
 - Solid lines representing walls of different heights. Near white for infinite.
 */
+
+// TODO: What should replace this now that FullCanvasContainer is deprecated in v11?
+class FullCanvasContainer extends FullCanvasObjectMixin(PIXI.Container) {
+  constructor(...args) {
+    super(...args);
+  }
+}
 
 export class ElevationLayer extends InteractionLayer {
   constructor() {
