@@ -35,9 +35,11 @@ import { SETTINGS, getSetting, registerSettings, getSceneSetting, setSceneSettin
 
 import { updateFlyTokenControl } from "./scenes.js";
 
+// Hooks
+import { preUpdateTokenHook, refreshTokenHook } from "./tokens.js";
+
 // Other self-executing hooks
 import "./changelog.js";
-import "./tokens.js";
 import "./renderConfig.js";
 import "./controls.js";
 import "./tiles.js";
@@ -219,3 +221,6 @@ Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
 function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
+
+Hooks.on("preUpdateToken", preUpdateTokenHook);
+Hooks.on("refreshToken", refreshTokenHook);
