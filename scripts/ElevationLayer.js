@@ -146,7 +146,7 @@ export class ElevationLayer extends InteractionLayer {
    * adjustments by the GM to the scene elevation.
    * @type {PIXI.Sprite}
    */
-  _backgroundElevation = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
+  _backgroundElevation = PIXI.Sprite.from(PIXI.Texture.EMPTY);
 
   /**
    * Container to hold the current graphics objects representing elevation.
@@ -1162,7 +1162,7 @@ export class ElevationLayer extends InteractionLayer {
   #destroy() {
     this._clearElevationPixelCache();
     this._backgroundElevation.destroy();
-    this._backgroundElevation = new PIXI.Sprite.from(PIXI.Texture.EMPTY);
+    this._backgroundElevation = PIXI.Sprite.from(PIXI.Texture.EMPTY);
 
     this._graphicsContainer.destroy({children: true});
     this._graphicsContainer = new PIXI.Container();
