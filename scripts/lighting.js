@@ -659,9 +659,8 @@ export function _createPolygonLightSource(wrapped) {
   // TO-DO: Only reset uniforms if:
   // 1. there are shadows
   // 2. there were previously shadows but are now none
-
-  this._resetUniforms.illumination = true;
-  this._resetUniforms.coloration = true;
+  this._updateIlluminationUniforms();
+  this._updateColorationUniforms();
 
   return los;
 }
