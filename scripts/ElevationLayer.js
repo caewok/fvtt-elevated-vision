@@ -1,20 +1,20 @@
 /* globals
-InteractionLayer,
-ui,
-canvas,
-PIXI,
-mergeObject,
 AbstractBaseFilter,
-saveDataToFile,
-Dialog,
-renderTemplate,
-game,
-isEmpty,
-PolygonVertex,
+canvas,
 CONFIG,
-Ray,
+Dialog,
+FullCanvasObjectMixin,
+game,
+InteractionLayer,
+isEmpty,
+mergeObject,
+PIXI,
+PolygonVertex,
 PreciseText,
-isNewerVersion
+Ray,
+renderTemplate,
+saveDataToFile,
+ui,
 */
 "use strict";
 
@@ -105,20 +105,17 @@ export class ElevationLayer extends InteractionLayer {
       || !canvas.elevation.active
       || !this.elevationLabel ) return;
 
-    // Extract event data
-    let moveTime = event.now;
-    this.elevationLabel.visible = false;
+    // Get the canvas position of the mouse pointer.
     const pos = event.getLocalPosition(canvas.app.stage);
+    if ( !canvas.dimensions.sceneRect.contains(pos.x, pos.y) ) {
+      this.elevationLabel.visible = false;
+      return;
+    }
 
-    setTimeout(() => {
-      if ( (Date.now() - moveTime) < this._HOVER_DELAY ) return;
-
-      // For debugging: console.log(`Mouse at ${pos.x},${pos.y}`);
-      this.updateElevationLabel(pos);
-      this.elevationLabel.visible = true;
-    }, this._HOVER_DELAY);
+    // Update the numeric label with the elevation at this position.
+    this.updateElevationLabel(pos);
+    this.elevationLabel.visible = true;
   }
-
 
   _activateHoverListener() {
     log("activatingHoverListener");
