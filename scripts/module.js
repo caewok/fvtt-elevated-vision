@@ -65,13 +65,6 @@ Hooks.once("init", function() {
 
     /**
      * ElevationLayer.
-     * Delay in milliseconds before displaying elevation values in the layer.
-     * @type {number}
-     */
-    hoverDelay: 500,
-
-    /**
-     * ElevationLayer.
      * Maximum texture size used to represent elevation values.
      * @type {number}
      */

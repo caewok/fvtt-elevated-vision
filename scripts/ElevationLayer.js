@@ -90,12 +90,6 @@ export class ElevationLayer extends InteractionLayer {
   CoordinateElevationCalculator = CoordinateElevationCalculator;
 
   /**
-   * Delay in milliseconds before displaying elevation value when mouse hovers.
-   * @type {number}
-   */
-  _HOVER_DELAY = CONFIG[MODULE_ID]?.hoverDelay ?? 500;
-
-  /**
    * Activate a listener to display elevation values when the mouse hovers over an area
    * of the canvas in the elevation layer.
    * See Ruler.prototype._onMouseMove
