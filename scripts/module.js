@@ -50,7 +50,7 @@ import "./controls.js";
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
-  CONFIG.debug.hooks = true;
+  // CONFIG.debug.hooks = true;
 
 
   // Set CONFIGS used by this module.

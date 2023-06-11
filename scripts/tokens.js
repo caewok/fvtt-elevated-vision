@@ -145,26 +145,28 @@ export function preUpdateTokenHook(tokenD, changes, _options, _userId) {
 export function refreshTokenHook(token, flags) {
   if ( !flags.refreshPosition ) return;
   if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
-  const ev = this._elevatedVision;
+  log(`EV refreshToken for ${token.name} at ${token.position.x},${token.position.y}. Token is ${token._original ? "Clone" : "Original"}. Token is ${token._animation ? "" : "not "}animating.`);
+  const ev = token._elevatedVision;
   if ( !ev || !ev.tokenAdjustElevation ) return;
+  log("EV refreshToken ev data present.");
 
-  if ( this._original ) {
+  if ( token._original ) {
     // This token is a clone in a drag operation.
     // Adjust elevation of the clone by calculating the elevation from origin to line.
     const { startPosition, startElevation, te } = ev;
 
     // Update the previous travel ray
-    te.travelRay = new Ray(startPosition, this.center);
+    te.travelRay = new Ray(startPosition, token.center);
     // Determine the new final elevation.
     const finalElevation = te.calculateFinalElevation(startElevation);
     log(`Token clone: {x: ${te.travelRay.A.x}, y: ${te.travelRay.A.y}, e: ${startElevation} } --> {x: ${te.travelRay.B.x}, y: ${te.travelRay.B.y}, e: ${finalElevation} }`, te);
-    this.document.elevation = finalElevation;
+    token.document.elevation = finalElevation;
     return;
   }
 
-  if ( this._animation ) {
+  if ( token._animation ) {
     // Adjust the elevation as the token is moved by locating where we are on the travel ray.
-    const tokenCenter = this.center;
+    const tokenCenter = token.center;
     const { travelRay, elevationChanges } = ev.travel;
     const currT = travelRay.tConversion(tokenCenter);
     const ln = elevationChanges.length;
@@ -184,9 +186,13 @@ export function refreshTokenHook(token, flags) {
       change.currE = tec.terrainElevation();
     }
     //options.elevation ||= this.document.elevation !== change.currE;
+    if ( token.document.elevation !== change.currE ) {
+      token.document.updateSource({ elevation: change.currE });
+      token.renderFlags.set({refreshElevation: true});
+    }
 
-    this.document.elevation = change.currE;
-    log(`{x: ${tokenCenter.x}, y: ${tokenCenter.y}, e: ${change.currE} }`, ev.travel);
+    // token.document.elevation = change.currE;
+    log(`Token Original: {x: ${tokenCenter.x}, y: ${tokenCenter.y}, e: ${change.currE} }`, ev.travel);
   }
 }
 
