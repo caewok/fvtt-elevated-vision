@@ -31,7 +31,7 @@ import {
 } from "./lighting.js";
 
 import {
-  refreshCanvasVisibilityPolygons,
+  drawShapePIXIGraphics,
   refreshCanvasVisibilityShader,
 
   _createEVMask,
@@ -202,14 +202,15 @@ export function registerShadowPatches() {
 
   // ----- Drawing shadows for vision source LOS, fog  ----- //
   const use_shader = shaderAlgorithm === TYPES.WEBGL;
-  const shader_choice = use_shader;
+  const shader_choice = Number(use_shader);
 
   switch ( shader_choice ) {
     case SHADER_SWITCH.NO_SHADER:
-      shaderOverride("CanvasVisibility.prototype.refresh", refreshCanvasVisibilityPolygons, { perf_mode: libWrapper.PERF_FAST });
+      shaderWrap("PIXI.LegacyGraphics.prototype.drawShape", drawShapePIXIGraphics, { perf_mode: libWrapper.PERF_FAST });
+      // shaderOverride("CanvasVisibility.prototype.refreshVisibility", refreshVisibilityCanvasVisibilityPolygons, { perf_mode: libWrapper.PERF_FAST });
       break;
     case SHADER_SWITCH.SHADER:
-      shaderOverride("CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, { type: libWrapper.OVERRIDE, perf_mode: libWrapper.PERF_FAST });
+      // shaderOverride("CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, { type: libWrapper.OVERRIDE, perf_mode: libWrapper.PERF_FAST });
       shaderWrap("LightSource.prototype._createPolygon", _createPolygonLightSource, { perf_mode: libWrapper.PERF_FAST });
       break;
   }
