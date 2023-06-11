@@ -563,7 +563,7 @@ export class ElevationLayer extends InteractionLayer {
       mipmap: PIXI.MIPMAP_MODES.OFF,
       scaleMode: PIXI.SCALE_MODES.NEAREST,
       multisample: PIXI.MSAA_QUALITY.NONE,
-      //format: PIXI.FORMATS.RED
+      format: PIXI.FORMATS.RED
       // Cannot be extracted ( GL_INVALID_OPERATION: Invalid format and type combination)
       // format: PIXI.FORMATS.RED_INTEGER,
       // type: PIXI.TYPES.INT
