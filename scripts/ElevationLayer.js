@@ -145,7 +145,7 @@ export class ElevationLayer extends InteractionLayer {
     const value = this.elevationAt({x, y});
 
     this.elevationLabel.text = value.toString();
-    log(`Updating elevation label at ${x},${y} to ${this.elevationLabel.text}`);
+//     log(`Updating elevation label at ${x},${y} to ${this.elevationLabel.text}`);
     this.elevationLabel.position = {x, y};
   }
 
@@ -370,9 +370,9 @@ export class ElevationLayer extends InteractionLayer {
   /**
    * Color used to store this elevation value.
    * @param {number} elevation  Proposed elevation value. May be corrected by clampElevation.
-   * @return {Hex}
+   * @return {PIXI.Color}
    */
-  elevationHex(elevation) {
+  elevationColor(elevation) {
     const value = this.elevationToPixelValue(elevation);
 
     // Gradient from red (255, 0, 0) to blue (0, 0, 255)
@@ -383,8 +383,7 @@ export class ElevationLayer extends InteractionLayer {
     // const b = value - 255;
 
     log(`elevationHex elevation ${elevation}, value ${value}`);
-    const c = new PIXI.Color([value / this.#maximumPixelValue, 0, 0]);
-    return c.toNumber();
+    return new PIXI.Color([value / this.#maximumPixelValue, 0, 0]);
   }
 
   /**
@@ -564,7 +563,7 @@ export class ElevationLayer extends InteractionLayer {
       mipmap: PIXI.MIPMAP_MODES.OFF,
       scaleMode: PIXI.SCALE_MODES.NEAREST,
       multisample: PIXI.MSAA_QUALITY.NONE,
-      format: PIXI.FORMATS.RED
+      //format: PIXI.FORMATS.RED
       // Cannot be extracted ( GL_INVALID_OPERATION: Invalid format and type combination)
       // format: PIXI.FORMATS.RED_INTEGER,
       // type: PIXI.TYPES.INT
@@ -919,9 +918,9 @@ export class ElevationLayer extends InteractionLayer {
   setElevationForGridSpace(p, elevation = 0, { temporary = false, useHex = canvas.grid.isHex } = {}) {
     const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
-    graphics.beginFill(this.elevationHex(elevation), 1.0);
-    graphics.drawShape(shape);
-    graphics.endFill();
+    const draw = new Draw(graphics);
+    const color = this.elevationColor(elevation);
+    draw.shape(shape, { color, fill: color });
 
     this.renderElevation();
 
@@ -978,9 +977,9 @@ export class ElevationLayer extends InteractionLayer {
     const los = CONFIG.Canvas.losBackend.create(origin, { type });
 
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
-    graphics.beginFill(this.elevationHex(elevation), 1.0);
-    graphics.drawPolygon(los);
-    graphics.endFill();
+    const draw = new Draw(graphics);
+    const color = this.elevationColor(elevation);
+    draw.shape(los, { color, width: 0, fill: color });
 
     this.renderElevation();
 
@@ -1035,7 +1034,7 @@ export class ElevationLayer extends InteractionLayer {
 
     // Create the graphics representing the fill!
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
-    drawPolygonWithHoles(polys, { graphics, fillColor: this.elevationHex(elevation) });
+    drawPolygonWithHoles(polys, { graphics, fillColor: this.elevationColor(elevation) });
 
     this.renderElevation();
 
@@ -1191,7 +1190,7 @@ export class ElevationLayer extends InteractionLayer {
   renderElevation() {
     const dims = canvas.dimensions;
     const transform = new PIXI.Matrix(1, 0, 0, 1, -dims.sceneX, -dims.sceneY);
-    canvas.app.renderer.render(this._graphicsContainer, this._elevationTexture, undefined, transform);
+    canvas.app.renderer.render(this._graphicsContainer, { renderTexture: this._elevationTexture, transform });
 
     // Destroy the cache
     this.#elevationPixelCache = undefined;
@@ -1296,7 +1295,7 @@ export class ElevationLayer extends InteractionLayer {
    * - fill-by-grid: keep a temporary set of left corner grid locations and draw the grid
    */
   _onDragLeftStart(event) {
-    const o = event.data.origin;
+    const o = event.interactionData.origin;
     const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
     log(`dragLeftStart at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
@@ -1315,8 +1314,8 @@ export class ElevationLayer extends InteractionLayer {
    * - fill-by-grid: If new grid space, add.
    */
   _onDragLeftMove(event) {
-    const o = event.data.origin;
-    const d = event.data.destination;
+    const o = event.interactionData.origin;
+    const d = event.interactionData.destination;
     const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
 
@@ -1337,8 +1336,8 @@ export class ElevationLayer extends InteractionLayer {
    * User commits the drag
    */
   _onDragLeftDrop(event) {
-    const o = event.data.origin;
-    const d = event.data.destination;
+    const o = event.interactionData.origin;
+    const d = event.interactionData.destination;
     const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
     log(`dragLeftDrop at ${o.x}, ${o.y} to ${d.x},${d.y} with tool ${activeTool} and elevation ${currE}`, event);
@@ -1382,7 +1381,7 @@ export class ElevationLayer extends InteractionLayer {
    * User scrolls the mouse wheel. Currently does nothing in response.
    */
   _onMouseWheel(event) {
-    const o = event.data.origin;
+    const o = event.interactionData.origin;
     const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
     log(`mouseWheel at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
@@ -1392,7 +1391,7 @@ export class ElevationLayer extends InteractionLayer {
    * User hits delete key. Currently not triggered (at least on this M1 Mac).
    */
   async _onDeleteKey(event) {
-    const o = event.data.origin;
+    const o = event.interactionData.origin;
     const activeTool = game.activeTool;
     const currE = this.controls.currentElevation;
     log(`deleteKey at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
@@ -1471,5 +1470,52 @@ class ElevationFilter extends AbstractBaseFilter {
     this.uniforms.canvasMatrix.translate(-sceneX, -sceneY);
     return super.apply(filterManager, input, output, clear, currentState);
   }
-
 }
+
+// NOTE: Testing elevation texture pixels
+/*
+api = game.modules.get("elevatedvision").api
+extractPixels = api.extract.extractPixels
+
+let { pixels, width, height } = extractPixels(canvas.app.renderer, canvas.elevation._elevationTexture)
+
+filterPixelsByChannel = function(pixels, channel = 0, numChannels = 4) {
+  if ( numChannels === 1 ) return;
+  if ( channel < 0 || numChannels < 0 ) {
+    console.error("channels and numChannels must be greater than 0.");
+  }
+  if ( channel >= numChannels ) {
+    console.error("channel must be less than numChannels. (First channel is 0.)");
+  }
+
+  const numPixels = pixels.length;
+  const filteredPixels = new Array(Math.floor(numPixels / numChannels));
+  for ( let i = channel, j = 0; i < numPixels; i += numChannels, j += 1 ) {
+    filteredPixels[j] = pixels[i];
+  }
+  return filteredPixels;
+}
+
+
+pixelRange = function(pixels) {
+  const out = {
+    min: pixels.reduce((acc, curr) => Math.min(curr, acc), Number.POSITIVE_INFINITY),
+    max: pixels.reduce((acc, curr) => Math.max(curr, acc), Number.NEGATIVE_INFINITY)
+  };
+
+  out.nextMin = pixels.reduce((acc, curr) => curr > out.min ? Math.min(curr, acc) : acc, Number.POSITIVE_INFINITY);
+  out.nextMax = pixels.reduce((acc, curr) => curr < out.max ? Math.max(curr, acc) : acc, Number.NEGATIVE_INFINITY);
+  return out;
+}
+uniquePixels = function(pixels) {
+  s = new Set();
+  pixels.forEach(px => s.add(px))
+  return s;
+}
+
+countPixels = function(pixels, value) {
+  let sum = 0;
+  pixels.forEach(px => sum += px === value);
+  return sum;
+}
+*/
