@@ -965,7 +965,7 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
   fillLOS(origin, elevation = 0, { type = "light"} = {}) {
-    const los = CONFIG.Canvas.losBackend.create(origin, { type });
+    const los = CONFIG.Canvas.polygonBackends[type].create(origin, { type });
 
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     const draw = new Draw(graphics);
