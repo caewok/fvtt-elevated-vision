@@ -14,7 +14,6 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 import { Plane } from "./geometry/3d/Plane.js";
 import { SETTINGS, getSceneSetting } from "./settings.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
-import { MODULE_ID } from "./const.js";
 
 /**
  * Wrap ClockwisePolygonSweep.prototype._identifyEdges
@@ -89,7 +88,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   });
 
 
-  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
+  // if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
 
   // TODO: Fix below b/c POLYGONS is only algorithm left.
 
@@ -150,6 +149,8 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   // We want one or more LOS polygons along with non-overlapping holes.
   this._elevatedvision.combinedShadows = combineBoundaryPolygonWithHoles(this, this._elevatedvision.shadows);
 
+  // Trigger so that PIXI.Graphics.drawShape draws the holes.
+  if ( this._elevatedvision.combinedShadows.length ) this._evPolygons = this._elevatedvision.combinedShadows;
 }
 
 /**

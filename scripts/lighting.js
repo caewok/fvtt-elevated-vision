@@ -1,8 +1,7 @@
 /* globals
-GlobalLightSource,
 canvas,
-PIXI,
-CONFIG
+CONFIG,
+PIXI
 */
 "use strict";
 
@@ -10,7 +9,6 @@ import { MODULE_ID } from "./const.js";
 import { SETTINGS, getSceneSetting } from "./settings.js";
 import { log } from "./util.js";
 import { ShaderPatcher, applyPatches } from "./perfect-vision/shader-patcher.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
 
 /** To test a light
 drawing = game.modules.get("elevatedvision").api.drawing
@@ -369,7 +367,7 @@ function addShadowCode(source) {
 const originalFragmentSource = new Map();
 
 /**
- * Wrap AdaptiveLightShader.prototype.create
+ * Wrap AdaptiveLightShader.create
  * Modify the code to add shadow depth based on background elevation and walls
  * Add uniforms used by the fragment shader to draw shadows in the color and illumination shaders.
  */
@@ -378,10 +376,10 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
 
   if ( !originalFragmentSource.has(this.name) ) originalFragmentSource.set(this.name, this.fragmentShader);
   const shaderAlgorithm = getSceneSetting(SETTINGS.SHADING.ALGORITHM);
-  if ( shaderAlgorithm !== SETTINGS.SHADING.TYPES.WEBGL ) {
+  //if ( shaderAlgorithm !== SETTINGS.SHADING.TYPES.WEBGL ) {
     this.fragmentShader = originalFragmentSource.get(this.name);
     return wrapped(...args);
-  }
+  //}
 
   applyPatches(this,
     false,
@@ -440,214 +438,6 @@ So Oe becomes Oe - pixelE. We = We - pixelE.
 */
 
 /**
- * Wrap LightSource.prototype._updateColorationUniforms.
- * Add uniforms needed for the shadow fragment shader.
- */
-export function _updateColorationUniformsLightSource(wrapped) {
-  wrapped();
-  if ( this instanceof GlobalLightSource ) return;
-  this._updateEVLightUniforms(this.coloration);
-}
-
-/**
- * Wrap LightSource.prototype._updateIlluminationUniforms.
- * Add uniforms needed for the shadow fragment shader.
- */
-export function _updateIlluminationUniformsLightSource(wrapped) {
-  wrapped();
-  if ( this instanceof GlobalLightSource ) return;
-  this._updateEVLightUniforms(this.illumination);
-}
-
-/**
- * Helper function to add uniforms for the light shaders.
- * Add:
- * - elevation of the light
- * - number of walls that are in the LOS and below the light source elevation
- * For each wall that is below the light source, add
- *   (in the coordinate system used in the shader):
- * - wall coordinates
- * - wall elevations
- * - distance between the wall and the light source center
- * @param {PIXI.Shader} shader
- */
-export function _updateEVLightUniformsLightSource(mesh) {
-  const shader = mesh.shader;
-  const { x, y, radius, elevationZ } = this;
-  const source = this;
-  const { width, height } = canvas.dimensions;
-
-  let heightWalls = this.los._elevatedvision?.heightWalls || new Set();
-  let terrainWalls = this.los._elevatedvision?.terrainWalls || new Set();
-  const r_inv = 1 / radius;
-
-  // Sort the walls from distance to the origin point
-  // This should help when the maximum wall limit is reached.
-  const originPt = {x, y};
-  heightWalls = [...heightWalls];
-  terrainWalls = [...terrainWalls];
-
-  heightWalls.forEach(w => {
-    const pt = foundry.utils.closestPointToSegment(originPt, w.A, w.B);
-    w._distance2 = PIXI.Point.distanceSquaredBetween(originPt, pt);
-  });
-  terrainWalls.forEach(w => {
-    const pt = foundry.utils.closestPointToSegment(originPt, w.A, w.B);
-    w._distance2 = PIXI.Point.distanceSquaredBetween(originPt, pt);
-  });
-
-  heightWalls.sort((a, b) => a._distance2 - b._distance2);
-  terrainWalls.sort((a, b) => a._distance2 - b.distance2);
-
-  // Radius is .5 in the shader coordinates; adjust elevation accordingly
-  const u = shader.uniforms;
-  u.EV_sourceLocation = [0.5, 0.5, elevationZ * 0.5 * r_inv];
-
-  let terrainWallCoords = [];
-  let terrainWallDistances = [];
-  const numWalls = CONFIG[MODULE_ID].numShaderWalls;
-  for ( const w of terrainWalls.slice(0, numWalls) ) {
-    addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source, r_inv);
-  }
-  u.EV_numTerrainWalls = terrainWallDistances.length;
-
-  if ( !terrainWallCoords.length ) terrainWallCoords = [0, 0, 0, 0, 0, 0];
-  if ( !terrainWallDistances.length ) terrainWallDistances = [0];
-
-  u.EV_terrainWallCoords = terrainWallCoords;
-  u.EV_terrainWallDistances = terrainWallDistances;
-
-  let wallCoords = [];
-  let wallDistances = [];
-  for ( const w of heightWalls.slice(0, numWalls) ) {
-    addWallDataToShaderArrays(w, wallDistances, wallCoords, source, r_inv);
-  }
-
-  u.EV_numWalls = wallDistances.length;
-
-  if ( !wallCoords.length ) wallCoords = [0, 0, 0, 0, 0, 0];
-  if ( !wallDistances.length ) wallDistances = [0];
-
-  u.EV_wallCoords = wallCoords;
-  u.EV_wallDistances = wallDistances;
-  u.EV_elevationSampler = canvas.elevation?._elevationTexture;
-
-  // Screen-space to local coords:
-  // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010914586532261909
-  // shader.uniforms.EV_canvasMatrix ??= new PIXI.Matrix();
-  // shader.uniforms.EV_canvasMatrix
-  //   .copyFrom(canvas.stage.worldTransform)
-  //   .invert()
-  //   .append(mesh.transform.worldTransform);
-
-  // Alternative version using vUvs, given that light source mesh have no rotation
-  // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010999752030171136
-  u.EV_transform = [
-    radius * 2 / width,
-    radius * 2 / height,
-    (x - radius) / width,
-    (y - radius) / height];
-
-  /*
-  Elevation of a given pixel from the texture value:
-  texture value in the shader is between 0 and 1. Represents value / maximumPixelValue where
-  maximumPixelValue is currently 255.
-
-  To get to elevation in the light vUvs space:
-  elevationCanvasUnits = (((value * maximumPixelValue * elevationStep) - elevationMin) * size) / distance;
-  elevationLightUnits = elevationCanvasUnits * 0.5 * r_inv;
-  = (((value * maximumPixelValue * elevationStep) - elevationMin) * size) * inv_distance * 0.5 * r_inv;
-  */
-
-  // [min, step, maxPixelValue ]
-  if ( !u.EV_elevationSampler ) {
-    u.EV_elevationSampler = PIXI.Texture.EMPTY;
-    u.EV_hasElevationSampler = false;
-  } else {
-    const { elevationMin, elevationStep, maximumPixelValue} = canvas.elevation;
-    const { distance, size } = canvas.scene.grid;
-    const elevationMult = size * (1 / distance) * 0.5 * r_inv;
-    u.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
-    u.EV_hasElevationSampler = true;
-  }
-
-  // Convert scene rectangle to local light coordinates
-  const sceneRect = canvas.dimensions.sceneRect;
-  const sceneLeft = circleCoord(sceneRect.left, radius, x, r_inv);
-  const sceneRight = circleCoord(sceneRect.right, radius, x, r_inv);
-  const sceneTop = circleCoord(sceneRect.top, radius, y, r_inv);
-  const sceneBottom = circleCoord(sceneRect.bottom, radius, y, r_inv);
-  u.EV_sceneDims = [sceneLeft, sceneTop, sceneRight - sceneLeft, sceneBottom - sceneTop];
-}
-
-function addWallDataToShaderArrays(w, wallDistances, wallCoords, source, r_inv = 1 / source.radius) {
-  // Because walls are rectangular, we can pass the top-left and bottom-right corners
-  const { x, y, radius } = source;
-  const center = {x, y};
-
-  const wallPoints = Point3d.fromWall(w, { finite: true });
-
-  const a = pointCircleCoord(wallPoints.A.top, radius, center, r_inv);
-  const b = pointCircleCoord(wallPoints.B.bottom, radius, center, r_inv);
-
-  // Point where line from light, perpendicular to wall, intersects
-  const center_shader = {x: 0.5, y: 0.5};
-  const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center_shader);
-  if ( !wallIx ) return; // Likely a and b not proper wall
-  const wallOriginDist = PIXI.Point.distanceBetween(center_shader, wallIx);
-  wallDistances.push(wallOriginDist);
-
-  wallCoords.push(a.x, a.y, a.z, b.x, b.y, b.z);
-}
-
-/**
- * Transform a point coordinate to be in relation to a circle center and radius.
- * Between 0 and 1 where [0.5, 0.5] is the center
- * [0, .5] is at the edge in the westerly direction.
- * [1, .5] is the edge in the easterly direction
- * @param {Point} point
- * @param {Point} center
- * @param {number} r      Radius
- * @param {number} r_inv  Inverse of the radius. Optional; for repeated calcs.
- * @returns {Point}
- */
-export function pointCircleCoord(point, r, center, r_inv = 1 / r) {
-  return {
-    x: circleCoord(point.x, r, center.x, r_inv),
-    y: circleCoord(point.y, r, center.y, r_inv),
-    z: point.z * 0.5 * r_inv
-  };
-}
-
-/**
- * Transform a coordinate to be in relation to a circle center and radius.
- * Between 0 and 1 where [0.5, 0.5] is the center.
- * @param {number} a    Coordinate value
- * @param {number} c    Center value, along the axis of interest
- * @param {number} r    Light circle radius
- * @param {number} r_inv  Inverse of the radius. Optional; for repeated calcs.
- * @returns {number}
- */
-function circleCoord(a, r, c = 0, r_inv = 1 / r) {
-  return ((a - c) * r_inv * 0.5) + 0.5;
-}
-
-/**
- * Inverse of circleCoord.
- * @param {number} p    Coordinate value, in the shader coordinate system between 0 and 1.
- * @param {number} c    Center value, along the axis of interest
- * @param {number} r    Radius
- * @returns {number}
- */
-function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-vars
-  // ((a - c) * 1/r * 0.5) + 0.5 = p
-  // (a - c) * 1/r = (p - 0.5) / 0.5
-  // a - c = 2 * (p - 0.5) / 1/r = 2 * (p - 0.5) * r
-  // a = 2 * (p - 0.5) * r + c
-  return ((p - 0.5) * r * 2) + c;
-}
-
-/**
  * Wrap LightSource.prototype._createLOS.
  * Trigger an update to the illumination and coloration uniforms, so that
  * the light reflects the current shadow positions when dragged.
@@ -659,9 +449,8 @@ export function _createPolygonLightSource(wrapped) {
   // TO-DO: Only reset uniforms if:
   // 1. there are shadows
   // 2. there were previously shadows but are now none
-
-  this._resetUniforms.illumination = true;
-  this._resetUniforms.coloration = true;
+  this._updateIlluminationUniforms();
+  this._updateColorationUniforms();
 
   return los;
 }

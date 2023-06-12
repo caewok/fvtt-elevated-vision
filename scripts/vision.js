@@ -3,95 +3,143 @@ canvas,
 GlobalLightSource,
 FogManager,
 game,
-PIXI,
-PolygonMesher,
-PointSource
+PIXI
 */
 "use strict";
 
-import { drawPolygonWithHoles, drawPolygonWithHolesPV } from "./util.js";
+import { drawPolygonWithHolesPV } from "./util.js";
 import { ShadowShader } from "./ShadowShader.js";
 import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
+import { getSceneSetting, SETTINGS } from "./settings.js";
+
+// NOTE: Polygon and Shader methods
 
 /**
- * Override CanvasVisionMask.prototype.refresh
- * This version draws the FOV and LOS polygons with holes, which creates shadows for
- * walls below the source, but does not (a) make higher terrain in the shadow visible or
- * (b) shadow terrain higher than the viewer.
+ * Wrap PIXI.Graphics.drawShape.
+ * If passed a polygon with an array of polygons property, use that to draw with holes.
  */
-export function refreshCanvasVisibilityPolygons({forceUpdateFog=false}={}) {
-  if ( !this.initialized ) return;
-  if ( !this.tokenVision ) {
-    this.visible = false;
-    return this.restrictVisibility();
+export function drawShapePIXIGraphics(wrapped, shape) {
+  if ( !(shape instanceof ClockwiseSweepPolygon) ) return wrapped(shape);
+
+  const { ALGORITHM, TYPES } = SETTINGS.SHADING;
+  const shaderAlgorithm = getSceneSetting(ALGORITHM) ?? TYPES.NONE;
+  if ( (shaderAlgorithm === TYPES.POLYGONS ||  shaderAlgorithm === TYPES.WEBGL) && Object.hasOwn(shape, "_evPolygons") ) {
+    for ( const poly of shape._evPolygons ) {
+      if ( poly.isHole ) {
+        this.beginHole();
+        this.drawShape(poly);
+        this.endHole();
+      } else this.drawShape(poly);
+    }
+  } else {
+    return wrapped(shape);
   }
 
-  // Stage the priorVision vision container to be saved to the FOW texture
-  let commitFog = false;
-  const priorVision = canvas.masks.vision.detachVision();
-  if ( priorVision._explored ) {
-    this.pending.addChild(priorVision);
-    commitFog = this.pending.children.length >= FogManager.COMMIT_THRESHOLD;
-  }
-  else priorVision.destroy({children: true});
-
-  // Create a new vision for this frame
-  const vision = canvas.masks.vision.createVision();
-
-  // Draw field-of-vision for lighting sources
-  for ( let lightSource of canvas.effects.lightSources ) {
-    if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
-    const shadows = lightSource.los._elevatedvision?.combinedShadows || [];
-    if ( shadows.length ) {
-      drawPolygonWithHoles(shadows, { graphics: vision.fov });
-    } else {
-      vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
-    }
-
-    if ( lightSource.data.vision ) {
-      if ( shadows.length ) {
-        drawPolygonWithHoles(shadows, { graphics: vision.los });
-      } else {
-        vision.los.beginFill(0xFFFFFF, 1.0).drawShape(lightSource.los).endFill();
-      }
-    }
-  }
-
-  // Draw sight-based visibility for each vision source
-  for ( let visionSource of canvas.effects.visionSources ) {
-    visionSource.active = true;
-    const shadows = visionSource.los._elevatedvision?.combinedShadows || [];
-
-    // Draw FOV polygon or provide some baseline visibility of the token's space
-    if ( visionSource.radius > 0 ) {
-      vision.fov.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.fov).endFill();
-    } else {
-      const baseR = canvas.dimensions.size / 2;
-      vision.base.beginFill(0xFFFFFF, 1.0).drawCircle(visionSource.x, visionSource.y, baseR).endFill();
-    }
-
-    // Draw LOS mask
-    if ( shadows.length ) {
-      drawPolygonWithHoles(shadows, { graphics: vision.los });
-    } else {
-      vision.los.beginFill(0xFFFFFF, 1.0).drawShape(visionSource.los).endFill();
-    }
-
-    // Record Fog of war exploration
-    if ( canvas.fog.update(visionSource, forceUpdateFog) ) vision._explored = true;
-  }
-
-
-  // Commit updates to the Fog of War texture
-  if ( commitFog ) canvas.fog.commit();
-
-  // Alter visibility of the vision layer
-  this.visible = canvas.effects.visionSources.size || !game.user.isGM;
-
-  // Restrict the visibility of other canvas objects
-  this.restrictVisibility();
+  return this;
 }
 
+
+// NOTE: Shader methods
+
+/**
+ * Create an EV shadow mask of the LOS polygon.
+ * @returns {PIXI.Mesh}
+ */
+export function _createEVMask(type = "los") {
+  const mesh = this._createEVMesh(type);
+  mesh.shader.updateUniforms(this);
+  return mesh;
+}
+
+
+export function _createEVMeshVisionSource(type = "los") {
+  const mesh = _createMesh(ShadowShaderNoRadius, this._EV_geometry[type]);
+  return mesh;
+}
+
+export function _createEVMeshLightSource() {
+  const mesh = _createMesh(ShadowShaderNoRadius, this._EV_geometry.los);
+  return mesh;
+}
+
+function _createMesh(shaderCls, geometry) {
+  const state = new PIXI.State();
+  const mesh = new PointSourceMesh(geometry, shaderCls.create(), state);
+  mesh.drawMode = PIXI.DRAW_MODES.TRIANGLES;
+  Object.defineProperty(mesh, "uniforms", {get: () => mesh.shader.uniforms});
+  return mesh;
+}
+
+// export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
+//   if ( !this.initialized ) return;
+//   if ( !this.tokenVision ) {
+//     this.visible = false;
+//     return this.restrictVisibility();
+//   }
+//
+//   // Stage the priorVision vision container to be saved to the FOW texture
+//   let commitFog = false;
+//   const priorVision = canvas.masks.vision.detachVision();
+//   if ( priorVision._explored ) {
+//     this.pending.addChild(priorVision);
+//     commitFog = this.pending.children.length >= FogManager.COMMIT_THRESHOLD;
+//   }
+//   else priorVision.destroy({children: true});
+//
+//   // Create a new vision for this frame
+//   const vision = canvas.masks.vision.createVision();
+//   const fillColor = 0xFF0000;
+//
+//
+//   // Draw field-of-vision for lighting sources
+//   for ( let lightSource of canvas.effects.lightSources ) {
+//     if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
+//
+//     if ( lightSource instanceof GlobalLightSource ) {
+//       // No shadows possible for the global light source
+//       const g = vision.fov.addChild(new PIXI.LegacyGraphics());
+//       g.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
+//       continue;
+//     }
+//
+//     const mask = lightSource._createEVMask();
+//     vision.fov.addChild(mask);
+//
+//     if ( lightSource.data.vision ) {
+//       vision.los.addChild(mask);
+//     }
+//   }
+//
+//   // Draw sight-based visibility for each vision source
+//   for ( let visionSource of canvas.effects.visionSources ) {
+//     visionSource.active = true;
+//
+//     // Draw FOV polygon or provide some baseline visibility of the token's space
+//     if ( visionSource.radius > 0 ) {
+//       vision.fov.addChild(visionSource._createEVMask("fov"));
+//     } else {
+//       const baseR = canvas.dimensions.size / 2;
+//       vision.base.beginFill(fillColor, 1.0).drawCircle(visionSource.x, visionSource.y, baseR).endFill();
+//     }
+//
+//     vision.los.addChild(visionSource._createEVMask("los"));
+//
+//     // Record Fog of war exploration
+//     if ( canvas.fog.update(visionSource, forceUpdateFog) ) vision._explored = true;
+//   }
+//
+//   // Commit updates to the Fog of War texture
+//   if ( commitFog ) canvas.fog.commit();
+//
+//   // Alter visibility of the vision layer
+//   this.visible = canvas.effects.visionSources.size || !game.user.isGM;
+//
+//   // Restrict the visibility of other canvas objects
+//   this.restrictVisibility();
+// }
+
+// NOTE: PerfectVision functions for compatibility
+// TODO: Need to fix this if PV v11 comes out
 
 /**
  * Override for creating vision with polygon shadow holes, compatible with Perfect Vision.
@@ -126,64 +174,6 @@ export function createVisionCanvasVisionMaskPV(wrapper) {
   return vision;
 }
 
-
-/**
- * Wrap VisionSource.prototype._updateLosGeometry
- * Add simple geometry for using ShadowShader without a radius
- */
-export function _updateLosGeometryVisionSource(wrapped, polygon) {
-  wrapped(polygon);
-
-  this._EV_geometry = {}
-
-  // LOS
-  const los_vertices = this.los.points;
-  const los_indices = PIXI.utils.earcut(los_vertices);
-  this._EV_geometry.los = new PIXI.Geometry()
-      .addAttribute("aVertexPosition", los_vertices, 2)
-      .addAttribute("aTextureCoord", [], 2)
-      .addIndex(los_indices);
-
-  // FOV
-  const fov_vertices = this.fov.points;
-  const fov_indices = PIXI.utils.earcut(fov_vertices);
-  this._EV_geometry.fov = new PIXI.Geometry()
-      .addAttribute("aVertexPosition", fov_vertices, 2)
-      .addAttribute("aTextureCoord", [], 2)
-      .addIndex(fov_indices);
-}
-
-/**
- * Wrap LightSource.prototype._updateLosGeometry
- * Add simple geometry for using ShadowShader without a radius
- */
-export function _updateLosGeometryLightSource(wrapped, polygon) {
-  wrapped(polygon);
-
-  this._EV_geometry = {}
-
-  // LOS
-  const los_vertices = this.los.points;
-  const los_indices = PIXI.utils.earcut(los_vertices);
-  this._EV_geometry.los = new PIXI.Geometry()
-      .addAttribute("aVertexPosition", los_vertices, 2)
-      .addAttribute("aTextureCoord", [], 2)
-      .addIndex(los_indices);
-}
-
-export function _createEVMeshVisionSource(type = "los") {
-  const mesh = this._createMesh(ShadowShaderNoRadius);
-  mesh.geometry = this._EV_geometry[type];
-  return mesh;
-}
-
-export function _createEVMeshLightSource() {
-  const mesh = this._createMesh(ShadowShaderNoRadius);
-  mesh.geometry = this._EV_geometry.los;
-  return mesh;
-}
-
-
 export function _createEVMeshVisionSourcePV(type = "los") {
   if ( type === "los" ) {
     const mesh = this._createMesh(ShadowShaderNoRadius);
@@ -196,97 +186,12 @@ export function _createEVMeshVisionSourcePV(type = "los") {
   return mesh;
 }
 
+
 export function _createEVMeshLightSourcePV() {
   const mesh = this._createMesh(ShadowShader);
   mesh.geometry = this._sourceGeometry;
   return mesh;
 }
-
-/**
- * Create an EV shadow mask of the LOS polygon.
- * @returns {PIXI.Mesh}
- */
-export function _createEVMask(type = "los") {
-  const mesh = this._createEVMesh(type);
-
-//   const shader = mesh.shader;
-//   shader.texture = this.texture ?? PIXI.Texture.WHITE;
-//   shader.textureMatrix = this._textureMatrix?.clone() ?? PIXI.Matrix.IDENTITY;
-//   shader.alphaThreshold = 0.75;
-
-  mesh.shader.updateUniforms(this);
-
-  return mesh;
-}
-
-export function refreshCanvasVisibilityShader({forceUpdateFog=false}={}) {
-  if ( !this.initialized ) return;
-  if ( !this.tokenVision ) {
-    this.visible = false;
-    return this.restrictVisibility();
-  }
-
-  // Stage the priorVision vision container to be saved to the FOW texture
-  let commitFog = false;
-  const priorVision = canvas.masks.vision.detachVision();
-  if ( priorVision._explored ) {
-    this.pending.addChild(priorVision);
-    commitFog = this.pending.children.length >= FogManager.COMMIT_THRESHOLD;
-  }
-  else priorVision.destroy({children: true});
-
-  // Create a new vision for this frame
-  const vision = canvas.masks.vision.createVision();
-  const fillColor = 0xFF0000;
-
-
-  // Draw field-of-vision for lighting sources
-  for ( let lightSource of canvas.effects.lightSources ) {
-    if ( !canvas.effects.visionSources.size || !lightSource.active || lightSource.disabled ) continue;
-
-    if ( lightSource instanceof GlobalLightSource ) {
-      // No shadows possible for the global light source
-      const g = vision.fov.addChild(new PIXI.LegacyGraphics());
-      g.beginFill(fillColor, 1.0).drawShape(lightSource.los).endFill();
-      continue;
-    }
-
-    const mask = lightSource._createEVMask();
-    vision.fov.addChild(mask);
-
-    if ( lightSource.data.vision ) {
-      vision.los.addChild(mask);
-    }
-  }
-
-  // Draw sight-based visibility for each vision source
-  for ( let visionSource of canvas.effects.visionSources ) {
-    visionSource.active = true;
-
-    // Draw FOV polygon or provide some baseline visibility of the token's space
-    if ( visionSource.radius > 0 ) {
-      vision.fov.addChild(visionSource._createEVMask("fov"));
-    } else {
-      const baseR = canvas.dimensions.size / 2;
-      vision.base.beginFill(fillColor, 1.0).drawCircle(visionSource.x, visionSource.y, baseR).endFill();
-    }
-
-    vision.los.addChild(visionSource._createEVMask("los"));
-
-    // Record Fog of war exploration
-    if ( canvas.fog.update(visionSource, forceUpdateFog) ) vision._explored = true;
-  }
-
-  // Commit updates to the Fog of War texture
-  if ( commitFog ) canvas.fog.commit();
-
-  // Alter visibility of the vision layer
-  this.visible = canvas.effects.visionSources.size || !game.user.isGM;
-
-  // Restrict the visibility of other canvas objects
-  this.restrictVisibility();
-}
-
 
 /**
  * Override VisionSource.prototype._createMask

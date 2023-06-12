@@ -1,14 +1,13 @@
 /* globals
-PIXI,
-canvas,
+CONFIG,
 foundry,
-CONFIG
+PIXI
 */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
 import { FRAGMENT_FUNCTIONS } from "./lighting.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
+import { shadowUniforms } from "./shader_uniforms.js";
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
 // const MAX_NUM_WALLS = 100;
@@ -170,7 +169,7 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
 `
   #define MAX_NUM_WALLS ${CONFIG[MODULE_ID].maxShaderWalls}
   #define MAX_NUM_WALL_ENDPOINTS ${CONFIG[MODULE_ID].maxShaderWalls * 2}
-`
+`;
     const fShader = defines + ShadowShaderNoRadius.fragmentShader;
 
     const program = ShadowShaderNoRadius.#program ??= PIXI.Program.from(
@@ -236,101 +235,6 @@ export class ShadowShaderNoRadius extends PIXI.Shader {
 
 
   updateUniforms(source) {
-    const uniforms = this.uniforms;
-
-    // Screen-space to local coords:
-    // https://ptb.discord.com/channels/732325252788387980/734082399453052938/1010914586532261909
-    // shader.uniforms.EV_canvasMatrix ??= new PIXI.Matrix();
-    // shader.uniforms.EV_canvasMatrix
-    //   .copyFrom(canvas.stage.worldTransform)
-    //   .invert()
-    //   .append(mesh.transform.worldTransform);
-
-    const { elevationMin, elevationStep, maximumPixelValue } = canvas.elevation;
-    const { size, distance, width, height } = canvas.dimensions;
-    const { x, y } = source;
-
-
-    uniforms.EV_elevationSampler = canvas.elevation?._elevationTexture || PIXI.Texture.EMPTY;
-
-    // [min, step, maxPixValue, canvasMult]
-    const elevationMult = size * (1 / distance);
-    uniforms.EV_elevationResolution = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
-
-    // Uniforms based on source
-    uniforms.EV_sourceLocation = [x, y, source.elevationZ];
-
-    // Construct wall data
-    const center = {x, y};
-    let heightWalls = source.los._elevatedvision?.heightWalls || new Set();
-    let terrainWalls = source.los._elevatedvision?.terrainWalls || new Set();
-
-    // Sort the walls from distance to the origin point
-    // This should help when the maximum wall limit is reached.
-    const originPt = {x, y};
-    heightWalls = [...heightWalls];
-    terrainWalls = [...terrainWalls];
-
-    heightWalls.forEach(w => {
-      const pt = foundry.utils.closestPointToSegment(originPt, w.A, w.B);
-      w._distance2 = PIXI.Point.distanceSquaredBetween(originPt, pt);
-    });
-    terrainWalls.forEach(w => {
-      const pt = foundry.utils.closestPointToSegment(originPt, w.A, w.B);
-      w._distance2 = PIXI.Point.distanceSquaredBetween(originPt, pt);
-    });
-
-    let terrainWallCoords = [];
-    let terrainWallDistances = [];
-    const numWalls = CONFIG[MODULE_ID].numShaderWalls;
-    for ( const w of terrainWalls.slice(0, numWalls) ) {
-      addWallDataToShaderArrays(w, terrainWallDistances, terrainWallCoords, source);
-    }
-    uniforms.EV_numTerrainWalls = terrainWallDistances.length;
-
-    if ( !terrainWallCoords.length ) terrainWallCoords = [0, 0, 0, 0, 0, 0];
-    if ( !terrainWallDistances.length ) terrainWallDistances = [0];
-
-    uniforms.EV_terrainWallCoords = terrainWallCoords;
-    uniforms.EV_terrainWallDistances = terrainWallDistances;
-
-    let wallCoords = [];
-    let wallDistances = [];
-    for ( const w of heightWalls.slice(0, numWalls) ) {
-      addWallDataToShaderArrays(w, wallDistances, wallCoords, source);
-    }
-
-    uniforms.EV_numWalls = wallDistances.length;
-
-    if ( !wallCoords.length ) wallCoords = [0, 0, 0, 0, 0, 0];
-    if ( !wallDistances.length ) wallDistances = [0];
-
-    uniforms.EV_wallCoords = wallCoords;
-    uniforms.EV_wallDistances = wallDistances;
-    uniforms.EV_center = [center.x, center.y];
-    uniforms.EV_canvasDims = [width, height];
-
-    const { sceneX, sceneY, sceneWidth, sceneHeight } = canvas.dimensions;
-    uniforms.EV_sceneDims = [sceneX, sceneY, sceneWidth, sceneHeight];
+    shadowUniforms(source, false, this.uniforms);
   }
-}
-
-function addWallDataToShaderArrays(w, wallDistances, wallCoords, source) {
-  // Because walls are rectangular, we can pass the top-left and bottom-right corners
-  const { x, y } = source;
-  const center = {x, y};
-
-  const wallPoints = Point3d.fromWall(w, { finite: true });
-
-  const a = wallPoints.A.top;
-  const b = wallPoints.B.bottom;
-
-  // Point where line from light, perpendicular to wall, intersects
-  // const center_shader = {x: 0.5, y: 0.5};
-  const wallIx = CONFIG.GeometryLib.utils.perpendicularPoint(a, b, center);
-  if ( !wallIx ) return; // Likely a and b not proper wall
-  const wallOriginDist = PIXI.Point.distanceBetween(center, wallIx);
-  wallDistances.push(wallOriginDist);
-
-  wallCoords.push(a.x, a.y, a.z, b.x, b.y, b.z);
 }
