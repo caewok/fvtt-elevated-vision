@@ -367,7 +367,7 @@ function addShadowCode(source) {
 const originalFragmentSource = new Map();
 
 /**
- * Wrap AdaptiveLightShader.prototype.create
+ * Wrap AdaptiveLightShader.create
  * Modify the code to add shadow depth based on background elevation and walls
  * Add uniforms used by the fragment shader to draw shadows in the color and illumination shaders.
  */
