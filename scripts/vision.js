@@ -23,7 +23,7 @@ export function drawShapePIXIGraphics(wrapped, shape) {
 
   const { ALGORITHM, TYPES } = SETTINGS.SHADING;
   const shaderAlgorithm = getSceneSetting(ALGORITHM) ?? TYPES.NONE;
-  if ( shaderAlgorithm === TYPES.POLYGONS && Object.hasOwn(shape, "_evPolygons") ) {
+  if ( (shaderAlgorithm === TYPES.POLYGONS ||  shaderAlgorithm === TYPES.WEBGL) && Object.hasOwn(shape, "_evPolygons") ) {
     for ( const poly of shape._evPolygons ) {
       if ( poly.isHole ) {
         this.beginHole();
@@ -31,9 +31,6 @@ export function drawShapePIXIGraphics(wrapped, shape) {
         this.endHole();
       } else this.drawShape(poly);
     }
-  } else if ( shaderAlgorithm === TYPES.WEBGL && shape.config.source ) {
-    const mask = shape.config.source._createEVMask();
-    this.addChild(mask);
   } else {
     return wrapped(shape);
   }
