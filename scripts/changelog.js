@@ -48,6 +48,19 @@ Hooks.once("ready", () => {
                 - **Levels:** Elevation of basement tiles should now work regardless of the minimum elevation level for
                   the scene.`
         })
+
+        .addEntry({
+            version: "0.5.0",
+            title: "FoundryVTT v11",
+            body: `\
+                - **Updated for v11:** Updated for FoundryVTT v11. If you need to fall back to v10, please use the
+                  Elevated Vision v0.4 series.
+                - **No WebGL:** WebGL shadows is not functional and so for now it will default back to Polygon shadows.
+                  I will continue to work on a more robust implementation and intend to bring back lighting and
+                  elevation shadows in a future update. I wanted to get this update out quickly because all of the
+                  EV functionality appears to be working, just not the prettier visual shadows.`
+        })
+
         .build()
         ?.render(true);
 });
