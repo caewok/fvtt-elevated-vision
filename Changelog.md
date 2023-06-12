@@ -1,7 +1,9 @@
 # 0.5.0
-Updated for Foundry v11. Update geometry lib to v0.2.0.
+Updated for Foundry v11. Update geometry lib to v0.2.1.
 
-Display of the elevation number when in the elevation layer is now faster; near real-time.
+Display of the elevation number when in the elevation layer is now faster.
+
+WebGL shadows disabled until a more robust solution can be implemented.
 
 # 0.4.7
 Fix for error thrown with rotated tiles, due to bug in PixelCache.
