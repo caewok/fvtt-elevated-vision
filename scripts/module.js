@@ -41,10 +41,17 @@ import { updateTileHook } from "./tiles.js";
 import {
   initializeLightSourceShadersHook,
   initializeVisionSourceShadersHook } from "./rendered_point_sources.js";
+import {
+  renderAmbientLightConfigHook,
+  renderAmbientSoundConfigHook,
+  renderTileConfigHook,
+  updateAmbientLightDocumentHook,
+  updateAmbientSoundDocumentHook,
+  refreshAmbientLightHook,
+  refreshAmbientSoundHook } from "./renderConfig.js";
 
 // Other self-executing hooks
 import "./changelog.js";
-import "./renderConfig.js";
 import "./controls.js";
 
 // Imported elsewhere: import "./scenes.js";
@@ -148,6 +155,13 @@ Hooks.once("init", function() {
   registerSettings();
   registerLayer();
   registerAdditions();
+
+  // Register new render flag for elevation changes to placeables.
+  CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshElevation = {};
+  CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshField.propagate.push("refreshElevation");
+
+  CONFIG.AmbientSound.objectClass.RENDER_FLAGS.refreshElevation = {};
+  CONFIG.AmbientSound.objectClass.RENDER_FLAGS.refreshField.propagate.push("refreshElevation");
 });
 
 Hooks.once("setup", function() {
@@ -211,6 +225,16 @@ Hooks.on("preUpdateToken", preUpdateTokenHook);
 Hooks.on("refreshToken", refreshTokenHook);
 
 Hooks.on("updateTile", updateTileHook);
+Hooks.on("renderTileConfig", renderTileConfigHook);
 
 Hooks.on("initializeVisionSourceShaders", initializeVisionSourceShadersHook);
 Hooks.on("initializeLightSourceShaders", initializeLightSourceShadersHook);
+
+Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
+Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
+Hooks.on("updateAmbientLightDocument", updateAmbientLightDocumentHook);
+Hooks.on("updateAmbientSoundDocument", updateAmbientSoundDocumentHook);
+Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
+Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);
+
+

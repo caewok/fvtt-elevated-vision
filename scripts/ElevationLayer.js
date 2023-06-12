@@ -18,7 +18,7 @@ ui,
 */
 "use strict";
 
-import { MODULE_ID, FLAG_ELEVATION_IMAGE } from "./const.js";
+import { MODULE_ID, FLAGS } from "./const.js";
 import { PixelCache } from "./PixelCache.js";
 import {
   log,
@@ -566,11 +566,11 @@ export class ElevationLayer extends InteractionLayer {
    */
   async loadSceneElevationData() {
     log("loadSceneElevationData");
-    const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAG_ELEVATION_IMAGE);
+    const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
     if ( !elevationImage ) return;
 
     if ( isEmpty(elevationImage) || isEmpty(elevationImage.imageData) ) {
-      canvas.scene.unsetFlag(MODULE_ID, FLAG_ELEVATION_IMAGE);
+      canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
       return;
     }
 
@@ -614,7 +614,7 @@ export class ElevationLayer extends InteractionLayer {
       timestamp: Date.now(),
       version: game.modules.get(MODULE_ID).version };
 
-    await canvas.scene.setFlag(MODULE_ID, FLAG_ELEVATION_IMAGE, saveObj);
+    await canvas.scene.setFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE, saveObj);
     this._requiresSave = false;
   }
 
@@ -711,7 +711,7 @@ export class ElevationLayer extends InteractionLayer {
    * Download the stored elevation data for the scene.
    */
   async downloadStoredSceneElevationData({ fileName = "elevation-" + canvas.scene.name } = {}) {
-    const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAG_ELEVATION_IMAGE);
+    const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
     if ( !elevationImage || isEmpty(elevationImage) || isEmpty(elevationImage.imageData) ) return;
     saveDataToFile(convertBase64ToImage(elevationImage.imageData), elevationImage.format, fileName);
   }
@@ -1155,7 +1155,7 @@ export class ElevationLayer extends InteractionLayer {
    */
   async clearElevationData() {
     this.#destroy();
-    await canvas.scene.unsetFlag(MODULE_ID, FLAG_ELEVATION_IMAGE);
+    await canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
     this._requiresSave = false;
     this.renderElevation();
   }
