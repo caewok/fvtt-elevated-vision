@@ -1180,11 +1180,11 @@ export class TilePixelCache extends PixelCache {
    */
   static fromOverheadTileAlpha(tile) {
     if ( !tile.document.overhead ) return this.fromTileAlpha(tile);
+    if ( !tile.mesh._textureData ) tile.mesh.updateTextureData();
 
     // Texture width/height not necessarily same as canvas width/height for tiles.
-
     // The aw and ah properties must be rounded to determine the dimensions.
-    const localWidth = tile._textureData.aw;
+    const localWidth = tile.mesh._textureData.aw;
     const texWidth = tile.texture.width;
     const resolution = localWidth / texWidth;
 

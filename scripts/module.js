@@ -11,9 +11,6 @@ ui
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
 
-// Patches
-import { patchTile } from "./patches/Tile.js";
-
 // API imports
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
@@ -29,25 +26,39 @@ import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculat
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
-import { registerElevationAdditions } from "./elevation.js";
 
 // For elevation layer registration and API
 import { ElevationLayer } from "./ElevationLayer.js";
 
 // Settings, to toggle whether to change elevation on token move
-import { SETTINGS, getSetting, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
+import { SETTINGS, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
 
 import { updateFlyTokenControl } from "./scenes.js";
 
+// Hooks
+import { preUpdateTokenHook, refreshTokenHook } from "./tokens.js";
+import { updateTileHook } from "./tiles.js";
+import {
+  initializeLightSourceShadersHook,
+  initializeVisionSourceShadersHook } from "./rendered_point_sources.js";
+import {
+  renderAmbientLightConfigHook,
+  renderAmbientSoundConfigHook,
+  renderTileConfigHook,
+  updateAmbientLightDocumentHook,
+  updateAmbientSoundDocumentHook,
+  refreshAmbientLightHook,
+  refreshAmbientSoundHook } from "./renderConfig.js";
+
 // Other self-executing hooks
 import "./changelog.js";
-import "./tokens.js";
-import "./renderConfig.js";
 import "./controls.js";
-import "./tiles.js";
+
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
+  // CONFIG.debug.hooks = true;
+
 
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
@@ -58,13 +69,6 @@ Hooks.once("init", function() {
      * @type {number}
      */
     alphaThreshold: 0.75,
-
-    /**
-     * ElevationLayer.
-     * Delay in milliseconds before displaying elevation values in the layer.
-     * @type {number}
-     */
-    hoverDelay: 500,
 
     /**
      * ElevationLayer.
@@ -148,48 +152,35 @@ Hooks.once("init", function() {
 
   // These methods need to be registered early
   registerGeometry();
-  registerElevationAdditions();
   registerSettings();
   registerLayer();
   registerAdditions();
+
+  // Register new render flag for elevation changes to placeables.
+  CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshElevation = {};
+  CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshField.propagate.push("refreshElevation");
+
+  CONFIG.AmbientSound.objectClass.RENDER_FLAGS.refreshElevation = {};
+  CONFIG.AmbientSound.objectClass.RENDER_FLAGS.refreshField.propagate.push("refreshElevation");
 });
 
-Hooks.once("libWrapper.Ready", async function() {
-  patchTile();
-});
-
-Hooks.once("setup", async function() {
+Hooks.once("setup", function() {
   registerPatches();
 });
 
-Hooks.on("canvasInit", async function(_canvas) {
+Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
   registerShadowPatches();
   updateFlyTokenControl();
 });
 
-Hooks.on("canvasReady", async function() {
+Hooks.on("canvasReady", function() {
   // Set the elevation grid now that we know scene dimensions
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
-
-  // Cache overhead tile pixel data.
-  for ( const tile of canvas.tiles.placeables ) {
-    if ( tile.document.overhead ) {
-
-      if ( game.user.isGM ) {
-        // Match Levels settings. Prefer Levels settings.
-        const levelsE = tile.document?.flag?.levels?.rangeBottom;
-        if ( typeof levelsE !== "undefined" ) tile.document.setFlag(MODULE_ID, "elevation", levelsE);
-        else tile.document.update({flags: { levels: { rangeBottom: tile.elevationE } } });
-      }
-      // Cache the tile pixels.
-      tile._evPixelCache = TilePixelCache.fromOverheadTileAlpha(tile);
-    }
-  }
 });
 
-Hooks.on("3DCanvasSceneReady", function(previewArr) {
+Hooks.on("3DCanvasSceneReady", function(_previewArr) {
   disableScene();
 });
 
@@ -211,6 +202,7 @@ async function disableScene() {
   if ( shadowsDisabled ) {
     await setSceneSetting(SETTINGS.SHADING.ALGORITHM, SETTINGS.SHADING.TYPES.NONE);
     registerShadowPatches();
+    // Looks like we don't need to redraw the scene?
     // await canvas.draw(canvas.scene);
   }
 
@@ -228,3 +220,21 @@ Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
 function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
+
+Hooks.on("preUpdateToken", preUpdateTokenHook);
+Hooks.on("refreshToken", refreshTokenHook);
+
+Hooks.on("updateTile", updateTileHook);
+Hooks.on("renderTileConfig", renderTileConfigHook);
+
+Hooks.on("initializeVisionSourceShaders", initializeVisionSourceShadersHook);
+Hooks.on("initializeLightSourceShaders", initializeLightSourceShadersHook);
+
+Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
+Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
+Hooks.on("updateAmbientLightDocument", updateAmbientLightDocumentHook);
+Hooks.on("updateAmbientSoundDocument", updateAmbientSoundDocumentHook);
+Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
+Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);
+
+

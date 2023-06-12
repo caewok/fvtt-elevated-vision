@@ -214,13 +214,6 @@ As of v0.4.0, some advanced configuration options are available in `CONFIG.eleva
 
  /**
   * ElevationLayer.
-  * Delay in milliseconds before displaying elevation values in the layer.
-  * @type {number}
-  */
- hoverDelay: 500,
-
- /**
-  * ElevationLayer.
   * Maximum texture size used to represent elevation values.
   * @type {number}
   */

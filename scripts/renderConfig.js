@@ -1,23 +1,19 @@
 /* globals
-renderTemplate,
-Hooks,
-foundry,
 canvas,
+flattenObject,
+FormDataExtended,
+foundry,
 game,
-FormDataExtended
+renderTemplate
 */
 "use strict";
-
-import { MODULE_ID } from "./const.js";
-
-Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
-Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
-Hooks.on("renderTileConfig", renderTileConfigHook);
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
+import { MODULE_ID, FLAGS } from "./const.js";
 
 /**
  * Inject html to add controls to the ambient light configuration to allow user to set elevation.
  */
-async function renderAmbientLightConfigHook(app, html, data) {
+export async function renderAmbientLightConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-ambient-source-config.html`;
   const findString = "div[data-tab='basic']:last";
   await injectConfiguration(app, html, data, template, findString);
@@ -26,7 +22,7 @@ async function renderAmbientLightConfigHook(app, html, data) {
 /**
  * Inject html to add controls to the ambient sound configuration to allow user to set elevation.
  */
-async function renderAmbientSoundConfigHook(app, html, data) {
+export async function renderAmbientSoundConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-ambient-source-config.html`;
   const findString = ".form-group:last";
   await injectConfiguration(app, html, data, template, findString);
@@ -35,11 +31,73 @@ async function renderAmbientSoundConfigHook(app, html, data) {
 /**
  * Inject html to add controls to the tile configuration to allow user to set elevation.
  */
-async function renderTileConfigHook(app, html, data) {
+export async function renderTileConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-tile-config.html`;
   const findString = "div[data-tab='basic']:last";
   await injectConfiguration(app, html, data, template, findString);
 }
+
+
+/**
+ * Hook when the elevation flag is changed in the AmbientLightDocument.
+ * Used below to update the underlying source elevation.
+ * @param {Document} document                       The existing Document which was updated
+ * @param {object} change                           Differential data that was used to update the document
+ * @param {DocumentModificationContext} options     Additional options which modified the update request
+ * @param {string} userId                           The ID of the User who triggered the update workflow
+ */
+export function updateAmbientLightDocumentHook(doc, data, _options, _userId) {
+  const changeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
+  const flatData = flattenObject(data);
+  const changed = new Set(Object.keys(flatData));
+  if ( !changed.has(changeFlag) ) return;
+
+  doc.object.renderFlags.set({
+    refreshElevation: true
+  });
+}
+
+/**
+ * Hook when the elevation flag is changed in the AmbientSoundDocument.
+ * Used below to update the underlying source elevation.
+ * @param {Document} document                       The existing Document which was updated
+ * @param {object} change                           Differential data that was used to update the document
+ * @param {DocumentModificationContext} options     Additional options which modified the update request
+ * @param {string} userId                           The ID of the User who triggered the update workflow
+ */
+export function updateAmbientSoundDocumentHook(doc, data, _options, _userId) {
+  const changeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
+  const flatData = flattenObject(data);
+  const changed = new Set(Object.keys(flatData));
+  if ( !changed.has(changeFlag) ) return;
+
+  doc.object.renderFlags.set({
+    refreshElevation: true
+  });
+}
+
+/**
+ * Hook ambient light refresh to address the refreshElevation renderFlag.
+ * Update the source elevation.
+ * See AmbientLight.prototype._applyRenderFlags.
+ * @param {PlaceableObject} object    The object instance being refreshed
+ * @param {RenderFlags} flags
+ */
+export function refreshAmbientLightHook(light, flags) {
+  // if ( flags.refreshElevation ) {}
+}
+
+/**
+ * Hook ambient sound refresh to address the refreshElevation renderFlag.
+ * Update the source elevation.
+ * See AmbientSound.prototype._applyRenderFlags.
+ * @param {PlaceableObject} object    The object instance being refreshed
+ * @param {RenderFlags} flags
+ */
+export function refreshAmbientSoundHook(sound, flags) {
+  // if ( flags.refreshElevation ) {}
+}
+
 
 /**
  * Helper to inject configuration html into the application config.
@@ -104,3 +162,5 @@ export async function _onChangeInputTileConfig(wrapper, event) {
   foundry.utils.mergeObject(this.document, foundry.utils.expandObject(fdo));
   this.document.object.refresh();
 }
+
+

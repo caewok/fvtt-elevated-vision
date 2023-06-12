@@ -1,3 +1,8 @@
+# 0.5.0
+Updated for Foundry v11. Update geometry lib to v0.2.0.
+
+Display of the elevation number when in the elevation layer is now faster; near real-time.
+
 # 0.4.7
 Fix for error thrown with rotated tiles, due to bug in PixelCache.
 Remove unnecessary console warning re PixelCache uneven division.

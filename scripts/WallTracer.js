@@ -101,6 +101,20 @@ So northern hemisphere is negative, southern is positive.
 0 --> -π moves from east to west counterclockwise.
 */
 
+// NOTE: Testing
+/*
+api = game.modules.get("elevatedvision").api
+SCENE_GRAPH = api.SCENE_GRAPH
+WallTracer = api.WallTracer
+WallTracerEdge = api.WallTracerEdge
+WallTracerVertex = api.WallTracerVertex
+
+origin = _token.center
+
+
+
+*/
+
 
 // Wall Tracer tracks all edges and vertices that make up walls/wall intersections.
 
