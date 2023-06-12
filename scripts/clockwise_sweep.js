@@ -88,7 +88,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   });
 
 
-  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
+  // if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
 
   // TODO: Fix below b/c POLYGONS is only algorithm left.
 

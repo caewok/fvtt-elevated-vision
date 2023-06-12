@@ -57,7 +57,7 @@ export function defaultSceneSetting(value) {
     case SETTINGS.ELEVATION_MINIMUM: return getSetting(value) ?? 0;
     case SETTINGS.ELEVATION_INCREMENT: return getSetting(value) ?? 1;
     case SETTINGS.AUTO_ELEVATION: return getSetting(value) ?? true;
-    case SETTINGS.SHADING.ALGORITHM: return getSetting(value) ?? SETTINGS.SHADING.TYPES.WEBGL;
+    case SETTINGS.SHADING.ALGORITHM: return getSetting(value) ?? SETTINGS.SHADING.TYPES.POLYGONS;
   }
 }
 
@@ -71,13 +71,12 @@ export function registerSettings() {
     hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.SHADING.ALGORITHM}.hint`),
     scope: "world",
     config: true,
-    default: STYPES.WEBGL,
+    default: STYPES.POLYGONS,
     type: String,
     requiresReload: false,
     choices: {
       [STYPES.NONE]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.NONE}`),
-      [STYPES.POLYGONS]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.POLYGONS}`),
-      [STYPES.WEBGL]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.WEBGL}`)
+      [STYPES.POLYGONS]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.POLYGONS}`)
     }
   });
 

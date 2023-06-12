@@ -376,10 +376,10 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
 
   if ( !originalFragmentSource.has(this.name) ) originalFragmentSource.set(this.name, this.fragmentShader);
   const shaderAlgorithm = getSceneSetting(SETTINGS.SHADING.ALGORITHM);
-  if ( shaderAlgorithm !== SETTINGS.SHADING.TYPES.WEBGL ) {
+  //if ( shaderAlgorithm !== SETTINGS.SHADING.TYPES.WEBGL ) {
     this.fragmentShader = originalFragmentSource.get(this.name);
     return wrapped(...args);
-  }
+  //}
 
   applyPatches(this,
     false,

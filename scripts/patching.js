@@ -196,8 +196,9 @@ export function registerShadowPatches() {
   deregisterShadowPatches();
 
   const { ALGORITHM, TYPES } = SETTINGS.SHADING;
-  const shaderAlgorithm = getSceneSetting(ALGORITHM) ?? TYPES.NONE;
+  let shaderAlgorithm = getSceneSetting(ALGORITHM) ?? TYPES.NONE;
   if ( shaderAlgorithm === TYPES.NONE ) return;
+
 
   // ----- Drawing shadows for vision source LOS, fog  ----- //
   const use_shader = shaderAlgorithm === TYPES.WEBGL;
@@ -211,7 +212,7 @@ export function registerShadowPatches() {
     case SHADER_SWITCH.SHADER:
       shaderWrap("PIXI.LegacyGraphics.prototype.drawShape", drawShapePIXIGraphics, { perf_mode: libWrapper.PERF_FAST });
       // shaderOverride("CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, { type: libWrapper.OVERRIDE, perf_mode: libWrapper.PERF_FAST });
-      shaderWrap("LightSource.prototype._createPolygon", _createPolygonLightSource, { perf_mode: libWrapper.PERF_FAST });
+      // shaderWrap("LightSource.prototype._createPolygon", _createPolygonLightSource, { perf_mode: libWrapper.PERF_FAST });
       break;
   }
 }
