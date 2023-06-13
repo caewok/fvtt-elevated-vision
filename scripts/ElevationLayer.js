@@ -35,6 +35,7 @@ import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.j
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
+import { ElevationLayerShader } from "./ElevationLayerShader.js";
 
 /* Elevation layer
 
@@ -87,6 +88,7 @@ export class ElevationLayer extends InteractionLayer {
 
   // Imported methods
   TravelElevationCalculator = TravelElevationCalculator;
+
   CoordinateElevationCalculator = CoordinateElevationCalculator;
 
   /**
@@ -168,6 +170,12 @@ export class ElevationLayer extends InteractionLayer {
    * @type {PIXI.RenderTexture}
    */
   _elevationTexture;
+
+  /**
+   * PIXI.Mesh used to display the elevation colors when the layer is active.
+   * @type {ElevationLayerShader}
+   */
+  _elevationColorsMesh;
 
   /**
    * Container representing the canvas
@@ -419,6 +427,8 @@ export class ElevationLayer extends InteractionLayer {
     if ( !this.container ) return;
     canvas.stage.removeChild(this._wallDataContainer);
 
+    this.eraseElevation();
+
     // TO-DO: keep the wall graphics and labels and just update as necessary.
     // Destroy only in tearDown
     const wallData = this._wallDataContainer.removeChildren();
@@ -432,7 +442,7 @@ export class ElevationLayer extends InteractionLayer {
 
   /** @override */
   async _draw(options) { // eslint-disable-line no-unused-vars
-    if ( canvas.elevation.active ) this.drawElevation();
+    //if ( canvas.elevation.active ) this.drawElevation();
   }
 
   /* -------------------------------------------- */
@@ -486,6 +496,9 @@ export class ElevationLayer extends InteractionLayer {
 
     // Add the sprite that holds the default background elevation settings
     this._graphicsContainer.addChild(this._backgroundElevation);
+
+    // Add the elevation color mesh
+    this._elevationColorsMesh = new ElevationLayerShader();
 
     await this.loadSceneElevationData();
     this.renderElevation();
@@ -1167,6 +1180,7 @@ export class ElevationLayer extends InteractionLayer {
     this._clearElevationPixelCache();
     this._backgroundElevation.destroy();
     this._backgroundElevation = PIXI.Sprite.from(PIXI.Texture.EMPTY);
+    this._elevationColorsMesh?.destroy();
 
     this._graphicsContainer.destroy({children: true});
     this._graphicsContainer = new PIXI.Container();
@@ -1189,15 +1203,26 @@ export class ElevationLayer extends InteractionLayer {
 
   /**
    * Draw the elevation container.
-   * @returns {FullCanvasContainer|null}    The elevation container
    */
   drawElevation() {
-    const { width, height } = this.elevationPixelCache;
-    const elevationFilter = ElevationFilter.create({
-      dimensions: [width, height],
-      elevationSampler: this._elevationTexture
-    });
-    this.container.filters = [elevationFilter];
+    this.container.addChild(this._elevationColorsMesh);
+
+//     const { width, height } = this.elevationPixelCache;
+//     const mesh = new ElevationLayerShader();
+//     this.container.addChild(mesh);
+
+//     const elevationFilter = ElevationFilter.create({
+//       dimensions: [width, height],
+//       elevationSampler: this._elevationTexture
+//     });
+//     this.container.filters = [elevationFilter];
+  }
+
+  /**
+   * Remove the elevation color shading.
+   */
+  eraseElevation() {
+    this.container.removeChild(this._elevationColorsMesh);
   }
 
   /**
