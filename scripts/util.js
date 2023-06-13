@@ -236,7 +236,7 @@ export function log(...args) {
     const isDebugging = true;
     // const isDebugging = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
     if ( isDebugging ) {
-      console.log(MODULE_ID, "|", ...args);
+      console.debug(MODULE_ID, "|", ...args);
     }
   } catch(e) {
     // Empty
