@@ -78,7 +78,7 @@ function tileTerrainOpacityCountFunction(tile, alphaThreshold) {
   const cache = tile._evPixelCache;
   const tileE = tile.elevationE;
   const evCache = canvas.elevation.elevationPixelCache;
-  const pixelE = canvas.elevation._normalizeElevationValue(tileE);
+  const pixelE = canvas.elevation._normalizeElevation(tileE);
   const pixelThreshold = MAXIMUM_TILE_PIXEL_VALUE * alphaThreshold;
   const countFn = (value, _i, localX, localY) => {
     if ( value > pixelThreshold ) countFn.sum += 1;
