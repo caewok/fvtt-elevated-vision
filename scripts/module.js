@@ -165,7 +165,12 @@ Hooks.once("init", function() {
 });
 
 Hooks.once("setup", function() {
+  // game.scenes is present here
   registerPatches();
+});
+
+Hooks.once("ready", function() {
+  log("ready");
 });
 
 Hooks.on("canvasInit", function(_canvas) {
