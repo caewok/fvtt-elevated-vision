@@ -24,7 +24,9 @@ import {
   log,
   readDataURLFromFile,
   convertBase64ToImage,
-  drawPolygonWithHoles } from "./util.js";
+  drawPolygonWithHoles,
+  quotient256,
+  mod256 } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
@@ -190,12 +192,11 @@ export class ElevationLayer extends InteractionLayer {
   #elevation = 9000;
 
   /**
-   * Maximum pixel value. Currently pixels range between 0 and 255 for a color channel.
+   * Maximum normalized value.
+   * 256 values (8 bit) per channel; two channels currently used. Don't forget 0!
    * @type {number}
    */
-  #maximumPixelValue = 255;
-
-  get maximumPixelValue() { return this.#maximumPixelValue; }
+  #maximumNormalizedElevationValue = Math.pow(256, 2) - 1;
 
   /**
    * The maximum allowable visibility texture size.
@@ -316,7 +317,7 @@ export class ElevationLayer extends InteractionLayer {
    * @type {number}
    */
   get elevationMax() {
-    return this.elevationMin + (this.#maximumPixelValue * this.elevationStep);
+    return this._scaleNormalizedElevationValue(this.#maximumNormalizedElevationValue);
   }
 
   /* ------------------------ */
@@ -329,22 +330,60 @@ export class ElevationLayer extends InteractionLayer {
 
   /**
    * Convert a pixel value to an elevation value.
-   * @param {number} value    Pixel value
+   * @param {object} value    Pixel value
    * @returns {number}
    */
-  pixelValueToElevation(value) {
-    return this.elevationMin + (Math.round(value * this.elevationStep * 10) / 10);
+  pixelValueToElevation(r, g) {
+    const value = this._decodeElevationColor(r, g);
+    return this._scaleNormalizedElevationValue(value);
   }
 
   /**
    * Convert an elevation value to a pixel value between 0 and 255
    * @param {number} value    Elevation
-   * @returns {number}
+   * @returns {object}
    */
   elevationToPixelValue(elevation) {
     elevation = this.clampElevation(elevation);
-    return (elevation - this.elevationMin) / this.elevationStep;
+    const norm = this._normalizeElevationValue(elevation);
+    return this._encodeElevationColor(norm);
   }
+
+  /**
+   * Normalize elevation value for encoding in texture.
+   * @param {number} e    Elevation value in grid units
+   * @returns {number} Integer between 0 and 65,536
+   */
+  _normalizeElevationValue(e) {
+    return (e - this.elevationMin) / this.elevationStep;
+  }
+
+  /**
+   * Scale an integer to the scene elevation.
+   * @param {number} value    Integer between 0 and 65,536
+   * @returns {number} Elevation value, in grid units
+   */
+  _scaleNormalizedElevationValue(value) {
+    return this.elevationMin + (Math.round(value * this.elevationStep * 10) / 10);
+  }
+
+  /**
+   * Given red and green 8-bit channels of a color,
+   * return an integer value.
+   * @param {number} r    Red channel value, between 0 and 255.
+   * @param {number} g    Green channel value, between 0 and 255.
+   * @returns {number} Number between 0 and 65,536. (256 * 256).
+   */
+  _decodeElevationColor(r, g) { return (g * 255) + r; }
+
+  /**
+   * Given a number representing normalized elevation, returns its encoded color channels.
+   * @param {number} e    Normalized elevation integer between 0 and 65,536.
+   * @returns {object}
+   *   - {number} r   Red channel, integer between 0 and 255
+   *   - {number} g   Green channel, integer between 0 and 255
+   */
+  _encodeElevationColor(e) { return { r: mod256(e), g: quotient256(e) }; }
 
   /**
    * Convert value such as elevation from grid units to x,y coordinate dimensions.
@@ -382,7 +421,7 @@ export class ElevationLayer extends InteractionLayer {
     // const b = value - 255;
 
     log(`elevationHex elevation ${elevation}, value ${value}`);
-    return new PIXI.Color([value / this.#maximumPixelValue, 0, 0]);
+    return new PIXI.Color([value / this.#maximumNormalizedElevationValue, 0, 0]);
   }
 
   /**
@@ -478,7 +517,7 @@ export class ElevationLayer extends InteractionLayer {
       ? TokenAverageElevationCalculator : TokenPointElevationCalculator;
 
     this._initialized = false;
-    this._clearElevationPixelCache()
+    this._clearElevationPixelCache();
     this.#textureConfiguration = this._configureElevationTexture();
 
     // Initialize container to hold the elevation data and GM modifications
@@ -543,7 +582,6 @@ export class ElevationLayer extends InteractionLayer {
   _configureElevationTexture() {
     // In v11, see CanvasVisibility.prototype.#configureVisibilityTexture
     const dims = canvas.scene.dimensions;
-    const size = dims.size;
     let width = dims.sceneWidth;
     let height = dims.sceneHeight;
 
@@ -567,7 +605,9 @@ export class ElevationLayer extends InteractionLayer {
       mipmap: PIXI.MIPMAP_MODES.OFF,
       scaleMode: PIXI.SCALE_MODES.NEAREST,
       multisample: PIXI.MSAA_QUALITY.NONE,
-      format: PIXI.FORMATS.RED
+      format: PIXI.FORMATS.RG, // 256 * 256 = 65,536 elevation increments in total.
+      type: PIXI.TYPES.UNSIGNED_BYTE
+
       // Cannot be extracted ( GL_INVALID_OPERATION: Invalid format and type combination)
       // format: PIXI.FORMATS.RED_INTEGER,
       // type: PIXI.TYPES.INT
@@ -766,9 +806,10 @@ export class ElevationLayer extends InteractionLayer {
    * Refresh the pixel array cache from the elevation texture.
    */
   #refreshElevationPixelCache() {
-    // TODO: This needs to handle textures with resolutions less than 1.
     const { sceneX: x, sceneY: y } = canvas.dimensions;
-    return PixelCache.fromTexture(this._elevationTexture, { x, y });
+    return PixelCache.fromTexture(
+      this._elevationTexture,
+      { x, y, arrayClass: Uint16Array, combineFn: this._decodeElevationColor });
   }
 
   /**
@@ -788,7 +829,7 @@ export class ElevationLayer extends InteractionLayer {
    */
   elevationAt({x, y}) {
     const value = this.elevationPixelCache.pixelAtCanvas(x, y);
-    return this.pixelValueToElevation(value);
+    return this._scaleNormalizedElevationValue(value);
   }
 
   /**
@@ -800,7 +841,7 @@ export class ElevationLayer extends InteractionLayer {
   averageElevationWithinShape(shape) {
     const skip = CONFIG[MODULE_ID]?.averageTerrain ?? 1;
     const average = this.elevationPixelCache.average(shape, skip);
-    return this.pixelValueToElevation(average);
+    return this._scaleNormalizedElevationValue(average);
   }
 
   /**
@@ -1198,7 +1239,7 @@ export class ElevationLayer extends InteractionLayer {
     canvas.app.renderer.render(this._graphicsContainer, { renderTexture: this._elevationTexture, transform });
 
     // Destroy the cache
-    this.#elevationPixelCache = undefined;
+    this._clearElevationPixelCache();
   }
 
   /**
