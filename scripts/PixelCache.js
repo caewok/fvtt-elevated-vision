@@ -888,16 +888,18 @@ export class PixelCache extends PIXI.Rectangle {
     const { pixels, x, y, width, height } = extractPixels(canvas.app.renderer, texture, opts.frame);
     const combinedPixels = opts.combineFn ? this.combinePixels(pixels, opts.combineFn, opts.arrayClass) : pixels;
 
+    opts.x ??= 0;
+    opts.y ??= 0;
     opts.resolution ??= 1;
     opts.channel ??= 0;
     opts.scalingMethod ??= this.nearestNeighborScaling;
-    const arr = opts.scalingMethod(combinedPixels, width, height, opts.resolution, { channel: opts.channel });
+    const arr = opts.scalingMethod(combinedPixels, width, height, opts.resolution, { channel: opts.channel, skip: opts.combineFn ? 1 : 4 });
 
     opts.x += x;
     opts.y += y;
     opts.resolution *= texture.resolution;
     opts.height = texture.height;
-    return new this(arr, width, opts);
+    return new this(arr, texture.width, opts);
   }
 
   /**
