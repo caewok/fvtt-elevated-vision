@@ -162,7 +162,7 @@ Combined ---> 1000 x 750. Which is 0.5 * 0.5 = 0.25.
 
 // Original function:
 // function fastFixed(num, n) {
-// 	const pow10 = Math.pow(10,n);
+//   const pow10 = Math.pow(10,n);
 //   return Math.round(num*pow10)/pow10; // roundFastPositive fails for large numbers
 // }
 
@@ -592,22 +592,32 @@ export class PixelCache extends PIXI.Rectangle {
    *                                          Should be an integer greater than 0 (this is not checked).
    * @returns {number}
    */
-  average(shape, skip = 1) {
-    const averageFn = PixelCache.averageFunction();
-    const denom = this.applyFunctionToShape(averageFn, shape, skip);
-    return averageFn.sum / denom;
+  average(shape, skip) {
+    const { sum, denom } = this.total(shape, skip);
+    return sum / denom;
   }
 
-  percent(shape, threshold, skip = 1) {
+  percent(shape, threshold, skip) {
+    const { sum, denom } = this.count(shape, threshold, skip);
+    return sum / denom;
+  }
+
+  total(shape, skip = 1) {
+    const averageFn = PixelCache.averageFunction();
+    const denom = this.applyFunctionToShape(averageFn, shape, skip);
+    return { sum: averageFn.sum, denom };
+  }
+
+  count(shape, threshold, skip = 1) {
     const countFn = PixelCache.countFunction(threshold);
     const denom = this.applyFunctionToShape(countFn, shape, skip);
-    return countFn.sum / denom;
+    return { sum: countFn.sum, denom };
   }
 
   static countFunction(threshold) {
     const countFn = value => {
       if ( value > threshold ) countFn.sum += 1;
-    }
+    };
     countFn.sum = 0;
     return countFn;
   }
@@ -869,23 +879,48 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} [options.y=0]              Move the texture in the y direction by this value
    * @param {number} [options.channel=0]        Which RGBA channel, where R = 0, A = 3.
    * @param {function} [options.scalingMethod=PixelCache.nearestNeighborScaling]
+   * @param {function} [options.combineFn]      Function to combine multiple channels of pixel data.
+   *   Will be passed the r, g, b, and a channels.
+   * @param {TypedArray} [options.arrayClass]        What array class to use to store the resulting pixel values
    * @returns {PixelCache}
    */
   static fromTexture(texture, opts = {}) {
+    const { pixels, x, y, width, height } = extractPixels(canvas.app.renderer, texture, opts.frame);
+    const combinedPixels = opts.combineFn ? this.combinePixels(pixels, opts.combineFn, opts.arrayClass) : pixels;
+
     opts.x ??= 0;
     opts.y ??= 0;
     opts.resolution ??= 1;
-    const channel = opts.channel ?? 0;
-    const scalingMethod = opts.scalingMethod ?? this.nearestNeighborScaling;
+    opts.channel ??= 0;
+    opts.scalingMethod ??= this.nearestNeighborScaling;
+    const arr = opts.scalingMethod(combinedPixels, width, height, opts.resolution, { channel: opts.channel, skip: opts.combineFn ? 1 : 4 });
 
-    const { pixels, x: texX, y: texY, width, height } = extractPixels(canvas.app.renderer, texture, opts.frame);
-    const arr = scalingMethod(pixels, width, height, opts.resolution, { channel });
-    opts.x += texX;
-    opts.y += texY;
+    opts.x += x;
+    opts.y += y;
     opts.resolution *= texture.resolution;
     opts.height = texture.height;
-
     return new this(arr, texture.width, opts);
+  }
+
+  /**
+   * Combine pixels using provided method.
+   * @param {number[]} pixels       Array of pixels to consolidate. Assumed 4 channels.
+   * @param {function} combineFn    Function to combine multiple channels of pixel data.
+   *   Will be passed the r, g, b, and a channels.
+   * @param {TypedArray} [options.arrayClass]        What array class to use to store the resulting pixel values
+   */
+  static combinePixels(pixels, combineFn, arrayClass = Float32Array) {
+    const numPixels = pixels.length;
+    if ( numPixels % 4 !== 0 ) {
+      console.error("fromTextureChannels requires a texture with 4 channels.");
+      return pixels;
+    }
+
+    const combinedPixels = new arrayClass(numPixels * 0.25);
+    for ( let i = 0, j = 0; i < numPixels; i += 4, j += 1 ) {
+      combinedPixels[j] = combineFn(pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]);
+    }
+    return combinedPixels;
   }
 
   /**
@@ -899,14 +934,19 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {object} [options]  Parameters that affect which pixels are used.
    * @param {number} [options.channel=0]    Which RGBA channel (0–3) should be pulled?
    * @param {number} [options.skip=4]       How many channels to skip.
+   * @param {TypedArray}   [options.arrayClass=Uint8Array]  What array class to use to store the resulting pixel values
    * @returns {number[]}
    */
-  static nearestNeighborScaling(pixels, width, height, resolution, { channel = 0, skip = 4 } = {}) {
+  static nearestNeighborScaling(pixels, width, height, resolution, { channel, skip, arrayClass } = {}) {
+    channel ??= 0;
+    skip ??= 4;
+    arrayClass ??= Uint8Array;
+
     const invResolution = 1 / resolution;
     const localWidth = Math.round(width * resolution);
     const localHeight = Math.round(height * resolution);
     const N = localWidth * localHeight;
-    const arr = new Uint8Array(N);
+    const arr = new arrayClass(N);
 
     for ( let col = 0; col < localWidth; col += 1 ) {
       for ( let row = 0; row < localHeight; row += 1 ) {
@@ -934,14 +974,19 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {object} [options]  Parameters that affect which pixels are used.
    * @param {number} [options.channel=0]    Which RGBA channel (0–3) should be pulled?
    * @param {number} [options.skip=4]       How many channels to skip.
+   * @param {TypedArray}   [options.arrayClass=Uint8Array]  What array class to use to store the resulting pixel values
    * @returns {number[]}
    */
-  static boxDownscaling(pixels, width, height, resolution, { channel = 0, skip = 4 } = {}) {
+  static boxDownscaling(pixels, width, height, resolution, { channel, skip, arrayClass } = {}) {
+    channel ??= 0;
+    skip ??= 4;
+    arrayClass ??= Uint8Array;
+
     const invResolution = 1 / resolution;
     const localWidth = Math.round(width * resolution);
     const localHeight = Math.round(height * resolution);
     const N = localWidth * localHeight;
-    const arr = new Uint8Array(N);
+    const arr = new arrayClass(N);
 
     const boxWidth = Math.ceil(invResolution);
     const boxHeight = Math.ceil(invResolution);

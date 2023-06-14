@@ -119,7 +119,8 @@ uniform vec4 uElevationRes;
  * uElevationRes = [elevationMin, elevationStep, maximumPixelValue, elevationMult];
  */
 float canvasElevationFromPixel(in vec4 pixel) {
-  return (uElevationRes.r + (pixel.r * uElevationRes.b * uElevationRes.g)) * uElevationRes.a;
+  float value = (pixel.g * 255.0) + pixel.r;
+  return (uElevationRes.r + (value * uElevationRes.b * uElevationRes.g)) * uElevationRes.a;
 }
 
 /**

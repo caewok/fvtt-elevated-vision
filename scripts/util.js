@@ -10,6 +10,17 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
+
+/**
+ * n modulus 256
+ */
+export function mod256(n) { return (n & 255); }
+
+/**
+ * Math.floor(n / 256)
+ */
+export function quotient256(n) { return (n >> 8); }
+
 export function almostLessThan(a, b) { return a < b || a.almostEqual(b); }
 
 export function almostGreaterThan(a, b) { return a > b || a.almostEqual(b); }
@@ -17,7 +28,6 @@ export function almostGreaterThan(a, b) { return a > b || a.almostEqual(b); }
 export function almostBetween(value, min, max) {
   return almostLessThan(value, max) && almostGreaterThan(value, min);
 }
-
 
 /**
  * Fast rounding for positive numbers
