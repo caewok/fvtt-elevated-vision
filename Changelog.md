@@ -1,3 +1,8 @@
+# 0.5.1
+Elevation can now handle up to 65,536 distinct values. This is accomplished by utilizing both red and green channels of the elevation image.
+
+
+
 # 0.5.0
 Updated for Foundry v11. Update geometry lib to v0.2.1.
 
