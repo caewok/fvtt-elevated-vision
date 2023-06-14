@@ -162,7 +162,7 @@ Combined ---> 1000 x 750. Which is 0.5 * 0.5 = 0.25.
 
 // Original function:
 // function fastFixed(num, n) {
-// 	const pow10 = Math.pow(10,n);
+//   const pow10 = Math.pow(10,n);
 //   return Math.round(num*pow10)/pow10; // roundFastPositive fails for large numbers
 // }
 
@@ -592,22 +592,32 @@ export class PixelCache extends PIXI.Rectangle {
    *                                          Should be an integer greater than 0 (this is not checked).
    * @returns {number}
    */
-  average(shape, skip = 1) {
-    const averageFn = PixelCache.averageFunction();
-    const denom = this.applyFunctionToShape(averageFn, shape, skip);
-    return averageFn.sum / denom;
+  average(shape, skip) {
+    const { sum, denom } = this.total(shape, skip);
+    return sum / denom;
   }
 
-  percent(shape, threshold, skip = 1) {
+  percent(shape, threshold, skip) {
+    const { sum, denom } = this.count(shape, threshold, skip);
+    return sum / denom;
+  }
+
+  total(shape, skip = 1) {
+    const averageFn = PixelCache.averageFunction();
+    const denom = this.applyFunctionToShape(averageFn, shape, skip);
+    return { sum: averageFn.sum, denom };
+  }
+
+  count(shape, threshold, skip = 1) {
     const countFn = PixelCache.countFunction(threshold);
     const denom = this.applyFunctionToShape(countFn, shape, skip);
-    return countFn.sum / denom;
+    return { sum: countFn.sum, denom };
   }
 
   static countFunction(threshold) {
     const countFn = value => {
       if ( value > threshold ) countFn.sum += 1;
-    }
+    };
     countFn.sum = 0;
     return countFn;
   }
