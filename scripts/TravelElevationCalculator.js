@@ -273,7 +273,7 @@ export class TravelElevationCalculator {
     FLY: 2
   };
 
-  static #maximumPixelValue = 255;
+  static #maximumTilePixelValue = 255;
 
   /** @type {TokenElevationCalculator} */
   TEC;
@@ -877,7 +877,7 @@ export class TravelElevationCalculator {
     if ( !cache ) return null;
 
     // Function to test if the given pixel is under the threshold.
-    const pixelThreshold = alphaThreshold * TravelElevationCalculator.#maximumPixelValue;
+    const pixelThreshold = alphaThreshold * TravelElevationCalculator.#maximumTilePixelValue;
 
     let cmp = value => value <= pixelThreshold;
     const opts = { stepT, startT };
@@ -934,7 +934,7 @@ export class TravelElevationCalculator {
     }
 
     // Function to test if the given pixel is within the threshold.
-    const pixelThreshold = alphaThreshold * TravelElevationCalculator.#maximumPixelValue;
+    const pixelThreshold = alphaThreshold * TravelElevationCalculator.#maximumTilePixelValue;
     let cmp = value => value > pixelThreshold;
 
     const opts = { stepT, startT };
