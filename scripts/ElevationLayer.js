@@ -919,8 +919,8 @@ export class ElevationLayer extends InteractionLayer {
     from = this.clampElevation(from);
     to = this.clampElevation(to);
 
-    const fromPixelValue = this.elevationToPixelValue(from);
-    const toPixelValue = this.elevationToPixelValue(to);
+    const fromPixelColor = this.elevationToPixelValue(from)
+    const toPixelColor = this.elevationToPixelValue(to);
 
     this.renderElevation(); // Just in case
 
@@ -930,7 +930,10 @@ export class ElevationLayer extends InteractionLayer {
 
     const ln = pixels.length;
     for ( let i = 0; i < ln; i += 4 ) {
-      if ( pixels[i] === fromPixelValue ) pixels[i] = toPixelValue;
+      if ( pixels[i] === fromPixelColor.r && pixels[i + 1] === fromPixelColor.g ) {
+        pixels[i] = toPixelColor.r;
+        pixels[i + 1] = toPixelColor.g;
+      }
     }
 
     // Error Makes vertical lines:
