@@ -13,6 +13,7 @@ TextureLoader
 "use strict";
 
 import { MODULE_ID, FLAGS } from "./const.js";
+import { log } from "./util.js";
 
 
 // Class to manage loading and saving of the elevation texture.
@@ -102,6 +103,7 @@ export class ElevationTextureManager {
    */
   async load() {
     const filePath = `${this.#filePath}/${this.#fileName}`;
+    log(`Loading ${filePath}`);
     try {
       const baseTexture = await TextureLoader.loader.loadTexture(filePath);
       const texture = new PIXI.Texture(baseTexture);
@@ -118,6 +120,7 @@ export class ElevationTextureManager {
    * @returns {PIXI.Texture}
    */
   async loadFromFile(file) {
+    log("Loading from file");
     try {
       const texture = await PIXI.Texture.fromURL(file);
       return this._formatElevationTexture(texture);
@@ -214,6 +217,8 @@ export class ElevationTextureManager {
    * @returns {Promise<object>}  The response object from FilePicker.upload.
    */
   async save(texture) {
+    log(`Saving texture to ${this.#filePath}/${this.#fileName}`);
+
     const base64image = await this.#extractor.extract({
       texture,
       compression: TextureExtractor.COMPRESSION_MODES.BASE64,
