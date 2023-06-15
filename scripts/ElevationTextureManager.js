@@ -151,7 +151,7 @@ export class ElevationTextureManager {
 
     try {
       const saveRes = await this.constructor.uploadBase64(
-        elevationImage.imageData, this.#fileName, this.#filePath, { type: "image", notify: false });
+        elevationImage.imageData, this.#fileName, this.#filePath, { type: "image", notify: true });
       const texture = await this.load();
       if ( !texture.valid ) throw new Error("Elevation texture is invalid.");
 
