@@ -195,15 +195,16 @@ export class ElevationTextureManager {
   static async constructSaveDirectory(filePath) {
     // Need to build the folder structure in steps or it will error out.
     const dirs = filePath.split("/");
-    let storagePath = "";
+    const storagePathArr = [];
     for (const dir of dirs) {
       if ( dir === "" ) continue; // E.g., the path ends with a "/"
-      storagePath += `${dir}/`;
+      storagePathArr.push(dir);
+      const storagePath = storagePathArr.join("/");
       await FilePicker.browse("data", storagePath).catch(_error => {  // eslint-disable-line no-loop-func
         FilePicker.createDirectory("data", storagePath);
       });
     }
-    return storagePath;
+    return storagePathArr.join("/");
   }
 
   /**
