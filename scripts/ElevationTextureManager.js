@@ -161,7 +161,7 @@ export class ElevationTextureManager {
       elevationImage.imageURL = saveRes.path;
       elevationImage.version = game.modules.get(MODULE_ID).version;
       elevationImage.timestamp = Date.now();
-      delete elevationImage.imageData;
+      elevationImage.imageData = null;
       await canvas.scene.setFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE, elevationImage);
 
     } catch(err) {
