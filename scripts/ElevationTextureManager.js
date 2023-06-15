@@ -66,6 +66,7 @@ export class ElevationTextureManager {
    */
   async initialize({filePath, fileName, fileURL} = {}) {
     this.#initialized = false;
+    this.#textureConfiguration = undefined;
 
     // Set default values.
     if ( fileURL ) {
@@ -86,8 +87,6 @@ export class ElevationTextureManager {
     // Set the file path for the texture and ensure that the folder structure is present
     this.#filePath = await this.constructor.constructSaveDirectory(filePath);
     this.#fileName = fileName;
-
-    this.#textureConfiguration = undefined;
 
     // Conversion from older versions of EV.
     this.#initialized = await this.convertFromSceneFlag();
@@ -140,7 +139,7 @@ export class ElevationTextureManager {
     const { width, height } = canvas.dimensions.sceneRect;
     const resolution = texture.width > texture.height ? texture.width / width : texture.height / height;
     texture.baseTexture.setSize(width, height, resolution);
-    texture.baseTexture.setStyle(this.#textureConfiguration.scaleMode, this.#textureConfiguration.mipmap);
+    texture.baseTexture.setStyle(this.textureConfiguration.scaleMode, this.textureConfiguration.mipmap);
     return texture;
   }
 
