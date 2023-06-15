@@ -522,7 +522,7 @@ export class ElevationLayer extends InteractionLayer {
     // Initialize the texture manager for the scene.
     const sceneEVData = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
     const fileURL = sceneEVData?.imageURL ?? undefined;
-    this._textureManager.initialize({ fileURL });
+    await this._textureManager.initialize({ fileURL });
 
     // Initialize container to hold the elevation data and GM modifications
     const w = new FullCanvasContainer();
