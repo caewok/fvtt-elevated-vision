@@ -380,7 +380,7 @@ export class ElevationLayer extends InteractionLayer {
    * @param {number} g    Green channel value, between 0 and 255.
    * @returns {number} Number between 0 and 65,536. (256 * 256).
    */
-  _decodeElevationChannels(r, g) { return (g * 255) + r; }
+  _decodeElevationChannels(r, g) { return (g * 256) + r; }
 
   /**
    * Given a number representing normalized elevation, returns its encoded color channels.
