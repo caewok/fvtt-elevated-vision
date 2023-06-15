@@ -1,7 +1,15 @@
 /* globals
 canvas,
-TexturExtractor
+CONFIG,
+FilePicker,
+game,
+ImageHelper,
+isNewerVersion,
+PIXI,
+TextureExtractor,
+TextureLoader
 */
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { MODULE_ID, FLAGS } from "./const.js";
@@ -9,7 +17,7 @@ import { MODULE_ID, FLAGS } from "./const.js";
 
 // Class to manage loading and saving of the elevation texture.
 
-class ElevationTextureManager {
+export class ElevationTextureManager {
   /**
    * The maximum allowable visibility texture size.
    * In v11, this is equal to CanvasVisibility.#MAXIMUM_VISIBILITY_TEXTURE_SIZE
@@ -21,7 +29,7 @@ class ElevationTextureManager {
   #initialized = false;
 
   /** @type {boolean} */
-  #useCachedTexture = true;
+  #useCachedTexture = false;
 
   /** @type {TextureExtractor} */
   #extractor;
@@ -31,9 +39,6 @@ class ElevationTextureManager {
 
   /** @type {string} */
   #fileName = "";
-
-  /** @type {boolean} */
-  //#useCached = true;
 
   /**
    * @typedef {object} ElevationTextureConfiguration
@@ -52,34 +57,40 @@ class ElevationTextureManager {
   /**
    * Initialize the elevation texture - resetting it when switching scenes or redrawing canvas.
    * @param {object} [opts]               Optional parameters that affect storage location
-   * @param {string[]} [opts.filePath]    Array of directory names, in order, for the file path
-   * @param {string} [opts.fileName]      Name of the file, without file extension. (.webp will be added.)
+   * @param {string} [opts.filePath]      Directory path of the elevation image file
+   * @param {string} [opts.fileName]      Name of the file, without file extension (.webp will be added)
+   * @param {string} [opts.fileURL]       Full path of the file with file extension.
+   *                                      If provided, filePath and fileName are ignored.
    * @returns {Promise<void>}
    */
-  async initialize({filePath, fileName} = {}) {
+  async initialize({filePath, fileName, fileURL} = {}) {
     this.#initialized = false;
 
     // Set default values.
-    const fileExt = "webp";
-    filePath ??= ["worlds", `${game.world.id}`, "assets", `${MODULE_ID}`];
-    fileName ??= `${game.world.id}-${canvas.scene.id}-elevationMap`;
-    fileName += `.${fileExt}`;
+    if ( fileURL ) {
+      const pathArr = fileURL.split("/");
+      fileName = pathArr.at(-1);
+      filePath = pathArr.slice(0, -1).join("/");
+    } else {
+      const fileExt = "webp";
+      filePath ??= `worlds/${game.world.id}/assets/${MODULE_ID}`;
+      fileName ??= `${game.world.id}-${canvas.scene.id}-elevationMap`;
+      fileName += `.${fileExt}`;
+    }
 
     // Initialize a new TextureExtractor worker.
     this.#extractor ??= new TextureExtractor(canvas.app.renderer, { callName: "ElevatedVision", controlHash: true });
     this.#extractor.reset();
 
     // Set the file path for the texture and ensure that the folder structure is present
-    this.#filePath = await this.constructor.constructSaveDirectory(...filePath));
+    this.#filePath = await this.constructor.constructSaveDirectory(filePath);
     this.#fileName = fileName;
 
     // Set up the texture configuration.
     this.#textureConfiguration = this._configureElevationTexture();
 
     // Conversion from older versions of EV.
-    await convertFromSceneFlag();
-
-    this.#initialized = true;
+    this.#initialized = await this.convertFromSceneFlag();
   }
 
   /**
@@ -87,16 +98,45 @@ class ElevationTextureManager {
    * @returns {PIXI.Texture}
    */
   async load() {
-    const fn = this.#useCached ? TextureLoader.loader.getCache : TextureLoader.loader.loadTexture;
-    const baseTexture = fn(`${this.#filePath}/${this.#fileName}`);
-    const texture = new PIXI.Texture(baseTexture);
-    // this.#useCached = true;
+    const filePath = `${this.#filePath}/${this.#fileName}`;
+    const fn = PIXI.Assets.cache.has(filePath) ? TextureLoader.loader.getCache : TextureLoader.loader.loadTexture;
+
+    try {
+      const baseTexture = await fn(filePath);
+      const texture = new PIXI.Texture(baseTexture);
+      return this._formatElevationTexture(texture);
+    } catch(err) {
+      console.warn("ElevatedVision|ElevationTextureManager load threw error", err);
+      return undefined; // May or may not be an error depending on whether texture should be there.
+    }
+  }
+
+  /**
+   * Import elevation data from the provided image file location into a texture
+   * @param {File} file
+   * @returns {PIXI.Texture}
+   */
+  async loadFromFile(file) {
+    try {
+      const texture = await PIXI.Texture.fromURL(file);
+      return this._formatElevationTexture(texture);
+
+    } catch(err) {
+      console.error("ElevatedVision|loadFromFile encountered error", err, file);
+      return undefined;
+    }
+  }
+
+  /**
+   * Format a texture for use as an elevation texture.
+   * @param {PIXI.Texture}
+   * @returns {PIXI.Texture}
+   */
+  _formatElevationTexture(texture) {
     const { width, height } = canvas.dimensions.sceneRect;
     const resolution = texture.width > texture.height ? texture.width / width : texture.height / height;
     texture.baseTexture.setSize(width, height, resolution);
     texture.baseTexture.setStyle(this.#textureConfiguration.scaleMode, this.#textureConfiguration.mipmap);
-
-    this.#useCachedTexture = true;
     return texture;
   }
 
@@ -110,11 +150,11 @@ class ElevationTextureManager {
 
     try {
       const saveRes = await this.constructor.uploadBase64(
-        elevationImage.imageData, this.#fileName, this.#filePath, { type: "image", notify: false })
+        elevationImage.imageData, this.#fileName, this.#filePath, { type: "image", notify: false });
       const texture = this.load();
       if ( !texture.valid ) throw new Error("Elevation texture is invalid.");
 
-      elevationImage.imageURL = `${this.#filePath}/${this.#fileName}`;
+      elevationImage.imageURL = saveRes.path;
       elevationImage.version = game.modules.get(MODULE_ID).version;
       elevationImage.timestamp = Date.now();
       delete elevationImage.imageData;
@@ -130,14 +170,17 @@ class ElevationTextureManager {
   /**
    * Extract pixels from a texture.
    * @param {PIXI.Texture} texture
+   * @param {object} [opts]         Options that affect the output
+   * @param {string} [opts.type]    MIME image type
+   * @param {number} [opts.quality] Value that affects some outputs, such as jpeg
    * @returns {Uint8Array}
    */
-  async extract(texture) {
+  async extract(texture, { type = "image/webp", quality = 1 } = {}) {
     return await this.#extractor.extract({
       texture,
       compression: TextureExtractor.COMPRESSION_MODES.NONE,
-      type: "image/webp",
-      quality: 1.0,
+      type,
+      quality,
       debug: false
     });
   }
@@ -145,15 +188,17 @@ class ElevationTextureManager {
   /**
    * Confirm if a hierarchy of directories exist within the "data" storage location.
    * Create new directories if missing.
-   * @param {string} ...dirs      Each argument is a string with the name of a folder
+   * @param {string} filePath   The directory path, separated by "/".
    * @returns {string} The constructed storage path, not including "data".
    */
-  static async constructSaveDirectory(...dirs) {
+  static async constructSaveDirectory(filePath) {
     // Need to build the folder structure in steps or it will error out.
+    const dirs = filePath.split("/");
     let storagePath = "";
     for (const dir of dirs) {
+      if ( dir === "" ) continue; // E.g., the path ends with a "/"
       storagePath += `${dir}/`;
-      await FilePicker.browse("data", storagePath).catch(error => {
+      await FilePicker.browse("data", storagePath).catch(_error => {  // eslint-disable-line no-loop-func
         FilePicker.createDirectory("data", storagePath);
       });
     }
@@ -175,8 +220,7 @@ class ElevationTextureManager {
       debug: false
     });
 
-    this.#useCachedTexture = false;
-    return this.constructor.uploadBase64(base64image, this.#fileName, this.#filePath, { type: "image", notify: false })
+    return this.constructor.uploadBase64(base64image, this.#fileName, this.#filePath, { type: "image", notify: false });
   }
 
   /**
@@ -196,6 +240,35 @@ class ElevationTextureManager {
     const file = new File([blob], fileName, {type});
     return FilePicker.upload(storage, filePath, file, { notify });
   }
+
+  /**
+   * Convert a texture to a specific image format for saving.
+   * @param {PIXI.Texture} texture    Texture from which to pull data
+   * @param {object} [opts]           Options that affect the image format returned
+   * @param {string} [opts.format]    MIME type image format
+   * @param {number} [opts.quality]   Quality, used for some formats such as jpeg.
+   * @returns {string}
+   */
+  async convertTextureToImage(texture, { type = "image/webp", quality = 1 }) {
+    const rgbaBuffer = await this.extract(texture, { type, quality });
+    const width = Math.round(texture.width * texture.resolution);
+    const height = Math.round(texture.height * texture.resolution);
+
+    const canvasElement = ImageHelper.pixelsToCanvas(rgbaBuffer, width, height);
+    return await ImageHelper.canvasToBase64(canvasElement, type, quality);
+  }
+
+  /**
+   * @typedef {object} ElevationTextureConfiguration
+   * @property {number} resolution    Resolution of the texture
+   * @property {number} width         Width, based on sceneWidth
+   * @property {number} height        Height, based on sceneHeight
+   * @property {PIXI.MIPMAP_MODES} mipmap
+   * @property {PIXI.SCALE_MODES} scaleMode
+   * @property {PIXI.MSAA_QUALITY} multisample
+   * @property {PIXI.FORMATS} format
+   */
+
 
   /**
    * Values used when rendering elevation data to a texture representing the scene canvas.
