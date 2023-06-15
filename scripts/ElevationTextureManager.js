@@ -86,11 +86,14 @@ export class ElevationTextureManager {
     this.#filePath = await this.constructor.constructSaveDirectory(filePath);
     this.#fileName = fileName;
 
-    // Set up the texture configuration.
-    this.#textureConfiguration = this._configureElevationTexture();
+    this.#textureConfiguration = undefined;
 
     // Conversion from older versions of EV.
     this.#initialized = await this.convertFromSceneFlag();
+  }
+
+  get textureConfiguration() {
+    return this.#textureConfiguration ?? (this.#textureConfiguration = this._getElevationTextureConfiguration());
   }
 
   /**
@@ -276,7 +279,7 @@ export class ElevationTextureManager {
    * by the downscaling resolution. (It is important for fog manager to prevent drift.)
    * @returns {ElevationTextureConfiguration}
    */
-  _configureElevationTexture() {
+  _getElevationTextureConfiguration() {
     // In v11, see CanvasVisibility.prototype.#configureVisibilityTexture
     const dims = canvas.scene.dimensions;
     let width = dims.sceneWidth;

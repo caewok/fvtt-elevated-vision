@@ -533,7 +533,7 @@ export class ElevationLayer extends InteractionLayer {
     this._backgroundElevation.position = { x: sceneX, y: sceneY };
 
     // Add the render texture for displaying elevation information to the GM
-    this._elevationTexture = PIXI.RenderTexture.create(this.textureConfiguration);
+    this._elevationTexture = PIXI.RenderTexture.create(this._textureManager.textureConfiguration);
     // Set the clear color of the render texture to black. The texture needs to be opaque.
     this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
 
