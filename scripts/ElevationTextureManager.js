@@ -103,9 +103,7 @@ export class ElevationTextureManager {
   async load() {
     const filePath = `${this.#filePath}/${this.#fileName}`;
     try {
-      const baseTexture = PIXI.Assets.cache.has(filePath)
-        ? (await TextureLoader.loader.getCache(filePath))
-        : (await TextureLoader.loader.loadTexture);
+      const baseTexture = await TextureLoader.loader.loadTexture(filePath);
       const texture = new PIXI.Texture(baseTexture);
       return this._formatElevationTexture(texture);
     } catch(err) {
