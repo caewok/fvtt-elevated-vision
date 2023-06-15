@@ -162,6 +162,7 @@ export class ElevationTextureManager {
       elevationImage.version = game.modules.get(MODULE_ID).version;
       elevationImage.timestamp = Date.now();
       delete elevationImage.imageData;
+      await canvas.scene.setFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE, elevationImage);
 
     } catch(err) {
       console.error("ElevatedVision|Conversion of elevation texture from scene flag failed.", err);
