@@ -240,7 +240,7 @@ export class ElevationTextureManager {
     type ||= base64.split(";")[0].split("data:")[1];
     const blob = await fetch(base64).then(r => r.blob());
     const file = new File([blob], fileName, {type});
-    return FilePicker.upload(storage, filePath, file, { notify });
+    return FilePicker.upload(storage, filePath, file, {}, { notify });
   }
 
   /**
