@@ -39,7 +39,7 @@ class ElevationTextureManager {
     // Set the file path for the texture and ensure that the folder structure is present.
     const pack = game.modules.get(MODULE_ID);
     const fileExt = "webp";
-    this.#filePath = await this.constructor.constructSaveDirectory(`${game.world.id}`, );
+    this.#filePath = await this.constructor.constructSaveDirectory("worlds", `${game.world.id}`, "assets", `${MODULE_ID}`);
     this.#fileName = `${game.world.id}-${canvas.scene.id}-elevationMap.${fileExt}`;
 
     await convertFromSceneFlag();
@@ -106,12 +106,8 @@ class ElevationTextureManager {
   }
 
   static async constructSaveDirectory(...dirs) {
-    // See uploadPersistent
-    const pack = game.modules.get(MODULE_ID);
-
     // Need to build the folder structure in steps or it will error out.
-    let storagePath = `${pack.type}s/${pack.id}/`;
-    dirs.unshift("storage")
+    let storagePath = "";
     for (const dir of dirs) {
       storagePath += `${dir}/`;
       await FilePicker.browse("data", storagePath).catch(error => {
