@@ -152,6 +152,7 @@ export class ElevationTextureManager {
     const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
     if ( !elevationImage || !elevationImage.imageData || isNewerVersion(elevationImage.version, "0.5.0") ) return true;
 
+    log(`Converting from scene flag to ${this.#filePath}/${this.#fileName}`);
     try {
       const saveRes = await this.constructor.uploadBase64(
         elevationImage.imageData, this.#fileName, this.#filePath, { type: "image", notify: true });
