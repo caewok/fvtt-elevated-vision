@@ -154,7 +154,7 @@ export class ElevationTextureManager {
     try {
       const saveRes = await this.constructor.uploadBase64(
         elevationImage.imageData, this.#fileName, this.#filePath, { type: "image", notify: false });
-      const texture = this.load();
+      const texture = await this.load();
       if ( !texture.valid ) throw new Error("Elevation texture is invalid.");
 
       elevationImage.imageURL = saveRes.path;
@@ -179,7 +179,7 @@ export class ElevationTextureManager {
    * @returns {Uint8Array}
    */
   async extract(texture, { type = "image/webp", quality = 1 } = {}) {
-    return await this.#extractor.extract({
+    return this.#extractor.extract({
       texture,
       compression: TextureExtractor.COMPRESSION_MODES.NONE,
       type,
@@ -258,7 +258,7 @@ export class ElevationTextureManager {
     const height = Math.round(texture.height * texture.resolution);
 
     const canvasElement = ImageHelper.pixelsToCanvas(rgbaBuffer, width, height);
-    return await ImageHelper.canvasToBase64(canvasElement, type, quality);
+    return ImageHelper.canvasToBase64(canvasElement, type, quality);
   }
 
   /**
