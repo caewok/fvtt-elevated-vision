@@ -10,9 +10,18 @@ import { MODULE_ID, FLAGS } from "./const.js";
 // Class to manage loading and saving of the elevation texture.
 
 class ElevationTextureManager {
+  /**
+   * The maximum allowable visibility texture size.
+   * In v11, this is equal to CanvasVisibility.#MAXIMUM_VISIBILITY_TEXTURE_SIZE
+   * @type {number}
+   */
+  static #MAXIMUM_ELEVATION_TEXTURE_SIZE = CONFIG[MODULE_ID]?.elevationTextureSize ?? 4096;
 
   /** @type {boolean} */
   #initialized = false;
+
+  /** @type {boolean} */
+  #useCachedTexture = true;
 
   /** @type {TextureExtractor} */
   #extractor;
@@ -27,43 +36,68 @@ class ElevationTextureManager {
   //#useCached = true;
 
   /**
+   * @typedef {object} ElevationTextureConfiguration
+   * @property {number} resolution    Resolution of the texture
+   * @property {number} width         Width, based on sceneWidth
+   * @property {number} height        Height, based on sceneHeight
+   * @property {PIXI.MIPMAP_MODES} mipmap
+   * @property {PIXI.SCALE_MODES} scaleMode
+   * @property {PIXI.MSAA_QUALITY} multisample
+   * @property {PIXI.FORMATS} format
+   */
+
+  /** @type {ElevationTextureConfiguration} */
+  #textureConfiguration;
+
+  /**
    * Initialize the elevation texture - resetting it when switching scenes or redrawing canvas.
+   * @param {object} [opts]               Optional parameters that affect storage location
+   * @param {string[]} [opts.filePath]    Array of directory names, in order, for the file path
+   * @param {string} [opts.fileName]      Name of the file, without file extension. (.webp will be added.)
    * @returns {Promise<void>}
    */
-  async initialize() {
+  async initialize({filePath, fileName} = {}) {
     this.#initialized = false;
+
+    // Set default values.
+    const fileExt = "webp";
+    filePath ??= ["worlds", `${game.world.id}`, "assets", `${MODULE_ID}`];
+    fileName ??= `${game.world.id}-${canvas.scene.id}-elevationMap`;
+    fileName += `.${fileExt}`;
+
+    // Initialize a new TextureExtractor worker.
     this.#extractor ??= new TextureExtractor(canvas.app.renderer, { callName: "ElevatedVision", controlHash: true });
     this.#extractor.reset();
-//     await this.load();
 
-    // Set the file path for the texture and ensure that the folder structure is present.
-    const pack = game.modules.get(MODULE_ID);
-    const fileExt = "webp";
-    this.#filePath = await this.constructor.constructSaveDirectory("worlds", `${game.world.id}`, "assets", `${MODULE_ID}`);
-    this.#fileName = `${game.world.id}-${canvas.scene.id}-elevationMap.${fileExt}`;
+    // Set the file path for the texture and ensure that the folder structure is present
+    this.#filePath = await this.constructor.constructSaveDirectory(...filePath));
+    this.#fileName = fileName;
 
+    // Set up the texture configuration.
+    this.#textureConfiguration = this._configureElevationTexture();
+
+    // Conversion from older versions of EV.
     await convertFromSceneFlag();
 
     this.#initialized = true;
   }
 
-
-
   /**
    * Load the elevation texture from the stored file for the world and scene.
+   * @returns {PIXI.Texture}
    */
   async load() {
-    // const fn = this.#useCached ? TextureLoader.loader.getCache : TextureLoader.loader.loadTexture;
-    const fn = TextureLoader.loader.loadTexture;
+    const fn = this.#useCached ? TextureLoader.loader.getCache : TextureLoader.loader.loadTexture;
     const baseTexture = fn(`${this.#filePath}/${this.#fileName}`);
     const texture = new PIXI.Texture(baseTexture);
     // this.#useCached = true;
+    const { width, height } = canvas.dimensions.sceneRect;
+    const resolution = texture.width > texture.height ? texture.width / width : texture.height / height;
+    texture.baseTexture.setSize(width, height, resolution);
+    texture.baseTexture.setStyle(this.#textureConfiguration.scaleMode, this.#textureConfiguration.mipmap);
 
-     width ??= canvas.dimensions.sceneWidth;
-     height ??= canvas.dimensions.sceneHeight;
-     resolution ??= texture.width > texture.height ? texture.width / width : texture.height / height;
-      texture.baseTexture.setSize(width, height, resolution);
-      texture.baseTexture.setStyle(this.textureConfiguration.scaleMode, this.textureConfiguration.mipmap);
+    this.#useCachedTexture = true;
+    return texture;
   }
 
   /**
@@ -93,18 +127,27 @@ class ElevationTextureManager {
     return true;
   }
 
-  async extract() {
-    const pix = await this.#extractor.extract({
-      texture: canvas.elevation._elevationTexture,
+  /**
+   * Extract pixels from a texture.
+   * @param {PIXI.Texture} texture
+   * @returns {Uint8Array}
+   */
+  async extract(texture) {
+    return await this.#extractor.extract({
+      texture,
       compression: TextureExtractor.COMPRESSION_MODES.NONE,
       type: "image/webp",
       quality: 1.0,
       debug: false
     });
-
-
   }
 
+  /**
+   * Confirm if a hierarchy of directories exist within the "data" storage location.
+   * Create new directories if missing.
+   * @param {string} ...dirs      Each argument is a string with the name of a folder
+   * @returns {string} The constructed storage path, not including "data".
+   */
   static async constructSaveDirectory(...dirs) {
     // Need to build the folder structure in steps or it will error out.
     let storagePath = "";
@@ -117,19 +160,23 @@ class ElevationTextureManager {
     return storagePath;
   }
 
-
-  async save() {
+  /**
+   * Save the provided texture to the location in "data" provided in the initialization step.
+   * Default location is data/worlds/world-id/assets/elevatedvision/
+   * @param {PIXI.Texture} texture      Texture to save as the elevation map
+   * @returns {Promise<object>}  The response object from FilePicker.upload.
+   */
+  async save(texture) {
     const base64image = await this.#extractor.extract({
-      texture: canvas.elevation._elevationTexture,
+      texture,
       compression: TextureExtractor.COMPRESSION_MODES.BASE64,
       type: "image/webp",
       quality: 1.0,
       debug: false
     });
 
-    const saveRes = await this.constructor.uploadBase64(base64image, this.#fileName, this.#filePath, { type: "image", notify: false })
-    //this.#useCached = false;
-    return saveRes;
+    this.#useCachedTexture = false;
+    return this.constructor.uploadBase64(base64image, this.#fileName, this.#filePath, { type: "image", notify: false })
   }
 
   /**
@@ -150,143 +197,40 @@ class ElevationTextureManager {
     return FilePicker.upload(storage, filePath, file, { notify });
   }
 
+  /**
+   * Values used when rendering elevation data to a texture representing the scene canvas.
+   * It may be important that width/height of the elevation texture is evenly divisible
+   * by the downscaling resolution. (It is important for fog manager to prevent drift.)
+   * @returns {ElevationTextureConfiguration}
+   */
+  _configureElevationTexture() {
+    // In v11, see CanvasVisibility.prototype.#configureVisibilityTexture
+    const dims = canvas.scene.dimensions;
+    let width = dims.sceneWidth;
+    let height = dims.sceneHeight;
 
+    let resolution = Math.clamped(CONFIG[MODULE_ID]?.resolution ?? 0.25, .01, 1);
+    const maxSize = Math.min(
+      this.constructor.#MAXIMUM_ELEVATION_TEXTURE_SIZE,
+      resolution * Math.max(width, height));
 
+    if ( width >= height ) {
+      resolution = maxSize / width;
+      height = Math.ceil(height * resolution) / resolution;
+    } else {
+      resolution = maxSize / height;
+      width = Math.ceil(width * resolution) / resolution;
+    }
 
-//   base64image =
-//       await extractor.extract({
-//         texture: canvas.elevation._elevationTexture,
-//         compression: TextureExtractor.COMPRESSION_MODES.BASE64,
-//         type: "image/webp",
-//         quality: 1.0,
-//         debug: false
-//       });
-
+    return {
+      resolution, // TODO: Remove these defaults
+      width,
+      height,
+      mipmap: PIXI.MIPMAP_MODES.OFF,
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      multisample: PIXI.MSAA_QUALITY.NONE,
+      format: PIXI.FORMATS.RG, // 256 * 256 = 65,536 elevation increments in total.
+      type: PIXI.TYPES.UNSIGNED_BYTE
+    };
   }
-
-  /**
-   * Load the elevation texture from the canvas scene flag.
-   * @deprecated
-   */
-//   async loadSceneElevationData() {
-//     const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-//     if ( !elevationImage ) return;
-//
-//     if ( isEmpty(elevationImage) || isEmpty(elevationImage.imageData) ) {
-//       canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-//       return;
-//     }
-//
-//     // We are loading a saved file, so we only want to require a save if the scene
-//     // elevation has already been modified.
-//     let neededSave = canvas.elevation._requiresSave;
-//
-//     await this.importFromImageFile(elevationImage.imageData, {
-//       resolution: elevationImage.resolution,
-//       width: elevationImage.width,
-//       height: elevationImage.height });
-//     this._requiresSave = neededSave;
-//
-//   }
-
-
 }
-
-  /**
-   * Load the elevation data from the image stored in a scene flag.
-   */
- //  async loadSceneElevationData() {
-//     log("loadSceneElevationData");
-//     const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-//     if ( !elevationImage ) return;
-//
-//     if ( isEmpty(elevationImage) || isEmpty(elevationImage.imageData) ) {
-//       canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-//       return;
-//     }
-//
-//     // We are loading a saved file, so we only want to require a save if the scene
-//     // elevation has already been modified.
-//     let neededSave = this._requiresSave;
-//
-//     // Check if this is an updated version.
-//     // v0.4.0 added resolution, width, height.
-//     /*
-//     if ( isNewerVersion("0.4.0", elevationImage.version) ) {
-//       ui.notifications.notify("Detected older version of elevation scene data.
-//       Downloading backup in case upgrade goes poorly!");
-//       await this.downloadStoredSceneElevationData();
-//       neededSave = true;
-//     }
-//     */
-//
-//     await this.importFromImageFile(elevationImage.imageData, {
-//       resolution: elevationImage.resolution,
-//       width: elevationImage.width,
-//       height: elevationImage.height });
-//     this._requiresSave = neededSave;
-//
-//     // Following won't work if _resolution.format = PIXI.FORMATS.ALPHA
-//     // texImage2D: type FLOAT but ArrayBufferView not Float32Array when using the filter
-//     // const { width, height } = this._resolution;
-//     // this._elevationBuffer = new Uint8Array(width * height);
-//     // this._elevationTexture = PIXI.Texture.fromBuffer(this._elevationBuffer, width, height, this._resolution);
-//   }
-//
-//   /**
-//    * Store the elevation data for the scene in a flag for the scene
-//    */
-//   async saveSceneElevationData() {
-//     const format = "image/webp";
-//     const imageData = await this._extractElevationImageData(format);
-//     const saveObj = {
-//       imageData,
-//       format,
-//       width: this._elevationTexture.width,
-//       height: this._elevationTexture.height,
-//       resolution: this._elevationTexture.resolution,
-//       timestamp: Date.now(),
-//       version: game.modules.get(MODULE_ID).version };
-//
-//     await canvas.scene.setFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE, saveObj);
-//     this._requiresSave = false;
-//   }
-//
-//   async _extractElevationImageData(format = "image/webp", quality = 1) {
-//     this.renderElevation();
-//     // Store only the scene rectangle data
-//     // From https://github.com/dev7355608/perfect-vision/blob/3eb3c040dfc83a422fd88d4c7329c776742bef2f/patches/fog.js#L256
-//     const { pixels, width, height } = extractPixels(
-//       canvas.app.renderer,
-//       this._elevationTexture);
-//     const canvasElement = pixelsToCanvas(pixels, width, height);
-//
-//     // Depending on format, may need quality = 1 to avoid lossy compression
-//     return await canvasToBase64(canvasElement, format, quality);
-//   }
-//
-//   /**
-//    * Import elevation data from the provided image file location into the scene.
-//    * @param {File} file
-//    */
-//   async importFromImageFile(file, { resolution = 1, width, height } = {}) {
-//     width ??= canvas.dimensions.sceneWidth;
-//     height ??= canvas.dimensions.sceneHeight;
-//     log(`import ${width}x${height} ${file} with resolution ${resolution}`, file);
-//
-//     // See https://stackoverflow.com/questions/41494623/pixijs-sprite-not-loading
-//     const texture = await PIXI.Texture.fromURL(file);
-//     log(`Loaded texture with dim ${texture.width},${texture.height}`, texture);
-//
-//     resolution ??= texture.width > texture.height ? texture.width / width : texture.height / height;
-//
-//     texture.baseTexture.setSize(width, height, resolution);
-//     texture.baseTexture.setStyle(this.textureConfiguration.scaleMode, this.textureConfiguration.mipmap);
-//
-//     // Testing: let sprite = PIXI.Sprite.from("elevation/test_001.png");
-//     canvas.elevation._backgroundElevation.texture.destroy();
-//     canvas.elevation._backgroundElevation.texture = texture;
-//
-//     canvas.elevation.renderElevation();
-//     canvas.elevation._requiresSave = true;
-//   }
