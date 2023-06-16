@@ -243,8 +243,7 @@ export function groupBy(list, keyGetter) {
  */
 export function log(...args) {
   try {
-    const isDebugging = true;
-    // const isDebugging = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
+    const isDebugging = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
     if ( isDebugging ) {
       console.debug(MODULE_ID, "|", ...args);
     }
