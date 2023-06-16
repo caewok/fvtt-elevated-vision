@@ -893,7 +893,10 @@ export class PixelCache extends PIXI.Rectangle {
     opts.resolution ??= 1;
     opts.channel ??= 0;
     opts.scalingMethod ??= this.nearestNeighborScaling;
-    const arr = opts.scalingMethod(combinedPixels, width, height, opts.resolution, { channel: opts.channel, skip: opts.combineFn ? 1 : 4 });
+    const arr = opts.scalingMethod(combinedPixels, width, height, opts.resolution, {
+      channel: opts.channel,
+      skip: opts.combineFn ? 1 : 4,
+      arrayClass: opts.arrayClass });
 
     opts.x += x;
     opts.y += y;

@@ -39,6 +39,9 @@ import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
 import { ElevationLayerShader } from "./ElevationLayerShader.js";
 import { ElevationTextureManager } from "./ElevationTextureManager.js";
 
+
+import "./perfect-vision/extract-async.js";
+
 /* Elevation layer
 
 Allow the user to "paint" areas with different elevations. This elevation data will then
@@ -380,7 +383,7 @@ export class ElevationLayer extends InteractionLayer {
    * @param {number} g    Green channel value, between 0 and 255.
    * @returns {number} Number between 0 and 65,536. (256 * 256).
    */
-  _decodeElevationChannels(r, g) { return (g * 255) + r; }
+  _decodeElevationChannels(r, g) { return (g * 256) + r; }
 
   /**
    * Given a number representing normalized elevation, returns its encoded color channels.
@@ -692,7 +695,7 @@ export class ElevationLayer extends InteractionLayer {
     const imageExtension = format.split("/")[1];
     fileName += `.${imageExtension}`;
 
-    const image64 = await this._textureManager.convertImageToTexture(this._elevationTexture, { type: format, quality });
+    const image64 = await this._textureManager.convertTextureToImage(this._elevationTexture, { type: format, quality });
     saveDataToFile(convertBase64ToImage(image64), format, fileName);
   }
 
@@ -868,9 +871,12 @@ export class ElevationLayer extends InteractionLayer {
   setElevationForGridSpace(p, elevation = 0, { temporary = false, useHex = canvas.grid.isHex } = {}) {
     const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
-    const draw = new Draw(graphics);
     const color = this.elevationColor(elevation);
-    draw.shape(shape, { color, fill: color });
+
+    // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
+    // and that causes a lighter-color border to appear outside the shape.
+    const draw = new Draw(graphics);
+    draw.shape(shape, { width: 0, fill: color});
 
     this.renderElevation();
 
