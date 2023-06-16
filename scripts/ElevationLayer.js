@@ -39,6 +39,9 @@ import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
 import { ElevationLayerShader } from "./ElevationLayerShader.js";
 import { ElevationTextureManager } from "./ElevationTextureManager.js";
 
+
+import "./perfect-vision/extract-async.js";
+
 /* Elevation layer
 
 Allow the user to "paint" areas with different elevations. This elevation data will then
@@ -692,7 +695,7 @@ export class ElevationLayer extends InteractionLayer {
     const imageExtension = format.split("/")[1];
     fileName += `.${imageExtension}`;
 
-    const image64 = await this._textureManager.convertImageToTexture(this._elevationTexture, { type: format, quality });
+    const image64 = await this._textureManager.convertTextureToImage(this._elevationTexture, { type: format, quality });
     saveDataToFile(convertBase64ToImage(image64), format, fileName);
   }
 

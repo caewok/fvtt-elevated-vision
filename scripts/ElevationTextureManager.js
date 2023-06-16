@@ -32,9 +32,6 @@ export class ElevationTextureManager {
   /** @type {boolean} */
   #useCachedTexture = false;
 
-  /** @type {TextureExtractor} */
-  #extractor;
-
   /** @type {string} */
   #filePath = "";
 
@@ -79,10 +76,6 @@ export class ElevationTextureManager {
       fileName ??= `${game.world.id}-${canvas.scene.id}-elevationMap`;
       fileName += `.${fileExt}`;
     }
-
-    // Initialize a new TextureExtractor worker.
-    this.#extractor ??= new TextureExtractor(canvas.app.renderer, { callName: "ElevatedVision", controlHash: true });
-    this.#extractor.reset();
 
     // Set the file path for the texture and ensure that the folder structure is present
     this.#filePath = await this.constructor.constructSaveDirectory(filePath);
@@ -173,24 +166,6 @@ export class ElevationTextureManager {
   }
 
   /**
-   * Extract pixels from a texture.
-   * @param {PIXI.Texture} texture
-   * @param {object} [opts]         Options that affect the output
-   * @param {string} [opts.type]    MIME image type
-   * @param {number} [opts.quality] Value that affects some outputs, such as jpeg
-   * @returns {Uint8Array}
-   */
-  async extract(texture, { type = "image/webp", quality = 1 } = {}) {
-    return this.#extractor.extract({
-      texture,
-      compression: TextureExtractor.COMPRESSION_MODES.NONE,
-      type,
-      quality,
-      debug: false
-    });
-  }
-
-  /**
    * Confirm if a hierarchy of directories exist within the "data" storage location.
    * Create new directories if missing.
    * @param {string} filePath   The directory path, separated by "/".
@@ -219,8 +194,7 @@ export class ElevationTextureManager {
    */
   async save(texture) {
     log(`Saving texture to ${this.#filePath}/${this.#fileName}`);
-
-    const base64image = await ImageHelper.textureToImage(texture, { format: "image/webp", quality: 1});
+    const base64image = await this.convertTextureToImage(texture);
     return this.constructor.uploadBase64(base64image, this.#fileName, this.#filePath, { type: "image", notify: false });
   }
 
@@ -251,12 +225,7 @@ export class ElevationTextureManager {
    * @returns {string}
    */
   async convertTextureToImage(texture, { type = "image/webp", quality = 1 }) {
-    const rgbaBuffer = await this.extract(texture, { type, quality });
-    const width = Math.round(texture.width * texture.resolution);
-    const height = Math.round(texture.height * texture.resolution);
-
-    const canvasElement = ImageHelper.pixelsToCanvas(rgbaBuffer, width, height);
-    return ImageHelper.canvasToBase64(canvasElement, type, quality);
+    return canvas.app.renderer.plugins.extractAsync.base64(texture, type, quality);
   }
 
   /**
