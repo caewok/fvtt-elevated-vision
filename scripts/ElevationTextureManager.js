@@ -220,14 +220,7 @@ export class ElevationTextureManager {
   async save(texture) {
     log(`Saving texture to ${this.#filePath}/${this.#fileName}`);
 
-    const base64image = await this.#extractor.extract({
-      texture,
-      compression: TextureExtractor.COMPRESSION_MODES.BASE64,
-      type: "image/webp",
-      quality: 1.0,
-      debug: false
-    });
-
+    const base64image = await ImageHelper.textureToImage(texture, { format: "image/webp", quality: 1});
     return this.constructor.uploadBase64(base64image, this.#fileName, this.#filePath, { type: "image", notify: false });
   }
 
