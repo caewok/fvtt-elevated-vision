@@ -24,17 +24,23 @@ import {
   log,
   readDataURLFromFile,
   convertBase64ToImage,
-  drawPolygonWithHoles } from "./util.js";
+  drawPolygonWithHoles,
+  quotient256,
+  mod256 } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
-import { extractPixels, pixelsToCanvas, canvasToBase64 } from "./perfect-vision/extract-pixels.js";
 import { setSceneSetting, getSceneSetting, getSetting, SETTINGS } from "./settings.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
+import { ElevationLayerShader } from "./ElevationLayerShader.js";
+import { ElevationTextureManager } from "./ElevationTextureManager.js";
+
+
+import "./perfect-vision/extract-async.js";
 
 /* Elevation layer
 
@@ -65,11 +71,7 @@ On canvas:
 */
 
 // TODO: What should replace this now that FullCanvasContainer is deprecated in v11?
-class FullCanvasContainer extends FullCanvasObjectMixin(PIXI.Container) {
-  constructor(...args) {
-    super(...args);
-  }
-}
+class FullCanvasContainer extends FullCanvasObjectMixin(PIXI.Container) {}
 
 export function _onMouseMoveCanvas(wrapper, event) {
   wrapper(event);
@@ -87,6 +89,7 @@ export class ElevationLayer extends InteractionLayer {
 
   // Imported methods
   TravelElevationCalculator = TravelElevationCalculator;
+
   CoordinateElevationCalculator = CoordinateElevationCalculator;
 
   /**
@@ -134,9 +137,7 @@ export class ElevationLayer extends InteractionLayer {
    */
   updateElevationLabel({x, y}) {
     const value = this.elevationAt({x, y});
-
     this.elevationLabel.text = value.toString();
-//     log(`Updating elevation label at ${x},${y} to ${this.elevationLabel.text}`);
     this.elevationLabel.position = {x, y};
   }
 
@@ -170,6 +171,12 @@ export class ElevationLayer extends InteractionLayer {
   _elevationTexture;
 
   /**
+   * PIXI.Mesh used to display the elevation colors when the layer is active.
+   * @type {ElevationLayerShader}
+   */
+  _elevationColorsMesh;
+
+  /**
    * Container representing the canvas
    * @type {FullCanvasContainer}
    */
@@ -182,30 +189,11 @@ export class ElevationLayer extends InteractionLayer {
   #elevation = 9000;
 
   /**
-   * Maximum pixel value. Currently pixels range between 0 and 255 for a color channel.
+   * Maximum normalized value.
+   * 256 values (8 bit) per channel; two channels currently used. Don't forget 0!
    * @type {number}
    */
-  #maximumPixelValue = 255;
-
-  get maximumPixelValue() { return this.#maximumPixelValue; }
-
-  /**
-   * The maximum allowable visibility texture size.
-   * In v11, this is equal to CanvasVisibility.#MAXIMUM_VISIBILITY_TEXTURE_SIZE
-   * @type {number}
-   */
-  static #MAXIMUM_ELEVATION_TEXTURE_SIZE = CONFIG[MODULE_ID]?.elevationTextureSize ?? 4096;
-
-  /** @type ElevationTextureConfiguration */
-  #textureConfiguration;
-
-  /**
-   * The configured options used for the saved elevation texture.
-   * @type {ElevationTextureConfiguration}
-   */
-  get textureConfiguration() {
-    return this.#textureConfiguration;
-  }
+  #maximumNormalizedElevation = Math.pow(256, 2) - 1;
 
   /**
    * Flag for when the elevation data has changed for the scene, requiring a save.
@@ -213,6 +201,9 @@ export class ElevationLayer extends InteractionLayer {
    * @type {boolean}
    */
   _requiresSave = false; // Avoid private field here b/c it causes problems for arrow functions
+
+  /** @type {ElevationTextureManager} */
+  _textureManager = new ElevationTextureManager();
 
   /* ------------------------ */
 
@@ -248,15 +239,16 @@ export class ElevationLayer extends InteractionLayer {
 
     stepNew = Number.isInteger(stepNew) ? stepNew : Math.round((stepNew * 10)) / 10;
 
-    // Function to set the new pixel value such that elevation stays (mostly) the same.
+    // Function to set the new normalized elevation value such that elevation stays (mostly) the same.
     // e = min + value * step.
     // min + value * step = min + valueNew * stepNew
     // valueNew * stepNew = min + value * step - min
     // valueNew = value * step / stepNew
     const step = this.elevationStep;
     const mult = step / stepNew;
-    const stepAdjust = function(pixel) {
-      const out = Math.clamped(Math.round(mult * pixel), 0, 255);
+    const max = this.#maximumNormalizedElevation;
+    const stepAdjust = function(normE) {
+      const out = Math.clamped(Math.round(mult * normE), 0, max);
       return out || 0;
     };
 
@@ -308,7 +300,7 @@ export class ElevationLayer extends InteractionLayer {
    * @type {number}
    */
   get elevationMax() {
-    return this.elevationMin + (this.#maximumPixelValue * this.elevationStep);
+    return this._scaleNormalizedElevation(this.#maximumNormalizedElevation);
   }
 
   /* ------------------------ */
@@ -321,22 +313,87 @@ export class ElevationLayer extends InteractionLayer {
 
   /**
    * Convert a pixel value to an elevation value.
-   * @param {number} value    Pixel value
+   * @param {object} value    Pixel value
    * @returns {number}
    */
-  pixelValueToElevation(value) {
-    return this.elevationMin + (Math.round(value * this.elevationStep * 10) / 10);
+  pixelChannelsToElevation(r, g = 0) {
+    const value = this._decodeElevationChannels(r, g);
+    return this._scaleNormalizedElevation(value);
+  }
+
+  /**
+   * Convert a pixel value to an elevation value.
+   * @param {number} r    Pixel value
+   * @returns {number}
+   * @deprecated since v0.5.1.
+   */
+  pixelValueToElevation(r) {
+    console.log("pixelValueToElevation is deprecated since Elevated Vision v0.5.1. Please use pixelChannelsToElevation instead.");
+    return this.pixelChannelsToElevation(r);
+  }
+
+  /**
+   * Convert an elevation value to a pixel value between 0 and 255
+   * @param {number} value    Elevation
+   * @returns {object}
+   *   - {number} r   Red channel, integer between 0 and 255
+   *   - {number} g   Green channel, integer between 0 and 255
+   *   - {number} b   Blue channel, currently unused
+   */
+  elevationToPixelChannels(elevation) {
+    elevation = this.clampElevation(elevation);
+    const norm = this._normalizeElevation(elevation);
+    return this._encodeElevationChannels(norm);
   }
 
   /**
    * Convert an elevation value to a pixel value between 0 and 255
    * @param {number} value    Elevation
    * @returns {number}
+   * @deprecated since v0.5.1.
    */
   elevationToPixelValue(elevation) {
+    console.warn("elevationToPixelValue no longer available since Elevated Vision v0.5.1. Please use elevationToPixelChannels instead.");
     elevation = this.clampElevation(elevation);
     return (elevation - this.elevationMin) / this.elevationStep;
   }
+
+  /**
+   * Normalize elevation value for encoding in texture.
+   * @param {number} e    Elevation value in grid units
+   * @returns {number} Integer between 0 and 65,536
+   */
+  _normalizeElevation(e) {
+    return (e - this.elevationMin) / this.elevationStep;
+  }
+
+  /**
+   * Scale an integer to the scene elevation.
+   * @param {number} value    Integer between 0 and 65,536
+   * @returns {number} Elevation value, in grid units
+   */
+  _scaleNormalizedElevation(value) {
+    return this.elevationMin + (Math.round(value * this.elevationStep * 10) / 10);
+  }
+
+  /**
+   * Given red and green 8-bit channels of a color,
+   * return an integer value.
+   * @param {number} r    Red channel value, between 0 and 255.
+   * @param {number} g    Green channel value, between 0 and 255.
+   * @returns {number} Number between 0 and 65,536. (256 * 256).
+   */
+  _decodeElevationChannels(r, g) { return (g * 256) + r; }
+
+  /**
+   * Given a number representing normalized elevation, returns its encoded color channels.
+   * @param {number} e    Normalized elevation integer between 0 and 65,536.
+   * @returns {object}
+   *   - {number} r   Red channel, integer between 0 and 255
+   *   - {number} g   Green channel, integer between 0 and 255
+   *   - {number} b   Blue channel, currently unused
+   */
+  _encodeElevationChannels(e) { return { r: mod256(e), g: quotient256(e), b: 0 }; }
 
   /**
    * Convert value such as elevation from grid units to x,y coordinate dimensions.
@@ -364,17 +421,9 @@ export class ElevationLayer extends InteractionLayer {
    * @return {PIXI.Color}
    */
   elevationColor(elevation) {
-    const value = this.elevationToPixelValue(elevation);
-
-    // Gradient from red (255, 0, 0) to blue (0, 0, 255)
-    // Flip at 128
-    // Helps visualization
-    // const r = value;
-    // const g = 0;
-    // const b = value - 255;
-
-    log(`elevationHex elevation ${elevation}, value ${value}`);
-    return new PIXI.Color([value / this.#maximumPixelValue, 0, 0]);
+    const channels = this.elevationToPixelChannels(elevation);
+    log(`elevationHex elevation ${elevation}, rgb ${channels.r},${channels.g},${channels.b}`);
+    return new PIXI.Color(channels);
   }
 
   /**
@@ -419,6 +468,8 @@ export class ElevationLayer extends InteractionLayer {
     if ( !this.container ) return;
     canvas.stage.removeChild(this._wallDataContainer);
 
+    this.eraseElevation();
+
     // TO-DO: keep the wall graphics and labels and just update as necessary.
     // Destroy only in tearDown
     const wallData = this._wallDataContainer.removeChildren();
@@ -432,7 +483,8 @@ export class ElevationLayer extends InteractionLayer {
 
   /** @override */
   async _draw(options) { // eslint-disable-line no-unused-vars
-    if ( canvas.elevation.active ) this.drawElevation();
+  // Not needed?
+  // if ( canvas.elevation.active ) this.drawElevation();
   }
 
   /* -------------------------------------------- */
@@ -468,8 +520,12 @@ export class ElevationLayer extends InteractionLayer {
       ? TokenAverageElevationCalculator : TokenPointElevationCalculator;
 
     this._initialized = false;
-    this._clearElevationPixelCache()
-    this.#textureConfiguration = this._configureElevationTexture();
+    this._clearElevationPixelCache();
+
+    // Initialize the texture manager for the scene.
+    const sceneEVData = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
+    const fileURL = sceneEVData?.imageURL ?? undefined;
+    await this._textureManager.initialize({ fileURL });
 
     // Initialize container to hold the elevation data and GM modifications
     const w = new FullCanvasContainer();
@@ -480,17 +536,18 @@ export class ElevationLayer extends InteractionLayer {
     this._backgroundElevation.position = { x: sceneX, y: sceneY };
 
     // Add the render texture for displaying elevation information to the GM
-    this._elevationTexture = PIXI.RenderTexture.create(this.textureConfiguration);
+    this._elevationTexture = PIXI.RenderTexture.create(this._textureManager.textureConfiguration);
     // Set the clear color of the render texture to black. The texture needs to be opaque.
     this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
 
     // Add the sprite that holds the default background elevation settings
     this._graphicsContainer.addChild(this._backgroundElevation);
 
+    // Add the elevation color mesh
+    this._elevationColorsMesh = new ElevationLayerShader();
+
     await this.loadSceneElevationData();
     this.renderElevation();
-
-//     this._updateMinimumElevationFromSceneTiles();
 
     this._initialized = true;
   }
@@ -511,103 +568,49 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
-   * @typedef {object} ElevationTextureConfiguration
-   * @property {number} resolution    Resolution of the texture
-   * @property {number} width         Width, based on sceneWidth
-   * @property {number} height        Height, based on sceneHeight
-   * @property {PIXI.MIPMAP_MODES} mipmap
-   * @property {PIXI.SCALE_MODES} scaleMode
-   * @property {PIXI.MSAA_QUALITY} multisample
-   * @property {PIXI.FORMATS} format
-   */
-
-  /**
-   * Values used when rendering elevation data to a texture representing the scene canvas.
-   * It may be important that width/height of the elevation texture is evenly divisible
-   * by the downscaling resolution. (It is important for fog manager to prevent drift.)
-   * @returns {ElevationTextureConfiguration}
-   */
-  _configureElevationTexture() {
-    // In v11, see CanvasVisibility.prototype.#configureVisibilityTexture
-    const dims = canvas.scene.dimensions;
-    const size = dims.size;
-    let width = dims.sceneWidth;
-    let height = dims.sceneHeight;
-
-    let resolution = Math.clamped(CONFIG[MODULE_ID]?.resolution ?? 0.25, .01, 1);
-    const maxSize = Math.min(
-      ElevationLayer.#MAXIMUM_ELEVATION_TEXTURE_SIZE,
-      resolution * Math.max(width, height));
-
-    if ( width >= height ) {
-      resolution = maxSize / width;
-      height = Math.ceil(height * resolution) / resolution;
-    } else {
-      resolution = maxSize / height;
-      width = Math.ceil(width * resolution) / resolution;
-    }
-
-    return {
-      resolution, // TODO: Remove these defaults
-      width,
-      height,
-      mipmap: PIXI.MIPMAP_MODES.OFF,
-      scaleMode: PIXI.SCALE_MODES.NEAREST,
-      multisample: PIXI.MSAA_QUALITY.NONE,
-      format: PIXI.FORMATS.RED
-      // Cannot be extracted ( GL_INVALID_OPERATION: Invalid format and type combination)
-      // format: PIXI.FORMATS.RED_INTEGER,
-      // type: PIXI.TYPES.INT
-    };
-  }
-
-  /**
-   * Load the elevation data from the image stored in a scene flag.
+   * Load the elevation data from the stored image.
    */
   async loadSceneElevationData() {
     log("loadSceneElevationData");
+
     const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
     if ( !elevationImage ) return;
 
-    if ( isEmpty(elevationImage) || isEmpty(elevationImage.imageData) ) {
+    if ( isEmpty(elevationImage) || isEmpty(elevationImage.imageURL) ) {
       canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
+      return;
+    }
+
+    const texture = await this._textureManager.load();
+    if ( !texture || !texture.valid ) {
+      const msg = `ElevatedVision|importFromImageFile failed to import elevation data from ${elevationImage.imageURL}.`;
+      ui.notifications.error(msg);
+      console.error(msg, elevationImage);
       return;
     }
 
     // We are loading a saved file, so we only want to require a save if the scene
     // elevation has already been modified.
-    let neededSave = this._requiresSave;
-
-    // Check if this is an updated version.
-    // v0.4.0 added resolution, width, height.
-//     if ( isNewerVersion("0.4.0", elevationImage.version) ) {
-//       ui.notifications.notify("Detected older version of elevation scene data. Downloading backup in case upgrade goes poorly!");
-//       await this.downloadStoredSceneElevationData();
-//       neededSave = true;
-//     }
-
-    await this.importFromImageFile(elevationImage.imageData, {
-      resolution: elevationImage.resolution,
-      width: elevationImage.width,
-      height: elevationImage.height });
+    const neededSave = this._requiresSave;
+    this.#replaceBackgroundElevationTexture(texture);
     this._requiresSave = neededSave;
-
-    // Following won't work if _resolution.format = PIXI.FORMATS.ALPHA
-    // texImage2D: type FLOAT but ArrayBufferView not Float32Array when using the filter
-    // const { width, height } = this._resolution;
-    // this._elevationBuffer = new Uint8Array(width * height);
-    // this._elevationTexture = PIXI.Texture.fromBuffer(this._elevationBuffer, width, height, this._resolution);
   }
 
   /**
-   * Store the elevation data for the scene in a flag for the scene
+   * Store the elevation data for the scene.
+   * Stores the elevation image to the world folder and stores metadata to the scene flag.
    */
   async saveSceneElevationData() {
-    const format = "image/webp";
-    const imageData = await this._extractElevationImageData(format);
+    const res = await this._textureManager.save(this._elevationTexture);
+    if ( res.status !== "success" ) {
+      ui.notifications.error("There was an error saving the elevation texture for the scene. Check the console for details.");
+      console.error(res);
+      return;
+    }
+
     const saveObj = {
-      imageData,
-      format,
+      format: "image/webp",
+      imageURL: res.path,
       width: this._elevationTexture.width,
       height: this._elevationTexture.height,
       resolution: this._elevationTexture.resolution,
@@ -616,20 +619,6 @@ export class ElevationLayer extends InteractionLayer {
 
     await canvas.scene.setFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE, saveObj);
     this._requiresSave = false;
-  }
-
-  async _extractElevationImageData(format = "image/webp", quality = 1) {
-    this.renderElevation();
-    // Store only the scene rectangle data
-    // From https://github.com/dev7355608/perfect-vision/blob/3eb3c040dfc83a422fd88d4c7329c776742bef2f/patches/fog.js#L256
-    const { pixels, width, height } = extractPixels(
-      canvas.app.renderer,
-      this._elevationTexture);
-      //canvas.dimensions.sceneRect);
-    const canvasElement = pixelsToCanvas(pixels, width, height);
-
-    // Depending on format, may need quality = 1 to avoid lossy compression
-    return await canvasToBase64(canvasElement, format, quality);
   }
 
   /**
@@ -670,77 +659,48 @@ export class ElevationLayer extends InteractionLayer {
    * Import elevation data from the provided image file location into the scene.
    * @param {File} file
    */
-  async importFromImageFile(file, { resolution = 1, width, height } = {}) {
-    width ??= canvas.dimensions.sceneWidth;
-    height ??= canvas.dimensions.sceneHeight;
-    log(`import ${width}x${height} ${file} with resolution ${resolution}`, file);
+  async importFromImageFile(file) {
+    const texture = await this._textureManager.loadFromFile(file);
+    if ( !texture || !texture.valid ) {
+      const msg = `ElevatedVision|importFromImageFile failed to import ${file.name}.`;
+      ui.notifications.error(msg);
+      console.error(msg, file);
+    }
 
-    // See https://stackoverflow.com/questions/41494623/pixijs-sprite-not-loading
-    const texture = await PIXI.Texture.fromURL(file);
     log(`Loaded texture with dim ${texture.width},${texture.height}`, texture);
+    this.#replaceBackgroundElevationTexture(texture);
+  }
 
-    resolution ??= texture.width > texture.height ? texture.width / width : texture.height / height;
-
-    texture.baseTexture.setSize(width, height, resolution);
-    texture.baseTexture.setStyle(this.textureConfiguration.scaleMode, this.textureConfiguration.mipmap);
-
-    // Testing: let sprite = PIXI.Sprite.from("elevation/test_001.png");
+  /**
+   * Replace the background elevation texture with a new one.
+   * Used by loadSceneElevationData and importFromImageFile.
+   * @param {PIXI.Texture} texture
+   */
+  #replaceBackgroundElevationTexture(texture) {
     canvas.elevation._backgroundElevation.texture.destroy();
     canvas.elevation._backgroundElevation.texture = texture;
-
     canvas.elevation.renderElevation();
     canvas.elevation._requiresSave = true;
   }
 
+
   /**
    * Download the elevation data as an image file.
-   * Currently writes the texture elevation data to red channel.
-   * @param {object} [options]  Options that affect how the image file is formatted.
-   * @param {string} [options.format] Image format, e.g. "image/jpeg" or "image/webp".
-   * @param {string} [options.fileName] Name of the file. Extension will be added based on format.
+   * @param {object} [opts]  Options that affect how the image file is formatted.
+   * @param {string} [opts.format]    Image format, e.g. "image/jpeg" or "image/webp"
+   * @param {string} [opts.fileName]  Name of the file. Extension will be added based on format
+   * @param {number} [opts.quality]   Value that affects some image types, such as jpeg
    */
-  async downloadElevationData({ format = "image/png", fileName = canvas.scene.name } = {}) {
+  async downloadElevationData({ format = "image/png", fileName = canvas.scene.name, quality } = {}) {
     const imageExtension = format.split("/")[1];
     fileName += `.${imageExtension}`;
 
-    const image64 = await this._extractElevationImageData(format);
+    const image64 = await this._textureManager.convertTextureToImage(this._elevationTexture, { type: format, quality });
     saveDataToFile(convertBase64ToImage(image64), format, fileName);
   }
 
-  /**
-   * Download the stored elevation data for the scene.
-   */
-  async downloadStoredSceneElevationData({ fileName = "elevation-" + canvas.scene.name } = {}) {
-    const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-    if ( !elevationImage || isEmpty(elevationImage) || isEmpty(elevationImage.imageData) ) return;
-    saveDataToFile(convertBase64ToImage(elevationImage.imageData), elevationImage.format, fileName);
-  }
-
-  // TO-DO: Preferably download as alpha, possibly by constructing a new texture?
-
-  //     const { width, height } = this._resolution;
-  //     const tex = PIXI.Texture.fromBuffer(this.pixelArray, width, height, {
-  //       resolution: 1.0,
-  //       mipmap: PIXI.MIPMAP_MODES.OFF,
-  //       scaleMode: PIXI.SCALE_MODES.LINEAR,
-  //       multisample: PIXI.MSAA_QUALITY.NONE,
-  //       format: PIXI.FORMATS.ALPHA
-  //     })
-  //
-  //     const s = new PIXI.Sprite(texture);
-  //     const png = canvas.app.renderer.extract.image(s, "image/png")
-
-
   /* -------------------------------------------- */
   /* NOTE: ELEVATION PIXEL DATA */
-
-  /**
-   * @typedef {object} PixelFrame
-   * @property {number[]} pixels
-   * @property {number} width
-   * @property {number} height
-   * @property {number} [resolution]
-   */
 
   /** @type {PixelFrame} */
   #elevationPixelCache;
@@ -753,9 +713,10 @@ export class ElevationLayer extends InteractionLayer {
    * Refresh the pixel array cache from the elevation texture.
    */
   #refreshElevationPixelCache() {
-    // TODO: This needs to handle textures with resolutions less than 1.
     const { sceneX: x, sceneY: y } = canvas.dimensions;
-    return PixelCache.fromTexture(this._elevationTexture, { x, y });
+    return PixelCache.fromTexture(
+      this._elevationTexture,
+      { x, y, arrayClass: Uint16Array, combineFn: this._decodeElevationChannels });
   }
 
   /**
@@ -775,7 +736,7 @@ export class ElevationLayer extends InteractionLayer {
    */
   elevationAt({x, y}) {
     const value = this.elevationPixelCache.pixelAtCanvas(x, y);
-    return this.pixelValueToElevation(value);
+    return this._scaleNormalizedElevation(value);
   }
 
   /**
@@ -787,7 +748,7 @@ export class ElevationLayer extends InteractionLayer {
   averageElevationWithinShape(shape) {
     const skip = CONFIG[MODULE_ID]?.averageTerrain ?? 1;
     const average = this.elevationPixelCache.average(shape, skip);
-    return this.pixelValueToElevation(average);
+    return this._scaleNormalizedElevation(average);
   }
 
   /**
@@ -819,10 +780,9 @@ export class ElevationLayer extends InteractionLayer {
   /* NOTE: CHANGE ELEVATION VALUES */
 
   /**
-   * Apply a function to every pixel value.
+   * Apply a function to every pixel.
    * @param {function} fn   Function to use.
-   *  It should take a single elevation value and return a different elevation value.
-   *  Note that these are pixel values, not elevation values.
+   *   It should take a single normalized elevation value and return a different normalized value.
    */
   changePixelValuesUsingFunction(fn) {
     this.renderElevation(); // Just in case
@@ -831,7 +791,13 @@ export class ElevationLayer extends InteractionLayer {
     const sceneRect = canvas.dimensions.sceneRect;
     const { pixels, width, height } = this._extractFromElevationTexture(sceneRect);
     const ln = pixels.length;
-    for ( let i = 0; i < ln; i += 1 ) pixels[i] = fn(pixels[i]);
+    for ( let i = 0; i < ln; i += 4 ) {
+      const currNormE = this._decodeElevationChannels(pixels[i], pixels[i + 1]);
+      const newNormE = fn(currNormE);
+      const newPixelChannels = this._encodeElevationChannels(newNormE);
+      pixels[i] = newPixelChannels.r;
+      pixels[i + 1] = newPixelChannels.g;
+    }
 
     // This makes vertical lines: newTex = PIXI.Texture.fromBuffer(pixels, width, height)
     const br = new PIXI.BufferResource(pixels, {width, height});
@@ -839,15 +805,12 @@ export class ElevationLayer extends InteractionLayer {
     const newTex = new PIXI.Texture(bt);
 
     // Save to the background texture (used by the background sprite, like with saved images)
-    this._backgroundElevation.texture.destroy();
-    this._backgroundElevation.texture = newTex;
-
-    this.renderElevation();
-    this._requiresSave = true;
+    this.#replaceBackgroundElevationTexture(newTex);
   }
 
   /**
    * Change elevation of every pixel that currently is set to X value.
+   * Faster than changePixelValuesUsingFunction.
    * @param {number} from   Pixels with this elevation will be changed.
    * @param {number} to     Selected pixels will be changed to this elevation.
    */
@@ -865,8 +828,8 @@ export class ElevationLayer extends InteractionLayer {
     from = this.clampElevation(from);
     to = this.clampElevation(to);
 
-    const fromPixelValue = this.elevationToPixelValue(from);
-    const toPixelValue = this.elevationToPixelValue(to);
+    const fromPixelChannels = this.elevationToPixelChannels(from);
+    const toPixelChannels = this.elevationToPixelChannels(to);
 
     this.renderElevation(); // Just in case
 
@@ -876,7 +839,10 @@ export class ElevationLayer extends InteractionLayer {
 
     const ln = pixels.length;
     for ( let i = 0; i < ln; i += 4 ) {
-      if ( pixels[i] === fromPixelValue ) pixels[i] = toPixelValue;
+      if ( pixels[i] === fromPixelChannels.r && pixels[i + 1] === fromPixelChannels.g ) {
+        pixels[i] = toPixelChannels.r;
+        pixels[i + 1] = toPixelChannels.g;
+      }
     }
 
     // Error Makes vertical lines:
@@ -886,11 +852,7 @@ export class ElevationLayer extends InteractionLayer {
     const newTex = new PIXI.Texture(bt);
 
     // Save to the background texture (used by the background sprite, like with saved images)
-    this._backgroundElevation.texture.destroy();
-    this._backgroundElevation.texture = newTex;
-
-    this.renderElevation();
-    this._requiresSave = true;
+    this.#replaceBackgroundElevationTexture(newTex);
   }
 
   /**
@@ -909,9 +871,12 @@ export class ElevationLayer extends InteractionLayer {
   setElevationForGridSpace(p, elevation = 0, { temporary = false, useHex = canvas.grid.isHex } = {}) {
     const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
-    const draw = new Draw(graphics);
     const color = this.elevationColor(elevation);
-    draw.shape(shape, { color, fill: color });
+
+    // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
+    // and that causes a lighter-color border to appear outside the shape.
+    const draw = new Draw(graphics);
+    draw.shape(shape, { width: 0, fill: color});
 
     this.renderElevation();
 
@@ -1167,6 +1132,7 @@ export class ElevationLayer extends InteractionLayer {
     this._clearElevationPixelCache();
     this._backgroundElevation.destroy();
     this._backgroundElevation = PIXI.Sprite.from(PIXI.Texture.EMPTY);
+    this._elevationColorsMesh?.destroy();
 
     this._graphicsContainer.destroy({children: true});
     this._graphicsContainer = new PIXI.Container();
@@ -1184,20 +1150,21 @@ export class ElevationLayer extends InteractionLayer {
     canvas.app.renderer.render(this._graphicsContainer, { renderTexture: this._elevationTexture, transform });
 
     // Destroy the cache
-    this.#elevationPixelCache = undefined;
+    this._clearElevationPixelCache();
   }
 
   /**
    * Draw the elevation container.
-   * @returns {FullCanvasContainer|null}    The elevation container
    */
   drawElevation() {
-    const { width, height } = this.elevationPixelCache;
-    const elevationFilter = ElevationFilter.create({
-      dimensions: [width, height],
-      elevationSampler: this._elevationTexture
-    });
-    this.container.filters = [elevationFilter];
+    this.container.addChild(this._elevationColorsMesh);
+  }
+
+  /**
+   * Remove the elevation color shading.
+   */
+  eraseElevation() {
+    this.container.removeChild(this._elevationColorsMesh);
   }
 
   /**
@@ -1456,7 +1423,6 @@ class ElevationFilter extends AbstractBaseFilter {
     const { sceneX, sceneY } = canvas.dimensions;
     this.uniforms.canvasMatrix ??= new PIXI.Matrix();
     this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform);
-//     this.uniforms.canvasMatrix.translate(sceneX, sceneY);
     this.uniforms.canvasMatrix.invert();
     this.uniforms.canvasMatrix.translate(-sceneX, -sceneY);
     return super.apply(filterManager, input, output, clear, currentState);

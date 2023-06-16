@@ -1,3 +1,12 @@
+# 0.5.1
+Elevation can now handle up to 65,536 distinct values. This is accomplished by utilizing both red and green channels of the elevation image.
+
+Switched to storing the elevation data for each scene as a webp image in worlds/[world-id]/assets/elevatedvision/[world-id][scene-id]-elevationMap.webp. Previously, the elevation data was stored in the scene flag. Switching to storing an image should be faster by avoiding database churn. In addition, I will backport this to v10 to avoid a potential v10 database issue if the length of the elevation data got too long.
+
+Switched to a Foundry worker for saving the elevation data image when it is modified, which should be faster than the previous approach.
+
+Fixed an error seen in v11 whereby setting the elevation of a grid square would create a border with a lower elevation.
+
 # 0.5.0
 Updated for Foundry v11. Update geometry lib to v0.2.1.
 

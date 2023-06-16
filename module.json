@@ -8,13 +8,13 @@
   "manifestPlusVersion": "1.0.0",
   "compatibility": {
     "minimum": "11.299",
-    "verified": "11.301"
+    "verified": "11.302"
   },
   "authors": [
     {
       "name": "caewok",
       "url": "https://github.com/caewok",
-      "discord": "caewok#9192"
+      "discord": "caewok"
     }
   ],
   "relationships": {

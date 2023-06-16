@@ -273,7 +273,7 @@ export class TravelElevationCalculator {
     FLY: 2
   };
 
-  static #maximumPixelValue = 255;
+  static #maximumTilePixelValue = 255;
 
   /** @type {TokenElevationCalculator} */
   TEC;
@@ -413,7 +413,7 @@ export class TravelElevationCalculator {
         // const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
         // let z = gridUnitsToPixels(e);
         // let pt3d = new Point3d(pt.x, pt.y, z);
-        pt.e = ev.pixelValueToElevation(local.value);
+        pt.e = ev._scaleNormalizedElevation(local.value);
         pt.t0 = local.t0;
         out.push(pt);
         t = local.t0 + stepT; // + stepT;
@@ -838,7 +838,7 @@ export class TravelElevationCalculator {
     const evCache = ev.elevationPixelCache;
 
     // Don't clamp the jump value so we don't extend beyond the values desired.
-    const maxFallPixel = ev.elevationToPixelValue((tec.terrainStep - ev.elevationMin) / ev.elevationStep);
+    const maxFallPixel = ev._normalizeElevation(tec.terrainStep);
 
     // Initialize with the start value
     const pt = travelRay.project(startT);
@@ -847,7 +847,7 @@ export class TravelElevationCalculator {
     startT += stepT;
 
     // Function to test if the given pixel is more than the allowable terrain step.
-    let currPixelValue = ev.elevationToPixelValue(currE);
+    let currPixelValue = ev._normalizeElevation(currE);
     const cmp = value => {
       if ( value < (currPixelValue - maxFallPixel) ) return true;
       currPixelValue = value;
@@ -857,7 +857,7 @@ export class TravelElevationCalculator {
     const opts = { stepT, startT };
     const ix = evCache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
     if ( !ix ) return null;
-    ix.e = ev.pixelValueToElevation(ix.value);
+    ix.e = ev._scaleNormalizedElevation(ix.value);
     ix.cliff = true;
     return ix;
   }
@@ -877,7 +877,7 @@ export class TravelElevationCalculator {
     if ( !cache ) return null;
 
     // Function to test if the given pixel is under the threshold.
-    const pixelThreshold = alphaThreshold * TravelElevationCalculator.#maximumPixelValue;
+    const pixelThreshold = alphaThreshold * TravelElevationCalculator.#maximumTilePixelValue;
 
     let cmp = value => value <= pixelThreshold;
     const opts = { stepT, startT };
@@ -934,7 +934,7 @@ export class TravelElevationCalculator {
     }
 
     // Function to test if the given pixel is within the threshold.
-    const pixelThreshold = alphaThreshold * TravelElevationCalculator.#maximumPixelValue;
+    const pixelThreshold = alphaThreshold * TravelElevationCalculator.#maximumTilePixelValue;
     let cmp = value => value > pixelThreshold;
 
     const opts = { stepT, startT };
@@ -974,7 +974,7 @@ export class TravelElevationCalculator {
     const evCache = ev.elevationPixelCache;
 
     // Function to test if the given pixel exceeds the threshold.
-    const pixelThreshold = ev.elevationToPixelValue(elevationThreshold);
+    const pixelThreshold = ev._normalizeElevation(elevationThreshold);
     const cmp = value => value > pixelThreshold;
     const opts = { stepT, startT };
     const ix = evCache.nextPixelValueAlongCanvasRay(travelRay, cmp, opts);
@@ -982,7 +982,7 @@ export class TravelElevationCalculator {
 
     // TO-DO: Could use Point3d here and set z value to elevationZ.
     // May be helpful for flagging difficulty checks for large climbs/falls.
-    ix.e = ev.pixelValueToElevation(ix.value);
+    ix.e = ev._scaleNormalizedElevation(ix.value);
     return ix;
   }
 
