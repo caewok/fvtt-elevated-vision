@@ -61,6 +61,17 @@ Hooks.once("ready", () => {
                   EV functionality appears to be working, just not the prettier visual shadows.`
         })
 
+        .addEntry({
+            version: "0.5.1",
+            title: "Elevation data changes",
+            body: `\
+                - **Larger elevation range:** Elevation data is now stored in red and green channels of the
+                  elevation image. This allows elevation to have 65,536 distinct values in a scene, for all the
+                  mountaineers in your party!
+                - **Elevation data storage:** Elevation data for each scene is now stored as a webp image in
+                  worlds/[world-id]/assets/elevatedvision/[world-id][scene-id]-elevationMap.webp.`
+        })
+
         .build()
         ?.render(true);
 });
