@@ -146,6 +146,30 @@ function testCoordinateTransform(pixelCache) {
 
 testCoordinateTransform(cacheTile1)
 testCoordinateTransform(cacheTile1sm)
+
+fn = function() {
+  return PixelCache.fromTexture(canvas.elevation._elevationTexture);
+}
+
+fn2 = function() {
+  const { pixels } = extractPixels(canvas.app.renderer, canvas.elevation._elevationTexture);
+  return pixels;
+}
+
+async function fn3() {
+  const pixels = await canvas.app.renderer.plugins.extractAsync.pixels(canvas.elevation._elevationTexture)
+  return pixels
+}
+
+async function fn4() {
+  return canvas.app.renderer.plugins.extractAsync.pixels(canvas.elevation._elevationTexture)
+}
+
+await foundry.utils.benchmark(fn, 100)
+await foundry.utils.benchmark(fn2, 100)
+await foundry.utils.benchmark(fn3, 100)
+
+
 */
 
 /* Resolution math
