@@ -304,7 +304,7 @@ export class ElevationTextureManager {
     }
 
     return {
-      resolution, // TODO: Remove these defaults
+      resolution,
       width,
       height,
       mipmap: PIXI.MIPMAP_MODES.OFF,
