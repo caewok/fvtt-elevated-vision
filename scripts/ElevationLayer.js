@@ -868,9 +868,12 @@ export class ElevationLayer extends InteractionLayer {
   setElevationForGridSpace(p, elevation = 0, { temporary = false, useHex = canvas.grid.isHex } = {}) {
     const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
-    const draw = new Draw(graphics);
     const color = this.elevationColor(elevation);
-    draw.shape(shape, { color, fill: color });
+
+    // Don't use Draw.shape b/c it fills in the border line, which causes a border edge.
+    graphics.beginFill(color, 1.0);
+    graphics.drawShape(shape);
+    graphics.endFill();
 
     this.renderElevation();
 
