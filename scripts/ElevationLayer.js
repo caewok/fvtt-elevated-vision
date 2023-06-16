@@ -870,10 +870,10 @@ export class ElevationLayer extends InteractionLayer {
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     const color = this.elevationColor(elevation);
 
-    // Don't use Draw.shape b/c it fills in the border line, which causes a border edge.
-    graphics.beginFill(color, 1.0);
-    graphics.drawShape(shape);
-    graphics.endFill();
+    // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
+    // and that causes a lighter-color border to appear outside the shape.
+    const draw = new Draw(graphics);
+    draw.shape(shape, { width: 0, fill: color});
 
     this.renderElevation();
 
