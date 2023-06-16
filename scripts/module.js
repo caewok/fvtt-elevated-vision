@@ -45,6 +45,7 @@ import "./tokens.js";
 import "./renderConfig.js";
 import "./controls.js";
 import "./tiles.js";
+import "./perfect-vision/extract-async.js";
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
