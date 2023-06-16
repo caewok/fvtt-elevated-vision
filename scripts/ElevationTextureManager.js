@@ -224,7 +224,7 @@ export class ElevationTextureManager {
    * @param {number} [opts.quality]   Quality, used for some formats such as jpeg.
    * @returns {string}
    */
-  async convertTextureToImage(texture, { type = "image/webp", quality = 1 }) {
+  async convertTextureToImage(texture, { type = "image/webp", quality = 1 } = {}) {
     return canvas.app.renderer.plugins.extractAsync.base64(texture, type, quality);
   }
 
