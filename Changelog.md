@@ -1,3 +1,6 @@
+# 0.4.8
+Backport from v0.5.1 of storing the elevation data for each scene as a webp image in worlds/[world-id]/assets/elevatedvision/[world-id][scene-id]-elevationMap.webp.  Previously, the elevation data was stored in the scene flag. Switching to storing an image should be faster by avoiding database churn. Avoids a potential v10 database issue that could cause the world not to load if the length of the elevation data got too long.
+
 # 0.4.7
 Fix for error thrown with rotated tiles, due to bug in PixelCache.
 Remove unnecessary console warning re PixelCache uneven division.
