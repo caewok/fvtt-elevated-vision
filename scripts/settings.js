@@ -23,6 +23,13 @@ export const SETTINGS = {
     }
   },
 
+  COLOR: {
+    MIN: "color-min",
+    MAX: "color-max",
+    DEFAULT_MIN: "#FF0000FF",
+    DEFAULT_MAX: "#0000FFFF"
+  },
+
   VISION_USE_SHADER: "vision-use-shader",  // Deprecated
   AUTO_ELEVATION: "auto-change-elevation",
   AUTO_AVERAGING: "auto-change-elevation.averaging",
@@ -142,6 +149,50 @@ export function registerSettings() {
     requiresReload: true,
     type: Boolean
   });
+
+  if ( game.modules.get("color-picker")?.active ) {
+    ColorPicker.register(MODULE_ID, SETTINGS.COLOR.MIN, {
+      name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MIN}.name`),
+      hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MIN}.hint`),
+      scope: "world",
+      config: true,
+      default: SETTINGS.COLOR.DEFAULT_MIN,
+      format: "hexa",
+      onChange: (value) => {},            // A callback function which triggers when the setting is changed
+      //insertAfter: "myModule.mySetting"   // If supplied it will place the setting after the supplied setting
+    });
+
+    ColorPicker.register(MODULE_ID, SETTINGS.COLOR.MAX, {
+      name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MAX}.name`),
+      hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MAX}.hint`),
+      scope: "world",
+      config: true,
+      default: SETTINGS.COLOR.DEFAULT_MAX,
+      format: "hexa",
+      onChange: (value) => {},            // A callback function which triggers when the setting is changed
+    });
+
+  } else {
+    game.settings.register(MODULE_ID, SETTINGS.COLOR.MIN, {
+      name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MIN}.name`),
+      hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MIN}.string_hint`),
+      scope: "world",
+      config: true,
+      default: SETTINGS.COLOR.DEFAULT_MIN,
+      type: String,
+      requiresReload: false
+    });
+
+    game.settings.register(MODULE_ID, SETTINGS.COLOR.MAX, {
+      name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MAX}.name`),
+      hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MAX}.string_hint`),
+      scope: "world",
+      config: true,
+      default: SETTINGS.COLOR.DEFAULT_MAX,
+      type: String,
+      requiresReload: false
+    });
+  }
 }
 
 function setTokenCalculator() {
