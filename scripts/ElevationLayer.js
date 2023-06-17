@@ -303,6 +303,24 @@ export class ElevationLayer extends InteractionLayer {
     return this._scaleNormalizedElevation(this.#maximumNormalizedElevation);
   }
 
+  /**
+   * Current maximum elevation value for the scene.
+   * @type {number}
+   */
+  #elevationCurrentMax;
+
+  get elevationCurrentMax() {
+    return this.#elevationCurrentMax ?? (this.#elevationCurrentMax = this._calculateElevationCurrentMax());
+  }
+
+  /**
+   * Calculate the current maximum elevation value in the scene.
+   * @returns {number}
+   */
+  _calculateElevationCurrentMax() {
+    return this.elevationPixelCache.applyFunctionToShape(PixelCache.maxFunction);
+  }
+
   /* ------------------------ */
 
   /**
