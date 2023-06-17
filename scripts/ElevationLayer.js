@@ -318,7 +318,12 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number}
    */
   _calculateElevationCurrentMax() {
-    return this.elevationPixelCache.applyFunctionToShape(PixelCache.maxFunction);
+    // Reduce is slow, so do this the hard way.
+    let max = Number.NEGATIVE_INFINITY;
+    const pix = this.elevationPixelCache.pixels;
+    const ln = pix.length;
+    for ( let i = 0; i < ln; i += 1 ) max = Math.max(max, pix[i]);
+    return max;
   }
 
   /* ------------------------ */
