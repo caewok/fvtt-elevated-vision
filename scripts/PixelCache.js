@@ -626,6 +626,7 @@ export class PixelCache extends PIXI.Rectangle {
     return sum / denom;
   }
 
+
   total(shape, skip = 1) {
     const averageFn = PixelCache.averageFunction();
     const denom = this.applyFunctionToShape(averageFn, shape, skip);
@@ -650,6 +651,12 @@ export class PixelCache extends PIXI.Rectangle {
     const averageFn = value => averageFn.sum += value;
     averageFn.sum = 0;
     return averageFn;
+  }
+
+  static maxFunction() {
+    const maxFn = value => maxFn.max = Math.max(maxFn.max, value);
+    maxFn.max = Number.NEGATIVE_INFINITY;
+    return maxFn;
   }
 
   /**
