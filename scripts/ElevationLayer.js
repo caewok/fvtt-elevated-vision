@@ -822,6 +822,9 @@ export class ElevationLayer extends InteractionLayer {
       pixels[i + 1] = newPixelChannels.g;
     }
 
+    // Reset the elevation maximum, b/c we don't know this value anymore.
+    this.#elevationCurrentMax = undefined;
+
     // This makes vertical lines: newTex = PIXI.Texture.fromBuffer(pixels, width, height)
     const br = new PIXI.BufferResource(pixels, {width, height});
     const bt = new PIXI.BaseTexture(br);
@@ -868,6 +871,10 @@ export class ElevationLayer extends InteractionLayer {
       }
     }
 
+    // Update the elevation maximum.
+    if ( this.#elevationCurrentMax === from ) this.#elevationCurrentMax = undefined;
+    else this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, to);
+
     // Error Makes vertical lines:
     // newTex = PIXI.Texture.fromBuffer(pixels, width, height)
     const br = new PIXI.BufferResource(pixels, {width, height});
@@ -876,6 +883,7 @@ export class ElevationLayer extends InteractionLayer {
 
     // Save to the background texture (used by the background sprite, like with saved images)
     this.#replaceBackgroundElevationTexture(newTex);
+
   }
 
   /**
@@ -895,6 +903,9 @@ export class ElevationLayer extends InteractionLayer {
     const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     const color = this.elevationColor(elevation);
+
+    // Update the elevation maximum.
+    this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, elevation);
 
     // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
     // and that causes a lighter-color border to appear outside the shape.
@@ -953,8 +964,10 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
   fillLOS(origin, elevation = 0, { type = "light"} = {}) {
-    const los = CONFIG.Canvas.polygonBackends[type].create(origin, { type });
+    // Update the elevation maximum.
+    this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, elevation);
 
+    const los = CONFIG.Canvas.polygonBackends[type].create(origin, { type });
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     const draw = new Draw(graphics);
     const color = this.elevationColor(elevation);
@@ -1010,6 +1023,9 @@ export class ElevationLayer extends InteractionLayer {
       ui.notifications.warn(`Sorry; cannot locate a closed boundary for the requested fill at { x: ${origin.x}, y: ${origin.y} }!`);
       return;
     }
+
+    // Update the elevation maximum.
+    this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, elevation);
 
     // Create the graphics representing the fill!
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
