@@ -169,10 +169,6 @@ Hooks.once("setup", function() {
   registerPatches();
 });
 
-Hooks.once("ready", function() {
-  log("ready");
-});
-
 Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
   registerShadowPatches();
