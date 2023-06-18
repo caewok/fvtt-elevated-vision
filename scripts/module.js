@@ -22,6 +22,7 @@ import { PixelCache, TilePixelCache } from "./PixelCache.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
+import { ElevationLayerShader } from "./ElevationLayerShader.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -147,7 +148,8 @@ Hooks.once("init", function() {
     TilePixelCache,
     CoordinateElevationCalculator,
     TokenPointElevationCalculator,
-    TokenAverageElevationCalculator
+    TokenAverageElevationCalculator,
+    ElevationLayerShader
   };
 
   // These methods need to be registered early

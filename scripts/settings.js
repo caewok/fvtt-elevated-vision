@@ -1,4 +1,8 @@
 /* globals
+canvas,
+ColorPicker,
+CONFIG,
+CONST,
 game
 */
 "use strict";
@@ -19,15 +23,15 @@ export const SETTINGS = {
     LABELS: {
       "shading-none": `${MODULE_ID}.shading-none`,
       "shading-polygons": `${MODULE_ID}.shading-polygons`,
-      "shading-webgl": `${MODULE_ID}.shading-webgl`,
+      "shading-webgl": `${MODULE_ID}.shading-webgl`
     }
   },
 
   COLOR: {
     MIN: "color-min",
     MAX: "color-max",
-    DEFAULT_MIN: "#FF0000FF",
-    DEFAULT_MAX: "#0000FFFF"
+    DEFAULT_MIN: "#3C3E6431",
+    DEFAULT_MAX: "#C22121BB"
   },
 
   VISION_USE_SHADER: "vision-use-shader",  // Deprecated
@@ -158,8 +162,8 @@ export function registerSettings() {
       config: true,
       default: SETTINGS.COLOR.DEFAULT_MIN,
       format: "hexa",
-      onChange: (value) => {},            // A callback function which triggers when the setting is changed
-      //insertAfter: "myModule.mySetting"   // If supplied it will place the setting after the supplied setting
+      mode: 'HVS',
+      onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMinColor(value)
     });
 
     ColorPicker.register(MODULE_ID, SETTINGS.COLOR.MAX, {
@@ -169,7 +173,8 @@ export function registerSettings() {
       config: true,
       default: SETTINGS.COLOR.DEFAULT_MAX,
       format: "hexa",
-      onChange: (value) => {},            // A callback function which triggers when the setting is changed
+      mode: 'HVS',
+      onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMaxColor(value)
     });
 
   } else {
@@ -180,7 +185,8 @@ export function registerSettings() {
       config: true,
       default: SETTINGS.COLOR.DEFAULT_MIN,
       type: String,
-      requiresReload: false
+      requiresReload: false,
+      onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMinColor(value)
     });
 
     game.settings.register(MODULE_ID, SETTINGS.COLOR.MAX, {
@@ -190,14 +196,15 @@ export function registerSettings() {
       config: true,
       default: SETTINGS.COLOR.DEFAULT_MAX,
       type: String,
-      requiresReload: false
+      requiresReload: false,
+      onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMaxColor(value)
     });
   }
 }
 
 function setTokenCalculator() {
   canvas.elevation.TokenElevationCalculator = getSetting(SETTINGS.AUTO_AVERAGING)
-      ? TokenAverageElevationCalculator : TokenPointElevationCalculator;
+    ? TokenAverageElevationCalculator : TokenPointElevationCalculator;
 }
 
 /**

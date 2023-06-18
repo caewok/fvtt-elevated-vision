@@ -1,5 +1,4 @@
 /* globals
-AbstractBaseFilter,
 canvas,
 CONFIG,
 Dialog,
@@ -36,7 +35,7 @@ import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.j
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
-import { ElevationLayerShader } from "./ElevationLayerShader.js";
+import { EVQuadMesh, ElevationLayerShader } from "./ElevationLayerShader.js";
 import { ElevationTextureManager } from "./ElevationTextureManager.js";
 
 
@@ -71,7 +70,9 @@ On canvas:
 */
 
 // TODO: What should replace this now that FullCanvasContainer is deprecated in v11?
-class FullCanvasContainer extends FullCanvasObjectMixin(PIXI.Container) {}
+class FullCanvasContainer extends FullCanvasObjectMixin(PIXI.Container) {
+
+}
 
 export function _onMouseMoveCanvas(wrapper, event) {
   wrapper(event);
@@ -323,7 +324,16 @@ export class ElevationLayer extends InteractionLayer {
     const pix = this.elevationPixelCache.pixels;
     const ln = pix.length;
     for ( let i = 0; i < ln; i += 1 ) max = Math.max(max, pix[i]);
-    return max;
+    return this._scaleNormalizedElevation(max);
+  }
+
+  /**
+   * Update the current elevation maximum to a specific value.
+   * @param {number} e    Elevation value
+   */
+  _updateElevationCurrentMax(e) {
+    this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, e);
+    this._elevationColorsMesh.shader.updateMaxCurrentElevation();
   }
 
   /* ------------------------ */
@@ -566,10 +576,13 @@ export class ElevationLayer extends InteractionLayer {
     // Add the sprite that holds the default background elevation settings
     this._graphicsContainer.addChild(this._backgroundElevation);
 
-    // Add the elevation color mesh
-    this._elevationColorsMesh = new ElevationLayerShader();
 
     await this.loadSceneElevationData();
+
+    // Add the elevation color mesh
+    const shader = ElevationLayerShader.create();
+    this._elevationColorsMesh = new EVQuadMesh(canvas.dimensions.sceneRect, shader);
+
     this.renderElevation();
 
     this._initialized = true;
@@ -873,7 +886,7 @@ export class ElevationLayer extends InteractionLayer {
 
     // Update the elevation maximum.
     if ( this.#elevationCurrentMax === from ) this.#elevationCurrentMax = undefined;
-    else this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, to);
+    else this._updateElevationCurrentMax(to);
 
     // Error Makes vertical lines:
     // newTex = PIXI.Texture.fromBuffer(pixels, width, height)
@@ -903,9 +916,7 @@ export class ElevationLayer extends InteractionLayer {
     const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     const color = this.elevationColor(elevation);
-
-    // Update the elevation maximum.
-    this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, elevation);
+    this._updateElevationCurrentMax(elevation);
 
     // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
     // and that causes a lighter-color border to appear outside the shape.
@@ -964,9 +975,7 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
   fillLOS(origin, elevation = 0, { type = "light"} = {}) {
-    // Update the elevation maximum.
-    this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, elevation);
-
+    this._updateElevationCurrentMax(elevation);
     const los = CONFIG.Canvas.polygonBackends[type].create(origin, { type });
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     const draw = new Draw(graphics);
@@ -1024,8 +1033,7 @@ export class ElevationLayer extends InteractionLayer {
       return;
     }
 
-    // Update the elevation maximum.
-    this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, elevation);
+    this._updateElevationCurrentMax(elevation);
 
     // Create the graphics representing the fill!
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
@@ -1150,6 +1158,7 @@ export class ElevationLayer extends InteractionLayer {
     if ( !g ) return;
     this._graphicsContainer.removeChild(g);
     g.destroy();
+    this.#elevationCurrentMax = undefined;
     this._requiresSave = true;
     this.renderElevation();
   }
@@ -1158,9 +1167,16 @@ export class ElevationLayer extends InteractionLayer {
    * Remove all elevation data from the scene.
    */
   async clearElevationData() {
-    this.#destroy();
+    this._clearElevationPixelCache();
+    this._backgroundElevation.destroy();
+    this._backgroundElevation = PIXI.Sprite.from(PIXI.Texture.EMPTY);
+
+    this._graphicsContainer.destroy({children: true});
+    this._graphicsContainer = new PIXI.Container();
+
     await canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
     this._requiresSave = false;
+    this.#elevationCurrentMax = 0;
     this.renderElevation();
   }
 
@@ -1175,6 +1191,8 @@ export class ElevationLayer extends InteractionLayer {
 
     this._graphicsContainer.destroy({children: true});
     this._graphicsContainer = new PIXI.Container();
+
+    this._elevationTexture?.destroy();
   }
 
   /* -------------------------------------------- */
@@ -1204,6 +1222,10 @@ export class ElevationLayer extends InteractionLayer {
    */
   eraseElevation() {
     this.container.removeChild(this._elevationColorsMesh);
+  }
+
+  _updateMinColor() {
+    this._elevationColorsMesh.shader.updateMinColor();
   }
 
   /**
