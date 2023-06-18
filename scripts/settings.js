@@ -1,4 +1,8 @@
 /* globals
+canvas,
+ColorPicker,
+CONFIG,
+CONST,
 game
 */
 "use strict";
@@ -19,8 +23,15 @@ export const SETTINGS = {
     LABELS: {
       "shading-none": `${MODULE_ID}.shading-none`,
       "shading-polygons": `${MODULE_ID}.shading-polygons`,
-      "shading-webgl": `${MODULE_ID}.shading-webgl`,
+      "shading-webgl": `${MODULE_ID}.shading-webgl`
     }
+  },
+
+  COLOR: {
+    MIN: "color-min",
+    MAX: "color-max",
+    DEFAULT_MIN: "#03000003",
+    DEFAULT_MAX: "#80000080"
   },
 
   VISION_USE_SHADER: "vision-use-shader",  // Deprecated
@@ -142,11 +153,58 @@ export function registerSettings() {
     requiresReload: true,
     type: Boolean
   });
+
+  if ( game.modules.get("color-picker")?.active ) {
+    ColorPicker.register(MODULE_ID, SETTINGS.COLOR.MIN, {
+      name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MIN}.name`),
+      hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MIN}.hint`),
+      scope: "world",
+      config: true,
+      default: SETTINGS.COLOR.DEFAULT_MIN,
+      format: "hexa",
+      mode: 'HVS',
+      onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMinColor(value)
+    });
+
+    ColorPicker.register(MODULE_ID, SETTINGS.COLOR.MAX, {
+      name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MAX}.name`),
+      hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MAX}.hint`),
+      scope: "world",
+      config: true,
+      default: SETTINGS.COLOR.DEFAULT_MAX,
+      format: "hexa",
+      mode: 'HVS',
+      onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMaxColor(value)
+    });
+
+  } else {
+    game.settings.register(MODULE_ID, SETTINGS.COLOR.MIN, {
+      name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MIN}.name`),
+      hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MIN}.string_hint`),
+      scope: "world",
+      config: true,
+      default: SETTINGS.COLOR.DEFAULT_MIN,
+      type: String,
+      requiresReload: false,
+      onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMinColor(value)
+    });
+
+    game.settings.register(MODULE_ID, SETTINGS.COLOR.MAX, {
+      name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MAX}.name`),
+      hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MAX}.string_hint`),
+      scope: "world",
+      config: true,
+      default: SETTINGS.COLOR.DEFAULT_MAX,
+      type: String,
+      requiresReload: false,
+      onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMaxColor(value)
+    });
+  }
 }
 
 function setTokenCalculator() {
   canvas.elevation.TokenElevationCalculator = getSetting(SETTINGS.AUTO_AVERAGING)
-      ? TokenAverageElevationCalculator : TokenPointElevationCalculator;
+    ? TokenAverageElevationCalculator : TokenPointElevationCalculator;
 }
 
 /**
