@@ -3,10 +3,8 @@ canvas,
 CONFIG,
 FilePicker,
 game,
-ImageHelper,
 isNewerVersion,
 PIXI,
-TextureExtractor,
 TextureLoader
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */

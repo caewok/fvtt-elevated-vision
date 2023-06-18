@@ -1,5 +1,4 @@
 /* globals
-AbstractBaseFilter,
 canvas,
 CONFIG,
 Dialog,
@@ -36,7 +35,7 @@ import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.j
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
-import { ElevationLayerShader } from "./ElevationLayerShader.js";
+import { EVQuadMesh, ElevationLayerShader } from "./ElevationLayerShader.js";
 import { ElevationTextureManager } from "./ElevationTextureManager.js";
 
 
@@ -71,7 +70,9 @@ On canvas:
 */
 
 // TODO: What should replace this now that FullCanvasContainer is deprecated in v11?
-class FullCanvasContainer extends FullCanvasObjectMixin(PIXI.Container) {}
+class FullCanvasContainer extends FullCanvasObjectMixin(PIXI.Container) {
+
+}
 
 export function _onMouseMoveCanvas(wrapper, event) {
   wrapper(event);
@@ -301,6 +302,38 @@ export class ElevationLayer extends InteractionLayer {
    */
   get elevationMax() {
     return this._scaleNormalizedElevation(this.#maximumNormalizedElevation);
+  }
+
+  /**
+   * Current maximum elevation value for the scene.
+   * @type {number}
+   */
+  #elevationCurrentMax;
+
+  get elevationCurrentMax() {
+    return this.#elevationCurrentMax ?? (this.#elevationCurrentMax = this._calculateElevationCurrentMax());
+  }
+
+  /**
+   * Calculate the current maximum elevation value in the scene.
+   * @returns {number}
+   */
+  _calculateElevationCurrentMax() {
+    // Reduce is slow, so do this the hard way.
+    let max = Number.NEGATIVE_INFINITY;
+    const pix = this.elevationPixelCache.pixels;
+    const ln = pix.length;
+    for ( let i = 0; i < ln; i += 1 ) max = Math.max(max, pix[i]);
+    return this._scaleNormalizedElevation(max);
+  }
+
+  /**
+   * Update the current elevation maximum to a specific value.
+   * @param {number} e    Elevation value
+   */
+  _updateElevationCurrentMax(e) {
+    this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, e);
+    this._elevationColorsMesh.shader.updateMaxCurrentElevation();
   }
 
   /* ------------------------ */
@@ -543,10 +576,13 @@ export class ElevationLayer extends InteractionLayer {
     // Add the sprite that holds the default background elevation settings
     this._graphicsContainer.addChild(this._backgroundElevation);
 
-    // Add the elevation color mesh
-    this._elevationColorsMesh = new ElevationLayerShader();
 
     await this.loadSceneElevationData();
+
+    // Add the elevation color mesh
+    const shader = ElevationLayerShader.create();
+    this._elevationColorsMesh = new EVQuadMesh(canvas.dimensions.sceneRect, shader);
+
     this.renderElevation();
 
     this._initialized = true;
@@ -799,6 +835,9 @@ export class ElevationLayer extends InteractionLayer {
       pixels[i + 1] = newPixelChannels.g;
     }
 
+    // Reset the elevation maximum, b/c we don't know this value anymore.
+    this.#elevationCurrentMax = undefined;
+
     // This makes vertical lines: newTex = PIXI.Texture.fromBuffer(pixels, width, height)
     const br = new PIXI.BufferResource(pixels, {width, height});
     const bt = new PIXI.BaseTexture(br);
@@ -845,6 +884,10 @@ export class ElevationLayer extends InteractionLayer {
       }
     }
 
+    // Update the elevation maximum.
+    if ( this.#elevationCurrentMax === from ) this.#elevationCurrentMax = undefined;
+    else this._updateElevationCurrentMax(to);
+
     // Error Makes vertical lines:
     // newTex = PIXI.Texture.fromBuffer(pixels, width, height)
     const br = new PIXI.BufferResource(pixels, {width, height});
@@ -853,6 +896,7 @@ export class ElevationLayer extends InteractionLayer {
 
     // Save to the background texture (used by the background sprite, like with saved images)
     this.#replaceBackgroundElevationTexture(newTex);
+
   }
 
   /**
@@ -872,6 +916,7 @@ export class ElevationLayer extends InteractionLayer {
     const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     const color = this.elevationColor(elevation);
+    this._updateElevationCurrentMax(elevation);
 
     // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
     // and that causes a lighter-color border to appear outside the shape.
@@ -930,8 +975,8 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
   fillLOS(origin, elevation = 0, { type = "light"} = {}) {
+    this._updateElevationCurrentMax(elevation);
     const los = CONFIG.Canvas.polygonBackends[type].create(origin, { type });
-
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     const draw = new Draw(graphics);
     const color = this.elevationColor(elevation);
@@ -987,6 +1032,8 @@ export class ElevationLayer extends InteractionLayer {
       ui.notifications.warn(`Sorry; cannot locate a closed boundary for the requested fill at { x: ${origin.x}, y: ${origin.y} }!`);
       return;
     }
+
+    this._updateElevationCurrentMax(elevation);
 
     // Create the graphics representing the fill!
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
@@ -1111,6 +1158,7 @@ export class ElevationLayer extends InteractionLayer {
     if ( !g ) return;
     this._graphicsContainer.removeChild(g);
     g.destroy();
+    this.#elevationCurrentMax = undefined;
     this._requiresSave = true;
     this.renderElevation();
   }
@@ -1119,9 +1167,16 @@ export class ElevationLayer extends InteractionLayer {
    * Remove all elevation data from the scene.
    */
   async clearElevationData() {
-    this.#destroy();
+    this._clearElevationPixelCache();
+    this._backgroundElevation.destroy();
+    this._backgroundElevation = PIXI.Sprite.from(PIXI.Texture.EMPTY);
+
+    this._graphicsContainer.destroy({children: true});
+    this._graphicsContainer = new PIXI.Container();
+
     await canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
     this._requiresSave = false;
+    this.#elevationCurrentMax = 0;
     this.renderElevation();
   }
 
@@ -1136,6 +1191,8 @@ export class ElevationLayer extends InteractionLayer {
 
     this._graphicsContainer.destroy({children: true});
     this._graphicsContainer = new PIXI.Container();
+
+    this._elevationTexture?.destroy();
   }
 
   /* -------------------------------------------- */
@@ -1165,6 +1222,10 @@ export class ElevationLayer extends InteractionLayer {
    */
   eraseElevation() {
     this.container.removeChild(this._elevationColorsMesh);
+  }
+
+  _updateMinColor() {
+    this._elevationColorsMesh.shader.updateMinColor();
   }
 
   /**
@@ -1355,78 +1416,6 @@ export class ElevationLayer extends InteractionLayer {
     log(`deleteKey at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
   }
 
-}
-
-/**
- * Filter used to display the elevation layer coloration of elevation data.
- * elevationSampler is a texture that stores elevation data in the red channel.
- * Elevation data currently displayed as a varying red color with varying alpha.
- * Alpha is gamma corrected to ensure only darker alphas and red shades are used, to
- * ensure the lower elevation values are perceivable.
- */
-class ElevationFilter extends AbstractBaseFilter {
-  static vertexShader = `
-    attribute vec2 aVertexPosition;
-
-    uniform mat3 projectionMatrix;
-    uniform mat3 canvasMatrix;
-    uniform vec4 inputSize;
-    uniform vec4 outputFrame;
-    uniform vec2 dimensions;
-
-    varying vec2 vTextureCoord;
-//     varying vec2 vCanvasCoord;
-    varying vec2 vCanvasCoordNorm;
-
-    void main(void)
-    {
-       vTextureCoord = aVertexPosition * (outputFrame.zw * inputSize.zw);
-       vec2 position = aVertexPosition * max(outputFrame.zw, vec2(0.)) + outputFrame.xy;
-       vec2 canvasCoord = (canvasMatrix * vec3(position, 1.0)).xy;
-       vCanvasCoordNorm = canvasCoord / dimensions;
-       gl_Position = vec4((projectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
-    }
-  `;
-
-  static fragmentShader = `
-    varying vec2 vTextureCoord;
-    varying vec2 vCanvasCoord;
-    varying vec2 vCanvasCoordNorm;
-
-    uniform sampler2D uSampler;
-    uniform sampler2D elevationSampler;
-
-    void main() {
-      vec4 tex = texture2D(uSampler, vTextureCoord);
-      vec4 elevation = texture2D(elevationSampler, vCanvasCoordNorm);
-
-
-      if ( elevation.r == 0.
-        || vCanvasCoordNorm.x < 0.
-        || vCanvasCoordNorm.y < 0.
-        || vCanvasCoordNorm.x > 1.
-        || vCanvasCoordNorm.y > 1. ) {
-        // Outside the scene boundary or no elevation set: use the background texture.
-        gl_FragColor = tex;
-      } else {
-        // Adjust alpha to avoid extremely light alphas
-        // basically a gamma correction
-        float alphaAdj = pow(elevation.r, 1. / 2.2);
-        gl_FragColor = vec4(alphaAdj, 0., 0., alphaAdj);
-      }
-    }
-  `;
-
-  /** @override */
-  // Thanks to https://ptb.discord.com/channels/732325252788387980/734082399453052938/1009287977261879388
-  apply(filterManager, input, output, clear, currentState) {
-    const { sceneX, sceneY } = canvas.dimensions;
-    this.uniforms.canvasMatrix ??= new PIXI.Matrix();
-    this.uniforms.canvasMatrix.copyFrom(canvas.stage.worldTransform);
-    this.uniforms.canvasMatrix.invert();
-    this.uniforms.canvasMatrix.translate(-sceneX, -sceneY);
-    return super.apply(filterManager, input, output, clear, currentState);
-  }
 }
 
 // NOTE: Testing elevation texture pixels

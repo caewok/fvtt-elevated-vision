@@ -1,3 +1,6 @@
+# 0.5.2
+GM can define a minimum and maximum elevation color in settings. The coloration in the elevation layer will be interpolated between the two colors, based on the scene minimum and the current maximum elevation in the scene.
+
 # 0.5.1
 Elevation can now handle up to 65,536 distinct values. This is accomplished by utilizing both red and green channels of the elevation image.
 

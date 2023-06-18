@@ -26,6 +26,13 @@
   "elevatedvision.settings.add-fly-button.name": "Add Token Fly control",
   "elevatedvision.settings.add-fly-button.hint": "Add a control to the token toolbar that can be enabled or disabled to tell Elevated Vision when a token should be considered capable of flight. When the control is enabled, automatic token elevation will keep tokens above the ground when moved off a terrain or tile cliff greater than the token height.",
 
+  "elevatedvision.settings.color-min.name": "Elevation Minimum Color",
+  "elevatedvision.settings.color-min.hint": "Set the color used to display the minimum elevation (above the scene minimum) on the elevation layer.",
+  "elevatedvision.settings.color-max.name": "Elevation Maximum Color",
+  "elevatedvision.settings.color-max.hint": "Set the color used to display the maximum elevation on the elevation layer. Colors between min and max will be interpolated.",
+  "elevatedvision.settings.color-min.string_hint": "Set the color used to display the minimum elevation (above the scene minimum) on the elevation layer. Install the Color Picker module to get a color picker here.",
+  "elevatedvision.settings.color-max.string_hint": "Set the color used to display the maximum elevation on the elevation layer. Colors between min and max will be interpolated. Install the Color Picker module to get a color picker here.",
+
   "elevatedvision.controls.fill-by-grid.name": "Fill by grid",
   "elevatedvision.controls.fill-by-los.name": "Fill by line-of-sight",
   "elevatedvision.controls.fill-space.name": "Fill space enclosed by walls",
