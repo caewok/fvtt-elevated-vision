@@ -249,7 +249,7 @@ vec4 colorForElevation(float eNorm) {
   // color.a = pow(color.a, 1. / 2.2);
 
   // Gamma correct alpha and colors?
-  // color = pow(color, vec4(1. / 2.2));
+  color = pow(color, vec4(1. / 2.2));
 
   return color;
 }

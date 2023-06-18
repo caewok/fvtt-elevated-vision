@@ -30,8 +30,8 @@ export const SETTINGS = {
   COLOR: {
     MIN: "color-min",
     MAX: "color-max",
-    DEFAULT_MIN: "#3C3E6431",
-    DEFAULT_MAX: "#C22121BB"
+    DEFAULT_MIN: "#03000003",
+    DEFAULT_MAX: "#80000080"
   },
 
   VISION_USE_SHADER: "vision-use-shader",  // Deprecated
