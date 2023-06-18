@@ -72,6 +72,23 @@ Hooks.once("ready", () => {
                   worlds/[world-id]/assets/elevatedvision/[world-id][scene-id]-elevationMap.webp.`
         })
 
+        .addEntry({
+            version: "0.5.2",
+            title: "Elevation colors",
+            body: `\
+                GM can define a minimum and maximum elevation color in settings. The coloration in the elevation layer
+                will be interpolated between the two colors, based on the scene minimum and the current maximum elevation
+                in the scene. Alpha (transparency) values will also be interpolated.
+
+                Install the [Color Picker](https://foundryvtt.com/packages/color-picker) module to get
+                a color picker for the minimum/maximum elevation settings.
+
+                Any of you graphic experts out there, feel free to suggest improvements to how to best represent
+                elevation gradients on a scene! Or share your preferred min/max color choices. There is an open
+                comment on the Github page regarding "Multicolor height indicators." I will leave it open in case
+                anyone has additional suggestions.`
+        })
+
         .build()
         ?.render(true);
 });
