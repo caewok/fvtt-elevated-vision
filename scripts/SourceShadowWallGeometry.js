@@ -14,8 +14,6 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 
 // NOTE: Ambient Light Hooks
 
-
-
 /**
  * Hook the initial ambient light draw to construct shadows.
  * A hook event that fires when a {@link PlaceableObject} is initially drawn.
@@ -68,11 +66,11 @@ export function destroyAmbientLightHook(object) {
  * @param {DocumentModificationContext} options     Additional options which modified the creation request
  * @param {string} userId                           The ID of the User who triggered the creation workflow
  */
-export function createWallHook(wall, _options, _userId) {
+export function createWallHook(wallD, _options, _userId) {
   for ( const src of canvas.effects.lightSources ) {
     const geom = src[MODULE_ID]?.wallGeometry;
     if ( !geom ) continue;
-    geom.addWall(wall);
+    geom.addWall(wallD.object);
   }
 }
 
@@ -88,7 +86,7 @@ export function createWallHook(wall, _options, _userId) {
  * @param {DocumentModificationContext} options     Additional options which modified the update request
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
-export function updateWallHook(wall, data, _options, _userId) {
+export function updateWallHook(wallD, data, _options, _userId) {
   const changes = new Set(Object.keys(flattenObject(data)));
   // TODO: Will eventually need to monitor changes for sounds and sight, possibly move.
   // TODO: Need to deal with threshold as well
@@ -99,7 +97,7 @@ export function updateWallHook(wall, data, _options, _userId) {
   for ( const src of canvas.effects.lightSources ) {
     const geom = src[MODULE_ID]?.wallGeometry;
     if ( !geom ) continue;
-    geom.updateWall(wall, { changes });
+    geom.updateWall(wallD.object, { changes });
   }
 }
 
@@ -114,11 +112,11 @@ export function updateWallHook(wall, data, _options, _userId) {
  * @param {DocumentModificationContext} options     Additional options which modified the deletion request
  * @param {string} userId                           The ID of the User who triggered the deletion workflow
  */
-export function deleteWallHook(wall, _options, _userId) {
+export function deleteWallHook(wallD, _options, _userId) {
   for ( const src of canvas.effects.lightSources ) {
     const geom = src[MODULE_ID]?.wallGeometry;
     if ( !geom ) continue;
-    geom.removeWall(wall);
+    geom.removeWall(wallD.id);
   }
 }
 
@@ -444,7 +442,7 @@ export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
 
     // Wall must be within the light radius.
     const bounds = this.source.bounds ?? this.source.object.bounds ?? canvas.dimensions.rect;
-    if ( bounds.lineSegmentIntersects(wall.A, wall.B, { inside: true }) ) return false;
+    if ( !bounds.lineSegmentIntersects(wall.A, wall.B, { inside: true }) ) return false;
 
     return true;
   }
@@ -482,6 +480,6 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
 Hooks.on("drawAmbientLight", drawAmbientLightHook);
 Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
 Hooks.on("destroyAmbientLight", destroyAmbientLightHook);
-// Hooks.on("createWall", createWallHook);
-// Hooks.on("updateWall", updateWallHook);
-// Hooks.on("deleteWallHook", deleteWall);
+Hooks.on("createWall", createWallHook);
+Hooks.on("updateWall", updateWallHook);
+Hooks.on("deleteWall", deleteWallHook);
