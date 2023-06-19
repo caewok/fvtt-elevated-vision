@@ -42,6 +42,7 @@ import { updateTileHook } from "./tiles.js";
 import {
   initializeLightSourceShadersHook,
   initializeVisionSourceShadersHook } from "./rendered_point_sources.js";
+
 import {
   renderAmbientLightConfigHook,
   renderAmbientSoundConfigHook,
@@ -54,11 +55,13 @@ import {
 // Other self-executing hooks
 import "./changelog.js";
 import "./controls.js";
+import "./SourceShadowWallGeometry.js";
 
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
   // CONFIG.debug.hooks = true;
+  console.debug(`${MODULE_ID}|init`)
 
 
   // Set CONFIGS used by this module.
@@ -239,5 +242,3 @@ Hooks.on("updateAmbientLightDocument", updateAmbientLightDocumentHook);
 Hooks.on("updateAmbientSoundDocument", updateAmbientSoundDocumentHook);
 Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
 Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);
-
-

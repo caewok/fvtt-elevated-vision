@@ -54,7 +54,7 @@ export async function setSetting(settingName, value) {
 
 export function getSceneSetting(settingName, scene) {
   scene ??= canvas.scene;
-  if ( canvas.performance.mode === CONST.CANVAS_PERFORMANCE_MODES.LOW ) return SETTINGS.SHADING.NONE;
+  // if ( canvas.performance.mode === CONST.CANVAS_PERFORMANCE_MODES.LOW ) return SETTINGS.SHADING.NONE;
   return scene.flags[MODULE_ID]?.[settingName] ?? defaultSceneSetting(settingName);
 }
 
