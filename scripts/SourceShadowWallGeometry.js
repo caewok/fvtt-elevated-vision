@@ -25,7 +25,7 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 export function drawAmbientLightHook(object) {
   if ( !object.source ) return;
   object.source[MODULE_ID] ??= {};
-  object.source[MODULE_ID].wallGeometry = new PointSourceShadowWallGeometry(object.source);
+  object.source[MODULE_ID].wallGeometry = new DirectionalSourceShadowWallGeometry(object.source);
 }
 
 /**
@@ -470,7 +470,7 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
   _includeWall(wall) {
     // Wall must not be the same (2d) direction as the source
     const A = new PIXI.Point(wall.A.x, wall.A.y);
-    const orientWall = foundry.utils.orient2dFast(wall.A, wall.B, A.add(this.sourceDirection));
+    const orientWall = foundry.utils.orient2dFast(A, wall.B, A.add(this.sourceDirection));
     if ( orientWall.almostEqual(0) ) return false;
 
     return true;
