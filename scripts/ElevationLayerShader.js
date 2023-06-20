@@ -8,8 +8,9 @@ PIXI
 "use strict";
 
 import { getSetting, SETTINGS } from "./settings.js";
+import { defineFunction } from "./GLSLFunctions.js";
 
-class AbstractEVShader extends PIXI.Shader {
+export class AbstractEVShader extends PIXI.Shader {
   constructor(program, uniforms) {
     super(program, foundry.utils.deepClone(uniforms));
 
@@ -153,84 +154,9 @@ uniform vec4 uMinColor;
 uniform vec4 uMaxColor;
 uniform float uMaxNormalizedElevation;
 
-/**
- * Convert a Hue-Saturation-Brightness color to RGB - useful to convert polar coordinates to RGB
- * See BaseShaderMixin.HSB2RGB
- * @type {string}
- */
-vec3 hsb2rgb(in vec3 c) {
-  vec3 rgb = clamp(abs(mod(c.x*6.0+vec3(0.0,4.0,2.0), 6.0)-3.0)-1.0, 0.0, 1.0 );
-  rgb = rgb*rgb*(3.0-2.0*rgb);
-  return c.z * mix(vec3(1.0), rgb, c.y);
-}
-
-/**
- * From https://stackoverflow.com/questions/15095909/from-rgb-to-hsv-in-opengl-glsl
- * @param {vec3} c    RGB color representation (0–1)
- * @returns {vec3} HSV color representation (0–1)
- */
-// All components are in the range [0…1], including hue.
-vec3 rgb2hsv(in vec3 c) {
-  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-
-  float d = q.x - min(q.w, q.y);
-  float e = 1.0e-10;
-  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-}
-
-/**
- * From https://www.shadertoy.com/view/XljGzV.
- * @param {vec3} c    HSV color representation (0–1)
- * @returns {vec3} RGB color representation (0–1)
- */
-// All components are in the range [0…1], including hue.
-vec3 hsv2rgb(in vec3 c) {
-  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-
-/**
- * Return the normalized elevation value for a given color representation.
- * @param {vec4} pixel    Color representation of elevation value on canvas
- * @returns {float} The normalized elevation value, between 0 and 65,536.
- */
-float decodeElevationChannels(in vec4 color) {
-  color = color * 255.0;
-  return (color.g * 256.0) + color.r;
-}
-
-/**
- * Return the scaled elevation value for a given normalized value.
- * @param {float} value   The normalized elevation between 0 and 65,536
- * @returns {float} Scaled elevation value based on scene settings, in grid units
- */
-float scaleNormalizedElevation(in float value) {
-  float elevationMin = uElevationRes.r;
-  float elevationStep = uElevationRes.g;
-  return elevationMin + (round(value * elevationStep * 10.0) * 0.1);
-}
-
-/**
- * Convert grid to pixel units.
- * @param {float} value     Number, in grid units
- * @returns {float} The equivalent number in pixel units based on grid distance
- */
-float gridUnitsToPixels(in float value) {
-  float distancePixels = uElevationRes.a;
-  return value * distancePixels;
-}
-
-/**
- * Convert a color pixel to a scaled elevation value, in pixel units.
- */
-float colorToElevationPixelUnits(in vec4 color) {
-  float e = decodeElevationChannels(color);
-  e = scaleNormalizedElevation(e);
-  return gridUnitsToPixels(e);
-}
+${defineFunction("hsb2rgb")}
+${defineFunction("hsb2rgb")}
+${defineFunction("decodeElevationChannels")}
 
 /**
  * Determine the color for a given elevation value.
@@ -244,6 +170,7 @@ vec4 colorForElevation(float eNorm) {
 
   // If using hsv
   // color.rgb = hsv2rgb(color.rgb);
+  // color.rgb = hsb2rgb(color.rgb);
 
   // Gamma correction to avoid extremely light alpha?
   // color.a = pow(color.a, 1. / 2.2);
@@ -261,13 +188,15 @@ void main() {
   fragColor = eNorm == 0.0 ? vec4(0.0) : colorForElevation(eNorm);
 }`;
 
+  /**
+   * uElevationRes: [minElevation, elevationStep, maxElevation, gridScale]
+   * uTerrainSampler: elevation texture
+   * uMinColor: Color to use at the minimum elevation: minElevation + elevationStep
+   * uMaxColor: Color to use at the maximum current elevation: uMaxNormalizedElevation
+   * uMaxNormalizedElevation: Maximum elevation, normalized units
+   */
   static defaultUniforms = {
-    uElevationRes: [
-        0,
-        1,
-        256 * 256,
-        1
-      ],
+    uElevationRes: [0, 1, 256 * 256, 1],
     uTerrainSampler: 0,
     uMinColor: [1, 0, 0, 1],
     uMaxColor: [0, 0, 1, 1],
@@ -283,7 +212,7 @@ void main() {
         // canvas.elevation.maximumPixelValue,
         canvas.dimensions.distancePixels
       ];
-    defaultUniforms.uTerrainSampler = canvas.elevation._elevationTexture;
+    defaultUniforms.uTerrainSampler = ev._elevationTexture;
     defaultUniforms.uMinColor = this.getDefaultColorArray("MIN");
     defaultUniforms.uMaxColor = this.getDefaultColorArray("MAX");
     defaultUniforms.uMaxNormalizedElevation = ev._normalizeElevation(ev.elevationCurrentMax);

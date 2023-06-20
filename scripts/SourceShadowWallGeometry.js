@@ -25,7 +25,7 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 export function drawAmbientLightHook(object) {
   if ( !object.source ) return;
   object.source[MODULE_ID] ??= {};
-  object.source[MODULE_ID].wallGeometry = new DirectionalSourceShadowWallGeometry(object.source);
+  object.source[MODULE_ID].wallGeometry = new PointSourceShadowWallGeometry(object.source);
 }
 
 /**
