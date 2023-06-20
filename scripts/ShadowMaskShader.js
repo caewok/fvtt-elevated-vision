@@ -35,11 +35,11 @@ flat out vec4 fWallDims;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
-uniform vec4 uElevationRes
+uniform vec4 uElevationRes;
 uniform vec3 uLightPosition;
 uniform float uMaxR;
 
-${defineFunction("normalize", "normalizeRay")}
+${defineFunction("normalizeRay")}
 ${defineFunction("rayFromPoints")}
 ${defineFunction("intersectRayPlane")}
 
@@ -63,23 +63,24 @@ void main() {
   }
 
   // Plane describing the canvas surface at minimum elevation for the scene.
+  float canvasElevation = uElevationRes.x;
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
-  vec3 planePoint = vec3(0.0, 0.0, uCanvasElevation);
+  vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
   Plane canvasPlane = Plane(planePoint, planeNormal);
 
   // Determine top and bottom wall coordinates at this vertex
   vec3 wallCoords[2] = vec3[2](aWallCorner1, aWallCorner2);
-  vec3 wallTop = vec3(wallCoords[gl_vertexID - 1].xy, wallCoords[0].z);
-  vec3 wallBottom = vec3(wallCoords[gl_vertexID % 2].xy, wallCoords[1].z);
+  vec3 wallTop = vec3(wallCoords[gl_VertexID - 1].xy, wallCoords[0].z);
+  vec3 wallBottom = vec3(wallCoords[gl_VertexID % 2].xy, wallCoords[1].z);
 
   // Trim walls to be between light elevation and canvas elevation.
   wallTop.z = min(wallTop.z, uLightPosition.z);
-  wallBottom.z = max(wallBottom.z, uCanvasElevation);
+  wallBottom.z = max(wallBottom.z, canvasElevation);
 
   // Intersect the canvas plane: light --> vertex --> plane
   // If the light is below or equal to the vertex in elevation, the shadow has infinite length, represented here by uMaxR.
   Ray rayLT = rayFromPoints(uLightPosition, wallTop);
-  normalize(rayLT); // So maximum shadow location can be determined.
+  rayLT = normalizeRay(rayLT); // So maximum shadow location can be determined.
   vec3 ixFarShadow = rayLT.origin + (uMaxR * rayLT.direction);
   if ( uLightPosition.z > wallTop.z ) intersectRayPlane(rayLT, canvasPlane, ixFarShadow);
 
@@ -91,11 +92,11 @@ void main() {
     float distShadow = distance(uLightPosition.xy, ixFarShadow.xy);
     float wallRatio = 1.0 - (distWallTop / distShadow);
     float nearRatio = wallRatio;
-    if ( wallBottom.z > uCanvasElevation ) {
+    if ( wallBottom.z > canvasElevation ) {
       // Wall bottom floats above the canvas.
       vec3 ixNearPenumbra;
       Ray rayLB = rayFromPoints(uLightPosition, wallBottom);
-      intersectRayPlane(uLightPosition, rayLB, ixNearPenumbra);
+      intersectRayPlane(rayLB, canvasPlane, ixNearPenumbra);
       nearRatio = 1.0 - (distance(uLightPosition.xy, ixNearPenumbra.xy) / distShadow);
     }
     fWallDims = vec4(wallTop.z, wallBottom.z, wallRatio, nearRatio);
@@ -137,7 +138,7 @@ ${defineFunction("between")}
  */
 float terrainElevation() {
   vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
-  float canvasElevation = uElevationRes.x
+  float canvasElevation = uElevationRes.x;
 
   // If outside scene bounds, elevation is set to the canvas minimum.
   if ( !all(lessThan(evTexCoord, vec2(1.0)))
@@ -187,7 +188,7 @@ vec4 lightEncoding(in float light) {
 
   #ifdef SHADOW
   // For testing, return the amount of shadow, which can be directly rendered to the canvas.
-  c = vec4(vec3(0.0), 1.0 - light);
+  c = vec4(1.0, 0.0, 0.0, 1.0 - light);
   #endif
 
   return c;
@@ -202,12 +203,12 @@ void main() {
   }
 
   // Get the elevation at this fragment.
-  float canvasElevation = uElevationRes.x
+  float canvasElevation = uElevationRes.x;
   float elevation = terrainElevation();
 
   // Determine the start and end of the shadow, relative to the light.
   vec2 nearFarShadowRatios = vec2(fWallDims.a, 0.0);
-  if ( elevation > uCanvasElevation ) {
+  if ( elevation > canvasElevation ) {
     // Calculate the proportional elevation change relative to wall height.
     float elevationChange = elevation - canvasElevation;
     vec2 wallHeight = fWallDims.xy - canvasElevation;
@@ -217,7 +218,7 @@ void main() {
 
   // If fragment is between the start and end shadow points, then full shadow.
   // If in front of the near shadow or behind the far shadow, then full light.
-  float lightPercentage = 1.0 - between(shadowRatios.x, shadowRatios.y, vBary.x);
+  float lightPercentage = 1.0 - between(nearFarShadowRatios.x, nearFarShadowRatios.y, vBary.x);
   fragColor = lightEncoding(lightPercentage);
 }`;
 
@@ -247,7 +248,7 @@ void main() {
   static create(lightPosition, defaultUniforms = {}) {
     if ( !lightPosition ) console.error("ShadowMaskWallShader requires a lightPosition.");
 
-    defaultUniforms.lightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
+    defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
     const { sceneRect, maxR, distancePixels } = canvas.dimensions;
     defaultUniforms.uSceneDims ??= [
       sceneRect.x,
@@ -286,8 +287,8 @@ export class ShadowWallPointSourceMesh extends PIXI.Mesh {
     }
 
     if ( !shader ) {
-      const lightPosition = new Point3d(source.x, source.y, source.elevationZ);
-      shader ??= ShadowMaskWallShader.create(lightPosition);
+      const sourcePosition = Point3d.fromPointSource(source);
+      shader ??= ShadowMaskWallShader.create(sourcePosition);
     }
     super(source[MODULE_ID].wallGeometry, shader, state, drawMode);
 
@@ -303,3 +304,26 @@ export class ShadowWallPointSourceMesh extends PIXI.Mesh {
     this.shader.updateLightPosition(x, y, elevationZ);
   }
 }
+
+
+/* Testing
+MODULE_ID = "elevatedvision"
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+api = game.modules.get("elevatedvision").api
+PointSourceShadowWallGeometry = api.PointSourceShadowWallGeometry
+defineFunction = api.defineFunction;
+AbstractEVShader = api.AbstractEVShader
+ShadowMaskWallShader = api.ShadowMaskWallShader
+ShadowWallPointSourceMesh = api.ShadowWallPointSourceMesh
+
+
+let [l] = canvas.lighting.placeables;
+lightSource = l.source;
+lightPosition = Point3d.fromPointSource(lightSource)
+shader = ShadowMaskWallShader.create(lightPosition);
+mesh = new ShadowWallPointSourceMesh(lightSource, shader)
+
+canvas.stage.addChild(mesh)
+canvas.stage.removeChild(mesh)
+
+*/

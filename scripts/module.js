@@ -22,7 +22,11 @@ import { PixelCache, TilePixelCache } from "./PixelCache.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
-import { ElevationLayerShader } from "./ElevationLayerShader.js";
+
+import { ElevationLayerShader, AbstractEVShader } from "./ElevationLayerShader.js";
+import { defineFunction } from "./GLSLFunctions.js";
+import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./ShadowMaskShader.js";
+import { PointSourceShadowWallGeometry } from "./SourceShadowWallGeometry.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -61,7 +65,7 @@ import "./SourceShadowWallGeometry.js";
 
 Hooks.once("init", function() {
   // CONFIG.debug.hooks = true;
-  console.debug(`${MODULE_ID}|init`)
+  console.debug(`${MODULE_ID}|init`);
 
 
   // Set CONFIGS used by this module.
@@ -152,7 +156,13 @@ Hooks.once("init", function() {
     CoordinateElevationCalculator,
     TokenPointElevationCalculator,
     TokenAverageElevationCalculator,
-    ElevationLayerShader
+    ElevationLayerShader,
+
+    AbstractEVShader,
+    PointSourceShadowWallGeometry,
+    defineFunction,
+    ShadowMaskWallShader,
+    ShadowWallPointSourceMesh
   };
 
   // These methods need to be registered early
@@ -170,7 +180,7 @@ Hooks.once("init", function() {
 });
 
 Hooks.once("setup", function() {
-  // game.scenes is present here
+  // The game.scenes object is present here
   registerPatches();
 });
 
