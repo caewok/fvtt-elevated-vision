@@ -35,14 +35,15 @@ ${GLSLStructs[struct]}
 // NOTE: Utility
 GLSLFunctions.between =
 // See https://stackoverflow.com/questions/52958171/glsl-optimization-check-if-variable-is-within-range
+// step is (float, float) or (float, vec) or (vec, vec)
 `
 /**
  * Is x in the range of [a, b]?
  * @returns {0|1}
  */
 float between(in float a, in float b, in float x) { return step(a, x) * step(x, b); }
-vec2 between(in float a, in float b, in vec2 x) { return step(a, x) * step(x, b); }
-vec3 between(in float a, in float b, in vec3 x) { return step(a, x) * step(x, b); }
+vec2 between(in float a, in float b, in vec2 x) { return step(a, x) * step(x, vec2(b)); }
+vec3 between(in float a, in float b, in vec3 x) { return step(a, x) * step(x, vec3(b)); }
 `;
 
 // NOTE: Matrix
