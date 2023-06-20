@@ -3,6 +3,7 @@ canvas,
 CONST,
 flattenObject,
 foundry,
+Hooks,
 PIXI,
 Wall
 */
@@ -179,11 +180,21 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       const wall = walls[i];
       if ( !this._includeWall(wall) ) continue;
       const wallCoords = this._wallCornerCoordinates(wall);
-      aWallCorner1.push(wallCoords.corner1.x, wallCoords.corner1.y, wallCoords.topZ);
-      aWallCorner2.push(wallCoords.corner2.x, wallCoords.corner2.y, wallCoords.bottomZ);
 
-      aLimitedWall.push(this.isLimited(wall));
-      indices.push(triNumber, triNumber, triNumber);
+      // TODO: Instanced attributes.
+      // For now, must repeat the vertices three times.
+      // Should be possible to use instanced attributes to avoid this. (see PIXI.Attribute)
+      // Unclear whether that would be supported using Foundry rendering options.
+      const corner1 = [wallCoords.corner1.x, wallCoords.corner1.y, wallCoords.topZ];
+      const corner2 = [wallCoords.corner2.x, wallCoords.corner2.y, wallCoords.bottomZ];
+      aWallCorner1.push(...corner1, ...corner1, ...corner1);
+      aWallCorner2.push(...corner2, ...corner2, ...corner2);
+
+      const ltd = this.isLimited(wall);
+      aLimitedWall.push(ltd, ltd, ltd);
+
+      const idx = triNumber * 3;
+      indices.push(idx, idx + 1, idx + 2);
 
       // Track where this wall is in the attribute arrays for future updates.
       this._triWallMap.set(wall.id, triNumber);
@@ -233,7 +244,6 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const ABDist = PIXI.Point.distanceBetween(A, B);
 
     // Slightly extend wall to ensure connected walls do not have gaps in shadows.
-    const minCanvasE = canvas.elevation?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
     const adjA = B.towardsPoint(A, ABDist + this.constructor.WALL_OFFSET_PIXELS);
     const adjB = A.towardsPoint(B, ABDist + this.constructor.WALL_OFFSET_PIXELS);
     const topZ = Math.min(wall.topZ + this.constructor.WALL_OFFSET_PIXELS, Number.MAX_SAFE_INTEGER);
@@ -310,25 +320,29 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const idxToAdd = this._triWallMap.size;
 
     // First wall corner
-    const data1 = [wallCoords.corner1.x, wallCoords.corner1.y, wallCoords.topZ];
-    const size1 = this.getAttribute("aWallCorner1").size;
+    const coords1 = [wallCoords.corner1.x, wallCoords.corner1.y, wallCoords.topZ];
+    const data1 = [...coords1, ...coords1, ...coords1];
+    const size1 = this.getAttribute("aWallCorner1").size * 3;
     const buffer1 = this.getBuffer("aWallCorner1");
     buffer1.data = this.constructor.addToBuffer(buffer1.data, size1, data1);
 
     // Second wall corner
-    const data2 = [wallCoords.corner2.x, wallCoords.corner2.y, wallCoords.bottomZ];
-    const size2 = this.getAttribute("aWallCorner2").size;
+    const coords2 = [wallCoords.corner2.x, wallCoords.corner2.y, wallCoords.bottomZ];
+    const data2 = [...coords2, ...coords2, ...coords2];
+    const size2 = this.getAttribute("aWallCorner2").size * 3;
     const buffer2 = this.getBuffer("aWallCorner2");
     buffer2.data = this.constructor.addToBuffer(buffer2.data, size2, data2);
 
     // Limited wall indicator
-    const data3 = [this.isLimited(wall)];
-    const size3 = this.getAttribute("aLimitedWall").size;
+    const ltd = [this.isLimited(wall)];
+    const data3 = [ltd, ltd, ltd];
+    const size3 = this.getAttribute("aLimitedWall").size * 3;
     const buffer3 = this.getBuffer("aLimitedWall");
     buffer3.data = this.constructor.addToBuffer(buffer3.data, size3, data3);
 
     // Index
-    const dataIdx = [idxToAdd, idxToAdd, idxToAdd];
+    const idx = idxToAdd * 3;
+    const dataIdx = [idx, idx + 1, idx + 2];
     const sizeIdx = 3;
     this.indexBuffer.data = this.constructor.addToBuffer(this.indexBuffer.data, sizeIdx, dataIdx);
 
@@ -350,14 +364,16 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       const wallCoords = this._wallCornerCoordinates(wall);
 
       // First wall corner
-      const data1 = [wallCoords.corner1.x, wallCoords.corner1.y, wallCoords.topZ];
-      const size1 = this.getAttribute("aWallCorner1").size;
+      const coords1 = [wallCoords.corner1.x, wallCoords.corner1.y, wallCoords.topZ];
+      const data1 = [...coords1, ...coords1, ...coords1];
+      const size1 = this.getAttribute("aWallCorner1").size * 3;
       const buffer1 = this.getBuffer("aWallCorner1");
       buffer1.data = this.constructor.overwriteBufferAt(buffer1.data, size1, data1, idxToUpdate);
 
       // Second wall corner
-      const data2 = [wallCoords.corner2.x, wallCoords.corner2.y, wallCoords.bottomZ];
-      const size2 = this.getAttribute("aWallCorner2").size;
+      const coords2 = [wallCoords.corner2.x, wallCoords.corner2.y, wallCoords.bottomZ];
+      const data2 = [...coords2, ...coords2, ...coords2];
+      const size2 = this.getAttribute("aWallCorner2").size * 3;
       const buffer2 = this.getBuffer("aWallCorner2");
       buffer2.data = this.constructor.overwriteBufferAt(buffer2.data, size2, data2, idxToUpdate);
 
@@ -369,8 +385,9 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
     // Limited wall indicator
     if ( changes.has(this.sourceType) ) {
-      const data3 = [this.isLimited(wall)];
-      const size3 = this.getAttribute("aLimitedWall").size;
+      const ltd = [this.isLimited(wall)];
+      const data3 = [ltd, ltd, ltd];
+      const size3 = this.getAttribute("aLimitedWall").size * 3;
       const buffer3 = this.getBuffer("aLimitedWall");
       buffer3.data = this.constructor.overwriteBufferAt(buffer3.data, size3, data3, idxToUpdate);
       if ( update ) buffer3.update(buffer3.data);
@@ -389,7 +406,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
     const idxToRemove = this._triWallMap.get(id);
     for ( const attr of ["aWallCorner1", "aWallCorner2", "aLimitedWall"] ) {
-      const size = this.getAttribute(attr).size;
+      const size = this.getAttribute(attr).size * 3;
       const buffer = this.getBuffer(attr);
       buffer.data = this.constructor.removeFromBuffer(buffer.data, size, idxToRemove);
     }
