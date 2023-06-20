@@ -14,9 +14,11 @@ export let GLSLStructs = {};
  * @returns {string}
  */
 export const defineFunction = (method, lookup = method) =>
-`#ifndef ${method}
+`#ifndef ${method.toUpperCase()}
+#define ${method.toUpperCase()} true
 ${GLSLFunctions[lookup]}
-#endif`;
+#endif
+`;
 
 /**
  * Utility to wrap a strut definition in #ifndef.
@@ -24,7 +26,8 @@ ${GLSLFunctions[lookup]}
  * @returns {string}
  */
 export const defineStruct = struct =>
-`#ifndef ${struct}
+`#ifndef ${struct.toUpperCase()}
+#define ${struct.toUpperCase()} true
 ${GLSLStructs[struct]}
 #endif`;
 
