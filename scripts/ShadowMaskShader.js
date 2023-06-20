@@ -10,6 +10,72 @@ import { defineFunction } from "./GLSLFunctions.js";
 import { PointSourceShadowWallGeometry } from "./SourceShadowWallGeometry.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
+class TestGeometryShader extends AbstractEVShader {
+  static vertexShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+in vec3 aWallCorner1;
+in vec3 aWallCorner2;
+
+out vec2 vVertexPosition;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+uniform vec3 uLightPosition;
+
+void main() {
+  int vertexNum = gl_VertexID % 3;
+
+  // testing
+  if ( vertexNum == 0 ) {
+    // vVertexPosition = uLightPosition.xy;
+    vVertexPosition = vec2(1900.0, 1750.0);
+
+  } else if ( vertexNum == 1 ) {
+    // vVertexPosition = aWallCorner1.xy;
+    vVertexPosition = vec2(1562.0, 1187.0);
+
+  } else if ( vertexNum == 2 ) {
+    // vVertexPosition = aWallCorner2.xy;
+    vVertexPosition = vec2(1975.0, 1425.0);
+  }
+
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
+}`;
+
+  static fragmentShader =
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+out vec4 fragColor;
+
+void main() {
+  fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  return;
+}`;
+
+  static defaultUniforms = {
+    uLightPosition: [0, 0, 0]
+  };
+
+  /**
+   * Factory function.
+   * @param {Point3d} lightPosition
+   * @param {object} defaultUniforms    Changes from the default uniforms set here.
+   * @returns {ShadowMaskWallShader}
+   */
+  static create(lightPosition, defaultUniforms = {}) {
+    if ( !lightPosition ) console.error("ShadowMaskWallShader requires a lightPosition.");
+
+    defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
+    return super.create(defaultUniforms);
+  }
+}
+
+
+
+
 /**
  * Draw shadow for wall without shading for penumbra and without the outer penumbra.
  */
@@ -44,6 +110,29 @@ ${defineFunction("rayFromPoints")}
 ${defineFunction("intersectRayPlane")}
 
 void main() {
+  int vertexNum = gl_VertexID % 3;
+  fLimitedWall = aLimitedWall;
+  fWallDims = vec4(aWallCorner1.z, aWallCorner2.z, .3, .3);
+
+  // testing
+  if ( vertexNum == 0 ) {
+    vVertexPosition = uLightPosition.xy;
+    vBary = vec3(1.0, 0.0, 0.0);
+
+  } else if ( vertexNum == 1 ) {
+    vVertexPosition = aWallCorner1.xy;
+    vBary = vec3(0.0, 1.0, 0.0);
+
+  } else if ( vertexNum == 2 ) {
+    vVertexPosition = aWallCorner2.xy;
+    vBary = vec3(0.0, 0.0, 1.0);
+  }
+
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
+  return;
+
+
+
   // Shadow is a trapezoid formed from the intersection of the wall with the
   // triangle ABC, where
   // C is the light position.
@@ -52,11 +141,10 @@ void main() {
 
   // Set varyings and flats
   vBary = vec3(0.0, 0.0, 0.0);
-  vBary[gl_VertexID] = 1.0;
+  vBary[vertexNum] = 1.0;
 
   // Vertex 0 is the light; can end early.
-  if ( gl_VertexID == 0 ) {
-    vBary = vec3(1.0, 0.0, 0.0);
+  if ( vertexNum == 0 ) {
     vVertexPosition = uLightPosition.xy;
     gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
     return;
@@ -70,8 +158,8 @@ void main() {
 
   // Determine top and bottom wall coordinates at this vertex
   vec3 wallCoords[2] = vec3[2](aWallCorner1, aWallCorner2);
-  vec3 wallTop = vec3(wallCoords[gl_VertexID - 1].xy, wallCoords[0].z);
-  vec3 wallBottom = vec3(wallCoords[gl_VertexID % 2].xy, wallCoords[1].z);
+  vec3 wallTop = vec3(wallCoords[vertexNum - 1].xy, wallCoords[0].z);
+  vec3 wallBottom = vec3(wallCoords[vertexNum % 2].xy, wallCoords[1].z);
 
   // Trim walls to be between light elevation and canvas elevation.
   wallTop.z = min(wallTop.z, uLightPosition.z);
@@ -85,7 +173,7 @@ void main() {
   if ( uLightPosition.z > wallTop.z ) intersectRayPlane(rayLT, canvasPlane, ixFarShadow);
 
   // Calculate wall dimensions used in fragment shader (flat variable fWallDims).
-  if ( gl_VertexID == 2 ) {
+  if ( vertexNum == 2 ) {
     fLimitedWall = aLimitedWall;  // TODO: Better as a flat or varying variable?
 
     float distWallTop = distance(uLightPosition.xy, wallTop.xy);
@@ -195,6 +283,9 @@ vec4 lightEncoding(in float light) {
 }
 
 void main() {
+  fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  return;
+
   // If in front of the wall, can return early.
   float wallRatio = fWallDims.z;
   if ( vBary.x > wallRatio ) {
@@ -325,5 +416,9 @@ mesh = new ShadowWallPointSourceMesh(lightSource, shader)
 
 canvas.stage.addChild(mesh)
 canvas.stage.removeChild(mesh)
+
+shader = TestGeometryShader.create(lightPosition);
+mesh = new ShadowWallPointSourceMesh(lightSource, shader)
+canvas.stage.addChild(mesh)
 
 */
