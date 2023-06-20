@@ -14,8 +14,8 @@ export let GLSLStructs = {};
  * @returns {string}
  */
 export const defineFunction = (method, lookup = method) =>
-`#ifndef ${method.toUpperCase()}
-#define ${method.toUpperCase()} true
+`#ifndef EV_${method.toUpperCase()}
+#define EV_${method.toUpperCase()} true
 ${GLSLFunctions[lookup]}
 #endif
 `;
@@ -26,8 +26,8 @@ ${GLSLFunctions[lookup]}
  * @returns {string}
  */
 export const defineStruct = struct =>
-`#ifndef ${struct.toUpperCase()}
-#define ${struct.toUpperCase()} true
+`#ifndef EV_${struct.toUpperCase()}
+#define EV_${struct.toUpperCase()} true
 ${GLSLStructs[struct]}
 #endif`;
 
@@ -322,10 +322,12 @@ GLSLStructs.Ray =
 struct Ray {
   vec3 origin;
   vec3 direction;
-}`;
+};`;
 
 GLSLFunctions.rayFromPoints =
 `
+${defineStruct("Ray")}
+
 /**
  * Construct a ray from two points: origin and towards point.
  */
@@ -335,11 +337,13 @@ Ray rayFromPoints(in vec3 origin, in vec3 towardsPoint) {
 
 GLSLFunctions.normalizeRay =
 `
+${defineStruct("Ray")}
+
 /**
  * Normalize the ray direction.
  */
-normalize(in Ray ray) {
-  normalize(ray.direction);
+Ray normalizeRay(in Ray r) {
+  return Ray(r.origin, normalize(r.direction));
 }`;
 
 // NOTE: Plane struct
@@ -353,7 +357,7 @@ GLSLStructs.Plane =
 struct Plane  {
   vec3 point;
   vec3 normal;
-}`;
+};`;
 
 // NOTE: Quad struct
 GLSLStructs.Quad =
@@ -372,7 +376,7 @@ struct Quad {
   vec3 v1;
   vec3 v2;
   vec3 v3;
-}`;
+};`;
 
 GLSLFunctions.quadFromPlane =
 `
