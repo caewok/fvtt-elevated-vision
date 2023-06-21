@@ -25,15 +25,32 @@ import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./ShadowMaskSha
  * @param {PlaceableObject} object    The object instance being drawn
  */
 export function drawAmbientLightHook(object) {
-  if ( !object.source ) return;
-  object.source[MODULE_ID] ??= {};
-  object.source[MODULE_ID].wallGeometry = new PointSourceShadowWallGeometry(object.source);
+  const lightSource = object.source;
+  if ( !lightSource ) return;
+}
+
+/**
+ * Hook light source shader initialization
+ * @param {LightSource} lightSource
+ */
+function initializeLightSourceShadersHook(lightSource) {
+  if ( lightSource instanceof GlobalLightSource ) return;
+  lightSource[MODULE_ID] ??= {};
+
+  // Build the geometry.
+  if ( lightSource[MODULE_ID].wallGeometry ) lightSource[MODULE_ID].wallGeometry.destroy(); // Just in case.
+  lightSource[MODULE_ID].wallGeometry = new PointSourceShadowWallGeometry(lightSource);
 
   // Build the shadow mesh.
-//   const lightPosition = Point3d.fromPointSource(lightSource)
-//   const shader = ShadowMaskWallShader.create(lightPosition);
-//   object.source[MODULE_ID].shadowMesh = new ShadowWallPointSourceMesh(lightSource, shader);
+  const lightPosition = Point3d.fromPointSource(lightSource);
+  const shader = ShadowMaskWallShader.create(lightPosition);
+  if ( lightSource[MODULE_ID].shadowMesh ) lightSource[MODULE_ID].shadowMesh.destroy(); // Just in case.
+  const mesh = new ShadowWallPointSourceMesh(lightSource, shader);
+  lightSource[MODULE_ID].shadowMesh = mesh;
 
+  // For testing, add to the canvas effects
+  if ( !canvas.effects.EVshadows ) canvas.effects.EVshadows = canvas.effects.addChild(new PIXI.Container());
+  canvas.effects.EVshadows.addChild(mesh);
 }
 
 /**
@@ -45,7 +62,10 @@ export function drawAmbientLightHook(object) {
 export function refreshAmbientLightHook(object, flags) {
   const geom = object.source[MODULE_ID]?.wallGeometry;
   if ( !geom ) return;
-  if ( flags.refreshPosition ) geom.refreshWalls();
+  if ( flags.refreshPosition ) {
+    geom.refreshWalls();
+    object.source[MODULE_ID].shadowMesh?.updateLightPosition();
+  }
 }
 
 /**
@@ -56,9 +76,18 @@ export function refreshAmbientLightHook(object, flags) {
  * @param {PlaceableObject} object    The object instance being refreshed
  */
 export function destroyAmbientLightHook(object) {
-  const geom = object.source[MODULE_ID]?.wallGeometry;
-  if ( !geom ) return;
-  geom.destroy();
+  let geom = object.source[MODULE_ID]?.wallGeometry;
+  if ( geom ) {
+    geom.destroy();
+    geom = undefined;
+  }
+
+  let mesh = object.source[MODULE_ID].shadowMesh;
+  if ( mesh ) {
+    canvas.effects.EVshadows.removeChild(mesh);
+    mesh.destroy();
+    mesh = undefined;
+  }
 }
 
 // NOTE: Wall Document Hooks
@@ -98,9 +127,9 @@ export function updateWallHook(wallD, data, _options, _userId) {
   const changes = new Set(Object.keys(flattenObject(data)));
   // TODO: Will eventually need to monitor changes for sounds and sight, possibly move.
   // TODO: Need to deal with threshold as well
-  if ( !(changes.has("c")
-    || changes.has("light")
-    || changes.has("door")) ) return;
+  const changeFlags = SourceShadowWallGeometry.CHANGE_FLAGS;
+  if ( !(changeFlags.WALL_COORDINATES.some(f => changes.has(f))
+    || changeFlags.WALL_RESTRICTED.some(f => changes.has(f))) ) return;
 
   for ( const src of canvas.effects.lightSources ) {
     const geom = src[MODULE_ID]?.wallGeometry;
@@ -142,6 +171,26 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @type {number}
    */
   static WALL_OFFSET_PIXELS = 2;
+
+  /**
+   * Changes to monitor in the wall data that indicate a relevant change.
+   */
+  static CHANGE_FLAGS = {
+    WALL_COORDINATES: [
+      "c",
+      "flags.wall-height.top",
+      "flags.wall-height.bottom",
+      "flags.elevatedvision.elevation.top",
+      "flags.elevatedvision.elevation.bottom"
+    ],
+
+    WALL_RESTRICTED: [
+      "sight",
+      "move",
+      "light",
+      "sound"
+    ]
+  };
 
   /**
    * Track the triangle index for each wall used by this source.
@@ -383,7 +432,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const idxToUpdate = this._triWallMap.get(wall.id);
 
     // Wall endpoint coordinates
-    if ( changes.has("c") ) {
+    if ( SourceShadowWallGeometry.CHANGE_FLAGS.WALL_COORDINATES.some(f => changes.has(f)) ) {
       const wallCoords = this._wallCornerCoordinates(wall);
 
       // First wall corner
@@ -523,3 +572,4 @@ Hooks.on("destroyAmbientLight", destroyAmbientLightHook);
 Hooks.on("createWall", createWallHook);
 Hooks.on("updateWall", updateWallHook);
 Hooks.on("deleteWall", deleteWallHook);
+Hooks.on("initializeLightSourceShaders", initializeLightSourceShadersHook);
