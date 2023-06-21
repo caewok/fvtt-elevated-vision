@@ -12,6 +12,7 @@ Wall
 
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
+import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./ShadowMaskShader.js";
 
 // NOTE: Ambient Light Hooks
 
@@ -27,6 +28,12 @@ export function drawAmbientLightHook(object) {
   if ( !object.source ) return;
   object.source[MODULE_ID] ??= {};
   object.source[MODULE_ID].wallGeometry = new PointSourceShadowWallGeometry(object.source);
+
+  // Build the shadow mesh.
+//   const lightPosition = Point3d.fromPointSource(lightSource)
+//   const shader = ShadowMaskWallShader.create(lightPosition);
+//   object.source[MODULE_ID].shadowMesh = new ShadowWallPointSourceMesh(lightSource, shader);
+
 }
 
 /**
@@ -358,6 +365,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     if ( !this._includeWall(wall) ) return this.removeWall(wall.id, update);
 
     const idxToUpdate = this._triWallMap.get(wall.id);
+    const bufferIdxToUpdate = idxToUpdate * 3;
 
     // Wall endpoint coordinates
     if ( changes.has("c") ) {
@@ -368,14 +376,14 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       const data1 = [...coords1, ...coords1, ...coords1];
       const size1 = this.getAttribute("aWallCorner1").size * 3;
       const buffer1 = this.getBuffer("aWallCorner1");
-      buffer1.data = this.constructor.overwriteBufferAt(buffer1.data, size1, data1, idxToUpdate);
+      buffer1.data = this.constructor.overwriteBufferAt(buffer1.data, size1, data1, bufferIdxToUpdate);
 
       // Second wall corner
       const coords2 = [wallCoords.corner2.x, wallCoords.corner2.y, wallCoords.bottomZ];
       const data2 = [...coords2, ...coords2, ...coords2];
       const size2 = this.getAttribute("aWallCorner2").size * 3;
       const buffer2 = this.getBuffer("aWallCorner2");
-      buffer2.data = this.constructor.overwriteBufferAt(buffer2.data, size2, data2, idxToUpdate);
+      buffer2.data = this.constructor.overwriteBufferAt(buffer2.data, size2, data2, bufferIdxToUpdate);
 
       if ( update ) {
         buffer1.update(buffer1.data);
@@ -389,7 +397,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       const data3 = [ltd, ltd, ltd];
       const size3 = this.getAttribute("aLimitedWall").size * 3;
       const buffer3 = this.getBuffer("aLimitedWall");
-      buffer3.data = this.constructor.overwriteBufferAt(buffer3.data, size3, data3, idxToUpdate);
+      buffer3.data = this.constructor.overwriteBufferAt(buffer3.data, size3, data3, bufferIdxToUpdate);
       if ( update ) buffer3.update(buffer3.data);
     }
 
@@ -405,17 +413,19 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     if ( !this._triWallMap.has(id) ) return;
 
     const idxToRemove = this._triWallMap.get(id);
+    const bufferIdxToRemove = idxToRemove * 3;
+
     for ( const attr of ["aWallCorner1", "aWallCorner2", "aLimitedWall"] ) {
       const size = this.getAttribute(attr).size * 3;
       const buffer = this.getBuffer(attr);
-      buffer.data = this.constructor.removeFromBuffer(buffer.data, size, idxToRemove);
+      buffer.data = this.constructor.removeFromBuffer(buffer.data, size, bufferIdxToRemove);
     }
     const sizeIdx = 3;
-    this.indexBuffer.data = this.constructor.removeFromBuffer(this.indexBuffer.data, sizeIdx, idxToRemove);
+    this.indexBuffer.data = this.constructor.removeFromBuffer(this.indexBuffer.data, sizeIdx, bufferIdxToRemove);
 
     // Remove the wall from the tracker and decrement other wall indices accordingly.
     this._triWallMap.delete(id);
-    const fn = value => { if ( value > idxToRemove ) value -= 1; };
+    const fn = value => { if ( value > bufferIdxToRemove ) value -= 1; };
     this._triWallMap.forEach(fn);
     this.indexBuffer.data = this.indexBuffer.data.map(fn);
 
