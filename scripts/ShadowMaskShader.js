@@ -97,7 +97,9 @@ in float aLimitedWall;
 out vec2 vVertexPosition;
 out vec3 vBary;
 flat out float fLimitedWall;
-flat out vec4 fWallDims;
+flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bottom
+flat out float fWallRatio;
+flat out float fNearRatio;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -110,36 +112,14 @@ ${defineFunction("rayFromPoints")}
 ${defineFunction("intersectRayPlane")}
 
 void main() {
-  int vertexNum = gl_VertexID % 3;
-  fLimitedWall = aLimitedWall;
-  fWallDims = vec4(aWallCorner1.z, aWallCorner2.z, .3, .3);
-
-  // testing
-  if ( vertexNum == 0 ) {
-    vVertexPosition = uLightPosition.xy;
-    vBary = vec3(1.0, 0.0, 0.0);
-
-  } else if ( vertexNum == 1 ) {
-    vVertexPosition = aWallCorner1.xy;
-    vBary = vec3(0.0, 1.0, 0.0);
-
-  } else if ( vertexNum == 2 ) {
-    vVertexPosition = aWallCorner2.xy;
-    vBary = vec3(0.0, 0.0, 1.0);
-  }
-
-  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
-  return;
-
-
-
   // Shadow is a trapezoid formed from the intersection of the wall with the
   // triangle ABC, where
   // C is the light position.
   // A is the intersection of the line light --> wall endpointA --> canvas plane
   // B is the intersection of the line light --> wall endpointB --> canvas plane
+  int vertexNum = gl_VertexID % 3;
 
-  // Set varyings and flats
+  // Set the barymetric coordinates for each corner of the triangle.
   vBary = vec3(0.0, 0.0, 0.0);
   vBary[vertexNum] = 1.0;
 
@@ -172,10 +152,8 @@ void main() {
   vec3 ixFarShadow = rayLT.origin + (uMaxR * rayLT.direction);
   if ( uLightPosition.z > wallTop.z ) intersectRayPlane(rayLT, canvasPlane, ixFarShadow);
 
-  // Calculate wall dimensions used in fragment shader (flat variable fWallDims).
+  // Calculate wall dimensions used in fragment shader.
   if ( vertexNum == 2 ) {
-    fLimitedWall = aLimitedWall;  // TODO: Better as a flat or varying variable?
-
     float distWallTop = distance(uLightPosition.xy, wallTop.xy);
     float distShadow = distance(uLightPosition.xy, ixFarShadow.xy);
     float wallRatio = 1.0 - (distWallTop / distShadow);
@@ -187,7 +165,12 @@ void main() {
       intersectRayPlane(rayLB, canvasPlane, ixNearPenumbra);
       nearRatio = 1.0 - (distance(uLightPosition.xy, ixNearPenumbra.xy) / distShadow);
     }
-    fWallDims = vec4(wallTop.z, wallBottom.z, wallRatio, nearRatio);
+
+    // Flat variables.
+    fWallHeights = vec2(wallTop.z - canvasElevation, wallBottom.z - canvasElevation);
+    fWallRatio = wallRatio;
+    fNearRatio = nearRatio;
+    fLimitedWall = aLimitedWall;
   }
 
   vVertexPosition = ixFarShadow.xy;
@@ -212,7 +195,9 @@ uniform vec4 uSceneDims;
 in vec2 vVertexPosition;
 in vec3 vBary;
 
-flat in vec4 fWallDims; // x: topZ, y: bottomZ, z: wallRatio, a: nearShadowRatio
+flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
+flat in float fWallRatio;
+flat in float fNearRatio;
 flat in float fLimitedWall;
 
 out vec4 fragColor;
@@ -245,8 +230,7 @@ float terrainElevation() {
  * @returns {vec2} Modified elevation ratio
  */
 vec2 elevateShadowRatios(in vec2 nearFarShadowRatios, in vec2 elevRatio) {
-  float wallRatio = fWallDims.z;
-  return nearFarShadowRatios + elevRatio.yx * (wallRatio - nearFarShadowRatios);
+  return nearFarShadowRatios + elevRatio.yx * (fWallRatio - nearFarShadowRatios);
 }
 
 /**
@@ -276,19 +260,17 @@ vec4 lightEncoding(in float light) {
 
   #ifdef SHADOW
   // For testing, return the amount of shadow, which can be directly rendered to the canvas.
-  c = vec4(1.0, 0.0, 0.0, 1.0 - light);
+  if ( light < 1.0 && light > 0.0 ) return vec4(0.0, 1.0, 0.0, 1.0);
+
+  c = vec4(vec3(0.0), (1.0 - light) * 0.7);
   #endif
 
   return c;
 }
 
 void main() {
-  fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-  return;
-
   // If in front of the wall, can return early.
-  float wallRatio = fWallDims.z;
-  if ( vBary.x > wallRatio ) {
+  if ( vBary.x > fWallRatio ) {
     fragColor = lightEncoding(1.0);
     return;
   }
@@ -298,18 +280,20 @@ void main() {
   float elevation = terrainElevation();
 
   // Determine the start and end of the shadow, relative to the light.
-  vec2 nearFarShadowRatios = vec2(fWallDims.a, 0.0);
+  vec2 nearFarShadowRatios = vec2(fNearRatio, 0.0);
   if ( elevation > canvasElevation ) {
     // Calculate the proportional elevation change relative to wall height.
     float elevationChange = elevation - canvasElevation;
-    vec2 wallHeight = fWallDims.xy - canvasElevation;
-    vec2 elevRatio = elevationChange / wallHeight;
+    vec2 elevRatio = elevationChange / fWallHeights;
     nearFarShadowRatios = elevateShadowRatios(nearFarShadowRatios, elevRatio);
   }
 
   // If fragment is between the start and end shadow points, then full shadow.
   // If in front of the near shadow or behind the far shadow, then full light.
-  float lightPercentage = 1.0 - between(nearFarShadowRatios.x, nearFarShadowRatios.y, vBary.x);
+  // Remember, vBary.x is 1.0 at the light, and 0.0 at the far end of the shadow.
+  float minShadowRatio = nearFarShadowRatios.y;
+  float maxShadowRatio = nearFarShadowRatios.x;
+  float lightPercentage = 1.0 - between(minShadowRatio, maxShadowRatio, vBary.x);
   fragColor = lightEncoding(lightPercentage);
 }`;
 
