@@ -111,6 +111,8 @@ ${defineFunction("normalizeRay")}
 ${defineFunction("rayFromPoints")}
 ${defineFunction("intersectRayPlane")}
 
+#define EV_CONST_INFINITE_SHADOW_OFFSET   0.01
+
 void main() {
   // Shadow is a trapezoid formed from the intersection of the wall with the
   // triangle ABC, where
@@ -137,20 +139,23 @@ void main() {
   Plane canvasPlane = Plane(planePoint, planeNormal);
 
   // Determine top and bottom wall coordinates at this vertex
-  vec3 wallCoords[2] = vec3[2](aWallCorner1, aWallCorner2);
-  vec3 wallTop = vec3(wallCoords[vertexNum - 1].xy, wallCoords[0].z);
-  vec3 wallBottom = vec3(wallCoords[vertexNum % 2].xy, wallCoords[1].z);
+  vec2 vertex2d = vertexNum == 1 ? aWallCorner1.xy : aWallCorner2.xy;
+  vec3 wallTop = vec3(vertex2d, aWallCorner1.z);
+  vec3 wallBottom = vec3(vertex2d, aWallCorner2.z);
 
   // Trim walls to be between light elevation and canvas elevation.
-  wallTop.z = min(wallTop.z, uLightPosition.z);
+  // If wall top is above or equal to the light, need to approximate an infinite shadow.
+  // Cannot just set the ray to the scene maxR, b/c the ray from light --> vertex is
+  // different lengths for each vertex. Instead, make wall very slightly lower than light,
+  // thus casting a very long shadow.
+  wallTop.z = min(wallTop.z, uLightPosition.z - EV_CONST_INFINITE_SHADOW_OFFSET);
   wallBottom.z = max(wallBottom.z, canvasElevation);
 
   // Intersect the canvas plane: light --> vertex --> plane
-  // If the light is below or equal to the vertex in elevation, the shadow has infinite length, represented here by uMaxR.
+  // We know there is an intersect because we manipulated the wall height.
   Ray rayLT = rayFromPoints(uLightPosition, wallTop);
-  rayLT = normalizeRay(rayLT); // So maximum shadow location can be determined.
-  vec3 ixFarShadow = rayLT.origin + (uMaxR * rayLT.direction);
-  if ( uLightPosition.z > wallTop.z ) intersectRayPlane(rayLT, canvasPlane, ixFarShadow);
+  vec3 ixFarShadow;
+  intersectRayPlane(rayLT, canvasPlane, ixFarShadow);
 
   // Calculate wall dimensions used in fragment shader.
   if ( vertexNum == 2 ) {
