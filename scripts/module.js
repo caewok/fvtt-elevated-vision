@@ -51,8 +51,8 @@ import {
   renderAmbientLightConfigHook,
   renderAmbientSoundConfigHook,
   renderTileConfigHook,
-  updateAmbientLightDocumentHook,
-  updateAmbientSoundDocumentHook,
+  updateAmbientLightHook,
+  updateAmbientSoundHook,
   refreshAmbientLightHook,
   refreshAmbientSoundHook } from "./renderConfig.js";
 
@@ -248,7 +248,7 @@ Hooks.on("initializeLightSourceShaders", initializeLightSourceShadersHook);
 
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
 Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
-Hooks.on("updateAmbientLightDocument", updateAmbientLightDocumentHook);
-Hooks.on("updateAmbientSoundDocument", updateAmbientSoundDocumentHook);
+Hooks.on("updateAmbientLight", updateAmbientLightHook);
+Hooks.on("updateAmbientSound", updateAmbientSoundHook);
 Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
 Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);

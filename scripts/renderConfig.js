@@ -46,7 +46,7 @@ export async function renderTileConfigHook(app, html, data) {
  * @param {DocumentModificationContext} options     Additional options which modified the update request
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
-export function updateAmbientLightDocumentHook(doc, data, _options, _userId) {
+export function updateAmbientLightHook(doc, data, _options, _userId) {
   const changeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
   const flatData = flattenObject(data);
   const changed = new Set(Object.keys(flatData));
@@ -65,7 +65,7 @@ export function updateAmbientLightDocumentHook(doc, data, _options, _userId) {
  * @param {DocumentModificationContext} options     Additional options which modified the update request
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
-export function updateAmbientSoundDocumentHook(doc, data, _options, _userId) {
+export function updateAmbientSoundHook(doc, data, _options, _userId) {
   const changeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
   const flatData = flattenObject(data);
   const changed = new Set(Object.keys(flatData));
