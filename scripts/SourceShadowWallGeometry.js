@@ -27,6 +27,8 @@ import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./ShadowMaskSha
 export function drawAmbientLightHook(object) {
   const lightSource = object.source;
   if ( !lightSource ) return;
+
+  // TODO: Is drawAmbientLightHook still needed?
 }
 
 /**
@@ -53,6 +55,7 @@ function initializeLightSourceShadersHook(lightSource) {
   canvas.effects.EVshadows.addChild(mesh);
 }
 
+
 /**
  * Hook lighting refresh to update the source geometry
  * See Placeable.prototype._applyRenderFlags.
@@ -62,7 +65,9 @@ function initializeLightSourceShadersHook(lightSource) {
 export function refreshAmbientLightHook(object, flags) {
   const geom = object.source[MODULE_ID]?.wallGeometry;
   if ( !geom ) return;
-  if ( flags.refreshPosition ) {
+  if ( flags.refreshPosition || flags.refreshElevation ) {
+    console.log(`EV|refreshAmbientLightHook light ${object.source.x},${object.source.y},${object.source.elevationE} flag: ${object.document.flags.elevatedvision.elevation}`);
+
     geom.refreshWalls();
     object.source[MODULE_ID].shadowMesh?.updateLightPosition();
   }
