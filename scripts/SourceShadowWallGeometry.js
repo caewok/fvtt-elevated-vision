@@ -87,7 +87,7 @@ export function destroyAmbientLightHook(object) {
     geom = undefined;
   }
 
-  let mesh = object.source[MODULE_ID].shadowMesh;
+  let mesh = object.source[MODULE_ID]?.shadowMesh;
   if ( mesh ) {
     canvas.effects.EVshadows.removeChild(mesh);
     mesh.destroy();
