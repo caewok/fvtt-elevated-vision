@@ -163,7 +163,7 @@ export function registerPatches() {
   }
 
   // ----- Shader code for drawing shadows ----- //
-  wrap("AdaptiveLightingShader.create", createAdaptiveLightingShader);
+  // wrap("AdaptiveLightingShader.create", createAdaptiveLightingShader);
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
