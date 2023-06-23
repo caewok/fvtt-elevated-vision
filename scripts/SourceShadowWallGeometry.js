@@ -3,6 +3,7 @@ canvas,
 CONST,
 flattenObject,
 foundry,
+GlobalLightSource,
 Hooks,
 PIXI,
 Wall
@@ -13,6 +14,9 @@ Wall
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./ShadowMaskShader.js";
+import { ShadowTextureRenderer } from "./ShadowTextureRenderer.js";
+import { TestShadowShader } from "./TestShadowShader.js";
+import { EVQuadMesh } from "./ElevationLayerShader.js";
 
 // NOTE: Ambient Light Hooks
 
@@ -37,22 +41,29 @@ export function drawAmbientLightHook(object) {
  */
 function initializeLightSourceShadersHook(lightSource) {
   if ( lightSource instanceof GlobalLightSource ) return;
-  lightSource[MODULE_ID] ??= {};
+  const ev = lightSource[MODULE_ID] ??= {};
 
   // Build the geometry.
-  if ( lightSource[MODULE_ID].wallGeometry ) lightSource[MODULE_ID].wallGeometry.destroy(); // Just in case.
-  lightSource[MODULE_ID].wallGeometry = new PointSourceShadowWallGeometry(lightSource);
+  if ( ev.wallGeometry ) ev.wallGeometry.destroy(); // Just in case.
+  ev.wallGeometry = new PointSourceShadowWallGeometry(lightSource);
 
   // Build the shadow mesh.
   const lightPosition = Point3d.fromPointSource(lightSource);
   const shader = ShadowMaskWallShader.create(lightPosition);
-  if ( lightSource[MODULE_ID].shadowMesh ) lightSource[MODULE_ID].shadowMesh.destroy(); // Just in case.
+  if ( ev.shadowMesh ) ev.shadowMesh.destroy(); // Just in case.
   const mesh = new ShadowWallPointSourceMesh(lightSource, shader);
-  lightSource[MODULE_ID].shadowMesh = mesh;
+  ev.shadowMesh = mesh;
+
+  // Build the shadow render texture
+  ev.shadowRenderer = new ShadowTextureRenderer(lightSource, mesh);
+  ev.shadowRenderer.renderShadowMeshToTexture();
 
   // For testing, add to the canvas effects
+  const shadowShader = TestShadowShader.create(ev.shadowRenderer.renderTexture);
+  ev.shadowQuadMesh = new EVQuadMesh(lightSource.object.bounds, shadowShader);
+
   if ( !canvas.effects.EVshadows ) canvas.effects.EVshadows = canvas.effects.addChild(new PIXI.Container());
-  canvas.effects.EVshadows.addChild(mesh);
+  canvas.effects.EVshadows.addChild(ev.shadowQuadMesh);
 }
 
 
@@ -63,13 +74,25 @@ function initializeLightSourceShadersHook(lightSource) {
  * @param {RenderFlags} flags
  */
 export function refreshAmbientLightHook(object, flags) {
-  const geom = object.source[MODULE_ID]?.wallGeometry;
-  if ( !geom ) return;
-  if ( flags.refreshPosition || flags.refreshElevation ) {
-    console.log(`EV|refreshAmbientLightHook light ${object.source.x},${object.source.y},${object.source.elevationE} flag: ${object.document.flags.elevatedvision.elevation}`);
+  const ev = object.source[MODULE_ID];
+  if ( !ev ) return;
 
-    geom.refreshWalls();
-    object.source[MODULE_ID].shadowMesh?.updateLightPosition();
+  if ( flags.refreshPosition || flags.refreshElevation || flags.refreshRadius ) {
+    console.log(`EV|refreshAmbientLightHook light ${object.source.x},${object.source.y},${object.source.elevationE} flag: ${object.document.flags.elevatedvision.elevation}`);
+    ev.geom?.refreshWalls();
+    ev.shadowMesh?.updateLightPosition();
+  }
+
+  if ( flags.refreshPosition ) {
+    ev.shadowRenderer?.update();
+    ev.shadowQuadMesh.updateGeometry(object.bounds);
+
+  } else if ( flags.refreshRadius ) {
+    ev.shadowRenderer?.updateSourceRadius();
+    ev.shadowQuadMesh.updateGeometry(object.bounds);
+
+  } else if ( flags.refreshElevation ) {
+    ev.shadowRenderer?.update();
   }
 }
 
@@ -81,17 +104,28 @@ export function refreshAmbientLightHook(object, flags) {
  * @param {PlaceableObject} object    The object instance being refreshed
  */
 export function destroyAmbientLightHook(object) {
-  let geom = object.source[MODULE_ID]?.wallGeometry;
-  if ( geom ) {
-    geom.destroy();
-    geom = undefined;
+  const ev = object.source[MODULE_ID];
+  if ( !ev ) return;
+
+  if ( ev.shadowQuadMesh ) {
+    canvas.effects.EVshadows.removeChild(ev.shadowQuadMesh);
+    ev.shadowQuadMesh.destroy();
+    ev.shadowQuadMesh = undefined;
   }
 
-  let mesh = object.source[MODULE_ID]?.shadowMesh;
-  if ( mesh ) {
-    canvas.effects.EVshadows.removeChild(mesh);
-    mesh.destroy();
-    mesh = undefined;
+  if ( ev.shadowRenderer ) {
+    ev.shadowRenderer.destroy();
+    ev.shadowRenderer = undefined;
+  }
+
+  if ( ev.mesh ) {
+    ev.mesh.destroy();
+    ev.mesh = undefined;
+  }
+
+  if ( ev.wallGeometry ) {
+    ev.wallGeometry.destroy();
+    ev.wallGeometry = undefined;
   }
 }
 
@@ -110,9 +144,10 @@ export function destroyAmbientLightHook(object) {
  */
 export function createWallHook(wallD, _options, _userId) {
   for ( const src of canvas.effects.lightSources ) {
-    const geom = src[MODULE_ID]?.wallGeometry;
-    if ( !geom ) continue;
-    geom.addWall(wallD.object);
+    const ev = src[MODULE_ID];
+    if ( !ev ) continue;
+    ev.wallGeometry?.addWall(wallD.object);
+    ev.shadowRenderer?.update();
   }
 }
 
@@ -137,9 +172,10 @@ export function updateWallHook(wallD, data, _options, _userId) {
     || changeFlags.WALL_RESTRICTED.some(f => changes.has(f))) ) return;
 
   for ( const src of canvas.effects.lightSources ) {
-    const geom = src[MODULE_ID]?.wallGeometry;
-    if ( !geom ) continue;
-    geom.updateWall(wallD.object, { changes });
+    const ev = src[MODULE_ID];
+    if ( !ev ) continue;
+    ev.wallGeometry?.updateWall(wallD.object, { changes });
+    ev.shadowRenderer?.update();
   }
 }
 
@@ -156,9 +192,10 @@ export function updateWallHook(wallD, data, _options, _userId) {
  */
 export function deleteWallHook(wallD, _options, _userId) {
   for ( const src of canvas.effects.lightSources ) {
-    const geom = src[MODULE_ID]?.wallGeometry;
-    if ( !geom ) continue;
-    geom.removeWall(wallD.id);
+    const ev = src[MODULE_ID];
+    if ( !ev ) continue;
+    ev.wallGeometry.removeWall(wallD.id);
+    ev.shadowRenderer?.update();
   }
 }
 

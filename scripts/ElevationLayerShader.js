@@ -88,25 +88,42 @@ export class EVQuadMesh extends PIXI.Mesh {
    * @returns {PIXI.Geometry}
    */
   static calculateQuadGeometry(rect) {
-    const { left, right, top, bottom } = rect;
     const geometry = new PIXI.Geometry();
-    geometry.addAttribute("aVertexPosition", [
+    geometry.addAttribute("aVertexPosition", this.aVertexPosition(rect), 2);
+    geometry.addAttribute("aTextureCoord", this.aTextureCoord, 2);
+    geometry.addIndex([0, 1, 2, 0, 2, 3]);
+    return geometry;
+  }
+
+  static aVertexPosition(rect) {
+    const { left, right, top, bottom } = rect;
+    return [
       left, top,      // TL
       right, top,   // TR
       right, bottom, // BR
       left, bottom  // BL
-    ], 2);
+    ];
+  }
 
-    // Texture coordinates:
-    // BL: 0,0; BR: 1,0; TL: 0,1; TR: 1,1
-    geometry.addAttribute("aTextureCoord", [
-      0, 0, // TL
-      1, 0, // TR
-      1, 1, // BR
-      0, 1 // BL
-    ], 2);
-    geometry.addIndex([0, 1, 2, 0, 2, 3]);
-    return geometry;
+  static aTextureCoord = [
+    0, 0, // TL
+    1, 0, // TR
+    1, 1, // BR
+    0, 1 // BL
+  ];
+
+  get aVertexPosition() {
+    return this.constructor.aVertexPosition(this.rect);
+  }
+
+  updateGeometry(newRect) {
+    if ( this.rect.x === newRect.x
+      && this.rect.y === newRect.y
+      && this.rect.width === newRect.width
+      && this.rect.height === newRect.height ) return;
+
+    this.rect.copyFrom(newRect);
+    this.getBuffer("aVertexPosition").update(this.aVertexPosition);
   }
 }
 
@@ -119,6 +136,7 @@ export class ElevationLayerShader extends AbstractEVShader {
    * @type {string}
    */
   static vertexShader =
+  // eslint-disable-next-line indent
 `
 #version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
@@ -139,6 +157,7 @@ void main() {
 }`;
 
   static fragmentShader =
+  // eslint-disable-next-line indent
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
@@ -189,6 +208,7 @@ void main() {
 }`;
 
   /**
+   * Uniforms:
    * uElevationRes: [minElevation, elevationStep, maxElevation, gridScale]
    * uTerrainSampler: elevation texture
    * uMinColor: Color to use at the minimum elevation: minElevation + elevationStep
@@ -206,12 +226,11 @@ void main() {
   static create(defaultUniforms = {}) {
     const ev = canvas.elevation;
     defaultUniforms.uElevationRes ??= [
-        ev.elevationMin,
-        ev.elevationStep,
-        ev.elevationMax,
-        // canvas.elevation.maximumPixelValue,
-        canvas.dimensions.distancePixels
-      ];
+      ev.elevationMin,
+      ev.elevationStep,
+      ev.elevationMax,
+      canvas.dimensions.distancePixels
+    ];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
     defaultUniforms.uMinColor = this.getDefaultColorArray("MIN");
     defaultUniforms.uMaxColor = this.getDefaultColorArray("MAX");

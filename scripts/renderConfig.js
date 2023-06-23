@@ -47,14 +47,23 @@ export async function renderTileConfigHook(app, html, data) {
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
 export function updateAmbientLightHook(doc, data, _options, _userId) {
-  const changeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
+  const elevChangeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
+  const dimRadiusChangeFlag = "config.dim";
+  const brightRadiusChangeflag = "config.bright";
+
   const flatData = flattenObject(data);
   const changed = new Set(Object.keys(flatData));
-  if ( !changed.has(changeFlag) ) return;
+  if ( changed.has(elevChangeFlag) ) {
+    doc.object.renderFlags.set({
+      refreshElevation: true
+    });
+  }
 
-  doc.object.renderFlags.set({
-    refreshElevation: true
-  });
+  if ( changed.has(dimRadiusChangeFlag) || changed.has(brightRadiusChangeflag) ) {
+    doc.object.renderFlags.set({
+      refreshRadius: true
+    });
+  }
 }
 
 /**

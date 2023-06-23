@@ -191,7 +191,7 @@ void main() {
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-#define SHADOW true
+// #define SHADOW true
 
 uniform sampler2D uTerrainSampler;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
@@ -253,10 +253,39 @@ vec2 elevateShadowRatios(in vec2 nearFarShadowRatios, in vec2 elevRatio) {
  * r: (0.8 * (1. - ltd)) + ltd
  * g: 1. - (0.5 * ltd)
  * b: (0.8 * ltd) + (1. - ltd)
- * terrain == 0: 0.8, 1.0, 1.0
- * terrain == 1: 1.0, 0.5, 0.8
+ * limited == 0: 0.8, 1.0, 1.0
+ * limited == 1: 1.0, 0.5, 0.8
+ *
+ * light = 1.0
+ * limited == 0: 1.0, 1.0, 1.0
+ * limited == 1: 1.0, 0.5, 1.0
+ *
+ * light = 0.0
+ * limited == 0: 0.0, 1.0, 1.0
+ * limited == 1: 1.0, 0.5, 0.0
  */
+//
+// light 1 and light 0 for limited:
+//
+// light 1: 1.0, 0.5, 1.0
+// light 0: 1.0, 0.5, 0.0
+//          1.0, 0.25, 0.0
+//
+// light 1: 1.0, 0.5, 1.0
+// light 1: 1.0, 0.5, 1.0
+//          1.0, 0.25, 1.0
+
+// If not in shadow, need to treat limited wall as non-limited
+vec4 noShadow() {
+  #ifdef SHADOW
+  return vec4(0.0);
+  #endif
+  return vec4(1.0);
+}
+
 vec4 lightEncoding(in float light) {
+  if ( light == 1.0 ) return noShadow();
+
   // float ltd = float(fLimitedWall > 0.5); // If using a varying here.
   float ltd = fLimitedWall;
   float ltdInv = 1.0 - ltd;
@@ -273,10 +302,12 @@ vec4 lightEncoding(in float light) {
   return c;
 }
 
+
+
 void main() {
   // If in front of the wall, can return early.
   if ( vBary.x > fWallRatio ) {
-    fragColor = lightEncoding(1.0);
+    fragColor = noShadow();
     return;
   }
 
@@ -371,6 +402,7 @@ export class ShadowWallPointSourceMesh extends PIXI.Mesh {
       shader ??= ShadowMaskWallShader.create(sourcePosition);
     }
     super(source[MODULE_ID].wallGeometry, shader, state, drawMode);
+    this.blendMode = PIXI.BLEND_MODES.MULTIPLY;
 
     /** @type {LightSource} */
     this.source = source;

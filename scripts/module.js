@@ -22,8 +22,10 @@ import { PixelCache, TilePixelCache } from "./PixelCache.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
+import { ShadowTextureRenderer } from "./ShadowTextureRenderer.js";
+import { TestShadowShader } from "./TestShadowShader.js";
 
-import { ElevationLayerShader, AbstractEVShader } from "./ElevationLayerShader.js";
+import { ElevationLayerShader, AbstractEVShader, EVQuadMesh } from "./ElevationLayerShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
 import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./ShadowMaskShader.js";
 import { PointSourceShadowWallGeometry } from "./SourceShadowWallGeometry.js";
@@ -162,7 +164,10 @@ Hooks.once("init", function() {
     PointSourceShadowWallGeometry,
     defineFunction,
     ShadowMaskWallShader,
-    ShadowWallPointSourceMesh
+    ShadowWallPointSourceMesh,
+    EVQuadMesh,
+    ShadowTextureRenderer,
+    TestShadowShader
   };
 
   // These methods need to be registered early
@@ -177,6 +182,10 @@ Hooks.once("init", function() {
 
   CONFIG.AmbientSound.objectClass.RENDER_FLAGS.refreshElevation = {};
   CONFIG.AmbientSound.objectClass.RENDER_FLAGS.refreshField.propagate.push("refreshElevation");
+
+  // Register new render flag for radius changes to lights
+  CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshRadius = {};
+  CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshField.propagate.push("refreshRadius");
 });
 
 Hooks.once("setup", function() {
