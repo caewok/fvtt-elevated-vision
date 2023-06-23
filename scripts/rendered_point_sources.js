@@ -3,7 +3,7 @@ PIXI
 */
 "use strict";
 
-import { shadowUniforms } from "./shader_uniforms.js";
+import { shadowUniforms } from "./glsl/shader_uniforms.js";
 
 // Functions and hooks related to rendered point sources
 // In v11, RenderedPointSource extends PointSource.

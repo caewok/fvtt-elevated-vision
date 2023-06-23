@@ -8,8 +8,8 @@ PIXI
 "use strict";
 
 import { drawPolygonWithHolesPV } from "./util.js";
-import { ShadowShader } from "./ShadowShader.js";
-import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
+import { ShadowShader } from "./glsl/ShadowShader.js";
+import { ShadowShaderNoRadius } from "./glsl/ShadowShaderNoRadius.js";
 import { getSceneSetting, SETTINGS } from "./settings.js";
 
 // NOTE: Polygon and Shader methods

@@ -46,15 +46,24 @@ export async function renderTileConfigHook(app, html, data) {
  * @param {DocumentModificationContext} options     Additional options which modified the update request
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
-export function updateAmbientLightDocumentHook(doc, data, _options, _userId) {
-  const changeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
+export function updateAmbientLightHook(doc, data, _options, _userId) {
+  const elevChangeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
+  const dimRadiusChangeFlag = "config.dim";
+  const brightRadiusChangeflag = "config.bright";
+
   const flatData = flattenObject(data);
   const changed = new Set(Object.keys(flatData));
-  if ( !changed.has(changeFlag) ) return;
+  if ( changed.has(elevChangeFlag) ) {
+    doc.object.renderFlags.set({
+      refreshElevation: true
+    });
+  }
 
-  doc.object.renderFlags.set({
-    refreshElevation: true
-  });
+  if ( changed.has(dimRadiusChangeFlag) || changed.has(brightRadiusChangeflag) ) {
+    doc.object.renderFlags.set({
+      refreshRadius: true
+    });
+  }
 }
 
 /**
@@ -65,7 +74,7 @@ export function updateAmbientLightDocumentHook(doc, data, _options, _userId) {
  * @param {DocumentModificationContext} options     Additional options which modified the update request
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
-export function updateAmbientSoundDocumentHook(doc, data, _options, _userId) {
+export function updateAmbientSoundHook(doc, data, _options, _userId) {
   const changeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
   const flatData = flattenObject(data);
   const changed = new Set(Object.keys(flatData));

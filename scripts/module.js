@@ -14,15 +14,24 @@ import { log } from "./util.js";
 // API imports
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
+
 import { FILOQueue } from "./FILOQueue.js";
-import { ShadowShader } from "./ShadowShader.js";
-import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { PixelCache, TilePixelCache } from "./PixelCache.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
-import { ElevationLayerShader } from "./ElevationLayerShader.js";
+
+import { AbstractEVShader } from "./glsl/AbstractEVShader.js";
+import { defineFunction } from "./glsl/GLSLFunctions.js";
+import { ElevationLayerShader } from "./glsl/ElevationLayerShader.js";
+import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
+import { PointSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
+import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./glsl/ShadowMaskShader.js";
+import { ShadowShader } from "./glsl/ShadowShader.js";
+import { ShadowShaderNoRadius } from "./glsl/ShadowShaderNoRadius.js";
+import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
+import { TestShadowShader } from "./glsl/TestShadowShader.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -42,23 +51,26 @@ import { updateTileHook } from "./tiles.js";
 import {
   initializeLightSourceShadersHook,
   initializeVisionSourceShadersHook } from "./rendered_point_sources.js";
+
 import {
   renderAmbientLightConfigHook,
   renderAmbientSoundConfigHook,
   renderTileConfigHook,
-  updateAmbientLightDocumentHook,
-  updateAmbientSoundDocumentHook,
+  updateAmbientLightHook,
+  updateAmbientSoundHook,
   refreshAmbientLightHook,
   refreshAmbientSoundHook } from "./renderConfig.js";
 
 // Other self-executing hooks
 import "./changelog.js";
 import "./controls.js";
+import "./shadow_hooks.js";
 
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
   // CONFIG.debug.hooks = true;
+  console.debug(`${MODULE_ID}|init`);
 
 
   // Set CONFIGS used by this module.
@@ -149,7 +161,16 @@ Hooks.once("init", function() {
     CoordinateElevationCalculator,
     TokenPointElevationCalculator,
     TokenAverageElevationCalculator,
-    ElevationLayerShader
+    ElevationLayerShader,
+
+    AbstractEVShader,
+    PointSourceShadowWallGeometry,
+    defineFunction,
+    ShadowMaskWallShader,
+    ShadowWallPointSourceMesh,
+    EVQuadMesh,
+    ShadowTextureRenderer,
+    TestShadowShader
   };
 
   // These methods need to be registered early
@@ -164,10 +185,14 @@ Hooks.once("init", function() {
 
   CONFIG.AmbientSound.objectClass.RENDER_FLAGS.refreshElevation = {};
   CONFIG.AmbientSound.objectClass.RENDER_FLAGS.refreshField.propagate.push("refreshElevation");
+
+  // Register new render flag for radius changes to lights
+  CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshRadius = {};
+  CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshField.propagate.push("refreshRadius");
 });
 
 Hooks.once("setup", function() {
-  // game.scenes is present here
+  // The game.scenes object is present here
   registerPatches();
 });
 
@@ -235,9 +260,7 @@ Hooks.on("initializeLightSourceShaders", initializeLightSourceShadersHook);
 
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
 Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
-Hooks.on("updateAmbientLightDocument", updateAmbientLightDocumentHook);
-Hooks.on("updateAmbientSoundDocument", updateAmbientSoundDocumentHook);
+Hooks.on("updateAmbientLight", updateAmbientLightHook);
+Hooks.on("updateAmbientSound", updateAmbientSoundHook);
 Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
 Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);
-
-

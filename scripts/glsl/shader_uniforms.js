@@ -6,7 +6,7 @@ PIXI
 */
 "use strict";
 
-import { Point3d } from "./geometry/3d/Point3d.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
 
 
 // Uniforms used by the lighting and shadow shaders.
