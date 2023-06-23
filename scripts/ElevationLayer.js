@@ -586,6 +586,14 @@ export class ElevationLayer extends InteractionLayer {
     this.renderElevation();
 
     this._initialized = true;
+
+    // Update the light source shadow meshes with the elevation texture.
+    for ( const lightSource of canvas.effects.lightSources ) {
+      const ev = lightSource[MODULE_ID];
+      if ( !ev ) continue;
+      if ( ev.shadowMesh ) ev.shadowMesh.shader.uniforms.uTerrainSampler = canvas.elevation._elevationTexture;
+      ev.shadowRenderer?.update();
+    }
   }
 
   /**
