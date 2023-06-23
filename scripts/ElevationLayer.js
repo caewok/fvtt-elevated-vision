@@ -26,7 +26,6 @@ import {
   drawPolygonWithHoles,
   quotient256,
   mod256 } from "./util.js";
-import { Draw } from "./geometry/Draw.js";
 import { testWallsForIntersections } from "./clockwise_sweep.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
@@ -35,9 +34,12 @@ import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.j
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
-import { EVQuadMesh, ElevationLayerShader } from "./ElevationLayerShader.js";
 import { ElevationTextureManager } from "./ElevationTextureManager.js";
 
+import { Draw } from "./geometry/Draw.js";
+
+import { ElevationLayerShader } from "./glsl/ElevationLayerShader.js";
+import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 
 import "./perfect-vision/extract-async.js";
 

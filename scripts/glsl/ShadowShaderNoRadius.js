@@ -5,36 +5,28 @@ PIXI
 */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
-import { FRAGMENT_FUNCTIONS } from "./lighting.js";
+import { MODULE_ID } from "../const.js";
+import { FRAGMENT_FUNCTIONS } from "../lighting.js";
+
 import { shadowUniforms } from "./shader_uniforms.js";
 
 // In GLSL 2, cannot use dynamic arrays. So set a maximum number of walls for a given light.
 // const MAX_NUM_WALLS = 100;
 // const MAX_NUM_WALL_ENDPOINTS = MAX_NUM_WALLS * 2;
 
-export class ShadowShader extends PIXI.Shader {
+export class ShadowShaderNoRadius extends PIXI.Shader {
   static vertexShader = `
   attribute vec2 aVertexPosition;
   uniform mat3 projectionMatrix;
   uniform mat3 translationMatrix;
   uniform mat3 textureMatrix;
+  uniform vec2 EV_canvasDims;
   varying vec2 vTextureCoord;
-
-  // EV-specific variables
-  uniform vec4 EV_transform;
-  varying vec2 vUvs;
-  varying vec2 vSamplerUvs;
-  varying vec2 EV_textureCoord;
+  varying vec2 vEVTextureCoord;
 
   void main() {
-    // EV-specific calcs
-    vec3 tPos = translationMatrix * vec3(aVertexPosition, 1.0);
-    vUvs = aVertexPosition * 0.5 + 0.5;
-    EV_textureCoord = EV_transform.xy * vUvs + EV_transform.zw;
-    // TO-DO: drop vUvs and just use aVertexPosition?
-
     vTextureCoord = (textureMatrix * vec3(aVertexPosition, 1.0)).xy;
+    vEVTextureCoord = vTextureCoord / EV_canvasDims;
     gl_Position = vec4((projectionMatrix * (translationMatrix * vec3(aVertexPosition, 1.0))).xy, 0.0, 1.0);
   }
   `;
@@ -48,8 +40,6 @@ export class ShadowShader extends PIXI.Shader {
   ${FRAGMENT_FUNCTIONS}
 
   // EV-specific variables
-  varying vec2 EV_textureCoord;
-  varying vec2 vUvs;
   uniform sampler2D EV_elevationSampler;
   uniform vec4 EV_elevationResolution;
   uniform vec3 EV_sourceLocation;
@@ -57,7 +47,9 @@ export class ShadowShader extends PIXI.Shader {
   uniform int EV_numTerrainWalls;
   uniform vec4 EV_sceneDims;
 
-  // Wall data, in vUvs coordinate space
+  varying vec2 vEVTextureCoord;
+
+  // Wall data, in coordinate space
   uniform vec3 EV_wallCoords[MAX_NUM_WALL_ENDPOINTS];
   uniform float EV_wallDistances[MAX_NUM_WALLS];
   uniform vec3 EV_terrainWallCoords[MAX_NUM_WALL_ENDPOINTS];
@@ -75,10 +67,10 @@ export class ShadowShader extends PIXI.Shader {
     float sceneRight = sceneLeft + sceneWidth;
     float sceneBottom = sceneTop + sceneHeight;
 
-    // Elevation texture spans the scene width/height
+    // Elevation texture spans the scene width/height.
     vec2 evTextureCoord = (vTextureCoord - EV_sceneDims.xy) / EV_sceneDims.zw;
     vec4 backgroundElevation = texture2D(EV_elevationSampler, evTextureCoord);
-    // vec4 backgroundElevation = texture2D(EV_elevationSampler, EV_textureCoord);
+    //vec4 backgroundElevation = texture2D(EV_elevationSampler, vEVTextureCoord);
     float pixelElevation = canvasElevationFromPixel(backgroundElevation.r, EV_elevationResolution);
 
     bool inShadow = false;
@@ -86,10 +78,11 @@ export class ShadowShader extends PIXI.Shader {
     int wallsToProcess = EV_numWalls;
     int terrainWallsToProcess = EV_numTerrainWalls;
 
-    if ( vUvs.x < sceneLeft
-      || vUvs.x > sceneRight
-      || vUvs.y < sceneTop
-      || vUvs.y > sceneBottom
+
+    if ( vTextureCoord.x < sceneLeft
+      || vTextureCoord.x > sceneRight
+      || vTextureCoord.y < sceneTop
+      || vTextureCoord.y > sceneBottom
       || EV_sourceLocation.z < EV_elevationResolution.r  ) {
 
       // Skip if we are outside the scene boundary or under minimum scene elevation
@@ -103,7 +96,7 @@ export class ShadowShader extends PIXI.Shader {
       terrainWallsToProcess = 0;
     }
 
-    vec3 pixelLocation = vec3(vUvs.xy, pixelElevation);
+    vec3 pixelLocation = vec3(vTextureCoord.xy, pixelElevation);
     for ( int i = 0; i < MAX_NUM_WALLS; i++ ) {
       if ( i >= wallsToProcess ) break;
 
@@ -172,15 +165,15 @@ export class ShadowShader extends PIXI.Shader {
   static #program;
 
   static create(defaultUniforms = {}) {
-    const vShader = ShadowShader.vertexShader;
+    const vShader = ShadowShaderNoRadius.vertexShader;
     const defines =
 `
   #define MAX_NUM_WALLS ${CONFIG[MODULE_ID].maxShaderWalls}
   #define MAX_NUM_WALL_ENDPOINTS ${CONFIG[MODULE_ID].maxShaderWalls * 2}
 `;
-    const fShader = defines + ShadowShader.fragmentShader;
+    const fShader = defines + ShadowShaderNoRadius.fragmentShader;
 
-    const program = ShadowShader.#program ??= PIXI.Program.from(
+    const program = ShadowShaderNoRadius.#program ??= PIXI.Program.from(
       vShader,
       fShader
     );
@@ -241,7 +234,8 @@ export class ShadowShader extends PIXI.Shader {
     this.uniforms.depthElevation = value;
   }
 
+
   updateUniforms(source) {
-    shadowUniforms(source, true, this.uniforms);
+    shadowUniforms(source, false, this.uniforms);
   }
 }

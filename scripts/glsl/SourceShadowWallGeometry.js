@@ -11,12 +11,13 @@ Wall
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
-import { MODULE_ID } from "./const.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
+import { MODULE_ID } from "../const.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
+
 import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./ShadowMaskShader.js";
 import { ShadowTextureRenderer } from "./ShadowTextureRenderer.js";
 import { TestShadowShader } from "./TestShadowShader.js";
-import { EVQuadMesh } from "./ElevationLayerShader.js";
+import { EVQuadMesh } from "./EVQuadMesh.js";
 
 // NOTE: Ambient Light Hooks
 

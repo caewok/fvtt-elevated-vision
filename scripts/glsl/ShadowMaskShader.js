@@ -4,11 +4,13 @@ PIXI
 */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
-import { AbstractEVShader } from "./ElevationLayerShader.js";
+import { MODULE_ID } from "../const.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
+
+import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
 import { PointSourceShadowWallGeometry } from "./SourceShadowWallGeometry.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
+
 
 class TestGeometryShader extends AbstractEVShader {
   static vertexShader =

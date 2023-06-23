@@ -14,21 +14,24 @@ import { log } from "./util.js";
 // API imports
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
+
 import { FILOQueue } from "./FILOQueue.js";
-import { ShadowShader } from "./ShadowShader.js";
-import { ShadowShaderNoRadius } from "./ShadowShaderNoRadius.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { PixelCache, TilePixelCache } from "./PixelCache.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
-import { ShadowTextureRenderer } from "./ShadowTextureRenderer.js";
-import { TestShadowShader } from "./TestShadowShader.js";
 
-import { ElevationLayerShader, AbstractEVShader, EVQuadMesh } from "./ElevationLayerShader.js";
-import { defineFunction } from "./GLSLFunctions.js";
-import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./ShadowMaskShader.js";
-import { PointSourceShadowWallGeometry } from "./SourceShadowWallGeometry.js";
+import { AbstractEVShader } from "./glsl/AbstractEVShader.js";
+import { defineFunction } from "./glsl/GLSLFunctions.js";
+import { ElevationLayerShader } from "./glsl/ElevationLayerShader.js";
+import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
+import { PointSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
+import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./glsl/ShadowMaskShader.js";
+import { ShadowShader } from "./glsl/ShadowShader.js";
+import { ShadowShaderNoRadius } from "./glsl/ShadowShaderNoRadius.js";
+import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
+import { TestShadowShader } from "./glsl/TestShadowShader.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -61,7 +64,7 @@ import {
 // Other self-executing hooks
 import "./changelog.js";
 import "./controls.js";
-import "./SourceShadowWallGeometry.js";
+import "./glsl/SourceShadowWallGeometry.js";
 
 // Imported elsewhere: import "./scenes.js";
 

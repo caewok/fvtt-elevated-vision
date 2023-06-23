@@ -1,131 +1,14 @@
 /* global
 canvas,
 Color,
-foundry,
-mergeObject,
 PIXI
 */
 "use strict";
 
-import { getSetting, SETTINGS } from "./settings.js";
+import { getSetting, SETTINGS } from "../settings.js";
+
 import { defineFunction } from "./GLSLFunctions.js";
-
-export class AbstractEVShader extends PIXI.Shader {
-  constructor(program, uniforms) {
-    super(program, foundry.utils.deepClone(uniforms));
-
-    /**
-     * The initial default values of shader uniforms
-     * @type {object}
-     */
-    this._defaults = uniforms;
-  }
-
-  /* -------------------------------------------- */
-
-  /**
-   * The raw vertex shader used by this class.
-   * A subclass of AbstractBaseShader must implement the vertexShader static field.
-   * @type {string}
-   */
-  static vertexShader = "";
-
-  /**
-   * The raw fragment shader used by this class.
-   * A subclass of AbstractBaseShader must implement the fragmentShader static field.
-   * @type {string}
-   */
-  static fragmentShader = "";
-
-  /**
-   * The default uniform values for the shader.
-   * A subclass of AbstractBaseShader must implement the defaultUniforms static field.
-   * @type {object}
-   */
-  static defaultUniforms = {};
-
-  /* -------------------------------------------- */
-
-  /**
-   * A factory method for creating the shader using its defined default values
-   * @param {object} defaultUniforms
-   * @returns {AbstractBaseShader}
-   */
-  static create(defaultUniforms) {
-    const program = PIXI.Program.from(this.vertexShader, this.fragmentShader);
-    const uniforms = mergeObject(this.defaultUniforms, defaultUniforms, {inplace: false, insertKeys: false});
-    return new this(program, uniforms);
-  }
-
-  /* -------------------------------------------- */
-
-  /**
-   * Reset the shader uniforms back to their provided default values
-   * @private
-   */
-  reset() {
-    for (let [k, v] of Object.entries(this._defaults)) {
-      this.uniforms[k] = v;
-    }
-  }
-}
-
-/**
- * Mesh that takes a rectangular frame instead of a geometry.
- * @param {PIXI.Rectangle} rect
- */
-export class EVQuadMesh extends PIXI.Mesh {
-  constructor(rect, shader, state, drawMode) {
-    const geometry = EVQuadMesh.calculateQuadGeometry(rect);
-    super(geometry, shader, state, drawMode);
-    this.rect = rect;
-  }
-
-  /**
-   * Construct a geometry that represents a rectangle on the canvas.
-   * Adds vertex coordinates and texture UV coordinates.
-   * @param {PIXI.Rectangle} rect   Rectangle to use for the frame.
-   * @returns {PIXI.Geometry}
-   */
-  static calculateQuadGeometry(rect) {
-    const geometry = new PIXI.Geometry();
-    geometry.addAttribute("aVertexPosition", this.aVertexPosition(rect), 2);
-    geometry.addAttribute("aTextureCoord", this.aTextureCoord, 2);
-    geometry.addIndex([0, 1, 2, 0, 2, 3]);
-    return geometry;
-  }
-
-  static aVertexPosition(rect) {
-    const { left, right, top, bottom } = rect;
-    return [
-      left, top,      // TL
-      right, top,   // TR
-      right, bottom, // BR
-      left, bottom  // BL
-    ];
-  }
-
-  static aTextureCoord = [
-    0, 0, // TL
-    1, 0, // TR
-    1, 1, // BR
-    0, 1 // BL
-  ];
-
-  get aVertexPosition() {
-    return this.constructor.aVertexPosition(this.rect);
-  }
-
-  updateGeometry(newRect) {
-    if ( this.rect.x === newRect.x
-      && this.rect.y === newRect.y
-      && this.rect.width === newRect.width
-      && this.rect.height === newRect.height ) return;
-
-    this.rect.copyFrom(newRect);
-    this.geometry.getBuffer("aVertexPosition").update(this.aVertexPosition);
-  }
-}
+import { AbstractEVShader } from "./AbstractEVShader.js";
 
 /**
  * Shader to represent elevation values on the elevation layer canvas.

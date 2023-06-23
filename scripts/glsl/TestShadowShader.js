@@ -3,7 +3,7 @@ PIXI
 */
 "use strict";
 
-import { AbstractEVShader } from "./ElevationLayerShader.js";
+import { AbstractEVShader } from "./AbstractEVShader.js";
 
 
 export class TestShadowShader extends AbstractEVShader {
