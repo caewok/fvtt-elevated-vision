@@ -123,7 +123,7 @@ export class EVQuadMesh extends PIXI.Mesh {
       && this.rect.height === newRect.height ) return;
 
     this.rect.copyFrom(newRect);
-    this.getBuffer("aVertexPosition").update(this.aVertexPosition);
+    this.geometry.getBuffer("aVertexPosition").update(this.aVertexPosition);
   }
 }
 
