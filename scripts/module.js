@@ -64,7 +64,7 @@ import {
 // Other self-executing hooks
 import "./changelog.js";
 import "./controls.js";
-import "./glsl/SourceShadowWallGeometry.js";
+import "./shadow_hooks.js";
 
 // Imported elsewhere: import "./scenes.js";
 
