@@ -101,12 +101,7 @@ canvas.stage.removeChild(s)
 
 shadowShader = TestShadowShader.create(rt);
 
-rect = new PIXI.Rectangle(
-  lightSource.object.bounds.x,
-  lightSource.object.bounds.x,
-  lightSource.radius * 2,
-  lightSource.radius * 2)
-quadMesh = new EVQuadMesh(rect, shadowShader);
+quadMesh = new EVQuadMesh(lightSource.object.bounds, shadowShader);
 
 canvas.stage.addChild(quadMesh);
 canvas.stage.removeChild(quadMesh);
