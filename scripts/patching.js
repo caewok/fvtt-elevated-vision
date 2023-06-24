@@ -207,7 +207,7 @@ export function registerShadowPatches() {
       // shaderOverride("CanvasVisibility.prototype.refreshVisibility", refreshVisibilityCanvasVisibilityPolygons, { perf_mode: libWrapper.PERF_FAST });
       break;
     case SHADER_SWITCH.SHADER:
-      shaderWrap("PIXI.LegacyGraphics.prototype.drawShape", drawShapePIXIGraphics, { perf_mode: libWrapper.PERF_FAST });
+      //shaderWrap("PIXI.LegacyGraphics.prototype.drawShape", drawShapePIXIGraphics, { perf_mode: libWrapper.PERF_FAST });
       // shaderOverride("CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, { type: libWrapper.OVERRIDE, perf_mode: libWrapper.PERF_FAST });
       break;
   }
