@@ -25,10 +25,10 @@ import {
   cloneToken
 } from "./tokens.js";
 
-import {
-  createAdaptiveLightingShader,
-  _createPolygonLightSource
-} from "./lighting.js";
+// import {
+//   createAdaptiveLightingShader,
+//   _createPolygonLightSource
+// } from "./lighting.js";
 
 import {
   drawShapePIXIGraphics,
@@ -54,6 +54,8 @@ import {
 import { getEVPixelCacheTile } from "./tiles.js";
 
 import { _onMouseMoveCanvas } from "./ElevationLayer.js";
+
+import { createAdaptiveLightingShader } from "./glsl/patch_lighting_shaders.js";
 
 // A: shader / not shader
 // B: PV / not PV
@@ -163,7 +165,7 @@ export function registerPatches() {
   }
 
   // ----- Shader code for drawing shadows ----- //
-  // wrap("AdaptiveLightingShader.create", createAdaptiveLightingShader);
+  wrap("AdaptiveLightingShader.create", createAdaptiveLightingShader);
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;

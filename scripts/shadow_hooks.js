@@ -60,11 +60,14 @@ function initializeLightSourceShadersHook(lightSource) {
   ev.shadowRenderer.renderShadowMeshToTexture();
 
   // For testing, add to the canvas effects
-  const shadowShader = TestShadowShader.create(ev.shadowRenderer.renderTexture);
-  ev.shadowQuadMesh = new EVQuadMesh(lightSource.object.bounds, shadowShader);
-
-  if ( !canvas.effects.EVshadows ) canvas.effects.EVshadows = canvas.effects.addChild(new PIXI.Container());
-  canvas.effects.EVshadows.addChild(ev.shadowQuadMesh);
+//   const shadowShader = TestShadowShader.create(ev.shadowRenderer.renderTexture);
+//   ev.shadowQuadMesh = new EVQuadMesh(lightSource.object.bounds, shadowShader);
+//
+//   if ( !canvas.effects.EVshadows ) canvas.effects.EVshadows = canvas.effects.addChild(new PIXI.Container());
+//   canvas.effects.EVshadows.addChild(ev.shadowQuadMesh);
+  lightSource.layers.illumination.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+  lightSource.layers.coloration.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+  lightSource.layers.background.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
 }
 
 
@@ -79,18 +82,18 @@ export function refreshAmbientLightHook(object, flags) {
   if ( !ev ) return;
 
   if ( flags.refreshPosition || flags.refreshElevation || flags.refreshRadius ) {
-    console.log(`EV|refreshAmbientLightHook light ${object.source.x},${object.source.y},${object.source.elevationE} flag: ${object.document.flags.elevatedvision.elevation}`);
+    // console.log(`EV|refreshAmbientLightHook light ${object.source.x},${object.source.y},${object.source.elevationE} flag: ${object.document.flags.elevatedvision.elevation}`);
     ev.geom?.refreshWalls();
     ev.shadowMesh?.updateLightPosition();
   }
 
   if ( flags.refreshPosition ) {
     ev.shadowRenderer?.update();
-    ev.shadowQuadMesh.updateGeometry(object.bounds);
+    ev.shadowQuadMesh?.updateGeometry(object.bounds);
 
   } else if ( flags.refreshRadius ) {
     ev.shadowRenderer?.updateSourceRadius();
-    ev.shadowQuadMesh.updateGeometry(object.bounds);
+    ev.shadowQuadMesh?.updateGeometry(object.bounds);
 
   } else if ( flags.refreshElevation ) {
     ev.shadowRenderer?.update();
@@ -109,7 +112,7 @@ export function destroyAmbientLightHook(object) {
   if ( !ev ) return;
 
   if ( ev.shadowQuadMesh ) {
-    canvas.effects.EVshadows.removeChild(ev.shadowQuadMesh);
+    if ( canvas.effects.EVshadows ) canvas.effects.EVshadows.removeChild(ev.shadowQuadMesh);
     ev.shadowQuadMesh.destroy();
     ev.shadowQuadMesh = undefined;
   }
