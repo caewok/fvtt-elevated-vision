@@ -25,11 +25,6 @@ import {
   cloneToken
 } from "./tokens.js";
 
-// import {
-//   createAdaptiveLightingShader,
-//   _createPolygonLightSource
-// } from "./lighting.js";
-
 import {
   drawShapePIXIGraphics,
 
@@ -116,8 +111,8 @@ export function registerAdditions() {
   addClassMethod(ClockwiseSweepPolygon.prototype, "_drawShadows", _drawShadowsClockwiseSweepPolygon);
   addClassMethod(Token.prototype, "getTopLeft", getTopLeftTokenCorner);
 
-  addClassMethod(VisionSource.prototype, "_createEVMask", _createEVMask);
-  addClassMethod(LightSource.prototype, "_createEVMask", _createEVMask);
+//   addClassMethod(VisionSource.prototype, "_createEVMask", _createEVMask);
+//   addClassMethod(LightSource.prototype, "_createEVMask", _createEVMask);
 
   addClassGetter(Tile.prototype, "evPixelCache", getEVPixelCacheTile);
   addClassMethod(Tile.prototype, "_evPixelCache", undefined);
@@ -126,8 +121,8 @@ export function registerAdditions() {
 }
 
 function shaderAdditions() {
-  addClassMethod(VisionSource.prototype, "_createEVMesh", _createEVMeshVisionSource);
-  addClassMethod(LightSource.prototype, "_createEVMesh", _createEVMeshLightSource);
+//   addClassMethod(VisionSource.prototype, "_createEVMesh", _createEVMeshVisionSource);
+//   addClassMethod(LightSource.prototype, "_createEVMesh", _createEVMeshLightSource);
 }
 
 // IDs returned by libWrapper.register for the shadow shader patches.
@@ -214,7 +209,6 @@ export function registerShadowPatches() {
     case SHADER_SWITCH.SHADER:
       shaderWrap("PIXI.LegacyGraphics.prototype.drawShape", drawShapePIXIGraphics, { perf_mode: libWrapper.PERF_FAST });
       // shaderOverride("CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, { type: libWrapper.OVERRIDE, perf_mode: libWrapper.PERF_FAST });
-      // shaderWrap("LightSource.prototype._createPolygon", _createPolygonLightSource, { perf_mode: libWrapper.PERF_FAST });
       break;
   }
 }
