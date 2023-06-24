@@ -52,6 +52,8 @@ import { _onMouseMoveCanvas } from "./ElevationLayer.js";
 
 import { createAdaptiveLightingShader } from "./glsl/patch_lighting_shaders.js";
 
+import { _configureRenderedPointSource, destroyRenderedPointSource } from "./shadow_hooks.js";
+
 // A: shader / not shader
 // B: PV / not PV
 // A | (B << 1)
@@ -161,6 +163,9 @@ export function registerPatches() {
 
   // ----- Shader code for drawing shadows ----- //
   wrap("AdaptiveLightingShader.create", createAdaptiveLightingShader);
+
+  wrap("RenderedPointSource.prototype._configure", _configureRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
+  wrap("RenderedPointSource.prototype.destroy", destroyRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
