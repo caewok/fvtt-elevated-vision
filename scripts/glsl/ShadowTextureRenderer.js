@@ -50,12 +50,23 @@ export class ShadowTextureRenderer {
   }
 
   /**
+   * Source bounds defined by the radius of the source.
+   * @type {PIXI.Rectangle}
+   */
+  get sourceBounds() {
+    const { x, y } = this.source;
+    const r = this.source.radius ?? canvas.dimensions.maxR;
+    const d = r * 2;
+    return new PIXI.Rectangle(x - r, y - r, d, d);
+  }
+
+  /**
    * Render a shadow mesh to the texture.
    * @param {ShadowWallPointSourceMesh} mesh
    * @returns {PIXI.RenderTexture}
    */
   renderShadowMeshToTexture() {
-    this.mesh.position = { x: -this.source.object.bounds.x, y: -this.source.object.bounds.y };
+    this.mesh.position = { x: -this.sourceBounds.x, y: -this.sourceBounds.y };
     canvas.app.renderer.render(this.mesh, { renderTexture: this.renderTexture, clear: true });
     return this.renderTexture;
   }
