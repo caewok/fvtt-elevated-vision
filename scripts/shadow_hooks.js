@@ -215,6 +215,3 @@ Hooks.on("deleteWall", deleteWallHook);
 
 Hooks.on("initializeLightSourceShaders", initializeSourceShadersHook);
 Hooks.on("initializeVisionSourceShaders", initializeSourceShadersHook);
-
-
-
