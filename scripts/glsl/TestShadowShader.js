@@ -87,12 +87,16 @@ TestShadowShader = api.TestShadowShader
 
 
 let [l] = canvas.lighting.placeables;
-lightSource = l.source;
-shadowMesh = l.source.elevatedvision.shadowMesh
+source = l.source;
+
+source = _token.vision
+
+
+
+shadowMesh = source.elevatedvision.shadowMesh
 canvas.stage.addChild(shadowMesh)
 
-// shadowMesh.position = {x: -lightSource.object.bounds.x, y: -lightSource.object.bounds.y}
-str = new ShadowTextureRenderer(lightSource, shadowMesh);
+str = new ShadowTextureRenderer(source, shadowMesh);
 rt = str.renderShadowMeshToTexture()
 
 s = new PIXI.Sprite(rt)
@@ -101,7 +105,7 @@ canvas.stage.removeChild(s)
 
 shadowShader = TestShadowShader.create(rt);
 
-quadMesh = new EVQuadMesh(lightSource.object.bounds, shadowShader);
+quadMesh = new EVQuadMesh(str.sourceBounds, shadowShader);
 
 canvas.stage.addChild(quadMesh);
 canvas.stage.removeChild(quadMesh);

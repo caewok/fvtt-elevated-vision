@@ -12,7 +12,7 @@ import { defineFunction } from "./GLSLFunctions.js";
 import { PointSourceShadowWallGeometry } from "./SourceShadowWallGeometry.js";
 
 
-class TestGeometryShader extends AbstractEVShader {
+export class TestGeometryShader extends AbstractEVShader {
   static vertexShader =
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
@@ -31,16 +31,13 @@ void main() {
 
   // testing
   if ( vertexNum == 0 ) {
-    // vVertexPosition = uLightPosition.xy;
-    vVertexPosition = vec2(1900.0, 1750.0);
+    vVertexPosition = uLightPosition.xy;
 
   } else if ( vertexNum == 1 ) {
-    // vVertexPosition = aWallCorner1.xy;
-    vVertexPosition = vec2(1562.0, 1187.0);
+    vVertexPosition = aWallCorner1.xy;
 
   } else if ( vertexNum == 2 ) {
-    // vVertexPosition = aWallCorner2.xy;
-    vVertexPosition = vec2(1975.0, 1425.0);
+    vVertexPosition = aWallCorner2.xy;
   }
 
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
@@ -150,6 +147,7 @@ void main() {
   // Cannot just set the ray to the scene maxR, b/c the ray from light --> vertex is
   // different lengths for each vertex. Instead, make wall very slightly lower than light,
   // thus casting a very long shadow.
+  float actualWallTop = wallTop.z;
   wallTop.z = min(wallTop.z, uLightPosition.z - EV_CONST_INFINITE_SHADOW_OFFSET);
   wallBottom.z = max(wallBottom.z, canvasElevation);
 
@@ -174,7 +172,8 @@ void main() {
     }
 
     // Flat variables.
-    fWallHeights = vec2(wallTop.z - canvasElevation, wallBottom.z - canvasElevation);
+    // Use actual wall top so that terrain does not poke above a wall that was cut off.
+    fWallHeights = vec2(actualWallTop, wallBottom.z);
     fWallRatio = wallRatio;
     fNearRatio = nearRatio;
     fLimitedWall = aLimitedWall;
@@ -198,6 +197,7 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 uniform sampler2D uTerrainSampler;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 uniform vec4 uSceneDims;
+uniform vec3 uLightPosition;
 
 in vec2 vVertexPosition;
 in vec3 vBary;
@@ -236,8 +236,10 @@ float terrainElevation() {
  * @param {vec2} elevRatio            Elevation change as a percentage of wall bottom/top height from canvas.
  * @returns {vec2} Modified elevation ratio
  */
-vec2 elevateShadowRatios(in vec2 nearFarShadowRatios, in vec2 elevRatio) {
-  return nearFarShadowRatios + elevRatio.yx * (fWallRatio - nearFarShadowRatios);
+vec2 elevateShadowRatios(in vec2 nearFarRatios, in vec2 wallHeights, in float wallRatio, in float elevChange) {
+  vec2 toWallRatios = wallRatio - nearFarRatios;
+  vec2 heightFractions = elevChange / wallHeights.yx;
+  return nearFarRatios + (heightFractions * toWallRatios);
 }
 
 /**
@@ -307,6 +309,7 @@ vec4 lightEncoding(in float light) {
 
 
 void main() {
+
   // If in front of the wall, can return early.
   if ( vBary.x > fWallRatio ) {
     fragColor = noShadow();
@@ -317,23 +320,133 @@ void main() {
   float canvasElevation = uElevationRes.x;
   float elevation = terrainElevation();
 
+
+
+  // If elevation is above or equal to the light, then shadow.
+  if ( elevation >= uLightPosition.z ) {
+    fragColor = lightEncoding(0.0);
+    return;
+  }
+
+  // If elevation is above the wall, then no shadow.
+  if ( elevation > fWallHeights.x ) {
+    fragColor = noShadow();
+    return;
+  }
+
   // Determine the start and end of the shadow, relative to the light.
   vec2 nearFarShadowRatios = vec2(fNearRatio, 0.0);
   if ( elevation > canvasElevation ) {
     // Calculate the proportional elevation change relative to wall height.
     float elevationChange = elevation - canvasElevation;
-    vec2 elevRatio = elevationChange / fWallHeights;
-    nearFarShadowRatios = elevateShadowRatios(nearFarShadowRatios, elevRatio);
+    nearFarShadowRatios = elevateShadowRatios(nearFarShadowRatios, max(fWallHeights - canvasElevation, 0.0), fWallRatio, elevationChange);
   }
 
   // If fragment is between the start and end shadow points, then full shadow.
   // If in front of the near shadow or behind the far shadow, then full light.
   // Remember, vBary.x is 1.0 at the light, and 0.0 at the far end of the shadow.
-  float minShadowRatio = nearFarShadowRatios.y;
-  float maxShadowRatio = nearFarShadowRatios.x;
-  float lightPercentage = 1.0 - between(minShadowRatio, maxShadowRatio, vBary.x);
+  float farShadowRatio = nearFarShadowRatios.y;
+  float nearShadowRatio = nearFarShadowRatios.x;
+
+//   if ( vBary.x < farShadowRatio ) {
+//     fragColor = vec4((elevation + 100.0) / 400.0, 0.0, 0.0, 0.8);
+//     // fragColor = lightEncoding(1.0);
+//   } else if ( vBary.x > nearShadowRatio ) {
+//     fragColor = vec4(0.0, (elevation + 100.0) / 400.0, 0.0, 0.8);
+//     // fragColor = lightEncoding(1.0);
+//   } else {
+//     fragColor = vec4(0.0, 0.0, (elevation + 100.0) / 400.0, 0.8);
+//     // fragColor = lightEncoding(0.0);
+//   }
+
+//   bool inShadow = between(farShadowRatio, nearShadowRatio, vBary.x) == 1.0;
+//   if ( inShadow ) {
+//     fragColor = vec4(0.0, 0.0, (elevation + 100.0) / 400.0, 0.8);
+//   } else if ( vBary.x < farShadowRatio ) {
+//     fragColor = vec4((elevation + 100.0) / 400.0, 0.0, 0.0, 0.8);
+//   } else { // vBary.x > nearShadowRatio
+//     fragColor = vec4(0.0, (elevation + 100.0) / 400.0, 0.0, 0.8);
+//   }
+
+
+  float lightPercentage = 1.0 - between(farShadowRatio, nearShadowRatio, vBary.x);
   fragColor = lightEncoding(lightPercentage);
 }`;
+
+
+/*
+token center: 1550, 1550
+20' (400) wall,
+5' above surface
+~ 37.5 feet to end of shadow
+12.5 feet to wall
+
+fWallRatio = 25 / 37.5 = .66
+nearFarRatios = vec2(37.5 / (12.5 + 37.5), 0) = vec2(.75, 0)
+elevationChange = 5'
+elevRatio = 5 / vec2(400, 0) = vec2(0.0125, 0)
+
+nearFarShadowRatios + (elevRatio.yx * (fWallRatio - nearFarShadowRatios));
+
+(0.75, 0) + (0, .0125) * (.66 - (.75, 0))
+
+(0.75, 0) + (0, 0)
+
+
+// New method
+top: 400
+bottom: -9999
+
+fWallRatio: 0.66
+elevationChange: 0
+
+
+
+fWallHeights: 400, -9999
+fWallRatio: .66
+elevationChange = 5
+nearFarShadowRatios = (0.50, 0)
+wallHeights = max(0, fWallHeights - canvasElevation) = (400, 0)
+
+toWallRatios: .66 - (0.66, 0) = (0, .66)
+heightFractions: 100 / (0, 400) = (0, .25)
+
+(.66, 0) + (0, .25) * (0, .66) = (.66, .165)
+
+
+
+
+bottomToWallRatio = (wallRatio - nearRatio)
+bottomFraction = elevChange / bottomHeight
+newNearRatio = nearFraction + (bottomFraction * bottomToWallRatio)
+
+topToWallRatio = (wallRatio - farRatio)
+topFraction = elevChange / topHeight
+newFarRatio = farFraction + (topFraction * topToWallRatio)
+
+nearFraction = ~.5
+bottomToWallRatio = .66 - .5 = .16
+bottomFraction = 5 / 5 = 100%
+newNearRatio = .5 + (100% * .16) = .56
+
+farFraction = 0
+topToWallRatio = .66 - 0 = .66
+topFraction = 5 / 20 = 25%
+newFarRatio = 0 + (25% * .66) = 0.165
+
+
+
+
+
+
+
+
+
+
+
+*/
+
+
 
   /**
    * Set the basic uniform structures.
@@ -429,19 +542,26 @@ defineFunction = api.defineFunction;
 AbstractEVShader = api.AbstractEVShader
 ShadowMaskWallShader = api.ShadowMaskWallShader
 ShadowWallPointSourceMesh = api.ShadowWallPointSourceMesh
-
+TestGeometryShader = api.TestGeometryShader
 
 let [l] = canvas.lighting.placeables;
-lightSource = l.source;
-lightPosition = Point3d.fromPointSource(lightSource)
-shader = ShadowMaskWallShader.create(lightPosition);
-mesh = new ShadowWallPointSourceMesh(lightSource, shader)
+source = l.source;
+sourcePosition = Point3d.fromPointSource(source)
+
+
+source = _token.vision
+sourcePosition = Point3d.fromPointSource(source)
+
+
+shader = ShadowMaskWallShader.create(sourcePosition);
+mesh = new ShadowWallPointSourceMesh(source, shader)
 
 canvas.stage.addChild(mesh)
 canvas.stage.removeChild(mesh)
 
-shader = TestGeometryShader.create(lightPosition);
-mesh = new ShadowWallPointSourceMesh(lightSource, shader)
-canvas.stage.addChild(mesh)
+geomShader = TestGeometryShader.create(sourcePosition);
+geomMesh = new ShadowWallPointSourceMesh(source, geomShader)
+canvas.stage.addChild(geomMesh)
+canvas.stage.removeChild(geomMesh)
 
 */

@@ -73,6 +73,17 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     return dat.some(x => x);
   }
 
+  /**
+   * Source bounds defined by the radius of the source.
+   * @type {PIXI.Rectangle}
+   */
+  get sourceBounds() {
+    const { x, y } = this.source;
+    const r = this.source.radius ?? canvas.dimensions.maxR;
+    const d = r * 2;
+    return new PIXI.Rectangle(x - r, y - r, d, d);
+  }
+
   constructWallGeometry(walls) {
     this._triWallMap.clear();
 
@@ -156,8 +167,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // Slightly extend wall to ensure connected walls do not have gaps in shadows.
     const adjA = B.towardsPoint(A, ABDist + this.constructor.WALL_OFFSET_PIXELS);
     const adjB = A.towardsPoint(B, ABDist + this.constructor.WALL_OFFSET_PIXELS);
-    const topZ = Math.min(wall.topZ + this.constructor.WALL_OFFSET_PIXELS, Number.MAX_SAFE_INTEGER);
-    const bottomZ = Math.max(wall.bottomZ - this.constructor.WALL_OFFSET_PIXELS, Number.MIN_SAFE_INTEGER);
+    const topZ = Math.min(wall.topZ, Number.MAX_SAFE_INTEGER);
+    const bottomZ = Math.max(wall.bottomZ, Number.MIN_SAFE_INTEGER);
 
     const out = {
       corner1: adjA,
@@ -384,8 +395,7 @@ export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
     if ( orientWall.almostEqual(0) ) return false;
 
     // Wall must be within the light radius.
-    const bounds = this.source.bounds ?? this.source.object.bounds ?? canvas.dimensions.rect;
-    if ( !bounds.lineSegmentIntersects(wall.A, wall.B, { inside: true }) ) return false;
+    if ( !this.sourceBounds.lineSegmentIntersects(wall.A, wall.B, { inside: true }) ) return false;
 
     return true;
   }

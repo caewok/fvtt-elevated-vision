@@ -2,8 +2,7 @@
 canvas,
 flattenObject,
 GlobalLightSource,
-Hooks,
-PIXI
+Hooks
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -13,103 +12,50 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 
 import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./glsl/ShadowMaskShader.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
-import { TestShadowShader } from "./glsl/TestShadowShader.js";
-import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 import { PointSourceShadowWallGeometry, SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 
 
-// Hooks used for updating source shadow geometry, mesh, texture
-// NOTE: Ambient Light Hooks
+export function _configureRenderedPointSource(wrapped, changes) {
+  wrapped(changes);
 
-/**
- * Hook the initial ambient light draw to construct shadows.
- * A hook event that fires when a {@link PlaceableObject} is initially drawn.
- * The dispatched event name replaces "Object" with the named PlaceableObject subclass, i.e. "drawToken".
- * @event drawObject
- * @category PlaceableObject
- * @param {PlaceableObject} object    The object instance being drawn
- */
-export function drawAmbientLightHook(object) {
-  const lightSource = object.source;
-  if ( !lightSource ) return;
-
-  // TODO: Is drawAmbientLightHook still needed?
-}
-
-/**
- * Hook light source shader initialization
- * @param {LightSource} lightSource
- */
-function initializeLightSourceShadersHook(lightSource) {
-  if ( lightSource instanceof GlobalLightSource ) return;
-  const ev = lightSource[MODULE_ID] ??= {};
-
-  // Build the geometry.
-  if ( ev.wallGeometry ) ev.wallGeometry.destroy(); // Just in case.
-  ev.wallGeometry = new PointSourceShadowWallGeometry(lightSource);
-
-  // Build the shadow mesh.
-  const lightPosition = Point3d.fromPointSource(lightSource);
-  const shader = ShadowMaskWallShader.create(lightPosition);
-  if ( ev.shadowMesh ) ev.shadowMesh.destroy(); // Just in case.
-  const mesh = new ShadowWallPointSourceMesh(lightSource, shader);
-  ev.shadowMesh = mesh;
-
-  // Build the shadow render texture
-  ev.shadowRenderer = new ShadowTextureRenderer(lightSource, mesh);
-  ev.shadowRenderer.renderShadowMeshToTexture();
-
-  // For testing, add to the canvas effects
-  const shadowShader = TestShadowShader.create(ev.shadowRenderer.renderTexture);
-  ev.shadowQuadMesh = new EVQuadMesh(lightSource.object.bounds, shadowShader);
-
-  if ( !canvas.effects.EVshadows ) canvas.effects.EVshadows = canvas.effects.addChild(new PIXI.Container());
-  canvas.effects.EVshadows.addChild(ev.shadowQuadMesh);
-}
-
-
-/**
- * Hook lighting refresh to update the source geometry
- * See Placeable.prototype._applyRenderFlags.
- * @param {PlaceableObject} object    The object instance being refreshed
- * @param {RenderFlags} flags
- */
-export function refreshAmbientLightHook(object, flags) {
-  const ev = object.source[MODULE_ID];
+  // At this point, ev property should exist on source b/c of initialize shaders hook.
+  const ev = this[MODULE_ID];
   if ( !ev ) return;
 
-  if ( flags.refreshPosition || flags.refreshElevation || flags.refreshRadius ) {
-    console.log(`EV|refreshAmbientLightHook light ${object.source.x},${object.source.y},${object.source.elevationE} flag: ${object.document.flags.elevatedvision.elevation}`);
+  console.log(`${MODULE_ID}|_configureRenderedPointSource (${this.constructor.name}) for ${this.object?.name || this.object?.id} with ${Object.keys(changes).length} changed properties.`, changes);
+
+
+  // Test for different change properties
+  const changedPosition = Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
+  const changedRadius = Object.hasOwn(changes, "radius");
+  const changedElevation = Object.hasOwn(changes, "elevation");
+
+  if ( changedPosition || changedElevation || changedRadius ) {
+    // console.log(`EV|refreshAmbientLightHook light ${object.source.x},${object.source.y},${object.source.elevationE} flag: ${object.document.flags.elevatedvision.elevation}`);
     ev.geom?.refreshWalls();
     ev.shadowMesh?.updateLightPosition();
   }
 
-  if ( flags.refreshPosition ) {
+  if ( changedPosition ) {
     ev.shadowRenderer?.update();
-    ev.shadowQuadMesh.updateGeometry(object.bounds);
+    ev.shadowQuadMesh?.updateGeometry(bounds);
 
-  } else if ( flags.refreshRadius ) {
+  } else if ( changedRadius ) {
     ev.shadowRenderer?.updateSourceRadius();
-    ev.shadowQuadMesh.updateGeometry(object.bounds);
+    ev.shadowQuadMesh?.updateGeometry(bounds);
 
-  } else if ( flags.refreshElevation ) {
+  } else if ( changedElevation ) {
     ev.shadowRenderer?.update();
   }
 }
 
-/**
- * A hook event that fires when a {@link PlaceableObject} is destroyed.
- * The dispatched event name replaces "Object" with the named PlaceableObject subclass, i.e. "destroyToken".
- * @event destroyObject
- * @category PlaceableObject
- * @param {PlaceableObject} object    The object instance being refreshed
- */
-export function destroyAmbientLightHook(object) {
-  const ev = object.source[MODULE_ID];
-  if ( !ev ) return;
+export function destroyRenderedPointSource(wrapped) {
+  console.log(`${MODULE_ID}|destroyRenderedPointSource (${this.constructor.name}) for ${this.object?.name || this.object?.id}.`);
+  const ev = this[MODULE_ID];
+  if ( !ev ) return wrapped();
 
   if ( ev.shadowQuadMesh ) {
-    canvas.effects.EVshadows.removeChild(ev.shadowQuadMesh);
+    if ( canvas.effects.EVshadows ) canvas.effects.EVshadows.removeChild(ev.shadowQuadMesh);
     ev.shadowQuadMesh.destroy();
     ev.shadowQuadMesh = undefined;
   }
@@ -128,7 +74,50 @@ export function destroyAmbientLightHook(object) {
     ev.wallGeometry.destroy();
     ev.wallGeometry = undefined;
   }
+
+  return wrapped();
 }
+
+// Hooks used for updating source shadow geometry, mesh, texture
+// NOTE: Ambient Light Hooks
+
+/**
+ * Store a shadow texture for a given (rendered) source.
+ * 1. Store wall geometry.
+ * 2. Store a mesh with encoded shadow data.
+ * 3. Render the shadow data to a texture.
+ * @param {RenderedPointSource} source
+ */
+function initializeSourceShadersHook(source) {
+  if ( source instanceof GlobalLightSource ) return;
+  const ev = source[MODULE_ID] ??= {};
+
+  // Build the geometry.
+  ev.wallGeometry ??= new PointSourceShadowWallGeometry(source);
+
+  // Build the shadow mesh.
+  if ( !ev.shadowMesh ) {
+    const position = Point3d.fromPointSource(source);
+    const shader = ShadowMaskWallShader.create(position);
+    ev.shadowMesh = new ShadowWallPointSourceMesh(source, shader);
+  }
+
+  // Build the shadow render texture
+  ev.shadowRenderer ??= new ShadowTextureRenderer(source, ev.shadowMesh);
+  ev.shadowRenderer.renderShadowMeshToTexture();
+
+  // For testing, add to the canvas effects
+  //   if ( ! ev.shadowQuadMesh ) {
+  //     const shadowShader = TestShadowShader.create(ev.shadowRenderer.renderTexture);
+  //     ev.shadowQuadMesh = new EVQuadMesh(source.object.bounds, shadowShader);
+  //   }
+  //   if ( !canvas.effects.EVshadows ) canvas.effects.EVshadows = canvas.effects.addChild(new PIXI.Container());
+  //   canvas.effects.EVshadows.addChild(ev.shadowQuadMesh);
+  source.layers.illumination.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+  source.layers.coloration.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+  source.layers.background.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+}
+
 
 // NOTE: Wall Document Hooks
 
@@ -143,8 +132,14 @@ export function destroyAmbientLightHook(object) {
  * @param {DocumentModificationContext} options     Additional options which modified the creation request
  * @param {string} userId                           The ID of the User who triggered the creation workflow
  */
-export function createWallHook(wallD, _options, _userId) {
-  for ( const src of canvas.effects.lightSources ) {
+function createWallHook(wallD, _options, _userId) {
+  const sources = [
+    ...canvas.effects.lightSources,
+    ...canvas.effects.visionSources,
+    ...canvas.sounds.sources
+  ];
+
+  for ( const src of sources ) {
     const ev = src[MODULE_ID];
     if ( !ev ) continue;
     ev.wallGeometry?.addWall(wallD.object);
@@ -164,7 +159,7 @@ export function createWallHook(wallD, _options, _userId) {
  * @param {DocumentModificationContext} options     Additional options which modified the update request
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
-export function updateWallHook(wallD, data, _options, _userId) {
+function updateWallHook(wallD, data, _options, _userId) {
   const changes = new Set(Object.keys(flattenObject(data)));
   // TODO: Will eventually need to monitor changes for sounds and sight, possibly move.
   // TODO: Need to deal with threshold as well
@@ -172,7 +167,13 @@ export function updateWallHook(wallD, data, _options, _userId) {
   if ( !(changeFlags.WALL_COORDINATES.some(f => changes.has(f))
     || changeFlags.WALL_RESTRICTED.some(f => changes.has(f))) ) return;
 
-  for ( const src of canvas.effects.lightSources ) {
+  const sources = [
+    ...canvas.effects.lightSources,
+    ...canvas.effects.visionSources,
+    ...canvas.sounds.sources
+  ];
+
+  for ( const src of sources ) {
     const ev = src[MODULE_ID];
     if ( !ev ) continue;
     ev.wallGeometry?.updateWall(wallD.object, { changes });
@@ -191,19 +192,26 @@ export function updateWallHook(wallD, data, _options, _userId) {
  * @param {DocumentModificationContext} options     Additional options which modified the deletion request
  * @param {string} userId                           The ID of the User who triggered the deletion workflow
  */
-export function deleteWallHook(wallD, _options, _userId) {
-  for ( const src of canvas.effects.lightSources ) {
+function deleteWallHook(wallD, _options, _userId) {
+  const sources = [
+    ...canvas.effects.lightSources,
+    ...canvas.effects.visionSources,
+    ...canvas.sounds.sources
+  ];
+
+  for ( const src of sources ) {
     const ev = src[MODULE_ID];
     if ( !ev ) continue;
-    ev.wallGeometry.removeWall(wallD.id);
+    ev.wallGeometry?.removeWall(wallD.id);
     ev.shadowRenderer?.update();
   }
 }
 
-Hooks.on("drawAmbientLight", drawAmbientLightHook);
-Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
-Hooks.on("destroyAmbientLight", destroyAmbientLightHook);
+// Hooks.on("drawAmbientLight", drawAmbientLightHook);
+
 Hooks.on("createWall", createWallHook);
 Hooks.on("updateWall", updateWallHook);
 Hooks.on("deleteWall", deleteWallHook);
-Hooks.on("initializeLightSourceShaders", initializeLightSourceShadersHook);
+
+Hooks.on("initializeLightSourceShaders", initializeSourceShadersHook);
+Hooks.on("initializeVisionSourceShaders", initializeSourceShadersHook);
