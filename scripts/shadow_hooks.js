@@ -13,7 +13,9 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 import { ShadowWallShader, ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { PointSourceShadowWallGeometry, SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-
+import { ShadowVisionMaskShader } from "./glsl/ShadowVisionMaskShader.js";
+import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
+import { TestShadowShader } from "./glsl/TestShadowShader.js";
 
 export function _configureRenderedPointSource(wrapped, changes) {
   wrapped(changes);
@@ -23,7 +25,6 @@ export function _configureRenderedPointSource(wrapped, changes) {
   if ( !ev ) return;
 
   console.log(`${MODULE_ID}|_configureRenderedPointSource (${this.constructor.name}) for ${this.object?.name || this.object?.id} with ${Object.keys(changes).length} changed properties.`, changes);
-
 
   // Test for different change properties
   const changedPosition = Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
@@ -38,11 +39,13 @@ export function _configureRenderedPointSource(wrapped, changes) {
 
   if ( changedPosition ) {
     ev.shadowRenderer?.update();
-    ev.shadowQuadMesh?.updateGeometry(bounds);
+    ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.sourceBounds);
+    ev.shadowVisionMask?.updateGeometry(ev.shadowRenderer.sourceBounds);
 
   } else if ( changedRadius ) {
     ev.shadowRenderer?.updateSourceRadius();
-    ev.shadowQuadMesh?.updateGeometry(bounds);
+    ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.sourceBounds);
+    ev.shadowVisionMask?.updateGeometry(ev.shadowRenderer.sourceBounds);
 
   } else if ( changedElevation ) {
     ev.shadowRenderer?.update();
@@ -60,14 +63,19 @@ export function destroyRenderedPointSource(wrapped) {
     ev.shadowQuadMesh = undefined;
   }
 
+  if ( ev.shadowVisionMask ) {
+    ev.shadowVisionMask.destroy();
+    ev.shadowVisionMask = undefined;
+  }
+
   if ( ev.shadowRenderer ) {
     ev.shadowRenderer.destroy();
     ev.shadowRenderer = undefined;
   }
 
-  if ( ev.mesh ) {
-    ev.mesh.destroy();
-    ev.mesh = undefined;
+  if ( ev.shadowMesh ) {
+    ev.shadowMesh.destroy();
+    ev.shadowMesh = undefined;
   }
 
   if ( ev.wallGeometry ) {
@@ -106,11 +114,19 @@ function initializeSourceShadersHook(source) {
   ev.shadowRenderer ??= new ShadowTextureRenderer(source, ev.shadowMesh);
   ev.shadowRenderer.renderShadowMeshToTexture();
 
+  // Build the vision mask.
+  if ( !ev.shadowVisionMask ) {
+    const shader = ShadowVisionMaskShader.create(ev.shadowRenderer.renderTexture);
+    ev.shadowVisionMask = new EVQuadMesh(ev.shadowRenderer.sourceBounds, shader);
+  }
+
+  // TODO: Comment out the shadowQuadMesh.
+  // Testing use only.
+  if ( !ev.shadowQuadMesh ) {
+    const shader = TestShadowShader.create(ev.shadowRenderer.renderTexture);
+    ev.shadowQuadMesh = new EVQuadMesh(ev.shadowRenderer.sourceBounds, shader);
+  }
   // For testing, add to the canvas effects
-  //   if ( ! ev.shadowQuadMesh ) {
-  //     const shadowShader = TestShadowShader.create(ev.shadowRenderer.renderTexture);
-  //     ev.shadowQuadMesh = new EVQuadMesh(source.object.bounds, shadowShader);
-  //   }
   //   if ( !canvas.effects.EVshadows ) canvas.effects.EVshadows = canvas.effects.addChild(new PIXI.Container());
   //   canvas.effects.EVshadows.addChild(ev.shadowQuadMesh);
   source.layers.illumination.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;

@@ -6,7 +6,7 @@ PIXI
 import { AbstractEVShader } from "./AbstractEVShader.js";
 
 
-export class TestShadowShader extends AbstractEVShader {
+export class ShadowVisionMaskShader extends AbstractEVShader {
   static vertexShader =
   // eslint-disable-next-line indent
 `#version 300 es
@@ -54,8 +54,12 @@ void main() {
   // If a single limited wall, ignore.
   if ( shadowTexel.g < 0.3 ) lightAmount *= shadowTexel.b;
 
-  // Ignore fully light areas for this test by setting opacity to 0.
-  fragColor = vec4(vec3(0.0), 1.0 - lightAmount);
+  // If in light, color red. Discard if in shadow.
+  // See https://github.com/caewok/fvtt-elevated-vision/blob/0.4.8/scripts/vision.js#L209
+  // and https://github.com/caewok/fvtt-elevated-vision/blob/0.4.8/scripts/ShadowShaderNoRadius.js
+  // Greater than 50% in anticipation of penumbra shadows.
+  if ( lightAmount < 0.50 ) discard;
+  fragColor = vec4(1.0, 0.0, 0.0, 1.0);
 }`;
 
   /**
@@ -101,7 +105,7 @@ s = new PIXI.Sprite(rt)
 canvas.stage.addChild(s)
 canvas.stage.removeChild(s)
 
-shadowShader = TestShadowShader.create(rt);
+shadowShader = ShadowVisionMaskShader.create(rt);
 
 quadMesh = new EVQuadMesh(str.sourceBounds, shadowShader);
 
