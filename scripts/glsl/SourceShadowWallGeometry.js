@@ -167,8 +167,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // Slightly extend wall to ensure connected walls do not have gaps in shadows.
     const adjA = B.towardsPoint(A, ABDist + this.constructor.WALL_OFFSET_PIXELS);
     const adjB = A.towardsPoint(B, ABDist + this.constructor.WALL_OFFSET_PIXELS);
-    const topZ = Math.min(wall.topZ + this.constructor.WALL_OFFSET_PIXELS, Number.MAX_SAFE_INTEGER);
-    const bottomZ = Math.max(wall.bottomZ - this.constructor.WALL_OFFSET_PIXELS, Number.MIN_SAFE_INTEGER);
+    const topZ = Math.min(wall.topZ, Number.MAX_SAFE_INTEGER);
+    const bottomZ = Math.max(wall.bottomZ, Number.MIN_SAFE_INTEGER);
 
     const out = {
       corner1: adjA,
