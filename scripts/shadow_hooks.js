@@ -10,7 +10,7 @@ Hooks
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
-import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./glsl/ShadowMaskShader.js";
+import { ShadowWallShader, ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { PointSourceShadowWallGeometry, SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 
@@ -98,7 +98,7 @@ function initializeSourceShadersHook(source) {
   // Build the shadow mesh.
   if ( !ev.shadowMesh ) {
     const position = Point3d.fromPointSource(source);
-    const shader = ShadowMaskWallShader.create(position);
+    const shader = ShadowWallShader.create(position);
     ev.shadowMesh = new ShadowWallPointSourceMesh(source, shader);
   }
 
