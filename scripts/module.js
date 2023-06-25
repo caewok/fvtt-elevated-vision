@@ -27,7 +27,7 @@ import { defineFunction } from "./glsl/GLSLFunctions.js";
 import { ElevationLayerShader } from "./glsl/ElevationLayerShader.js";
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 import { PointSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-import { ShadowMaskWallShader, ShadowWallPointSourceMesh } from "./glsl/ShadowMaskShader.js";
+import { ShadowMaskWallShader, ShadowWallPointSourceMesh, TestGeometryShader } from "./glsl/ShadowMaskShader.js";
 import { ShadowShader } from "./glsl/ShadowShader.js";
 import { ShadowShaderNoRadius } from "./glsl/ShadowShaderNoRadius.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
@@ -170,7 +170,8 @@ Hooks.once("init", function() {
     ShadowWallPointSourceMesh,
     EVQuadMesh,
     ShadowTextureRenderer,
-    TestShadowShader
+    TestShadowShader,
+    TestGeometryShader
   };
 
   // These methods need to be registered early

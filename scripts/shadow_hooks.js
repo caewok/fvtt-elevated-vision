@@ -16,12 +16,14 @@ import { PointSourceShadowWallGeometry, SourceShadowWallGeometry } from "./glsl/
 
 
 export function _configureRenderedPointSource(wrapped, changes) {
-  console.log(`${MODULE_ID}|_configureRenderedPointSource with ${Object.keys(changes).length} changed properties.`, changes);
   wrapped(changes);
 
   // At this point, ev property should exist on source b/c of initialize shaders hook.
   const ev = this[MODULE_ID];
   if ( !ev ) return;
+
+  console.log(`${MODULE_ID}|_configureRenderedPointSource (${this.constructor.name}) for ${this.object?.name || this.object?.id} with ${Object.keys(changes).length} changed properties.`, changes);
+
 
   // Test for different change properties
   const changedPosition = Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
@@ -48,7 +50,7 @@ export function _configureRenderedPointSource(wrapped, changes) {
 }
 
 export function destroyRenderedPointSource(wrapped) {
-  console.log(`${MODULE_ID}|destroyRenderedPointSource`);
+  console.log(`${MODULE_ID}|destroyRenderedPointSource (${this.constructor.name}) for ${this.object?.name || this.object?.id}.`);
   const ev = this[MODULE_ID];
   if ( !ev ) return wrapped();
 
@@ -212,7 +214,7 @@ Hooks.on("updateWall", updateWallHook);
 Hooks.on("deleteWall", deleteWallHook);
 
 Hooks.on("initializeLightSourceShaders", initializeSourceShadersHook);
-// Hooks.on("initializeVisionSourceShaders", initializeSourceShadersHook);
+Hooks.on("initializeVisionSourceShaders", initializeSourceShadersHook);
 
 
 

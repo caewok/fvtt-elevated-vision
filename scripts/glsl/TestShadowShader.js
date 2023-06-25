@@ -87,7 +87,11 @@ TestShadowShader = api.TestShadowShader
 
 
 let [l] = canvas.lighting.placeables;
-lightSource = l.source;
+source = l.source;
+
+source = _token.vision
+
+
 shadowMesh = l.source.elevatedvision.shadowMesh
 canvas.stage.addChild(shadowMesh)
 
