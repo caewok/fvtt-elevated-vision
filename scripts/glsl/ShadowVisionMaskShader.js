@@ -1,9 +1,11 @@
 /* globals
+canvas,
 PIXI
 */
 "use strict";
 
 import { AbstractEVShader } from "./AbstractEVShader.js";
+import { defineFunction } from "./GLSLFunctions.js";
 
 
 export class ShadowVisionMaskShader extends AbstractEVShader {
@@ -21,7 +23,7 @@ uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 
 void main() {
-  // Don't use aVertexPosition because it is broken.
+  // Don't use aTextureCoord because it is broken.
   // https://ptb.discord.com/channels/170995199584108546/811676497965613117/1122891745705861211
   vTextureCoord = aVertexPosition * 0.5 + 0.5;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
@@ -75,6 +77,84 @@ void main() {
 
   static create(shadowSampler, defaultUniforms = {}) {
     defaultUniforms.uShadowSampler = shadowSampler.baseTexture;
+    return super.create(defaultUniforms);
+  }
+}
+
+/**
+ * Token LOS is the LOS polygon; aVertexPosition is in canvas coordinates.
+ */
+export class ShadowVisionMaskTokenLOSShader extends AbstractEVShader {
+  static vertexShader =
+  // eslint-disable-next-line indent
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+in vec2 aVertexPosition;
+
+out vec2 vVertexPosition;
+out vec2 vTextureCoord;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
+uniform vec2 uCanvasDim; // width, height
+
+void main() {
+  // Don't use aTextureCoord because it is broken.
+  // https://ptb.discord.com/channels/170995199584108546/811676497965613117/1122891745705861211
+  vTextureCoord = aVertexPosition / uCanvasDim;
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
+}`;
+
+  static fragmentShader =
+  // eslint-disable-next-line indent
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
+
+in vec2 vVertexPosition;
+in vec2 vTextureCoord;
+
+out vec4 fragColor;
+
+uniform sampler2D uShadowSampler;
+
+${defineFunction("between")}
+
+void main() {
+  if ( any(equal(between(0.0, 1.0, vTextureCoord), 0.0)) ) discard;
+
+  vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
+  float lightAmount = shadowTexel.r;
+
+  // If more than 1 limited wall at this point, add to the shadow.
+  // If a single limited wall, ignore.
+  if ( shadowTexel.g < 0.3 ) lightAmount *= shadowTexel.b;
+
+  // If in light, color red. Discard if in shadow.
+  // See https://github.com/caewok/fvtt-elevated-vision/blob/0.4.8/scripts/vision.js#L209
+  // and https://github.com/caewok/fvtt-elevated-vision/blob/0.4.8/scripts/ShadowShaderNoRadius.js
+  // Greater than 50% in anticipation of penumbra shadows.
+  if ( lightAmount < 0.50 ) discard;
+  fragColor = vec4(1.0, 0.0, 0.0, 0.5);
+}`;
+
+  /**
+   * Uniform parameters:
+   * uElevationRes: [minElevation, elevationStep, maxElevation, gridScale]
+   * uTerrainSampler: elevation texture
+   * uMinColor: Color to use at the minimum elevation: minElevation + elevationStep
+   * uMaxColor: Color to use at the maximum current elevation: uMaxNormalizedElevation
+   * uMaxNormalizedElevation: Maximum elevation, normalized units
+   */
+  static defaultUniforms = {
+    uShadowSampler: 0,
+    uCanvasDim: [1, 1]  // Params: width, height
+  };
+
+  static create(shadowSampler, defaultUniforms = {}) {
+    const { width, height } = canvas.dimension;
+    defaultUniforms.uCanvasDim = [width, height];
     return super.create(defaultUniforms);
   }
 }

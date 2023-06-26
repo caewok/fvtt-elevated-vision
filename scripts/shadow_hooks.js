@@ -2,7 +2,11 @@
 canvas,
 flattenObject,
 GlobalLightSource,
-Hooks
+Hooks,
+PIXI,
+PointSourcePolygon,
+PolygonMesher,
+VisionSource
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -11,12 +15,14 @@ import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { SETTINGS, getSceneSetting } from "./settings.js";
 
-import { ShadowWallShader, ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
-import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
+import { ShadowWallShader, ShadowWallPointSourceMesh, ShadowWallVisionLOSMesh } from "./glsl/ShadowWallShader.js";
+import { ShadowTextureRenderer, ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { PointSourceShadowWallGeometry, SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-import { ShadowVisionMaskShader } from "./glsl/ShadowVisionMaskShader.js";
+import { ShadowVisionMaskShader, ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 import { TestShadowShader } from "./glsl/TestShadowShader.js";
+
+// NOTE: Wraps for RenderedPointSource methods.
 
 export function _configureRenderedPointSource(wrapped, changes) {
   wrapped(changes);
@@ -36,22 +42,23 @@ export function _configureRenderedPointSource(wrapped, changes) {
     // console.log(`EV|refreshAmbientLightHook light ${object.source.x},${object.source.y},${object.source.elevationE} flag: ${object.document.flags.elevatedvision.elevation}`);
     ev.geom?.refreshWalls();
     ev.shadowMesh?.updateLightPosition();
+    ev.shadowVisionLOSMesh?.updateLightPosition();
   }
 
   if ( changedPosition ) {
     ev.shadowRenderer?.update();
+    ev.shadowVisionLOSRenderer?.update();
     ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.sourceBounds);
     ev.shadowVisionMask.position.copyFrom(this);
-//     ev.shadowVisionMask?.updateGeometry(ev.shadowRenderer.sourceBounds);
 
   } else if ( changedRadius ) {
     ev.shadowRenderer?.updateSourceRadius();
     ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.sourceBounds);
     ev.shadowVisionMask.scale = { x: this.radius, y: this.radius };
-//     ev.shadowVisionMask?.updateGeometry(ev.shadowRenderer.sourceBounds);
 
   } else if ( changedElevation ) {
     ev.shadowRenderer?.update();
+    ev.shadowVisionLOSRenderer?.update();
   }
 }
 
@@ -60,37 +67,30 @@ export function destroyRenderedPointSource(wrapped) {
   const ev = this[MODULE_ID];
   if ( !ev ) return wrapped();
 
-  if ( ev.shadowQuadMesh ) {
-    if ( canvas.effects.EVshadows ) canvas.effects.EVshadows.removeChild(ev.shadowQuadMesh);
-    ev.shadowQuadMesh.destroy();
-    ev.shadowQuadMesh = undefined;
-  }
+  if ( ev.shadowQuadMesh && canvas.effects.EVshadows ) canvas.effects.EVshadows.removeChild(ev.shadowQuadMesh);
 
-  if ( ev.shadowVisionMask ) {
-    ev.shadowVisionMask.destroy();
-    ev.shadowVisionMask = undefined;
-  }
+  const assets = [
+    "shadowQuadMesh",
+    "shadowRenderer",
+    "shadowMesh",
+    "wallGeometry",
+    "shadowVisionMask",
+    "shadowVisionLOSMask",
+    "shadowVisionLOSMesh",
+    "shadowVisionLOSRenderer",
+    "losGeometry"
+  ];
 
-  if ( ev.shadowRenderer ) {
-    ev.shadowRenderer.destroy();
-    ev.shadowRenderer = undefined;
-  }
-
-  if ( ev.shadowMesh ) {
-    ev.shadowMesh.destroy();
-    ev.shadowMesh = undefined;
-  }
-
-  if ( ev.wallGeometry ) {
-    ev.wallGeometry.destroy();
-    ev.wallGeometry = undefined;
+  for ( const asset of assets ) {
+    if ( !ev[asset] ) continue;
+    ev[asset].destroy();
+    ev[asset] = undefined;
   }
 
   return wrapped();
 }
 
-// Hooks used for updating source shadow geometry, mesh, texture
-// NOTE: Ambient Light Hooks
+// NOTE: Hooks used for updating source shadow geometry, mesh, texture
 
 /**
  * Store a shadow texture for a given (rendered) source.
@@ -138,11 +138,20 @@ function initializeSourceShadersHook(source) {
   }
 
   // If vision source, build extra LOS geometry and add an additional mask for the LOS.
-  if ( source instanceof VisionSource ) {
+  if ( source instanceof VisionSource && !ev.shadowVisionLOSMesh ) {
+    // Shadow mesh of the entire canvas for LOS.
+    ev.shadowVisionLOSMesh = new ShadowWallVisionLOSMesh();
+    ev.shadowVisionLOSRenderer = new ShadowVisionLOSTextureRenderer(source, ev.shadowVisionLOSMesh);
+    ev.shadowVisionLOSRenderer.renderShadowMeshToTexture();
+
+    // Add or update the LOS geometry for the vision source.
     updateLOSGeometryVisionSource(source);
 
-
+    // Build LOS vision mask.
+    const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowVisionLOSRenderer.renderTexture);
+    ev.shadowVisionLOSMask = new PIXI.Mesh(source[MODULE_ID].losGeometry, shader);
   }
+
   // TODO: Comment out the shadowQuadMesh.
   // Testing use only.
   if ( !ev.shadowQuadMesh ) {

@@ -9,7 +9,9 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
-import { PointSourceShadowWallGeometry } from "./SourceShadowWallGeometry.js";
+import {
+  PointSourceShadowWallGeometry,
+  VisionLOSShadowWallGeometry } from "./SourceShadowWallGeometry.js";
 
 
 export class TestGeometryShader extends AbstractEVShader {
@@ -407,9 +409,35 @@ export class ShadowWallPointSourceMesh extends PIXI.Mesh {
 
     if ( !shader ) {
       const sourcePosition = Point3d.fromPointSource(source);
-      shader ??= ShadowMaskWallShader.create(sourcePosition);
+      shader ??= ShadowWallShader.create(sourcePosition);
     }
     super(source[MODULE_ID].wallGeometry, shader, state, drawMode);
+    this.blendMode = PIXI.BLEND_MODES.MULTIPLY;
+
+    /** @type {LightSource} */
+    this.source = source;
+  }
+
+  /**
+   * Update the source position.
+   */
+  updateLightPosition() {
+    const { x, y, elevationZ } = this.source;
+    this.shader.updateLightPosition(x, y, elevationZ);
+  }
+}
+
+export class ShadowWallVisionLOSMesh extends PIXI.Mesh {
+  constructor(source, shader, state, drawMode) {
+    if ( !source[MODULE_ID]?.visionLOSShadowGeometry ) {
+      source[MODULE_ID].visionLOSShadowGeometry = new VisionLOSShadowWallGeometry(source);
+    }
+
+    if ( !shader ) {
+      const sourcePosition = Point3d.fromPointSource(source);
+      shader ??= ShadowWallShader.create(sourcePosition);
+    }
+    super(source[MODULE_ID].visionLOSShadowGeometry, shader, state, drawMode);
     this.blendMode = PIXI.BLEND_MODES.MULTIPLY;
 
     /** @type {LightSource} */
