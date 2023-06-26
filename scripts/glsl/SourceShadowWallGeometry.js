@@ -385,8 +385,6 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
 
 export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
-
-
   _includeWall(wall) {
     if ( !super._includeWall(wall) ) return false;
 
@@ -399,8 +397,20 @@ export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
 
     return true;
   }
-
 }
+
+export class VisionLOSShadowWallGeometry extends SourceShadowWallGeometry {
+  _includeWall(wall) {
+    if ( !super._includeWall(wall) ) return false;
+
+    // Wall cannot be collinear to the light.
+    const orientWall = foundry.utils.orient2dFast(wall.A, wall.B, this.source);
+    if ( orientWall.almostEqual(0) ) return false;
+
+    return true;
+  }
+}
+
 
 export class SizedSourceShadowWallGeometry extends PointSourceShadowWallGeometry {
   // Light has defined size.
