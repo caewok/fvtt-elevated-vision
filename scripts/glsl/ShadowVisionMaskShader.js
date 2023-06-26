@@ -112,4 +112,10 @@ quadMesh = new EVQuadMesh(str.sourceBounds, shadowShader);
 canvas.stage.addChild(quadMesh);
 canvas.stage.removeChild(quadMesh);
 
+// Testing the already constructed mask
+
+mask = source.elevatedvision.shadowVisionMask
+canvas.stage.addChild(mask)
+canvas.stage.removeChild(mask)
+
 */
