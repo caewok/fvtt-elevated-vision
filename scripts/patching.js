@@ -28,9 +28,9 @@ import {
 import {
   drawShapePIXIGraphics,
 
-  _createEVMask,
-  _createEVMeshVisionSource,
-  _createEVMeshLightSource
+//   _createEVMask,
+//   _createEVMeshVisionSource,
+//   _createEVMeshLightSource
 
   // Perfect Vision patches that will not work in v11:
   // createVisionCanvasVisionMaskPV,

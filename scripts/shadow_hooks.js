@@ -9,6 +9,7 @@ Hooks
 
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
+import { SETTINGS, getSceneSetting } from "./settings.js";
 
 import { ShadowWallShader, ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
@@ -108,6 +109,18 @@ function initializeSourceShadersHook(source) {
     const position = Point3d.fromPointSource(source);
     const shader = ShadowWallShader.create(position);
     ev.shadowMesh = new ShadowWallPointSourceMesh(source, shader);
+
+    // Force a uniform update, to avoid ghosting of placeables in the light radius.
+    // TODO: Find the underlying issue and fix this!
+    // Why doesn't this work:
+//     source.layers.background.shader.uniformGroup.update();
+//     source.layers.coloration.shader.uniformGroup.update();
+//     source.layers.illumination.shader.uniformGroup.update();
+    const { ALGORITHM, TYPES } = SETTINGS.SHADING;
+    const EVshadows = getSceneSetting(ALGORITHM) === TYPES.WEBGL;
+    source.layers.background.shader.uniforms.EVshadows = EVshadows;
+    source.layers.coloration.shader.uniforms.EVshadows = EVshadows;
+    source.layers.illumination.shader.uniforms.EVshadows = EVshadows;
   }
 
   // Build the shadow render texture
@@ -120,6 +133,12 @@ function initializeSourceShadersHook(source) {
     ev.shadowVisionMask = new EVQuadMesh(ev.shadowRenderer.sourceBounds, shader);
   }
 
+  // If vision source, build extra LOS geometry and add an additional mask for the LOS.
+  if ( source instanceof VisionSource ) {
+    updateLOSGeometryVisionSource(source);
+
+
+  }
   // TODO: Comment out the shadowQuadMesh.
   // Testing use only.
   if ( !ev.shadowQuadMesh ) {
@@ -132,6 +151,30 @@ function initializeSourceShadersHook(source) {
   source.layers.illumination.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
   source.layers.coloration.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
   source.layers.background.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+}
+
+/**
+ * Update the los geometry for a vision source shape used in the vision mask.
+ * Copy of RenderedPointSource.prototype.#updateGeometry
+ */
+function updateLOSGeometryVisionSource(source) {
+  const {x, y, radius} = source.data;
+  const offset = source._flags.renderSoftEdges ? source.constructor.EDGE_OFFSET : 0;
+  const pm = new PolygonMesher(source.los, {x, y, radius, normalize: true, offset});
+  source[MODULE_ID].losGeometry ??= null;
+  source[MODULE_ID].losGeometry = pm.triangulate(source[MODULE_ID].losGeometry);
+
+  // Compute bounds of the geometry (used for optimizing culling)
+  const bounds = new PIXI.Rectangle(0, 0, 0, 0);
+  if ( radius > 0 ) {
+    const b = source.los instanceof PointSourcePolygon ? source.los.bounds : source.los.getBounds();
+    bounds.x = (b.x - x) / radius;
+    bounds.y = (b.y - y) / radius;
+    bounds.width = b.width / radius;
+    bounds.height = b.height / radius;
+  }
+  if ( source[MODULE_ID].losGeometry.bounds ) source[MODULE_ID].losGeometry.bounds.copyFrom(bounds);
+  else source[MODULE_ID].losGeometry.bounds = bounds;
 }
 
 
