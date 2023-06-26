@@ -41,12 +41,14 @@ export function _configureRenderedPointSource(wrapped, changes) {
   if ( changedPosition ) {
     ev.shadowRenderer?.update();
     ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.sourceBounds);
-    ev.shadowVisionMask?.updateGeometry(ev.shadowRenderer.sourceBounds);
+    ev.shadowVisionMask.position.copyFrom(this);
+//     ev.shadowVisionMask?.updateGeometry(ev.shadowRenderer.sourceBounds);
 
   } else if ( changedRadius ) {
     ev.shadowRenderer?.updateSourceRadius();
     ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.sourceBounds);
-    ev.shadowVisionMask?.updateGeometry(ev.shadowRenderer.sourceBounds);
+    ev.shadowVisionMask.scale = { x: this.radius, y: this.radius };
+//     ev.shadowVisionMask?.updateGeometry(ev.shadowRenderer.sourceBounds);
 
   } else if ( changedElevation ) {
     ev.shadowRenderer?.update();
@@ -130,7 +132,9 @@ function initializeSourceShadersHook(source) {
   // Build the vision mask.
   if ( !ev.shadowVisionMask ) {
     const shader = ShadowVisionMaskShader.create(ev.shadowRenderer.renderTexture);
-    ev.shadowVisionMask = new EVQuadMesh(ev.shadowRenderer.sourceBounds, shader);
+    ev.shadowVisionMask = new PIXI.Mesh(source.layers.background.mesh.geometry, shader);
+    ev.shadowVisionMask.position.copyFrom(source);
+    ev.shadowVisionMask.scale = { x: source.radius, y: source.radius };
   }
 
   // If vision source, build extra LOS geometry and add an additional mask for the LOS.

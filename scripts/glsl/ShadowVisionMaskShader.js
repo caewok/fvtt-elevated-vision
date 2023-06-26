@@ -13,7 +13,6 @@ export class ShadowVisionMaskShader extends AbstractEVShader {
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec2 aVertexPosition;
-in vec2 aTextureCoord;
 
 out vec2 vVertexPosition;
 out vec2 vTextureCoord;
@@ -22,8 +21,9 @@ uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 
 void main() {
-  vVertexPosition = aVertexPosition;
-  vTextureCoord = aTextureCoord;
+  // Don't use aVertexPosition because it is broken.
+  // https://ptb.discord.com/channels/170995199584108546/811676497965613117/1122891745705861211
+  vTextureCoord = aVertexPosition * 0.5 + 0.5;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
 }`;
 
@@ -47,7 +47,6 @@ void main() {
     || vTextureCoord.y > 1.0 ) discard;
 
   vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
-
   float lightAmount = shadowTexel.r;
 
   // If more than 1 limited wall at this point, add to the shadow.
@@ -59,7 +58,7 @@ void main() {
   // and https://github.com/caewok/fvtt-elevated-vision/blob/0.4.8/scripts/ShadowShaderNoRadius.js
   // Greater than 50% in anticipation of penumbra shadows.
   if ( lightAmount < 0.50 ) discard;
-  fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  fragColor = vec4(1.0, 0.0, 0.0, 0.5);
 }`;
 
   /**
