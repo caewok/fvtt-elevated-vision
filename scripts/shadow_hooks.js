@@ -43,6 +43,7 @@ export function _configureRenderedPointSource(wrapped, changes) {
     ev.geom?.refreshWalls();
     ev.shadowMesh?.updateLightPosition();
     ev.shadowVisionLOSMesh?.updateLightPosition();
+    if ( this instanceof VisionSource ) updateLOSGeometryVisionSource(this);
   }
 
   if ( changedPosition ) {
@@ -140,7 +141,7 @@ function initializeSourceShadersHook(source) {
   // If vision source, build extra LOS geometry and add an additional mask for the LOS.
   if ( source instanceof VisionSource && !ev.shadowVisionLOSMesh ) {
     // Shadow mesh of the entire canvas for LOS.
-    ev.shadowVisionLOSMesh = new ShadowWallVisionLOSMesh();
+    ev.shadowVisionLOSMesh = new ShadowWallVisionLOSMesh(source);
     ev.shadowVisionLOSRenderer = new ShadowVisionLOSTextureRenderer(source, ev.shadowVisionLOSMesh);
     ev.shadowVisionLOSRenderer.renderShadowMeshToTexture();
 
@@ -171,23 +172,11 @@ function initializeSourceShadersHook(source) {
  * Copy of RenderedPointSource.prototype.#updateGeometry
  */
 function updateLOSGeometryVisionSource(source) {
-  const {x, y, radius} = source.data;
+  const {x, y} = source.data;
   const offset = source._flags.renderSoftEdges ? source.constructor.EDGE_OFFSET : 0;
-  const pm = new PolygonMesher(source.los, {x, y, radius, normalize: true, offset});
+  const pm = new PolygonMesher(source.los, {x, y, radius: 0, normalize: false, offset});
   source[MODULE_ID].losGeometry ??= null;
   source[MODULE_ID].losGeometry = pm.triangulate(source[MODULE_ID].losGeometry);
-
-  // Compute bounds of the geometry (used for optimizing culling)
-  const bounds = new PIXI.Rectangle(0, 0, 0, 0);
-  if ( radius > 0 ) {
-    const b = source.los instanceof PointSourcePolygon ? source.los.bounds : source.los.getBounds();
-    bounds.x = (b.x - x) / radius;
-    bounds.y = (b.y - y) / radius;
-    bounds.width = b.width / radius;
-    bounds.height = b.height / radius;
-  }
-  if ( source[MODULE_ID].losGeometry.bounds ) source[MODULE_ID].losGeometry.bounds.copyFrom(bounds);
-  else source[MODULE_ID].losGeometry.bounds = bounds;
 }
 
 

@@ -81,6 +81,8 @@ void main() {
   }
 }
 
+
+// TODO: Extend ShadowVisionMaskShader or vice-versa and use #define to modify the shaders.
 /**
  * Token LOS is the LOS polygon; aVertexPosition is in canvas coordinates.
  */
@@ -122,7 +124,7 @@ uniform sampler2D uShadowSampler;
 ${defineFunction("between")}
 
 void main() {
-  if ( any(equal(between(0.0, 1.0, vTextureCoord), 0.0)) ) discard;
+  if ( any(equal(between(0.0, 1.0, vTextureCoord), vec2(0.0))) ) discard;
 
   vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
   float lightAmount = shadowTexel.r;
@@ -153,8 +155,9 @@ void main() {
   };
 
   static create(shadowSampler, defaultUniforms = {}) {
-    const { width, height } = canvas.dimension;
+    const { width, height } = canvas.dimensions;
     defaultUniforms.uCanvasDim = [width, height];
+    defaultUniforms.uShadowSampler = shadowSampler.baseTexture;
     return super.create(defaultUniforms);
   }
 }
@@ -162,6 +165,7 @@ void main() {
 /* Testing
 MODULE_ID = "elevatedvision"
 Point3d = CONFIG.GeometryLib.threeD.Point3d
+Draw = CONFIG.GeometryLib.Draw;
 api = game.modules.get("elevatedvision").api
 AbstractEVShader = api.AbstractEVShader
 EVQuadMesh = api.EVQuadMesh
@@ -192,8 +196,17 @@ canvas.stage.addChild(quadMesh);
 canvas.stage.removeChild(quadMesh);
 
 // Testing the already constructed mask
+Draw.shape(source.object.los, { color: Draw.COLORS.red, width: 5 });
 
 mask = source.elevatedvision.shadowVisionMask
+canvas.stage.addChild(mask)
+canvas.stage.removeChild(mask)
+
+// Test the vision LOS mask
+Draw.shape(source.object.fov, { color: Draw.COLORS.red, width: 5 });
+Draw.shape(source.object.los, { color: Draw.COLORS.blue, width: 5 });
+
+mask = source.elevatedvision.shadowVisionLOSMask;
 canvas.stage.addChild(mask)
 canvas.stage.removeChild(mask)
 

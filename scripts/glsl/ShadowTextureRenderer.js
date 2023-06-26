@@ -32,18 +32,27 @@ export class ShadowTextureRenderer {
    * Width of the render texture based on the source dimensions.
    * @type {number}
    */
-  get width() {
-    const diameter = this.source.radius * 2;
-    return Math.min(ShadowTextureRenderer.MAX_TEXTURE_SIZE, diameter);
-  }
+  get width() { return this.source.radius * 2; }
 
   /**
    * Height of the render texture based on the source dimensions.
    * @type {number}
    */
-  get height() {
-    const diameter = this.source.radius * 2;
-    return Math.min(ShadowTextureRenderer.MAX_TEXTURE_SIZE, diameter);
+  get height() { return this.source.radius * 2; }
+
+  /**
+   * Resolution of the render texture base on maximum texture size.
+   * @type {number}
+   */
+  get resolution() {
+    const { width, height } = this;
+
+    let resolution = 1;
+    const maxSize = Math.min(this.constructor.MAX_TEXTURE_SIZE,  resolution * Math.max(width, height));
+    if ( width >= height ) resolution = maxSize / width;
+    else resolution = maxSize / height;
+
+    return resolution;
   }
 
   /**
@@ -69,9 +78,9 @@ export class ShadowTextureRenderer {
   }
 
   configureTexture() {
+    const { width, height, resolution } = this;
     return {
-      width: this.width,
-      height: this.height,
+      width, height, resolution,
       scaleMode: PIXI.SCALE_MODES.NEAREST
     };
   }
@@ -81,7 +90,8 @@ export class ShadowTextureRenderer {
    * @returns {PIXI.RenderTexture} Updated render texture.
    */
   updateSourceRadius() {
-    this.renderTexture.resize(this.width, this.height);
+    this.renderTexture.setResolution(this.resolution);
+    this.renderTexture.resize(this.width, this.height, true);
     return this.renderShadowMeshToTexture();
   }
 
@@ -102,31 +112,9 @@ export class ShadowTextureRenderer {
 }
 
 export class ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer {
-  get width() {
-    const { width, height } = canvas.dimensions;
-    let texWidth = width;
-    const maxSize = ShadowTextureRenderer.MAX_TEXTURE_SIZE;
+  get width() { return canvas.dimensions.width; }
 
-    if ( width > height && width > maxSize ) texWidth = maxSize;
-    else if ( height > width && height > maxSize ) {
-      const reduction = maxSize / height;
-      texWidth = width * reduction;
-    }
-    return texWidth;
-  }
-
-  get height() {
-    const { width, height } = canvas.dimensions;
-    let texHeight = height;
-    const maxSize = ShadowTextureRenderer.MAX_TEXTURE_SIZE;
-
-    if ( width > height && width > maxSize ) {
-      const reduction = maxSize / width;
-      texHeight = height * reduction;
-    } else if ( height > width && height > maxSize ) texHeight = maxSize;
-
-    return texHeight;
-  }
+  get height() { return canvas.dimensions.height; }
 
   /**
    * Source bounds defined by the canvas rectangle or scene rectangle.
