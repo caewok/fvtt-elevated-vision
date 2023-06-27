@@ -1,11 +1,10 @@
 /* globals
+CanvasVisibility,
 ClockwiseSweepPolygon,
 libWrapper,
-LightSource,
 PIXI,
 Tile,
-Token,
-VisionSource
+Token
 */
 
 "use strict";
@@ -27,6 +26,10 @@ import {
 
 import {
   drawShapePIXIGraphics,
+  refreshVisibilityCanvasVisibility,
+  checkLightsCanvasVisibility,
+  _tearDownCanvasVisibility,
+  cacheLightsCanvasVisibility
 
 //   _createEVMask,
 //   _createEVMeshVisionSource,
@@ -166,6 +169,16 @@ export function registerPatches() {
 
   wrap("RenderedPointSource.prototype._configure", _configureRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
   wrap("RenderedPointSource.prototype.destroy", destroyRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
+
+  // ----- Override canvasVisibility ----- //
+  // TODO: Only when WebGL setting is enabled.
+  override("CanvasVisibility.prototype.refreshVisibility", refreshVisibilityCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
+  wrap("CanvasVisibility.prototype._tearDown", _tearDownCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
+
+  addClassMethod(CanvasVisibility.prototype, "checkLights", checkLightsCanvasVisibility);
+  addClassMethod(CanvasVisibility.prototype, "cacheLights", cacheLightsCanvasVisibility);
+  addClassMethod(CanvasVisibility.prototype, "renderTransform", new PIXI.Matrix());
+  addClassMethod(CanvasVisibility.prototype, "pointSourcesStates", new Map());
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
