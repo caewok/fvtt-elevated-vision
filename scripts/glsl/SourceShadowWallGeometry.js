@@ -252,10 +252,11 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * Add a wall to this geometry.
    * @param {Wall} wall   Wall to add
    * @param {boolean} [update=true]  If false, buffer will not be flagged for update
+   * @returns {boolean} Did the geometry need to be updated based on the wall addition?
    */
-  addWall(wall, update = true) {
-    if ( this._triWallMap.has(wall.id) ) return;
-    if ( !this._includeWall(wall) ) return;
+  addWall(wall, { update = true } = {}) {
+    if ( this._triWallMap.has(wall.id) ) return false;
+    if ( !this._includeWall(wall) ) return false;
 
     const wallCoords = this._wallCornerCoordinates(wall);
     const idxToAdd = this._triWallMap.size;
@@ -288,11 +289,22 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
     // Flag the updated buffers for uploading to the GPU.
     if ( update ) this.update();
+
+    return true;
   }
 
+  /**
+   * Update a wall in this geometry.
+   * May result in a wall being added or removed.
+   * @param {Wall} wall   Wall to update
+   * @param {object} [opts]               Options that affect how the wall update is treated.
+   * @param {boolean} [opts.update]       If false, buffer will not be flagged for update.
+   * @param {Set<string>} [opts.changes]  Set of change flags for the wall.
+   * @returns {boolean} Did the geometry need to be updated based on the wall update?
+   */
   updateWall(wall, { update = true, changes = DEFAULT_WALL_CHANGES } = {}) {
-    if ( !this._triWallMap.has(wall.id) ) return this.addWall(wall, update);
-    if ( !this._includeWall(wall) ) return this.removeWall(wall.id, update);
+    if ( !this._triWallMap.has(wall.id) ) return this.addWall(wall, { update });
+    if ( !this._includeWall(wall) ) return this.removeWall(wall.id, { update });
 
     const idxToUpdate = this._triWallMap.get(wall.id);
 
@@ -328,15 +340,19 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     }
 
     // Don't need to update the index
+
+    return true;
   }
 
   /**
    * Remove a wall from this geometry.
    * @param {string} id   Wall id (b/c that is what the remove hook uses)
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update.
+   * @returns {boolean} Did the geometry need to be updated based on the wall removal?
    */
-  removeWall(id, update = true) {
+  removeWall(id, { update = true } = {}) {
     if ( id instanceof Wall ) id = id.id;
-    if ( !this._triWallMap.has(id) ) return;
+    if ( !this._triWallMap.has(id) ) return false;
 
     const idxToRemove = this._triWallMap.get(id);
 
@@ -358,6 +374,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
     // Flag the updated buffers for uploading to the GPU.
     if ( update ) this.update();
+
+    return true;
   }
 
   /**

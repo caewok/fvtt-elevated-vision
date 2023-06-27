@@ -55,7 +55,13 @@ import { _onMouseMoveCanvas } from "./ElevationLayer.js";
 
 import { createAdaptiveLightingShader } from "./glsl/patch_lighting_shaders.js";
 
-import { _configureRenderedPointSource, destroyRenderedPointSource } from "./shadow_hooks.js";
+import {
+  _configureRenderedPointSource,
+  destroyRenderedPointSource,
+  updateLOSGeometryVisionSource,
+  wallAddedRenderedPointSource,
+  wallUpdatedRenderedPointSource,
+  wallRemovedRenderedPointSource } from "./shadow_hooks.js";
 
 // A: shader / not shader
 // B: PV / not PV
@@ -169,6 +175,11 @@ export function registerPatches() {
 
   wrap("RenderedPointSource.prototype._configure", _configureRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
   wrap("RenderedPointSource.prototype.destroy", destroyRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
+
+  addClassMethod(VisionSource.prototype, "updateLOSGeometry", updateLOSGeometryVisionSource);
+  addClassMethod(RenderedPointSource.prototype, "wallAdded", wallAddedRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "wallUpdated", wallUpdatedRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "wallRemoved", wallRemovedRenderedPointSource);
 
   // ----- Override canvasVisibility ----- //
   // TODO: Only when WebGL setting is enabled.

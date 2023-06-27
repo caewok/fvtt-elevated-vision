@@ -4,7 +4,6 @@ flattenObject,
 GlobalLightSource,
 Hooks,
 PIXI,
-PointSourcePolygon,
 PolygonMesher,
 VisionSource
 */
@@ -21,6 +20,60 @@ import { PointSourceShadowWallGeometry, SourceShadowWallGeometry } from "./glsl/
 import { ShadowVisionMaskShader, ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 import { TestShadowShader } from "./glsl/TestShadowShader.js";
+
+/* Shadow texture workflow
+
+LightSource
+1. wallGeometry (PointSourceShadowWallGeometry extends PIXI.Geometry)
+   Walls within radius of the light source.
+2. shadowMesh (ShadowWallPointSourceMesh extends PIXI.Mesh)
+   - shader: ShadowWallShader based on source position
+   - geometry: wallGeometry (1)
+3. shadowRenderer (ShadowTextureRenderer)
+   - mesh: shadowMesh (2)
+   Renders the shadowMesh to a texture. Updates the render texture using:
+     - updateSourceRadius
+     - update
+   --> shadowRenderer.renderTexture output
+4. shadowVisionMask (PIXI.Mesh)
+   - shader: ShadowVisionMaskShader.
+     Draws only lighted areas in red, discards shadow areas.
+     Uses shadowRenderer.renderTexture (3) as uniform
+   - geometry: source.layers.background.mesh.geometry
+     Could probably use QuadMesh with light bounds instead but might need the circle radius.
+5. shadowQuadMesh (EVQuadMesh extends PIXI.Mesh)
+   - shader: shadowRenderer.renderTexture
+   - geometry: Custom quad
+   For testing drawing the renderTexture.
+
+VisionSource FOV
+1–5: Same as LightSource. Used for the FOV, which has a radius.
+
+VisionSource LOS
+1–3: Same as LightSource.
+     Geometry not limited by radius.
+
+3.1 shadowVisionLOSRenderer (ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer)
+    Same as shadowRenderer for LightSource.
+    Render the shadowMesh to a texture.
+
+
+3.2: losGeometry (PIXI.Geometry)
+   Triangulation of the vision.los (unconstrained) polygon.
+   Update using vision.updateLOSGeometry()
+
+4: shadowVisionLOSMask
+   - shader: ShadowVisionMaskTokenLOSShader
+     Draws only lighted areas in red, discards shadow areas.
+     Uses shadowVisionLOSRenderer.renderTexture (3.1) as uniform
+
+
+
+
+
+*/
+
+
 
 // NOTE: Wraps for RenderedPointSource methods.
 
@@ -43,7 +96,7 @@ export function _configureRenderedPointSource(wrapped, changes) {
     ev.geom?.refreshWalls();
     ev.shadowMesh?.updateLightPosition();
     ev.shadowVisionLOSMesh?.updateLightPosition();
-    if ( this instanceof VisionSource ) updateLOSGeometryVisionSource(this);
+    if ( this instanceof VisionSource ) this.updateLOSGeometry();
   }
 
   if ( changedPosition ) {
@@ -144,7 +197,7 @@ function initializeSourceShadersHook(source) {
     ev.shadowVisionLOSRenderer.renderShadowMeshToTexture();
 
     // Add or update the LOS geometry for the vision source.
-    updateLOSGeometryVisionSource(source);
+    source.updateLOSGeometry();
 
     // Build LOS vision mask.
     const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowVisionLOSRenderer.renderTexture);
@@ -166,15 +219,64 @@ function initializeSourceShadersHook(source) {
 }
 
 /**
+ * New method:  RenderedPointSource.prototype.updateLOSGeometry
  * Update the los geometry for a vision source shape used in the vision mask.
  * Copy of RenderedPointSource.prototype.#updateGeometry
  */
-function updateLOSGeometryVisionSource(source) {
-  const {x, y} = source.data;
-  const offset = source._flags.renderSoftEdges ? source.constructor.EDGE_OFFSET : 0;
-  const pm = new PolygonMesher(source.los, {x, y, radius: 0, normalize: false, offset});
-  source[MODULE_ID].losGeometry ??= null;
-  source[MODULE_ID].losGeometry = pm.triangulate(source[MODULE_ID].losGeometry);
+export function updateLOSGeometryVisionSource() {
+  const {x, y} = this.data;
+  const offset = this._flags.renderSoftEdges ? this.constructor.EDGE_OFFSET : 0;
+  const pm = new PolygonMesher(this.los, {x, y, radius: 0, normalize: false, offset});
+  const ev = this[MODULE_ID];
+  ev.losGeometry ??= null;
+  ev.losGeometry = pm.triangulate(ev.losGeometry);
+}
+
+// NOTE: Wall handling for RenderedPointSource
+
+/**
+ * New method: RenderedPointSource.prototype.wallAdded
+ * Update shadow data based on the added wall, as necessary.
+ * @param {Wall} wall     Wall that was added to the scene.
+ */
+export function wallAddedRenderedPointSource(wall) { handleWallChange(this, wall, "addWall"); }
+
+/**
+ * New method: RenderedPointSource.prototype.wallUpdated
+ * Update shadow data based on the updated wall, as necessary.
+ * @param {Wall} wall     Wall that was updated in the scene.
+ */
+export function wallUpdatedRenderedPointSource(wall, changes) {
+  handleWallChange(this, wall, "updateWall", { changes });
+}
+
+/**
+ * New method: RenderedPointSource.prototype.wallRemoved
+ * Update shadow data based on the removed wall, as necessary.
+ * @param {Wall} wallId     Wall id that was removed from the scene.
+ */
+export function wallRemovedRenderedPointSource(wallId) { handleWallChange(this, wallId, "removeWall"); }
+
+/**
+ * Utility function to handle variety of wall changes to a source.
+ * @param {RenderedPointSource} source
+ * @param {Wall} wall
+ * @param {string} updateFn   Name of the update method for the wall geometry.
+ * @param {object} opts       Options passed to updateFn
+ */
+function handleWallChange(source, wall, updateFn, opts = {}) {
+  const ev = source[MODULE_ID];
+  if ( !ev ) return;
+
+  // At this point, the wall caused a change to the geometry.
+  // Update accordingly.
+  if ( ev.wallGeometry?.[updateFn](wall, opts) ) ev.shadowRenderer?.update();
+
+  // For vision sources, update the LOS geometry.
+  if ( ev.losGeometry ) source.updateLOSGeometry();
+
+  // For vision sources, update the LOS texture.
+  if ( ev.shadowVisionLOSRenderer ) ev.shadowVisionLOSRenderer.update();
 }
 
 
@@ -194,16 +296,11 @@ function updateLOSGeometryVisionSource(source) {
 function createWallHook(wallD, _options, _userId) {
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.effects.visionSources,
+    ...canvas.tokens.placeables.map(t => t.vision),
     ...canvas.sounds.sources
   ];
 
-  for ( const src of sources ) {
-    const ev = src[MODULE_ID];
-    if ( !ev ) continue;
-    ev.wallGeometry?.addWall(wallD.object);
-    ev.shadowRenderer?.update();
-  }
+  for ( const src of sources ) src.wallAdded(wallD.object);
 }
 
 /**
@@ -228,16 +325,11 @@ function updateWallHook(wallD, data, _options, _userId) {
 
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.effects.visionSources,
+    ...canvas.tokens.placeables.map(t => t.vision),
     ...canvas.sounds.sources
   ];
 
-  for ( const src of sources ) {
-    const ev = src[MODULE_ID];
-    if ( !ev ) continue;
-    ev.wallGeometry?.updateWall(wallD.object, { changes });
-    ev.shadowRenderer?.update();
-  }
+  for ( const src of sources ) src.wallUpdated(wallD.object, changes);
 }
 
 /**
@@ -254,16 +346,11 @@ function updateWallHook(wallD, data, _options, _userId) {
 function deleteWallHook(wallD, _options, _userId) {
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.effects.visionSources,
+    ...canvas.tokens.placeables.map(t => t.vision),
     ...canvas.sounds.sources
   ];
 
-  for ( const src of sources ) {
-    const ev = src[MODULE_ID];
-    if ( !ev ) continue;
-    ev.wallGeometry?.removeWall(wallD.id);
-    ev.shadowRenderer?.update();
-  }
+  for ( const src of sources ) src.wallRemoved(wallD.id);
 }
 
 // Hooks.on("drawAmbientLight", drawAmbientLightHook);
