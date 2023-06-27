@@ -145,11 +145,16 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    */
   _includeWall(wall) {
     if ( wall.isDoor && wall.isOpen ) return false;
+    const { topZ, bottomZ } = wall;
+    const { sourceZ } = this.source.elevationZ;
 
+    // If wall is entirely above the light, do not keep.
+    if ( bottomZ > sourceZ ) return false;
+
+    // If wall is entirely below the canvas, do not keep.
     const minCanvasE = canvas.elevation?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
-    const topZ = Math.min(wall.topZ, this.source.elevationZ);
-    const bottomZ = Math.max(wall.bottomZ, minCanvasE);
-    if ( topZ <= bottomZ ) return false; // Wall is above or below the viewing box.
+    if ( topZ <= minCanvasE ) return false;
+
     return true;
   }
 
@@ -162,6 +167,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   _wallCornerCoordinates(wall) {
     const A = new PIXI.Point(wall.A.x, wall.A.y);
     const B = new PIXI.Point(wall.B.x, wall.B.y);
+    const { topZ, bottomZ } = wall;
+
     const out = {
       corner1: A,
       corner2: B,
