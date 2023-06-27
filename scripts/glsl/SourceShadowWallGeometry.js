@@ -162,25 +162,12 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   _wallCornerCoordinates(wall) {
     const A = new PIXI.Point(wall.A.x, wall.A.y);
     const B = new PIXI.Point(wall.B.x, wall.B.y);
-    const ABDist = PIXI.Point.distanceBetween(A, B);
-
-    // Slightly extend wall to ensure connected walls do not have gaps in shadows.
-    const adjA = B.towardsPoint(A, ABDist + this.constructor.WALL_OFFSET_PIXELS);
-    const adjB = A.towardsPoint(B, ABDist + this.constructor.WALL_OFFSET_PIXELS);
-    const topZ = Math.min(wall.topZ, Number.MAX_SAFE_INTEGER);
-    const bottomZ = Math.max(wall.bottomZ, Number.MIN_SAFE_INTEGER);
-
     const out = {
-      corner1: adjA,
-      corner2: adjB,
+      corner1: A,
+      corner2: B,
       topZ,
       bottomZ
     };
-
-    // Round b/c points may be adjusted.
-    out.corner1.roundDecimals();
-    out.corner2.roundDecimals();
-
     return out;
   }
 
