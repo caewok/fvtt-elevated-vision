@@ -257,6 +257,19 @@ export function wallUpdatedRenderedPointSource(wall, changes) {
  */
 export function wallRemovedRenderedPointSource(wallId) { handleWallChange(this, wallId, "removeWall"); }
 
+
+/**
+ * New getter: RenderedPointSource.prototype.bounds
+ */
+export function boundsRenderedPointSource() {
+  const r = this.radius ?? this.data.externalRadius;
+  if ( !r ) return this.object?.bounds ?? new PIXI.Rectangle(this.x - 1, this.y - 1, 2, 2);
+
+  const { x, y } = this;
+  const d = r * 2;
+  return new PIXI.Rectangle(x - r, y - r, d, d);
+}
+
 /**
  * Utility function to handle variety of wall changes to a source.
  * @param {RenderedPointSource} source

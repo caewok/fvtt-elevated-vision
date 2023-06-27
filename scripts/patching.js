@@ -61,7 +61,8 @@ import {
   updateLOSGeometryVisionSource,
   wallAddedRenderedPointSource,
   wallUpdatedRenderedPointSource,
-  wallRemovedRenderedPointSource } from "./shadow_hooks.js";
+  wallRemovedRenderedPointSource,
+  boundsRenderedPointSource } from "./shadow_hooks.js";
 
 // A: shader / not shader
 // B: PV / not PV
@@ -180,6 +181,7 @@ export function registerPatches() {
   addClassMethod(RenderedPointSource.prototype, "wallAdded", wallAddedRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "wallUpdated", wallUpdatedRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "wallRemoved", wallRemovedRenderedPointSource);
+  addClassGetter(RenderedPointSource.prototype, "bounds", boundsRenderedPointSource);
 
   // ----- Override canvasVisibility ----- //
   // TODO: Only when WebGL setting is enabled.
