@@ -402,16 +402,14 @@ void main() {
 }
 
 export class ShadowWallPointSourceMesh extends PIXI.Mesh {
-  constructor(source, shader, state, drawMode) {
-    if ( !source[MODULE_ID]?.wallGeometry ) {
-      source[MODULE_ID].wallGeometry = new PointSourceShadowWallGeometry(source);
-    }
-
+  constructor(source, geometry, shader, state, drawMode) {
+    geometry ??= source[MODULE_ID]?.wallGeometry ?? new PointSourceShadowWallGeometry(source);
     if ( !shader ) {
       const sourcePosition = Point3d.fromPointSource(source);
-      shader ??= ShadowWallShader.create(sourcePosition);
+      shader = ShadowWallShader.create(sourcePosition);
     }
-    super(source[MODULE_ID].wallGeometry, shader, state, drawMode);
+
+    super(geometry, shader, state, drawMode);
     this.blendMode = PIXI.BLEND_MODES.MULTIPLY;
 
     /** @type {LightSource} */
@@ -426,33 +424,6 @@ export class ShadowWallPointSourceMesh extends PIXI.Mesh {
     this.shader.updateLightPosition(x, y, elevationZ);
   }
 }
-
-export class ShadowWallVisionLOSMesh extends PIXI.Mesh {
-  constructor(source, shader, state, drawMode) {
-    if ( !source[MODULE_ID]?.visionLOSShadowGeometry ) {
-      source[MODULE_ID].visionLOSShadowGeometry = new VisionLOSShadowWallGeometry(source);
-    }
-
-    if ( !shader ) {
-      const sourcePosition = Point3d.fromPointSource(source);
-      shader ??= ShadowWallShader.create(sourcePosition);
-    }
-    super(source[MODULE_ID].visionLOSShadowGeometry, shader, state, drawMode);
-    this.blendMode = PIXI.BLEND_MODES.MULTIPLY;
-
-    /** @type {LightSource} */
-    this.source = source;
-  }
-
-  /**
-   * Update the light position.
-   */
-  updateLightPosition() {
-    const { x, y, elevationZ } = this.source;
-    this.shader.updateLightPosition(x, y, elevationZ);
-  }
-}
-
 
 /* Testing
 MODULE_ID = "elevatedvision"
