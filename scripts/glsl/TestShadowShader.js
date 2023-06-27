@@ -103,7 +103,7 @@ canvas.stage.removeChild(s)
 
 shadowShader = TestShadowShader.create(rt);
 
-quadMesh = new EVQuadMesh(str.sourceBounds, shadowShader);
+quadMesh = new EVQuadMesh(str.source.bounds, shadowShader);
 
 canvas.stage.addChild(quadMesh);
 canvas.stage.removeChild(quadMesh);
