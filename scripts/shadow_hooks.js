@@ -15,7 +15,7 @@ import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { SETTINGS, getSceneSetting } from "./settings.js";
 
-import { ShadowWallShader, ShadowWallPointSourceMesh, ShadowWallVisionLOSMesh } from "./glsl/ShadowWallShader.js";
+import { ShadowWallShader, ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer, ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { PointSourceShadowWallGeometry, SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { ShadowVisionMaskShader, ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
@@ -109,9 +109,7 @@ function initializeSourceShadersHook(source) {
 
   // Build the shadow mesh.
   if ( !ev.shadowMesh ) {
-    const position = Point3d.fromPointSource(source);
-    const shader = ShadowWallShader.create(position);
-    ev.shadowMesh = new ShadowWallPointSourceMesh(source, shader);
+    ev.shadowMesh = new ShadowWallPointSourceMesh(source, ev.wallGeometry);
 
     // Force a uniform update, to avoid ghosting of placeables in the light radius.
     // TODO: Find the underlying issue and fix this!
@@ -141,7 +139,7 @@ function initializeSourceShadersHook(source) {
   // If vision source, build extra LOS geometry and add an additional mask for the LOS.
   if ( source instanceof VisionSource && !ev.shadowVisionLOSMesh ) {
     // Shadow mesh of the entire canvas for LOS.
-    ev.shadowVisionLOSMesh = new ShadowWallVisionLOSMesh(source);
+    ev.shadowVisionLOSMesh = new ShadowWallPointSourceMesh(source, ev.visionLOSShadowGeometry);
     ev.shadowVisionLOSRenderer = new ShadowVisionLOSTextureRenderer(source, ev.shadowVisionLOSMesh);
     ev.shadowVisionLOSRenderer.renderShadowMeshToTexture();
 
