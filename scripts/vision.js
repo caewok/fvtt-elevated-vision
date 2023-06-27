@@ -73,30 +73,32 @@ export function refreshVisibilityCanvasVisibility() {
   let commitFog = false;
 
   // Checking if the lights cache need a full redraw
-  let lightsFullRedraw = this.checkLights();
+  // TODO: Can we force the cache to clear if a wall within the light radius changes?
+  // let lightsFullRedraw = this.checkLights();
+  let lightsFullRedraw = true;
   if ( lightsFullRedraw ) {
     this.pointSourcesStates.clear();
     vision.fov.lights.clear();
-    // vision.fov.lights.removeChildren();
+    vision.fov.lights.removeChildren();
   }
 
   vision.base.clear();
-  //vision.base.removeChildren();
+  vision.base.removeChildren();
   vision.base.beginFill(fillColor, 1.0);
 
   vision.fov.lights.beginFill(fillColor, 1.0);
   // Already cleared with lightsFullRedraw above.
 
   vision.fov.tokens.clear();
-  // vision.fov.tokens.removeChildren();
+  vision.fov.tokens.removeChildren();
   // vision.fov.tokens.beginFill(fillColor, 1.0);
 
   vision.los.clear();
-  // if ( vision.los.children.length > 1 ) vision.los.removeChildren(1); // Keep the vision.los.preview child.
+  if ( vision.los.children.length > 1 ) vision.los.removeChildren(1); // Keep the vision.los.preview child.
   // vision.los.beginFill(fillColor, 1.0);
 
   vision.los.preview.clear();
-  // vision.los.preview.removeChildren();
+  vision.los.preview.removeChildren();
   // vision.los.preview.beginFill(fillColor, 1.0);
 
   // Iterating over each light source
@@ -149,6 +151,7 @@ export function refreshVisibilityCanvasVisibility() {
   // Iterating over each vision source
   for ( const visionSource of canvas.effects.visionSources ) {
     if ( !visionSource.active ) continue;
+
     const fovMask = visionSource[MODULE_ID].shadowVisionMask;
     const losMask = visionSource[MODULE_ID].shadowVisionLOSMask;
     if ( !fovMask ) console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|visionSource ${visionSource.object.id} has no fov mask.`);
