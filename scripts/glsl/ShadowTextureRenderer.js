@@ -56,14 +56,12 @@ export class ShadowTextureRenderer {
   }
 
   /**
-   * Source bounds defined by the radius of the source.
-   * @type {PIXI.Rectangle}
+   * Top left corner of the source boundary.
+   * Used to anchor the mesh passed to the renderer.
+   * @type {PIXI.Point}
    */
-  get sourceBounds() {
-    const { x, y } = this.source;
-    const r = this.source.radius ?? canvas.dimensions.maxR;
-    const d = r * 2;
-    return new PIXI.Rectangle(x - r, y - r, d, d);
+  get topLeft() {
+    return PIXI.Point.fromObject(this.source).translate(-this.width * 0.5, -this.height * 0.5);
   }
 
   /**
@@ -72,7 +70,10 @@ export class ShadowTextureRenderer {
    * @returns {PIXI.RenderTexture}
    */
   renderShadowMeshToTexture() {
-    this.mesh.position = { x: -this.sourceBounds.x, y: -this.sourceBounds.y };
+    const tl = this.topLeft;
+    this.mesh.position = { x: -tl.x, y: -tl.y };
+    // console.debug(`elevatedvision|renderShadowMeshToTexture|position is ${-tl.x},${-tl.y}`);
+
     canvas.app.renderer.render(this.mesh, { renderTexture: this.renderTexture, clear: true });
     return this.renderTexture;
   }
@@ -116,15 +117,7 @@ export class ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer {
 
   get height() { return canvas.dimensions.height; }
 
-  /**
-   * Source bounds defined by the canvas rectangle or scene rectangle.
-   * @type {PIXI.Rectangle}
-   */
-  get sourceBounds() {
-//     const { rect, sceneRect } = canvas.dimensions;
-//     if ( sceneRect.contains(this.source.object.center) ) return sceneRect;
-    return canvas.dimensions.rect;
-  }
+  get topLeft() { return new PIXI.Point(0, 0); }
 }
 
 /* Testing

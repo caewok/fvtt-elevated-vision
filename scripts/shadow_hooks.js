@@ -102,12 +102,12 @@ export function _configureRenderedPointSource(wrapped, changes) {
   if ( changedPosition ) {
     ev.shadowRenderer?.update();
     ev.shadowVisionLOSRenderer?.update();
-    ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.sourceBounds);
+    ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.source.bounds);
     ev.shadowVisionMask.position.copyFrom(this);
 
   } else if ( changedRadius ) {
     ev.shadowRenderer?.updateSourceRadius();
-    ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.sourceBounds);
+    ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.source.bounds);
     ev.shadowVisionMask.scale = { x: this.radius, y: this.radius };
 
   } else if ( changedElevation ) {
@@ -208,7 +208,7 @@ function initializeSourceShadersHook(source) {
   // Testing use only.
   if ( !ev.shadowQuadMesh ) {
     const shader = TestShadowShader.create(ev.shadowRenderer.renderTexture);
-    ev.shadowQuadMesh = new EVQuadMesh(ev.shadowRenderer.sourceBounds, shader);
+    ev.shadowQuadMesh = new EVQuadMesh(ev.shadowRenderer.source.bounds, shader);
   }
   // For testing, add to the canvas effects
   //   if ( !canvas.effects.EVshadows ) canvas.effects.EVshadows = canvas.effects.addChild(new PIXI.Container());
