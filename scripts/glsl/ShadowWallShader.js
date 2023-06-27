@@ -9,13 +9,12 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
-import {
-  PointSourceShadowWallGeometry,
-  VisionLOSShadowWallGeometry } from "./SourceShadowWallGeometry.js";
+import { PointSourceShadowWallGeometry } from "./SourceShadowWallGeometry.js";
 
 
 export class TestGeometryShader extends AbstractEVShader {
   static vertexShader =
+  // eslint-disable-next-line indent
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -46,6 +45,7 @@ void main() {
 }`;
 
   static fragmentShader =
+  // eslint-disable-next-line indent
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -74,9 +74,6 @@ void main() {
   }
 }
 
-
-
-
 /**
  * Draw shadow for wall without shading for penumbra and without the outer penumbra.
  */
@@ -88,6 +85,7 @@ export class ShadowWallShader extends AbstractEVShader {
    * @type {string}
    */
   static vertexShader =
+  // eslint-disable-next-line indent
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -106,7 +104,6 @@ uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 uniform vec4 uElevationRes;
 uniform vec3 uLightPosition;
-uniform float uMaxR;
 
 ${defineFunction("normalizeRay")}
 ${defineFunction("rayFromPoints")}
@@ -191,6 +188,7 @@ void main() {
    * This mask shader is binary: encodes either full light or no light.
    */
   static fragmentShader =
+  // eslint-disable-next-line indent
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -346,7 +344,6 @@ void main() {
   /**
    * Set the basic uniform structures.
    * uSceneDims: [sceneX, sceneY, sceneWidth, sceneHeight]
-   * uMaxR: Maximum radius for the scene
    * uElevationRes: [minElevation, elevationStep, maxElevation, gridScale]
    * uTerrainSampler: elevation texture
    * uLightPosition: [x, y, elevation] for the light
@@ -354,7 +351,6 @@ void main() {
 
   static defaultUniforms = {
     uSceneDims: [0, 0, 1, 1],
-    uMaxR: 1,
     uElevationRes: [0, 1, 256 * 256, 1],
     uTerrainSampler: 0,
     uLightPosition: [0, 0, 0]
@@ -370,14 +366,13 @@ void main() {
     if ( !lightPosition ) console.error("ShadowMaskWallShader requires a lightPosition.");
 
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
-    const { sceneRect, maxR, distancePixels } = canvas.dimensions;
+    const { sceneRect, distancePixels } = canvas.dimensions;
     defaultUniforms.uSceneDims ??= [
       sceneRect.x,
       sceneRect.y,
       sceneRect.width,
       sceneRect.height
     ];
-    defaultUniforms.uMaxR ??= maxR;
 
     const ev = canvas.elevation;
     defaultUniforms.uElevationRes ??= [
