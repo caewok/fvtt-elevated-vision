@@ -32,13 +32,13 @@ export class ShadowTextureRenderer {
    * Width of the render texture based on the source dimensions.
    * @type {number}
    */
-  get width() { return this.source.radius * 2; }
+  get width() { return (this.source.radius || this.source.data.externalRadius) * 2; }
 
   /**
    * Height of the render texture based on the source dimensions.
    * @type {number}
    */
-  get height() { return this.source.radius * 2; }
+  get height() { return (this.source.radius || this.source.data.externalRadius) * 2; }
 
   /**
    * Resolution of the render texture base on maximum texture size.
