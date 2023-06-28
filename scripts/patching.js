@@ -1,11 +1,10 @@
 /* globals
+CanvasVisibility,
 ClockwiseSweepPolygon,
 libWrapper,
-LightSource,
 PIXI,
 Tile,
-Token,
-VisionSource
+Token
 */
 
 "use strict";
@@ -27,10 +26,14 @@ import {
 
 import {
   drawShapePIXIGraphics,
+  refreshVisibilityCanvasVisibility,
+  checkLightsCanvasVisibility,
+  _tearDownCanvasVisibility,
+  cacheLightsCanvasVisibility
 
-  _createEVMask,
-  _createEVMeshVisionSource,
-  _createEVMeshLightSource
+//   _createEVMask,
+//   _createEVMeshVisionSource,
+//   _createEVMeshLightSource
 
   // Perfect Vision patches that will not work in v11:
   // createVisionCanvasVisionMaskPV,
@@ -52,7 +55,14 @@ import { _onMouseMoveCanvas } from "./ElevationLayer.js";
 
 import { createAdaptiveLightingShader } from "./glsl/patch_lighting_shaders.js";
 
-import { _configureRenderedPointSource, destroyRenderedPointSource } from "./shadow_hooks.js";
+import {
+  _configureRenderedPointSource,
+  destroyRenderedPointSource,
+  updateLOSGeometryVisionSource,
+  wallAddedRenderedPointSource,
+  wallUpdatedRenderedPointSource,
+  wallRemovedRenderedPointSource,
+  boundsRenderedPointSource } from "./shadow_hooks.js";
 
 // A: shader / not shader
 // B: PV / not PV
@@ -166,6 +176,22 @@ export function registerPatches() {
 
   wrap("RenderedPointSource.prototype._configure", _configureRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
   wrap("RenderedPointSource.prototype.destroy", destroyRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
+
+  addClassMethod(VisionSource.prototype, "updateLOSGeometry", updateLOSGeometryVisionSource);
+  addClassMethod(RenderedPointSource.prototype, "wallAdded", wallAddedRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "wallUpdated", wallUpdatedRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "wallRemoved", wallRemovedRenderedPointSource);
+  addClassGetter(RenderedPointSource.prototype, "bounds", boundsRenderedPointSource);
+
+  // ----- Override canvasVisibility ----- //
+  // TODO: Only when WebGL setting is enabled.
+  override("CanvasVisibility.prototype.refreshVisibility", refreshVisibilityCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
+  wrap("CanvasVisibility.prototype._tearDown", _tearDownCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
+
+  addClassMethod(CanvasVisibility.prototype, "checkLights", checkLightsCanvasVisibility);
+  addClassMethod(CanvasVisibility.prototype, "cacheLights", cacheLightsCanvasVisibility);
+  addClassMethod(CanvasVisibility.prototype, "renderTransform", new PIXI.Matrix());
+  addClassMethod(CanvasVisibility.prototype, "pointSourcesStates", new Map());
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;

@@ -27,9 +27,7 @@ import { defineFunction } from "./glsl/GLSLFunctions.js";
 import { ElevationLayerShader } from "./glsl/ElevationLayerShader.js";
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 import { PointSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-import { ShadowMaskWallShader, ShadowWallPointSourceMesh, TestGeometryShader } from "./glsl/ShadowMaskShader.js";
-import { ShadowShader } from "./glsl/ShadowShader.js";
-import { ShadowShaderNoRadius } from "./glsl/ShadowShaderNoRadius.js";
+import { ShadowWallShader, ShadowWallPointSourceMesh, TestGeometryShader } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { TestShadowShader } from "./glsl/TestShadowShader.js";
 
@@ -48,9 +46,6 @@ import { updateFlyTokenControl } from "./scenes.js";
 // Hooks
 import { preUpdateTokenHook, refreshTokenHook } from "./tokens.js";
 import { updateTileHook } from "./tiles.js";
-import {
-  initializeLightSourceShadersHook,
-  initializeVisionSourceShadersHook } from "./rendered_point_sources.js";
 
 import {
   renderAmbientLightConfigHook,
@@ -149,8 +144,6 @@ Hooks.once("init", function() {
     util,
     extract,
     ElevationLayer,
-    ShadowShader,
-    ShadowShaderNoRadius,
     FILOQueue,
     WallTracerEdge,
     WallTracerVertex,
@@ -166,7 +159,7 @@ Hooks.once("init", function() {
     AbstractEVShader,
     PointSourceShadowWallGeometry,
     defineFunction,
-    ShadowMaskWallShader,
+    ShadowWallShader,
     ShadowWallPointSourceMesh,
     EVQuadMesh,
     ShadowTextureRenderer,
@@ -255,9 +248,6 @@ Hooks.on("refreshToken", refreshTokenHook);
 
 Hooks.on("updateTile", updateTileHook);
 Hooks.on("renderTileConfig", renderTileConfigHook);
-
-Hooks.on("initializeVisionSourceShaders", initializeVisionSourceShadersHook);
-Hooks.on("initializeLightSourceShaders", initializeLightSourceShadersHook);
 
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
 Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);

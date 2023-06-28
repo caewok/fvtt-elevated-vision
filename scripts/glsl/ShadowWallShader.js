@@ -14,6 +14,7 @@ import { PointSourceShadowWallGeometry } from "./SourceShadowWallGeometry.js";
 
 export class TestGeometryShader extends AbstractEVShader {
   static vertexShader =
+  // eslint-disable-next-line indent
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -44,6 +45,7 @@ void main() {
 }`;
 
   static fragmentShader =
+  // eslint-disable-next-line indent
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -72,13 +74,10 @@ void main() {
   }
 }
 
-
-
-
 /**
  * Draw shadow for wall without shading for penumbra and without the outer penumbra.
  */
-export class ShadowMaskWallShader extends AbstractEVShader {
+export class ShadowWallShader extends AbstractEVShader {
   /**
    * Vertices are light --> wall corner to intersection on surface.
    * 3 vertices: light, ix for corner 1, ix for corner 2
@@ -86,6 +85,7 @@ export class ShadowMaskWallShader extends AbstractEVShader {
    * @type {string}
    */
   static vertexShader =
+  // eslint-disable-next-line indent
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -104,7 +104,6 @@ uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 uniform vec4 uElevationRes;
 uniform vec3 uLightPosition;
-uniform float uMaxR;
 
 ${defineFunction("normalizeRay")}
 ${defineFunction("rayFromPoints")}
@@ -189,6 +188,7 @@ void main() {
    * This mask shader is binary: encodes either full light or no light.
    */
   static fragmentShader =
+  // eslint-disable-next-line indent
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
@@ -268,16 +268,6 @@ vec2 elevateShadowRatios(in vec2 nearFarRatios, in vec2 wallHeights, in float wa
  * limited == 0: 0.0, 1.0, 1.0
  * limited == 1: 1.0, 0.5, 0.0
  */
-//
-// light 1 and light 0 for limited:
-//
-// light 1: 1.0, 0.5, 1.0
-// light 0: 1.0, 0.5, 0.0
-//          1.0, 0.25, 0.0
-//
-// light 1: 1.0, 0.5, 1.0
-// light 1: 1.0, 0.5, 1.0
-//          1.0, 0.25, 1.0
 
 // If not in shadow, need to treat limited wall as non-limited
 vec4 noShadow() {
@@ -347,111 +337,13 @@ void main() {
   // Remember, vBary.x is 1.0 at the light, and 0.0 at the far end of the shadow.
   float farShadowRatio = nearFarShadowRatios.y;
   float nearShadowRatio = nearFarShadowRatios.x;
-
-//   if ( vBary.x < farShadowRatio ) {
-//     fragColor = vec4((elevation + 100.0) / 400.0, 0.0, 0.0, 0.8);
-//     // fragColor = lightEncoding(1.0);
-//   } else if ( vBary.x > nearShadowRatio ) {
-//     fragColor = vec4(0.0, (elevation + 100.0) / 400.0, 0.0, 0.8);
-//     // fragColor = lightEncoding(1.0);
-//   } else {
-//     fragColor = vec4(0.0, 0.0, (elevation + 100.0) / 400.0, 0.8);
-//     // fragColor = lightEncoding(0.0);
-//   }
-
-//   bool inShadow = between(farShadowRatio, nearShadowRatio, vBary.x) == 1.0;
-//   if ( inShadow ) {
-//     fragColor = vec4(0.0, 0.0, (elevation + 100.0) / 400.0, 0.8);
-//   } else if ( vBary.x < farShadowRatio ) {
-//     fragColor = vec4((elevation + 100.0) / 400.0, 0.0, 0.0, 0.8);
-//   } else { // vBary.x > nearShadowRatio
-//     fragColor = vec4(0.0, (elevation + 100.0) / 400.0, 0.0, 0.8);
-//   }
-
-
   float lightPercentage = 1.0 - between(farShadowRatio, nearShadowRatio, vBary.x);
   fragColor = lightEncoding(lightPercentage);
 }`;
 
-
-/*
-token center: 1550, 1550
-20' (400) wall,
-5' above surface
-~ 37.5 feet to end of shadow
-12.5 feet to wall
-
-fWallRatio = 25 / 37.5 = .66
-nearFarRatios = vec2(37.5 / (12.5 + 37.5), 0) = vec2(.75, 0)
-elevationChange = 5'
-elevRatio = 5 / vec2(400, 0) = vec2(0.0125, 0)
-
-nearFarShadowRatios + (elevRatio.yx * (fWallRatio - nearFarShadowRatios));
-
-(0.75, 0) + (0, .0125) * (.66 - (.75, 0))
-
-(0.75, 0) + (0, 0)
-
-
-// New method
-top: 400
-bottom: -9999
-
-fWallRatio: 0.66
-elevationChange: 0
-
-
-
-fWallHeights: 400, -9999
-fWallRatio: .66
-elevationChange = 5
-nearFarShadowRatios = (0.50, 0)
-wallHeights = max(0, fWallHeights - canvasElevation) = (400, 0)
-
-toWallRatios: .66 - (0.66, 0) = (0, .66)
-heightFractions: 100 / (0, 400) = (0, .25)
-
-(.66, 0) + (0, .25) * (0, .66) = (.66, .165)
-
-
-
-
-bottomToWallRatio = (wallRatio - nearRatio)
-bottomFraction = elevChange / bottomHeight
-newNearRatio = nearFraction + (bottomFraction * bottomToWallRatio)
-
-topToWallRatio = (wallRatio - farRatio)
-topFraction = elevChange / topHeight
-newFarRatio = farFraction + (topFraction * topToWallRatio)
-
-nearFraction = ~.5
-bottomToWallRatio = .66 - .5 = .16
-bottomFraction = 5 / 5 = 100%
-newNearRatio = .5 + (100% * .16) = .56
-
-farFraction = 0
-topToWallRatio = .66 - 0 = .66
-topFraction = 5 / 20 = 25%
-newFarRatio = 0 + (25% * .66) = 0.165
-
-
-
-
-
-
-
-
-
-
-
-*/
-
-
-
   /**
    * Set the basic uniform structures.
    * uSceneDims: [sceneX, sceneY, sceneWidth, sceneHeight]
-   * uMaxR: Maximum radius for the scene
    * uElevationRes: [minElevation, elevationStep, maxElevation, gridScale]
    * uTerrainSampler: elevation texture
    * uLightPosition: [x, y, elevation] for the light
@@ -459,7 +351,6 @@ newFarRatio = 0 + (25% * .66) = 0.165
 
   static defaultUniforms = {
     uSceneDims: [0, 0, 1, 1],
-    uMaxR: 1,
     uElevationRes: [0, 1, 256 * 256, 1],
     uTerrainSampler: 0,
     uLightPosition: [0, 0, 0]
@@ -475,14 +366,13 @@ newFarRatio = 0 + (25% * .66) = 0.165
     if ( !lightPosition ) console.error("ShadowMaskWallShader requires a lightPosition.");
 
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
-    const { sceneRect, maxR, distancePixels } = canvas.dimensions;
+    const { sceneRect, distancePixels } = canvas.dimensions;
     defaultUniforms.uSceneDims ??= [
       sceneRect.x,
       sceneRect.y,
       sceneRect.width,
       sceneRect.height
     ];
-    defaultUniforms.uMaxR ??= maxR;
 
     const ev = canvas.elevation;
     defaultUniforms.uElevationRes ??= [
@@ -507,16 +397,14 @@ newFarRatio = 0 + (25% * .66) = 0.165
 }
 
 export class ShadowWallPointSourceMesh extends PIXI.Mesh {
-  constructor(source, shader, state, drawMode) {
-    if ( !source[MODULE_ID]?.wallGeometry ) {
-      source[MODULE_ID].wallGeometry = new PointSourceShadowWallGeometry(source);
-    }
-
+  constructor(source, geometry, shader, state, drawMode) {
+    geometry ??= source[MODULE_ID]?.wallGeometry ?? new PointSourceShadowWallGeometry(source);
     if ( !shader ) {
       const sourcePosition = Point3d.fromPointSource(source);
-      shader ??= ShadowMaskWallShader.create(sourcePosition);
+      shader = ShadowWallShader.create(sourcePosition);
     }
-    super(source[MODULE_ID].wallGeometry, shader, state, drawMode);
+
+    super(geometry, shader, state, drawMode);
     this.blendMode = PIXI.BLEND_MODES.MULTIPLY;
 
     /** @type {LightSource} */
@@ -524,14 +412,13 @@ export class ShadowWallPointSourceMesh extends PIXI.Mesh {
   }
 
   /**
-   * Update the light position.
+   * Update the source position.
    */
   updateLightPosition() {
     const { x, y, elevationZ } = this.source;
     this.shader.updateLightPosition(x, y, elevationZ);
   }
 }
-
 
 /* Testing
 MODULE_ID = "elevatedvision"
@@ -540,7 +427,7 @@ api = game.modules.get("elevatedvision").api
 PointSourceShadowWallGeometry = api.PointSourceShadowWallGeometry
 defineFunction = api.defineFunction;
 AbstractEVShader = api.AbstractEVShader
-ShadowMaskWallShader = api.ShadowMaskWallShader
+ShadowWallShader = api.ShadowWallShader
 ShadowWallPointSourceMesh = api.ShadowWallPointSourceMesh
 TestGeometryShader = api.TestGeometryShader
 
@@ -553,7 +440,7 @@ source = _token.vision
 sourcePosition = Point3d.fromPointSource(source)
 
 
-shader = ShadowMaskWallShader.create(sourcePosition);
+shader = ShadowWallShader.create(sourcePosition);
 mesh = new ShadowWallPointSourceMesh(source, shader)
 
 canvas.stage.addChild(mesh)

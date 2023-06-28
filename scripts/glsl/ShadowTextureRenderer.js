@@ -12,10 +12,7 @@ export class ShadowTextureRenderer {
   // TODO: Allow to be changed via CONFIG.
 
   /** @type {number} */
-  static #MAX_WIDTH = 4096;
-
-  /** @type {number} */
-  static #MAX_HEIGHT = 4096;
+  static MAX_TEXTURE_SIZE = 4096;
 
   /** @type PIXI.RenderTexture */
   renderTexture;
@@ -35,29 +32,36 @@ export class ShadowTextureRenderer {
    * Width of the render texture based on the source dimensions.
    * @type {number}
    */
-  get width() {
-    const diameter = this.source.radius * 2;
-    return Math.min(this.constructor.#MAX_WIDTH, diameter);
-  }
+  get width() { return (this.source.radius || this.source.data.externalRadius) * 2; }
 
   /**
    * Height of the render texture based on the source dimensions.
    * @type {number}
    */
-  get height() {
-    const diameter = this.source.radius * 2;
-    return Math.min(this.constructor.#MAX_HEIGHT, diameter);
+  get height() { return (this.source.radius || this.source.data.externalRadius) * 2; }
+
+  /**
+   * Resolution of the render texture base on maximum texture size.
+   * @type {number}
+   */
+  get resolution() {
+    const { width, height } = this;
+
+    let resolution = 1;
+    const maxSize = Math.min(this.constructor.MAX_TEXTURE_SIZE,  resolution * Math.max(width, height));
+    if ( width >= height ) resolution = maxSize / width;
+    else resolution = maxSize / height;
+
+    return resolution;
   }
 
   /**
-   * Source bounds defined by the radius of the source.
-   * @type {PIXI.Rectangle}
+   * Top left corner of the source boundary.
+   * Used to anchor the mesh passed to the renderer.
+   * @type {PIXI.Point}
    */
-  get sourceBounds() {
-    const { x, y } = this.source;
-    const r = this.source.radius ?? canvas.dimensions.maxR;
-    const d = r * 2;
-    return new PIXI.Rectangle(x - r, y - r, d, d);
+  get topLeft() {
+    return PIXI.Point.fromObject(this.source).translate(-this.width * 0.5, -this.height * 0.5);
   }
 
   /**
@@ -66,15 +70,18 @@ export class ShadowTextureRenderer {
    * @returns {PIXI.RenderTexture}
    */
   renderShadowMeshToTexture() {
-    this.mesh.position = { x: -this.sourceBounds.x, y: -this.sourceBounds.y };
+    const tl = this.topLeft;
+    this.mesh.position = { x: -tl.x, y: -tl.y };
+    // console.debug(`elevatedvision|renderShadowMeshToTexture|position is ${-tl.x},${-tl.y}`);
+
     canvas.app.renderer.render(this.mesh, { renderTexture: this.renderTexture, clear: true });
     return this.renderTexture;
   }
 
   configureTexture() {
+    const { width, height, resolution } = this;
     return {
-      width: this.width,
-      height: this.height,
+      width, height, resolution,
       scaleMode: PIXI.SCALE_MODES.NEAREST
     };
   }
@@ -84,7 +91,8 @@ export class ShadowTextureRenderer {
    * @returns {PIXI.RenderTexture} Updated render texture.
    */
   updateSourceRadius() {
-    this.renderTexture.resize(this.width, this.height);
+    this.renderTexture.setResolution(this.resolution);
+    this.renderTexture.resize(this.width, this.height, true);
     return this.renderShadowMeshToTexture();
   }
 
@@ -102,6 +110,14 @@ export class ShadowTextureRenderer {
   destroy() {
     this.renderTexture.destroy();
   }
+}
+
+export class ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer {
+  get width() { return canvas.dimensions.width; }
+
+  get height() { return canvas.dimensions.height; }
+
+  get topLeft() { return new PIXI.Point(0, 0); }
 }
 
 /* Testing
