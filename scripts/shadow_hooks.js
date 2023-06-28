@@ -192,7 +192,8 @@ function initializeSourceShadersHook(source) {
   // If vision source, build extra LOS geometry and add an additional mask for the LOS.
   if ( source instanceof VisionSource && !ev.shadowVisionLOSMesh ) {
     // Shadow mesh of the entire canvas for LOS.
-    ev.shadowVisionLOSMesh = new ShadowWallPointSourceMesh(source, ev.visionLOSShadowGeometry);
+    ev.wallGeometryUnbounded = new SourceShadowWallGeometry(source);
+    ev.shadowVisionLOSMesh = new ShadowWallPointSourceMesh(source, ev.wallGeometryUnbounded);
     ev.shadowVisionLOSRenderer = new ShadowVisionLOSTextureRenderer(source, ev.shadowVisionLOSMesh);
     ev.shadowVisionLOSRenderer.renderShadowMeshToTexture();
 
