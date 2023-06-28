@@ -290,15 +290,11 @@ function handleWallChange(source, wall, updateFn, opts = {}) {
   const ev = source[MODULE_ID];
   if ( !ev ) return;
 
-  // At this point, the wall caused a change to the geometry.
-  // Update accordingly.
-  if ( ev.wallGeometry?.[updateFn](wall, opts) ) ev.shadowRenderer?.update();
+  // At this point, the wall caused a change to the geometry. Update accordingly.
+  if ( ev.wallGeometry?.[updateFn](wall, opts) ) ev.shadowRenderer.update();
 
   // For vision sources, update the LOS geometry.
-  if ( ev.losGeometry ) source.updateLOSGeometry();
-
-  // For vision sources, update the LOS texture.
-  if ( ev.shadowVisionLOSRenderer ) ev.shadowVisionLOSRenderer.update();
+  if ( ev.wallGeometryUnbounded?.[updateFn](wall, opts) ) ev.shadowVisionLOSRenderer.update();
 }
 
 
