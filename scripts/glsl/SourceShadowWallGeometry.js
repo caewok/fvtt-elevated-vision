@@ -449,3 +449,87 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
 }
 
 
+/* Testing
+MODULE_ID = "elevatedvision"
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+Draw = CONFIG.GeometryLib.Draw;
+api = game.modules.get("elevatedvision").api
+AbstractEVShader = api.AbstractEVShader
+EVQuadMesh = api.EVQuadMesh
+ShadowTextureRenderer = api.ShadowTextureRenderer
+TestShadowShader = api.TestShadowShader
+SourceShadowWallGeometry = api.SourceShadowWallGeometry
+DirectionalSourceShadowWallGeometry = api.DirectionalSourceShadowWallGeometry
+PointSourceShadowWallGeometry = api.PointSourceShadowWallGeometry
+
+let [l] = canvas.lighting.placeables;
+source = l.source;
+
+source = _token.vision
+
+
+// Timing for constructing geometry
+function buildPointGeometry(source) {
+  return new PointSourceShadowWallGeometry(source);
+}
+
+function buildUnboundedGeometry(source) {
+  return new SourceShadowWallGeometry(source);
+}
+
+function buildDirectionalGeometry(source) {
+  return new DirectionalSourceShadowWallGeometry(source);
+}
+
+function renderShadow(source) {
+  return source.elevatedvision.shadowRenderer.renderShadowMeshToTexture();
+}
+
+function renderLOS(source) {
+  return source.elevatedvision.shadowVisionLOSRenderer.renderShadowMeshToTexture();
+}
+
+renderTexture = PIXI.RenderTexture.create({
+  width: canvas.dimensions.width,
+  height: canvas.dimensions.height,
+  resolution: 1,
+  scaleMode: PIXI.SCALE_MODES.NEAREST
+})
+
+function renderMask(source) {
+  const mask = source.elevatedvision.shadowVisionMask;
+  canvas.app.renderer.render(mask, { renderTexture, clear: true });
+  return renderTexture;
+}
+
+function renderLOSMask(source) {
+  const mask = source.elevatedvision.shadowVisionLOSMask;
+  canvas.app.renderer.render(mask, { renderTexture, clear: true });
+  return renderTexture;
+}
+
+
+N = 1e04
+await foundry.utils.benchmark(buildUnboundedGeometry, N, source)
+await foundry.utils.benchmark(buildPointGeometry, N, source)
+await foundry.utils.benchmark(buildDirectionalGeometry, N, source)
+
+// Big difference between 1e04 and 1e05
+N = 1e05
+await foundry.utils.benchmark(renderShadow, N, source)
+await foundry.utils.benchmark(renderMask, N, source)
+
+// For vision
+N = 1e04
+await foundry.utils.benchmark(renderLOS, N, source)
+await foundry.utils.benchmark(renderLOSMask, N, source)
+
+
+
+
+
+
+
+*/
+
+
