@@ -481,6 +481,10 @@ function buildDirectionalGeometry(source) {
   return new DirectionalSourceShadowWallGeometry(source);
 }
 
+function updateLOSGeometry(source) {
+  source.updateLOSGeometry()
+}
+
 function renderShadow(source) {
   return source.elevatedvision.shadowRenderer.renderShadowMeshToTexture();
 }
@@ -514,16 +518,17 @@ await foundry.utils.benchmark(buildUnboundedGeometry, N, source)
 await foundry.utils.benchmark(buildPointGeometry, N, source)
 await foundry.utils.benchmark(buildDirectionalGeometry, N, source)
 
-// Big difference between 1e04 and 1e05
-N = 1e05
+// Big difference between 1e04 and 1e05. Must hit some caching wall
+N = 1e04
 await foundry.utils.benchmark(renderShadow, N, source)
 await foundry.utils.benchmark(renderMask, N, source)
 
 // For vision
-N = 1e04
+N = 1e03
 await foundry.utils.benchmark(renderLOS, N, source)
 await foundry.utils.benchmark(renderLOSMask, N, source)
 
+await foundry.utils.benchmark(updateLOSGeometry, N, source)
 
 
 
