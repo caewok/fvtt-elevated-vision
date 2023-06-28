@@ -26,7 +26,7 @@ import { AbstractEVShader } from "./glsl/AbstractEVShader.js";
 import { defineFunction } from "./glsl/GLSLFunctions.js";
 import { ElevationLayerShader } from "./glsl/ElevationLayerShader.js";
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
-import { PointSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
+import { SourceShadowWallGeometry, DirectionalSourceShadowWallGeometry, PointSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { ShadowWallShader, ShadowWallPointSourceMesh, TestGeometryShader } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { TestShadowShader } from "./glsl/TestShadowShader.js";
@@ -157,7 +157,9 @@ Hooks.once("init", function() {
     ElevationLayerShader,
 
     AbstractEVShader,
+    SourceShadowWallGeometry,
     PointSourceShadowWallGeometry,
+    DirectionalSourceShadowWallGeometry,
     defineFunction,
     ShadowWallShader,
     ShadowWallPointSourceMesh,

@@ -21,11 +21,13 @@ out vec2 vTextureCoord;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
+uniform vec2 uCanvasDim; // width, height
 
 void main() {
   // Don't use aTextureCoord because it is broken.
   // https://ptb.discord.com/channels/170995199584108546/811676497965613117/1122891745705861211
-  vTextureCoord = aVertexPosition * 0.5 + 0.5;
+  vTextureCoord = aVertexPosition / uCanvasDim;
+  vVertexPosition = aVertexPosition;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
 }`;
 
@@ -41,12 +43,15 @@ in vec2 vTextureCoord;
 out vec4 fragColor;
 
 uniform sampler2D uShadowSampler;
+uniform vec2 uSourcePosition;
+uniform float uSourceRadius2;
+
+${defineFunction("between")}
 
 void main() {
-  if ( vTextureCoord.x < 0.0
-    || vTextureCoord.x > 1.0
-    || vTextureCoord.y < 0.0
-    || vTextureCoord.y > 1.0 ) discard;
+  if ( any(equal(between(0.0, 1.0, vTextureCoord), vec2(0.0))) ) discard;
+  float dist2 = dot(vVertexPosition, uSourcePosition);
+  if ( dist2 > uSourceRadius2 ) discard;
 
   vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
   float lightAmount = shadowTexel.r;
@@ -72,12 +77,33 @@ void main() {
    * uMaxNormalizedElevation: Maximum elevation, normalized units
    */
   static defaultUniforms = {
-    uShadowSampler: 0
+    uShadowSampler: 0,
+    uCanvasDim: [1, 1],  // Params: width, height
+    uSourcePosition: [0, 0],
+    uSourceRadius: 1
   };
 
-  static create(shadowSampler, defaultUniforms = {}) {
+  static create(source, shadowSampler, defaultUniforms = {}) {
+    const { width, height } = canvas.dimensions;
+    const radius = source.radius || source.data.externalRadius;
+
     defaultUniforms.uShadowSampler = shadowSampler.baseTexture;
-    return super.create(defaultUniforms);
+    defaultUniforms.uCanvasDim = [width, height];
+    defaultUniforms.uSourcePosition = [source.x, source.y];
+    defaultUniforms.uSourceRadius2 = Math.pow(radius, 2);
+
+    const out = super.create(defaultUniforms);
+    out.source = source;
+    return out;
+  }
+
+  updateSourcePosition() {
+    this.uniforms.uSourcePosition = [this.source.x, this.source.y];
+  }
+
+  updateSourceRadius() {
+    const radius = this.source.radius || this.source.data.externalRadius;
+    this.uniforms.uSourceRadius2 = Math.pow(radius, 2);
   }
 }
 
