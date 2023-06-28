@@ -73,6 +73,15 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     return dat.some(x => x);
   }
 
+  /**
+   * Orientation of a wall to the source.
+   * @param {Wall} wall
+   * @returns {number}  See foundry.utils.orient2dFast.
+   */
+  sourceWallOrientation(wall) {
+    return foundry.utils.orient2dFast(wall.A, wall.B, this.source);
+  }
+
   constructWallGeometry(walls) {
     this._triWallMap.clear();
 
@@ -133,7 +142,13 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns {boolean}   True if wall should be included
    */
   _includeWall(wall) {
-    if ( wall.isDoor && wall.isOpen ) return false;
+    // See PointSourcePolygon.prototype._testWallInclusion
+
+    // TODO: Interior walls underneath active roof tiles?
+
+    // Ignore walls that are not blocking for this polygon type
+    if ( !wall.document[this.sourceType] || wall.isOpen ) return false;
+
     const { topZ, bottomZ } = wall;
     const { sourceZ } = this.source.elevationZ;
 
@@ -143,6 +158,16 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // If wall is entirely below the canvas, do not keep.
     const minCanvasE = canvas.elevation?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
     if ( topZ <= minCanvasE ) return false;
+
+    // Ignore walls that are nearly collinear with the origin.
+    const side = this.sourceWallOrientation(wall);
+    if ( !side ) return false;
+
+    // Ignore one-directional walls facing away from the origin
+    const wdm = PointSourcePolygon.WALL_DIRECTION_MODES;
+    if ( wall.document.dir
+      && (wallDirectionMode !== wdm.BOTH)
+      && (wallDirectionMode === wdm.NORMAL) === (side === wall.document.dir) ) return false;
 
     return true;
   }
@@ -389,10 +414,6 @@ export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
   _includeWall(wall) {
     if ( !super._includeWall(wall) ) return false;
 
-    // Wall cannot be collinear to the light.
-    const orientWall = foundry.utils.orient2dFast(wall.A, wall.B, this.source);
-    if ( orientWall.almostEqual(0) ) return false;
-
     // Wall must be within the light radius.
     if ( !this.source.bounds.lineSegmentIntersects(wall.A, wall.B, { inside: true }) ) return false;
 
@@ -400,23 +421,6 @@ export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
   }
 }
 
-export class VisionLOSShadowWallGeometry extends SourceShadowWallGeometry {
-  _includeWall(wall) {
-    if ( !super._includeWall(wall) ) return false;
-
-    // Wall cannot be collinear to the light.
-    const orientWall = foundry.utils.orient2dFast(wall.A, wall.B, this.source);
-    if ( orientWall.almostEqual(0) ) return false;
-
-    return true;
-  }
-}
-
-
-export class SizedSourceShadowWallGeometry extends PointSourceShadowWallGeometry {
-  // Light has defined size.
-
-}
 
 export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometry {
 
@@ -430,15 +434,18 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
     return srcPosition.subtract(center).normalize();
   }
 
-
-  _includeWall(wall) {
+  /**
+   * Orientation of a wall to the source.
+   * @param {Wall} wall
+   * @returns {number}  See foundry.utils.orient2dFast.
+   */
+  sourceWallOrientation(wall) {
     // Wall must not be the same (2d) direction as the source
+    // TODO: Do we need to add a scalar to the normalized source direction?
     const A = new PIXI.Point(wall.A.x, wall.A.y);
-    const orientWall = foundry.utils.orient2dFast(A, wall.B, A.add(this.sourceDirection));
-    if ( orientWall.almostEqual(0) ) return false;
-
-    return true;
+    return foundry.utils.orient2dFast(A, wall.B, A.add(this.sourceDirection));
   }
+
 }
 
 
