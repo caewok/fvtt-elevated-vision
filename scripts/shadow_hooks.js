@@ -202,7 +202,7 @@ function initializeSourceShadersHook(source) {
 
     // Build LOS vision mask.
     const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowVisionLOSRenderer.renderTexture);
-    ev.shadowVisionLOSMask = new PIXI.Mesh(source[MODULE_ID].losGeometry, shader);
+    ev.shadowVisionLOSMask = new EVQuadMesh(source.los.bounds, shader);
   }
 
   // TODO: Comment out the shadowQuadMesh.

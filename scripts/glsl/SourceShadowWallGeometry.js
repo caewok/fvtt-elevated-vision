@@ -524,7 +524,7 @@ await foundry.utils.benchmark(renderShadow, N, source)
 await foundry.utils.benchmark(renderMask, N, source)
 
 // For vision
-N = 1e03
+N = 1e04
 await foundry.utils.benchmark(renderLOS, N, source)
 await foundry.utils.benchmark(renderLOSMask, N, source)
 
