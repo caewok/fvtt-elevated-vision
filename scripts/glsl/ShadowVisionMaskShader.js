@@ -206,6 +206,16 @@ canvas.stage.removeChild(mask)
 Draw.shape(source.object.fov, { color: Draw.COLORS.red, width: 5 });
 Draw.shape(source.object.los, { color: Draw.COLORS.blue, width: 5 });
 
+mesh = source.elevatedvision.shadowVisionLOSMesh
+canvas.stage.addChild(mesh)
+canvas.stage.removeChild(mesh)
+
+
+s = new PIXI.Sprite(source.elevatedvision.shadowVisionLOSRenderer.renderTexture)
+canvas.stage.addChild(s)
+canvas.stage.removeChild(s)
+
+
 mask = source.elevatedvision.shadowVisionLOSMask;
 canvas.stage.addChild(mask)
 canvas.stage.removeChild(mask)
