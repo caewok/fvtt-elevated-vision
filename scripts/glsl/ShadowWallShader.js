@@ -237,9 +237,12 @@ float terrainElevation() {
  * @returns {vec2} Modified elevation ratio
  */
 vec2 elevateShadowRatios(in vec2 nearFarRatios, in vec2 wallHeights, in float wallRatio, in float elevChange) {
-  vec2 toWallRatios = wallRatio - nearFarRatios;
-  vec2 heightFractions = elevChange / wallHeights.yx;
-  return nearFarRatios + (heightFractions * toWallRatios);
+  vec2 nearFarDist = wallRatio - nearFarRatios; // Distance between wall and the near/far canvas intersect as a ratio.
+  vec2 heightFractions = elevChange / wallHeights.yx; // Wall bottom, top
+  vec2 nfRatios = nearFarRatios + (heightFractions * nearFarDist);
+  if ( wallHeights.y == 0.0 ) nfRatios.x = 1.0;
+  if ( wallHeights.x == 0.0 ) nfRatios.y = 1.0;
+  return nfRatios;
 }
 
 /**
@@ -310,8 +313,6 @@ void main() {
   float canvasElevation = uElevationRes.x;
   float elevation = terrainElevation();
 
-
-
   // If elevation is above or equal to the light, then shadow.
   if ( elevation >= uLightPosition.z ) {
     fragColor = lightEncoding(0.0);
@@ -327,16 +328,21 @@ void main() {
   // Determine the start and end of the shadow, relative to the light.
   vec2 nearFarShadowRatios = vec2(fNearRatio, 0.0);
   if ( elevation > canvasElevation ) {
-    // Calculate the proportional elevation change relative to wall height.
+    // Elevation change relative the canvas.
     float elevationChange = elevation - canvasElevation;
-    nearFarShadowRatios = elevateShadowRatios(nearFarShadowRatios, max(fWallHeights - canvasElevation, 0.0), fWallRatio, elevationChange);
+
+    // Wall heights relative to the canvas.
+    vec2 wallHeights = max(fWallHeights - canvasElevation, 0.0);
+
+    // Adjust the end of the shadows based on terrain height for this fragment.
+    nearFarShadowRatios = elevateShadowRatios(nearFarShadowRatios, wallHeights, fWallRatio, elevationChange);
   }
 
   // If fragment is between the start and end shadow points, then full shadow.
   // If in front of the near shadow or behind the far shadow, then full light.
   // Remember, vBary.x is 1.0 at the light, and 0.0 at the far end of the shadow.
-  float farShadowRatio = nearFarShadowRatios.y;
   float nearShadowRatio = nearFarShadowRatios.x;
+  float farShadowRatio = nearFarShadowRatios.y;
   float lightPercentage = 1.0 - between(farShadowRatio, nearShadowRatio, vBary.x);
   fragColor = lightEncoding(lightPercentage);
 }`;
@@ -440,8 +446,7 @@ source = _token.vision
 sourcePosition = Point3d.fromPointSource(source)
 
 
-shader = ShadowWallShader.create(sourcePosition);
-mesh = new ShadowWallPointSourceMesh(source, shader)
+mesh = new ShadowWallPointSourceMesh(source)
 
 canvas.stage.addChild(mesh)
 canvas.stage.removeChild(mesh)
