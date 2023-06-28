@@ -96,12 +96,12 @@ export function _configureRenderedPointSource(wrapped, changes) {
     ev.geom?.refreshWalls();
     ev.shadowMesh?.updateLightPosition();
     ev.shadowVisionLOSMesh?.updateLightPosition();
-    if ( this instanceof VisionSource ) this.updateLOSGeometry();
   }
 
   if ( changedPosition ) {
     ev.shadowRenderer?.update();
     ev.shadowVisionLOSRenderer?.update();
+    ev.shadowVisionLOSMask?.updateGeometry(this.los.bounds);
     ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.source.bounds);
     ev.shadowVisionMask.position.copyFrom(this);
 
@@ -128,11 +128,11 @@ export function destroyRenderedPointSource(wrapped) {
     "shadowRenderer",
     "shadowMesh",
     "wallGeometry",
+    "wallGeometryUnbounded",
     "shadowVisionMask",
     "shadowVisionLOSMask",
     "shadowVisionLOSMesh",
-    "shadowVisionLOSRenderer",
-    "losGeometry"
+    "shadowVisionLOSRenderer"
   ];
 
   for ( const asset of assets ) {
@@ -196,9 +196,6 @@ function initializeSourceShadersHook(source) {
     ev.shadowVisionLOSMesh = new ShadowWallPointSourceMesh(source, ev.wallGeometryUnbounded);
     ev.shadowVisionLOSRenderer = new ShadowVisionLOSTextureRenderer(source, ev.shadowVisionLOSMesh);
     ev.shadowVisionLOSRenderer.renderShadowMeshToTexture();
-
-    // Add or update the LOS geometry for the vision source.
-    source.updateLOSGeometry();
 
     // Build LOS vision mask.
     const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowVisionLOSRenderer.renderTexture);
