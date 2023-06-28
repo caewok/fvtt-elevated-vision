@@ -186,8 +186,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const out = {
       corner1: A,
       corner2: B,
-      topZ,
-      bottomZ
+      topZ: isFinite(topZ) ? topZ : Number.MAX_SAFE_INTEGER,
+      bottomZ: isFinite(bottomZ) ? bottomZ : Number.MIN_SAFE_INTEGER
     };
     return out;
   }
