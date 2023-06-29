@@ -314,8 +314,7 @@ function handleWallChange(source, wall, updateFn, opts = {}) {
 function createWallHook(wallD, _options, _userId) {
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.tokens.placeables.map(t => t.vision),
-    ...canvas.sounds.sources
+    ...canvas.tokens.placeables.map(t => t.vision)
   ];
 
   for ( const src of sources ) src.wallAdded(wallD.object);
@@ -343,8 +342,7 @@ function updateWallHook(wallD, data, _options, _userId) {
 
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.tokens.placeables.map(t => t.vision),
-    ...canvas.sounds.sources
+    ...canvas.tokens.placeables.map(t => t.vision)
   ];
 
   for ( const src of sources ) src.wallUpdated(wallD.object, changes);
@@ -364,8 +362,7 @@ function updateWallHook(wallD, data, _options, _userId) {
 function deleteWallHook(wallD, _options, _userId) {
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.tokens.placeables.map(t => t.vision),
-    ...canvas.sounds.sources
+    ...canvas.tokens.placeables.map(t => t.vision)
   ];
 
   for ( const src of sources ) src.wallRemoved(wallD.id);
