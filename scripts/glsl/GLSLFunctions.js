@@ -248,6 +248,20 @@ vec3 barycentric(in vec2 p, in vec2 a, in vec2 b, in vec2 c) {
 
 
 // NOTE: Geometry lines
+
+GLSLFunctions.distanceSquared =
+`
+float distanceSquared(in vec2 a, in vec2 b) {
+  vec2 diff = b - a;
+  return dot(diff, diff);
+}
+
+float distanceSquared(in vec3 a, in vec3 b) {
+  vec3 diff = b - a;
+  return dot(diff, diff);
+}
+`;
+
 // Identify closest point on a 2d line to another point, just like foundry.utils.closestPointToSegment.
 // Note: will fail if passed a 0-length ab segment.
 GLSLFunctions.closest2dPointToLine =

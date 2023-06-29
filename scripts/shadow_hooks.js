@@ -84,7 +84,7 @@ export function _configureRenderedPointSource(wrapped, changes) {
   const ev = this[MODULE_ID];
   if ( !ev ) return;
 
-  console.log(`${MODULE_ID}|_configureRenderedPointSource (${this.constructor.name}) for ${this.object?.name || this.object?.id} with ${Object.keys(changes).length} changed properties.`, changes);
+  // console.log(`${MODULE_ID}|_configureRenderedPointSource for ${this.object?.name || this.object?.id} (${this.constructor.name}). Is ${this.object?._original ? "" : "not "}a clone. ${Object.keys(changes).length} changed properties.`, changes);
 
   // Test for different change properties
   const changedPosition = Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
@@ -92,8 +92,9 @@ export function _configureRenderedPointSource(wrapped, changes) {
   const changedElevation = Object.hasOwn(changes, "elevation");
 
   if ( changedPosition || changedElevation || changedRadius ) {
-    // console.log(`EV|refreshAmbientLightHook light ${object.source.x},${object.source.y},${object.source.elevationE} flag: ${object.document.flags.elevatedvision.elevation}`);
-    ev.geom?.refreshWalls();
+    // console.log(`EV|refreshAmbientLightHook light ${this.x},${this.y},${this.elevationE} flag: ${this.object.document.flags?.elevatedvision?.elevation}`);
+    ev.wallGeometry?.refreshWalls();
+    ev.wallGeometryUnbounded?.refreshWalls();
     ev.shadowMesh?.updateLightPosition();
     ev.shadowVisionLOSMesh?.updateLightPosition();
   }
@@ -128,7 +129,7 @@ export function _configureRenderedPointSource(wrapped, changes) {
 }
 
 export function destroyRenderedPointSource(wrapped) {
-  console.log(`${MODULE_ID}|destroyRenderedPointSource (${this.constructor.name}) for ${this.object?.name || this.object?.id}.`);
+  // console.log(`${MODULE_ID}|destroyRenderedPointSource (${this.constructor.name}) for ${this.object?.name || this.object?.id}.`);
   const ev = this[MODULE_ID];
   if ( !ev ) return wrapped();
 
@@ -314,8 +315,7 @@ function handleWallChange(source, wall, updateFn, opts = {}) {
 function createWallHook(wallD, _options, _userId) {
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.tokens.placeables.map(t => t.vision),
-    ...canvas.sounds.sources
+    ...canvas.tokens.placeables.map(t => t.vision)
   ];
 
   for ( const src of sources ) src.wallAdded(wallD.object);
@@ -337,14 +337,11 @@ function updateWallHook(wallD, data, _options, _userId) {
   const changes = new Set(Object.keys(flattenObject(data)));
   // TODO: Will eventually need to monitor changes for sounds and sight, possibly move.
   // TODO: Need to deal with threshold as well
-  const changeFlags = SourceShadowWallGeometry.CHANGE_FLAGS;
-  if ( !(changeFlags.WALL_COORDINATES.some(f => changes.has(f))
-    || changeFlags.WALL_RESTRICTED.some(f => changes.has(f))) ) return;
+  if ( !(SourceShadowWallGeometry.CHANGE_FLAGS.some(f => changes.has(f))) ) return;
 
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.tokens.placeables.map(t => t.vision),
-    ...canvas.sounds.sources
+    ...canvas.tokens.placeables.map(t => t.vision)
   ];
 
   for ( const src of sources ) src.wallUpdated(wallD.object, changes);
@@ -364,8 +361,7 @@ function updateWallHook(wallD, data, _options, _userId) {
 function deleteWallHook(wallD, _options, _userId) {
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.tokens.placeables.map(t => t.vision),
-    ...canvas.sounds.sources
+    ...canvas.tokens.placeables.map(t => t.vision)
   ];
 
   for ( const src of sources ) src.wallRemoved(wallD.id);
