@@ -91,12 +91,12 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec3 aWallCorner1;
 in vec3 aWallCorner2;
-in float aLimitedWall;
+in float aWallSenseType;
 in float aThresholdRadius2;
 
 out vec2 vVertexPosition;
 out vec3 vBary;
-flat out float fLimitedWall;
+flat out float fWallSenseType;
 flat out float fThresholdRadius2;
 flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bottom
 flat out float fWallRatio;
@@ -177,7 +177,7 @@ void main() {
     fWallHeights = vec2(actualWallTop, wallBottom.z);
     fWallRatio = wallRatio;
     fNearRatio = nearRatio;
-    fLimitedWall = aLimitedWall;
+    fWallSenseType = aWallSenseType;
     fThresholdRadius2 = aThresholdRadius2;
   }
 
@@ -197,6 +197,11 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 // #define SHADOW true
 
+// From CONST.WALL_SENSE_TYPES
+#define LIMITED_WALL      10.0
+#define PROXIMATE_WALL    30.0
+#define DISTANCE_WALL     40.0
+
 uniform sampler2D uTerrainSampler;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 uniform vec4 uSceneDims;
@@ -208,7 +213,7 @@ in vec3 vBary;
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
 flat in float fNearRatio;
-flat in float fLimitedWall;
+flat in float fWallSenseType;
 flat in float fThresholdRadius2;
 
 out vec4 fragColor;
@@ -288,8 +293,7 @@ vec4 noShadow() {
 vec4 lightEncoding(in float light) {
   if ( light == 1.0 ) return noShadow();
 
-  // float ltd = float(fLimitedWall > 0.5); // If using a varying here.
-  float ltd = fLimitedWall;
+  float ltd = fWallSenseType == LIMITED_WALL ? 1.0 : 0.0;
   float ltdInv = 1.0 - ltd;
 
   vec4 c = vec4((light * ltdInv) + ltd, 1.0 - (0.5 * ltd), (light * ltd) + ltdInv, 1.0);
@@ -323,7 +327,8 @@ void main() {
   if ( vBary.x > fWallRatio ) return;
 
   // If a threshold applies, we may be able to ignore the wall.
-  if ( fThresholdRadius2 != 0.0
+  if ( (fWallSenseType == DISTANCE_WALL || fWallSenseType == PROXIMATE_WALL)
+    && fThresholdRadius2 != 0.0
     && distanceSquared(vVertexPosition, uLightPosition.xy) < fThresholdRadius2 ) return;
 
   // If elevation is above the wall, then no shadow.

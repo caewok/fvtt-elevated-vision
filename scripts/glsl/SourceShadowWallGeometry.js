@@ -13,12 +13,6 @@ Wall
 import { MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
-/**
- * Set of possible relevant wall changes to use in the default case.
- * We test for open doors, so don't need those changes here.
- * @type {Set<string>}
- */
-const DEFAULT_WALL_CHANGES = new Set(["c", "light", "sight", "sound", "move"]);
 
 export class SourceShadowWallGeometry extends PIXI.Geometry {
 
@@ -31,22 +25,22 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   /**
    * Changes to monitor in the wall data that indicate a relevant change.
    */
-  static CHANGE_FLAGS = {
-    WALL_COORDINATES: [
-      "c",
-      "flags.wall-height.top",
-      "flags.wall-height.bottom",
-      "flags.elevatedvision.elevation.top",
-      "flags.elevatedvision.elevation.bottom"
-    ],
+  static CHANGE_FLAGS = [
+    "c",
+    "flags.wall-height.top",
+    "flags.wall-height.bottom",
+    "flags.elevatedvision.elevation.top",
+    "flags.elevatedvision.elevation.bottom",
 
-    WALL_RESTRICTED: [
-      "sight",
-      "move",
-      "light",
-      "sound"
-    ]
-  };
+    // Wall sense types
+    "sight",
+    "light",
+
+    // Wall threshold data
+    "threshold.sight",
+    "threshold.light",
+    "threshold.attenuation"
+  ];
 
   /**
    * Track the triangle index for each wall used by this source.
@@ -71,7 +65,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
   // TODO: Should this be a stored value? Makes it more complicated, but...
   get hasLimitedWalls() {
-    const dat = this.getBuffer("aLimitedWall").data;
+    const dat = this.getBuffer("aWallSenseType").data;
     return dat.some(x => x);
   }
 
@@ -93,7 +87,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const indices = [];
     const aWallCorner1 = [];
     const aWallCorner2 = [];
-    const aLimitedWall = [];
+    const aWallSenseType = []; // CONST.WALL_SENSE_TYPES
     const aThresholdRadius2 = []; // If within this radius squared of the light, ignore the wall.
 
     let triNumber = 0;
@@ -101,21 +95,19 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     for ( let i = 0; i < nWalls; i += 1 ) {
       const wall = walls[i];
       if ( !this._includeWall(wall) ) continue;
-      const wallCoords = this._wallCornerCoordinates(wall);
+      const {corner1, corner2 } = this._wallCornerCoordinates(wall);
 
       // TODO: Instanced attributes.
       // For now, must repeat the vertices three times.
       // Should be possible to use instanced attributes to avoid this. (see PIXI.Attribute)
       // Unclear whether that would be supported using Foundry rendering options.
-      const corner1 = [wallCoords.corner1.x, wallCoords.corner1.y, wallCoords.topZ];
-      const corner2 = [wallCoords.corner2.x, wallCoords.corner2.y, wallCoords.bottomZ];
       aWallCorner1.push(...corner1, ...corner1, ...corner1);
       aWallCorner2.push(...corner2, ...corner2, ...corner2);
 
-      const ltd = this.isLimited(wall);
-      aLimitedWall.push(ltd, ltd, ltd);
+      const type = this.senseType(wall);
+      aWallSenseType.push(type, type, type);
 
-      const threshold = Math.pow(this.thresholdAttribute(wall), 2);
+      const threshold = this.threshold2Attribute(wall);
       aThresholdRadius2.push(threshold, threshold, threshold);
 
       const idx = triNumber * 3;
@@ -130,34 +122,35 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     this.addIndex(indices);
     this.addAttribute("aWallCorner1", aWallCorner1, 3);
     this.addAttribute("aWallCorner2", aWallCorner2, 3);
-    this.addAttribute("aLimitedWall", aLimitedWall, 1); // TODO: Make this something other than PIXI.TYPES.FLOAT
+    this.addAttribute("aWallSenseType", aWallSenseType, 1);
     this.addAttribute("aThresholdRadius2", aThresholdRadius2, 1);
   }
+
+  /**
+   * Sense type for this wall and source combination.
+   * @param {Wall} wall
+   * @returns {CONST.WALL_SENSE_TYPES}
+   */
+  senseType(wall) { return wall.document[this.sourceType]; }
 
   /**
    * Is the wall limited with respect to this light source?
    * @param {Wall} wall
    * @returns {boolean}
    */
-  isLimited(wall) {
-    return wall.document[this.sourceType] === CONST.WALL_SENSE_TYPES.LIMITED;
-  }
+  isLimited(wall) { return this.senseType(wall) === CONST.WALL_SENSE_TYPES.LIMITED; }
 
   /**
    * For threshold walls, get the threshold distance
    * @param {Wall} wall
    * @returns {number}  Distance of the threshold in pixel units, or 0 if none.
    */
-  thresholdAttribute(wall) {
+  threshold2Attribute(wall) {
     if ( !this.thresholdApplies(wall) ) return 0;
 
-//     const senseType = wall.document[this.sourceType];
-//     const proximity = senseType === CONST.WALL_SENSE_TYPES.PROXIMITY
-//       ? 1 : senseType === CONST.WALL_SENSE_TYPES.DISTANCE ? -1 : 0;
-//
-//     if ( !proximity ) return 0;
     const { inside, outside } = this.calculateThresholdAttenuation(wall);
-    return inside + outside;
+    // return inside + outside;
+    return Math.min(Number.MAX_SAFE_INTEGER, Math.pow(inside + outside, 2)); // Avoid infinity.
   }
 
   /**
@@ -189,7 +182,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const percentDistance = sourceDistance / thresholdDistance;
     const pInv = proximity ? 1 - percentDistance : Math.min(1, percentDistance - 1);
     const a = (pInv / (2 * (1 - pInv))) * CONFIG.Wall.thresholdAttenuationMultiplier;
-    return { inside, outside: Math.min(a * thresholdDistance, outside) };
+    return { inside, outside: a * thresholdDistance };
+    // return { inside, outside: Math.min(a * thresholdDistance, outside) };
   }
 
   /**
@@ -238,9 +232,11 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       // Ignore threshold walls with non-attenuated thresholds.
       if ( !wall.document.threshold.attenuation ) return false;
 
-      // Ignore threshold walls if the attenuation results in full radius going through.
-      const { inside, outside } = this.calculateThresholdAttenuation(wall);
-      if ( (inside + outside) >= this.source.radius ) return false;
+      // Ignore reverse threshold walls if the attenuation results in full radius going through.
+//       if ( wall.document[this.sourceType] === CONST.WALL_SENSE_TYPES.DISTANCE ) {
+//         const { inside, outside } = this.calculateThresholdAttenuation(wall);
+//         if ( (inside + outside) >= this.source.radius ) return false;
+//       }
     }
 
     return true;
@@ -253,17 +249,13 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns { corner1: {PIXI.Point}, corner2: {PIXI.Point}, topZ: {number}, bottomZ: {number} }
    */
   _wallCornerCoordinates(wall) {
-    const A = new PIXI.Point(wall.A.x, wall.A.y);
-    const B = new PIXI.Point(wall.B.x, wall.B.y);
-    const { topZ, bottomZ } = wall;
-
-    const out = {
-      corner1: A,
-      corner2: B,
-      topZ: isFinite(topZ) ? topZ : Number.MAX_SAFE_INTEGER,
-      bottomZ: isFinite(bottomZ) ? bottomZ : Number.MIN_SAFE_INTEGER
+    const { A, B, topZ, bottomZ } = wall;
+    const top = isFinite(topZ) ? topZ : Number.MAX_SAFE_INTEGER;
+    const bottom = isFinite(bottomZ) ? bottomZ : Number.MIN_SAFE_INTEGER;
+    return {
+      corner1: [A.x, A.y, top],
+      corner2: [B.x, B.y, bottom]
     };
-    return out;
   }
 
   // ----- Wall updates ----- //
@@ -340,39 +332,37 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     if ( this._triWallMap.has(wall.id) ) return false;
     if ( !this._includeWall(wall) ) return false;
 
-    const wallCoords = this._wallCornerCoordinates(wall);
     const idxToAdd = this._triWallMap.size;
 
-    // First wall corner
-    const coords1 = [wallCoords.corner1.x, wallCoords.corner1.y, wallCoords.topZ];
-    const data1 = [...coords1, ...coords1, ...coords1];
-    const buffer1 = this.getBuffer("aWallCorner1");
-    buffer1.data = this.constructor.addToBuffer(buffer1.data, data1);
+    // Wall endpoints
+    const { corner1, corner2 } = this._wallCornerCoordinates(wall);
+    this._addToBuffer(corner1, "aWallCorner1", update);
+    this._addToBuffer(corner2, "aWallCorner2", update);
 
-    // Second wall corner
-    const coords2 = [wallCoords.corner2.x, wallCoords.corner2.y, wallCoords.bottomZ];
-    const data2 = [...coords2, ...coords2, ...coords2];
-    const buffer2 = this.getBuffer("aWallCorner2");
-    buffer2.data = this.constructor.addToBuffer(buffer2.data, data2);
+    // Wall sense type
+    this._addToBuffer([this.senseType(wall)], "aWallSenseType", update);
 
-    // Limited wall indicator
-    const ltd = [this.isLimited(wall)];
-    const data3 = [ltd, ltd, ltd];
-    const buffer3 = this.getBuffer("aLimitedWall");
-    buffer3.data = this.constructor.addToBuffer(buffer3.data, data3);
+    // Threshold value
+    this._addToBuffer([this.threshold2Attribute(wall)], "aThresholdRadius2", update);
 
     // Index
     const idx = idxToAdd * 3;
     const dataIdx = [idx, idx + 1, idx + 2];
     this.indexBuffer.data = this.constructor.addToBuffer(this.indexBuffer.data, dataIdx);
+    if ( update ) this.indexBuffer.update(this.indexBuffer.data);
 
     // Add the wall id as the next triangle object to the tracker.
     this._triWallMap.set(wall.id, idxToAdd);
 
-    // Flag the updated buffers for uploading to the GPU.
-    if ( update ) this.update();
-
     return true;
+  }
+
+  _addToBuffer(newValues, attributeName, update = true) {
+    // Currently, every buffer is repeated three times.
+    const data = [...newValues, ...newValues, ...newValues];
+    const buffer = this.getBuffer(attributeName);
+    buffer.data = this.constructor.addToBuffer(buffer.data, data);
+    if ( update ) buffer.update(buffer.data);
   }
 
   /**
@@ -381,49 +371,55 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @param {Wall} wall   Wall to update
    * @param {object} [opts]               Options that affect how the wall update is treated.
    * @param {boolean} [opts.update]       If false, buffer will not be flagged for update.
-   * @param {Set<string>} [opts.changes]  Set of change flags for the wall.
    * @returns {boolean} Did the geometry need to be updated based on the wall update?
    */
-  updateWall(wall, { update = true, changes = DEFAULT_WALL_CHANGES } = {}) {
+  updateWall(wall, { update = true } = {}) {
     if ( !this._triWallMap.has(wall.id) ) return this.addWall(wall, { update });
     if ( !this._includeWall(wall) ) return this.removeWall(wall.id, { update });
 
+    // Note: includeWall will handle changes to the threshold.attenuation.
+
     const idxToUpdate = this._triWallMap.get(wall.id);
 
-    // Wall endpoint coordinates
-    if ( SourceShadowWallGeometry.CHANGE_FLAGS.WALL_COORDINATES.some(f => changes.has(f)) ) {
-      const wallCoords = this._wallCornerCoordinates(wall);
-
-      // First wall corner
-      const coords1 = [wallCoords.corner1.x, wallCoords.corner1.y, wallCoords.topZ];
-      const data1 = [...coords1, ...coords1, ...coords1];
-      const buffer1 = this.getBuffer("aWallCorner1");
-      buffer1.data = this.constructor.overwriteBufferAt(buffer1.data, data1, idxToUpdate);
-
-      // Second wall corner
-      const coords2 = [wallCoords.corner2.x, wallCoords.corner2.y, wallCoords.bottomZ];
-      const data2 = [...coords2, ...coords2, ...coords2];
-      const buffer2 = this.getBuffer("aWallCorner2");
-      buffer2.data = this.constructor.overwriteBufferAt(buffer2.data, data2, idxToUpdate);
-
-      if ( update ) {
-        buffer1.update(buffer1.data);
-        buffer2.update(buffer2.data);
-      }
+    // Check for change in wall endpoints
+    let changedPosition = false;
+    const { corner1, corner2 } = this._wallCornerCoordinates(wall);
+    changedPosition = this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner1[i]);
+    changedPosition ||= this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner2[i]);
+    if ( changedPosition ) {
+      this._updateBuffer(corner1, "aWallCorner1", idxToUpdate, update);
+      this._updateBuffer(corner2, "aWallCorner2", idxToUpdate, update);
     }
 
-    // Limited wall indicator
-    if ( changes.has(this.sourceType) ) {
-      const ltd = [this.isLimited(wall)];
-      const data3 = [ltd, ltd, ltd];
-      const buffer3 = this.getBuffer("aLimitedWall");
-      buffer3.data = this.constructor.overwriteBufferAt(buffer3.data, data3, idxToUpdate);
-      if ( update ) buffer3.update(buffer3.data);
-    }
+    // Check for change in the sense type for the wall
+    const senseType = this.senseType(wall);
+    const changedSenseType = this.getAttributeAtIndex("aWallSenseType")[0] !== senseType;
+    if ( changedSenseType ) this._updateBuffer([senseType], "aWallSenseType", idxToUpdate, update);
+
+    // Check for change in the relevant threshold attribute
+    const threshold = this.threshold2Attribute(wall);
+    const changedThreshold = this.getAttributeAtIndex("aThresholdRadius2")[0] !== threshold;
+    if ( changedThreshold ) this._updateBuffer([threshold], "aThresholdRadius2", idxToUpdate, update);
 
     // Don't need to update the index
 
-    return true;
+    return changedPosition || changedSenseType || changedThreshold;
+  }
+
+  getAttributeAtIndex(attributeName, index) {
+    const buffer = this.getBuffer(attributeName);
+    const size = this.getAttribute(attributeName).size;
+    const numDuplicates = 3;
+    const start = index * size * numDuplicates;
+    return buffer.data.subarray(start, start + size);
+  }
+
+  _updateBuffer(newValues, attributeName, idxToUpdate, update = true) {
+    // Currently, every buffer is repeated three times.
+    const data = [...newValues, ...newValues, ...newValues];
+    const buffer = this.getBuffer(attributeName);
+    buffer.data = this.constructor.overwriteBufferAt(buffer.data, data, idxToUpdate);
+    if ( update ) buffer.update(buffer.data);
   }
 
   /**
@@ -438,7 +434,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
     const idxToRemove = this._triWallMap.get(id);
 
-    for ( const attr of ["aWallCorner1", "aWallCorner2", "aLimitedWall"] ) {
+    for ( const attr of Object.keys(this.attributes) ) {
       const size = this.getAttribute(attr).size * 3;
       const buffer = this.getBuffer(attr);
       buffer.data = this.constructor.removeFromBuffer(buffer.data, size, idxToRemove);
@@ -462,20 +458,25 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
   /**
    * Check all the walls in the scene b/c the source changed position or was otherwise modified.
-   * @param {Wall[]} [walls]
+   * @param {Wall[]} [walls]    Optional array of walls to consider.
+   * @returns {boolean} True if any changes to the geometry buffers resulted from the refresh.
    */
   refreshWalls(walls) {
     walls ??= canvas.walls.placeables;
-    const changes = new Set();
-    const opts = { changes, update: false };
-    walls.forEach(w => this.updateWall(w, opts));
-    this.update();
+    const opts = { update: false }; // Avoid repeatedly updating the buffers.
+    let changed = false;
+    walls.forEach(w => {
+      const wallBufferChanged = this.updateWall(w, opts);
+      changed ||= wallBufferChanged;
+    });
+    if ( changed ) this.update();
+    return changed;
   }
 
   update() {
     // Flag each buffer for updating.
     // Assumes that addWall, updateWall, or removeWall updated the local buffer previously.
-    for ( const attr of ["aWallCorner1", "aWallCorner2", "aLimitedWall"] ) {
+    for ( const attr of Object.keys(this.attributes) ) {
       const buffer = this.getBuffer(attr);
       buffer.update(buffer.data);
     }
@@ -643,5 +644,27 @@ function calculateThresholdAttenuation(wall, origin, radius, externalRadius, typ
     const pInv = proximity ? 1 - percentDistance : Math.min(1, percentDistance - 1);
     const a = (pInv / (2 * (1 - pInv))) * CONFIG.Wall.thresholdAttenuationMultiplier;
     return { inside, outside: Math.min(a * thresholdDistance, outside) };
+  }
+
+function calculateThresholdAttenuation2(wall, origin, radius, externalRadius, type) {
+    const document = wall.document;
+    const d = document.threshold[type];
+    if ( !d ) return { inside: radius, outside: radius };
+    const proximity = document[type] === CONST.WALL_SENSE_TYPES.PROXIMITY;
+
+    // Find the closest point on the threshold wall to the source.
+    // Calculate the proportion of the source radius that is "inside" and "outside" the threshold wall.
+    const pt = foundry.utils.closestPointToSegment(origin, wall.A, wall.B);
+    const inside = Math.hypot(pt.x - origin.x, pt.y - origin.y);
+    const outside = radius - inside;
+    if ( (outside < 0) || outside.almostEqual(0) ) return { inside, outside: 0 };
+
+    // Attenuate the radius outside the threshold wall based on source proximity to the wall.
+    const sourceDistance = proximity ? Math.max(inside - externalRadius, 0) : (inside + externalRadius);
+    const thresholdDistance = d * document.parent.dimensions.distancePixels;
+    const percentDistance = sourceDistance / thresholdDistance;
+    const pInv = proximity ? 1 - percentDistance : Math.min(1, percentDistance - 1);
+    const a = (pInv / (2 * (1 - pInv))) * CONFIG.Wall.thresholdAttenuationMultiplier;
+    return { inside, outside: a * thresholdDistance };
   }
 */
