@@ -92,10 +92,12 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 in vec3 aWallCorner1;
 in vec3 aWallCorner2;
 in float aLimitedWall;
+in float aThresholdRadius2;
 
 out vec2 vVertexPosition;
 out vec3 vBary;
 flat out float fLimitedWall;
+flat out float fThresholdRadius2;
 flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bottom
 flat out float fWallRatio;
 flat out float fNearRatio;
@@ -176,6 +178,7 @@ void main() {
     fWallRatio = wallRatio;
     fNearRatio = nearRatio;
     fLimitedWall = aLimitedWall;
+    fThresholdRadius2 = aThresholdRadius2;
   }
 
   vVertexPosition = ixFarShadow.xy;
@@ -206,11 +209,13 @@ flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
 flat in float fNearRatio;
 flat in float fLimitedWall;
+flat in float fThresholdRadius2;
 
 out vec4 fragColor;
 
 ${defineFunction("colorToElevationPixelUnits")}
 ${defineFunction("between")}
+${defineFunction("distanceSquared")}
 
 /**
  * Get the terrain elevation at this fragment.
@@ -299,25 +304,27 @@ vec4 lightEncoding(in float light) {
   return c;
 }
 
-
-
 void main() {
-
-  // If in front of the wall, can return early.
-  if ( vBary.x > fWallRatio ) {
-    fragColor = noShadow();
-    return;
-  }
-
   // Get the elevation at this fragment.
   float canvasElevation = uElevationRes.x;
   float elevation = terrainElevation();
 
-  // If elevation is above or equal to the light, then shadow.
-  if ( elevation >= uLightPosition.z ) {
+  // Assume no shadow as the default
+  fragColor = noShadow();
+
+  // If elevation is above the light, then shadow.
+  // Equal to light elevation should cause shadow, but foundry defaults to lights at elevation 0.
+  if ( elevation > uLightPosition.z ) {
     fragColor = lightEncoding(0.0);
     return;
   }
+
+  // If in front of the wall, can return early.
+  if ( vBary.x > fWallRatio ) return;
+
+  // If a threshold applies, we may be able to ignore the wall.
+  if ( fThresholdRadius2 != 0.0
+    && distanceSquared(vVertexPosition, uLightPosition.xy) < fThresholdRadius2 ) return;
 
   // If elevation is above the wall, then no shadow.
   if ( elevation > fWallHeights.x ) {
@@ -397,9 +404,7 @@ void main() {
    * @param {number} y
    * @param {number} z
    */
-  updateLightPosition(x, y, z) {
-    this.uniforms.uLightPosition = [x, y, z];
-  }
+  updateLightPosition(x, y, z) { this.uniforms.uLightPosition = [x, y, z]; }
 }
 
 export class ShadowWallPointSourceMesh extends PIXI.Mesh {
@@ -455,5 +460,12 @@ geomShader = TestGeometryShader.create(sourcePosition);
 geomMesh = new ShadowWallPointSourceMesh(source, geomShader)
 canvas.stage.addChild(geomMesh)
 canvas.stage.removeChild(geomMesh)
+
+ev = _token.vision.elevatedvision
+
+mesh = ev.shadowMesh
+mesh = ev.shadowVisionLOSMesh
+canvas.stage.addChild(mesh)
+canvas.stage.removeChild(mesh)
 
 */

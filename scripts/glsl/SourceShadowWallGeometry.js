@@ -1,8 +1,10 @@
 /* globals
 canvas,
+CONFIG,
 CONST,
 foundry,
 PIXI,
+PointSourcePolygon,
 Wall
 */
 "use strict";
@@ -92,6 +94,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const aWallCorner1 = [];
     const aWallCorner2 = [];
     const aLimitedWall = [];
+    const aThresholdRadius2 = []; // If within this radius squared of the light, ignore the wall.
 
     let triNumber = 0;
     const nWalls = walls.length;
@@ -112,6 +115,9 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       const ltd = this.isLimited(wall);
       aLimitedWall.push(ltd, ltd, ltd);
 
+      const threshold = Math.pow(this.thresholdAttribute(wall), 2);
+      aThresholdRadius2.push(threshold, threshold, threshold);
+
       const idx = triNumber * 3;
       indices.push(idx, idx + 1, idx + 2);
 
@@ -125,6 +131,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     this.addAttribute("aWallCorner1", aWallCorner1, 3);
     this.addAttribute("aWallCorner2", aWallCorner2, 3);
     this.addAttribute("aLimitedWall", aLimitedWall, 1); // TODO: Make this something other than PIXI.TYPES.FLOAT
+    this.addAttribute("aThresholdRadius2", aThresholdRadius2, 1);
   }
 
   /**
@@ -135,6 +142,62 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   isLimited(wall) {
     return wall.document[this.sourceType] === CONST.WALL_SENSE_TYPES.LIMITED;
   }
+
+  /**
+   * For threshold walls, get the threshold distance
+   * @param {Wall} wall
+   * @returns {number}  Distance of the threshold in pixel units, or 0 if none.
+   */
+  thresholdAttribute(wall) {
+    if ( !this.thresholdApplies(wall) ) return 0;
+
+//     const senseType = wall.document[this.sourceType];
+//     const proximity = senseType === CONST.WALL_SENSE_TYPES.PROXIMITY
+//       ? 1 : senseType === CONST.WALL_SENSE_TYPES.DISTANCE ? -1 : 0;
+//
+//     if ( !proximity ) return 0;
+    const { inside, outside } = this.calculateThresholdAttenuation(wall);
+    return inside + outside;
+  }
+
+  /**
+   * Calculate threshold attenuation for a wall.
+   * If the wall is not attenuated, inside + outside will be >= source radius.
+   * See PointSourcePolygon.prototype.#calculateThresholdAttenuation
+   * @param {Wall} wall
+   * @returns {{inside: number, outside: number}} The inside and outside portions of the radius
+   */
+  calculateThresholdAttenuation(wall) {
+    const externalRadius = 0;
+    const radius = this.source.radius;
+    const origin = this.source;
+    const document = wall.document;
+    const d = document.threshold[this.sourceType];
+    if ( !d ) return { inside: radius, outside: radius };
+    const proximity = document[this.sourceType] === CONST.WALL_SENSE_TYPES.PROXIMITY;
+
+    // Find the closest point on the threshold wall to the source.
+    // Calculate the proportion of the source radius that is "inside" and "outside" the threshold wall.
+    const pt = foundry.utils.closestPointToSegment(origin, wall.A, wall.B);
+    const inside = Math.hypot(pt.x - origin.x, pt.y - origin.y);
+    const outside = radius - inside;
+    if ( (outside < 0) || outside.almostEqual(0) ) return { inside, outside: 0 };
+
+    // Attenuate the radius outside the threshold wall based on source proximity to the wall.
+    const sourceDistance = proximity ? Math.max(inside - externalRadius, 0) : (inside + externalRadius);
+    const thresholdDistance = d * document.parent.dimensions.distancePixels;
+    const percentDistance = sourceDistance / thresholdDistance;
+    const pInv = proximity ? 1 - percentDistance : Math.min(1, percentDistance - 1);
+    const a = (pInv / (2 * (1 - pInv))) * CONFIG.Wall.thresholdAttenuationMultiplier;
+    return { inside, outside: Math.min(a * thresholdDistance, outside) };
+  }
+
+  /**
+   * For threshold walls, determine if threshold applies.
+   * @param {Wall} wall
+   * @returns {boolean} True if the threshold applies.
+   */
+  thresholdApplies(wall) { return wall.applyThreshold(this.sourceType, this.source); }
 
   /**
    * Should this wall be included in the geometry for this source shadow?
@@ -164,10 +227,21 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     if ( !side ) return false;
 
     // Ignore one-directional walls facing away from the origin
+    // TODO: Do we care about the other direction modes?
+    const wallDirectionMode = PointSourcePolygon.WALL_DIRECTION_MODES.NORMAL;
     const wdm = PointSourcePolygon.WALL_DIRECTION_MODES;
     if ( wall.document.dir
       && (wallDirectionMode !== wdm.BOTH)
       && (wallDirectionMode === wdm.NORMAL) === (side === wall.document.dir) ) return false;
+
+    if ( this.thresholdApplies(wall) ) {
+      // Ignore threshold walls with non-attenuated thresholds.
+      if ( !wall.document.threshold.attenuation ) return false;
+
+      // Ignore threshold walls if the attenuation results in full radius going through.
+      const { inside, outside } = this.calculateThresholdAttenuation(wall);
+      if ( (inside + outside) >= this.source.radius ) return false;
+    }
 
     return true;
   }
@@ -411,6 +485,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
 
 export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
+
   _includeWall(wall) {
     if ( !super._includeWall(wall) ) return false;
 
@@ -446,6 +521,12 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
     return foundry.utils.orient2dFast(A, wall.B, A.add(this.sourceDirection));
   }
 
+  /**
+   * Threshold walls cannot be triggered by directional sources.
+   * @param {Wall} wall
+   * @returns {boolean} True if the threshold applies.
+   */
+  thresholdApplies(_wall) { return false; }
 }
 
 
@@ -530,11 +611,37 @@ await foundry.utils.benchmark(renderLOSMask, N, source)
 
 await foundry.utils.benchmark(updateLOSGeometry, N, source)
 
-
-
-
-
-
 */
 
+/*
+[wall] = canvas.walls.controlled
+source = _token.vision
+origin = source
+radius = source.radius
+externalRadius = 0
+type = "sight"
 
+calculateThresholdAttenuation(wall, origin, radius, externalRadius, type)
+
+function calculateThresholdAttenuation(wall, origin, radius, externalRadius, type) {
+    const document = wall.document;
+    const d = document.threshold[type];
+    if ( !d ) return { inside: radius, outside: radius };
+    const proximity = document[type] === CONST.WALL_SENSE_TYPES.PROXIMITY;
+
+    // Find the closest point on the threshold wall to the source.
+    // Calculate the proportion of the source radius that is "inside" and "outside" the threshold wall.
+    const pt = foundry.utils.closestPointToSegment(origin, wall.A, wall.B);
+    const inside = Math.hypot(pt.x - origin.x, pt.y - origin.y);
+    const outside = radius - inside;
+    if ( (outside < 0) || outside.almostEqual(0) ) return { inside, outside: 0 };
+
+    // Attenuate the radius outside the threshold wall based on source proximity to the wall.
+    const sourceDistance = proximity ? Math.max(inside - externalRadius, 0) : (inside + externalRadius);
+    const thresholdDistance = d * document.parent.dimensions.distancePixels;
+    const percentDistance = sourceDistance / thresholdDistance;
+    const pInv = proximity ? 1 - percentDistance : Math.min(1, percentDistance - 1);
+    const a = (pInv / (2 * (1 - pInv))) * CONFIG.Wall.thresholdAttenuationMultiplier;
+    return { inside, outside: Math.min(a * thresholdDistance, outside) };
+  }
+*/
