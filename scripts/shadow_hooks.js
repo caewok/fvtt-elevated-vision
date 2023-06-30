@@ -178,15 +178,10 @@ function initializeSourceShadersHook(source) {
 
     // Force a uniform update, to avoid ghosting of placeables in the light radius.
     // TODO: Find the underlying issue and fix this!
-    // Why doesn't this work:
-//     source.layers.background.shader.uniformGroup.update();
-//     source.layers.coloration.shader.uniformGroup.update();
-//     source.layers.illumination.shader.uniformGroup.update();
-    const { ALGORITHM, TYPES } = SETTINGS.SHADING;
-    const EVshadows = getSceneSetting(ALGORITHM) === TYPES.WEBGL;
-    source.layers.background.shader.uniforms.EVshadows = EVshadows;
-    source.layers.coloration.shader.uniforms.EVshadows = EVshadows;
-    source.layers.illumination.shader.uniforms.EVshadows = EVshadows;
+    // Must be a new uniform variable (one that is not already in uniforms)
+    source.layers.background.shader.uniforms.uEVtmpfix = 0;
+    source.layers.coloration.shader.uniforms.uEVtmpfix = 0;
+    source.layers.illumination.shader.uniforms.uEVtmpfix = 0;
   }
 
   // Build the shadow render texture

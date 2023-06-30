@@ -12,7 +12,7 @@ ui
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
 import { SETTINGS, getSetting, getSceneSetting } from "./settings.js";
-import { registerShadowPatches } from "./patching.js";
+import { updateShadowPatches } from "./patching.js";
 
 const FLY_CONTROL = {
   name: SETTINGS.FLY_BUTTON,
@@ -29,6 +29,7 @@ Hooks.once("init", function() {
 Hooks.on("getSceneControlButtons", getSceneControlButtonsHook);
 Hooks.on("renderSceneConfig", renderSceneConfigHook);
 Hooks.on("updateScene", updateSceneHook);
+Hooks.on("preUpdateScene", preUpdateSceneHook);
 
 
 /**
@@ -73,7 +74,11 @@ async function renderSceneConfigHook(app, html, data) {
 /**
  * Monitor whether EV has been enabled or disabled for a scene.
  */
-async function updateSceneHook(document, change, _options, _userId) {
+async function preUpdateSceneHook(document, change, options, _userId) {
+  options.EValgorithm = document.flags[MODULE_ID]?.[SETTINGS.SHADING.ALGORITHM];
+}
+
+async function updateSceneHook(document, change, options, _userId) {
   if ( canvas.scene.id !== document.id ) return;
 
   // If the updated scene is currently the active scene, then update patches and fly controls.
@@ -86,8 +91,7 @@ async function updateSceneHook(document, change, _options, _userId) {
 
   const algorithm = change.flags?.[MODULE_ID]?.[SETTINGS.SHADING.ALGORITHM];
   if ( algorithm ) {
-    registerShadowPatches(algorithm);
-    await canvas.draw();
+    updateShadowPatches(algorithm, options.EValgorithm);
     const label = game.i18n.localize(SETTINGS.SHADING.LABELS[algorithm]);
     ui.notifications.notify(`Elevated Vision scene shadows switched to ${label}.`);
   }

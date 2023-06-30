@@ -169,6 +169,39 @@ function deregisterShadowPatches() {
   libWrapperShaderIds.forEach(i => libWrapper.unregister(MODULE_ID, i, false));
 }
 
+export async function updateShadowPatches(algorithm, priorAlgorithm) {
+  registerShadowPatches(algorithm);
+
+  if ( (!priorAlgorithm && algorithm !== SETTINGS.SHADING.TYPES.WEBGL)
+    || priorAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) await SettingsConfig.reloadConfirm({world: true});
+  await canvas.draw();
+
+  if ( algorithm === SETTINGS.SHADING.TYPES.WEBGL ) {
+    const sources = [
+      ...canvas.effects.lightSources,
+      ...canvas.tokens.placeables.map(t => t.vision)
+    ];
+
+    for ( const src of sources ) {
+      const ev = src[MODULE_ID];
+      if ( !ev ) continue;
+
+      ev.wallGeometry?.refreshWalls();
+      ev.wallGeometryUnbounded?.refreshWalls();
+
+      if ( ev.shadowMesh ) {
+        ev.shadowMesh.shader.uniforms.uTerrainSampler = canvas.elevation._elevationTexture;
+        ev.shadowRenderer.update();
+      }
+
+      if ( ev.shadowVisionLOSMesh ) {
+        ev.shadowVisionLOSMesh.shader.uniforms.uTerrainSampler = canvas.elevation._elevationTexture;
+        ev.shadowVisionLOSRenderer.update();
+      }
+    }
+  }
+}
+
 export function registerShadowPatches(algorithm) {
   const TYPES = SETTINGS.SHADING.TYPES;
   switch ( algorithm ) {
