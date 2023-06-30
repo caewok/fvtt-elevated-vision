@@ -314,13 +314,12 @@ vec4 lightEncoding(in float light) {
 }
 
 void main() {
-  if ( vBary.x > fWallRatio ) {
-    fragColor = vec4(vBary.x, 0.0, 0.0, 0.8);
-  } else {
-    fragColor = vec4(0.0, vBary.x, 0.0, 0.8);
-  }
-  return;
-
+//   if ( vBary.x > fWallRatio ) {
+//     fragColor = vec4(vBary.x, 0.0, 0.0, 0.8);
+//   } else {
+//     fragColor = vec4(0.0, vBary.x, 0.0, 0.8);
+//   }
+//   return;
 
   // Get the elevation at this fragment.
   float canvasElevation = uElevationRes.x;
