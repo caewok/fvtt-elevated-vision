@@ -86,7 +86,7 @@ async function updateSceneHook(document, change, _options, _userId) {
 
   const algorithm = change.flags?.[MODULE_ID]?.[SETTINGS.SHADING.ALGORITHM];
   if ( algorithm ) {
-    registerShadowPatches();
+    registerShadowPatches(algorithm);
     await canvas.draw();
     const label = game.i18n.localize(SETTINGS.SHADING.LABELS[algorithm]);
     ui.notifications.notify(`Elevated Vision scene shadows switched to ${label}.`);

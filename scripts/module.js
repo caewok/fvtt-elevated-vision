@@ -194,7 +194,7 @@ Hooks.once("setup", function() {
 
 Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
-  registerShadowPatches();
+  registerShadowPatches(getSceneSetting(SETTINGS.SHADING.ALGORITHM));
   updateFlyTokenControl();
 });
 
@@ -225,7 +225,7 @@ async function disableScene() {
   }
   if ( shadowsDisabled ) {
     await setSceneSetting(SETTINGS.SHADING.ALGORITHM, SETTINGS.SHADING.TYPES.NONE);
-    registerShadowPatches();
+    registerShadowPatches(SETTINGS.SHADING.TYPES.NONE);
     // Looks like we don't need to redraw the scene?
     // await canvas.draw(canvas.scene);
   }
