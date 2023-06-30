@@ -26,11 +26,16 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * Changes to monitor in the wall data that indicate a relevant change.
    */
   static CHANGE_FLAGS = [
+    // Wall location
     "c",
     "flags.wall-height.top",
     "flags.wall-height.bottom",
     "flags.elevatedvision.elevation.top",
     "flags.elevatedvision.elevation.bottom",
+
+    // Wall direction and door state
+    "dir",
+    "ds",
 
     // Wall sense types
     "sight",
