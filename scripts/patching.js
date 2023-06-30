@@ -3,8 +3,10 @@ CanvasVisibility,
 ClockwiseSweepPolygon,
 libWrapper,
 PIXI,
+RenderedPointSource,
 Tile,
-Token
+Token,
+VisionSource
 */
 
 "use strict";
@@ -12,7 +14,7 @@ Token
 // Patches
 
 import { MODULE_ID } from "./const.js";
-import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
+import { getSetting, SETTINGS } from "./settings.js";
 
 import {
   defaultOptionsAmbientSoundConfig,
@@ -29,19 +31,7 @@ import {
   refreshVisibilityCanvasVisibility,
   checkLightsCanvasVisibility,
   _tearDownCanvasVisibility,
-  cacheLightsCanvasVisibility
-
-//   _createEVMask,
-//   _createEVMeshVisionSource,
-//   _createEVMeshLightSource
-
-  // Perfect Vision patches that will not work in v11:
-  // createVisionCanvasVisionMaskPV,
-  // _createMaskVisionSourcePV,
-  // _createMaskLightSourcePV,
-  // _createEVMeshVisionSourcePV,
-  // _createEVMeshLightSourcePV
-} from "./vision.js";
+  cacheLightsCanvasVisibility } from "./vision.js";
 
 import {
   _computeClockwiseSweepPolygon,
@@ -63,16 +53,6 @@ import {
   wallUpdatedRenderedPointSource,
   wallRemovedRenderedPointSource,
   boundsRenderedPointSource } from "./shadow_hooks.js";
-
-// A: shader / not shader
-// B: PV / not PV
-// A | (B << 1)
-const SHADER_SWITCH = {
-  NO_SHADER: 0,
-  SHADER: 1,
-  PV_NO_SHADER: 2,
-  PV_SHADER: 3
-};
 
 /**
  * Helper to wrap methods.
@@ -119,24 +99,6 @@ function addClassGetter(cl, name, fn) {
   }
 }
 
-export function registerAdditions() {
-  addClassMethod(ClockwiseSweepPolygon.prototype, "_drawShadows", _drawShadowsClockwiseSweepPolygon);
-  addClassMethod(Token.prototype, "getTopLeft", getTopLeftTokenCorner);
-
-//   addClassMethod(VisionSource.prototype, "_createEVMask", _createEVMask);
-//   addClassMethod(LightSource.prototype, "_createEVMask", _createEVMask);
-
-  addClassGetter(Tile.prototype, "evPixelCache", getEVPixelCacheTile);
-  addClassMethod(Tile.prototype, "_evPixelCache", undefined);
-
-  shaderAdditions();
-}
-
-function shaderAdditions() {
-//   addClassMethod(VisionSource.prototype, "_createEVMesh", _createEVMeshVisionSource);
-//   addClassMethod(LightSource.prototype, "_createEVMesh", _createEVMeshLightSource);
-}
-
 // IDs returned by libWrapper.register for the shadow shader patches.
 const libWrapperShaderIds = [];
 
@@ -171,31 +133,72 @@ export function registerPatches() {
     wrap("ClockwiseSweepPolygon.prototype.initialize", initializeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
   }
 
-  // ----- Shader code for drawing shadows ----- //
-  wrap("AdaptiveLightingShader.create", createAdaptiveLightingShader);
+  // Clear the prior libWrapper shader ids, if any.
+  libWrapperShaderIds.length = 0;
+}
 
-  wrap("RenderedPointSource.prototype._configure", _configureRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
-  wrap("RenderedPointSource.prototype.destroy", destroyRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
+export function registerAdditions() {
+  addClassMethod(ClockwiseSweepPolygon.prototype, "_drawShadows", _drawShadowsClockwiseSweepPolygon);
+  addClassMethod(Token.prototype, "getTopLeft", getTopLeftTokenCorner);
 
+  addClassGetter(Tile.prototype, "evPixelCache", getEVPixelCacheTile);
+  addClassMethod(Tile.prototype, "_evPixelCache", undefined);
+
+  // For Polygons shadows -- Nothing added
+
+  // For WebGL shadows
   addClassMethod(VisionSource.prototype, "updateLOSGeometry", updateLOSGeometryVisionSource);
+
   addClassMethod(RenderedPointSource.prototype, "wallAdded", wallAddedRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "wallUpdated", wallUpdatedRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "wallRemoved", wallRemovedRenderedPointSource);
   addClassGetter(RenderedPointSource.prototype, "bounds", boundsRenderedPointSource);
 
-  // ----- Override canvasVisibility ----- //
-  // TODO: Only when WebGL setting is enabled.
-  override("CanvasVisibility.prototype.refreshVisibility", refreshVisibilityCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
-  wrap("CanvasVisibility.prototype._tearDown", _tearDownCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
-
   addClassMethod(CanvasVisibility.prototype, "checkLights", checkLightsCanvasVisibility);
   addClassMethod(CanvasVisibility.prototype, "cacheLights", cacheLightsCanvasVisibility);
   addClassMethod(CanvasVisibility.prototype, "renderTransform", new PIXI.Matrix());
   addClassMethod(CanvasVisibility.prototype, "pointSourcesStates", new Map());
-
-  // Clear the prior libWrapper shader ids, if any.
-  libWrapperShaderIds.length = 0;
 }
+
+
+/**
+ * Deregister shading wrappers.
+ * Used when switching shadow algorithms. Deregister all, then re-register needed wrappers.
+ */
+function deregisterShadowPatches() {
+  libWrapperShaderIds.forEach(i => libWrapper.unregister(MODULE_ID, i, false));
+}
+
+export function registerShadowPatches(algorithm) {
+  const TYPES = SETTINGS.SHADING.TYPES;
+  switch ( algorithm ) {
+    case TYPES.NONE: return registerNoShadowPatches();
+    case TYPES.POLYGONS: return registerPolygonShadowPatches();
+    case TYPES.WEBGL: return registerWebGLShadowPatches();
+  }
+}
+
+function registerNoShadowPatches() {
+  deregisterShadowPatches();
+}
+
+function registerPolygonShadowPatches() {
+  deregisterShadowPatches();
+  shaderWrap("PIXI.LegacyGraphics.prototype.drawShape", drawShapePIXIGraphics, { perf_mode: libWrapper.PERF_FAST });
+}
+
+function registerWebGLShadowPatches() {
+  deregisterShadowPatches();
+  shaderOverride("CanvasVisibility.prototype.refreshVisibility", refreshVisibilityCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
+  shaderWrap("CanvasVisibility.prototype._tearDown", _tearDownCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
+
+  shaderWrap("AdaptiveLightingShader.create", createAdaptiveLightingShader);
+
+  shaderWrap("RenderedPointSource.prototype._configure", _configureRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
+  shaderWrap("RenderedPointSource.prototype.destroy", destroyRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
+}
+
+// NOTE: Simple functions used in additions.
 
 /**
  * Calculate the top left corner location for a token given an assumed center point.
@@ -206,40 +209,4 @@ export function registerPatches() {
  */
 function getTopLeftTokenCorner(x, y) {
   return new PIXI.Point(x - (this.w * 0.5), y - (this.h * 0.5));
-}
-
-/**
- * Deregister shading wrappers.
- * Used when switching shadow algorithms. Deregister all, then re-register needed wrappers.
- */
-function deregisterShadowPatches() {
-  libWrapperShaderIds.forEach(i => libWrapper.unregister(MODULE_ID, i, false));
-}
-
-/**
- * Register shading wrappers
- * Used when switching shadow algorithms. Deregister all, then re-register needed wrappers.
- */
-export function registerShadowPatches() {
-  deregisterShadowPatches();
-
-  const { ALGORITHM, TYPES } = SETTINGS.SHADING;
-  let shaderAlgorithm = getSceneSetting(ALGORITHM) ?? TYPES.NONE;
-  if ( shaderAlgorithm === TYPES.NONE ) return;
-
-
-  // ----- Drawing shadows for vision source LOS, fog  ----- //
-  const use_shader = shaderAlgorithm === TYPES.WEBGL;
-  const shader_choice = Number(use_shader);
-
-  switch ( shader_choice ) {
-    case SHADER_SWITCH.NO_SHADER:
-      shaderWrap("PIXI.LegacyGraphics.prototype.drawShape", drawShapePIXIGraphics, { perf_mode: libWrapper.PERF_FAST });
-      // shaderOverride("CanvasVisibility.prototype.refreshVisibility", refreshVisibilityCanvasVisibilityPolygons, { perf_mode: libWrapper.PERF_FAST });
-      break;
-    case SHADER_SWITCH.SHADER:
-      //shaderWrap("PIXI.LegacyGraphics.prototype.drawShape", drawShapePIXIGraphics, { perf_mode: libWrapper.PERF_FAST });
-      // shaderOverride("CanvasVisibility.prototype.refresh", refreshCanvasVisibilityShader, { type: libWrapper.OVERRIDE, perf_mode: libWrapper.PERF_FAST });
-      break;
-  }
 }
