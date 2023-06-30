@@ -92,9 +92,9 @@ export function updateAmbientSoundHook(doc, data, _options, _userId) {
  * @param {PlaceableObject} object    The object instance being refreshed
  * @param {RenderFlags} flags
  */
-export function refreshAmbientLightHook(light, flags) {
+// export function refreshAmbientLightHook(light, flags) {
   // if ( flags.refreshElevation ) {}
-}
+// }
 
 /**
  * Hook ambient sound refresh to address the refreshElevation renderFlag.
@@ -103,9 +103,9 @@ export function refreshAmbientLightHook(light, flags) {
  * @param {PlaceableObject} object    The object instance being refreshed
  * @param {RenderFlags} flags
  */
-export function refreshAmbientSoundHook(sound, flags) {
+// export function refreshAmbientSoundHook(sound, flags) {
   // if ( flags.refreshElevation ) {}
-}
+// }
 
 
 /**

@@ -1,9 +1,12 @@
 /* globals
+AmbientLight,
+canvas,
 CanvasVisibility,
 ClockwiseSweepPolygon,
 libWrapper,
 PIXI,
 RenderedPointSource,
+SettingsConfig,
 Tile,
 Token,
 VisionSource
@@ -53,6 +56,12 @@ import {
   wallUpdatedRenderedPointSource,
   wallRemovedRenderedPointSource,
   boundsRenderedPointSource } from "./shadow_hooks.js";
+
+import {
+  _drawAmbientLight,
+  _drawTooltipAmbientLight,
+  _getTooltipTextAmbientLight,
+  _getTextStyleAmbientLight } from "./lighting_elevation_tooltip.js";
 
 /**
  * Helper to wrap methods.
@@ -133,6 +142,9 @@ export function registerPatches() {
     wrap("ClockwiseSweepPolygon.prototype.initialize", initializeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
   }
 
+  // ----- Lighting elevation tooltip ----- //
+  wrap("AmbientLight.prototype._draw", _drawAmbientLight);
+
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
 }
@@ -158,6 +170,11 @@ export function registerAdditions() {
   addClassMethod(CanvasVisibility.prototype, "cacheLights", cacheLightsCanvasVisibility);
   addClassMethod(CanvasVisibility.prototype, "renderTransform", new PIXI.Matrix());
   addClassMethod(CanvasVisibility.prototype, "pointSourcesStates", new Map());
+
+  // For light elevation tooltip
+  addClassMethod(AmbientLight.prototype, "_drawTooltip", _drawTooltipAmbientLight);
+  addClassMethod(AmbientLight.prototype, "_getTooltipText", _getTooltipTextAmbientLight);
+  addClassMethod(AmbientLight.prototype, "_getTextStyle", _getTextStyleAmbientLight);
 }
 
 
