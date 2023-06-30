@@ -133,6 +133,7 @@ void main() {
   }
 
   // Plane describing the canvas surface at minimum elevation for the scene.
+  // If the light (or token vision) is at canvas elevation, lower the canvas elevation slightly.
   float canvasElevation = uElevationRes.x;
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
   vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
@@ -143,18 +144,22 @@ void main() {
   vec3 wallTop = vec3(vertex2d, aWallCorner1.z);
   vec3 wallBottom = vec3(vertex2d, aWallCorner2.z);
 
+  // Light position must be above the canvas floor to get expected shadows.
+  vec3 lightPosition = uLightPosition;
+  lightPosition.z = max(canvasElevation + 1.0, lightPosition.z);
+
   // Trim walls to be between light elevation and canvas elevation.
   // If wall top is above or equal to the light, need to approximate an infinite shadow.
   // Cannot just set the ray to the scene maxR, b/c the ray from light --> vertex is
   // different lengths for each vertex. Instead, make wall very slightly lower than light,
   // thus casting a very long shadow.
   float actualWallTop = wallTop.z;
-  wallTop.z = min(wallTop.z, uLightPosition.z - EV_CONST_INFINITE_SHADOW_OFFSET);
+  wallTop.z = min(wallTop.z, lightPosition.z - EV_CONST_INFINITE_SHADOW_OFFSET);
   wallBottom.z = max(wallBottom.z, canvasElevation);
 
   // Intersect the canvas plane: light --> vertex --> plane
   // We know there is an intersect because we manipulated the wall height.
-  Ray rayLT = rayFromPoints(uLightPosition, wallTop);
+  Ray rayLT = rayFromPoints(lightPosition, wallTop);
   vec3 ixFarShadow;
   intersectRayPlane(rayLT, canvasPlane, ixFarShadow);
 
@@ -167,7 +172,7 @@ void main() {
     if ( wallBottom.z > canvasElevation ) {
       // Wall bottom floats above the canvas.
       vec3 ixNearPenumbra;
-      Ray rayLB = rayFromPoints(uLightPosition, wallBottom);
+      Ray rayLB = rayFromPoints(lightPosition, wallBottom);
       intersectRayPlane(rayLB, canvasPlane, ixNearPenumbra);
       nearRatio = 1.0 - (distance(uLightPosition.xy, ixNearPenumbra.xy) / distShadow);
     }
@@ -309,6 +314,14 @@ vec4 lightEncoding(in float light) {
 }
 
 void main() {
+  if ( vBary.x > fWallRatio ) {
+    fragColor = vec4(vBary.x, 0.0, 0.0, 0.8);
+  } else {
+    fragColor = vec4(0.0, vBary.x, 0.0, 0.8);
+  }
+  return;
+
+
   // Get the elevation at this fragment.
   float canvasElevation = uElevationRes.x;
   float elevation = terrainElevation();
