@@ -458,6 +458,7 @@ AbstractEVShader = api.AbstractEVShader
 ShadowWallShader = api.ShadowWallShader
 ShadowWallPointSourceMesh = api.ShadowWallPointSourceMesh
 TestGeometryShader = api.TestGeometryShader
+ShadowTextureRenderer = api.ShadowTextureRenderer
 
 let [l] = canvas.lighting.placeables;
 source = l.source;
