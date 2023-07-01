@@ -301,10 +301,8 @@ export function cloneToken(wrapper) {
 export function createOrRemoveActiveEffectHook(effect, _opts, _userId) {
   if ( !effect.statuses.has(CONFIG.GeometryLib.proneStatusId) ) return;
 
-  const actorId = effect.parent?.id;
-  if ( !actorId ) return;
+  const tokens = effect.parent?.getActiveTokens();
+  if ( !tokens) return;
 
-  canvas.tokens.placeables
-    .filter(t => t.actor?.id === actorId)
-    .forEach(t => t.vision._updateEVShadowData({changedElevation: true}));
+  tokens.forEach(t => t.vision._updateEVShadowData({changedElevation: true}));
 }
