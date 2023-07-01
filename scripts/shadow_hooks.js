@@ -230,7 +230,11 @@ function initializeSourceShadersHook(source) {
  * New getter: RenderedPointSource.prototype.EVVisionMask
  */
 export function EVVisionMaskRenderedPointSource() {
-  return this[MODULE_ID]?.shadowVisionMask;
+  if ( !this[MODULE_ID]?.shadowVisionMask ) {
+    console.error("elevatedvision|EVVisionMaskRenderedPointSource|No shadowVisionMask.");
+  }
+
+  return this[MODULE_ID].shadowVisionMask;
 }
 
 // NOTE: VisionSource shadow methods and getters
@@ -239,7 +243,37 @@ export function EVVisionMaskRenderedPointSource() {
  * New getter: VisionSource.prototype.EVVisionLOSMask
  */
 export function EVVisionLOSMaskVisionSource() {
-  return this[MODULE_ID]?.shadowVisionLOSMask;
+  if ( !this[MODULE_ID]?.shadowVisionLOSMask ) {
+    console.error("elevatedvision|EVVisionLOSMaskVisionSource|No shadowVisionLOSMask.");
+  }
+
+  return this[MODULE_ID].shadowVisionLOSMask;
+}
+
+/**
+ * New getter: VisionSource.prototype.EVVisionMask
+ */
+export function EVVisionMaskVisionSource() {
+  if ( !this[MODULE_ID]?.shadowVisionMask ) {
+    console.error("elevatedvision|EVVisionMaskVisionSource|No shadowVisionMask.");
+  }
+
+  return this[MODULE_ID].shadowVisionMask;
+
+  // Ideally, could just pass shadowVisionLOSMask with a circle mask added.
+  // This fails b/c masking breaks it.
+
+  // const c = new PIXI.Container();
+  // c.addChild(this[MODULE_ID].shadowVisionLOSMask);
+
+  // Mask the radius circle for this vision source.
+  // TODO: This breaks the FOV vision. (Try w/o light or global light and a vision radius.)
+//   const r = this.radius || this.data.externalRadius;
+//   const g = new PIXI.Graphics();
+//   const draw = new Draw(g);
+//   draw.shape(new PIXI.Circle(this.x, this.y, r), { fill: 0xFF0000 });
+//   c.mask = g;
+  return c;
 }
 
 // NOTE: GlobalLightSource shadow methods and getters

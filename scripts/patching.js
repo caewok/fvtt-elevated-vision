@@ -58,7 +58,8 @@ import {
 
   EVVisionMaskRenderedPointSource,
   EVVisionLOSMaskVisionSource,
-  EVVisionMaskGlobalLightSource } from "./shadow_hooks.js";
+  EVVisionMaskGlobalLightSource,
+  EVVisionMaskVisionSource } from "./shadow_hooks.js";
 
 import {
   _drawAmbientLight,
@@ -176,6 +177,8 @@ export function registerAdditions() {
   addClassGetter(RenderedPointSource.prototype, "EVVisionMask", EVVisionMaskRenderedPointSource);
   addClassGetter(VisionSource.prototype, "EVVisionLOSMask", EVVisionLOSMaskVisionSource);
   addClassGetter(GlobalLightSource.prototype, "EVVisionMask", EVVisionMaskGlobalLightSource);
+
+  addClassGetter(VisionSource.prototype, "EVVisionMask", EVVisionMaskVisionSource);
 
   // For light elevation tooltip
   addClassMethod(AmbientLight.prototype, "_drawTooltip", _drawTooltipAmbientLight);
