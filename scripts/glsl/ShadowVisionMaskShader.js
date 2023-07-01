@@ -47,10 +47,11 @@ uniform vec2 uSourcePosition;
 uniform float uSourceRadius2;
 
 ${defineFunction("between")}
+${defineFunction("distanceSquared")}
 
 void main() {
-  if ( any(equal(between(0.0, 1.0, vTextureCoord), vec2(0.0))) ) discard;
-  float dist2 = dot(vVertexPosition, uSourcePosition);
+  // if ( any(equal(between(0.0, 1.0, vTextureCoord), vec2(0.0))) ) discard;
+  float dist2 = distanceSquared(vVertexPosition, uSourcePosition);
   if ( dist2 > uSourceRadius2 ) discard;
 
   vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
