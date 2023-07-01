@@ -54,7 +54,11 @@ import {
   wallAddedRenderedPointSource,
   wallUpdatedRenderedPointSource,
   wallRemovedRenderedPointSource,
-  boundsRenderedPointSource } from "./shadow_hooks.js";
+  boundsRenderedPointSource,
+
+  EVVisionMaskRenderedPointSource,
+  EVVisionLOSMaskVisionSource,
+  EVVisionMaskGlobalLightSource } from "./shadow_hooks.js";
 
 import {
   _drawAmbientLight,
@@ -167,6 +171,11 @@ export function registerAdditions() {
   addClassMethod(CanvasVisibility.prototype, "cacheLights", cacheLightsCanvasVisibility);
   addClassMethod(CanvasVisibility.prototype, "renderTransform", new PIXI.Matrix());
   addClassMethod(CanvasVisibility.prototype, "pointSourcesStates", new Map());
+
+  // For WebGL shadows -- shadow properties
+  addClassGetter(RenderedPointSource.prototype, "EVVisionMask", EVVisionMaskRenderedPointSource);
+  addClassGetter(VisionSource.prototype, "EVVisionLOSMask", EVVisionLOSMaskVisionSource);
+  addClassGetter(GlobalLightSource.prototype, "EVVisionMask", EVVisionMaskGlobalLightSource);
 
   // For light elevation tooltip
   addClassMethod(AmbientLight.prototype, "_drawTooltip", _drawTooltipAmbientLight);

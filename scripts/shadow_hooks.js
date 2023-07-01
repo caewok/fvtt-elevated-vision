@@ -10,6 +10,7 @@ VisionSource
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "./const.js";
+import { Draw } from "./geometry/Draw.js";
 
 import { ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer, ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
@@ -225,11 +226,34 @@ function initializeSourceShadersHook(source) {
 // NOTE: RenderedSource shadow methods and getters
 
 
+/**
+ * New getter: RenderedPointSource.prototype.EVVisionMask
+ */
+export function EVVisionMaskRenderedPointSource() {
+  return this[MODULE_ID]?.shadowVisionMask;
+}
+
 // NOTE: VisionSource shadow methods and getters
 
+/**
+ * New getter: VisionSource.prototype.EVVisionLOSMask
+ */
+export function EVVisionLOSMaskVisionSource() {
+  return this[MODULE_ID]?.shadowVisionLOSMask;
+}
 
 // NOTE: GlobalLightSource shadow methods and getters
 
+/**
+ * New getter: GlobalLightSource.prototype.EVVisionMask
+ */
+export function EVVisionMaskGlobalLightSource() {
+  // TODO: This could be cached somewhere, b/c this.shape does not change.
+  const g = new PIXI.Graphics();
+  const draw = new Draw(g);
+  draw.shape(this.shape, { fill: 0xFF0000 });
+  return g;
+}
 
 // NOTE: Wall handling for RenderedPointSource
 

@@ -103,7 +103,7 @@ export function refreshVisibilityCanvasVisibility() {
 
   // Iterating over each light source
   for ( const lightSource of canvas.effects.lightSources ) {
-    const mask = lightSource[MODULE_ID]?.shadowVisionMask;
+    const mask = lightSource.EVVisionMask;
     if ( !mask && !(lightSource instanceof GlobalLightSource) ) {
       console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|LightSource ${lightSource.object.id} has no mask.`);
     }
@@ -152,8 +152,8 @@ export function refreshVisibilityCanvasVisibility() {
   for ( const visionSource of canvas.effects.visionSources ) {
     if ( !visionSource.active ) continue;
 
-    const fovMask = visionSource[MODULE_ID].shadowVisionMask;
-    const losMask = visionSource[MODULE_ID].shadowVisionLOSMask;
+    const fovMask = visionSource.EVVisionMask;
+    const losMask = visionSource.EVVisionLOSMask;
     if ( !fovMask ) console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|visionSource ${visionSource.object.id} has no fov mask.`);
     if ( !losMask ) console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|visionSource ${visionSource.object.id} has no los mask.`);
 
