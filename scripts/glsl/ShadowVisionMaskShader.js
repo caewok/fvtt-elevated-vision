@@ -80,7 +80,7 @@ void main() {
     uShadowSampler: 0,
     uCanvasDim: [1, 1],  // Params: width, height
     uSourcePosition: [0, 0],
-    uSourceRadius: 1
+    uSourceRadius2: 1
   };
 
   static create(source, shadowSampler, defaultUniforms = {}) {
@@ -97,12 +97,12 @@ void main() {
     return out;
   }
 
-  updateSourcePosition() {
-    this.uniforms.uSourcePosition = [this.source.x, this.source.y];
+  updateSourcePosition(source) {
+    this.uniforms.uSourcePosition = [source.x, source.y];
   }
 
-  updateSourceRadius() {
-    const radius = this.source.radius || this.source.data.externalRadius;
+  updateSourceRadius(source) {
+    const radius = source.radius || source.data.externalRadius;
     this.uniforms.uSourceRadius2 = Math.pow(radius, 2);
   }
 }

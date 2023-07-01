@@ -107,7 +107,7 @@ export function _configureRenderedPointSource(wrapped, changes) {
 
     if ( ev.shadowVisionMask ) {
       ev.shadowVisionMask.updateGeometry(this.shape.bounds);
-      ev.shadowVisionMask.shader.updateSourcePosition();
+      ev.shadowVisionMask.shader.updateSourcePosition(this);
     }
 
     // ev.shadowVisionMask.position.copyFrom(this);
@@ -119,7 +119,7 @@ export function _configureRenderedPointSource(wrapped, changes) {
 
     if ( ev.shadowVisionMask ) {
       ev.shadowVisionMask.updateGeometry(this.shape.bounds);
-      ev.shadowVisionMask.shader.updateSourceRadius();
+      ev.shadowVisionMask.shader.updateSourceRadius(this);
     }
 
   } else if ( changedElevation ) {
@@ -222,6 +222,7 @@ function initializeSourceShadersHook(source) {
   source.layers.coloration.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
   source.layers.background.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
 }
+
 
 // NOTE: Wall handling for RenderedPointSource
 
