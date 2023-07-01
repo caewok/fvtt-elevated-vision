@@ -89,6 +89,17 @@ Hooks.once("ready", () => {
                 anyone has additional suggestions.`
         })
 
+        .addEntry({
+            version: "0.5.3",
+            title: "WebGL shadows are back!",
+            body: `\
+                - **WebGL shadows:** The WebGL setting for elevation shadows is back! Pretty much rewritten
+                  from scratch. There is no longer a limit on the number of walls it can consider when calculating
+                  shadows using the GPU. WebGL shadows also should be a lot more performant.
+                - **Elevation label on lights:** Heading says it all—--When in the lighting layer, lights
+                  will display their current elevation.`
+        })
+
         .build()
         ?.render(true);
 });
