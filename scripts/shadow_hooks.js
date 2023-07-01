@@ -223,20 +223,6 @@ function initializeSourceShadersHook(source) {
   source.layers.background.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
 }
 
-/**
- * New method:  RenderedPointSource.prototype.updateLOSGeometry
- * Update the los geometry for a vision source shape used in the vision mask.
- * Copy of RenderedPointSource.prototype.#updateGeometry
- */
-export function updateLOSGeometryVisionSource() {
-  const {x, y} = this.data;
-  const offset = this._flags.renderSoftEdges ? this.constructor.EDGE_OFFSET : 0;
-  const pm = new PolygonMesher(this.los, {x, y, radius: 0, normalize: false, offset});
-  const ev = this[MODULE_ID];
-  ev.losGeometry ??= null;
-  ev.losGeometry = pm.triangulate(ev.losGeometry);
-}
-
 // NOTE: Wall handling for RenderedPointSource
 
 /**

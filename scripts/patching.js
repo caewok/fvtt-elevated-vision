@@ -51,7 +51,6 @@ import { createAdaptiveLightingShader } from "./glsl/patch_lighting_shaders.js";
 import {
   _configureRenderedPointSource,
   destroyRenderedPointSource,
-  updateLOSGeometryVisionSource,
   wallAddedRenderedPointSource,
   wallUpdatedRenderedPointSource,
   wallRemovedRenderedPointSource,
@@ -159,8 +158,6 @@ export function registerAdditions() {
   // For Polygons shadows -- Nothing added
 
   // For WebGL shadows
-  addClassMethod(VisionSource.prototype, "updateLOSGeometry", updateLOSGeometryVisionSource);
-
   addClassMethod(RenderedPointSource.prototype, "wallAdded", wallAddedRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "wallUpdated", wallUpdatedRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "wallRemoved", wallRemovedRenderedPointSource);
