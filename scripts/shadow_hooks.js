@@ -78,39 +78,7 @@ export function _configureRenderedPointSource(wrapped, changes) {
   const changedRadius = Object.hasOwn(changes, "radius");
   const changedElevation = Object.hasOwn(changes, "elevation");
 
-  if ( changedPosition || changedElevation || changedRadius ) {
-    // console.log(`EV|refreshAmbientLightHook light ${this.x},${this.y},${this.elevationE} flag: ${this.object.document.flags?.elevatedvision?.elevation}`);
-    ev.wallGeometry?.refreshWalls();
-    ev.wallGeometryUnbounded?.refreshWalls();
-    ev.shadowMesh?.updateLightPosition();
-    ev.shadowVisionLOSMesh?.updateLightPosition();
-  }
-
-  if ( changedPosition ) {
-    ev.shadowRenderer?.update();
-    ev.shadowVisionLOSRenderer?.update();
-    // ev.shadowVisionLOSMask?.updateGeometry(this.los.bounds); Unneeded b/c using canvas.dimensions.rect
-
-    if ( ev.shadowVisionMask ) {
-      ev.shadowVisionMask.updateGeometry(this.bounds);
-      ev.shadowVisionMask.shader.updateSourcePosition(this);
-    }
-
-    // ev.shadowVisionMask.position.copyFrom(this);
-
-  } else if ( changedRadius ) {
-    ev.shadowRenderer?.updateSourceRadius();
-    // ev.shadowVisionMask.scale = { x: this.radius, y: this.radius };
-
-    if ( ev.shadowVisionMask ) {
-      ev.shadowVisionMask.updateGeometry(this.bounds);
-      ev.shadowVisionMask.shader.updateSourceRadius(this);
-    }
-
-  } else if ( changedElevation ) {
-    ev.shadowRenderer?.update();
-    ev.shadowVisionLOSRenderer?.update();
-  }
+  this._updateEVShadowData({ changedPosition, changedElevation, changedRadius });
 }
 
 export function destroyRenderedPointSource(wrapped) {
@@ -118,12 +86,14 @@ export function destroyRenderedPointSource(wrapped) {
   const ev = this[MODULE_ID];
   if ( !ev ) return wrapped();
 
-
   const assets = [
-    "shadowRenderer",
+    // RenderedSource
     "shadowMesh",
-    "wallGeometry",
+    "shadowRenderer",
     "shadowVisionMask",
+    "wallGeometry",
+
+    // VisionSource
     "shadowVisionLOSMask",
     "shadowVisionLOSRenderer"
   ];
@@ -260,6 +230,45 @@ export function EVVisionMaskRenderedPointSource() {
   return this[MODULE_ID].shadowVisionMask;
 }
 
+/**
+ * New method: RenderedPointSource.prototype._updateEVShadowData
+ */
+export function _updateEVShadowDataRenderedPointSource({ changedPosition, changedRadius, changedElevation } = {}) {
+  const ev = this[MODULE_ID];
+  if ( !ev || !ev.wallGeometry) return;
+
+  changedPosition ??= true;
+  changedRadius ??= true;
+  changedElevation ??= true;
+
+  if ( !(changedPosition || changedRadius || changedElevation) ) return;
+
+  ev.wallGeometry.refreshWalls();
+  ev.shadowMesh.updateLightPosition();
+
+  if ( changedRadius ) {
+    ev.shadowRenderer.updateSourceRadius();
+
+    // VisionSource does not have shadowVisionMask
+    ev.shadowVisionMask?.shader.updateSourceRadius(this);
+  }
+
+  if ( changedPosition ) {
+    ev.shadowRenderer.update();
+
+    // VisionSource does not have shadowVisionMask
+    ev.shadowVisionMask?.updateGeometry(this.bounds);
+    ev.shadowVisionMask?.shader.updateSourcePosition(this);
+
+  } else if ( changedRadius ) {
+    // VisionSource does not have shadowVisionMask
+    ev.shadowVisionMask?.updateGeometry(this.bounds);
+
+  } else if ( changedElevation ) {
+    ev.shadowRenderer.update();
+  }
+}
+
 // NOTE: VisionSource shadow methods and getters
 
 /**
@@ -300,6 +309,24 @@ export function _initializeEVShadowMaskVisionSource() {
   const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowVisionLOSRenderer.renderTexture);
   ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
+/**
+ * New method: VisionSource.prototype._updateEVShadowData
+ */
+export function _updateEVShadowDataVisionSource({ changedPosition, changedRadius, changedElevation } = {}) {
+  const ev = this[MODULE_ID];
+  if ( !ev || !ev.wallGeometry) return;
+
+  changedPosition ??= true;
+  changedRadius ??= true;
+  changedElevation ??= true;
+
+  // Instead of super._updateEVShadowData()
+  RenderedPointSource.prototype._updateEVShadowData.call(this, { changedPosition, changedRadius, changedElevation });
+
+  if ( changedPosition || changedElevation ) ev.shadowVisionLOSRenderer.update();
+  if ( changedRadius ) ev.shadowVisionLOSRenderer.updateSourceRadius();
+}
+
 
 /**
  * New getter: VisionSource.prototype.EVVisionLOSMask
@@ -341,21 +368,23 @@ export function EVVisionMaskVisionSource() {
 
 // NOTE: GlobalLightSource shadow methods and getters
 /**
- * Return early for initialization methods b/c not calculating shadows.
+ * Return early for initialization and update methods b/c not calculating shadows.
  * New methods:
  * - GlobalLightSource.prototype._initializeEVShadowGeometry
  * - GlobalLightSource.prototype._initializeEVShadowTexture
  * - GlobalLightSource.prototype._initializeEVShadowMask
+ * - GlobalLightSource.prototype._updateEVShadowData
  */
 export function _initializeEVShadowGeometryGlobalLightSource() { return undefined; }
 export function _initializeEVShadowTextureGlobalLightSource() { return undefined; }
 export function _initializeEVShadowMaskGlobalLightSource() { return undefined; }
+export function _updateEVShadowDataGlobalLightSource(_opts) { return undefined; }
 
 /**
  * New getter: GlobalLightSource.prototype.EVVisionMask
  */
 export function EVVisionMaskGlobalLightSource() {
-  // TODO: This could be cached somewhere, b/c this.shape does not change.
+  // TODO: This could be cached somewhere, b/c this.shape does not change unless canvas changes.
   const g = new PIXI.Graphics();
   const draw = new Draw(g);
   draw.shape(this.shape, { fill: 0xFF0000 });

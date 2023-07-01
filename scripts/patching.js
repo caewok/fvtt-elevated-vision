@@ -72,7 +72,11 @@ import {
 
   _initializeEVShadowGeometryGlobalLightSource,
   _initializeEVShadowTextureGlobalLightSource,
-  _initializeEVShadowMaskGlobalLightSource } from "./shadow_hooks.js";
+  _initializeEVShadowMaskGlobalLightSource,
+
+  _updateEVShadowDataRenderedPointSource,
+  _updateEVShadowDataVisionSource,
+  _updateEVShadowDataGlobalLightSource } from "./shadow_hooks.js";
 
 import {
   _drawAmbientLight,
@@ -203,6 +207,10 @@ export function registerAdditions() {
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskGlobalLightSource);
+
+  addClassMethod(RenderedPointSource.prototype, "_updateEVShadowData", _updateEVShadowDataRenderedPointSource);
+  addClassMethod(VisionSource.prototype, "_updateEVShadowData", _updateEVShadowDataVisionSource);
+  addClassMethod(GlobalLightSource.prototype, "_updateEVShadowData", _updateEVShadowDataGlobalLightSource);
 
   // For light elevation tooltip
   addClassMethod(AmbientLight.prototype, "_drawTooltip", _drawTooltipAmbientLight);
