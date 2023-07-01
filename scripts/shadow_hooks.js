@@ -361,7 +361,10 @@ export function EVVisionMaskVisionSource() {
   const r = this.radius || this.data.externalRadius;
   const g = new PIXI.Graphics();
   const draw = new Draw(g);
-  draw.shape(new PIXI.Circle(this.x, this.y, r), { fill: 0xFF0000 });
+
+  // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
+  // and that causes a border to appear outside the shape.
+  draw.shape(new PIXI.Circle(this.x, this.y, r), { width: 0, fill: 0xFF0000 });
   c.addChild(g);
   return c;
 }
