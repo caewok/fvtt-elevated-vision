@@ -4,8 +4,7 @@ flattenObject,
 GlobalLightSource,
 Hooks,
 PIXI,
-RenderedPointSource,
-VisionSource
+RenderedPointSource
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -124,10 +123,8 @@ export function destroyRenderedPointSource(wrapped) {
     "shadowRenderer",
     "shadowMesh",
     "wallGeometry",
-    "wallGeometryUnbounded",
     "shadowVisionMask",
     "shadowVisionLOSMask",
-    "shadowVisionLOSMesh",
     "shadowVisionLOSRenderer"
   ];
 
@@ -182,7 +179,7 @@ function initializeSourceShadersHook(source) {
 
 /* VisionSource
 // Methods
-- _initializeEVShadowGeometry (mixed)
+- _initializeEVShadowGeometry (override) (use unbounded geometry)
 - _initializeEVShadowTexture (mixed)
 - _initializeEVShadowMask (mixed)
 
@@ -193,8 +190,6 @@ function initializeSourceShadersHook(source) {
 // elevatedvision properties
 - shadowVisionLOSRenderer
 - shadowVisionLOSMask
-- wallGeometryUnbounded
-- shadowVisionLOSMesh
 
 */
 
@@ -272,12 +267,8 @@ export function EVVisionMaskRenderedPointSource() {
  * Use SourceShadowWallGeometry, which does not restrict based on source bounds.
  */
 export function _initializeEVShadowGeometryVisionSource() {
-  // In lieu of super._initializeEVShadowGeometry
-  RenderedPointSource.prototype._initializeEVShadowGeometry.call(this);
-
-  // Build extra LOS geometry.
   const ev = this[MODULE_ID];
-  ev.wallGeometryUnbounded ??= new SourceShadowWallGeometry(this);
+  ev.wallGeometry ??= new SourceShadowWallGeometry(this);
 }
 
 /**
@@ -291,9 +282,8 @@ export function _initializeEVShadowTextureVisionSource() {
   // Instead of super._initializeEVShadowTexture()
   RenderedPointSource.prototype._initializeEVShadowTexture.call(this);
 
-  // Build extra LOS shadow mesh and render to a texture for use by other shaders.
-  ev.shadowVisionLOSMesh = new ShadowWallPointSourceMesh(this, ev.wallGeometryUnbounded);
-  ev.shadowVisionLOSRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowVisionLOSMesh);
+  // Render LOS to a texture for use by other shaders.
+  ev.shadowVisionLOSRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh);
   ev.shadowVisionLOSRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
 }
 
@@ -305,10 +295,7 @@ export function _initializeEVShadowMaskVisionSource() {
   const ev = this[MODULE_ID];
   if ( ev.shadowVisionLOSMask ) return;
 
-  // Instead of super._initializeEVShadowMask
-  RenderedPointSource.prototype._initializeEVShadowMask.call(this);
-
-  // Build add an additional mask for the LOS.
+  // Build the mask for the LOS based on the canvas dimensions rectangle.
   // Mask that colors red areas that are lit / are viewable.
   const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowVisionLOSRenderer.renderTexture);
   ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
@@ -329,8 +316,8 @@ export function EVVisionLOSMaskVisionSource() {
  * New getter: VisionSource.prototype.EVVisionMask
  */
 export function EVVisionMaskVisionSource() {
-  if ( !this[MODULE_ID]?.shadowVisionMask ) {
-    console.error("elevatedvision|EVVisionMaskVisionSource|No shadowVisionMask.");
+  if ( !this[MODULE_ID]?.shadowVisionLOSMask ) {
+    console.error("elevatedvision|EVVisionMaskVisionSource|No shadowVisionLOSMask.");
   }
 
   // return this[MODULE_ID].shadowVisionMask;
