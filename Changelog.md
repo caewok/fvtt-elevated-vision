@@ -1,3 +1,10 @@
+# 0.5.3
+WebGL shadows rewritten entirely. No longer a limit on the number of walls it can consider when calculating shadows using the GPU. (Technically, may be limited by the number of attributes that can be passed to a shader, but that should be sufficiently large for most use cases.) WebGL shadows also should be a lot more performant because shadows are drawn to a texture which is then used for rendering---this avoids a lot of calculations in the fragment shader on the fly.
+
+Lights now display their elevation when the lighting layer is active.
+
+Token vision is now based on token height, which can be set using Wall Height module. Making a token prone reduces the token height and changes the shadows accordingly.
+
 # 0.5.2
 GM can define a minimum and maximum elevation color in settings. The coloration in the elevation layer will be interpolated between the two colors, based on the scene minimum and the current maximum elevation in the scene.
 
