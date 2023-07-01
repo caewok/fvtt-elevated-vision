@@ -56,12 +56,16 @@ export class ShadowTextureRenderer {
   }
 
   /**
-   * Top left corner of the source boundary.
-   * Used to anchor the mesh passed to the renderer.
-   * @type {PIXI.Point}
+   * Position of the mesh relative to the render texture.
+   * The render texture goes from 0,0 --> width, height.
+   * But the mesh is in canvas coordinates.
+   * Center the render texture on the source center by moving the mesh in the opposite direction.
    */
-  get topLeft() {
-    return PIXI.Point.fromObject(this.source).translate(-this.width * 0.5, -this.height * 0.5);
+  get meshPosition() {
+    return new PIXI.Point(
+      -this.source.x + (this.width * 0.5),
+      -this.source.y + (this.height * 0.5)
+    );
   }
 
   /**
@@ -71,8 +75,9 @@ export class ShadowTextureRenderer {
    */
   renderShadowMeshToTexture() {
     const tl = this.topLeft;
-    this.mesh.position = { x: -tl.x, y: -tl.y };
+    this.mesh.position.set(this.meshPosition.x, this.meshPosition.y);
     // console.debug(`elevatedvision|renderShadowMeshToTexture|position is ${-tl.x},${-tl.y}`);
+    this.mesh.position.set(0, 0);
 
     canvas.app.renderer.render(this.mesh, { renderTexture: this.renderTexture, clear: true });
     return this.renderTexture;
@@ -113,11 +118,17 @@ export class ShadowTextureRenderer {
 }
 
 export class ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer {
+  /** @type {number} */
   get width() { return canvas.dimensions.width; }
 
+  /** @type {number} */
   get height() { return canvas.dimensions.height; }
 
-  get topLeft() { return new PIXI.Point(0, 0); }
+  /**
+   * Here, the render texture and the mesh are the same coordinate system: the canvas
+   * @type {PIXI.Point}
+   */
+  get meshPosition() { return new PIXI.Point(0, 0); }
 }
 
 /* Testing
