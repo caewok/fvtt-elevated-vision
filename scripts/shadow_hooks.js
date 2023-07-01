@@ -3,6 +3,7 @@ canvas,
 flattenObject,
 GlobalLightSource,
 Hooks,
+LimitedAnglePolygon,
 PIXI,
 RenderedPointSource
 */
@@ -339,6 +340,14 @@ export function EVVisionLOSMaskVisionSource() {
     console.error("elevatedvision|EVVisionLOSMaskVisionSource|No shadowVisionLOSMask.");
   }
 
+//   if ( this.object.hasLimitedSourceAngle ) {
+//     // Add a mask for the limited angle polygon.
+//     const { angle, rotation, externalRadius } = this.data;
+//     const radius = canvas.dimensions.maxR;
+//     const ltdPoly = new LimitedAnglePolygon(this, { radius, angle, rotation, externalRadius });
+//     return addShapeToShadowMask(ltdPoly, this[MODULE_ID].shadowVisionLOSMask);
+//   }
+
   return this[MODULE_ID].shadowVisionLOSMask;
 }
 
@@ -350,24 +359,37 @@ export function EVVisionMaskVisionSource() {
     console.error("elevatedvision|EVVisionMaskVisionSource|No shadowVisionLOSMask.");
   }
 
-  // return this[MODULE_ID].shadowVisionMask;
-
-  // Ideally, could just pass shadowVisionLOSMask with a circle mask added.
-  // This fails b/c masking breaks it.
-
-  const c = new PIXI.Container();
-  c.addChild(this[MODULE_ID].shadowVisionLOSMask);
+  if ( this.object.hasLimitedSourceAngle ) {
+    // Add a mask for the limited angle polygon.
+    const { radius, angle, rotation, externalRadius } = this.data;
+    const ltdPoly = new LimitedAnglePolygon(this, { radius, angle, rotation, externalRadius });
+    return addShapeToShadowMask(ltdPoly, this[MODULE_ID].shadowVisionLOSMask);
+  }
 
   // Mask the radius circle for this vision source.
   // Do not add as mask to container; can simply add to container as a child
   // b/c the entire container is treated as a mask by the vision system.
   const r = this.radius || this.data.externalRadius;
-  const g = new PIXI.Graphics();
-  const draw = new Draw(g);
+  const cir = new PIXI.Circle(this.x, this.y, r);
+  return addShapeToShadowMask(cir, this[MODULE_ID].shadowVisionLOSMask);
+}
 
+/**
+ * Build a new container with two children: the shadowMask and the shape, as a graphic.
+ * @param {PIXI.Circle|PIXI.Rectangle|PIXI.Polygon} shape
+ * @param {PIXI.Mesh} shadowMask
+ * @returns {PIXI.Container}
+ */
+function addShapeToShadowMask(shape, shadowMask) {
+  const c = new PIXI.Container();
+  c.addChild(shadowMask);
+
+  // Draw the shape and add to the container
   // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
   // and that causes a border to appear outside the shape.
-  draw.shape(new PIXI.Circle(this.x, this.y, r), { width: 0, fill: 0xFF0000 });
+  const g = new PIXI.Graphics();
+  const draw = new Draw(g);
+  draw.shape(shape, { width: 0, fill: 0xFF0000 });
   c.addChild(g);
   return c;
 }
