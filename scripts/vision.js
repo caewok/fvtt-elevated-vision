@@ -138,10 +138,8 @@ export function refreshVisibilityCanvasVisibility() {
 
     if ( !lightSource.active ) continue;
     refreshCache = true;
-    if ( draw ) {
-      if ( lightSource instanceof GlobalLightSource ) vision.fov.lights.drawShape(lightSource.shape);
-      else vision.fov.lights.addChild(mask);
-    }
+    if ( draw ) vision.fov.lights.addChild(mask);
+
   }
 
   // Do we need to cache the lights into the lightsSprite render texture?
