@@ -102,11 +102,11 @@ export function _configureRenderedPointSource(wrapped, changes) {
   if ( changedPosition ) {
     ev.shadowRenderer?.update();
     ev.shadowVisionLOSRenderer?.update();
-    ev.shadowVisionLOSMask?.updateGeometry(this.los.bounds);
-    ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.source.bounds);
+    // ev.shadowVisionLOSMask?.updateGeometry(this.los.bounds); Unneeded b/c using canvas.dimensions.rect
+    ev.shadowQuadMesh?.updateGeometry(this.bounds);
 
     if ( ev.shadowVisionMask ) {
-      ev.shadowVisionMask.updateGeometry(this.shape.bounds);
+      ev.shadowVisionMask.updateGeometry(this.bounds);
       ev.shadowVisionMask.shader.updateSourcePosition(this);
     }
 
@@ -114,11 +114,11 @@ export function _configureRenderedPointSource(wrapped, changes) {
 
   } else if ( changedRadius ) {
     ev.shadowRenderer?.updateSourceRadius();
-    ev.shadowQuadMesh?.updateGeometry(ev.shadowRenderer.source.bounds);
+    ev.shadowQuadMesh?.updateGeometry(this.bounds);
     // ev.shadowVisionMask.scale = { x: this.radius, y: this.radius };
 
     if ( ev.shadowVisionMask ) {
-      ev.shadowVisionMask.updateGeometry(this.shape.bounds);
+      ev.shadowVisionMask.updateGeometry(this.bounds);
       ev.shadowVisionMask.shader.updateSourceRadius(this);
     }
 
@@ -191,7 +191,7 @@ function initializeSourceShadersHook(source) {
   // Build the vision mask.
   if ( !ev.shadowVisionMask ) {
     const shader = ShadowVisionMaskShader.create(source, ev.shadowRenderer.renderTexture);
-    ev.shadowVisionMask = new EVQuadMesh(source.shape.bounds, shader);
+    ev.shadowVisionMask = new EVQuadMesh(source.bounds, shader);
 //     ev.shadowVisionMask.position.copyFrom(source);
 //     ev.shadowVisionMask.scale = { x: source.radius, y: source.radius };
   }
@@ -206,7 +206,7 @@ function initializeSourceShadersHook(source) {
 
     // Build LOS vision mask.
     const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowVisionLOSRenderer.renderTexture);
-    ev.shadowVisionLOSMask = new EVQuadMesh(source.los.bounds, shader);
+    ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
   }
 
   // TODO: Comment out the shadowQuadMesh.
