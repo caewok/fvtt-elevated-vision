@@ -129,15 +129,6 @@ Hooks.once("init", function() {
      * @type {number}
      */
     averageTiles: 2,
-
-    /**
-     * Maximum number of walls passed to the GLSL shader.
-     * This has a performance consequence. Also, even if the number of walls is not
-     * reached in a scene, setting this value too high could result in errors if it
-     * exceeds the maximum permissible number of uniforms that can be sent to the GPU.
-     *
-     */
-    maxShaderWalls: 100
   };
 
   game.modules.get(MODULE_ID).api = {
