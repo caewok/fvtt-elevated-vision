@@ -294,3 +294,15 @@ export function cloneToken(wrapper) {
 }
 
 
+/**
+ * Monitor for the prone active effect and update vision for affected tokens.
+ * This will cause shadows to change based on the changed token height.
+ */
+export function createOrRemoveActiveEffectHook(effect, _opts, _userId) {
+  if ( !effect.statuses.has(CONFIG.GeometryLib.proneStatusId) ) return;
+
+  const tokens = effect.parent?.getActiveTokens();
+  if ( !tokens) return;
+
+  tokens.forEach(t => t.vision._updateEVShadowData({changedElevation: true}));
+}
