@@ -4,22 +4,18 @@ flattenObject,
 GlobalLightSource,
 Hooks,
 PIXI,
-PolygonMesher,
 VisionSource
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "./const.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
-import { SETTINGS, getSceneSetting } from "./settings.js";
 
-import { ShadowWallShader, ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
+import { ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer, ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { PointSourceShadowWallGeometry, SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { ShadowVisionMaskShader, ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
-import { TestShadowShader } from "./glsl/TestShadowShader.js";
 
 /* Shadow texture workflow
 
@@ -41,10 +37,6 @@ LightSource
      Uses shadowRenderer.renderTexture (3) as uniform
    - geometry: source.layers.background.mesh.geometry
      Could probably use QuadMesh with light bounds instead but might need the circle radius.
-5. shadowQuadMesh (EVQuadMesh extends PIXI.Mesh)
-   - shader: shadowRenderer.renderTexture
-   - geometry: Custom quad
-   For testing drawing the renderTexture.
 
 VisionSource FOV
 1–5: Same as LightSource. Used for the FOV, which has a radius.
@@ -67,13 +59,7 @@ VisionSource LOS
      Draws only lighted areas in red, discards shadow areas.
      Uses shadowVisionLOSRenderer.renderTexture (3.1) as uniform
 
-
-
-
-
 */
-
-
 
 // NOTE: Wraps for RenderedPointSource methods.
 
@@ -103,7 +89,6 @@ export function _configureRenderedPointSource(wrapped, changes) {
     ev.shadowRenderer?.update();
     ev.shadowVisionLOSRenderer?.update();
     // ev.shadowVisionLOSMask?.updateGeometry(this.los.bounds); Unneeded b/c using canvas.dimensions.rect
-    ev.shadowQuadMesh?.updateGeometry(this.bounds);
 
     if ( ev.shadowVisionMask ) {
       ev.shadowVisionMask.updateGeometry(this.bounds);
@@ -114,7 +99,6 @@ export function _configureRenderedPointSource(wrapped, changes) {
 
   } else if ( changedRadius ) {
     ev.shadowRenderer?.updateSourceRadius();
-    ev.shadowQuadMesh?.updateGeometry(this.bounds);
     // ev.shadowVisionMask.scale = { x: this.radius, y: this.radius };
 
     if ( ev.shadowVisionMask ) {
@@ -133,10 +117,8 @@ export function destroyRenderedPointSource(wrapped) {
   const ev = this[MODULE_ID];
   if ( !ev ) return wrapped();
 
-  if ( ev.shadowQuadMesh && canvas.effects.EVshadows ) canvas.effects.EVshadows.removeChild(ev.shadowQuadMesh);
 
   const assets = [
-    "shadowQuadMesh",
     "shadowRenderer",
     "shadowMesh",
     "wallGeometry",
@@ -209,19 +191,44 @@ function initializeSourceShadersHook(source) {
     ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
   }
 
-  // TODO: Comment out the shadowQuadMesh.
-  // Testing use only.
-  if ( !ev.shadowQuadMesh ) {
-    const shader = TestShadowShader.create(ev.shadowRenderer.renderTexture);
-    ev.shadowQuadMesh = new EVQuadMesh(ev.shadowRenderer.source.bounds, shader);
-  }
-  // For testing, add to the canvas effects
-  //   if ( !canvas.effects.EVshadows ) canvas.effects.EVshadows = canvas.effects.addChild(new PIXI.Container());
-  //   canvas.effects.EVshadows.addChild(ev.shadowQuadMesh);
   source.layers.illumination.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
   source.layers.coloration.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
   source.layers.background.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
 }
+
+/* RenderedSource
+// Methods
+
+// Getters
+- EVVisionMask
+
+// elevatedvision properties
+- wallGeometry
+- shadowMesh
+- shadowRenderer
+- shadowVisionMask
+*/
+
+/* VisionSource
+// Getters
+- EVVisionLOSMask
+
+// elevatedvision properties
+- shadowVisionLOSRenderer
+- shadowVisionLOSMask
+- wallGeometryUnbounded
+- shadowVisionLOSMesh
+
+*/
+
+
+// NOTE: RenderedSource shadow methods and getters
+
+
+// NOTE: VisionSource shadow methods and getters
+
+
+// NOTE: GlobalLightSource shadow methods and getters
 
 
 // NOTE: Wall handling for RenderedPointSource
