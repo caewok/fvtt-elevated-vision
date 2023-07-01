@@ -15,18 +15,16 @@ export class ShadowVisionMaskShader extends AbstractEVShader {
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec2 aVertexPosition;
+in vec2 aTextureCoord;
 
 out vec2 vVertexPosition;
 out vec2 vTextureCoord;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
-uniform vec2 uCanvasDim; // width, height
 
 void main() {
-  // Don't use aTextureCoord because it is broken.
-  // https://ptb.discord.com/channels/170995199584108546/811676497965613117/1122891745705861211
-  vTextureCoord = aVertexPosition / uCanvasDim;
+  vTextureCoord = aTextureCoord;
   vVertexPosition = aVertexPosition;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
 }`;
@@ -47,10 +45,11 @@ uniform vec2 uSourcePosition;
 uniform float uSourceRadius2;
 
 ${defineFunction("between")}
+${defineFunction("distanceSquared")}
 
 void main() {
-  if ( any(equal(between(0.0, 1.0, vTextureCoord), vec2(0.0))) ) discard;
-  float dist2 = dot(vVertexPosition, uSourcePosition);
+  // if ( any(equal(between(0.0, 1.0, vTextureCoord), vec2(0.0))) ) discard;
+  float dist2 = distanceSquared(vVertexPosition, uSourcePosition);
   if ( dist2 > uSourceRadius2 ) discard;
 
   vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
@@ -78,17 +77,14 @@ void main() {
    */
   static defaultUniforms = {
     uShadowSampler: 0,
-    uCanvasDim: [1, 1],  // Params: width, height
     uSourcePosition: [0, 0],
-    uSourceRadius: 1
+    uSourceRadius2: 1
   };
 
   static create(source, shadowSampler, defaultUniforms = {}) {
-    const { width, height } = canvas.dimensions;
     const radius = source.radius || source.data.externalRadius;
 
     defaultUniforms.uShadowSampler = shadowSampler.baseTexture;
-    defaultUniforms.uCanvasDim = [width, height];
     defaultUniforms.uSourcePosition = [source.x, source.y];
     defaultUniforms.uSourceRadius2 = Math.pow(radius, 2);
 
@@ -97,12 +93,12 @@ void main() {
     return out;
   }
 
-  updateSourcePosition() {
-    this.uniforms.uSourcePosition = [this.source.x, this.source.y];
+  updateSourcePosition(source) {
+    this.uniforms.uSourcePosition = [source.x, source.y];
   }
 
-  updateSourceRadius() {
-    const radius = this.source.radius || this.source.data.externalRadius;
+  updateSourceRadius(source) {
+    const radius = source.radius || source.data.externalRadius;
     this.uniforms.uSourceRadius2 = Math.pow(radius, 2);
   }
 }
@@ -119,18 +115,16 @@ export class ShadowVisionMaskTokenLOSShader extends AbstractEVShader {
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec2 aVertexPosition;
+in vec2 aTextureCoord;
 
 out vec2 vVertexPosition;
 out vec2 vTextureCoord;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
-uniform vec2 uCanvasDim; // width, height
 
 void main() {
-  // Don't use aTextureCoord because it is broken.
-  // https://ptb.discord.com/channels/170995199584108546/811676497965613117/1122891745705861211
-  vTextureCoord = aVertexPosition / uCanvasDim;
+  vTextureCoord = aTextureCoord;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
 }`;
 
@@ -153,6 +147,7 @@ void main() {
   if ( any(equal(between(0.0, 1.0, vTextureCoord), vec2(0.0))) ) discard;
 
   vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
+
   float lightAmount = shadowTexel.r;
 
   // If more than 1 limited wall at this point, add to the shadow.
@@ -177,12 +172,9 @@ void main() {
    */
   static defaultUniforms = {
     uShadowSampler: 0,
-    uCanvasDim: [1, 1]  // Params: width, height
   };
 
   static create(shadowSampler, defaultUniforms = {}) {
-    const { width, height } = canvas.dimensions;
-    defaultUniforms.uCanvasDim = [width, height];
     defaultUniforms.uShadowSampler = shadowSampler.baseTexture;
     return super.create(defaultUniforms);
   }
@@ -206,6 +198,7 @@ source = _token.vision
 
 shadowMesh = source.elevatedvision.shadowMesh
 canvas.stage.addChild(shadowMesh)
+canvas.stage.removeChild(shadowMesh)
 
 str = new ShadowTextureRenderer(source, shadowMesh);
 rt = str.renderShadowMeshToTexture()
@@ -223,6 +216,16 @@ canvas.stage.removeChild(quadMesh);
 
 // Testing the already constructed mask
 Draw.shape(source.object.los, { color: Draw.COLORS.red, width: 5 });
+
+shadowMesh = source.elevatedvision.shadowMesh
+canvas.stage.addChild(shadowMesh)
+canvas.stage.removeChild(shadowMesh)
+
+str = source.elevatedvision.shadowRenderer;
+s = new PIXI.Sprite(str.renderTexture)
+canvas.stage.addChild(s)
+canvas.stage.removeChild(s)
+
 
 mask = source.elevatedvision.shadowVisionMask
 canvas.stage.addChild(mask)
