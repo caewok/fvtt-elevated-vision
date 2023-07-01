@@ -44,7 +44,7 @@ import { SETTINGS, registerSettings, getSceneSetting, setSceneSetting } from "./
 import { updateFlyTokenControl } from "./scenes.js";
 
 // Hooks
-import { preUpdateTokenHook, refreshTokenHook } from "./tokens.js";
+import { preUpdateTokenHook, refreshTokenHook, createOrRemoveActiveEffectHook } from "./tokens.js";
 import { updateTileHook } from "./tiles.js";
 
 import {
@@ -238,6 +238,8 @@ function registerLayer() {
 
 Hooks.on("preUpdateToken", preUpdateTokenHook);
 Hooks.on("refreshToken", refreshTokenHook);
+Hooks.on("createActiveEffect", createOrRemoveActiveEffectHook);
+Hooks.on("deleteActiveEffect", createOrRemoveActiveEffectHook);
 
 Hooks.on("updateTile", updateTileHook);
 Hooks.on("renderTileConfig", renderTileConfigHook);
