@@ -3,6 +3,7 @@ AmbientLight,
 canvas,
 CanvasVisibility,
 ClockwiseSweepPolygon,
+GlobalLightSource,
 libWrapper,
 PIXI,
 RenderedPointSource,
@@ -59,7 +60,19 @@ import {
   EVVisionMaskRenderedPointSource,
   EVVisionLOSMaskVisionSource,
   EVVisionMaskGlobalLightSource,
-  EVVisionMaskVisionSource } from "./shadow_hooks.js";
+  EVVisionMaskVisionSource,
+
+  _initializeEVShadowGeometryRenderedPointSource,
+  _initializeEVShadowTextureRenderedPointSource,
+  _initializeEVShadowMaskRenderedPointSource,
+
+  _initializeEVShadowGeometryVisionSource,
+  _initializeEVShadowTextureVisionSource,
+  _initializeEVShadowMaskVisionSource,
+
+  _initializeEVShadowGeometryGlobalLightSource,
+  _initializeEVShadowTextureGlobalLightSource,
+  _initializeEVShadowMaskGlobalLightSource } from "./shadow_hooks.js";
 
 import {
   _drawAmbientLight,
@@ -177,8 +190,19 @@ export function registerAdditions() {
   addClassGetter(RenderedPointSource.prototype, "EVVisionMask", EVVisionMaskRenderedPointSource);
   addClassGetter(VisionSource.prototype, "EVVisionLOSMask", EVVisionLOSMaskVisionSource);
   addClassGetter(GlobalLightSource.prototype, "EVVisionMask", EVVisionMaskGlobalLightSource);
-
   addClassGetter(VisionSource.prototype, "EVVisionMask", EVVisionMaskVisionSource);
+
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
+
+  addClassMethod(VisionSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryVisionSource);
+  addClassMethod(VisionSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureVisionSource);
+  addClassMethod(VisionSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskVisionSource);
+
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryGlobalLightSource);
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureGlobalLightSource);
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskGlobalLightSource);
 
   // For light elevation tooltip
   addClassMethod(AmbientLight.prototype, "_drawTooltip", _drawTooltipAmbientLight);

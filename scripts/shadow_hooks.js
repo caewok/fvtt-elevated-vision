@@ -4,6 +4,7 @@ flattenObject,
 GlobalLightSource,
 Hooks,
 PIXI,
+RenderedPointSource,
 VisionSource
 */
 "use strict";
@@ -152,46 +153,12 @@ function initializeSourceShadersHook(source) {
   if ( source instanceof GlobalLightSource ) return;
   const ev = source[MODULE_ID] ??= {};
 
-  // Build the geometry.
-  ev.wallGeometry ??= new PointSourceShadowWallGeometry(source);
+  // Build the geometry, shadow texture, and vision mask.
+  source._initializeEVShadowGeometry();
+  source._initializeEVShadowTexture();
+  source._initializeEVShadowMask();
 
-  // Build the shadow mesh.
-  if ( !ev.shadowMesh ) {
-    ev.shadowMesh = new ShadowWallPointSourceMesh(source, ev.wallGeometry);
-
-    // Force a uniform update, to avoid ghosting of placeables in the light radius.
-    // TODO: Find the underlying issue and fix this!
-    // Must be a new uniform variable (one that is not already in uniforms)
-    source.layers.background.shader.uniforms.uEVtmpfix = 0;
-    source.layers.coloration.shader.uniforms.uEVtmpfix = 0;
-    source.layers.illumination.shader.uniforms.uEVtmpfix = 0;
-  }
-
-  // Build the shadow render texture
-  ev.shadowRenderer ??= new ShadowTextureRenderer(source, ev.shadowMesh);
-  ev.shadowRenderer.renderShadowMeshToTexture();
-
-  // Build the vision mask.
-  if ( !ev.shadowVisionMask ) {
-    const shader = ShadowVisionMaskShader.create(source, ev.shadowRenderer.renderTexture);
-    ev.shadowVisionMask = new EVQuadMesh(source.bounds, shader);
-//     ev.shadowVisionMask.position.copyFrom(source);
-//     ev.shadowVisionMask.scale = { x: source.radius, y: source.radius };
-  }
-
-  // If vision source, build extra LOS geometry and add an additional mask for the LOS.
-  if ( source instanceof VisionSource && !ev.shadowVisionLOSMesh ) {
-    // Shadow mesh of the entire canvas for LOS.
-    ev.wallGeometryUnbounded = new SourceShadowWallGeometry(source);
-    ev.shadowVisionLOSMesh = new ShadowWallPointSourceMesh(source, ev.wallGeometryUnbounded);
-    ev.shadowVisionLOSRenderer = new ShadowVisionLOSTextureRenderer(source, ev.shadowVisionLOSMesh);
-    ev.shadowVisionLOSRenderer.renderShadowMeshToTexture();
-
-    // Build LOS vision mask.
-    const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowVisionLOSRenderer.renderTexture);
-    ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
-  }
-
+  // TODO: Does this need to be reset every time?
   source.layers.illumination.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
   source.layers.coloration.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
   source.layers.background.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
@@ -199,6 +166,9 @@ function initializeSourceShadersHook(source) {
 
 /* RenderedSource
 // Methods
+- _initializeEVShadowGeometry
+- _initializeEVShadowTexture
+- _initializeEVShadowMask
 
 // Getters
 - EVVisionMask
@@ -211,8 +181,14 @@ function initializeSourceShadersHook(source) {
 */
 
 /* VisionSource
+// Methods
+- _initializeEVShadowGeometry (mixed)
+- _initializeEVShadowTexture (mixed)
+- _initializeEVShadowMask (mixed)
+
 // Getters
 - EVVisionLOSMask
+- EVVisionMask (override)
 
 // elevatedvision properties
 - shadowVisionLOSRenderer
@@ -222,9 +198,61 @@ function initializeSourceShadersHook(source) {
 
 */
 
+/* GlobalLightSource
+// Methods
+- _initializeEVShadowGeometry (override)
+- _initializeEVShadowTexture (override)
+- _initializeEVShadowMask (override)
+
+// Getters
+- EVVisionMask (override)
+
+*/
+
 
 // NOTE: RenderedSource shadow methods and getters
 
+/**
+ * New method: RenderedPointSource.prototype._initializeEVShadowGeometry
+ */
+export function _initializeEVShadowGeometryRenderedPointSource() {
+  const ev = this[MODULE_ID] ??= {};
+  ev.wallGeometry ??= new PointSourceShadowWallGeometry(this);
+}
+
+/**
+ * New method: RenderedPointSource.prototype._initializeEVShadowTexture
+ */
+export function _initializeEVShadowTextureRenderedPointSource() {
+  const ev = this[MODULE_ID];
+  if ( ev.shadowRenderer ) return;
+
+  // Mesh that describes shadows for the given geometry and source origin.
+  ev.shadowMesh = new ShadowWallPointSourceMesh(this, ev.wallGeometry);
+
+  // Force a uniform update, to avoid ghosting of placeables in the light radius.
+  // TODO: Find the underlying issue and fix this!
+  // Must be a new uniform variable (one that is not already in uniforms)
+  this.layers.background.shader.uniforms.uEVtmpfix = 0;
+  this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
+  this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
+
+  // Render texture to store the shadow mesh for use by other shaders.
+  ev.shadowRenderer = new ShadowTextureRenderer(this, ev.shadowMesh);
+  ev.shadowRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
+}
+
+/**
+ * New method: RenderedPointSource.prototype._initializeEVShadowMask
+ */
+export function _initializeEVShadowMaskRenderedPointSource() {
+  const ev = this[MODULE_ID];
+  if ( ev.shadowVisionMask ) return;
+
+  // Mask that colors red areas that are lit / are viewable.
+  const shader = ShadowVisionMaskShader.create(this, ev.shadowRenderer.renderTexture);
+  ev.shadowVisionMask = new EVQuadMesh(this.bounds, shader);
+}
 
 /**
  * New getter: RenderedPointSource.prototype.EVVisionMask
@@ -238,6 +266,53 @@ export function EVVisionMaskRenderedPointSource() {
 }
 
 // NOTE: VisionSource shadow methods and getters
+
+/**
+ * New method: VisionSource.prototype._initializeEVShadowGeometry
+ * Use SourceShadowWallGeometry, which does not restrict based on source bounds.
+ */
+export function _initializeEVShadowGeometryVisionSource() {
+  // In lieu of super._initializeEVShadowGeometry
+  RenderedPointSource.prototype._initializeEVShadowGeometry.call(this);
+
+  // Build extra LOS geometry.
+  const ev = this[MODULE_ID];
+  ev.wallGeometryUnbounded ??= new SourceShadowWallGeometry(this);
+}
+
+/**
+ * New method: VisionSource.prototype._initializeEVShadowTexture
+ * Add a second LOS renderer that covers the entire canvas.
+ */
+export function _initializeEVShadowTextureVisionSource() {
+  const ev = this[MODULE_ID];
+  if ( ev.shadowVisionLOSRenderer ) return;
+
+  // Instead of super._initializeEVShadowTexture()
+  RenderedPointSource.prototype._initializeEVShadowTexture.call(this);
+
+  // Build extra LOS shadow mesh and render to a texture for use by other shaders.
+  ev.shadowVisionLOSMesh = new ShadowWallPointSourceMesh(this, ev.wallGeometryUnbounded);
+  ev.shadowVisionLOSRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowVisionLOSMesh);
+  ev.shadowVisionLOSRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
+}
+
+/**
+ * New method: VisionSource.prototype._initializeEVShadowMask
+ * Mask of entire canvas (LOS)
+ */
+export function _initializeEVShadowMaskVisionSource() {
+  const ev = this[MODULE_ID];
+  if ( ev.shadowVisionLOSMask ) return;
+
+  // Instead of super._initializeEVShadowMask
+  RenderedPointSource.prototype._initializeEVShadowMask.call(this);
+
+  // Build add an additional mask for the LOS.
+  // Mask that colors red areas that are lit / are viewable.
+  const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowVisionLOSRenderer.renderTexture);
+  ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
+}
 
 /**
  * New getter: VisionSource.prototype.EVVisionLOSMask
@@ -273,10 +348,20 @@ export function EVVisionMaskVisionSource() {
 //   const draw = new Draw(g);
 //   draw.shape(new PIXI.Circle(this.x, this.y, r), { fill: 0xFF0000 });
 //   c.mask = g;
-  return c;
+  // return c;
 }
 
 // NOTE: GlobalLightSource shadow methods and getters
+/**
+ * Return early for initialization methods b/c not calculating shadows.
+ * New methods:
+ * - GlobalLightSource.prototype._initializeEVShadowGeometry
+ * - GlobalLightSource.prototype._initializeEVShadowTexture
+ * - GlobalLightSource.prototype._initializeEVShadowMask
+ */
+export function _initializeEVShadowGeometryGlobalLightSource() { return undefined; }
+export function _initializeEVShadowTextureGlobalLightSource() { return undefined; }
+export function _initializeEVShadowMaskGlobalLightSource() { return undefined; }
 
 /**
  * New getter: GlobalLightSource.prototype.EVVisionMask
