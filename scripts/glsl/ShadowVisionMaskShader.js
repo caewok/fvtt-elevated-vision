@@ -231,6 +231,11 @@ mask = source.elevatedvision.shadowVisionMask
 canvas.stage.addChild(mask)
 canvas.stage.removeChild(mask)
 
+
+mask = source.EVVisionMask
+canvas.stage.addChild(mask)
+canvas.stage.removeChild(mask)
+
 // Test the vision LOS mask
 Draw.shape(source.object.fov, { color: Draw.COLORS.red, width: 5 });
 Draw.shape(source.object.los, { color: Draw.COLORS.blue, width: 5 });
