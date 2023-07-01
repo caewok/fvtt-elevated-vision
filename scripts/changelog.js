@@ -97,7 +97,12 @@ Hooks.once("ready", () => {
                   from scratch. There is no longer a limit on the number of walls it can consider when calculating
                   shadows using the GPU. WebGL shadows also should be a lot more performant.
                 - **Elevation label on lights:** Heading says it all—--When in the lighting layer, lights
-                  will display their current elevation.`
+                  will display their current elevation.
+                - **Token heights and prone status:** Token vision is (once again) based on token height.
+                  The Wall Height module allows you to set this value or it can be auto-calculated.
+                  When the prone status is enabled/disabled on a token, its height is decreased by two-thirds
+                  (consistent with Wall Height) and the token vision shadows are updated to reflect
+                  the new height.`
         })
 
         .build()
