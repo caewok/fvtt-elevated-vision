@@ -136,6 +136,7 @@ function initializeSourceShadersHook(source) {
 - _initializeEVShadowGeometry
 - _initializeEVShadowTexture
 - _initializeEVShadowMask
+- _updateEVShadowData
 
 // Getters
 - EVVisionMask
@@ -152,6 +153,7 @@ function initializeSourceShadersHook(source) {
 - _initializeEVShadowGeometry (override) (use unbounded geometry)
 - _initializeEVShadowTexture (mixed)
 - _initializeEVShadowMask (mixed)
+- _updateEVShadowData (mixed)
 
 // Getters
 - EVVisionLOSMask
@@ -168,6 +170,7 @@ function initializeSourceShadersHook(source) {
 - _initializeEVShadowGeometry (override)
 - _initializeEVShadowTexture (override)
 - _initializeEVShadowMask (override)
+- _updateEVShadowData (override)
 
 // Getters
 - EVVisionMask (override)
@@ -194,13 +197,6 @@ export function _initializeEVShadowTextureRenderedPointSource() {
 
   // Mesh that describes shadows for the given geometry and source origin.
   ev.shadowMesh = new ShadowWallPointSourceMesh(this, ev.wallGeometry);
-
-  // Force a uniform update, to avoid ghosting of placeables in the light radius.
-  // TODO: Find the underlying issue and fix this!
-  // Must be a new uniform variable (one that is not already in uniforms)
-  this.layers.background.shader.uniforms.uEVtmpfix = 0;
-  this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
-  this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
 
   // Render texture to store the shadow mesh for use by other shaders.
   ev.shadowRenderer = new ShadowTextureRenderer(this, ev.shadowMesh);
