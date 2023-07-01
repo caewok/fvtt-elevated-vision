@@ -76,10 +76,8 @@ export class ShadowTextureRenderer {
   renderShadowMeshToTexture() {
     const tl = this.topLeft;
     this.mesh.position.set(this.meshPosition.x, this.meshPosition.y);
-    // console.debug(`elevatedvision|renderShadowMeshToTexture|position is ${-tl.x},${-tl.y}`);
-    this.mesh.position.set(0, 0);
-
     canvas.app.renderer.render(this.mesh, { renderTexture: this.renderTexture, clear: true });
+    this.mesh.position.set(0, 0);
     return this.renderTexture;
   }
 
