@@ -334,12 +334,14 @@ export function _updateEVShadowDataVisionSource({ changedPosition, changedRadius
 
 /**
  * New getter: VisionSource.prototype.EVVisionLOSMask
+ * Line of sight for this vision source
  */
 export function EVVisionLOSMaskVisionSource() {
   if ( !this[MODULE_ID]?.shadowVisionLOSMask ) {
     console.error("elevatedvision|EVVisionLOSMaskVisionSource|No shadowVisionLOSMask.");
   }
 
+  // This seems to cause problems; do this in FOV instead.
 //   if ( this.object.hasLimitedSourceAngle ) {
 //     // Add a mask for the limited angle polygon.
 //     const { angle, rotation, externalRadius } = this.data;
@@ -353,6 +355,7 @@ export function EVVisionLOSMaskVisionSource() {
 
 /**
  * New getter: VisionSource.prototype.EVVisionMask
+ * Field-of-view (FOV) for this vision source.
  */
 export function EVVisionMaskVisionSource() {
   if ( !this[MODULE_ID]?.shadowVisionLOSMask ) {
