@@ -173,7 +173,7 @@ function initializeSourceShadersHook(source) {
  * New method: RenderedPointSource.prototype._initializeEVShadows
  */
 export function _initializeEVShadowsRenderedPointSource() {
-  if ( !this[MODULE_ID] ) this[MODULE_ID] = {}
+  if ( !this[MODULE_ID] ) this[MODULE_ID] = {};
 
   // Build the geometry, shadow texture, and vision mask.
   this._initializeEVShadowGeometry();
