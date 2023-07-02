@@ -30,7 +30,7 @@ import { SourceShadowWallGeometry, DirectionalSourceShadowWallGeometry, PointSou
 import { ShadowWallShader, ShadowWallPointSourceMesh, TestGeometryShader } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { TestShadowShader } from "./glsl/TestShadowShader.js";
-import { DirectionalLightSource } from "./directional-lights.js";
+import { DirectionalLightSource } from "./directional_lights.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
