@@ -178,6 +178,12 @@ void main() {
     defaultUniforms.uShadowSampler = shadowSampler.baseTexture;
     return super.create(defaultUniforms);
   }
+
+  // Disable unused methods.
+  updateSourcePosition(source) { return; }
+
+  updateSourceRadius(source) { return; }
+
 }
 
 /* Testing
