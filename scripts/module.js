@@ -30,6 +30,7 @@ import { SourceShadowWallGeometry, DirectionalSourceShadowWallGeometry, PointSou
 import { ShadowWallShader, ShadowWallPointSourceMesh, TestGeometryShader } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { TestShadowShader } from "./glsl/TestShadowShader.js";
+import { DirectionalLightSource } from "./directional-lights.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -128,7 +129,7 @@ Hooks.once("init", function() {
      * Larger numbers will make averaging faster but less precise.
      * @type {number}
      */
-    averageTiles: 2,
+    averageTiles: 2
   };
 
   game.modules.get(MODULE_ID).api = {
@@ -157,7 +158,8 @@ Hooks.once("init", function() {
     EVQuadMesh,
     ShadowTextureRenderer,
     TestShadowShader,
-    TestGeometryShader
+    TestGeometryShader,
+    DirectionalLightSource
   };
 
   // These methods need to be registered early
