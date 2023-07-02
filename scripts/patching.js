@@ -5,6 +5,7 @@ CanvasVisibility,
 ClockwiseSweepPolygon,
 GlobalLightSource,
 libWrapper,
+LightingLayer,
 PIXI,
 RenderedPointSource,
 SettingsConfig,
@@ -86,6 +87,12 @@ import {
   _getTooltipTextAmbientLight,
   _getTextStyleAmbientLight } from "./lighting_elevation_tooltip.js";
 
+import {
+  _onClickLeftLightingLayer,
+  _onDragLeftStartLightingLayer,
+  _onDragLeftMoveLightingLayer,
+  _onDragLeftCancelLightingLayer } from "./directional_lights.js";
+
 /**
  * Helper to wrap methods.
  * @param {string} method       Method to wrap
@@ -95,6 +102,10 @@ import {
  */
 function wrap(method, fn, options = {}) {
   return libWrapper.register(MODULE_ID, method, fn, libWrapper.WRAPPER, options);
+}
+
+function mixed(method, fn, options = {}) {
+  return libWrapper.register(MODULE_ID, method, fn, libWrapper.MIXED, options);
 }
 
 function override(method, fn, options = {}) {
@@ -168,6 +179,12 @@ export function registerPatches() {
   // ----- Lighting elevation tooltip ----- //
   wrap("AmbientLight.prototype._draw", _drawAmbientLight);
 
+  // ----- Directional lighting ----- //
+  mixed("LightingLayer.prototype._onDragLeftStart", _onDragLeftStartLightingLayer);
+  mixed("LightingLayer.prototype._onDragLeftMove", _onDragLeftMoveLightingLayer);
+  mixed("LightingLayer.prototype._onDragLeftCancel", _onDragLeftCancelLightingLayer);
+
+
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
 }
@@ -180,6 +197,9 @@ export function registerAdditions() {
   addClassMethod(Tile.prototype, "_evPixelCache", undefined);
 
   // For Polygons shadows -- Nothing added
+
+  // For Directional Lighting
+  addClassMethod(LightingLayer.prototype, "_onClickLeft", _onClickLeftLightingLayer);
 
   // For WebGL shadows
   addClassMethod(RenderedPointSource.prototype, "wallAdded", wallAddedRenderedPointSource);
