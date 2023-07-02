@@ -28,15 +28,15 @@ Hooks.on("renderTerrainLayerToolBar", renderElevationLayerSubControls);
 Hooks.on("getSceneControlButtons", addDirectionalLightingControl);
 
 function addDirectionalLightingControl(controls) {
-  const isGM = game.user.isGM;
+  // const isGM = game.user.isGM;
   const lighting = controls.find(c => c.name === "lighting");
   // if ( lighting.tools.some(t => t.name === "directionalLight") ) return;
 
   const directionalTool = {
-    name: "directionalLight",
+    name: "directional-light",
     title: game.i18n.localize(`${MODULE_ID}.controls.directional-light.name`),
     icon: "fas fa-star"
-  }
+  };
   lighting.tools = [lighting.tools[0], directionalTool, ...lighting.tools.slice(1)];
 }
 
