@@ -62,6 +62,7 @@ import {
   EVVisionMaskGlobalLightSource,
   EVVisionMaskVisionSource,
 
+  _initializeEVShadowsRenderedPointSource,
   _initializeEVShadowGeometryRenderedPointSource,
   _initializeEVShadowTextureRenderedPointSource,
   _initializeEVShadowMaskRenderedPointSource,
@@ -70,6 +71,7 @@ import {
   _initializeEVShadowTextureVisionSource,
   _initializeEVShadowMaskVisionSource,
 
+  _initializeEVShadowsGlobalLightSource,
   _initializeEVShadowGeometryGlobalLightSource,
   _initializeEVShadowTextureGlobalLightSource,
   _initializeEVShadowMaskGlobalLightSource,
@@ -196,6 +198,7 @@ export function registerAdditions() {
   addClassGetter(GlobalLightSource.prototype, "EVVisionMask", EVVisionMaskGlobalLightSource);
   addClassGetter(VisionSource.prototype, "EVVisionMask", EVVisionMaskVisionSource);
 
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadows", _initializeEVShadowsRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
@@ -204,6 +207,7 @@ export function registerAdditions() {
   addClassMethod(VisionSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureVisionSource);
   addClassMethod(VisionSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskVisionSource);
 
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadows", _initializeEVShadowsGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskGlobalLightSource);

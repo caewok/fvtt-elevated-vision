@@ -1,7 +1,6 @@
 /* globals
 canvas,
 flattenObject,
-GlobalLightSource,
 Hooks,
 LimitedAnglePolygon,
 PIXI,
@@ -118,18 +117,7 @@ export function destroyRenderedPointSource(wrapped) {
  * @param {RenderedPointSource} source
  */
 function initializeSourceShadersHook(source) {
-  if ( source instanceof GlobalLightSource ) return;
-  const ev = source[MODULE_ID] ??= {};
-
-  // Build the geometry, shadow texture, and vision mask.
-  source._initializeEVShadowGeometry();
-  source._initializeEVShadowTexture();
-  source._initializeEVShadowMask();
-
-  // TODO: Does this need to be reset every time?
-  source.layers.illumination.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
-  source.layers.coloration.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
-  source.layers.background.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+  source._initializeEVShadows();
 }
 
 /* RenderedSource
@@ -182,10 +170,28 @@ function initializeSourceShadersHook(source) {
 // NOTE: RenderedSource shadow methods and getters
 
 /**
+ * New method: RenderedPointSource.prototype._initializeEVShadows
+ */
+export function _initializeEVShadowsRenderedPointSource() {
+  if ( !this[MODULE_ID] ) this[MODULE_ID] = {}
+
+  // Build the geometry, shadow texture, and vision mask.
+  this._initializeEVShadowGeometry();
+  this._initializeEVShadowTexture();
+  this._initializeEVShadowMask();
+
+  // TODO: Does this need to be reset every time?
+  const ev = this[MODULE_ID];
+  this.layers.illumination.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+  this.layers.coloration.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+  this.layers.background.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+}
+
+/**
  * New method: RenderedPointSource.prototype._initializeEVShadowGeometry
  */
 export function _initializeEVShadowGeometryRenderedPointSource() {
-  const ev = this[MODULE_ID] ??= {};
+  const ev = this[MODULE_ID];
   ev.wallGeometry ??= new PointSourceShadowWallGeometry(this);
 }
 
@@ -401,6 +407,7 @@ function addShapeToShadowMask(shape, shadowMask) {
 /**
  * Return early for initialization and update methods b/c not calculating shadows.
  * New methods:
+ * - GlobalLightSource.prototype._initializeEVShadows
  * - GlobalLightSource.prototype._initializeEVShadowGeometry
  * - GlobalLightSource.prototype._initializeEVShadowTexture
  * - GlobalLightSource.prototype._initializeEVShadowMask
@@ -410,6 +417,7 @@ export function _initializeEVShadowGeometryGlobalLightSource() { return undefine
 export function _initializeEVShadowTextureGlobalLightSource() { return undefined; }
 export function _initializeEVShadowMaskGlobalLightSource() { return undefined; }
 export function _updateEVShadowDataGlobalLightSource(_opts) { return undefined; }
+export function _initializeEVShadowsGlobalLightSource() { return undefined; }
 
 /**
  * New getter: GlobalLightSource.prototype.EVVisionMask
@@ -555,3 +563,4 @@ Hooks.on("deleteWall", deleteWallHook);
 
 Hooks.on("initializeLightSourceShaders", initializeSourceShadersHook);
 Hooks.on("initializeVisionSourceShaders", initializeSourceShadersHook);
+Hooks.on("initializeDirectionalLightSourceShaders", initializeSourceShadersHook);
