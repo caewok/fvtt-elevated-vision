@@ -42,6 +42,7 @@
   "elevatedvision.controls.upload.name": "Upload elevation data and replace in scene",
   "elevatedvision.controls.download.name": "Download elevation data",
   "elevatedvision.controls.undo.name": "Undo",
+  "elevatedvision.controls.directional-light.name": "Directional Light",
 
   "elevatedvision.controls.add-fly-button.name": "Elevated Tokens Fly",
 
