@@ -154,7 +154,7 @@ export class DirectionalLightSource extends LightSource {
 }
 
 
-export class DirectionalLight extends AmbientLight() {
+export class DirectionalLight extends AmbientLight {
   constructor(document) {
     super(document);
 
