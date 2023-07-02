@@ -184,8 +184,10 @@ export async function _onClickLeftLightingLayer(event) {
   const activeTool = game.activeTool;
   if ( activeTool === "directional-light" ) {
     const interaction = event.interactionData;
-    const doc = new DirectionalLight(interaction.origin, {parent: canvas.scene});
-    return;
+    const cls = getDocumentClass("AmbientLight");
+    const doc = new cls(interaction.origin, {parent: canvas.scene});
+    const preview = new DirectionalLight(doc);
+    return await cls.create(preview.document.toObject(false), { parent: canvas.scene });
   }
   return PlaceablesLayer.prototype._onClickLeft.call(this, event);
 }
