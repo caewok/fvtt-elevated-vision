@@ -11,7 +11,6 @@ Wall
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "../const.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
 
 
 export class SourceShadowWallGeometry extends PIXI.Geometry {
@@ -506,16 +505,6 @@ export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
 export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometry {
 
   /**
-   * Direction of the light is from center of the canvas toward the light position and elevation.
-   * @type {Point3d}
-   */
-  get sourceDirection() {
-    const center = canvas.dimensions.sceneRect.center;
-    const srcPosition = new Point3d(this.source.x, this.source.y, this.source.elevationZ);
-    return srcPosition.subtract(center).normalize();
-  }
-
-  /**
    * Orientation of a wall to the source.
    * @param {Wall} wall
    * @returns {number}  See foundry.utils.orient2dFast.
@@ -524,7 +513,7 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
     // Wall must not be the same (2d) direction as the source
     // TODO: Do we need to add a scalar to the normalized source direction?
     const A = new PIXI.Point(wall.A.x, wall.A.y);
-    return foundry.utils.orient2dFast(A, wall.B, A.add(this.sourceDirection));
+    return foundry.utils.orient2dFast(A, wall.B, A.add(this.source.lightDirection));
   }
 
   /**

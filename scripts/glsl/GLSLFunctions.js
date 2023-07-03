@@ -46,6 +46,15 @@ vec2 between(in float a, in float b, in vec2 x) { return step(a, x) * step(x, ve
 vec3 between(in float a, in float b, in vec3 x) { return step(a, x) * step(x, vec3(b)); }
 `;
 
+GLSLFunctions.linearConversion =
+`
+/**
+ * Linear conversion from one range to another.
+ */
+float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
+  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+}`;
+
 // NOTE: Matrix
 GLSLFunctions.matrix =
 `
@@ -202,8 +211,9 @@ float orient(in vec2 a, in vec2 b, in vec2 c) {
 
 // NOTE: Barycentric
 // Calculate barycentric position within a given triangle
-GLSLFunctions.barycentric3d =
+GLSLFunctions.barycentric =
 `
+// 3d barycentric
 vec3 barycentric(in vec3 p, in vec3 a, in vec3 b, in vec3 c) {
   vec3 v0 = b - a; // Fixed for given triangle
   vec3 v1 = c - a; // Fixed for given triangle
@@ -222,10 +232,8 @@ vec3 barycentric(in vec3 p, in vec3 a, in vec3 b, in vec3 c) {
 
   return vec3(u, v, w);
 }
-`;
 
-GLSLFunctions.barycentric2d =
-`
+// 2D barycentric
 vec3 barycentric(in vec2 p, in vec2 a, in vec2 b, in vec2 c) {
   vec2 v0 = b - a;
   vec2 v1 = c - a;
@@ -290,7 +298,7 @@ vec2 closest2dPointToSegment(in vec2 c, in vec2 a, in vec2 b) {
 }
 `;
 
-GLSLFunctions.lineLineIntersection2dT =
+GLSLFunctions.lineLineIntersection2d =
 `
 bool lineLineIntersection2d(in vec2 a, in vec2 dirA, in vec2 b, in vec2 dirB, out float t) {
   float denom = (dirB.y * dirA.x) - (dirB.x * dirA.y);
@@ -302,11 +310,6 @@ bool lineLineIntersection2d(in vec2 a, in vec2 dirA, in vec2 b, in vec2 dirB, ou
   t = ((dirB.x * diff.y) - (dirB.y * diff.x)) / denom;
   return true;
 }
-`;
-
-GLSLFunctions.lineLineIntersection2d =
-`
-${defineFunction("lineLineIntersection2dT")}
 
 bool lineLineIntersection2d(in vec2 a, in vec2 dirA, in vec2 b, in vec2 dirB, out vec2 ix) {
   float t = 0.0;
@@ -592,3 +595,36 @@ vec3 stepColor(in float ratio) {
   return vec3(0.0, 0.0, smoothstep(0.8, 1.0, ratio));
 }`;
 
+// NOTE: Shadows
+GLSLFunctions.elevateShadowRatios =
+`
+/**
+ * Shift the front or back border of the shadow, specified as a ratio between 0 and 1.
+ * Shadow moves forward---towards the light---as terrain elevation rises.
+ * Thus higher fragment elevation means less shadow.
+ * @param {float} ratio       Ratio indicating where the shadow border lies between 0 and 1.
+ * @param {float} wallHeight  Height of the wall, relative to the canvas elevation.
+ * @param {float} wallRatio   Where the wall is relative to the light, where
+ *                              0 means at the shadow end;
+ *                              1 means at the light.
+ * @param {float} elevChange  Percentage elevation change compared to the canvas
+ * @returns {float} Modified ratio.
+ */
+float elevateShadowRatio(in float ratio, in float wallHeight, in float wallRatio, in float elevChange) {
+  if ( wallHeight == 0.0 ) return 1.0;
+  float ratioDist = wallRatio - ratio; // Distance between the wall and the canvas intersect as a ratio.
+  float heightFraction = elevChange / wallHeight;
+  float newRatio = ratio + (heightFraction * ratioDist);
+  return newRatio;
+}
+
+/**
+ * Same as the float version except that the ratios represent close/middle/far shadow borders.
+ */
+vec3 elevateShadowRatios(in vec3 ratios, in float wallHeight, in float wallRatio, in float elevChange) {
+  if ( wallHeight == 0.0 ) vec3(1.0);
+  vec3 ratiosDist = wallRatio - ratios; // Distance between the wall and the canvas intersect as a ratio.
+  float heightFraction = elevChange / wallHeight;
+  vec3 newRatios = ratios + (heightFraction * ratiosDist);
+  return newRatios;
+}`;

@@ -1,20 +1,15 @@
 /* globals
-AmbientLight,
 canvas,
-duplicate,
-game,
 LightSource,
 PIXI
-PlaceablesLayer
 */
 "use strict";
 
 import { MODULE_ID, FLAGS } from "./const.js";
-import { SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-import { ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
-import { ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
-import { ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
-import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
+import { DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
+import { ShadowWallDirectionalSourceMesh } from "./glsl/ShadowWallShader.js";
+import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 
 
 // Directional Light
@@ -39,22 +34,30 @@ export class DirectionalLightSource extends LightSource {
     const { azimuth, elevationAngle } = this.constructor.directionalParametersFromPosition(this.data);
     this.data.azimuth = azimuth;
     this.data.elevationAngle = elevationAngle;
+
+    this.data.lightSizeProjected = this.object.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.SIZE);
+
   }
 
   /**
    * The direction from which the light is coming.
    * Follows Foundry convention that 0 is east, 90º is south.
    * (Normally, azimuth is 0º when sun is to the north.)
-   * @type {number} Between 0º and 360º
+   * @type {number} Between 0º and 360º, in radians
    */
   get azimuth() { return this.data.azimuth; }
 
   /**
    * Elevation angle from the horizon.
    * 0º is at the horizon, 90º is directly overhead.
-   * @type {number} Between 0º and 90º
+   * @type {number} Between 0º and 90º, in radians
    */
   get elevationAngle() { return this.data.elevationAngle; }
+
+  /**
+   * Source elevation infinitely high.
+   */
+  get elevationE() { return Number.POSITIVE_INFINITY; }
 
   /**
    * Calculate azimuth and elevation based on position of the light.
@@ -72,36 +75,96 @@ export class DirectionalLightSource extends LightSource {
     const center = rect.center;
     const delta = position.subtract(center);
     const angle = Math.atan2(delta.y, delta.x);
-    const azimuth = Math.normalizeDegrees(Math.toDegrees(angle));
+    const azimuth = Math.normalizeRadians(angle);
 
     // Calculate elevation angle based on distance from center.
     // 90º when at the center.
     const maxDist = Math.min(rect.width, rect.height);
     const proportion = 1 - (PIXI.Point.distanceBetween(position, center) / maxDist);
-    const elevationAngle = mix(0, 45, proportion);
+    const elevationAngle = mix(0, Math.PI_1_2, proportion);
 
     return { azimuth, elevationAngle };
   }
 
+  /**
+   * Vector representing the light direction.
+   * From a point on the canvas toward the light.
+   * @param {number} azimuth          Canvas x/y light angle, in radians, between 0 and 360º
+   * @param {number} elevationAngle   Canvas z angle of the light, in radians, between 0 and 90º
+   * @returns {Point3d} Direction vector sized to 1 unit. (Not necessarily normalized.)
+   */
+  static lightDirection(azimuth, elevationAngle) {
+    // Round values that are very nearly 0 or very nearly 1
+    const fn = (x, e = 1e-10) => x.almostEqual(0, e) ? 0 : x.almostEqual(1, e) ? 1 : x;
+
+    // Determine the increase in z (contained in y)
+    const startPt = new PIXI.Point(0, 0);
+    const zPt = PIXI.Point.fromAngle(startPt, elevationAngle, 1);
+    zPt.x = fn(zPt.x);
+    zPt.y = fn(zPt.y);
+
+    // Pointed straight up?
+    if ( zPt.x === 0 ) return new Point3d(0, 0, 1);
+
+    // Determine the change in x,y and add on the z
+    const pt = Point3d.fromAngle(startPt, azimuth, 1, fn(zPt.y / zPt.x));
+    pt.x = fn(pt.x);
+    pt.y = fn(pt.y);
+    return pt;
+  }
+
+  get lightDirection() { return this.constructor.lightDirection(this.azimuth, this.elevationAngle); }
+
   // NOTE: EV Shadows
 
   /**
-   * Use SourceShadowWallGeometry, which does not restrict based on source bounds.
+   * Use DirectionalSourceShadowWallGeometry, which does not restrict based on source bounds.
    * While there is a radius, it is pointless to test for it b/c we are including all walls.
    */
   _initializeEVShadowGeometry() {
     const ev = this[MODULE_ID];
-    ev.wallGeometry ??= new SourceShadowWallGeometry(this);
+    ev.wallGeometry ??= new DirectionalSourceShadowWallGeometry(this);
   }
 
   /**
-   * Use RenderedPointSource.prototype._initializeEVShadowTexture
+   * Construct a directional mesh, using the directional wall shader.
    */
+  _initializeEVShadowTexture() {
+    const ev = this[MODULE_ID];
+    if ( ev.shadowRenderer ) return;
 
+    // Mesh that describes shadows for the given geometry and source origin.
+    ev.shadowMesh = new ShadowWallDirectionalSourceMesh(this, ev.wallGeometry);
+
+    // Force a uniform update, to avoid ghosting of placeables in the light radius.
+    // TODO: Find the underlying issue and fix this!
+    // Must be a new uniform variable (one that is not already in uniforms)
+    this.layers.background.shader.uniforms.uEVtmpfix = 0;
+    this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
+    this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
+
+    // Render texture to store the shadow mesh for use by other shaders.
+    ev.shadowRenderer = new ShadowTextureRenderer(this, ev.shadowMesh);
+    ev.shadowRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
+  }
 
   /**
    * Use the RenderedPointSource.prototype._initializeEVShadowMask
    */
+
+  /**
+   * Update shadow data when the light is moved.
+   */
+  _updateEVShadowData({ changedPosition }) {
+    const ev = this[MODULE_ID];
+    if ( !changedPosition || !ev || !ev.wallGeometry ) return;
+
+    // TODO: Need to monitor for change to lightSizeProjected.
+
+    ev.wallGeometry.refreshWalls();
+    ev.shadowMesh.updateLightDirection();
+    ev.shadowRenderer.update();
+  }
 
 }
 
@@ -115,7 +178,7 @@ export function convertToDirectionalLightAmbientLight() {
   if ( this.source instanceof DirectionalLightSource ) return;
 
   this.updateSource({ deleted: true });
-  this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT, true);
+  this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED, true);
   this.source = new DirectionalLightSource({object: this});
   this.updateSource();
 }
@@ -127,7 +190,7 @@ export function convertFromDirectionalLightAmbientLight() {
   if ( this.source instanceof LightSource ) return;
 
   this.updateSource({ deleted: true });
-  this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT, false);
+  this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED, false);
   this.source = new LightSource({object: this});
   this.updateSource();
 }
@@ -145,7 +208,6 @@ export function cloneAmbientLight(wrapped) {
 }
 
 
-
 /**
  * Linear interpolation of x and y numeric values based on "a" weight. Comparable to GLSL mix function.
  * @param {number} x    Start of range
@@ -157,23 +219,6 @@ function mix(x, y, a) {
   return (x * (1 - a)) + (y * a);
 }
 
-
-function replaceAmbientLightSourceWithDirectional(light) {
-  light.updateSource({ deleted: true });
-  light.source = new DirectionalLightSource({object: light});
-  light.updateSource();
-
-
-  light.updateSource({ deleted: true });
-  light.source = new LightSource({object: light});
-  light.updateSource();
-
-
-  const ds = DirectionalLightSource.fromLightSource(light.source);
-  light.updateSource({ deleted: true });
-  light.source = ds;
-  light.updateSource();
-}
 
 /* Testing
 MODULE_ID = "elevatedvision"
