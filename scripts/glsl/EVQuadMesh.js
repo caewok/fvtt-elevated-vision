@@ -11,7 +11,8 @@ export class EVQuadMesh extends PIXI.Mesh {
   constructor(rect, shader, state, drawMode) {
     const geometry = EVQuadMesh.calculateQuadGeometry(rect);
     super(geometry, shader, state, drawMode);
-    this.rect = rect;
+    this.rect = new PIXI.Rectangle();
+    this.rect.copyFrom(rect);
   }
 
   /**

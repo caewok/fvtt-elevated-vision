@@ -16,7 +16,8 @@ export const MODULES_ACTIVE = {
 
 export const FLAGS = {
   ELEVATION_IMAGE: "elevationImage",
-  ELEVATION: "elevation"
+  ELEVATION: "elevation",
+  DIRECTIONAL_LIGHT: "directionalLight"
 }
 
 // Hook init b/c game.modules is not initialized at start.

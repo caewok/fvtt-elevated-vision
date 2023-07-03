@@ -9,7 +9,7 @@ PlaceablesLayer
 */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, FLAGS } from "./const.js";
 import { SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
@@ -33,12 +33,12 @@ export class DirectionalLightSource extends LightSource {
     // Force attenuation to 0
     this.data.attenuation = 0;
 
-    // Inflate radius to avoid seeing the edges of the GlobalLight in huge maps without padding
-    // TODO: replace with better handling of rectangular shapes and custom shader
+    // Set radius to the maximum diagonal.
     this.data.radius = canvas.dimensions.maxR;
 
-    this.data.azimuth = this.data.azimuth ?? 0;
-    this.data.elevationAngle = this.data.elevationAngle ?? 45;
+    const { azimuth, elevationAngle } = this.constructor.directionalParametersFromPosition(this.data);
+    this.data.azimuth = azimuth;
+    this.data.elevationAngle = elevationAngle;
   }
 
   /**
@@ -83,34 +83,11 @@ export class DirectionalLightSource extends LightSource {
     return { azimuth, elevationAngle };
   }
 
-  /**
-   * Construct a new directional source using light source data.
-   * @param {LightSource}
-   * @returns {DirectionalLightSource}
-   */
-  static fromLightSource(ls) {
-    const ds = new this({ object: ls.object });
-    const sourceData = duplicate(ls.data);
-    ds.initialize(sourceData);
-
-    return ds;
-  }
-
-  /**
-   * Construct a new light source using this directional source data
-   * @returns {LightSource}
-   */
-  toLightSource() {
-    const ls = new LightSource({ object: this.object });
-    const sourceData = duplicate(this.data);
-    ls.initialize(sourceData);
-    return ls;
-  }
-
   // NOTE: EV Shadows
 
   /**
    * Use SourceShadowWallGeometry, which does not restrict based on source bounds.
+   * While there is a radius, it is pointless to test for it b/c we are including all walls.
    */
   _initializeEVShadowGeometry() {
     const ev = this[MODULE_ID];
@@ -118,112 +95,55 @@ export class DirectionalLightSource extends LightSource {
   }
 
   /**
-   * Renderer covers the entire canvas.
+   * Use RenderedPointSource.prototype._initializeEVShadowTexture
    */
-  _initializeEVShadowTexture() {
-    const ev = this[MODULE_ID];
-    if ( ev.shadowRenderer ) return;
 
-    // Mesh that describes shadows for the given geometry and source origin.
-    ev.shadowMesh = new ShadowWallPointSourceMesh(this, ev.wallGeometry);
-
-    // Force a uniform update, to avoid ghosting of placeables in the light radius.
-    // TODO: Find the underlying issue and fix this!
-    // Must be a new uniform variable (one that is not already in uniforms)
-    this.layers.background.shader.uniforms.uEVtmpfix = 0;
-    this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
-    this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
-
-    // Render texture to store the shadow mesh for use by other shaders.
-    ev.shadowRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh);
-    ev.shadowRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
-  }
 
   /**
-   * Mask the entire canvas.
+   * Use the RenderedPointSource.prototype._initializeEVShadowMask
    */
-  _initializeEVShadowMask() {
-    const ev = this[MODULE_ID];
-    if ( ev.shadowVisionMask ) return;
 
-    // Build the mask based on the canvas dimensions rectangle.
-    // Mask that colors red areas that are lit / are viewable.
-    const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowRenderer.renderTexture);
-    ev.shadowVisionMask = new EVQuadMesh(canvas.dimensions.rect, shader);
-  }
 }
 
 
-export class DirectionalLight extends AmbientLight {
-  constructor(document) {
-    super(document);
-
-    /**
-     * A reference to the PointSource object which defines this light source area of effect
-     * @type {DirectionalLightSource}
-     */
-    this.source = new DirectionalLightSource({object: this});
-  }
-
-  /** @inheritdoc */
-  get bounds() { return canvas.dimensions.rect; }
-
-  /**
-   * The maximum radius in pixels of the light field.
-   * @type {number}
-   */
-  get radius() { return canvas.dimensions.maxR; }
-}
-
+// Patches for AmbientLight
 
 /**
- * New method: LightingLayer.prototype._onClickLeft
- * Handle click left; add directional light when enabled.
+ * New method: AmbientLight.prototype.convertToDirectionalLight
  */
-export async function _onClickLeftLightingLayer(event) {
-  const activeTool = game.activeTool;
-  if ( activeTool === "directional-light" ) {
-    const interaction = event.interactionData;
-    const cls = getDocumentClass("AmbientLight");
-    const doc = new cls(interaction.origin, {parent: canvas.scene});
-    const preview = new DirectionalLight(doc);
-    return await cls.create(preview.document.toObject(false), { parent: canvas.scene });
-  }
-  return PlaceablesLayer.prototype._onClickLeft.call(this, event);
+export function convertToDirectionalLightAmbientLight() {
+  if ( this.source instanceof DirectionalLightSource ) return;
+
+  this.updateSource({ deleted: true });
+  this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT, true);
+  this.source = new DirectionalLightSource({object: this});
+  this.updateSource();
 }
 
 /**
- * Mixed wrap LightingLayer.prototype._onDragLeftStart
- * If the Directional Light is enabled, ignore drag left.
- * @override
+ * New method: AmbientLight.prototype.convertFromDirectionalLight
  */
-export async function _onDragLeftStartLightingLayer(wrapped, event) {
-  const activeTool = game.activeTool;
-  if ( activeTool !== "directional-light" ) return wrapped(event);
-  return PlaceablesLayer.prototype._onDragLeftStart.call(this, event);
+export function convertFromDirectionalLightAmbientLight() {
+  if ( this.source instanceof LightSource ) return;
+
+  this.updateSource({ deleted: true });
+  this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT, false);
+  this.source = new LightSource({object: this});
+  this.updateSource();
 }
 
 /**
- * Mixed wrap LightingLayer.prototype._onDragLeftMove
- * If the Directional Light is enabled, ignore drag left.
- * @override
+ * Wrap AmbientLight.prototype.clone
+ * Change the light source if cloning a directional light.
+ * Needed to switch out the light source to directional for the clone, when dragging.
+ * @returns {PlaceableObject}  A new object with identical data
  */
-export async function _onDragLeftMoveLightingLayer(wrapped, event) {
-  const activeTool = game.activeTool;
-  if ( activeTool !== "directional-light" ) return wrapped(event);
-  return PlaceablesLayer.prototype._onDragLeftMove.call(this, event);
+export function cloneAmbientLight(wrapped) {
+  const clone = wrapped();
+  if ( this.source instanceof DirectionalLightSource ) clone.convertToDirectionalLight();
+  return clone;
 }
 
-/**
- * Mixed wrap LightingLayer.prototype._onDragLeftCancel
- * If the Directional Light is enabled, ignore drag left.
- * @override
- */
-export async function _onDragLeftCancelLightingLayer(wrapped, event) {
-  const activeTool = game.activeTool;
-  if ( activeTool !== "directional-light" ) return wrapped(event);
-  return PlaceablesLayer.prototype._onDragLeftCancel.call(this, event);
-}
 
 
 /**

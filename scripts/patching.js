@@ -88,10 +88,10 @@ import {
   _getTextStyleAmbientLight } from "./lighting_elevation_tooltip.js";
 
 import {
-  _onClickLeftLightingLayer,
-  _onDragLeftStartLightingLayer,
-  _onDragLeftMoveLightingLayer,
-  _onDragLeftCancelLightingLayer } from "./directional_lights.js";
+  convertToDirectionalLightAmbientLight,
+  convertFromDirectionalLightAmbientLight,
+  cloneAmbientLight } from "./directional_lights.js";
+
 
 /**
  * Helper to wrap methods.
@@ -180,10 +180,7 @@ export function registerPatches() {
   wrap("AmbientLight.prototype._draw", _drawAmbientLight);
 
   // ----- Directional lighting ----- //
-  mixed("LightingLayer.prototype._onDragLeftStart", _onDragLeftStartLightingLayer);
-  mixed("LightingLayer.prototype._onDragLeftMove", _onDragLeftMoveLightingLayer);
-  mixed("LightingLayer.prototype._onDragLeftCancel", _onDragLeftCancelLightingLayer);
-
+  wrap("AmbientLight.prototype.clone", cloneAmbientLight);
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
@@ -199,7 +196,8 @@ export function registerAdditions() {
   // For Polygons shadows -- Nothing added
 
   // For Directional Lighting
-  addClassMethod(LightingLayer.prototype, "_onClickLeft", _onClickLeftLightingLayer);
+  addClassMethod(AmbientLight.prototype, "convertToDirectionalLight", convertToDirectionalLightAmbientLight);
+  addClassMethod(AmbientLight.prototype, "convertFromDirectionalLight", convertFromDirectionalLightAmbientLight);
 
   // For WebGL shadows
   addClassMethod(RenderedPointSource.prototype, "wallAdded", wallAddedRenderedPointSource);
