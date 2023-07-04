@@ -55,6 +55,18 @@ float linearConversion(in float x, in float oldMin, in float oldMax, in float ne
   return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
 }`;
 
+// Name of a built-in function cannot be redeclared as function, so call it cross2d
+GLSLFunctions.cross2d =
+`
+/**
+ * Cross x and y parameters in a vec2.
+ * @param {vec2} a  First vector
+ * @param {vec2} b  Second vector
+ * @returns {float} The cross product
+ */
+float cross2d(in vec2 a, in vec2 b) { return (a.x * b.y) - (a.y * b.x); }
+`;
+
 // NOTE: Matrix
 GLSLFunctions.matrix =
 `
@@ -254,6 +266,60 @@ vec3 barycentric(in vec2 p, in vec2 a, in vec2 b, in vec2 c) {
 }
 `;
 
+// NOTE: Ray struct
+GLSLStructs.Ray =
+`
+/**
+ * Ray defined by a point and a direction from that point.
+ */
+struct Ray {
+  vec3 origin;
+  vec3 direction;
+};`;
+
+GLSLStructs.Ray2d =
+`
+/**
+ * Ray defined by a point and a direction from that point.
+ */
+struct Ray2d {
+  vec2 origin;
+  vec2 direction;
+};`;
+
+GLSLFunctions.rayFromPoints =
+`
+${defineStruct("Ray")}
+${defineStruct("Ray2d")}
+
+/**
+ * Construct a ray from two points: origin and towards point.
+ */
+Ray rayFromPoints(in vec3 origin, in vec3 towardsPoint) {
+  return Ray(origin, towardsPoint - origin);
+}
+
+Ray2d rayFromPoints(in vec2 origin, in vec2 towardsPoint) {
+  return Ray2d(origin, towardsPoint - origin);
+}`;
+
+
+GLSLFunctions.normalizeRay =
+`
+${defineStruct("Ray")}
+${defineStruct("Ray2d")}
+
+/**
+ * Normalize the ray direction.
+ */
+Ray normalizeRay(in Ray r) {
+  return Ray(r.origin, normalize(r.direction));
+}
+
+Ray2d normalizeRay(in Ray2d r) {
+  return Ray2d(r.origin, normalize(r.direction));
+}`;
+
 
 // NOTE: Geometry lines
 
@@ -295,72 +361,35 @@ vec2 closest2dPointToSegment(in vec2 c, in vec2 a, in vec2 b) {
   if ( u < 0.0 ) return a;
   if ( u > 1.0 ) return b;
   return out;
-}
-`;
+}`;
 
-GLSLFunctions.lineLineIntersection2d =
+GLSLFunctions.lineLineIntersection =
 `
-bool lineLineIntersection2d(in vec2 a, in vec2 dirA, in vec2 b, in vec2 dirB, out float t) {
-  float denom = (dirB.y * dirA.x) - (dirB.x * dirA.y);
+${defineFunction("rayFromPoints")}
+${defineFunction("cross2d")}
+
+bool lineLineIntersection(in Ray2d a, in Ray2d b, out float t) {
+  float denom = (b.direction.y * a.direction.x) - (b.direction.x * a.direction.y);
 
   // If lines are parallel, no intersection.
   if ( abs(denom) < 0.0001 ) return false;
 
-  vec2 diff = a - b;
-  t = ((dirB.x * diff.y) - (dirB.y * diff.x)) / denom;
+  vec2 diff = a.origin - b.origin;
+  t = cross2d(b.direction, diff) / denom;
   return true;
 }
 
-bool lineLineIntersection2d(in vec2 a, in vec2 dirA, in vec2 b, in vec2 dirB, out vec2 ix) {
+bool lineLineIntersection(in Ray2d a, in Ray2d b, out vec2 ix) {
   float t = 0.0;
-  bool ixFound = lineLineIntersection2d(a, dirA, b, dirB, t);
-  ix = a + (dirA * t);
+  bool ixFound = lineLineIntersection(a, b, t);
+  ix = a.origin + (a.direction * t);
   return ixFound;
 }
-`;
 
-GLSLFunctions.cross2d =
-`
-/**
- * Cross x and y parameters in a vec2.
- * @param {vec2} a  First vector
- * @param {vec2} b  Second vector
- * @returns {float} The cross product
- */
-float cross(in vec2 a, in vec2 b) { return (a.x * b.y) - (a.y * b.x); }
-`;
-
-// NOTE: Ray struct
-GLSLStructs.Ray =
-`
-/**
- * Ray defined by a point and a direction from that point.
- */
-struct Ray {
-  vec3 origin;
-  vec3 direction;
-};`;
-
-GLSLFunctions.rayFromPoints =
-`
-${defineStruct("Ray")}
-
-/**
- * Construct a ray from two points: origin and towards point.
- */
-Ray rayFromPoints(in vec3 origin, in vec3 towardsPoint) {
-  return Ray(origin, towardsPoint - origin);
-}`;
-
-GLSLFunctions.normalizeRay =
-`
-${defineStruct("Ray")}
-
-/**
- * Normalize the ray direction.
- */
-Ray normalizeRay(in Ray r) {
-  return Ray(r.origin, normalize(r.direction));
+bool lineLineIntersection(vec2 a, vec2 b, vec2 c, vec2 d, out vec2 ix) {
+  Ray2d rayA = rayFromPoints(a, b);
+  Ray2d rayB = rayFromPoints(c, d);
+  return lineLineIntersection(rayA, rayB, ix);
 }`;
 
 // NOTE: Plane struct
@@ -454,7 +483,7 @@ GLSLFunctions.quadIntersectBary =
 `
 ${defineStruct("Ray")}
 ${defineStruct("Quad")}
-${defineFunction("cross", "cross2d")}
+${defineFunction("cross2d")}
 
 /**
  * Quad intersect
@@ -506,16 +535,16 @@ bool baryIntersectRayQuad(in Ray r, in Quad quad, out vec3 ix) {
 
   // Find barycentric coords of the quad.
   vec2 kg = kc - kb - ka;
-  float k0 = cross(kp, kb);
-  float k2 = cross(kc - kb, ka);  // Alt: float k2 = cross(kg, ka);
-  float k1 = cross(kp, kg) - nor[id]; // Alt: float k1 = cross(kb, ka) + cross(kp, kg);
+  float k0 = cross2d(kp, kb);
+  float k2 = cross2d(kc - kb, ka);  // Alt: float k2 = cross2d(kg, ka);
+  float k1 = cross2d(kp, kg) - nor[id]; // Alt: float k1 = cross2d(kb, ka) + cross2d(kp, kg);
 
   float u;
   float v;
   if ( abs(k2) < 0.00001 ) { // TODO: use EPSILON?
     // Edges are parallel; this is a linear equation.
     v = -k0 / k1;
-    u = cross(kp, ka) / k1;
+    u = cross2d(kp, ka) / k1;
   } else {
     // Otherwise, it's a quadratic.
     float w = (k1 * k1) - (4.0 * k0 * k2);
