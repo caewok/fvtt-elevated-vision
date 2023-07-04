@@ -425,7 +425,8 @@ void main() {
 }
 
 /**
- * Draw shadow for wall without shading for penumbra and without the outer penumbra.
+ * Draw directional shadow for wall with shading for penumbra and with the outer penumbra.
+ * https://www.researchgate.net/publication/266204563_Calculation_of_the_shadow-penumbra_relation_and_its_application_on_efficient_architectural_design
  */
 export class DirectionalShadowWallShader extends AbstractEVShader {
   /**
@@ -1062,11 +1063,11 @@ wallBottomZ = Math.max(wallCoords.B.bottom.z, canvasElevation);
 wallTopZ = wallCoords.A.top.z;
 distShadow = PIXI.Point.distanceBetween(lightCenter, ixFarPenumbra1)
 distShadowInv = 1.0 / distShadow;
-lightSizeProjectedUnit = lightSizeProjected * distShadowInv;
+lightSizeProjectedUnit = uLightSizeProjected * distShadowInv;
 distWallTop1 = PIXI.Point.distanceBetween(lightCenter, wallCoords.A.top);
 fWallRatio = 1.0 - (distWallTop1 * distShadowInv); // mid-penumbra
 fNearRatios = new Point3d(fWallRatio, fWallRatio, fWallRatio)
-fFarRatios = new Point3d(0, 0, 0); // 0.0 is the penumbra value (0 at shadow end)
+fFarRatios = new Point3d(lightSizeProjectedUnit * 2.0, lightSizeProjectedUnit, 0.0); // 0.0 is the penumbra value (0 at shadow end)
 fWallHeights = { x: wallTopZ, y: wallBottomZ };
 
 vVertexPosition = PIXI.Point.fromObject(lightCenter)
@@ -1085,7 +1086,32 @@ p2C = innerPenumbra2.to2d();
 p2B = outerPenumbra2.to2d();
 vSidePenumbra2 = barycentric(vVertexPosition, p2A, p2B, p2C);
 
+// ----- Fragment
+// Adjust ratios for elevation change
+/**
+ * @param {Point3d} ratios
+ * @param {float} wallHeight
+ * @param {float} wallRatio
+ * @param {float} elevChange
+ * @returns {Point3d}
+ */
+/*
+function elevateShadowRatios(ratios, wallHeight, wallRatio, elevChange) {
+  if ( wallHeight == 0.0 ) return ratios;
+  const ratiosDist = ratios.subtract(new Point3d(wallRatio, wallRatio, wallRatio)).multiplyScalar(-1) // wallRatio - ratios
+  const heightFraction = elevChange / wallHeight;
+  return ratios.add(ratiosDist.multiplyScalar(heightFraction))
+}
 
+elevationChange = CONFIG.GeometryLib.utils.gridUnitsToPixels(5)
+wallHeights = {
+  x: Math.max(fWallHeights.x - canvasElevation, 0.0),
+  y: Math.max(fWallHeights.y - canvasElevation, 0.0)
+}
+nearRatios = elevateShadowRatios(fNearRatios, wallHeights.y, fWallRatio, elevationChange)
+farRatios = elevateShadowRatios(fFarRatios, wallHeights.x, fWallRatio, elevationChange)
+
+between(farRatios.z, nearRatios.x, .3)
 
 */
 
