@@ -99,7 +99,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     for ( let i = 0; i < nWalls; i += 1 ) {
       const wall = walls[i];
       if ( !this._includeWall(wall) ) continue;
-      const {corner1, corner2 } = this._wallCornerCoordinates(wall);
+      const {corner1, corner2 } = this.constructor.wallCornerCoordinates(wall);
 
       // TODO: Instanced attributes.
       // For now, must repeat the vertices three times.
@@ -252,10 +252,10 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @param {Wall} wall
    * @returns { corner1: {PIXI.Point}, corner2: {PIXI.Point}, topZ: {number}, bottomZ: {number} }
    */
-  _wallCornerCoordinates(wall) {
+  static wallCornerCoordinates(wall) {
     const { A, B, topZ, bottomZ } = wall;
-    const top = isFinite(topZ) ? topZ : 1e6;
-    const bottom = isFinite(bottomZ) ? bottomZ : -1e6;
+    const top = Math.min(topZ, 1e6)
+    const bottom = Math.max(bottomZ, -1e6)
     return {
       corner1: [A.x, A.y, top],
       corner2: [B.x, B.y, bottom]
@@ -339,7 +339,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const idxToAdd = this._triWallMap.size;
 
     // Wall endpoints
-    const { corner1, corner2 } = this._wallCornerCoordinates(wall);
+    const { corner1, corner2 } = this.constructor.wallCornerCoordinates(wall);
     this._addToBuffer(corner1, "aWallCorner1", update);
     this._addToBuffer(corner2, "aWallCorner2", update);
 
@@ -387,7 +387,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
     // Check for change in wall endpoints
     let changedPosition = false;
-    const { corner1, corner2 } = this._wallCornerCoordinates(wall);
+    const { corner1, corner2 } = this.constructor.wallCornerCoordinates(wall);
     changedPosition = this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner1[i]);
     changedPosition ||= this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner2[i]);
     if ( changedPosition ) {

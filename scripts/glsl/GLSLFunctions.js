@@ -223,6 +223,8 @@ float orient(in vec2 a, in vec2 b, in vec2 c) {
 
 // NOTE: Barycentric
 // Calculate barycentric position within a given triangle
+// For point p and triangle abc, return the barycentric uvw as a vec3 or vec2.
+// See https://ceng2.ktu.edu.tr/~cakir/files/grafikler/Texture_Mapping.pdf
 GLSLFunctions.barycentric =
 `
 // 3d barycentric
@@ -265,6 +267,18 @@ vec3 barycentric(in vec2 p, in vec2 a, in vec2 b, in vec2 c) {
   return vec3(u, v, w);
 }
 `;
+
+// https://ceng2.ktu.edu.tr/~cakir/files/grafikler/Texture_Mapping.pdf
+GLSLFunctions.barycentricPointInsideTriangle =
+`
+/**
+ * Test if a barycentric coordinate is within its defined triangle.
+ * @param {vec3} bary     Barycentric coordinate; x,y,z => u,v,w
+ * @returns {bool} True if inside
+ */
+bool barycentricPointInsideTriangle(in vec3 bary) {
+  return bary.y >= 0.0 && bary.z >= 0.0 && (bary.y + bary.z) <= 1.0;
+}`;
 
 // NOTE: Ray struct
 GLSLStructs.Ray =
