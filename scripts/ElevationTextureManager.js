@@ -300,5 +300,5 @@ async function buildDirPath(dirs, idx = dirs.length) {
     if ( idx === dirs.length ) return true;
     return buildDirPath(dirs, idx + 1);
   }
-  return true;
+  return true; // eslint-disable-line no-unreachable
 }
