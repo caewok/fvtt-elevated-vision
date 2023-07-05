@@ -73,6 +73,7 @@ export class ElevationTextureManager {
       filePath ??= `worlds/${game.world.id}/assets/${MODULE_ID}`;
       fileName ??= `${game.world.id}-${canvas.scene.id}-elevationMap`;
       fileName += `.${fileExt}`;
+      filePath = await this.constructor.constructSaveDirectory(filePath);
     }
 
     // Set the file path for the texture and ensure that the folder structure is present
@@ -170,18 +171,10 @@ export class ElevationTextureManager {
    * @returns {string} The constructed storage path, not including "data".
    */
   static async constructSaveDirectory(filePath) {
-    // Need to build the folder structure in steps or it will error out.
     const dirs = filePath.split("/");
-    const storagePathArr = [];
-    for (const dir of dirs) {
-      if ( dir === "" ) continue; // E.g., the path ends with a "/"
-      storagePathArr.push(dir);
-      const storagePath = storagePathArr.join("/");
-      await FilePicker.browse("data", storagePath).catch(_error => {  // eslint-disable-line no-loop-func
-        FilePicker.createDirectory("data", storagePath);
-      });
-    }
-    return storagePathArr.join("/");
+    const res = await buildDirPath(dirs);
+    if ( !res ) { console.error(`Error constructing the file path ${filePath}.`); }
+    return filePath;
   }
 
   /**
@@ -274,4 +267,38 @@ export class ElevationTextureManager {
       type: PIXI.TYPES.UNSIGNED_BYTE
     };
   }
+}
+
+/**
+ * Recursively construct a directory path from an array of folders.
+ * Based in the "data" path.
+ * @param {string[]} dirs   Array of folder names, representing a folder hierarchy
+ * @param {number} [idx]    Used internally to control the recursion through the folders
+ * @returns {boolean} True if successful or path already exists.
+ */
+async function buildDirPath(dirs, idx = dirs.length) {
+  // Need to build the folder structure in steps or it will error out.
+  // Browse is more expensive than createDirectory.
+
+  // FilePicker.createDirectory has three basic returns:
+  // 1. EEXIST: file already exists if the directory path is present
+  // 2. ENOENT: no such file or directory if part of the directory path is not present
+  // 3. the file path if the base path exists and the folder is created.
+  if ( !idx ) return false;
+  if ( idx > dirs.length ) return true;
+
+  const path = dirs.slice(0, idx).join("/");
+  const res = await FilePicker.createDirectory("data", path).catch(err => { return err; });
+  if ( res.message ) {
+    // If this path exists, we can move down in the folder hierarchy
+    if ( res.message.includes("EEXIST: file already exists") ) return buildDirPath(dirs, idx + 1);
+
+    // Something in the path is missing; move up in the folder hierarchy to find and create it.
+    return buildDirPath(dirs, idx - 1);
+  } else {
+    // Folder at end of path was created. Either we are done or we need to move down the hierarchy.
+    if ( idx === dirs.length ) return true;
+    return buildDirPath(dirs, idx + 1);
+  }
+  return true;
 }
