@@ -76,7 +76,7 @@ export class ElevationTextureManager {
     }
 
     // Set the file path for the texture and ensure that the folder structure is present
-    this.#filePath = await this.constructor.constructSaveDirectory(filePath);
+    this.#filePath = filePath;
     this.#fileName = fileName;
 
     // Conversion from older versions of EV.
