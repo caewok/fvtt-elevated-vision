@@ -19,7 +19,7 @@ export const FLAGS = {
   ELEVATION: "elevation",
   DIRECTIONAL_LIGHT: {
     ENABLED: "directionalLight-enabled",
-    SIZE: "directionalLight-size"
+    SOLAR_ANGLE: "directionalLight-solarAngle"
   }
 }
 

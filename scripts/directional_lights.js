@@ -35,8 +35,7 @@ export class DirectionalLightSource extends LightSource {
     this.data.azimuth = azimuth;
     this.data.elevationAngle = elevationAngle;
 
-    this.data.lightSizeProjected = this.object.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.SIZE);
-
+    this.data.solarAngle = this.object.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.SOLAR_ANGLE) ?? Math.toRadians(1);
   }
 
   /**
@@ -58,6 +57,13 @@ export class DirectionalLightSource extends LightSource {
    * Source elevation infinitely high.
    */
   get elevationE() { return Number.POSITIVE_INFINITY; }
+
+  /**
+   * Perceived angle of the light on the surface. Used for constructing penumbra.
+   * A smaller angle means smaller penumbra.
+   * @type {number}
+   */
+  get solarAngle() { return this.data.solarAngle; }
 
   /**
    * Calculate azimuth and elevation based on position of the light.

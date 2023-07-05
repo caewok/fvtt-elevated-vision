@@ -68,7 +68,7 @@ float cross2d(in vec2 a, in vec2 b) { return (a.x * b.y) - (a.y * b.x); }
 `;
 
 // NOTE: Matrix
-GLSLFunctions.matrix =
+GLSLFunctions.MatrixTranslation =
 `
 // Translate a given x/y amount.
 // [1, 0, x]
@@ -78,8 +78,10 @@ mat3 MatrixTranslation(in float x, in float y) {
   mat3 tMat = mat3(1.0);
   tMat[2] = vec3(x, y, 1.0);
   return tMat;
-}
+}`;
 
+GLSLFunctions.MatrixScale =
+`
 // Scale using x/y value.
 // [x, 0, 0]
 // [0, y, 0]
@@ -89,13 +91,16 @@ mat3 MatrixScale(in float x, in float y) {
   scaleMat[0][0] = x;
   scaleMat[1][1] = y;
   return scaleMat;
-}
+}`;
 
+// Must have same return type for all declarations of a named function with same params, so separate 2d/3d
+GLSLFunctions.Matrix2dRotationZ =
+`
 // Rotation around the z-axis.
 // [c, -s, 0],
 // [s, c, 0],
 // [0, 0, 1]
-mat3 MatrixRotationZ(in float angle) {
+mat3 Matrix2dRotationZ(in float angle) {
   float c = cos(angle);
   float s = sin(angle);
   mat3 rotMat = mat3(1.0);
@@ -104,13 +109,40 @@ mat3 MatrixRotationZ(in float angle) {
   rotMat[1][0] = -s;
   rotMat[0][1] = s;
   return rotMat;
-}
+}`;
 
+GLSLFunctions.Matrix3dRotationZ =
+`
+// Rotation around the z-axis.
+// [c, -s, 0, 0],
+// [s, c, 0, 0],
+// [0, 0, 1, 0],
+// [0, 0, 0, 1]
+mat4 Matrix3dRotationZ(in float angle) {
+  float c = cos(angle);
+  float s = sin(angle);
+  mat4 rotMat = mat4(1.0);
+  rotMat[0][0] = c;
+  rotMat[1][1] = c;
+  rotMat[1][0] = -s;
+  rotMat[0][1] = s;
+  return rotMat;
+}`;
+
+GLSLFunctions.multiplyMatrixPoint =
+`
 vec2 multiplyMatrixPoint(mat3 m, vec2 pt) {
   vec3 res = m * vec3(pt, 1.0);
   return vec2(res.xy / res.z);
 }
 
+vec3 multiplyMatrixPoint(mat4 m, vec3 pt) {
+  vec4 res = m * vec4(pt, 1.0);
+  return vec3(res.xyz / res.w);
+}`;
+
+GLSLFunctions.toLocalRectangle =
+`
 mat3 toLocalRectangle(in vec2[4] rect) {
   // TL is 0, 0.
   // T --> B : y: 0 --> 1
@@ -134,7 +166,6 @@ mat3 toLocalRectangle(in vec2[4] rect) {
   return mScale * mShift;
 }
 `;
-
 
 // NOTE: Random
 // Pass a value and get a random normalized value between 0 and 1.
