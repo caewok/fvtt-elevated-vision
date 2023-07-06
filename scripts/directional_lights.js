@@ -85,8 +85,10 @@ export class DirectionalLightSource extends LightSource {
 
     // Calculate elevation angle based on distance from center.
     // 90º when at the center.
+    // Use grid-based measurements so the elevationAngle stays the same for similar grid locations.
     const maxDist = Math.min(rect.width, rect.height) * 0.5;
-    const proportion = Math.clamped(1 - (PIXI.Point.distanceBetween(position, center) / maxDist), 0, 1);
+    const positionDist = Math.max(Math.abs(delta.x), Math.abs(delta.y));
+    const proportion = Math.clamped(1 - (positionDist / maxDist), 0, 1);
     const elevationAngle = mix(0, Math.PI_1_2, proportion);
 
     return { azimuth, elevationAngle };
@@ -105,12 +107,19 @@ export class DirectionalLightSource extends LightSource {
 
     // Calculate distance from the center based on elevationAngle.
     const rect = canvas.dimensions.rect;
-    const maxDist = Math.min(rect.width, rect.height);
-    const proportion = elevationAngle / Math.PI_1_2;
+    const maxDist = Math.min(rect.width, rect.height) * 0.5;
+    const proportion = Math.clamped(1 - (elevationAngle / Math.PI_1_2), 0, 1);
     const dist = proportion * maxDist;
+    const center = rect.center;
+    if ( dist === 0 ) return PIXI.Point.fromObject(center);
 
     // Project using azimuth angle for the calculated distance from center.
-    return PIXI.Point.fromAngle(rect.center, azimuth, dist);
+    const projPt = PIXI.Point.fromAngle(center, azimuth, canvas.dimensions.maxR);
+
+    // Intersect the square for this grid distance with this projected line.
+    const distRect = new PIXI.Rectangle(center.x - dist, center.y - dist, dist * 2, dist * 2);
+    const ixs = distRect.segmentIntersections(center, projPt);
+    return PIXI.Point.fromObject(ixs[0]).roundDecimals();
   }
 
   /**

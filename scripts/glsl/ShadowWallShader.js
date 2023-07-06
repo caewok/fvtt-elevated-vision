@@ -995,6 +995,7 @@ ShadowWallShader = api.ShadowWallShader
 ShadowWallPointSourceMesh = api.ShadowWallPointSourceMesh
 TestGeometryShader = api.TestGeometryShader
 ShadowTextureRenderer = api.ShadowTextureRenderer
+DirectionalLightSource = api.DirectionalLightSource
 
 let [l] = canvas.lighting.placeables;
 l.convertToDirectionalLight()
