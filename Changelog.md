@@ -1,3 +1,6 @@
+# 0.4.11
+Correct issue with 0.4.10 release.
+
 # 0.4.10
 Try a cache-busting URL to avoid file caching issue with texture image data when in The Forge.
 
