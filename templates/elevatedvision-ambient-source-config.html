@@ -25,7 +25,7 @@
     <div class="form-group" id="elevatedvision-config-azimuth" style="display:none;">
       <label>{{ localize "elevatedvision.ambientconfig.azimuth.name" }} <span class="units">({{ localize "degrees" }})</span></label>
       <div class="form-fields">
-        <input type="number" placeholder="0" id="elevatedvisionAzimuthConfig" min="0" max="360" step="1" name="flags.elevatedvision.azimuth" class="elevatedvision" value="{{ data.flags.elevatedvision.azimuth }}" />
+        <input type="number" placeholder="0" id="elevatedvisionAzimuthConfig" min="0" max="360" step="1" name="elevatedvision.azimuth" class="elevatedvision" value="{{ data.elevatedvision.azimuth }}" />
       </div>
       <p class="hint">{{ localize "elevatedvision.ambientconfig.azimuth.hint" }}</p>
     </div>
@@ -33,7 +33,7 @@
     <div class="form-group" id="elevatedvision-config-elevationAngle" style="display:none;">
       <label>{{ localize "elevatedvision.ambientconfig.elevationAngle.name" }} <span class="units">({{ localize "degrees" }})</span></label>
       <div class="form-fields">
-        <input type="number" placeholder="45" id="elevatedvisionElevationAngleConfig" min="0" max="90" step="0.1" name="flags.elevatedvision.elevationAngle" class="elevatedvision" value="{{ data.flags.elevatedvision.elevationAngle }}" />
+        <input type="number" placeholder="45" id="elevatedvisionElevationAngleConfig" min="0" max="90" step="0.1" name="elevatedvision.elevationAngle" class="elevatedvision" value="{{ data.elevatedvision.elevationAngle }}" />
       </div>
       <p class="hint">{{ localize "elevatedvision.ambientconfig.elevationAngle.hint" }}</p>
     </div>

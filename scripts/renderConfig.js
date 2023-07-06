@@ -9,6 +9,7 @@ renderTemplate
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 import { MODULE_ID, FLAGS } from "./const.js";
+import { DirectionalLightSource } from "./directional_lights.js";
 
 /**
  * Inject html to add controls to the ambient light configuration to allow user to set elevation.
@@ -16,8 +17,20 @@ import { MODULE_ID, FLAGS } from "./const.js";
 export async function renderAmbientLightConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-ambient-source-config.html`;
   const findString = "div[data-tab='basic']:last";
+  calculateDirectionalData(app, data);
   await injectConfiguration(app, html, data, template, findString);
   activateLightConfigListeners(app, html);
+}
+
+/**
+ * Calculate directional data based on position.
+ */
+function calculateDirectionalData(app, data) {
+  const { x, y } = app.object;
+  const { azimuth, elevationAngle } = DirectionalLightSource.directionalParametersFromPosition({x, y});
+  const renderData = {};
+  renderData[MODULE_ID] = { azimuth, elevationAngle };
+  foundry.utils.mergeObject(data, renderData, {inplace: true});
 }
 
 /**

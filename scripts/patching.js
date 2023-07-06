@@ -90,7 +90,8 @@ import {
 import {
   convertToDirectionalLightAmbientLight,
   convertFromDirectionalLightAmbientLight,
-  cloneAmbientLight } from "./directional_lights.js";
+  cloneAmbientLight,
+  _onUpdateAmbientLight } from "./directional_lights.js";
 
 
 /**
@@ -181,6 +182,7 @@ export function registerPatches() {
 
   // ----- Directional lighting ----- //
   wrap("AmbientLight.prototype.clone", cloneAmbientLight);
+  wrap("AmbientLight.prototype._onUpdate", _onUpdateAmbientLight);
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
