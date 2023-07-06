@@ -193,7 +193,7 @@ export function convertToDirectionalLightAmbientLight() {
  * New method: AmbientLight.prototype.convertFromDirectionalLight
  */
 export function convertFromDirectionalLightAmbientLight() {
-  if ( this.source instanceof LightSource ) return;
+  if ( !(this.source instanceof DirectionalLightSource) ) return;
 
   this.updateSource({ deleted: true });
   this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED, false);
@@ -211,6 +211,23 @@ export function cloneAmbientLight(wrapped) {
   const clone = wrapped();
   if ( this.source instanceof DirectionalLightSource ) clone.convertToDirectionalLight();
   return clone;
+}
+
+/**
+ * Wrap AmbientLight.prototype._onUpdate
+ * If changing to/from directional source, update the source accordingly.
+ */
+export function _onUpdateAmbientLight(wrap, data, options, userId) {
+  const changes = flattenObject(data);
+  const keys = new Set(Object.keys(changes))
+
+  const isDirectionalFlag = `flags.${MODULE_ID}.directionalLight`
+  if ( keys.has(isDirectionalFlag) ) changes[isDirectionalFlag]
+    ? this.convertToDirectionalLight() : this.convertFromDirectionalLight();
+
+  // TODO: Do renderFlags need to be set here?
+
+  return wrap(data, options, userId);
 }
 
 
