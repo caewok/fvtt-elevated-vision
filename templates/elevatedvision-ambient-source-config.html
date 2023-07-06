@@ -12,7 +12,7 @@
 
     <!--- Point source light options -->
 
-    <div class="form-group" id="elevatedvision-config-elevation" style="display:block;">
+    <div class="form-group" id="elevatedvision-config-elevation" style={{ ifThen data.elevatedvision.isDirectional "display:none;" "display:block;" }}>
       <label>{{ localize "elevatedvision.ambientconfig.elevation.name" }} <span class="units">({{gridUnits}})</span></label>
       <div class="form-fields">
         <input type="number" placeholder="Infinity" id="elevatedvisionElevationConfig" name="flags.elevatedvision.elevation" class="elevatedvision" value="{{ data.flags.elevatedvision.elevation }}" />
@@ -22,15 +22,15 @@
 
     <!-- Directional light options-->
 
-    <div class="form-group" id="elevatedvision-config-azimuth" style="display:none;">
+    <div class="form-group" id="elevatedvision-config-azimuth" style={{ ifThen data.elevatedvision.isDirectional "display:block;" "display:none;" }}>
       <label>{{ localize "elevatedvision.ambientconfig.azimuth.name" }} <span class="units">({{ localize "degrees" }})</span></label>
       <div class="form-fields">
-        <input type="number" placeholder="0" id="elevatedvisionAzimuthConfig" min="0" max="360" step="1" name="elevatedvision.azimuth" class="elevatedvision" value="{{ data.elevatedvision.azimuth }}" />
+        <input type="number" placeholder="0" id="elevatedvisionAzimuthConfig" min="0" max="360" step="0.1" name="elevatedvision.azimuth" class="elevatedvision" value="{{ data.elevatedvision.azimuth }}" />
       </div>
       <p class="hint">{{ localize "elevatedvision.ambientconfig.azimuth.hint" }}</p>
     </div>
 
-    <div class="form-group" id="elevatedvision-config-elevationAngle" style="display:none;">
+    <div class="form-group" id="elevatedvision-config-elevationAngle" style={{ ifThen data.elevatedvision.isDirectional "display:block;" "display:none;" }}>
       <label>{{ localize "elevatedvision.ambientconfig.elevationAngle.name" }} <span class="units">({{ localize "degrees" }})</span></label>
       <div class="form-fields">
         <input type="number" placeholder="45" id="elevatedvisionElevationAngleConfig" min="0" max="90" step="0.1" name="elevatedvision.elevationAngle" class="elevatedvision" value="{{ data.elevatedvision.elevationAngle }}" />
@@ -38,10 +38,10 @@
       <p class="hint">{{ localize "elevatedvision.ambientconfig.elevationAngle.hint" }}</p>
     </div>
 
-    <div class="form-group" id="elevatedvision-config-solarAngle" style="display:none;">
+    <div class="form-group" id="elevatedvision-config-solarAngle" style={{ ifThen data.elevatedvision.isDirectional "display:block;" "display:none;" }}>
       <label>{{ localize "elevatedvision.ambientconfig.solarAngle.name" }} <span class="units">({{ localize "degrees" }})</span></label>
       <div class="form-fields">
-        <input type="number" placeholder="0" id="elevatedvisionSolarAngleConfig" min="0" max="45" step="0.01" name="flags.elevatedvision.solarAngle" class="elevatedvision" value="{{ data.flags.elevatedvision.solarAngle }}" />
+        <input type="number" placeholder="1" id="elevatedvisionSolarAngleConfig" min="0" max="45" step="0.1" name="flags.elevatedvision.solarAngle" class="elevatedvision" value="{{ data.flags.elevatedvision.solarAngle }}" />
       </div>
       <p class="hint">{{ localize "elevatedvision.ambientconfig.solarAngle.hint" }}</p>
     </div>

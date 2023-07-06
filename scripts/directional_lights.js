@@ -93,6 +93,27 @@ export class DirectionalLightSource extends LightSource {
   }
 
   /**
+   * Inverse of directionalParametersFromPosition.
+   * @param {number} azimuth          In radians
+   * @param {number} elevationAngle   In radians
+   * @returns {PIXI.Point}
+   */
+  static positionFromDirectionalParameters(azimuth, elevationAngle) {
+    azimuth = Math.normalizeRadians(azimuth);
+    elevationAngle = Math.normalizeRadians(elevationAngle);
+    elevationAngle = Math.clamped(elevationAngle, 0, Math.PI_1_2);
+
+    // Calculate distance from the center based on elevationAngle.
+    const rect = canvas.dimensions.rect;
+    const maxDist = Math.min(rect.width, rect.height);
+    const proportion = elevationAngle / Math.PI_1_2;
+    const dist = proportion * maxDist;
+
+    // Project using azimuth angle for the calculated distance from center.
+    return PIXI.Point.fromAngle(rect.center, azimuth, dist);
+  }
+
+  /**
    * Vector representing the light direction.
    * From a point on the canvas toward the light.
    * @param {number} azimuth          Canvas x/y light angle, in radians, between 0 and 360º

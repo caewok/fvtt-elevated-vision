@@ -18,8 +18,8 @@ export const FLAGS = {
   ELEVATION_IMAGE: "elevationImage",
   ELEVATION: "elevation",
   DIRECTIONAL_LIGHT: {
-    ENABLED: "directionalLight-enabled",
-    SOLAR_ANGLE: "directionalLight-solarAngle"
+    ENABLED: "directionalLight",
+    SOLAR_ANGLE: "solarAngle"
   }
 }
 

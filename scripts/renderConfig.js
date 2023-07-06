@@ -28,9 +28,10 @@ export async function renderAmbientLightConfigHook(app, html, data) {
 function calculateDirectionalData(app, data) {
   const { x, y } = app.object;
   const { azimuth, elevationAngle } = DirectionalLightSource.directionalParametersFromPosition({x, y});
+  const isDirectional = app.object.flags[MODULE_ID].directionalLight;
   const renderData = {};
-  renderData[MODULE_ID] = { azimuth, elevationAngle };
-  foundry.utils.mergeObject(data, renderData, {inplace: true});
+  renderData[MODULE_ID] = { azimuth: Math.toDegrees(azimuth), elevationAngle: Math.toDegrees(elevationAngle), isDirectional };
+  foundry.utils.mergeObject(data.data, renderData, {inplace: true});
 }
 
 /**
@@ -56,25 +57,60 @@ export async function renderTileConfigHook(app, html, data) {
  */
 function activateLightConfigListeners(app, html) {
   html.on("click", "#elevatedvisionDirectionalLightCheckbox", onCheckDirectional.bind(app));
+  html.on("change", "#elevatedvisionAzimuthConfig", onChangeAzimuth.bind(app));
+  html.on("change", "#elevatedvisionElevationAngleConfig", onChangeElevationAngle.bind(app));
 }
 
 /**
- * Update data
+ * Update directional light location when azimuth changes.
+ */
+function onChangeAzimuth(event) {
+  const azimuth = Math.toRadians(Number(event.target.value));
+  const clone = this.object.object._preview;
+  if ( !clone ) return;
+
+//   const { x, y} = DirectionalLightSource.positionFromDirectionalParameters(azimuth, clone.source.elevationAngle);
+//   const newData = { x, y };
+//   const previewData = this._getSubmitData(newData);
+//   this._previewChanges(previewData);
+//   this.render();
+}
+
+/**
+ * Update directional light location when elevationAngle changes.
+ */
+function onChangeElevationAngle(event) {
+  const elevationAngle = Math.toRadians(Number(event.target.value));
+  const clone = this.object.object._preview;
+  if ( !clone ) return;
+
+//   const { x, y } = DirectionalLightSource.positionFromDirectionalParameters(clone.source.azimuth, elevationAngle);
+//   const newData = { x, y };
+//   const previewData = this._getSubmitData(newData);
+//   this._previewChanges(previewData);
+//   this.render();
+}
+
+/**
+ * Update submenu visibility
  */
 function onCheckDirectional(event) {
   const elemElevation = document.getElementById("elevatedvision-config-elevation");
   const elemAzimuth = document.getElementById("elevatedvision-config-azimuth");
   const elemElevationAngle = document.getElementById("elevatedvision-config-elevationAngle");
   const elemSolarAngle = document.getElementById("elevatedvision-config-solarAngle");
-
+  const clone = this.object.object._preview;
   const directionalLightChecked = event.target.checked;
+
   if ( directionalLightChecked ) {
+    if ( clone ) clone.convertToDirectionalLight();
     elemElevation.style.display = "none";
     elemAzimuth.style.display = "block";
     elemElevationAngle.style.display = "block";
     elemSolarAngle.style.display = "block";
 
   } else {  // Point source
+    if ( clone ) clone.convertFromDirectionalLight();
     elemElevation.style.display = "block";
     elemAzimuth.style.display = "none";
     elemElevationAngle.style.display = "none";
