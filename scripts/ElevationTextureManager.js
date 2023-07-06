@@ -93,7 +93,12 @@ export class ElevationTextureManager {
    * @returns {PIXI.Texture}
    */
   async load() {
-    const filePath = `${this.#filePath}/${this.#fileName}`;
+    let filePath = `${this.#filePath}/${this.#fileName}`;
+
+    // Bust the caching of the texture (The Forge issue).
+    if ( filePath.startsWith("https://")
+      || filePath.startsWith("http://") ) filePath = `${filePath}?v=${Math.random()}`;
+
     log(`Loading ${filePath}`);
     try {
       const baseTexture = await TextureLoader.loader.loadTexture(filePath);
@@ -300,5 +305,5 @@ async function buildDirPath(dirs, idx = dirs.length) {
     if ( idx === dirs.length ) return true;
     return buildDirPath(dirs, idx + 1);
   }
-  return true;
+  return true; // eslint-disable-line no-unreachable
 }
