@@ -1,3 +1,6 @@
+# 0.5.4
+Fix for storing elevation data in the Forge. Resolves issue #60. See v0.4.9 and 0.4.10.
+
 # 0.5.3
 WebGL shadows rewritten entirely. No longer a limit on the number of walls it can consider when calculating shadows using the GPU. (Technically, may be limited by the number of attributes that can be passed to a shader, but that should be sufficiently large for most use cases.) WebGL shadows also should be a lot more performant because shadows are drawn to a texture which is then used for rendering---this avoids a lot of calculations in the fragment shader on the fly.
 
@@ -23,6 +26,18 @@ Updated for Foundry v11. Update geometry lib to v0.2.1.
 Display of the elevation number when in the elevation layer is now faster.
 
 WebGL shadows disabled until a more robust solution can be implemented.
+
+# 0.4.11
+Correct issue with 0.4.10 release.
+
+# 0.4.10
+Try a cache-busting URL to avoid file caching issue with texture image data when in The Forge.
+
+# 0.4.9
+Backport from upcoming v0.5.2 to fix storing elevation data in the Forge. Should resolve issue #60. File path creation should no longer override the "html://" prefix. Avoids use of `FilePicker.browse` in favor of `FilePicker.createDirectory`.
+
+# 0.4.8
+Backport from v0.5.1 of storing the elevation data for each scene as a webp image in `worlds/[world-id]/assets/elevatedvision/[world-id][scene-id]-elevationMap.webp`. Previously, the elevation data was stored in the scene flag. Switching to storing an image should be faster by avoiding database churn. Avoids a potential v10 database issue that could cause the world not to load if the length of the elevation data got too long.
 
 # 0.4.7
 Fix for error thrown with rotated tiles, due to bug in PixelCache.
