@@ -85,8 +85,8 @@ export class DirectionalLightSource extends LightSource {
 
     // Calculate elevation angle based on distance from center.
     // 90º when at the center.
-    const maxDist = Math.min(rect.width, rect.height);
-    const proportion = 1 - (PIXI.Point.distanceBetween(position, center) / maxDist);
+    const maxDist = Math.min(rect.width, rect.height) * 0.5;
+    const proportion = Math.clamped(1 - (PIXI.Point.distanceBetween(position, center) / maxDist), 0, 1);
     const elevationAngle = mix(0, Math.PI_1_2, proportion);
 
     return { azimuth, elevationAngle };
