@@ -93,7 +93,12 @@ export class ElevationTextureManager {
    * @returns {PIXI.Texture}
    */
   async load() {
-    const filePath = `${this.#filePath}/${this.#fileName}`;
+    let filePath = `${this.#filePath}/${this.#fileName}`;
+
+    // Bust the caching of the texture (The Forge issue).
+    if ( filePath.startsWith("https://")
+      || filePath.startsWith("http://") ) filePath = `${filePath}?v=${Math.random()}`;
+
     log(`Loading ${filePath}`);
     try {
       const baseTexture = await TextureLoader.loader.loadTexture(filePath);
