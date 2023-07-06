@@ -1,3 +1,6 @@
+# 0.4.10
+Try a cache-busting URL to avoid file caching issue with texture image data when in The Forge.
+
 # 0.4.9
 Backport from upcoming v0.5.2 to fix storing elevation data in the Forge. Should resolve issue #60. File path creation should no longer override the "html://" prefix. Avoids use of `FilePicker.browse` in favor of `FilePicker.createDirectory`.
 
