@@ -30,7 +30,10 @@ function calculateDirectionalData(app, data) {
   const { azimuth, elevationAngle } = DirectionalLightSource.directionalParametersFromPosition({x, y});
   const isDirectional = app.object.flags[MODULE_ID].directionalLight;
   const renderData = {};
-  renderData[MODULE_ID] = { azimuth: Math.toDegrees(azimuth), elevationAngle: Math.toDegrees(elevationAngle), isDirectional };
+  renderData[MODULE_ID] = {
+    azimuth: Math.normalizeDegrees(Math.toDegrees(azimuth)).toFixed(1),
+    elevationAngle: Math.normalizeDegrees(Math.toDegrees(elevationAngle)).toFixed(1),
+    isDirectional };
   foundry.utils.mergeObject(data.data, renderData, {inplace: true});
 }
 
@@ -69,11 +72,13 @@ function onChangeAzimuth(event) {
   const clone = this.object.object._preview;
   if ( !clone ) return;
 
-//   const { x, y} = DirectionalLightSource.positionFromDirectionalParameters(azimuth, clone.source.elevationAngle);
-//   const newData = { x, y };
-//   const previewData = this._getSubmitData(newData);
-//   this._previewChanges(previewData);
-//   this.render();
+  const { x, y} = DirectionalLightSource.positionFromDirectionalParameters(azimuth, clone.source.elevationAngle);
+  const newData = { x, y };
+  newData[MODULE_ID] = { azimuth: Number(event.target.value) };
+
+  const previewData = this._getSubmitData(newData);
+  this._previewChanges(previewData);
+  this.render();
 }
 
 /**
@@ -84,11 +89,13 @@ function onChangeElevationAngle(event) {
   const clone = this.object.object._preview;
   if ( !clone ) return;
 
-//   const { x, y } = DirectionalLightSource.positionFromDirectionalParameters(clone.source.azimuth, elevationAngle);
-//   const newData = { x, y };
-//   const previewData = this._getSubmitData(newData);
-//   this._previewChanges(previewData);
-//   this.render();
+  const { x, y } = DirectionalLightSource.positionFromDirectionalParameters(clone.source.azimuth, elevationAngle);
+  const newData = { x, y };
+  newData[MODULE_ID] = { elevationAngle: Number(event.target.value) };
+
+  const previewData = this._getSubmitData(newData);
+  this._previewChanges(previewData);
+  this.render();
 }
 
 /**
