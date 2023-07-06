@@ -1,5 +1,5 @@
 # 0.5.4
-Fix for storing elevation data in the Forge. Resolves issue #60. See v0.4.9 and 0.4.10.
+Fix for storing elevation data in The Forge. Resolves issue #60. See v0.4.9 and 0.4.10.
 
 # 0.5.3
 WebGL shadows rewritten entirely. No longer a limit on the number of walls it can consider when calculating shadows using the GPU. (Technically, may be limited by the number of attributes that can be passed to a shader, but that should be sufficiently large for most use cases.) WebGL shadows also should be a lot more performant because shadows are drawn to a texture which is then used for rendering---this avoids a lot of calculations in the fragment shader on the fly.
