@@ -6,6 +6,8 @@ PreciseText
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { DirectionalLightSource } from "./directional_lights.js";
+
 // Draw elevation for lights similar to that of tokens.
 
 /**
@@ -45,7 +47,14 @@ export function _drawTooltipAmbientLight() {
 
 
 export function _getTooltipTextAmbientLight() {
-  let el = this.elevationE;
+  if ( this.source instanceof DirectionalLightSource ) {
+    const azimuth = Math.normalizeDegrees(Math.toDegrees(this.source.azimuth)).toFixed(1);
+    const elevationAngle = Math.normalizeDegrees(Math.toDegrees(this.source.elevationAngle)).toFixed(1);
+    const text = `${azimuth}º\n${elevationAngle}º`
+    return text;
+  }
+
+  const el = this.elevationE;
   if ( !Number.isFinite(el) || el === 0 ) return "";
   let units = canvas.scene.grid.units;
   return el > 0 ? `+${el} ${units}` : `${el} ${units}`;
