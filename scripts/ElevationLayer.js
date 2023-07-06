@@ -641,9 +641,11 @@ export class ElevationLayer extends InteractionLayer {
 
     const texture = await this._textureManager.load();
     if ( !texture || !texture.valid ) {
-      const msg = `ElevatedVision|importFromImageFile failed to import elevation data from ${elevationImage.imageURL}.`;
-      ui.notifications.error(msg);
-      console.error(msg, elevationImage);
+      const msg = `ElevatedVision|importFromImageFile failed to import expected elevation data from ${elevationImage.imageURL}. Using empty data file instead.`;
+      ui.notifications.warn(msg);
+      console.warn(msg, elevationImage);
+      canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
+      this._textureManager.initialize();
       return;
     }
 
