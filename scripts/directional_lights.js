@@ -17,6 +17,9 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 // Similar to GlobalLightSource in that it overrides the polygon shape.
 export class DirectionalLightSource extends LightSource {
 
+  /** @type {boolean} */
+  isDirectional = true;
+
   /** @override */
   _createPolygon() {
     return canvas.dimensions.rect.toPolygon();
@@ -211,7 +214,7 @@ export class DirectionalLightSource extends LightSource {
  * New method: AmbientLight.prototype.convertToDirectionalLight
  */
 export function convertToDirectionalLightAmbientLight() {
-  if ( this.source instanceof DirectionalLightSource ) return;
+  if ( this.source.isDirectional ) return;
 
   this.updateSource({ deleted: true });
   this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED, true);
@@ -223,7 +226,7 @@ export function convertToDirectionalLightAmbientLight() {
  * New method: AmbientLight.prototype.convertFromDirectionalLight
  */
 export function convertFromDirectionalLightAmbientLight() {
-  if ( !(this.source instanceof DirectionalLightSource) ) return;
+  if ( !this.source.isDirectional ) return;
 
   this.updateSource({ deleted: true });
   this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED, false);

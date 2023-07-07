@@ -85,7 +85,8 @@ import {
   _drawAmbientLight,
   _drawTooltipAmbientLight,
   _getTooltipTextAmbientLight,
-  _getTextStyleAmbientLight } from "./lighting_elevation_tooltip.js";
+  _getTextStyleAmbientLight,
+  refreshControlAmbientLight } from "./lighting_elevation_tooltip.js";
 
 import {
   convertToDirectionalLightAmbientLight,
@@ -183,6 +184,7 @@ export function registerPatches() {
   // ----- Directional lighting ----- //
   wrap("AmbientLight.prototype.clone", cloneAmbientLight);
   wrap("AmbientLight.prototype._onUpdate", _onUpdateAmbientLight);
+  wrap("AmbientLight.prototype.refreshControl", refreshControlAmbientLight);
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;

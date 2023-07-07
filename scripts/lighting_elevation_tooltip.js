@@ -1,6 +1,7 @@
 /* globals
 canvas,
 CONFIG,
+getTexture,
 PreciseText
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -31,6 +32,15 @@ export function refreshAmbientLightHook(light, flags) {
 export function _drawAmbientLight(wrapped) {
   wrapped();
   this.tooltip ||= this.addChild(this._drawTooltip());
+  if ( this.source.isDirectional ) this.refreshControl();
+}
+
+export function refreshControlAmbientLight(wrapped) {
+  wrapped();
+  if ( this.source.isDirectional ) {
+    this.controlIcon.texture = getTexture(this.isVisible ?  CONFIG.controlIcons.directionalLight : CONFIG.controlIcons.directionalLightOff);
+    this.controlIcon.draw();
+  }
 }
 
 export function _drawTooltipAmbientLight() {
@@ -47,10 +57,10 @@ export function _drawTooltipAmbientLight() {
 
 
 export function _getTooltipTextAmbientLight() {
-  if ( this.source instanceof DirectionalLightSource ) {
+  if ( this.source.isDirectional ) {
     const azimuth = Math.normalizeDegrees(Math.toDegrees(this.source.azimuth)).toFixed(1);
     const elevationAngle = Math.normalizeDegrees(Math.toDegrees(this.source.elevationAngle)).toFixed(1);
-    const text = `${azimuth}º\n${elevationAngle}º`
+    const text = `${azimuth}º\n${elevationAngle}º`;
     return text;
   }
 

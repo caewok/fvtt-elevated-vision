@@ -68,6 +68,8 @@ Hooks.once("init", function() {
   // CONFIG.debug.hooks = true;
   console.debug(`${MODULE_ID}|init`);
 
+  CONFIG.controlIcons.directionalLight = "icons/svg/sun.svg";
+  CONFIG.controlIcons.directionalLightOff = "icons/svg/cancel.svg";
 
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
