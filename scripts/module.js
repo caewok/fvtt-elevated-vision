@@ -57,6 +57,8 @@ import {
 
 import { refreshAmbientLightHook } from "./lighting_elevation_tooltip.js";
 
+import { hoverAmbientLightHook } from "./directional_lights.js";
+
 // Other self-executing hooks
 import "./changelog.js";
 import "./controls.js";
@@ -198,6 +200,7 @@ Hooks.on("canvasReady", function() {
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
   setDirectionalLightSources(canvas.lighting.placeables);
+  DirectionalLightSource._refreshElevationAngleGuidelines()
 });
 
 function setDirectionalLightSources(lights) {
@@ -262,4 +265,5 @@ Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
 Hooks.on("updateAmbientLight", updateAmbientLightHook);
 Hooks.on("updateAmbientSound", updateAmbientSoundHook);
 Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
+Hooks.on("hoverAmbientLight", hoverAmbientLightHook);
 // Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);

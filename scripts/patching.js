@@ -241,7 +241,7 @@ export function registerAdditions() {
   // For light elevation tooltip
   addClassMethod(AmbientLight.prototype, "_drawTooltip", _drawTooltipAmbientLight);
   addClassMethod(AmbientLight.prototype, "_getTooltipText", _getTooltipTextAmbientLight);
-  addClassMethod(AmbientLight.prototype, "_getTextStyle", _getTextStyleAmbientLight);
+  addClassMethod(AmbientLight, "_getTextStyle", _getTextStyleAmbientLight);
 }
 
 

@@ -1,7 +1,9 @@
 /* globals
 canvas,
+flattenObject,
 LightSource,
 PIXI
+PreciseText
 */
 "use strict";
 
@@ -10,7 +12,7 @@ import { DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeom
 import { ShadowWallDirectionalSourceMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
-
+import { Draw } from "./geometry/Draw.js";
 
 // Directional Light
 // Assumed to be infinitely far, like a sun, and so causes directional shadows only.
@@ -25,6 +27,15 @@ export class DirectionalLightSource extends LightSource {
     return canvas.dimensions.rect.toPolygon();
   }
 
+  /**
+   * Holds a grid delineating elevation angle breaks that can be displayed when hovering over or
+   * dragging the source.
+   * @type {PIXI.Graphics}
+   */
+  static _elevationAngleGrid = new PIXI.Graphics();
+
+  static #guideAngles = [0, 10, 20, 30, 40, 50, 60, 70, 80].map(d => Math.toRadians(d));
+
   /** @override */
   _initialize(data) {
     super._initialize(data);
@@ -38,7 +49,70 @@ export class DirectionalLightSource extends LightSource {
     this.data.azimuth = azimuth;
     this.data.elevationAngle = elevationAngle;
 
-    this.data.solarAngle = this.object.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.SOLAR_ANGLE) ?? Math.toRadians(1);
+    this.data.solarAngle = this.object.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.SOLAR_ANGLE)
+      ?? Math.toRadians(1);
+
+
+  }
+
+  /**
+   * Draw a set of rectangles displaying the elevation angles at 10º spaces along the canvas.
+   */
+  static _refreshElevationAngleGuidelines() {
+    this._elevationAngleGrid.removeChildren();
+
+    const draw = new Draw(this._elevationAngleGrid);
+    draw.clearDrawings();
+    const center = canvas.dimensions.rect.center;
+    const color = Draw.COLORS.white;
+    const width = 2;
+    const azimuth = {
+      north: Math.PI * 1.5,
+      south: Math.PI_1_2,
+      east: 0,
+      west: Math.PI
+    };
+
+    const guideTextContainer = this._elevationAngleGrid.addChild(new PIXI.Container());
+
+    for ( const elevationAngle of this.#guideAngles ) {
+      // Find the point due east.
+      const east = this.positionFromDirectionalParameters(azimuth.east, elevationAngle);
+      const width1_2 = east.x - center.x;
+      const r = new PIXI.Rectangle(center.x - width1_2, center.y - width1_2, width1_2 * 2, width1_2 * 2);
+      draw.shape(r, { color, width });
+
+      // Add text
+      // (For mysterious reasons, adding the text to 4 containers at different positions fails.)
+      // (It draws the text only in the last container added.)
+
+
+      // Add text in all 4 directions by adding the text to 4 distinct containers.
+      for ( const compassDirection of Object.keys(azimuth) ) {
+        const text = this._drawGuideText(`${Math.round(Math.toDegrees(elevationAngle))}º⦞`);
+        const c = guideTextContainer.addChild(new PIXI.Container());
+        c.addChild(text);
+
+        const position = this.positionFromDirectionalParameters(azimuth[compassDirection], elevationAngle);
+        c.position.copyFrom(position);
+
+        // TODO: Move to align better with the grid
+      }
+    }
+  }
+
+  /**
+   * Draw the text used when displaying the elevation angle guide
+   */
+  static _drawGuideText(text) {
+    const style = AmbientLight._getTextStyle();
+    const tip = new PreciseText(text, style);
+    tip.anchor.set(0.5, 0.5);
+
+    // From #drawControlIcon
+    const size = Math.max(Math.round((canvas.dimensions.size * 0.5) / 20) * 20, 40);
+    tip.position.set(0, 0);
+    return tip;
   }
 
   /**
@@ -211,6 +285,18 @@ export class DirectionalLightSource extends LightSource {
 // Patches for AmbientLight
 
 /**
+ * Hook AmbientLight hover in and hover out
+ * Display the elevation angle grid when hovering over a directional light.
+ * @param {AmbientLight} light  The light object for which the hover applies.
+ * @param {boolean} hover       True if hover started.
+ */
+export function hoverAmbientLightHook(light, hover) {
+  if ( !light.source.isDirectional ) return;
+  if ( hover ) canvas.lighting.addChild(DirectionalLightSource._elevationAngleGrid);
+  else canvas.lighting.removeChild(DirectionalLightSource._elevationAngleGrid);
+}
+
+/**
  * New method: AmbientLight.prototype.convertToDirectionalLight
  */
 export function convertToDirectionalLightAmbientLight() {
@@ -252,10 +338,10 @@ export function cloneAmbientLight(wrapped) {
  */
 export function _onUpdateAmbientLight(wrap, data, options, userId) {
   const changes = flattenObject(data);
-  const keys = new Set(Object.keys(changes))
+  const keys = new Set(Object.keys(changes));
 
-  const isDirectionalFlag = `flags.${MODULE_ID}.directionalLight`
-  if ( keys.has(isDirectionalFlag) ) changes[isDirectionalFlag]
+  const isDirectionalFlag = `flags.${MODULE_ID}.directionalLight`;
+  if ( keys.has(isDirectionalFlag) ) changes[isDirectionalFlag] // eslint-disable-line no-unused-expressions
     ? this.convertToDirectionalLight() : this.convertFromDirectionalLight();
 
   // TODO: Do renderFlags need to be set here?

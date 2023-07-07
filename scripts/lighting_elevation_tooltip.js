@@ -45,7 +45,7 @@ export function refreshControlAmbientLight(wrapped) {
 
 export function _drawTooltipAmbientLight() {
   let text = this._getTooltipText();
-  const style = this._getTextStyle();
+  const style = this.constructor._getTextStyle();
   const tip = new PreciseText(text, style);
   tip.anchor.set(0.5, 1);
 
@@ -60,7 +60,7 @@ export function _getTooltipTextAmbientLight() {
   if ( this.source.isDirectional ) {
     const azimuth = Math.normalizeDegrees(Math.toDegrees(this.source.azimuth)).toFixed(1);
     const elevationAngle = Math.normalizeDegrees(Math.toDegrees(this.source.elevationAngle)).toFixed(1);
-    const text = `${azimuth}º\n${elevationAngle}º`;
+    const text = `${azimuth}º⥁\n${elevationAngle}º⦞`;
     return text;
   }
 
@@ -71,6 +71,7 @@ export function _getTooltipTextAmbientLight() {
 }
 
 /**
+ * New method: AmbientLight._getTextStyle
  * Get the text style that should be used for this Light's tooltip.
  * See Token.prototype._getTextStyle.
  * @returns {string}

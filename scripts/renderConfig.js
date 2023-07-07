@@ -28,7 +28,7 @@ export async function renderAmbientLightConfigHook(app, html, data) {
 function calculateDirectionalData(app, data) {
   const { x, y } = app.object;
   const { azimuth, elevationAngle } = DirectionalLightSource.directionalParametersFromPosition({x, y});
-  const isDirectional = app.object.flags[MODULE_ID].directionalLight;
+  const isDirectional = Boolean(app.object.flags[MODULE_ID]?.directionalLight);
   const renderData = {};
   renderData[MODULE_ID] = {
     azimuth: Math.normalizeDegrees(Math.toDegrees(azimuth)).toFixed(1),
@@ -76,9 +76,9 @@ function onChangeAzimuth(event) {
   const newData = { x, y };
   newData[MODULE_ID] = { azimuth: Number(event.target.value) };
 
-  const previewData = this._getSubmitData(newData);
-  this._previewChanges(previewData);
-  this.render();
+//   const previewData = this._getSubmitData(newData);
+//   this._previewChanges(previewData);
+//   this.render();
 }
 
 /**
@@ -93,9 +93,9 @@ function onChangeElevationAngle(event) {
   const newData = { x, y };
   newData[MODULE_ID] = { elevationAngle: Number(event.target.value) };
 
-  const previewData = this._getSubmitData(newData);
-  this._previewChanges(previewData);
-  this.render();
+//   const previewData = this._getSubmitData(newData);
+//   this._previewChanges(previewData);
+//   this.render();
 }
 
 /**
