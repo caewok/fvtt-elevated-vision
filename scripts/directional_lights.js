@@ -260,7 +260,6 @@ export function _onUpdateAmbientLight(wrap, data, options, userId) {
   return wrap(data, options, userId);
 }
 
-
 /**
  * Linear interpolation of x and y numeric values based on "a" weight. Comparable to GLSL mix function.
  * @param {number} x    Start of range

@@ -8,7 +8,7 @@ ui
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, FLAGS } from "./const.js";
 import { log } from "./util.js";
 
 // API imports
@@ -195,7 +195,16 @@ Hooks.on("canvasReady", function() {
   // Set the elevation grid now that we know scene dimensions
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
+  setDirectionalLightSources(canvas.lighting.placeables);
 });
+
+function setDirectionalLightSources(lights) {
+  lights.forEach(l => {
+    // Assuming all lights currently are non-directional.
+    if ( !l.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED) ) return;
+    l.convertToDirectionalLight();
+  });
+}
 
 Hooks.on("3DCanvasSceneReady", function(_previewArr) {
   disableScene();
