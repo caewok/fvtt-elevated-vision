@@ -815,11 +815,11 @@ void main() {
   bool inNearPenumbra = vBary.x > nearRatios.z; // && vBary.x < nearRatios.x; // handled by in front of wall test.
 
 //   For testing
-  fragColor = vec4(vec3(0.0), 0.8);
-  if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
-  if ( inFarPenumbra ) fragColor.b = 1.0;
-  if ( inNearPenumbra ) fragColor.g = 1.0;
-  return;
+//   fragColor = vec4(vec3(0.0), 0.8);
+//   if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
+//   if ( inFarPenumbra ) fragColor.b = 1.0;
+//   if ( inNearPenumbra ) fragColor.g = 1.0;
+//   return;
 
   float percentLightSides = 1.0;
   float percentLightFN = 1.0;
