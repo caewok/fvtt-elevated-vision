@@ -67,6 +67,21 @@ GLSLFunctions.cross2d =
 float cross2d(in vec2 a, in vec2 b) { return (a.x * b.y) - (a.y * b.x); }
 `;
 
+// Comparable to Ray.fromAngle
+GLSLFunctions.fromAngle =
+`
+/**
+ * @param {vec2} origin     Starting point
+ * @param {float} radians   Angle to move from the starting point
+ * @param {float} distance  Distance to travel from the starting point
+ * @returns {vec2}  Coordinates of a point that lies distance away from origin along angle.
+ */
+vec2 fromAngle(in vec2 origin, in float radians, in float distance) {
+  float dx = cos(radians);
+  float dy = sin(radians);
+  return origin + (vec2(dx, dy) * distance);
+}`;
+
 // NOTE: Matrix
 GLSLFunctions.MatrixTranslation =
 `

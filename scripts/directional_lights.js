@@ -1,4 +1,5 @@
 /* globals
+AmbientLight,
 canvas,
 flattenObject,
 LightSource,
@@ -49,10 +50,8 @@ export class DirectionalLightSource extends LightSource {
     this.data.azimuth = azimuth;
     this.data.elevationAngle = elevationAngle;
 
-    this.data.solarAngle = this.object.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.SOLAR_ANGLE)
-      ?? Math.toRadians(1);
-
-
+    this.data.solarAngle = Math.toRadians(this.object.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.SOLAR_ANGLE)
+      ?? 1);
   }
 
   /**
@@ -110,8 +109,8 @@ export class DirectionalLightSource extends LightSource {
     tip.anchor.set(0.5, 0.5);
 
     // From #drawControlIcon
-    const size = Math.max(Math.round((canvas.dimensions.size * 0.5) / 20) * 20, 40);
-    tip.position.set(0, 0);
+//     const size = Math.max(Math.round((canvas.dimensions.size * 0.5) / 20) * 20, 40);
+//     tip.position.set(0, 0);
     return tip;
   }
 
@@ -275,10 +274,24 @@ export class DirectionalLightSource extends LightSource {
     // TODO: Need to monitor for change to lightSizeProjected.
 
     ev.wallGeometry.refreshWalls();
-    ev.shadowMesh.updateLightDirection();
+    ev.shadowMesh.updateAzimuth();
+    ev.shadowMesh.updateElevationAngle();
     ev.shadowRenderer.update();
   }
 
+  /**
+   * Catch when solarAngle is updated.
+   */
+  _configure(changes) {
+    super._configure(changes);
+
+    const ev = this[MODULE_ID];
+    if ( !ev || !ev.wallGeometry ) return;
+    if ( Object.hasOwn(changes, "solarAngle") ) {
+      ev.shadowMesh.updateSolarAngle();
+      ev.shadowRenderer.update();
+    }
+  }
 }
 
 

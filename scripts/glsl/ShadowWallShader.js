@@ -459,78 +459,25 @@ flat out vec3 fFarRatios;  // x: penumbra, y: mid-penumbra, z: umbra
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 uniform vec4 uElevationRes;
-uniform vec3 uLightDirection;
-uniform float uSolarAngle; // Must be greater than or equal to 0.
+uniform float uAzimuth; // radians
+uniform float uElevationAngle; // radians
+uniform float uSolarAngle; // radians
 uniform vec4 uSceneDims;
+
+#define PI_1_2 1.5707963267948966
 
 ${defineFunction("normalizeRay")}
 ${defineFunction("rayFromPoints")}
 ${defineFunction("intersectRayPlane")}
 ${defineFunction("lineLineIntersection")}
 ${defineFunction("barycentric")}
-${defineFunction("Matrix3dRotationZ")}
-${defineFunction("multiplyMatrixPoint")}
 ${defineFunction("orient")}
+${defineFunction("fromAngle")}
 
-#define EV_CONST_INFINITE_SHADOW_OFFSET   0.01
-
-// Calculate the flat ratios needed for shading the penumbra.
-// x: penumbra; y: mid-penumbra; z: umbra
-void calculateFlats(
-  in vec2 lightCenter,
-  in vec2 outerPenumbra,
-  in Plane canvasPlane,
-  float zAdjust,
-  vec3 lightPenumbraDir) {
-
-  float canvasElevation = uElevationRes.x;
-  float wallBottomZ = max(aWallCorner2.z, canvasElevation);
-  float wallTopZ = aWallCorner1.z;
-  float distShadow = distance(lightCenter, outerPenumbra);
-  float distShadowInv = 1.0 / distShadow;
-  float distWallTop1 = distance(aWallCorner1.xy, outerPenumbra);
-
-  // Intersect the canvas plane after adjusting for z * 2 (first gets us to mid-penumbra).
-  // This is the amount of the penumbra at the far edge of the wall shadow.
-  vec3 wallTop1 = vec3(aWallCorner1.xy, wallTopZ);
-  vec3 farUmbra;
-  vec3 midFarPenumbra;
-  vec3 lightMidPenumbraDir = lightPenumbraDir;
-  vec3 lightUmbraDir = lightPenumbraDir;
-  lightMidPenumbraDir.z += zAdjust;
-  lightUmbraDir.z += (zAdjust * 2.0);
-
-  intersectRayPlane(Ray(wallTop1, lightMidPenumbraDir), canvasPlane, midFarPenumbra);
-  intersectRayPlane(Ray(wallTop1, lightUmbraDir), canvasPlane, farUmbra);
-  float distMidFarPenumbra = distance(outerPenumbra, midFarPenumbra.xy);
-  float distFarUmbra = distance(outerPenumbra, farUmbra.xy);
-
-  // Set the ratios to determine, using the bary.x coordinate, where the wall
-  // and the key penumbra points are.
-  fWallRatio = distWallTop1 * distShadowInv;
-  fNearRatios = vec3(fWallRatio);
-  fFarRatios = vec3(distFarUmbra, distMidFarPenumbra, 0.0) * distShadowInv; // 0.0 is the penumbra value (0 at shadow end)
-
-  if ( wallBottomZ > canvasElevation ) {
-    vec3 wallBottom = vec3(aWallCorner1.xy, wallBottomZ);
-
-    // Find where the canvas intersects the ray from the light to the bottom wall endpoint.
-    vec3 nearUmbra;
-    vec3 midNearPenumbra;
-    vec3 nearPenumbra;
-    intersectRayPlane(Ray(wallBottom, lightUmbraDir), canvasPlane, nearUmbra);
-    intersectRayPlane(Ray(wallBottom, lightMidPenumbraDir), canvasPlane, midNearPenumbra);
-    intersectRayPlane(Ray(wallBottom, lightPenumbraDir), canvasPlane, nearPenumbra);
-
-    float distNearUmbra = distance(outerPenumbra, nearUmbra.xy);
-    float distNearMidPenumbra = distance(outerPenumbra, midNearPenumbra.xy);
-    float distNearPenumbra = distance(outerPenumbra, nearPenumbra.xy);
-
-    fNearRatios = vec3(distNearPenumbra, distNearMidPenumbra, distNearUmbra) * distShadowInv;
-  }
-
-  fWallHeights = vec2(wallTopZ, wallBottomZ);
-  fWallSenseType = aWallSenseType;
+float zChangeForElevationAngle(in float elevationAngle) {
+  elevationAngle = clamp(elevationAngle, 0.0, PI_1_2); // 0º to 90º
+  vec2 pt = fromAngle(vec2(0.0), elevationAngle, 1.0);
+  return pt.x == 0.0 ? 1.0 : pt.y / pt.x;
 }
 
 void main() {
@@ -553,55 +500,50 @@ void main() {
   float canvasElevation = uElevationRes.x;
   float wallTopZ = aWallCorner1.z;
   float maxR = sqrt(uSceneDims.z * uSceneDims.z + uSceneDims.w * uSceneDims.w) * 2.0;
-  float solarAngle = max(uSolarAngle, 1e-06);
-
   vec3 wallTop1 = vec3(aWallCorner1.xy, wallTopZ);
   vec3 wallTop2 = vec3(aWallCorner2.xy, wallTopZ);
-
   int vertexNum = gl_VertexID % 3;
 
   // Set the barymetric coordinates for each corner of the triangle.
   vBary = vec3(0.0, 0.0, 0.0);
   vBary[vertexNum] = 1.0;
 
-  // Plane describing the canvas surface at minimum elevation for the scene.
-  vec3 planeNormal = vec3(0.0, 0.0, 1.0);
-  vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
-  Plane canvasPlane = Plane(planePoint, planeNormal);
-
-  // Intersect the canvas plane: light --> vertex --> plane
-  // We know there is an intersect b/c we are using direction for the light and direction
-  // points up. Ensure this by setting the z component to a positive value.
-  // One degree for elevationAngle would be 0.017 rise in z.
-  vec3 lightDirection = uLightDirection;
-  lightDirection.z = max(lightDirection.z, 1e-06);
-
-  // Reverse the light ray to use for testing canvas intersections.
-  vec3 lightDirectionRev = lightDirection * -1.0;
-
-  // Adjust the light ray so it hits slightly further out along the canvas based on solarAngle
-  vec2 zAdjustTmp = vec2(cos(uSolarAngle), sin(uSolarAngle));
-  float zAdjust = zAdjustTmp.y != 0.0 ? zAdjustTmp.y / zAdjustTmp.x : 0.0;
-  lightDirectionRev.z += zAdjust; // Move more slowly toward the canvas.
-
   // Determine which side of the wall the light is on.
-  // Then adjust the light direction to angle it slightly outward from the wall endpoint - light shadow.
-  // to form a penumbra. Adjust in opposite direction for the opposite penumbra, umbra.
-  // orient returns positive if ccw; negative if cw.
-  float oWallLight = sign(orient(aWallCorner1.xy, aWallCorner2.xy, aWallCorner1.xy + lightDirection.xy));
-  mat4 rotMat = Matrix3dRotationZ(solarAngle * oWallLight);
+  vec2 lightDirection2d = fromAngle(vec2(0.0), uAzimuth, 1.0);
+  float oWallLight = sign(orient(aWallCorner1.xy, aWallCorner2.xy, aWallCorner1.xy + lightDirection2d));
 
-  // Flip the sin values to reverse the rotation.
-  mat4 rotMatRev = rotMat;
-  rotMatRev[1][0] *= -1.0;
-  rotMatRev[0][1] *= -1.0;
-  vec3 lightPenumbraDirRev1 = multiplyMatrixPoint(rotMat, lightDirectionRev);
-  vec3 lightPenumbraDirRev2 = multiplyMatrixPoint(rotMatRev, lightDirectionRev);
+  // Adjust azimuth by the solarAngle.
+  // Determine the direction of the outer penumbra rays from light --> wallCorner1 / wallCorner2.
+  // The angle for the penumbra is the azimuth ± the solarAngle.
+  float solarWallAngle = max(uSolarAngle, 0.0001) * oWallLight;
+  vec2 sidePenumbra1_2d = fromAngle(vec2(0.0), uAzimuth + solarWallAngle, 1.0);
+  vec2 sidePenumbra2_2d = fromAngle(vec2(0.0), uAzimuth - solarWallAngle, 1.0);
+
+  // Adjust elevationAngle by the solarAngle. Use the lower elevation angle to find the far penumbra.
+  float zFarPenumbra = zChangeForElevationAngle(uElevationAngle - uSolarAngle);
+
+  // Find the direction for each endpoint penumbra and reverse it for intersecting the canvas.
+  vec3 lightPenumbraDirRev1 = vec3(sidePenumbra1_2d, zFarPenumbra) * -1.0;
+  vec3 lightPenumbraDirRev2 = vec3(sidePenumbra2_2d, zFarPenumbra) * -1.0;
+
+  // Determine the light direction for the endpoint to light and reverse it.
+  float zMidPenumbra = zChangeForElevationAngle(uElevationAngle);
+  vec3 lightDirectionRev = vec3(lightDirection2d, zMidPenumbra) * -1.0;
+
+  // Normalize all the directions.
+  lightPenumbraDirRev1 = normalize(lightPenumbraDirRev1);
+  lightPenumbraDirRev2 = normalize(lightPenumbraDirRev2);
+  lightDirectionRev = normalize(lightDirectionRev);
 
   // If the canvas intersection point would be too far away, find an intermediate point to use instead.
   // Shift the canvas plane up accordingly.
+  vec3 planeNormal = vec3(0.0, 0.0, 1.0);
+  vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
   vec3 maxIx = wallTop1 + (lightPenumbraDirRev1 * maxR);
-  if ( maxIx.z > 0.0 ) canvasPlane = Plane(maxIx, planeNormal);
+  bool shadowLengthExceedsCanvas = maxIx.z > 0.0;
+  if ( shadowLengthExceedsCanvas ) planePoint = maxIx;
+
+  Plane canvasPlane = Plane(planePoint, planeNormal);
 
   // The different ray intersections with the canvas from wall endpoint --> canvas form an arc around the wall endpoint.
   // Intersect the mid-penumbra with the canvas, then find the intersection of those two with
@@ -643,7 +585,6 @@ void main() {
       break;
     case 2:
       vVertexPosition = outerPenumbra2;
-      calculateFlats(lightCenter, outerPenumbra1, canvasPlane, zAdjust, lightPenumbraDirRev1);
       break;
   }
 
@@ -658,6 +599,61 @@ void main() {
   vec2 p2C = innerPenumbra2;
   vec2 p2B = outerPenumbra2;
   vSidePenumbra2 = barycentric(vVertexPosition, p2A, p2B, p2C);
+
+  if ( vertexNum == 2 ) {
+    // Calculate flat variables
+    float distShadow = distance(lightCenter, outerPenumbra1);
+    float distShadowInv = 1.0 / distShadow;
+    float distWallTop1 = distance(aWallCorner1.xy, outerPenumbra1);
+
+    // Determine the angle and z change for the light at the far mid penumbra and umbra points.
+    float zMidPenumbra = zChangeForElevationAngle(uElevationAngle);
+    float zUmbra = zChangeForElevationAngle(uElevationAngle + uSolarAngle);
+    vec3 midPenumbraDir = vec3(sidePenumbra1_2d, zMidPenumbra) * -1.0;
+    vec3 umbraDir = vec3(sidePenumbra1_2d, zUmbra) * -1.0;
+
+    // Intersect the canvas plane for the different penumbra points.
+    // This is the amount of the penumbra at the far edge of the wall shadow.
+    // x: penumbra; y: mid-penumbra; z: umbra
+    fFarRatios = vec3(-1.0);
+    if ( !shadowLengthExceedsCanvas ) {
+      vec3 farUmbraIx;
+      vec3 midFarPenumbraIx;
+      intersectRayPlane(Ray(wallTop1, midPenumbraDir), canvasPlane, midFarPenumbraIx);
+      intersectRayPlane(Ray(wallTop1, umbraDir), canvasPlane, farUmbraIx);
+      float distMidFarPenumbra = distance(outerPenumbra1, midFarPenumbraIx.xy);
+      float distFarUmbra = distance(outerPenumbra1, farUmbraIx.xy);
+      fFarRatios = vec3(distFarUmbra, distMidFarPenumbra, 0.0) * distShadowInv; // (0 at shadow end)
+    }
+
+    // Set the ratios to determine, using the bary.x coordinate, where the wall
+    // and the key penumbra points are.
+    fWallRatio = distWallTop1 * distShadowInv;
+    fNearRatios = vec3(fWallRatio);
+
+    // If the wall bottom is above the canvas, there is an attenuated bottom shadow.
+    float wallBottomZ = aWallCorner2.z;
+    if ( wallBottomZ > canvasElevation ) {
+      vec3 wallBottom = vec3(aWallCorner1.xy, wallBottomZ);
+
+      // Find where the canvas intersects the ray from the light to the bottom wall endpoint.
+      vec3 nearUmbra;
+      vec3 nearMidPenumbra;
+      vec3 nearPenumbra;
+      intersectRayPlane(Ray(wallBottom, umbraDir), canvasPlane, nearUmbra);
+      intersectRayPlane(Ray(wallBottom, midPenumbraDir), canvasPlane, nearMidPenumbra);
+      intersectRayPlane(Ray(wallBottom, lightPenumbraDirRev1), canvasPlane, nearPenumbra);
+
+      float distNearUmbra = distance(outerPenumbra1, nearUmbra.xy);
+      float distNearMidPenumbra = distance(outerPenumbra1, nearMidPenumbra.xy);
+      float distNearPenumbra = distance(outerPenumbra1, nearPenumbra.xy);
+
+      fNearRatios = vec3(distNearPenumbra, distNearMidPenumbra, distNearUmbra) * distShadowInv;
+    }
+
+    fWallHeights = vec2(wallTopZ, wallBottomZ);
+    fWallSenseType = aWallSenseType;
+  }
 
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
 
@@ -818,12 +814,12 @@ void main() {
   bool inFarPenumbra = vBary.x < farRatios.x; // And vBary.x > 0.0
   bool inNearPenumbra = vBary.x > nearRatios.z; // && vBary.x < nearRatios.x; // handled by in front of wall test.
 
-  // For testing
-//   fragColor = vec4(vec3(0.0), 0.8);
-//   if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
-//   if ( inFarPenumbra ) fragColor.b = 1.0;
-//   if ( inNearPenumbra ) fragColor.g = 1.0;
-//   return;
+//   For testing
+  fragColor = vec4(vec3(0.0), 0.8);
+  if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
+  if ( inFarPenumbra ) fragColor.b = 1.0;
+  if ( inNearPenumbra ) fragColor.g = 1.0;
+  return;
 
   float percentLightSides = 1.0;
   float percentLightFN = 1.0;
@@ -885,22 +881,17 @@ void main() {
     uSceneDims: [0, 0, 1, 1],
     uElevationRes: [0, 1, 256 * 256, 1],
     uTerrainSampler: 0,
-    uLightDirection: [Math.SQRT1_2, 0, Math.SQRT1_2], // 45º elevation rise, due east, normalized
+    uAzimuth: 0,
+    uElevationAngle: Math.toRadians(45),
     uSolarAngle: Math.toRadians(1)   // Must be at least 0.
   };
 
   /**
    * Factory function.
-   * @param {Point3d} lightDirection
    * @param {object} defaultUniforms    Changes from the default uniforms set here.
    * @returns {ShadowMaskWallShader}
    */
-  static create(lightDirection, defaultUniforms = {}) {
-    if ( lightDirection ) {
-      const normD = lightDirection.normalize();
-      defaultUniforms.uLightDirection = [normD.x, normD.y, normD.z];
-    }
-
+  static create(defaultUniforms = {}) {
     const { sceneRect, distancePixels } = canvas.dimensions;
     defaultUniforms.uSceneDims ??= [
       sceneRect.x,
@@ -920,16 +911,11 @@ void main() {
     return super.create(defaultUniforms);
   }
 
-  /**
-   * Update the light direction.
-   * @param {Point3d} lightDirection
-   */
-  updateLightDirection(lightDirection) {
-    const normD = lightDirection.normalize();
-    this.uniforms.uLightDirection = [normD.x, normD.y, normD.z];
-  }
+  updateAzimuth(azimuth) { this.uniforms.uAzimuth = azimuth; }
 
-  updateSolarAngle(solarAngle) { this.uniforms.uLightSizeProjected = solarAngle; }
+  updateElevationAngle(elevationAngle) { this.uniforms.elevationAngle = elevationAngle; }
+
+  updateSolarAngle(solarAngle) { this.uniforms.uSolarAngle = solarAngle; }
 }
 
 export class ShadowWallPointSourceMesh extends PIXI.Mesh {
@@ -960,9 +946,13 @@ export class ShadowWallDirectionalSourceMesh extends PIXI.Mesh {
   constructor(source, geometry, shader, state, drawMode) {
     geometry ??= source[MODULE_ID]?.wallGeometry ?? new PointSourceShadowWallGeometry(source);
     if ( !shader ) {
-      const lightDirection = source.lightDirection;
-      const uSolarAngle = source.data.solarAngle ?? 0;
-      shader = DirectionalShadowWallShader.create(lightDirection, { uSolarAngle });
+      const { azimuth, elevationAngle, solarAngle } = source;
+      const uniforms = {
+        uAzimuth: azimuth,
+        uElevationAngle: elevationAngle,
+        uSolarAngle: solarAngle
+      };
+      shader = DirectionalShadowWallShader.create(uniforms);
     }
 
     super(geometry, shader, state, drawMode);
@@ -972,15 +962,11 @@ export class ShadowWallDirectionalSourceMesh extends PIXI.Mesh {
     this.source = source;
   }
 
-  /**
-   * Update the source position.
-   */
-  updateLightDirection() { this.shader.updateLightDirection(this.source.lightDirection); }
+  updateAzimuth() { this.shader.updateAzimuth(this.source.azimuth); }
 
-  /**
-   * Update light projected size.
-   */
-  updateSolarAngle() { this.shader.updateSolarAngle(this.source.data.solarAngle); }
+  updateElevationAngle() { this.shader.updateElevationAngle(this.source.elevationAngle); }
+
+  updateSolarAngle() { this.shader.updateSolarAngle(this.source.solarAngle); }
 }
 
 /* Testing
@@ -1062,18 +1048,29 @@ function barycentric(p, a, b, c) {
   return new Point3d(u, v, w);
 }
 
+function zChangeForElevationAngle(elevationAngle) {
+  elevationAngle = Math.clamped(elevationAngle, 0, Math.PI_1_2);
+  pt = PIXI.Point.fromAngle(new PIXI.Point(0, 0), elevationAngle, 1.0);
+  return pt.x == 0.0 ? 1.0 : pt.y / pt.x;
+}
+
 */
 
 /* Checking the directional math
+[wall] = canvas.controlled.wall
+
 Plane = CONFIG.GeometryLib.threeD.Plane
-mesh = ev.shadowMesh
-uSolarAngle = mesh.shader.uniforms.uSolarAngle
-solarAngle = Math.max(uSolarAngle, 1e-06);
-uLightDirection = mesh.shader.uniforms.uLightDirection
-uLightDirection = new Point3d(uLightDirection[0], uLightDirection[1], uLightDirection[2])
-uSceneDims = mesh.shader.uniforms.uSceneDims
-maxR = Math.sqrt(uSceneDims[2] * uSceneDims[2] + uSceneDims[3] * uSceneDims[3]) * 2
 Matrix = CONFIG.GeometryLib.Matrix
+
+mesh = ev.shadowMesh
+uAzimuth = mesh.shader.uniforms.uAzimuth
+uElevationAngle = mesh.shader.uniforms.uElevationAngle
+uSolarAngle = mesh.shader.uniforms.uSolarAngle
+uSceneDims = mesh.shader.uniforms.uSceneDims
+uElevationRes = mesh.shader.uniforms.uElevationRes
+uElevationRes = { x: uElevationRes[0], y: uElevationRes[1], z: uElevationRes[2], w: uElevationRes[3]}
+uSceneDims = mesh.shader.uniforms.uSceneDims
+uSceneDims = { x: uSceneDims[0], y: uSceneDims[1], z: uSceneDims[2], w: uSceneDims[3] }
 
 wallCoords = Point3d.fromWall(wall)
 wallCoords.A.top.z = Math.min(wallCoords.A.top.z, 1e06)
@@ -1083,39 +1080,49 @@ wallCoords.B.bottom.z = Math.max(wallCoords.B.bottom.z, -1e06)
 aWallCorner1 = wallCoords.A.top;
 aWallCorner2 = wallCoords.B.bottom
 wallTopZ = aWallCorner1.z
-
 wallTop1 = new Point3d(aWallCorner1.x, aWallCorner1.y, wallTopZ);
 wallTop2 =  new Point3d(aWallCorner2.x, aWallCorner2.y, wallTopZ);
 
-canvasPlane = new Plane()
-lightDirection = uLightDirection
-lightDirection.z = Math.max(uLightDirection.z, 1e-06)
+canvasElevation = uElevationRes.x;
+maxR = Math.sqrt(uSceneDims.z * uSceneDims.z + uSceneDims.w * uSceneDims.w) * 2
 
-// Reverse the light ray to use for testing canvas intersections.
-lightDirectionRev = lightDirection.multiplyScalar(-1);
+// Determine which side of the wall the light is on.
+vec2_0 = new PIXI.Point(0, 0)
+lightDirection2d = PIXI.Point.fromAngle(vec2_0, uAzimuth, 1.0);
+oWallLight = Math.sign(foundry.utils.orient2dFast(aWallCorner1, aWallCorner2, aWallCorner1.add(lightDirection2d)));
 
-// Adjust the light ray so it hits slightly further out along the canvas based on solarAngle
-zAdjustTmp = new PIXI.Point(Math.cos(uSolarAngle), Math.sin(uSolarAngle));
-zAdjust = zAdjustTmp.y != 0.0 ? zAdjustTmp.y / zAdjustTmp.x : 0.0;
-lightDirectionRev.z += zAdjust;
+// Adjust azimuth by the solarAngle.
+// Determine the direction of the outer penumbra rays from light --> wallCorner1 / wallCorner2.
+// The angle for the penumbra is the azimuth ± the solarAngle.
+solarWallAngle = Math.max(uSolarAngle, 0.0001) * oWallLight
+sidePenumbra1_2d = PIXI.Point.fromAngle(vec2_0, uAzimuth + solarWallAngle, 1.0);
+sidePenumbra2_2d = PIXI.Point.fromAngle(vec2_0, uAzimuth - solarWallAngle, 1.0);
 
-// Determine penumbra direction
-oWallLight = Math.sign(foundry.utils.orient2dFast(aWallCorner1, aWallCorner2, aWallCorner1.add(lightDirection)));
-rotMat = Matrix.rotationZ(solarAngle * oWallLight);
+// Adjust elevationAngle by the solarAngle. Use the lower elevation angle to find the far penumbra.
+zFarPenumbra = zChangeForElevationAngle(uElevationAngle - uSolarAngle);
 
-// Flip the cosines to reverse XY direction
-rotMatRev = new Matrix(duplicate(rotMat.arr));
-rotMatRev.arr[1][0] *= -1;
-rotMatRev.arr[0][1] *= -1;
+// Find the direction for each endpoint penumbra and reverse it for intersecting the canvas.
+lightPenumbraDirRev1 = new Point3d(sidePenumbra1_2d.x, sidePenumbra1_2d.y, zFarPenumbra).multiplyScalar(-1.0);
+lightPenumbraDirRev2 = new Point3d(sidePenumbra2_2d.x, sidePenumbra2_2d.y, zFarPenumbra).multiplyScalar(-1.0);
 
-rotMatRev = Matrix.rotationZ(solarAngle * -oWallLight);
-lightPenumbraDirRev1 = rotMat.multiplyPoint3d(lightDirectionRev);
-lightPenumbraDirRev2 = rotMatRev.multiplyPoint3d(lightDirectionRev);
+// Determine the light direction for the endpoint to light and reverse it.
+zMidPenumbra = zChangeForElevationAngle(uElevationAngle);
+lightDirectionRev = new Point3d(lightDirection2d.x, lightDirection2d.y, zMidPenumbra).multiplyScalar(-1.0);
 
+// Normalize all the directions.
+lightPenumbraDirRev1 = lightPenumbraDirRev1.normalize();
+lightPenumbraDirRev2 = lightPenumbraDirRev2.normalize();
+lightDirectionRev = lightDirectionRev.normalize();
 
-// Test whether intersection to canvas will be too far away.
-maxIx = wallTop1.add(lightPenumbraDir1Rev.multiplyScalar(maxR))
-if ( maxIx.z > 0 ) canvasPlane = new Plane(maxIx)
+// If the canvas intersection point would be too far away, find an intermediate point to use instead.
+// Shift the canvas plane up accordingly.
+planePoint = new Point3d(0, 0, canvasElevation)
+planeNormal = new Point3d(0, 0, 1)
+maxIx = wallTop1.add(lightPenumbraDirRev1.multiplyScalar(maxR));
+shadowLengthExceedsCanvas = maxIx.z > 0.0;
+if ( shadowLengthExceedsCanvas = maxIx.z > 0.0 ) planePoint = maxIx
+canvasPlane = new Plane(planePoint, planeNormal)
+
 
 // The different ray intersections with the canvas from wall endpoint --> canvas form an arc around the wall endpoint.
 // Intersect the mid-penumbra with the canvas, then find the intersection of those two with
