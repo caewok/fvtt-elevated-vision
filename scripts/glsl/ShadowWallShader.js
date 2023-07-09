@@ -477,7 +477,8 @@ ${defineFunction("fromAngle")}
 float zChangeForElevationAngle(in float elevationAngle) {
   elevationAngle = clamp(elevationAngle, 0.0, PI_1_2); // 0º to 90º
   vec2 pt = fromAngle(vec2(0.0), elevationAngle, 1.0);
-  return pt.x == 0.0 ? 1.0 : pt.y / pt.x;
+  float z = pt.x == 0.0 ? 1.0 : pt.y / pt.x;
+  return max(z, 1e-06); // Don't let z go to 0.
 }
 
 void main() {
@@ -539,9 +540,9 @@ void main() {
   // Shift the canvas plane up accordingly.
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
   vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
-  vec3 maxIx = wallTop1 + (lightPenumbraDirRev1 * maxR);
-  bool shadowLengthExceedsCanvas = maxIx.z > 0.0;
-  if ( shadowLengthExceedsCanvas ) planePoint = maxIx;
+  // vec3 maxIx = wallTop1 + (lightPenumbraDirRev1 * maxR);
+  // bool shadowLengthExceedsCanvas = maxIx.z > 0.0;
+  // if ( shadowLengthExceedsCanvas ) planePoint = maxIx;
 
   Plane canvasPlane = Plane(planePoint, planeNormal);
 
@@ -615,8 +616,8 @@ void main() {
     // Intersect the canvas plane for the different penumbra points.
     // This is the amount of the penumbra at the far edge of the wall shadow.
     // x: penumbra; y: mid-penumbra; z: umbra
-    fFarRatios = vec3(-1.0);
-    if ( !shadowLengthExceedsCanvas ) {
+    // fFarRatios = vec3(-1.0);
+    // if ( !shadowLengthExceedsCanvas ) {
       vec3 farUmbraIx;
       vec3 midFarPenumbraIx;
       intersectRayPlane(Ray(wallTop1, midPenumbraDir), canvasPlane, midFarPenumbraIx);
@@ -624,7 +625,7 @@ void main() {
       float distMidFarPenumbra = distance(outerPenumbra1, midFarPenumbraIx.xy);
       float distFarUmbra = distance(outerPenumbra1, farUmbraIx.xy);
       fFarRatios = vec3(distFarUmbra, distMidFarPenumbra, 0.0) * distShadowInv; // (0 at shadow end)
-    }
+    // }
 
     // Set the ratios to determine, using the bary.x coordinate, where the wall
     // and the key penumbra points are.
@@ -1050,14 +1051,15 @@ function barycentric(p, a, b, c) {
 
 function zChangeForElevationAngle(elevationAngle) {
   elevationAngle = Math.clamped(elevationAngle, 0, Math.PI_1_2);
-  pt = PIXI.Point.fromAngle(new PIXI.Point(0, 0), elevationAngle, 1.0);
-  return pt.x == 0.0 ? 1.0 : pt.y / pt.x;
+  const pt = PIXI.Point.fromAngle(new PIXI.Point(0, 0), elevationAngle, 1.0);
+  const z = pt.x == 0.0 ? 1.0 : pt.y / pt.x;
+  return Math.max(z, 1e-06); // Don't let z go to 0.
 }
 
 */
 
 /* Checking the directional math
-[wall] = canvas.controlled.wall
+[wall] = canvas.walls.controlled
 
 Plane = CONFIG.GeometryLib.threeD.Plane
 Matrix = CONFIG.GeometryLib.Matrix
@@ -1120,7 +1122,7 @@ planePoint = new Point3d(0, 0, canvasElevation)
 planeNormal = new Point3d(0, 0, 1)
 maxIx = wallTop1.add(lightPenumbraDirRev1.multiplyScalar(maxR));
 shadowLengthExceedsCanvas = maxIx.z > 0.0;
-if ( shadowLengthExceedsCanvas = maxIx.z > 0.0 ) planePoint = maxIx
+// if ( shadowLengthExceedsCanvas = maxIx.z > 0.0 ) planePoint = maxIx
 canvasPlane = new Plane(planePoint, planeNormal)
 
 
