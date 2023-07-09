@@ -816,57 +816,39 @@ void main() {
   bool inNearPenumbra = vBary.x > nearRatios.z; // && vBary.x < nearRatios.x; // handled by in front of wall test.
 
 //   For testing
+//   if ( !inSidePenumbra1 && !inSidePenumbra2 && !inFarPenumbra && !inNearPenumbra ) fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+//   else fragColor = vec4(vec3(0.0), 0.8);
+//   return;
+
 //   fragColor = vec4(vec3(0.0), 0.8);
 //   if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
 //   if ( inFarPenumbra ) fragColor.b = 1.0;
 //   if ( inNearPenumbra ) fragColor.g = 1.0;
 //   return;
 
-  float percentLightSides = 1.0;
-  float percentLightFN = 1.0;
-  bool inPenumbra = false;
-  bool inSidePenumbras = false;
-  bool inNearFarPenumbras = false;
-
   // Blend the two side penumbras if overlapping by multiplying the light amounts.
-  if ( inSidePenumbra1 ) {
-    float penumbraPercentShadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
-    percentLightSides = 1.0 - penumbraPercentShadow;
-    inPenumbra = true;
-    inSidePenumbras = true;
-  }
+  float side1Shadow = inSidePenumbra1 ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
+  float side2Shadow = inSidePenumbra2 ? vSidePenumbra2.z / (vSidePenumbra2.y + vSidePenumbra2.z) : 1.0;
 
-  if ( inSidePenumbra2 ) {
-    float penumbraPercentShadow = vSidePenumbra2.z / (vSidePenumbra2.y + vSidePenumbra2.z);
-    percentLightSides *= (1.0 - penumbraPercentShadow);
-    inPenumbra = true;
-    inSidePenumbras = true;
-  }
-
-  // Blend the near/far penumbras if overlapping by multiplying the light amounts.
+  float farShadow = 1.0;
   if ( inFarPenumbra ) {
     bool inLighterPenumbra = vBary.x < farRatios.y;
-    float penumbraPercentShadow = inLighterPenumbra
+    farShadow = inLighterPenumbra
       ? linearConversion(vBary.x, 0.0, farRatios.y, 0.0, 0.5)
       : linearConversion(vBary.x, farRatios.y, farRatios.x, 0.5, 1.0);
-    percentLightFN = 1.0 - penumbraPercentShadow;
-    inPenumbra = true;
-    inNearFarPenumbras = true;
   }
 
+  float nearShadow = 1.0;
   if ( inNearPenumbra ) {
     bool inLighterPenumbra = vBary.x > nearRatios.y;
-    float penumbraPercentShadow = inLighterPenumbra
+    nearShadow = inLighterPenumbra
       ? linearConversion(vBary.x, nearRatios.x, nearRatios.y, 0.0, 0.5)
       : linearConversion(vBary.x, nearRatios.y, nearRatios.z, 0.5, 1.0);
-    percentLightFN *= 1.0 - penumbraPercentShadow;
-    inPenumbra = true;
-    inNearFarPenumbras = true;
   }
 
-  float totalLight = inSidePenumbras && inNearFarPenumbras
-    ? max(percentLightSides, percentLightFN) : inPenumbra
-    ? (percentLightSides * percentLightFN) : 0.0;
+  float shadow = side1Shadow * side2Shadow * farShadow * nearShadow;
+  float totalLight = clamp(0.0, 1.0, 1.0 - shadow);
+
   fragColor = lightEncoding(totalLight);
 }`;
 
