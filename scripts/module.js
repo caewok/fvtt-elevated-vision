@@ -8,7 +8,7 @@ ui
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, FLAGS } from "./const.js";
 import { log } from "./util.js";
 
 // API imports
@@ -30,6 +30,7 @@ import { SourceShadowWallGeometry, DirectionalSourceShadowWallGeometry, PointSou
 import { ShadowWallShader, ShadowWallPointSourceMesh, TestGeometryShader } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { TestShadowShader } from "./glsl/TestShadowShader.js";
+import { DirectionalLightSource } from "./directional_lights.js";
 
 // Register methods, patches, settings
 import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
@@ -56,6 +57,8 @@ import {
 
 import { refreshAmbientLightHook } from "./lighting_elevation_tooltip.js";
 
+import { hoverAmbientLightHook } from "./directional_lights.js";
+
 // Other self-executing hooks
 import "./changelog.js";
 import "./controls.js";
@@ -67,6 +70,8 @@ Hooks.once("init", function() {
   // CONFIG.debug.hooks = true;
   console.debug(`${MODULE_ID}|init`);
 
+  CONFIG.controlIcons.directionalLight = "icons/svg/sun.svg";
+  CONFIG.controlIcons.directionalLightOff = "icons/svg/cancel.svg";
 
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
@@ -128,7 +133,7 @@ Hooks.once("init", function() {
      * Larger numbers will make averaging faster but less precise.
      * @type {number}
      */
-    averageTiles: 2,
+    averageTiles: 2
   };
 
   game.modules.get(MODULE_ID).api = {
@@ -157,7 +162,8 @@ Hooks.once("init", function() {
     EVQuadMesh,
     ShadowTextureRenderer,
     TestShadowShader,
-    TestGeometryShader
+    TestGeometryShader,
+    DirectionalLightSource
   };
 
   // These methods need to be registered early
@@ -193,7 +199,17 @@ Hooks.on("canvasReady", function() {
   // Set the elevation grid now that we know scene dimensions
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
+  setDirectionalLightSources(canvas.lighting.placeables);
+  DirectionalLightSource._refreshElevationAngleGuidelines()
 });
+
+function setDirectionalLightSources(lights) {
+  lights.forEach(l => {
+    // Assuming all lights currently are non-directional.
+    if ( !l.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED) ) return;
+    l.convertToDirectionalLight();
+  });
+}
 
 Hooks.on("3DCanvasSceneReady", function(_previewArr) {
   disableScene();
@@ -249,4 +265,6 @@ Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
 Hooks.on("updateAmbientLight", updateAmbientLightHook);
 Hooks.on("updateAmbientSound", updateAmbientSoundHook);
 Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
+Hooks.on("hoverAmbientLight", hoverAmbientLightHook);
+
 // Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);

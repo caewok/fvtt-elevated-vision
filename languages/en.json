@@ -42,6 +42,7 @@
   "elevatedvision.controls.upload.name": "Upload elevation data and replace in scene",
   "elevatedvision.controls.download.name": "Download elevation data",
   "elevatedvision.controls.undo.name": "Undo",
+  "elevatedvision.controls.directional-light.name": "Directional Light",
 
   "elevatedvision.controls.add-fly-button.name": "Elevated Tokens Fly",
 
@@ -63,7 +64,20 @@
 
   "elevatedvision.ambientconfig.legendtitle": "Elevated Vision",
   "elevatedvision.ambientconfig.elevation.name": "Elevation",
-  "elevatedvision.ambientconfig.elevation.hint": "Elevation of this source.",
+  "elevatedvision.ambientconfig.elevation.hint": "Elevation of this point source.",
+
+  "elevatedvision.ambientconfig.directionallight.name": "Directional Light",
+  "elevatedvision.ambientconfig.directionallight.hint": "Treat this light like a sun or moon—--as though it is infinitely far away, at a given direction and angle above the horizon.",
+
+  "elevatedvision.ambientconfig.azimuth.name": "Azimuth",
+  "elevatedvision.ambientconfig.azimuth.hint": "Canvas X/Y direction from which the directional light appears along the horizon. 0º is due east; 90º is due south. The location of this light on the canvas determines its azimuth.",
+
+  "elevatedvision.ambientconfig.elevationAngle.name": "Elevation Angle",
+  "elevatedvision.ambientconfig.elevationAngle.hint": "Angle of the directional light above the horizon. 90º is directly overhead, and results in no shadows. Distance of this light from the canvas center controls elevation angle; the elevation angle increases as the light approaches the center.",
+
+  "elevatedvision.ambientconfig.solarAngle.name": "Solar Angle",
+  "elevatedvision.ambientconfig.solarAngle.hint": "Controls the amount of the penumbra (the fuzzy area) in the wall shadow. Approximates the angle of the directional light as seen at the canvas level. A smaller angle results in a smaller penumbra.",
+
 
   "elevatedvision.tileconfig.legendtitle": "Elevated Vision",
   "elevatedvision.tileconfig.elevation.name": "Elevation",

@@ -11,7 +11,6 @@ Wall
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "../const.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
 
 
 export class SourceShadowWallGeometry extends PIXI.Geometry {
@@ -100,7 +99,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     for ( let i = 0; i < nWalls; i += 1 ) {
       const wall = walls[i];
       if ( !this._includeWall(wall) ) continue;
-      const {corner1, corner2 } = this._wallCornerCoordinates(wall);
+      const {corner1, corner2 } = this.constructor.wallCornerCoordinates(wall);
 
       // TODO: Instanced attributes.
       // For now, must repeat the vertices three times.
@@ -253,10 +252,10 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @param {Wall} wall
    * @returns { corner1: {PIXI.Point}, corner2: {PIXI.Point}, topZ: {number}, bottomZ: {number} }
    */
-  _wallCornerCoordinates(wall) {
+  static wallCornerCoordinates(wall) {
     const { A, B, topZ, bottomZ } = wall;
-    const top = isFinite(topZ) ? topZ : Number.MAX_SAFE_INTEGER;
-    const bottom = isFinite(bottomZ) ? bottomZ : Number.MIN_SAFE_INTEGER;
+    const top = Math.min(topZ, 1e6)
+    const bottom = Math.max(bottomZ, -1e6)
     return {
       corner1: [A.x, A.y, top],
       corner2: [B.x, B.y, bottom]
@@ -340,7 +339,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const idxToAdd = this._triWallMap.size;
 
     // Wall endpoints
-    const { corner1, corner2 } = this._wallCornerCoordinates(wall);
+    const { corner1, corner2 } = this.constructor.wallCornerCoordinates(wall);
     this._addToBuffer(corner1, "aWallCorner1", update);
     this._addToBuffer(corner2, "aWallCorner2", update);
 
@@ -388,7 +387,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
     // Check for change in wall endpoints
     let changedPosition = false;
-    const { corner1, corner2 } = this._wallCornerCoordinates(wall);
+    const { corner1, corner2 } = this.constructor.wallCornerCoordinates(wall);
     changedPosition = this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner1[i]);
     changedPosition ||= this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner2[i]);
     if ( changedPosition ) {
@@ -506,16 +505,6 @@ export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
 export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometry {
 
   /**
-   * Direction of the light is from center of the canvas toward the light position and elevation.
-   * @type {Point3d}
-   */
-  get sourceDirection() {
-    const center = canvas.dimensions.sceneRect.center;
-    const srcPosition = new Point3d(this.source.x, this.source.y, this.source.elevationZ);
-    return srcPosition.subtract(center).normalize();
-  }
-
-  /**
    * Orientation of a wall to the source.
    * @param {Wall} wall
    * @returns {number}  See foundry.utils.orient2dFast.
@@ -524,7 +513,7 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
     // Wall must not be the same (2d) direction as the source
     // TODO: Do we need to add a scalar to the normalized source direction?
     const A = new PIXI.Point(wall.A.x, wall.A.y);
-    return foundry.utils.orient2dFast(A, wall.B, A.add(this.sourceDirection));
+    return foundry.utils.orient2dFast(A, wall.B, A.add(this.source.lightDirection));
   }
 
   /**

@@ -127,6 +127,9 @@ export class ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer {
    * @type {PIXI.Point}
    */
   get meshPosition() { return new PIXI.Point(0, 0); }
+
+  // Disable updating source radius b/c not needed.
+  updateSourceRadius() { return; }
 }
 
 /* Testing

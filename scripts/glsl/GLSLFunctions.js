@@ -46,8 +46,44 @@ vec2 between(in float a, in float b, in vec2 x) { return step(a, x) * step(x, ve
 vec3 between(in float a, in float b, in vec3 x) { return step(a, x) * step(x, vec3(b)); }
 `;
 
+GLSLFunctions.linearConversion =
+`
+/**
+ * Linear conversion from one range to another.
+ */
+float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
+  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+}`;
+
+// Name of a built-in function cannot be redeclared as function, so call it cross2d
+GLSLFunctions.cross2d =
+`
+/**
+ * Cross x and y parameters in a vec2.
+ * @param {vec2} a  First vector
+ * @param {vec2} b  Second vector
+ * @returns {float} The cross product
+ */
+float cross2d(in vec2 a, in vec2 b) { return (a.x * b.y) - (a.y * b.x); }
+`;
+
+// Comparable to Ray.fromAngle
+GLSLFunctions.fromAngle =
+`
+/**
+ * @param {vec2} origin     Starting point
+ * @param {float} radians   Angle to move from the starting point
+ * @param {float} distance  Distance to travel from the starting point
+ * @returns {vec2}  Coordinates of a point that lies distance away from origin along angle.
+ */
+vec2 fromAngle(in vec2 origin, in float radians, in float distance) {
+  float dx = cos(radians);
+  float dy = sin(radians);
+  return origin + (vec2(dx, dy) * distance);
+}`;
+
 // NOTE: Matrix
-GLSLFunctions.matrix =
+GLSLFunctions.MatrixTranslation =
 `
 // Translate a given x/y amount.
 // [1, 0, x]
@@ -57,8 +93,10 @@ mat3 MatrixTranslation(in float x, in float y) {
   mat3 tMat = mat3(1.0);
   tMat[2] = vec3(x, y, 1.0);
   return tMat;
-}
+}`;
 
+GLSLFunctions.MatrixScale =
+`
 // Scale using x/y value.
 // [x, 0, 0]
 // [0, y, 0]
@@ -68,13 +106,16 @@ mat3 MatrixScale(in float x, in float y) {
   scaleMat[0][0] = x;
   scaleMat[1][1] = y;
   return scaleMat;
-}
+}`;
 
+// Must have same return type for all declarations of a named function with same params, so separate 2d/3d
+GLSLFunctions.Matrix2dRotationZ =
+`
 // Rotation around the z-axis.
 // [c, -s, 0],
 // [s, c, 0],
 // [0, 0, 1]
-mat3 MatrixRotationZ(in float angle) {
+mat3 Matrix2dRotationZ(in float angle) {
   float c = cos(angle);
   float s = sin(angle);
   mat3 rotMat = mat3(1.0);
@@ -83,13 +124,40 @@ mat3 MatrixRotationZ(in float angle) {
   rotMat[1][0] = -s;
   rotMat[0][1] = s;
   return rotMat;
-}
+}`;
 
+GLSLFunctions.Matrix3dRotationZ =
+`
+// Rotation around the z-axis.
+// [c, -s, 0, 0],
+// [s, c, 0, 0],
+// [0, 0, 1, 0],
+// [0, 0, 0, 1]
+mat4 Matrix3dRotationZ(in float angle) {
+  float c = cos(angle);
+  float s = sin(angle);
+  mat4 rotMat = mat4(1.0);
+  rotMat[0][0] = c;
+  rotMat[1][1] = c;
+  rotMat[1][0] = -s;
+  rotMat[0][1] = s;
+  return rotMat;
+}`;
+
+GLSLFunctions.multiplyMatrixPoint =
+`
 vec2 multiplyMatrixPoint(mat3 m, vec2 pt) {
   vec3 res = m * vec3(pt, 1.0);
   return vec2(res.xy / res.z);
 }
 
+vec3 multiplyMatrixPoint(mat4 m, vec3 pt) {
+  vec4 res = m * vec4(pt, 1.0);
+  return vec3(res.xyz / res.w);
+}`;
+
+GLSLFunctions.toLocalRectangle =
+`
 mat3 toLocalRectangle(in vec2[4] rect) {
   // TL is 0, 0.
   // T --> B : y: 0 --> 1
@@ -113,7 +181,6 @@ mat3 toLocalRectangle(in vec2[4] rect) {
   return mScale * mShift;
 }
 `;
-
 
 // NOTE: Random
 // Pass a value and get a random normalized value between 0 and 1.
@@ -202,8 +269,11 @@ float orient(in vec2 a, in vec2 b, in vec2 c) {
 
 // NOTE: Barycentric
 // Calculate barycentric position within a given triangle
-GLSLFunctions.barycentric3d =
+// For point p and triangle abc, return the barycentric uvw as a vec3 or vec2.
+// See https://ceng2.ktu.edu.tr/~cakir/files/grafikler/Texture_Mapping.pdf
+GLSLFunctions.barycentric =
 `
+// 3d barycentric
 vec3 barycentric(in vec3 p, in vec3 a, in vec3 b, in vec3 c) {
   vec3 v0 = b - a; // Fixed for given triangle
   vec3 v1 = c - a; // Fixed for given triangle
@@ -222,10 +292,8 @@ vec3 barycentric(in vec3 p, in vec3 a, in vec3 b, in vec3 c) {
 
   return vec3(u, v, w);
 }
-`;
 
-GLSLFunctions.barycentric2d =
-`
+// 2D barycentric
 vec3 barycentric(in vec2 p, in vec2 a, in vec2 b, in vec2 c) {
   vec2 v0 = b - a;
   vec2 v1 = c - a;
@@ -245,6 +313,72 @@ vec3 barycentric(in vec2 p, in vec2 a, in vec2 b, in vec2 c) {
   return vec3(u, v, w);
 }
 `;
+
+// https://ceng2.ktu.edu.tr/~cakir/files/grafikler/Texture_Mapping.pdf
+GLSLFunctions.barycentricPointInsideTriangle =
+`
+/**
+ * Test if a barycentric coordinate is within its defined triangle.
+ * @param {vec3} bary     Barycentric coordinate; x,y,z => u,v,w
+ * @returns {bool} True if inside
+ */
+bool barycentricPointInsideTriangle(in vec3 bary) {
+  return bary.y >= 0.0 && bary.z >= 0.0 && (bary.y + bary.z) <= 1.0;
+}`;
+
+// NOTE: Ray struct
+GLSLStructs.Ray =
+`
+/**
+ * Ray defined by a point and a direction from that point.
+ */
+struct Ray {
+  vec3 origin;
+  vec3 direction;
+};`;
+
+GLSLStructs.Ray2d =
+`
+/**
+ * Ray defined by a point and a direction from that point.
+ */
+struct Ray2d {
+  vec2 origin;
+  vec2 direction;
+};`;
+
+GLSLFunctions.rayFromPoints =
+`
+${defineStruct("Ray")}
+${defineStruct("Ray2d")}
+
+/**
+ * Construct a ray from two points: origin and towards point.
+ */
+Ray rayFromPoints(in vec3 origin, in vec3 towardsPoint) {
+  return Ray(origin, towardsPoint - origin);
+}
+
+Ray2d rayFromPoints(in vec2 origin, in vec2 towardsPoint) {
+  return Ray2d(origin, towardsPoint - origin);
+}`;
+
+
+GLSLFunctions.normalizeRay =
+`
+${defineStruct("Ray")}
+${defineStruct("Ray2d")}
+
+/**
+ * Normalize the ray direction.
+ */
+Ray normalizeRay(in Ray r) {
+  return Ray(r.origin, normalize(r.direction));
+}
+
+Ray2d normalizeRay(in Ray2d r) {
+  return Ray2d(r.origin, normalize(r.direction));
+}`;
 
 
 // NOTE: Geometry lines
@@ -287,77 +421,35 @@ vec2 closest2dPointToSegment(in vec2 c, in vec2 a, in vec2 b) {
   if ( u < 0.0 ) return a;
   if ( u > 1.0 ) return b;
   return out;
-}
-`;
+}`;
 
-GLSLFunctions.lineLineIntersection2dT =
+GLSLFunctions.lineLineIntersection =
 `
-bool lineLineIntersection2d(in vec2 a, in vec2 dirA, in vec2 b, in vec2 dirB, out float t) {
-  float denom = (dirB.y * dirA.x) - (dirB.x * dirA.y);
+${defineFunction("rayFromPoints")}
+${defineFunction("cross2d")}
+
+bool lineLineIntersection(in Ray2d a, in Ray2d b, out float t) {
+  float denom = (b.direction.y * a.direction.x) - (b.direction.x * a.direction.y);
 
   // If lines are parallel, no intersection.
   if ( abs(denom) < 0.0001 ) return false;
 
-  vec2 diff = a - b;
-  t = ((dirB.x * diff.y) - (dirB.y * diff.x)) / denom;
+  vec2 diff = a.origin - b.origin;
+  t = cross2d(b.direction, diff) / denom;
   return true;
 }
-`;
 
-GLSLFunctions.lineLineIntersection2d =
-`
-${defineFunction("lineLineIntersection2dT")}
-
-bool lineLineIntersection2d(in vec2 a, in vec2 dirA, in vec2 b, in vec2 dirB, out vec2 ix) {
+bool lineLineIntersection(in Ray2d a, in Ray2d b, out vec2 ix) {
   float t = 0.0;
-  bool ixFound = lineLineIntersection2d(a, dirA, b, dirB, t);
-  ix = a + (dirA * t);
+  bool ixFound = lineLineIntersection(a, b, t);
+  ix = a.origin + (a.direction * t);
   return ixFound;
 }
-`;
 
-GLSLFunctions.cross2d =
-`
-/**
- * Cross x and y parameters in a vec2.
- * @param {vec2} a  First vector
- * @param {vec2} b  Second vector
- * @returns {float} The cross product
- */
-float cross(in vec2 a, in vec2 b) { return (a.x * b.y) - (a.y * b.x); }
-`;
-
-// NOTE: Ray struct
-GLSLStructs.Ray =
-`
-/**
- * Ray defined by a point and a direction from that point.
- */
-struct Ray {
-  vec3 origin;
-  vec3 direction;
-};`;
-
-GLSLFunctions.rayFromPoints =
-`
-${defineStruct("Ray")}
-
-/**
- * Construct a ray from two points: origin and towards point.
- */
-Ray rayFromPoints(in vec3 origin, in vec3 towardsPoint) {
-  return Ray(origin, towardsPoint - origin);
-}`;
-
-GLSLFunctions.normalizeRay =
-`
-${defineStruct("Ray")}
-
-/**
- * Normalize the ray direction.
- */
-Ray normalizeRay(in Ray r) {
-  return Ray(r.origin, normalize(r.direction));
+bool lineLineIntersection(vec2 a, vec2 b, vec2 c, vec2 d, out vec2 ix) {
+  Ray2d rayA = rayFromPoints(a, b);
+  Ray2d rayB = rayFromPoints(c, d);
+  return lineLineIntersection(rayA, rayB, ix);
 }`;
 
 // NOTE: Plane struct
@@ -451,7 +543,7 @@ GLSLFunctions.quadIntersectBary =
 `
 ${defineStruct("Ray")}
 ${defineStruct("Quad")}
-${defineFunction("cross", "cross2d")}
+${defineFunction("cross2d")}
 
 /**
  * Quad intersect
@@ -503,16 +595,16 @@ bool baryIntersectRayQuad(in Ray r, in Quad quad, out vec3 ix) {
 
   // Find barycentric coords of the quad.
   vec2 kg = kc - kb - ka;
-  float k0 = cross(kp, kb);
-  float k2 = cross(kc - kb, ka);  // Alt: float k2 = cross(kg, ka);
-  float k1 = cross(kp, kg) - nor[id]; // Alt: float k1 = cross(kb, ka) + cross(kp, kg);
+  float k0 = cross2d(kp, kb);
+  float k2 = cross2d(kc - kb, ka);  // Alt: float k2 = cross2d(kg, ka);
+  float k1 = cross2d(kp, kg) - nor[id]; // Alt: float k1 = cross2d(kb, ka) + cross2d(kp, kg);
 
   float u;
   float v;
   if ( abs(k2) < 0.00001 ) { // TODO: use EPSILON?
     // Edges are parallel; this is a linear equation.
     v = -k0 / k1;
-    u = cross(kp, ka) / k1;
+    u = cross2d(kp, ka) / k1;
   } else {
     // Otherwise, it's a quadratic.
     float w = (k1 * k1) - (4.0 * k0 * k2);
@@ -592,3 +684,34 @@ vec3 stepColor(in float ratio) {
   return vec3(0.0, 0.0, smoothstep(0.8, 1.0, ratio));
 }`;
 
+// NOTE: Shadows
+GLSLFunctions.elevateShadowRatios =
+`
+/**
+ * Shift the front or back border of the shadow, specified as a ratio between 0 and 1.
+ * Shadow moves forward---towards the light---as terrain elevation rises.
+ * Thus higher fragment elevation means less shadow.
+ * @param {float} ratio       Ratio indicating where the shadow border lies between 0 and 1.
+ * @param {float} wallHeight  Height of the wall, relative to the canvas elevation.
+ * @param {float} wallRatio   Where the wall is relative to the light, where
+ *                              0 means at the shadow end;
+ *                              1 means at the light.
+ * @param {float} elevChange  Percentage elevation change compared to the canvas
+ * @returns {float} Modified ratio.
+ */
+float elevateShadowRatio(in float ratio, in float wallHeight, in float wallRatio, in float elevChange) {
+  if ( wallHeight == 0.0 ) return ratio;
+  float ratioDist = wallRatio - ratio; // Distance between the wall and the canvas intersect as a ratio.
+  float heightFraction = elevChange / wallHeight;
+  return ratio + (heightFraction * ratioDist);
+}
+
+/**
+ * Same as the float version except that the ratios represent close/middle/far shadow borders.
+ */
+vec3 elevateShadowRatios(in vec3 ratios, in float wallHeight, in float wallRatio, in float elevChange) {
+  if ( wallHeight == 0.0 ) return ratios;
+  vec3 ratiosDist = wallRatio - ratios; // Distance between the wall and the canvas intersect as a ratio.
+  float heightFraction = elevChange / wallHeight;
+  return ratios + (heightFraction * ratiosDist);
+}`;

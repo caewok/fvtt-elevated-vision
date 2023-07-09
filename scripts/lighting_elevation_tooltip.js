@@ -1,10 +1,13 @@
 /* globals
 canvas,
 CONFIG,
+getTexture,
 PreciseText
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
+
+import { DirectionalLightSource } from "./directional_lights.js";
 
 // Draw elevation for lights similar to that of tokens.
 
@@ -29,11 +32,20 @@ export function refreshAmbientLightHook(light, flags) {
 export function _drawAmbientLight(wrapped) {
   wrapped();
   this.tooltip ||= this.addChild(this._drawTooltip());
+  if ( this.source.isDirectional ) this.refreshControl();
+}
+
+export function refreshControlAmbientLight(wrapped) {
+  wrapped();
+  if ( this.source.isDirectional ) {
+    this.controlIcon.texture = getTexture(this.isVisible ?  CONFIG.controlIcons.directionalLight : CONFIG.controlIcons.directionalLightOff);
+    this.controlIcon.draw();
+  }
 }
 
 export function _drawTooltipAmbientLight() {
   let text = this._getTooltipText();
-  const style = this._getTextStyle();
+  const style = this.constructor._getTextStyle();
   const tip = new PreciseText(text, style);
   tip.anchor.set(0.5, 1);
 
@@ -45,13 +57,21 @@ export function _drawTooltipAmbientLight() {
 
 
 export function _getTooltipTextAmbientLight() {
-  let el = this.elevationE;
+  if ( this.source.isDirectional ) {
+    const azimuth = Math.normalizeDegrees(Math.toDegrees(this.source.azimuth)).toFixed(1);
+    const elevationAngle = Math.normalizeDegrees(Math.toDegrees(this.source.elevationAngle)).toFixed(1);
+    const text = `${azimuth}º⥁\n${elevationAngle}º⦞`;
+    return text;
+  }
+
+  const el = this.elevationE;
   if ( !Number.isFinite(el) || el === 0 ) return "";
   let units = canvas.scene.grid.units;
   return el > 0 ? `+${el} ${units}` : `${el} ${units}`;
 }
 
 /**
+ * New method: AmbientLight._getTextStyle
  * Get the text style that should be used for this Light's tooltip.
  * See Token.prototype._getTextStyle.
  * @returns {string}

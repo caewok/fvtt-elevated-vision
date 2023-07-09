@@ -9,6 +9,7 @@ renderTemplate
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 import { MODULE_ID, FLAGS } from "./const.js";
+import { DirectionalLightSource } from "./directional_lights.js";
 
 /**
  * Inject html to add controls to the ambient light configuration to allow user to set elevation.
@@ -16,7 +17,24 @@ import { MODULE_ID, FLAGS } from "./const.js";
 export async function renderAmbientLightConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-ambient-source-config.html`;
   const findString = "div[data-tab='basic']:last";
+  calculateDirectionalData(app, data);
   await injectConfiguration(app, html, data, template, findString);
+  activateLightConfigListeners(app, html);
+}
+
+/**
+ * Calculate directional data based on position.
+ */
+function calculateDirectionalData(app, data) {
+  const { x, y } = app.object;
+  const { azimuth, elevationAngle } = DirectionalLightSource.directionalParametersFromPosition({x, y});
+  const isDirectional = Boolean(app.object.flags[MODULE_ID]?.directionalLight);
+  const renderData = {};
+  renderData[MODULE_ID] = {
+    azimuth: Math.normalizeDegrees(Math.toDegrees(azimuth)).toFixed(1),
+    elevationAngle: Math.normalizeDegrees(Math.toDegrees(elevationAngle)).toFixed(1),
+    isDirectional };
+  foundry.utils.mergeObject(data.data, renderData, {inplace: true});
 }
 
 /**
@@ -37,6 +55,75 @@ export async function renderTileConfigHook(app, html, data) {
   await injectConfiguration(app, html, data, template, findString);
 }
 
+/**
+ * Catch when the user selects directional wall to update the submenu options.
+ */
+function activateLightConfigListeners(app, html) {
+  html.on("click", "#elevatedvisionDirectionalLightCheckbox", onCheckDirectional.bind(app));
+  html.on("change", "#elevatedvisionAzimuthConfig", onChangeAzimuth.bind(app));
+  html.on("change", "#elevatedvisionElevationAngleConfig", onChangeElevationAngle.bind(app));
+}
+
+/**
+ * Update directional light location when azimuth changes.
+ */
+function onChangeAzimuth(event) {
+  const azimuth = Math.toRadians(Number(event.target.value));
+  const clone = this.object.object._preview;
+  if ( !clone ) return;
+
+  const { x, y} = DirectionalLightSource.positionFromDirectionalParameters(azimuth, clone.source.elevationAngle);
+  const newData = { x, y };
+  newData[MODULE_ID] = { azimuth: Number(event.target.value) };
+
+//   const previewData = this._getSubmitData(newData);
+//   this._previewChanges(previewData);
+//   this.render();
+}
+
+/**
+ * Update directional light location when elevationAngle changes.
+ */
+function onChangeElevationAngle(event) {
+  const elevationAngle = Math.toRadians(Number(event.target.value));
+  const clone = this.object.object._preview;
+  if ( !clone ) return;
+
+  const { x, y } = DirectionalLightSource.positionFromDirectionalParameters(clone.source.azimuth, elevationAngle);
+  const newData = { x, y };
+  newData[MODULE_ID] = { elevationAngle: Number(event.target.value) };
+
+//   const previewData = this._getSubmitData(newData);
+//   this._previewChanges(previewData);
+//   this.render();
+}
+
+/**
+ * Update submenu visibility
+ */
+function onCheckDirectional(event) {
+  const elemElevation = document.getElementById("elevatedvision-config-elevation");
+  const elemAzimuth = document.getElementById("elevatedvision-config-azimuth");
+  const elemElevationAngle = document.getElementById("elevatedvision-config-elevationAngle");
+  const elemSolarAngle = document.getElementById("elevatedvision-config-solarAngle");
+  const clone = this.object.object._preview;
+  const directionalLightChecked = event.target.checked;
+
+  if ( directionalLightChecked ) {
+    if ( clone ) clone.convertToDirectionalLight();
+    elemElevation.style.display = "none";
+    elemAzimuth.style.display = "block";
+    elemElevationAngle.style.display = "block";
+    elemSolarAngle.style.display = "block";
+
+  } else {  // Point source
+    if ( clone ) clone.convertFromDirectionalLight();
+    elemElevation.style.display = "block";
+    elemAzimuth.style.display = "none";
+    elemElevationAngle.style.display = "none";
+    elemSolarAngle.style.display = "none";
+  }
+}
 
 /**
  * Hook when the elevation flag is changed in the AmbientLightDocument.

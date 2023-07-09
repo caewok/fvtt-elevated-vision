@@ -62,6 +62,7 @@ import {
   EVVisionMaskGlobalLightSource,
   EVVisionMaskVisionSource,
 
+  _initializeEVShadowsRenderedPointSource,
   _initializeEVShadowGeometryRenderedPointSource,
   _initializeEVShadowTextureRenderedPointSource,
   _initializeEVShadowMaskRenderedPointSource,
@@ -70,6 +71,7 @@ import {
   _initializeEVShadowTextureVisionSource,
   _initializeEVShadowMaskVisionSource,
 
+  _initializeEVShadowsGlobalLightSource,
   _initializeEVShadowGeometryGlobalLightSource,
   _initializeEVShadowTextureGlobalLightSource,
   _initializeEVShadowMaskGlobalLightSource,
@@ -82,7 +84,15 @@ import {
   _drawAmbientLight,
   _drawTooltipAmbientLight,
   _getTooltipTextAmbientLight,
-  _getTextStyleAmbientLight } from "./lighting_elevation_tooltip.js";
+  _getTextStyleAmbientLight,
+  refreshControlAmbientLight } from "./lighting_elevation_tooltip.js";
+
+import {
+  convertToDirectionalLightAmbientLight,
+  convertFromDirectionalLightAmbientLight,
+  cloneAmbientLight,
+  _onUpdateAmbientLight } from "./directional_lights.js";
+
 
 /**
  * Helper to wrap methods.
@@ -93,6 +103,10 @@ import {
  */
 function wrap(method, fn, options = {}) {
   return libWrapper.register(MODULE_ID, method, fn, libWrapper.WRAPPER, options);
+}
+
+function mixed(method, fn, options = {}) {
+  return libWrapper.register(MODULE_ID, method, fn, libWrapper.MIXED, options);
 }
 
 function override(method, fn, options = {}) {
@@ -166,6 +180,11 @@ export function registerPatches() {
   // ----- Lighting elevation tooltip ----- //
   wrap("AmbientLight.prototype._draw", _drawAmbientLight);
 
+  // ----- Directional lighting ----- //
+  wrap("AmbientLight.prototype.clone", cloneAmbientLight);
+  wrap("AmbientLight.prototype._onUpdate", _onUpdateAmbientLight);
+  wrap("AmbientLight.prototype.refreshControl", refreshControlAmbientLight);
+
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
 }
@@ -178,6 +197,10 @@ export function registerAdditions() {
   addClassMethod(Tile.prototype, "_evPixelCache", undefined);
 
   // For Polygons shadows -- Nothing added
+
+  // For Directional Lighting
+  addClassMethod(AmbientLight.prototype, "convertToDirectionalLight", convertToDirectionalLightAmbientLight);
+  addClassMethod(AmbientLight.prototype, "convertFromDirectionalLight", convertFromDirectionalLightAmbientLight);
 
   // For WebGL shadows
   addClassMethod(RenderedPointSource.prototype, "wallAdded", wallAddedRenderedPointSource);
@@ -196,6 +219,7 @@ export function registerAdditions() {
   addClassGetter(GlobalLightSource.prototype, "EVVisionMask", EVVisionMaskGlobalLightSource);
   addClassGetter(VisionSource.prototype, "EVVisionMask", EVVisionMaskVisionSource);
 
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadows", _initializeEVShadowsRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
@@ -204,6 +228,7 @@ export function registerAdditions() {
   addClassMethod(VisionSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureVisionSource);
   addClassMethod(VisionSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskVisionSource);
 
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadows", _initializeEVShadowsGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskGlobalLightSource);
@@ -215,7 +240,7 @@ export function registerAdditions() {
   // For light elevation tooltip
   addClassMethod(AmbientLight.prototype, "_drawTooltip", _drawTooltipAmbientLight);
   addClassMethod(AmbientLight.prototype, "_getTooltipText", _getTooltipTextAmbientLight);
-  addClassMethod(AmbientLight.prototype, "_getTextStyle", _getTextStyleAmbientLight);
+  addClassMethod(AmbientLight, "_getTextStyle", _getTextStyleAmbientLight);
 }
 
 
