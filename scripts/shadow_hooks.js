@@ -11,6 +11,7 @@ RenderedPointSource
 
 import { MODULE_ID, FLAGS } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
+import { SETTINGS, getSetting } from "./settings.js";
 
 import { ShadowWallPointSourceMesh, ShadowWallSizedPointSourceMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer, ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
@@ -312,7 +313,9 @@ export function _updateEVShadowDataLightSource(changes) {
 export function _initializeLightSource(wrapped, data) {
   wrapped(data);
   if ( !this.object ) return;
-  this.data.lightSize = this.object.document.getFlag(MODULE_ID, FLAGS.LIGHT_SIZE) ?? 0;
+  this.data.lightSize = this.object.document.getFlag(MODULE_ID, FLAGS.LIGHT_SIZE)
+    ?? getSetting(SETTINGS.LIGHTING.LIGHT_SIZE)
+    ?? 0;
 }
 
 // NOTE: VisionSource shadow methods and getters

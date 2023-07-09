@@ -10,6 +10,7 @@ renderTemplate
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 import { MODULE_ID, FLAGS } from "./const.js";
 import { DirectionalLightSource } from "./directional_lights.js";
+import { SETTINGS, getSetting } from "./settings.js";
 
 /**
  * Inject html to add controls to the ambient light configuration to allow user to set elevation.
@@ -31,6 +32,7 @@ function calculateDirectionalData(app, data) {
   const isDirectional = Boolean(app.object.flags[MODULE_ID]?.directionalLight);
   const renderData = {};
   renderData[MODULE_ID] = {
+    defaultLightSize: getSetting(SETTINGS.LIGHTING.LIGHT_SIZE),
     pixelsDistance: (1 / canvas.dimensions.distancePixels).toPrecision(1),
     azimuth: Math.normalizeDegrees(Math.toDegrees(azimuth)).toFixed(1),
     elevationAngle: Math.normalizeDegrees(Math.toDegrees(elevationAngle)).toFixed(1),

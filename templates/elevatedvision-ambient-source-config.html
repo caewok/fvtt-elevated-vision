@@ -23,7 +23,7 @@
     <div class="form-group" id="elevatedvision-config-lightSize" style={{ ifThen data.elevatedvision.isDirectional "display:none;" "display:block;" }}>
       <label>{{ localize "elevatedvision.ambientconfig.lightSize.name" }} <span class="units">({{ localize "pixels" }}) (1 {{ localize "pixel" }} ≈ {{ data.elevatedvision.pixelsDistance }} {{gridUnits}})</span></label>
       <div class="form-fields">
-        <input type="number" placeholder="0" id="elevatedvisionlightSizeConfig" name="flags.elevatedvision.lightSize" min="0" step="1" class="elevatedvision" value="{{ data.flags.elevatedvision.lightSize }}" />
+        <input type="number" placeholder="{{ data.elevatedvision.defaultLightSize }}" id="elevatedvisionlightSizeConfig" name="flags.elevatedvision.lightSize" min="0" step="1" class="elevatedvision" value="{{ data.flags.elevatedvision.lightSize }}" />
       </div>
       <p class="hint">{{ localize "elevatedvision.ambientconfig.lightSize.hint" }}</p>
     </div>
