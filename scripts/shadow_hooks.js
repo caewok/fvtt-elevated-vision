@@ -9,7 +9,7 @@ RenderedPointSource
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, FLAGS } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
 
 import { ShadowWallPointSourceMesh, ShadowWallSizedPointSourceMesh } from "./glsl/ShadowWallShader.js";
@@ -305,6 +305,15 @@ export function _updateEVShadowDataLightSource(changes) {
   }
 }
 
+/**
+ * Wrap method: LightSource.prototype._initialize
+ * Add lightSize to source data
+ */
+export function _initializeLightSource(wrapped, data) {
+  wrapped(data);
+  if ( !this.object ) return;
+  this.data.lightSize = this.object.document.getFlag(MODULE_ID, FLAGS.LIGHT_SIZE) ?? 0;
+}
 
 // NOTE: VisionSource shadow methods and getters
 

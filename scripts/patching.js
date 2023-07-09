@@ -70,6 +70,7 @@ import {
   _initializeEVShadowMaskRenderedPointSource,
 
   _initializeEVShadowMeshLightSource,
+  _initializeLightSource,
 
   _initializeEVShadowGeometryVisionSource,
   _initializeEVShadowRendererVisionSource,
@@ -191,6 +192,9 @@ export function registerPatches() {
   wrap("AmbientLight.prototype.clone", cloneAmbientLight);
   wrap("AmbientLight.prototype._onUpdate", _onUpdateAmbientLight);
   wrap("AmbientLight.prototype.refreshControl", refreshControlAmbientLight);
+
+  // ----- Penumbra lighting shadows ----- //
+  wrap("LightSource.prototype._initialize", _initializeLightSource);
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;

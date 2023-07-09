@@ -1426,8 +1426,10 @@ export class ShadowWallSizedPointSourceMesh extends PIXI.Mesh {
     geometry ??= source[MODULE_ID]?.wallGeometry ?? new PointSourceShadowWallGeometry(source);
     if ( !shader ) {
       const lightPosition = Point3d.fromPointSource(source);
+      const uLightSize = source.data.lightSize;
       const uniforms = {
-        uSourceLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z]
+        uSourceLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
+        uLightSize
       };
       shader = SizedPointSourceShadowWallShader.create(uniforms);
     }
@@ -1447,7 +1449,7 @@ export class ShadowWallSizedPointSourceMesh extends PIXI.Mesh {
     this.shader.updateLightPosition(x, y, elevationZ);
   }
 
-  updateLightSize() { this.shader.updateLightSize(this.source.lightSize); }
+  updateLightSize() { this.shader.updateLightSize(this.source.data.lightSize); }
 }
 
 /* Testing
@@ -1465,7 +1467,6 @@ ShadowTextureRenderer = api.ShadowTextureRenderer
 DirectionalLightSource = api.DirectionalLightSource
 
 let [l] = canvas.lighting.placeables;
-l.convertToDirectionalLight()
 source = l.source;
 ev = source.elevatedvision
 
