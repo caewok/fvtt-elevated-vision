@@ -266,4 +266,5 @@ Hooks.on("updateAmbientLight", updateAmbientLightHook);
 Hooks.on("updateAmbientSound", updateAmbientSoundHook);
 Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
 Hooks.on("hoverAmbientLight", hoverAmbientLightHook);
+
 // Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);

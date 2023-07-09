@@ -15,6 +15,39 @@ import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Draw } from "./geometry/Draw.js";
 
+
+/* RenderedPointSource mesh geometry workflow
+
+drawMeshes
+ --> For each layer, #drawMesh
+
+_configure
+ --> initalizeShader = this.#initializeMeshes
+ --> if initalizeShaders || change --> this.#initalizeShaders
+
+#initializeShaders
+  --> Hooks.callAll(`initialize${this.constructor.name}Shaders`, this)
+
+#initializeMeshes
+  --> #updateGeometry
+  --> this.#createMeshes
+
+#updateGeometry
+  --> this.#geometry = new PolygonMesher().triangulate(this.#geometry)
+
+#createMeshes
+  --> _configureShaders
+  --> For each layer, #createMesh
+
+#createMesh
+  --> mesh = new PointSourceMesh(this.#geometry)
+
+
+
+*/
+
+
+
 // Directional Light
 // Assumed to be infinitely far, like a sun, and so causes directional shadows only.
 // Similar to GlobalLightSource in that it overrides the polygon shape.
@@ -49,9 +82,16 @@ export class DirectionalLightSource extends LightSource {
     const { azimuth, elevationAngle } = this.constructor.directionalParametersFromPosition(this.data);
     this.data.azimuth = azimuth;
     this.data.elevationAngle = elevationAngle;
-
     this.data.solarAngle = Math.toRadians(this.object.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.SOLAR_ANGLE)
       ?? 1);
+
+    // Set the x,y position to an edge of canvas based on the azimuth.
+    const { rect, maxR } = canvas.dimensions;
+    const center = rect.center;
+    const projPt = PIXI.Point.fromAngle(center, azimuth, maxR);
+    const ix = rect.segmentIntersections(center, projPt)[0];
+    this.data.x = ix.x;
+    this.data.y = ix.y;
   }
 
   /**
@@ -230,6 +270,15 @@ export class DirectionalLightSource extends LightSource {
   // NOTE: EV Shadows
 
   /**
+   * When shaders are initialized, swap out the lighting geometry for a quad.
+   * Trick the light shader into thinking its center point is at the edge of the canvas.
+   */
+  _initializeEVShadows() {
+    super._initializeEVShadows();
+    console.log("DirectionalLight _initializeEVShadows.");
+  }
+
+  /**
    * Use DirectionalSourceShadowWallGeometry, which does not restrict based on source bounds.
    * While there is a radius, it is pointless to test for it b/c we are including all walls.
    */
@@ -296,6 +345,7 @@ export class DirectionalLightSource extends LightSource {
 
 
 // Patches for AmbientLight
+
 
 /**
  * Hook AmbientLight hover in and hover out
