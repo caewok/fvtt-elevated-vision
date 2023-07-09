@@ -925,6 +925,7 @@ out vec3 vSidePenumbra1;
 out vec3 vSidePenumbra2;
 
 flat out float fWallSenseType;
+flat out float fThresholdRadius2;
 flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bottom
 flat out float fWallRatio;
 flat out vec3 fNearRatios; // x: penumbra, y: mid-penumbra, z: umbra
@@ -936,6 +937,7 @@ uniform vec4 uElevationRes;
 uniform vec3 uLightPosition;
 uniform float uLightSize;
 uniform vec4 uSceneDims;
+uniform float uMaxR;
 
 #define PI_1_2 1.5707963267948966
 
@@ -1095,19 +1097,19 @@ void main() {
       if ( lightTop.z > wallBottomZ ) {
         vec3 ixNearPenumbra;
         intersectRayPlane(rayFromPoints(lightTop, wallBottom1), canvasPlane, ixNearPenumbra);
-        fNearRatios.x = distance(outerPenumbra1, ixNearPenumbra) * distShadowInv;
+        fNearRatios.x = distance(outerPenumbra1, ixNearPenumbra.xy) * distShadowInv;
       }
 
       if ( lightCenter.z > wallBottomZ ) {
         vec3 ixNearMidPenumbra;
         intersectRayPlane(rayFromPoints(lightCenter, wallBottom1), canvasPlane, ixNearMidPenumbra);
-        fNearRatios.y = distance(outerPenumbra1, ixNearMidPenumbra) * distShadowInv;
+        fNearRatios.y = distance(outerPenumbra1, ixNearMidPenumbra.xy) * distShadowInv;
       }
 
       if ( lightBottom.z > wallBottomZ ) {
         vec3 ixNearUmbra;
         intersectRayPlane(rayFromPoints(lightBottom, wallBottom1), canvasPlane, ixNearUmbra);
-        fNearRatios.z = distance(outerPenumbra1, ixNearUmbra) * distShadowInv;
+        fNearRatios.z = distance(outerPenumbra1, ixNearUmbra.xy) * distShadowInv;
       }
     }
   }
@@ -1236,6 +1238,9 @@ void main() {
   // If in front of the wall, no shadow.
   if ( vBary.x > fWallRatio ) return;
 
+//   fragColor = vec4(vBary, 0.8);
+//   return;
+
   // If a threshold applies, we may be able to ignore the wall.
   if ( (fWallSenseType == DISTANCE_WALL || fWallSenseType == PROXIMATE_WALL)
     && fThresholdRadius2 != 0.0
@@ -1282,11 +1287,11 @@ void main() {
 //   else fragColor = vec4(vec3(0.0), 0.8);
 //   return;
 
-//   fragColor = vec4(vec3(0.0), 0.8);
-//   if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
-//   if ( inFarPenumbra ) fragColor.b = 1.0;
-//   if ( inNearPenumbra ) fragColor.g = 1.0;
-//   return;
+  fragColor = vec4(vec3(0.0), 0.8);
+  if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
+  if ( inFarPenumbra ) fragColor.b = 1.0;
+  if ( inNearPenumbra ) fragColor.g = 1.0;
+  return;
 
   // Blend the two side penumbras if overlapping by multiplying the light amounts.
   float side1Shadow = inSidePenumbra1 ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
@@ -1325,6 +1330,7 @@ void main() {
   static defaultUniforms = {
     uSceneDims: [0, 0, 1, 1],
     uElevationRes: [0, 1, 256 * 256, 1],
+    uMaxR: 1e06,
     uTerrainSampler: 0,
     uLightPosition: [0, 0, 0],
     uLightSize: 1
@@ -1352,6 +1358,7 @@ void main() {
       distancePixels
     ];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
+    defaultUniforms.uMaxR = canvas.dimensions.uMaxR;
     return super.create(defaultUniforms);
   }
 
