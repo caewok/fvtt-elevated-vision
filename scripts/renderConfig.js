@@ -31,6 +31,7 @@ function calculateDirectionalData(app, data) {
   const isDirectional = Boolean(app.object.flags[MODULE_ID]?.directionalLight);
   const renderData = {};
   renderData[MODULE_ID] = {
+    pixelsDistance: (1 / canvas.dimensions.distancePixels).toPrecision(1),
     azimuth: Math.normalizeDegrees(Math.toDegrees(azimuth)).toFixed(1),
     elevationAngle: Math.normalizeDegrees(Math.toDegrees(elevationAngle)).toFixed(1),
     isDirectional };

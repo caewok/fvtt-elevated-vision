@@ -66,6 +66,9 @@
   "elevatedvision.ambientconfig.elevation.name": "Elevation",
   "elevatedvision.ambientconfig.elevation.hint": "Elevation of this point source.",
 
+  "elevatedvision.ambientconfig.lightSize.name": "Light Size",
+  "elevatedvision.ambientconfig.lightSize.hint": "Radius of the physical light sphere. Foundry default treats lights as point sources (0-sized). Larger values create larger shadow penumbra.",
+
   "elevatedvision.ambientconfig.directionallight.name": "Directional Light",
   "elevatedvision.ambientconfig.directionallight.hint": "Treat this light like a sun or moon—--as though it is infinitely far away, at a given direction and angle above the horizon.",
 
