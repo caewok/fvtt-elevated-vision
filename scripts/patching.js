@@ -5,6 +5,7 @@ CanvasVisibility,
 ClockwiseSweepPolygon,
 GlobalLightSource,
 libWrapper,
+LightSource,
 PIXI,
 RenderedPointSource,
 SettingsConfig,
@@ -68,6 +69,8 @@ import {
   _initializeEVShadowRendererRenderedPointSource,
   _initializeEVShadowMaskRenderedPointSource,
 
+  _initializeEVShadowMeshLightSource,
+
   _initializeEVShadowGeometryVisionSource,
   _initializeEVShadowRendererVisionSource,
   _initializeEVShadowMaskVisionSource,
@@ -79,6 +82,7 @@ import {
   _initializeEVShadowMaskGlobalLightSource,
 
   _updateEVShadowDataRenderedPointSource,
+  _updateEVShadowDataLightSource,
   _updateEVShadowDataVisionSource,
   _updateEVShadowDataGlobalLightSource } from "./shadow_hooks.js";
 
@@ -107,9 +111,10 @@ function wrap(method, fn, options = {}) {
   return libWrapper.register(MODULE_ID, method, fn, libWrapper.WRAPPER, options);
 }
 
-function mixed(method, fn, options = {}) {
-  return libWrapper.register(MODULE_ID, method, fn, libWrapper.MIXED, options);
-}
+// Currently unused
+// function mixed(method, fn, options = {}) {
+//   return libWrapper.register(MODULE_ID, method, fn, libWrapper.MIXED, options);
+// }
 
 function override(method, fn, options = {}) {
   return libWrapper.register(MODULE_ID, method, fn, libWrapper.OVERRIDE, options);
@@ -226,6 +231,9 @@ export function registerAdditions() {
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
+
+  addClassMethod(LightSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshLightSource);
+  addClassMethod(LightSource.prototype, "_updateEVShadowData", _updateEVShadowDataLightSource);
 
   addClassMethod(VisionSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryVisionSource);
   addClassMethod(VisionSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererVisionSource);

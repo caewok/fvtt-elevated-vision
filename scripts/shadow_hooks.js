@@ -12,7 +12,7 @@ RenderedPointSource
 import { MODULE_ID } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
 
-import { ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
+import { ShadowWallPointSourceMesh, ShadowWallSizedPointSourceMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer, ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { PointSourceShadowWallGeometry, SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { ShadowVisionMaskShader, ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
@@ -75,7 +75,6 @@ export function _configureRenderedPointSource(wrapped, changes) {
 }
 
 export function destroyRenderedPointSource(wrapped) {
-  // console.log(`${MODULE_ID}|destroyRenderedPointSource (${this.constructor.name}) for ${this.object?.name || this.object?.id}.`);
   const ev = this[MODULE_ID];
   if ( !ev ) return wrapped();
 
@@ -171,7 +170,7 @@ export function _initializeEVShadowsRenderedPointSource() {
   // Build the geometry, shadow texture, and vision mask.
   this._initializeEVShadowGeometry();
   this._initializeEVShadowMesh();
-  this._initializeShadowRenderer();
+  this._initializeEVShadowRenderer();
   this._initializeEVShadowMask();
 
   // TODO: Does this need to be reset every time?
@@ -279,6 +278,34 @@ export function _updateEVShadowDataRenderedPointSource(changes) {
   }
 }
 
+// NOTE: LightSource shadow methods and getters
+// Use the advanced penumbra shader
+
+/**
+ * New method: LightSource.prototype._initializeEVShadowMesh
+ * Use the penumbra shader
+ */
+export function _initializeEVShadowMeshLightSource() {
+  const ev = this[MODULE_ID];
+  ev.shadowMesh ??= new ShadowWallSizedPointSourceMesh(this, ev.wallGeometry);
+}
+
+/**
+ * New method: LightSource.prototype._updateEVShadowData
+ */
+export function _updateEVShadowDataLightSource(changes) {
+  // Instead of super._updateEVShadowData()
+  RenderedPointSource.prototype._updateEVShadowData.call(this, changes);
+
+  const ev = this[MODULE_ID];
+  const changedLightSize = Object.hasOwn(changes, "lightSize");
+  if ( changedLightSize ) {
+    ev.shadowMesh.updateLightSize();
+    ev.shadowRenderer.update();
+  }
+}
+
+
 // NOTE: VisionSource shadow methods and getters
 
 /**
@@ -348,13 +375,13 @@ export function EVVisionLOSMaskVisionSource() {
   }
 
   // This seems to cause problems; do this in FOV instead.
-//   if ( this.object.hasLimitedSourceAngle ) {
-//     // Add a mask for the limited angle polygon.
-//     const { angle, rotation, externalRadius } = this.data;
-//     const radius = canvas.dimensions.maxR;
-//     const ltdPoly = new LimitedAnglePolygon(this, { radius, angle, rotation, externalRadius });
-//     return addShapeToShadowMask(ltdPoly, this[MODULE_ID].shadowVisionLOSMask);
-//   }
+  //   if ( this.object.hasLimitedSourceAngle ) {
+  //     // Add a mask for the limited angle polygon.
+  //     const { angle, rotation, externalRadius } = this.data;
+  //     const radius = canvas.dimensions.maxR;
+  //     const ltdPoly = new LimitedAnglePolygon(this, { radius, angle, rotation, externalRadius });
+  //     return addShapeToShadowMask(ltdPoly, this[MODULE_ID].shadowVisionLOSMask);
+  //   }
 
   return this[MODULE_ID].shadowVisionLOSMask;
 }
