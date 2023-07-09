@@ -211,7 +211,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     if ( !wall.document[this.sourceType] || wall.isOpen ) return false;
 
     const { topZ, bottomZ } = wall;
-    const { sourceZ } = this.source.elevationZ;
+    const sourceZ = this.source.elevationZ;
 
     // If wall is entirely above the light, do not keep.
     if ( bottomZ > sourceZ ) return false;

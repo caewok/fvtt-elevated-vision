@@ -85,7 +85,9 @@ import {
   _updateEVShadowDataRenderedPointSource,
   _updateEVShadowDataLightSource,
   _updateEVShadowDataVisionSource,
-  _updateEVShadowDataGlobalLightSource } from "./shadow_hooks.js";
+  _updateEVShadowDataGlobalLightSource,
+
+  _createPolygonLightSource } from "./shadow_hooks.js";
 
 import {
   _drawAmbientLight,
@@ -195,6 +197,7 @@ export function registerPatches() {
 
   // ----- Penumbra lighting shadows ----- //
   wrap("LightSource.prototype._initialize", _initializeLightSource);
+  wrap("LightSource.prototype._createPolygon", _createPolygonLightSource);
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;

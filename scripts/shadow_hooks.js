@@ -318,6 +318,19 @@ export function _initializeLightSource(wrapped, data) {
     ?? 0;
 }
 
+/**
+ * Wrap method: LightSource.prototype._createPolygon()
+ */
+export function _createPolygonLightSource(wrapped) {
+  this.originalShape = wrapped();
+
+  // Instead of the actual polygon, pass an unblocked circle as the shape.
+  // TODO: Can we just pass a rectangle and shadow portions of the light outside the radius?
+  const cir = new PIXI.Circle(this.x, this.y, this.radius);
+  return cir.toPolygon();
+}
+
+
 // NOTE: VisionSource shadow methods and getters
 
 /**

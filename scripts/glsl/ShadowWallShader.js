@@ -1238,11 +1238,13 @@ void main() {
   // Assume no shadow as the default
   fragColor = noShadow();
 
+  fragColor = vec4(vBary, 0.8);
+  return;
+
   // If in front of the wall, no shadow.
   if ( vBary.x > fWallRatio ) return;
 
-//   fragColor = vec4(vBary, 0.8);
-//   return;
+
 
   // If a threshold applies, we may be able to ignore the wall.
   if ( (fWallSenseType == DISTANCE_WALL || fWallSenseType == PROXIMATE_WALL)
@@ -1492,8 +1494,8 @@ canvas.stage.removeChild(geomMesh)
 
 ev = source.elevatedvision;
 
-mesh = ev.shadowMesh
 mesh = ev.shadowVisionLOSMesh
+mesh = ev.shadowMesh
 canvas.stage.addChild(mesh)
 canvas.stage.removeChild(mesh)
 
