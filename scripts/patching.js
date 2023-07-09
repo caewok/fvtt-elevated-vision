@@ -5,6 +5,7 @@ CanvasVisibility,
 ClockwiseSweepPolygon,
 GlobalLightSource,
 libWrapper,
+LightSource,
 PIXI,
 RenderedPointSource,
 SettingsConfig,
@@ -64,19 +65,25 @@ import {
 
   _initializeEVShadowsRenderedPointSource,
   _initializeEVShadowGeometryRenderedPointSource,
-  _initializeEVShadowTextureRenderedPointSource,
+  _initializeEVShadowMeshRenderedPointSource,
+  _initializeEVShadowRendererRenderedPointSource,
   _initializeEVShadowMaskRenderedPointSource,
 
+  _initializeEVShadowMeshLightSource,
+  _initializeLightSource,
+
   _initializeEVShadowGeometryVisionSource,
-  _initializeEVShadowTextureVisionSource,
+  _initializeEVShadowRendererVisionSource,
   _initializeEVShadowMaskVisionSource,
 
   _initializeEVShadowsGlobalLightSource,
   _initializeEVShadowGeometryGlobalLightSource,
-  _initializeEVShadowTextureGlobalLightSource,
+  _initializeEVShadowMeshGlobalLightSource,
+  _initializeEVShadowRendererGlobalLightSource,
   _initializeEVShadowMaskGlobalLightSource,
 
   _updateEVShadowDataRenderedPointSource,
+  _updateEVShadowDataLightSource,
   _updateEVShadowDataVisionSource,
   _updateEVShadowDataGlobalLightSource } from "./shadow_hooks.js";
 
@@ -105,9 +112,10 @@ function wrap(method, fn, options = {}) {
   return libWrapper.register(MODULE_ID, method, fn, libWrapper.WRAPPER, options);
 }
 
-function mixed(method, fn, options = {}) {
-  return libWrapper.register(MODULE_ID, method, fn, libWrapper.MIXED, options);
-}
+// Currently unused
+// function mixed(method, fn, options = {}) {
+//   return libWrapper.register(MODULE_ID, method, fn, libWrapper.MIXED, options);
+// }
 
 function override(method, fn, options = {}) {
   return libWrapper.register(MODULE_ID, method, fn, libWrapper.OVERRIDE, options);
@@ -185,6 +193,9 @@ export function registerPatches() {
   wrap("AmbientLight.prototype._onUpdate", _onUpdateAmbientLight);
   wrap("AmbientLight.prototype.refreshControl", refreshControlAmbientLight);
 
+  // ----- Penumbra lighting shadows ----- //
+  wrap("LightSource.prototype._initialize", _initializeLightSource);
+
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
 }
@@ -221,16 +232,21 @@ export function registerAdditions() {
 
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadows", _initializeEVShadowsRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
 
+  addClassMethod(LightSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshLightSource);
+  addClassMethod(LightSource.prototype, "_updateEVShadowData", _updateEVShadowDataLightSource);
+
   addClassMethod(VisionSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryVisionSource);
-  addClassMethod(VisionSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureVisionSource);
+  addClassMethod(VisionSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererVisionSource);
   addClassMethod(VisionSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskVisionSource);
 
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadows", _initializeEVShadowsGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryGlobalLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureGlobalLightSource);
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshGlobalLightSource);
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskGlobalLightSource);
 
   addClassMethod(RenderedPointSource.prototype, "_updateEVShadowData", _updateEVShadowDataRenderedPointSource);

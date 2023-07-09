@@ -17,6 +17,7 @@ export const MODULES_ACTIVE = {
 export const FLAGS = {
   ELEVATION_IMAGE: "elevationImage",
   ELEVATION: "elevation",
+  LIGHT_SIZE: "lightSize",
   DIRECTIONAL_LIGHT: {
     ENABLED: "directionalLight",
     SOLAR_ANGLE: "solarAngle"

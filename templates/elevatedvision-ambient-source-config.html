@@ -20,6 +20,14 @@
       <p class="hint">{{ localize "elevatedvision.ambientconfig.elevation.hint" }}</p>
     </div>
 
+    <div class="form-group" id="elevatedvision-config-lightSize" style={{ ifThen data.elevatedvision.isDirectional "display:none;" "display:block;" }}>
+      <label>{{ localize "elevatedvision.ambientconfig.lightSize.name" }} <span class="units">({{ localize "pixels" }}) (1 {{ localize "pixel" }} ≈ {{ data.elevatedvision.pixelsDistance }} {{gridUnits}})</span></label>
+      <div class="form-fields">
+        <input type="number" placeholder="{{ data.elevatedvision.defaultLightSize }}" id="elevatedvisionlightSizeConfig" name="flags.elevatedvision.lightSize" min="0" step="1" class="elevatedvision" value="{{ data.flags.elevatedvision.lightSize }}" />
+      </div>
+      <p class="hint">{{ localize "elevatedvision.ambientconfig.lightSize.hint" }}</p>
+    </div>
+
     <!-- Directional light options-->
 
     <div class="form-group" id="elevatedvision-config-azimuth" style={{ ifThen data.elevatedvision.isDirectional "display:block;" "display:none;" }}>

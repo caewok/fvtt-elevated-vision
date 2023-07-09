@@ -34,6 +34,10 @@ export const SETTINGS = {
     DEFAULT_MAX: "#80000080"
   },
 
+  LIGHTING: {
+    LIGHT_SIZE: "point-light-size"
+  },
+
   VISION_USE_SHADER: "vision-use-shader",  // Deprecated
   AUTO_ELEVATION: "auto-change-elevation",
   AUTO_AVERAGING: "auto-change-elevation.averaging",
@@ -107,6 +111,20 @@ export function registerSettings() {
     scope: "world",
     config: true,
     default: 5,
+    requiresReload: false,
+    type: Number
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.LIGHTING.LIGHT_SIZE, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LIGHTING.LIGHT_SIZE}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LIGHTING.LIGHT_SIZE}.hint`),
+    scope: "world",
+    config: true,
+    range: {
+      min: 0,
+      step: 1
+    },
+    default: 0,
     requiresReload: false,
     type: Number
   });
