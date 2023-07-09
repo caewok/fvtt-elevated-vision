@@ -71,14 +71,7 @@ export function _configureRenderedPointSource(wrapped, changes) {
   const ev = this[MODULE_ID];
   if ( !ev ) return;
 
-  // console.log(`${MODULE_ID}|_configureRenderedPointSource for ${this.object?.name || this.object?.id} (${this.constructor.name}). Is ${this.object?._original ? "" : "not "}a clone. ${Object.keys(changes).length} changed properties.`, changes);
-
-  // Test for different change properties
-  const changedPosition = Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
-  const changedRadius = Object.hasOwn(changes, "radius");
-  const changedElevation = Object.hasOwn(changes, "elevation");
-
-  this._updateEVShadowData({ changedPosition, changedElevation, changedRadius });
+  this._updateEVShadowData(changes);
 }
 
 export function destroyRenderedPointSource(wrapped) {
@@ -243,13 +236,13 @@ export function EVVisionMaskRenderedPointSource() {
 /**
  * New method: RenderedPointSource.prototype._updateEVShadowData
  */
-export function _updateEVShadowDataRenderedPointSource({ changedPosition, changedRadius, changedElevation } = {}) {
+export function _updateEVShadowDataRenderedPointSource(changes) {
   const ev = this[MODULE_ID];
   if ( !ev || !ev.wallGeometry) return;
 
-  changedPosition ??= true;
-  changedRadius ??= true;
-  changedElevation ??= true;
+  const changedPosition = Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
+  const changedRadius = Object.hasOwn(changes, "radius");
+  const changedElevation = Object.hasOwn(changes, "elevation");
 
   if ( !(changedPosition || changedRadius || changedElevation) ) return;
 
@@ -322,16 +315,16 @@ export function _initializeEVShadowMaskVisionSource() {
 /**
  * New method: VisionSource.prototype._updateEVShadowData
  */
-export function _updateEVShadowDataVisionSource({ changedPosition, changedRadius, changedElevation } = {}) {
+export function _updateEVShadowDataVisionSource(changes) {
   const ev = this[MODULE_ID];
   if ( !ev || !ev.wallGeometry) return;
 
-  changedPosition ??= true;
-  changedRadius ??= true;
-  changedElevation ??= true;
-
   // Instead of super._updateEVShadowData()
-  RenderedPointSource.prototype._updateEVShadowData.call(this, { changedPosition, changedRadius, changedElevation });
+  RenderedPointSource.prototype._updateEVShadowData.call(this, changes);
+
+  const changedPosition = Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
+  const changedRadius = Object.hasOwn(changes, "radius");
+  const changedElevation = Object.hasOwn(changes, "elevation");
 
   if ( changedPosition || changedElevation ) ev.shadowVisionLOSRenderer.update();
   if ( changedRadius ) ev.shadowVisionLOSRenderer.updateSourceRadius();
