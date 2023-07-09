@@ -64,16 +64,18 @@ import {
 
   _initializeEVShadowsRenderedPointSource,
   _initializeEVShadowGeometryRenderedPointSource,
-  _initializeEVShadowTextureRenderedPointSource,
+  _initializeEVShadowMeshRenderedPointSource,
+  _initializeEVShadowRendererRenderedPointSource,
   _initializeEVShadowMaskRenderedPointSource,
 
   _initializeEVShadowGeometryVisionSource,
-  _initializeEVShadowTextureVisionSource,
+  _initializeEVShadowRendererVisionSource,
   _initializeEVShadowMaskVisionSource,
 
   _initializeEVShadowsGlobalLightSource,
   _initializeEVShadowGeometryGlobalLightSource,
-  _initializeEVShadowTextureGlobalLightSource,
+  _initializeEVShadowMeshGlobalLightSource,
+  _initializeEVShadowRendererGlobalLightSource,
   _initializeEVShadowMaskGlobalLightSource,
 
   _updateEVShadowDataRenderedPointSource,
@@ -221,16 +223,18 @@ export function registerAdditions() {
 
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadows", _initializeEVShadowsRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
 
   addClassMethod(VisionSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryVisionSource);
-  addClassMethod(VisionSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureVisionSource);
+  addClassMethod(VisionSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererVisionSource);
   addClassMethod(VisionSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskVisionSource);
 
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadows", _initializeEVShadowsGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryGlobalLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowTexture", _initializeEVShadowTextureGlobalLightSource);
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshGlobalLightSource);
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererGlobalLightSource);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskGlobalLightSource);
 
   addClassMethod(RenderedPointSource.prototype, "_updateEVShadowData", _updateEVShadowDataRenderedPointSource);
