@@ -11,7 +11,6 @@ PreciseText
 import { MODULE_ID, FLAGS } from "./const.js";
 import { DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { ShadowWallDirectionalSourceMesh } from "./glsl/ShadowWallShader.js";
-import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Draw } from "./geometry/Draw.js";
 
@@ -42,10 +41,7 @@ _configure
 #createMesh
   --> mesh = new PointSourceMesh(this.#geometry)
 
-
-
 */
-
 
 
 // Directional Light
@@ -148,9 +144,9 @@ export class DirectionalLightSource extends LightSource {
     const tip = new PreciseText(text, style);
     tip.anchor.set(0.5, 0.5);
 
-    // From #drawControlIcon
-//     const size = Math.max(Math.round((canvas.dimensions.size * 0.5) / 20) * 20, 40);
-//     tip.position.set(0, 0);
+  // From #drawControlIcon
+  //     const size = Math.max(Math.round((canvas.dimensions.size * 0.5) / 20) * 20, 40);
+  //     tip.position.set(0, 0);
     return tip;
   }
 
@@ -303,28 +299,18 @@ export class DirectionalLightSource extends LightSource {
    */
 
   /**
-   * Update shadow data when the light is moved.
+   * Update shadow data when the light is moved or solarAngle is updated.
    */
-  _updateEVShadowData({ changedPosition }) {
+  _updateEVShadowData(changes) {
     const ev = this[MODULE_ID];
-    if ( !changedPosition || !ev || !ev.wallGeometry ) return;
 
-    // TODO: Need to monitor for change to lightSizeProjected.
+    if ( Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y") ) {
+      ev.wallGeometry.refreshWalls();
+      ev.shadowMesh.updateAzimuth();
+      ev.shadowMesh.updateElevationAngle();
+      ev.shadowRenderer.update();
+    }
 
-    ev.wallGeometry.refreshWalls();
-    ev.shadowMesh.updateAzimuth();
-    ev.shadowMesh.updateElevationAngle();
-    ev.shadowRenderer.update();
-  }
-
-  /**
-   * Catch when solarAngle is updated.
-   */
-  _configure(changes) {
-    super._configure(changes);
-
-    const ev = this[MODULE_ID];
-    if ( !ev || !ev.wallGeometry ) return;
     if ( Object.hasOwn(changes, "solarAngle") ) {
       ev.shadowMesh.updateSolarAngle();
       ev.shadowRenderer.update();
