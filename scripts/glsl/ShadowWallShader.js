@@ -913,7 +913,7 @@ void main() {
 
   updateAzimuth(azimuth) { this.uniforms.uAzimuth = azimuth; }
 
-  updateElevationAngle(elevationAngle) { this.uniforms.elevationAngle = elevationAngle; }
+  updateElevationAngle(elevationAngle) { this.uniforms.uElevationAngle = elevationAngle; }
 
   updateSolarAngle(solarAngle) { this.uniforms.uSolarAngle = solarAngle; }
 }
