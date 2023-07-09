@@ -201,7 +201,7 @@ export function _initializeEVShadowMeshRenderedPointSource() {
 /**
  * New method: RenderedPointSource.prototype._initializeShadowRenderer
  */
-export function _initializeShadowRendererRenderedPointSource() {
+export function _initializeEVShadowRendererRenderedPointSource() {
   const ev = this[MODULE_ID];
   if ( ev.shadowRenderer ) return;
 
