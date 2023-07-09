@@ -973,6 +973,9 @@ void main() {
   vec3 wallBottom1 = vec3(aWallCorner1.xy, wallBottomZ);
   int vertexNum = gl_VertexID % 3;
 
+  // For now, force lightSize to be at least 1 to avoid degeneracies.
+  float lightSize = max(1.0, uLightSize);
+
   // Set the barymetric coordinates for each corner of the triangle.
   vBary = vec3(0.0, 0.0, 0.0);
   vBary[vertexNum] = 1.0;
@@ -985,9 +988,9 @@ void main() {
   // Use a rough approximation of the spherical light instead of calculating ray angles for each.
 
   // Points for the light in the z direction.
-  vec3 lightTop = uLightPosition + vec3(0.0, 0.0, uLightSize);
+  vec3 lightTop = uLightPosition + vec3(0.0, 0.0, lightSize);
   vec3 lightCenter = uLightPosition;
-  vec3 lightBottom = uLightPosition + vec3(0.0, 0.0, -uLightSize);
+  vec3 lightBottom = uLightPosition + vec3(0.0, 0.0, -lightSize);
   lightBottom.z = max(lightBottom.z, canvasElevation);
 
   // Intersect the canvas plane: Light --> vertex --> plane.
@@ -1023,7 +1026,7 @@ void main() {
   float distWallTop1 = distance(lightCenter.xy, wallTop1.xy);
   float distShadow = distance(lightCenter.xy, ixFarPenumbra1.xy);
   float invK = (distShadow - distWallTop1) / distWallTop1;
-  float lightSizeProjected = uLightSize * invK;
+  float lightSizeProjected = lightSize * invK;
 
   // Shift the penumbra by the projected light size.
   vec2 dir = normalize(wallTop1.xy - wallTop2.xy);
@@ -1287,11 +1290,11 @@ void main() {
 //   else fragColor = vec4(vec3(0.0), 0.8);
 //   return;
 
-  fragColor = vec4(vec3(0.0), 0.8);
-  if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
-  if ( inFarPenumbra ) fragColor.b = 1.0;
-  if ( inNearPenumbra ) fragColor.g = 1.0;
-  return;
+//   fragColor = vec4(vec3(0.0), 0.8);
+//   if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
+//   if ( inFarPenumbra ) fragColor.b = 1.0;
+//   if ( inNearPenumbra ) fragColor.g = 1.0;
+//   return;
 
   // Blend the two side penumbras if overlapping by multiplying the light amounts.
   float side1Shadow = inSidePenumbra1 ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
