@@ -290,23 +290,12 @@ export class DirectionalLightSource extends LightSource {
   /**
    * Construct a directional mesh, using the directional wall shader.
    */
-  _initializeEVShadowTexture() {
+  _initializeEVShadowMesh() {
     const ev = this[MODULE_ID];
     if ( ev.shadowRenderer ) return;
 
     // Mesh that describes shadows for the given geometry and source origin.
     ev.shadowMesh = new ShadowWallDirectionalSourceMesh(this, ev.wallGeometry);
-
-    // Force a uniform update, to avoid ghosting of placeables in the light radius.
-    // TODO: Find the underlying issue and fix this!
-    // Must be a new uniform variable (one that is not already in uniforms)
-    this.layers.background.shader.uniforms.uEVtmpfix = 0;
-    this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
-    this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
-
-    // Render texture to store the shadow mesh for use by other shaders.
-    ev.shadowRenderer = new ShadowTextureRenderer(this, ev.shadowMesh);
-    ev.shadowRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
   }
 
   /**
