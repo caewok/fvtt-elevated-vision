@@ -89,8 +89,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // Assumed that light is passed as uniform.
     // Attributes used to pass needed wall data to each vertex.
     const indices = [];
+    const aWallCorner0 = [];
     const aWallCorner1 = [];
-    const aWallCorner2 = [];
     const aWallSenseType = []; // CONST.WALL_SENSE_TYPES
     const aThresholdRadius2 = []; // If within this radius squared of the light, ignore the wall.
 
@@ -105,8 +105,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       // For now, must repeat the vertices three times.
       // Should be possible to use instanced attributes to avoid this. (see PIXI.Attribute)
       // Unclear whether that would be supported using Foundry rendering options.
-      aWallCorner1.push(...corner1, ...corner1, ...corner1);
-      aWallCorner2.push(...corner2, ...corner2, ...corner2);
+      aWallCorner0.push(...corner1, ...corner1, ...corner1);
+      aWallCorner1.push(...corner2, ...corner2, ...corner2);
 
       const type = this.senseType(wall);
       aWallSenseType.push(type, type, type);
@@ -124,8 +124,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
     // TODO: Should this or a subclass set interleave to true?
     this.addIndex(indices);
+    this.addAttribute("aWallCorner0", aWallCorner0, 3);
     this.addAttribute("aWallCorner1", aWallCorner1, 3);
-    this.addAttribute("aWallCorner2", aWallCorner2, 3);
     this.addAttribute("aWallSenseType", aWallSenseType, 1);
     this.addAttribute("aThresholdRadius2", aThresholdRadius2, 1);
   }
@@ -340,8 +340,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
     // Wall endpoints
     const { corner1, corner2 } = this.constructor.wallCornerCoordinates(wall);
-    this._addToBuffer(corner1, "aWallCorner1", update);
-    this._addToBuffer(corner2, "aWallCorner2", update);
+    this._addToBuffer(corner1, "aWallCorner0", update);
+    this._addToBuffer(corner2, "aWallCorner1", update);
 
     // Wall sense type
     this._addToBuffer([this.senseType(wall)], "aWallSenseType", update);
@@ -388,11 +388,11 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // Check for change in wall endpoints
     let changedPosition = false;
     const { corner1, corner2 } = this.constructor.wallCornerCoordinates(wall);
-    changedPosition = this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner1[i]);
-    changedPosition ||= this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner2[i]);
+    changedPosition = this.getAttributeAtIndex("aWallCorner0", idxToUpdate).some((x, i) => x !== corner1[i]);
+    changedPosition ||= this.getAttributeAtIndex("aWallCorner0", idxToUpdate).some((x, i) => x !== corner2[i]);
     if ( changedPosition ) {
-      this._updateBuffer(corner1, "aWallCorner1", idxToUpdate, update);
-      this._updateBuffer(corner2, "aWallCorner2", idxToUpdate, update);
+      this._updateBuffer(corner1, "aWallCorner0", idxToUpdate, update);
+      this._updateBuffer(corner2, "aWallCorner1", idxToUpdate, update);
     }
 
     // Check for change in the sense type for the wall
