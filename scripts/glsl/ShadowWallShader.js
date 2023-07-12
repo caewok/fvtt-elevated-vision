@@ -92,6 +92,14 @@ float calculateRatio(in vec3 wallEndpoint, in vec3 dir, in vec2 furthestPoint, i
 
 const PENUMBRA_VERTEX_CALCULATIONS =
 `
+// Normalize the directional vectors
+dirMidSidePenumbra[0] = normalize(dirMidSidePenumbra[0]);
+dirMidSidePenumbra[1] = normalize(dirMidSidePenumbra[1]);
+dirInnerSidePenumbra[0] = normalize(dirInnerSidePenumbra[0]);
+dirInnerSidePenumbra[1] = normalize(dirInnerSidePenumbra[1]);
+dirOuterSidePenumbra[0] = normalize(dirOuterSidePenumbra[0]);
+dirOuterSidePenumbra[1] = normalize(dirOuterSidePenumbra[1]);
+
 // Define some terms for ease-of-reference.
 float canvasElevation = uElevationRes.x;
 float maxR = sqrt(uSceneDims.z * uSceneDims.z + uSceneDims.w * uSceneDims.w) * 2.0;
@@ -139,7 +147,7 @@ lineLineIntersection(farParallelRay, Ray2d(wall2d[furtherIdx], dirMidSidePenumbr
 lineLineIntersection(farParallelRay, Ray2d(wall2d[0], dirOuterSidePenumbra[0]), sidePenumbra[0]);
 lineLineIntersection(farParallelRay, Ray2d(wall2d[1], dirOuterSidePenumbra[1]), sidePenumbra[1]);
 lineLineIntersection(farParallelRay, Ray2d(wall2d[0], dirInnerSidePenumbra[0]), sideUmbra[0]);
-lineLineIntersection(farParallelRay, Ray2d(wall2d[1], dirInnerSidePenumbra[1]), sideUmbra[0]);
+lineLineIntersection(farParallelRay, Ray2d(wall2d[1], dirInnerSidePenumbra[1]), sideUmbra[1]);
 
 // Construct a new light position based on the xy intersection of the outer penumbra points --> wall corner
 vec2 newLightCenter;
@@ -1029,7 +1037,6 @@ uniform vec4 uElevationRes;
 uniform vec3 uLightPosition;
 uniform float uLightSize;
 uniform vec4 uSceneDims;
-uniform float uMaxR;
 
 #define PI_1_2 1.5707963267948966
 
@@ -1049,7 +1056,8 @@ float zChangeForElevationAngle(in float elevationAngle) {
   elevationAngle = clamp(elevationAngle, 0.0, PI_1_2); // 0º to 90º
   vec2 pt = fromAngle(vec2(0.0), elevationAngle, 1.0);
   float z = pt.x == 0.0 ? 1.0 : pt.y / pt.x;
-  return max(z, 1e-06); // Don't let z go to 0.
+  return z;
+  // return max(z, 1e-06); // Don't let z go to 0.
 }
 
 void main() {
@@ -1067,20 +1075,30 @@ void main() {
   float wallBottomZ = aWallCorner1.z;
   vec2 wall2d[2] = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
   vec2 wallDir = normalize(aWallCorner0.xy - aWallCorner1.xy);
-
-  // Calculate the light positions in the vertical direction.
-  vec3 lightZ = uLightPosition.z + vec3(lightSize, 0.0, -lightSize);
+  vec3 wallBottom0 = vec3(aWallCorner0.xy, wallBottomZ);
 
   // Determine the z change between the light and the wall. light top / middle / bottom
-  vec3 zChangeLightWallTop = lightZ - wallTopZ;
-  vec3 zChangeLightWallBottom = lightZ - wallBottomZ;
+  // Must be the z portion of the normalized vector between the light and the first endpoint.
+  vec3 lightSizeVec = vec3(0.0, 0.0, lightSize);
+  vec3 dirLightWallTop = aWallCorner0 - uLightPosition;
+  vec3 dirLightWallBottom = wallBottom0 - uLightPosition;
+  vec3 zChangeLightWallTop = vec3(
+    normalize(dirLightWallTop + lightSizeVec).z,
+    normalize(dirLightWallTop).z,
+    normalize(dirLightWallTop - lightSizeVec).z
+  );
+  vec3 zChangeLightWallBottom = vec3(
+    normalize(dirLightWallBottom + lightSizeVec).z,
+    normalize(dirLightWallBottom).z,
+    normalize(dirLightWallBottom - lightSizeVec).z
+  );
 
   // Direction from light center --> wall endpoints
   vec2 dirMidSidePenumbra[2] = vec2[2](wall2d[0] - uLightPosition.xy, wall2d[1] - uLightPosition.xy);
 
   // Use wall direction to determine the left/right light points
-  vec2 lightLR0 = uLightPosition.xy + wallDir;
-  vec2 lightLR1 = uLightPosition.xy - wallDir;
+  vec2 lightLR0 = uLightPosition.xy - (wallDir * lightSize);
+  vec2 lightLR1 = uLightPosition.xy + (wallDir * lightSize);
 
   // Direction from light LR --> wall endpoints
   vec2 dirOuterSidePenumbra[2] = vec2[2](wall2d[0] - lightLR0, wall2d[1] - lightLR1);
@@ -1302,7 +1320,6 @@ void main() {
   static defaultUniforms = {
     uSceneDims: [0, 0, 1, 1],
     uElevationRes: [0, 1, 256 * 256, 1],
-    uMaxR: 1e06,
     uTerrainSampler: 0,
     uLightPosition: [0, 0, 0],
     uLightSize: 1
@@ -1330,7 +1347,6 @@ void main() {
       distancePixels
     ];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
-    defaultUniforms.uMaxR = canvas.dimensions.uMaxR;
     return super.create(defaultUniforms);
   }
 
@@ -1428,6 +1444,7 @@ export class ShadowWallSizedPointSourceMesh extends PIXI.Mesh {
 MODULE_ID = "elevatedvision"
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 Draw = CONFIG.GeometryLib.Draw
+Plane = CONFIG.GeometryLib.threeD.Plane
 api = game.modules.get("elevatedvision").api
 PointSourceShadowWallGeometry = api.PointSourceShadowWallGeometry
 defineFunction = api.defineFunction;
@@ -1461,8 +1478,8 @@ canvas.stage.removeChild(geomMesh)
 
 ev = source.elevatedvision;
 
-mesh = ev.shadowMesh
 mesh = ev.shadowVisionLOSMesh
+mesh = ev.shadowMesh
 canvas.stage.addChild(mesh)
 canvas.stage.removeChild(mesh)
 
@@ -1506,10 +1523,165 @@ function zChangeForElevationAngle(elevationAngle) {
   elevationAngle = Math.clamped(elevationAngle, 0, Math.PI_1_2);
   const pt = PIXI.Point.fromAngle(new PIXI.Point(0, 0), elevationAngle, 1.0);
   const z = pt.x == 0.0 ? 1.0 : pt.y / pt.x;
-  return Math.max(z, 1e-06); // Don't let z go to 0.
+  return z;
+  // return Math.max(z, 1e-06); // Don't let z go to 0.
 }
 
 */
+
+
+/* Checking the sized math
+
+// Wall uniforms
+wallCoords = Point3d.fromWall(wall)
+wallCoords.A.top.z = Math.min(wallCoords.A.top.z, 1e06)
+wallCoords.B.top.z = Math.min(wallCoords.B.top.z, 1e06)
+wallCoords.A.bottom.z = Math.max(wallCoords.A.bottom.z, -1e06)
+wallCoords.B.bottom.z = Math.max(wallCoords.B.bottom.z, -1e06)
+aWallCorner0 = wallCoords.A.top
+aWallCorner1 = wallCoords.B.bottom
+
+// Other uniforms
+let { uSceneDims, uElevationRes, uLightSize, uLightPosition } = mesh.shader.uniforms
+uSceneDims = { x: uSceneDims[0], y: uSceneDims[1], z: uSceneDims[2], w: uSceneDims[3] }
+uElevationRes = { x: uElevationRes[0], y: uElevationRes[1], z: uElevationRes[2], w: uElevationRes[3]}
+uLightPosition = new Point3d(uLightPosition[0], uLightPosition[1], uLightPosition[2])
+
+// Define some terms for ease-of-reference.
+lightSize = Math.max(0, uLightSize);
+
+// Define wall dimensions.
+wallTopZ = aWallCorner0.z;
+wallBottomZ = aWallCorner1.z;
+wall2d = [aWallCorner0.to2d(), aWallCorner1.to2d()]
+wallDir = aWallCorner0.to2d().subtract(aWallCorner1.to2d()).normalize()
+wallBottom0 = new Point3d(aWallCorner0.x, aWallCorner0.y, wallBottomZ);
+
+// Determine the z change between the light and the wall. light top / middle / bottom
+// Must be the z portion of the normalized vector between the light and the first endpoint.
+lightSizeVec = new Point3d(0, 0, lightSize)
+dirLightWallTop = aWallCorner0.subtract(uLightPosition);
+dirLightWallBottom = wallBottom0.subtract(uLightPosition);
+zChangeLightWallTop = {
+  x: dirLightWallTop.add(lightSizeVec).normalize().z,
+  y: dirLightWallTop.normalize().z,
+  z: dirLightWallTop.subtract(lightSizeVec).normalize().z
+}
+
+zChangeLightWallBottom = {
+  x: dirLightWallBottom.add(lightSizeVec).normalize().z,
+  y: dirLightWallBottom.normalize().z,
+  z: dirLightWallBottom.subtract(lightSizeVec).normalize().z
+}
+
+// Direction from light center --> wall endpoints
+dirMidSidePenumbra = [wall2d[0].subtract(uLightPosition.to2d()), wall2d[1].subtract(uLightPosition.to2d())];
+
+// Use wall direction to determine the left/right light points
+lightLR0 = uLightPosition.to2d().subtract(wallDir.multiplyScalar(lightSize));
+lightLR1 = uLightPosition.to2d().add(wallDir.multiplyScalar(lightSize));
+
+// Test: Draw the light position
+Draw.point(uLightPosition, { color: Draw.COLORS.yellow, radius: 3 })
+Draw.point(lightLR0, { color: Draw.COLORS.yellow, radius: 2 })
+Draw.point(lightLR1, { color: Draw.COLORS.yellow, radius: 2 })
+
+// Direction from light LR --> wall endpoints
+dirOuterSidePenumbra = [wall2d[0].subtract(lightLR0), wall2d[1].subtract(lightLR1)];
+dirInnerSidePenumbra = [wall2d[0].subtract(lightLR1), wall2d[1].subtract(lightLR0)];
+
+// Normalize directionals
+dirMidSidePenumbra = dirMidSidePenumbra.map(dir => dir.normalize())
+dirOuterSidePenumbra = dirOuterSidePenumbra.map(dir => dir.normalize())
+dirInnerSidePenumbra = dirInnerSidePenumbra.map(dir => dir.normalize())
+
+// Test: Draw from endpoint toward canvas for each direction
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirOuterSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.orange })
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirMidSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.blue })
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirInnerSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.red })
+
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirOuterSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.orange })
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirMidSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.blue })
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirInnerSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.red })
+
+*/
+
+/* Penumbra geometry
+// Already normalized the directional vectors
+
+canvasElevation = uElevationRes.x;
+maxR = Math.sqrt(uSceneDims.z * uSceneDims.z + uSceneDims.w * uSceneDims.w) * 2
+vertexNum = 0
+
+planePoint = new Point3d(0, 0, canvasElevation)
+planeNormal = new Point3d(0, 0, 1)
+canvasPlane = new Plane(planePoint, planeNormal)
+
+// Determine where the light ray hits the canvas when passing through one of the endpoints.
+sideMidPenumbra = Array(2)
+closerIdx = 0;
+furtherIdx = 1
+farLightRayZChange = zChangeLightWallTop.z;
+wall0Top3d = new Point3d(wall2d[0].x, wall2d[0].y, wallTopZ);
+if ( farLightRayZChange < 0 ) {
+  dir = new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, farLightRayZChange)
+  t = canvasPlane.rayIntersection(wall0Top3d, dir)
+  ixCanvas = wall0Top3d.projectToward(wall0Top3d.add(dir), t)
+  sideMidPenumbra[0] = ixCanvas.to2d()
+  Draw.segment({ A: wall0Top3d, B: ixCanvas}, { color: Draw.COLORS.green })
+
+} else {
+  // if point source light
+  closerIdx = PIXI.Point.distanceSquaredBetween(uLightPosition, wall2d[0]) < PIXI.Point.distanceSquaredBetween(uLightPosition, wall2d[1]) ? 0 : 1;
+  furtherIdx = closerIdx % 2;
+  // end if
+  penumbraCloser = { origin: wall2d[closerIdx], direction: dirMidSidePenumbra[closerIdx] }
+  penumbraCloser.direction = penumbraCloser.direction.normalize();
+  sideMidPenumbra[closerIdx] = penumbraCloser.origin.projectToward(penumbraCloser.origin.add(penumbraCloser.direction), maxR)
+}
+
+// Construct a parallel ray to the wall and use that to intersect the further penumbra ray.
+
+farParallelRay = { origin: sideMidPenumbra[closerIdx], direction: wallDir };
+sideMidPenumbra[furtherIdx] = foundry.utils.lineLineIntersection(
+  farParallelRay.origin,
+  farParallelRay.origin.add(farParallelRay.direction),
+  wall2d[furtherIdx],
+  wall2d[furtherIdx].add(dirMidSidePenumbra[furtherIdx]))
+sideMidPenumbra[furtherIdx] = PIXI.Point.fromObject(sideMidPenumbra[furtherIdx])
+Draw.segment({ A: sideMidPenumbra[0], B: sideMidPenumbra[1] }, { color: Draw.COLORS.blue })
+
+sidePenumbra = Array(2);
+sidePenumbra[0] = foundry.utils.lineLineIntersection(
+  farParallelRay.origin,
+  farParallelRay.origin.add(farParallelRay.direction),
+  wall2d[0],
+  wall2d[0].add(dirOuterSidePenumbra[0]));
+sidePenumbra[1] = foundry.utils.lineLineIntersection(
+  farParallelRay.origin,
+  farParallelRay.origin.add(farParallelRay.direction),
+  wall2d[1],
+  wall2d[1].add(dirOuterSidePenumbra[1]));
+
+sideUmbra = Array(2)
+sideUmbra[0] = foundry.utils.lineLineIntersection(
+  farParallelRay.origin,
+  farParallelRay.origin.add(farParallelRay.direction),
+  wall2d[0],
+  wall2d[0].add(dirInnerSidePenumbra[0]));
+sideUmbra[1] = foundry.utils.lineLineIntersection(
+  farParallelRay.origin,
+  farParallelRay.origin.add(farParallelRay.direction),
+  wall2d[1],
+  wall2d[1].add(dirInnerSidePenumbra[1]));
+
+Draw.point(sidePenumbra[0])
+Draw.point(sidePenumbra[1])
+Draw.point(sideUmbra[0])
+Draw.point(sideUmbra[1])
+*/
+
+
 
 /* Checking the directional math
 [wall] = canvas.walls.controlled
