@@ -700,7 +700,7 @@ float zChangeForElevationAngle(in float elevationAngle) {
   elevationAngle = clamp(elevationAngle, 0.0, PI_1_2); // 0º to 90º
   vec2 pt = fromAngle(vec2(0.0), elevationAngle, 1.0);
   float z = pt.x == 0.0 ? 1.0 : pt.y / pt.x;
-  return z;
+  return -z;
   // return max(z, 1e-06); // Don't let z go to 0.
 }
 
@@ -729,18 +729,24 @@ void main() {
   vec2 wall2d[2] = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
   vec2 wallDir = normalize(aWallCorner0.xy - aWallCorner1.xy);
 
-  // Calculate the change in z for the light direction based on differing solar angles.
-  float zFarUmbra = zChangeForElevationAngle(uElevationAngle + solarAngle); // light top
-  float zFarMidPenumbra = zChangeForElevationAngle(uElevationAngle); // light middle
-  float zFarPenumbra = zChangeForElevationAngle(uElevationAngle - solarAngle); // light bottom
-  vec3 zChangeLightWallTop = vec3(zFarUmbra, zFarMidPenumbra, zFarPenumbra);
-  vec3 zChangeLightWallBottom = zChangeLightWallTop;
-
   // Direction from endpoint toward the light
   vec2 lightDirection2d = normalize(fromAngle(vec2(0.0), uAzimuth, 1.0));
 
   // Reverse for determining penumbra
   vec2 dirMidSidePenumbra[2] = vec2[2](lightDirection2d * -1.0, lightDirection2d * -1.0);
+
+  // Calculate the change in z for the light direction based on differing solar angles.
+  float zFarUmbra = zChangeForElevationAngle(uElevationAngle + solarAngle); // light top
+  float zFarMidPenumbra = zChangeForElevationAngle(uElevationAngle); // light middle
+  float zFarPenumbra = zChangeForElevationAngle(uElevationAngle - solarAngle); // light bottom
+
+  // Normalize based on the mid penumbra for corner 0
+  vec3 zChangeLightWallTop = vec3(
+    normalize(vec3(dirMidSidePenumbra[0], zFarUmbra)).z,
+    normalize(vec3(dirMidSidePenumbra[0], zFarMidPenumbra)).z,
+    normalize(vec3(dirMidSidePenumbra[0], zFarPenumbra)).z
+  );
+  vec3 zChangeLightWallBottom = zChangeLightWallTop;
 
   // Determine which side of the wall the light is on.
   float oWallLight = sign(orient(aWallCorner0.xy, aWallCorner1.xy, aWallCorner0.xy + lightDirection2d));
@@ -1525,9 +1531,64 @@ function zChangeForElevationAngle(elevationAngle) {
   elevationAngle = Math.clamped(elevationAngle, 0, Math.PI_1_2);
   const pt = PIXI.Point.fromAngle(new PIXI.Point(0, 0), elevationAngle, 1.0);
   const z = pt.x == 0.0 ? 1.0 : pt.y / pt.x;
-  return z;
+  return -z;
   // return Math.max(z, 1e-06); // Don't let z go to 0.
 }
+
+*/
+
+/* Checking the directional math
+
+// Wall uniforms
+wallCoords = Point3d.fromWall(wall)
+wallCoords.A.top.z = Math.min(wallCoords.A.top.z, 1e06)
+wallCoords.B.top.z = Math.min(wallCoords.B.top.z, 1e06)
+wallCoords.A.bottom.z = Math.max(wallCoords.A.bottom.z, -1e06)
+wallCoords.B.bottom.z = Math.max(wallCoords.B.bottom.z, -1e06)
+aWallCorner0 = wallCoords.A.top
+aWallCorner1 = wallCoords.B.bottom
+
+// Other uniforms
+let { uSceneDims, uElevationRes, uSolarAngle, uAzimuth, uElevationAngle } = mesh.shader.uniforms
+uSceneDims = { x: uSceneDims[0], y: uSceneDims[1], z: uSceneDims[2], w: uSceneDims[3] }
+uElevationRes = { x: uElevationRes[0], y: uElevationRes[1], z: uElevationRes[2], w: uElevationRes[3]}
+
+// Define some terms for ease-of-reference.
+solarAngle = Math.max(0, uSolarAngle);
+
+// Define wall dimensions.
+wallTopZ = aWallCorner0.z;
+wallBottomZ = aWallCorner1.z;
+wall2d = [aWallCorner0.to2d(), aWallCorner1.to2d()]
+wallDir = aWallCorner0.to2d().subtract(aWallCorner1.to2d()).normalize()
+
+// Direction from endpoint toward the light
+lightDirection2d = PIXI.Point.fromAngle(new PIXI.Point(0.0), uAzimuth, 1).normalize()
+
+// Reverse for determining penumbra
+dirMidSidePenumbra = [lightDirection2d.multiplyScalar(-1), lightDirection2d.multiplyScalar(-1)];
+
+// Testing: draw a ray for this penumbra
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirMidSidePenumbra[0].multiplyScalar(500))})
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirMidSidePenumbra[1].multiplyScalar(500))})
+
+// Calculate the change in z for the light direction based on differing solar angles.
+zFarUmbra = zChangeForElevationAngle(uElevationAngle + solarAngle); // light top
+zFarMidPenumbra = zChangeForElevationAngle(uElevationAngle); // light middle
+zFarPenumbra = zChangeForElevationAngle(uElevationAngle - solarAngle); // light bottom
+
+// Normalize based on the mid penumbra for corner 0
+zChangeLightWallTop = new Point3d(
+  (new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, zFarUmbra)).normalize().z,
+  (new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, zFarMidPenumbra)).normalize().z,
+  (new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, zFarPenumbra)).normalize().z,
+
+);
+zChangeLightWallBottom = Point3d.fromObject(zChangeLightWallTop)
+
+
+
+
 
 */
 
