@@ -83,6 +83,8 @@ function zChangeForElevationAngle(elevationAngle) {
 
 const PENUMBRA_VERTEX_FUNCTIONS =
 `
+${defineFunction("projectRay")}
+
 float calculateRatio(in vec3 wallEndpoint, in vec3 dir, in vec2 furthestPoint, in Plane canvasPlane) {
   if ( dir.z >= 0.0 ) return 0.0;
   vec3 ix;
@@ -731,14 +733,14 @@ void main() {
   float zFarUmbra = zChangeForElevationAngle(uElevationAngle + solarAngle); // light top
   float zFarMidPenumbra = zChangeForElevationAngle(uElevationAngle); // light middle
   float zFarPenumbra = zChangeForElevationAngle(uElevationAngle - solarAngle); // light bottom
-  zChangeLightWallTop = vec3(zFarUmbra, zFarMidPenumbra, zFarPenumbra);
-  zChangeLightWallBottom = zChangeLightWallTop;
+  vec3 zChangeLightWallTop = vec3(zFarUmbra, zFarMidPenumbra, zFarPenumbra);
+  vec3 zChangeLightWallBottom = zChangeLightWallTop;
 
   // Direction from endpoint toward the light
   vec2 lightDirection2d = normalize(fromAngle(vec2(0.0), uAzimuth, 1.0));
 
   // Reverse for determining penumbra
-  vec2 dirMidSidePenumbra[2] = vec2[2](lightDirection2d * -1.0; lightDirection2d * -1.0);
+  vec2 dirMidSidePenumbra[2] = vec2[2](lightDirection2d * -1.0, lightDirection2d * -1.0);
 
   // Determine which side of the wall the light is on.
   float oWallLight = sign(orient(aWallCorner0.xy, aWallCorner1.xy, aWallCorner0.xy + lightDirection2d));
