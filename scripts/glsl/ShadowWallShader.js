@@ -230,7 +230,182 @@ if ( vertexNum == 2 ) {
   }
 }`;
 
+const PENUMBRA_FRAGMENT_FUNCTIONS =
+`
+// From CONST.WALL_SENSE_TYPES
+#define LIMITED_WALL      10.0
+#define PROXIMATE_WALL    30.0
+#define DISTANCE_WALL     40.0
 
+${defineFunction("colorToElevationPixelUnits")}
+${defineFunction("between")}
+${defineFunction("distanceSquared")}
+${defineFunction("elevateShadowRatios")}
+${defineFunction("linearConversion")}
+${defineFunction("barycentricPointInsideTriangle")}
+
+/**
+ * Get the terrain elevation at this fragment.
+ * @returns {float}
+ */
+float terrainElevation() {
+  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
+  float canvasElevation = uElevationRes.x;
+
+  // If outside scene bounds, elevation is set to the canvas minimum.
+  if ( !all(lessThan(evTexCoord, vec2(1.0)))
+    || !all(greaterThan(evTexCoord, vec2(0.0))) ) return canvasElevation;
+
+  // Inside scene bounds. Pull elevation from the texture.
+  vec4 evTexel = texture(uTerrainSampler, evTexCoord);
+  return colorToElevationPixelUnits(evTexel);
+}
+
+
+/**
+ * Encode the amount of light in the fragment color to accommodate limited walls.
+ * Percentage light is used so 2+ shadows can be multiplied together.
+ * For example, if two shadows each block 50% of the light, would expect 25% of light to get through.
+ * @param {float} light   Percent of light for this fragment, between 0 and 1.
+ * @returns {vec4}
+ *   - r: percent light for a non-limited wall fragment
+ *   - g: wall type: limited (1.0) or non-limited (0.5) (again, for multiplication: .5 * .5 = .25)
+ *   - b: percent light for a limited wall fragment
+ *   - a: unused (1.0)
+ * @example
+ * light = 0.8
+ * r: (0.8 * (1. - ltd)) + ltd
+ * g: 1. - (0.5 * ltd)
+ * b: (0.8 * ltd) + (1. - ltd)
+ * limited == 0: 0.8, 1.0, 1.0
+ * limited == 1: 1.0, 0.5, 0.8
+ *
+ * light = 1.0
+ * limited == 0: 1.0, 1.0, 1.0
+ * limited == 1: 1.0, 0.5, 1.0
+ *
+ * light = 0.0
+ * limited == 0: 0.0, 1.0, 1.0
+ * limited == 1: 1.0, 0.5, 0.0
+ */
+
+// If not in shadow, need to treat limited wall as non-limited
+vec4 noShadow() {
+  #ifdef SHADOW
+  return vec4(0.0);
+  #endif
+  return vec4(1.0);
+}
+
+vec4 lightEncoding(in float light) {
+  if ( light == 1.0 ) return noShadow();
+
+  float ltd = fWallSenseType == LIMITED_WALL ? 1.0 : 0.0;
+  float ltdInv = 1.0 - ltd;
+
+  vec4 c = vec4((light * ltdInv) + ltd, 1.0 - (0.5 * ltd), (light * ltd) + ltdInv, 1.0);
+
+  #ifdef SHADOW
+  // For testing, return the amount of shadow, which can be directly rendered to the canvas.
+  // if ( light < 1.0 && light > 0.0 ) return vec4(0.0, 1.0, 0.0, 1.0);
+
+  c = vec4(vec3(0.0), (1.0 - light) * 0.7);
+  #endif
+
+  return c;
+}`;
+
+const PENUMBRA_FRAGMENT_CALCULATIONS =
+  // eslint-disable-next-line indent
+`
+  // Assume no shadow as the default
+  fragColor = noShadow();
+
+  // If in front of the wall, no shadow.
+  if ( vBary.x > fWallRatio ) return;
+
+//   fragColor = vec4(vBary, 0.8);
+//   return;
+
+  #ifndef EV_DIRECTIONAL_LIGHT
+  // If a threshold applies, we may be able to ignore the wall.
+  if ( (fWallSenseType == DISTANCE_WALL || fWallSenseType == PROXIMATE_WALL)
+    && fThresholdRadius2 != 0.0
+    && distanceSquared(vVertexPosition, uLightPosition.xy) < fThresholdRadius2 ) return;
+  #endif
+
+  // The light position is artificially set to the intersection of the outer two penumbra
+  // lines. So all fragment points must be either in a penumbra or in the umbra.
+  // (I.e., not possible to be outside the side penumbras.)
+
+  // Get the elevation at this fragment.
+  float canvasElevation = uElevationRes.x;
+  float elevation = terrainElevation();
+
+  // Determine the start and end of the shadow, relative to the light.
+  vec3 nearRatios = fNearRatios;
+  vec3 farRatios = fFarRatios;
+
+  if ( elevation > canvasElevation ) {
+    // Elevation change relative the canvas.
+    float elevationChange = elevation - canvasElevation;
+
+    // Wall heights relative to the canvas.
+    vec2 wallHeights = max(fWallHeights - canvasElevation, 0.0); // top, bottom
+
+    // Adjust the near and far shadow borders based on terrain height for this fragment.
+    nearRatios = elevateShadowRatios(nearRatios, wallHeights.y, fWallRatio, elevationChange);
+    farRatios = elevateShadowRatios(farRatios, wallHeights.x, fWallRatio, elevationChange);
+  }
+
+  // If in front of the near shadow or behind the far shadow, then no shadow.
+  if ( between(farRatios.z, nearRatios.x, vBary.x) == 0.0 ) return;
+
+  // ----- Calculate percentage of light ----- //
+
+  // Determine if the fragment is within one or more penumbra.
+  // x, y, z ==> u, v, w barycentric
+  bool inSidePenumbra1 = barycentricPointInsideTriangle(vSidePenumbra1);
+  bool inSidePenumbra2 = barycentricPointInsideTriangle(vSidePenumbra2);
+  bool inFarPenumbra = vBary.x < farRatios.x; // And vBary.x > 0.0
+  bool inNearPenumbra = vBary.x > nearRatios.z; // && vBary.x < nearRatios.x; // handled by in front of wall test.
+
+//   For testing
+//   if ( !inSidePenumbra1 && !inSidePenumbra2 && !inFarPenumbra && !inNearPenumbra ) fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+//   else fragColor = vec4(vec3(0.0), 0.8);
+//   return;
+
+//   fragColor = vec4(vec3(0.0), 0.8);
+//   if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
+//   if ( inFarPenumbra ) fragColor.b = 1.0;
+//   if ( inNearPenumbra ) fragColor.g = 1.0;
+//   return;
+
+  // Blend the two side penumbras if overlapping by multiplying the light amounts.
+  float side1Shadow = inSidePenumbra1 ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
+  float side2Shadow = inSidePenumbra2 ? vSidePenumbra2.z / (vSidePenumbra2.y + vSidePenumbra2.z) : 1.0;
+
+  float farShadow = 1.0;
+  if ( inFarPenumbra ) {
+    bool inLighterPenumbra = vBary.x < farRatios.y;
+    farShadow = inLighterPenumbra
+      ? linearConversion(vBary.x, 0.0, farRatios.y, 0.0, 0.5)
+      : linearConversion(vBary.x, farRatios.y, farRatios.x, 0.5, 1.0);
+  }
+
+  float nearShadow = 1.0;
+  if ( inNearPenumbra ) {
+    bool inLighterPenumbra = vBary.x > nearRatios.y;
+    nearShadow = inLighterPenumbra
+      ? linearConversion(vBary.x, nearRatios.x, nearRatios.y, 0.0, 0.5)
+      : linearConversion(vBary.x, nearRatios.y, nearRatios.z, 0.5, 1.0);
+  }
+
+  float shadow = side1Shadow * side2Shadow * farShadow * nearShadow;
+  float totalLight = clamp(0.0, 1.0, 1.0 - shadow);
+
+  fragColor = lightEncoding(totalLight);
+`;
 
 
 
@@ -697,7 +872,7 @@ ${defineFunction("fromAngle")}
 ${PENUMBRA_VERTEX_FUNCTIONS}
 
 float zChangeForElevationAngle(in float elevationAngle) {
-  elevationAngle = clamp(elevationAngle, 0.0, PI_1_2); // 0º to 90º
+  // elevationAngle = clamp(elevationAngle, 0.0, PI_1_2); // 0º to 90º
   vec2 pt = fromAngle(vec2(0.0), elevationAngle, 1.0);
   float z = pt.x == 0.0 ? 1.0 : pt.y / pt.x;
   return -z;
@@ -749,17 +924,17 @@ void main() {
   vec3 zChangeLightWallBottom = zChangeLightWallTop;
 
   // Determine which side of the wall the light is on.
-  float oWallLight = sign(orient(aWallCorner0.xy, aWallCorner1.xy, aWallCorner0.xy + lightDirection2d));
+  float oWallLight = sign(orient(wall2d[0], wall2d[1], wall2d[0] + lightDirection2d));
 
   // Adjust azimuth by the solarAngle.
   // Determine the direction of the outer penumbra rays from light --> wallCorner1 / wallCorner2.
   // The angle for the penumbra is the azimuth ± the solarAngle.
   float solarWallAngle = solarAngle * oWallLight;
-  vec2 sidePenumbra1_2d = fromAngle(vec2(0.0), uAzimuth + solarWallAngle, 1.0) * -1.0;
-  vec2 sidePenumbra2_2d = fromAngle(vec2(0.0), uAzimuth - solarWallAngle, 1.0) * -1.0;
-
-  vec2 dirOuterSidePenumbra[2] = vec2[2](sidePenumbra1_2d, sidePenumbra2_2d);
-  vec2 dirInnerSidePenumbra[2] = vec2[2](sidePenumbra2_2d, sidePenumbra1_2d);
+  vec2 dirOuterSidePenumbra[2] = vec2[2](
+    fromAngle(vec2(0.0), uAzimuth + solarWallAngle, 1.0) * -1.0,
+    fromAngle(vec2(0.0), uAzimuth - solarWallAngle, 1.0) * -1.0
+  );
+  vec2 dirInnerSidePenumbra[2] = vec2[2](dirOuterSidePenumbra[1], dirOuterSidePenumbra[0]);
 
   ${PENUMBRA_VERTEX_CALCULATIONS}
 }`;
@@ -774,12 +949,8 @@ void main() {
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-// #define SHADOW true
-
-// From CONST.WALL_SENSE_TYPES
-#define LIMITED_WALL      10.0
-#define PROXIMATE_WALL    30.0
-#define DISTANCE_WALL     40.0
+// #define SHADOW
+#define EV_DIRECTIONAL_LIGHT
 
 uniform sampler2D uTerrainSampler;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
@@ -798,162 +969,10 @@ flat in float fWallSenseType;
 
 out vec4 fragColor;
 
-${defineFunction("colorToElevationPixelUnits")}
-${defineFunction("between")}
-${defineFunction("distanceSquared")}
-${defineFunction("elevateShadowRatios")}
-${defineFunction("linearConversion")}
-${defineFunction("barycentricPointInsideTriangle")}
-
-/**
- * Get the terrain elevation at this fragment.
- * @returns {float}
- */
-float terrainElevation() {
-  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
-  float canvasElevation = uElevationRes.x;
-
-  // If outside scene bounds, elevation is set to the canvas minimum.
-  if ( !all(lessThan(evTexCoord, vec2(1.0)))
-    || !all(greaterThan(evTexCoord, vec2(0.0))) ) return canvasElevation;
-
-  // Inside scene bounds. Pull elevation from the texture.
-  vec4 evTexel = texture(uTerrainSampler, evTexCoord);
-  return colorToElevationPixelUnits(evTexel);
-}
-
-
-/**
- * Encode the amount of light in the fragment color to accommodate limited walls.
- * Percentage light is used so 2+ shadows can be multiplied together.
- * For example, if two shadows each block 50% of the light, would expect 25% of light to get through.
- * @param {float} light   Percent of light for this fragment, between 0 and 1.
- * @returns {vec4}
- *   - r: percent light for a non-limited wall fragment
- *   - g: wall type: limited (1.0) or non-limited (0.5) (again, for multiplication: .5 * .5 = .25)
- *   - b: percent light for a limited wall fragment
- *   - a: unused (1.0)
- * @example
- * light = 0.8
- * r: (0.8 * (1. - ltd)) + ltd
- * g: 1. - (0.5 * ltd)
- * b: (0.8 * ltd) + (1. - ltd)
- * limited == 0: 0.8, 1.0, 1.0
- * limited == 1: 1.0, 0.5, 0.8
- *
- * light = 1.0
- * limited == 0: 1.0, 1.0, 1.0
- * limited == 1: 1.0, 0.5, 1.0
- *
- * light = 0.0
- * limited == 0: 0.0, 1.0, 1.0
- * limited == 1: 1.0, 0.5, 0.0
- */
-
-// If not in shadow, need to treat limited wall as non-limited
-vec4 noShadow() {
-  #ifdef SHADOW
-  return vec4(0.0);
-  #endif
-  return vec4(1.0);
-}
-
-vec4 lightEncoding(in float light) {
-  if ( light == 1.0 ) return noShadow();
-
-  float ltd = fWallSenseType == LIMITED_WALL ? 1.0 : 0.0;
-  float ltdInv = 1.0 - ltd;
-
-  vec4 c = vec4((light * ltdInv) + ltd, 1.0 - (0.5 * ltd), (light * ltd) + ltdInv, 1.0);
-
-  #ifdef SHADOW
-  // For testing, return the amount of shadow, which can be directly rendered to the canvas.
-  // if ( light < 1.0 && light > 0.0 ) return vec4(0.0, 1.0, 0.0, 1.0);
-
-  c = vec4(vec3(0.0), (1.0 - light) * 0.7);
-  #endif
-
-  return c;
-}
+${PENUMBRA_FRAGMENT_FUNCTIONS}
 
 void main() {
-  // Assume no shadow as the default
-  fragColor = noShadow();
-
-  // If in front of the wall, no shadow.
-  if ( vBary.x > fWallRatio ) return;
-
-  // The light position is artificially set to the intersection of the outer two penumbra
-  // lines. So all fragment points must be either in a penumbra or in the umbra.
-  // (I.e., not possible to be outside the side penumbras.)
-
-  // Get the elevation at this fragment.
-  float canvasElevation = uElevationRes.x;
-  float elevation = terrainElevation();
-
-  // Determine the start and end of the shadow, relative to the light.
-  vec3 nearRatios = fNearRatios;
-  vec3 farRatios = fFarRatios;
-
-  if ( elevation > canvasElevation ) {
-    // Elevation change relative the canvas.
-    float elevationChange = elevation - canvasElevation;
-
-    // Wall heights relative to the canvas.
-    vec2 wallHeights = max(fWallHeights - canvasElevation, 0.0); // top, bottom
-
-    // Adjust the near and far shadow borders based on terrain height for this fragment.
-    nearRatios = elevateShadowRatios(nearRatios, wallHeights.y, fWallRatio, elevationChange);
-    farRatios = elevateShadowRatios(farRatios, wallHeights.x, fWallRatio, elevationChange);
-  }
-
-  // If in front of the near shadow or behind the far shadow, then no shadow.
-  if ( between(farRatios.z, nearRatios.x, vBary.x) == 0.0 ) return;
-
-  // ----- Calculate percentage of light ----- //
-
-  // Determine if the fragment is within one or more penumbra.
-  // x, y, z ==> u, v, w barycentric
-  bool inSidePenumbra1 = barycentricPointInsideTriangle(vSidePenumbra1);
-  bool inSidePenumbra2 = barycentricPointInsideTriangle(vSidePenumbra2);
-  bool inFarPenumbra = vBary.x < farRatios.x; // And vBary.x > 0.0
-  bool inNearPenumbra = vBary.x > nearRatios.z; // && vBary.x < nearRatios.x; // handled by in front of wall test.
-
-//   For testing
-//   if ( !inSidePenumbra1 && !inSidePenumbra2 && !inFarPenumbra && !inNearPenumbra ) fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-//   else fragColor = vec4(vec3(0.0), 0.8);
-//   return;
-
-//   fragColor = vec4(vec3(0.0), 0.8);
-//   if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
-//   if ( inFarPenumbra ) fragColor.b = 1.0;
-//   if ( inNearPenumbra ) fragColor.g = 1.0;
-//   return;
-
-  // Blend the two side penumbras if overlapping by multiplying the light amounts.
-  float side1Shadow = inSidePenumbra1 ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
-  float side2Shadow = inSidePenumbra2 ? vSidePenumbra2.z / (vSidePenumbra2.y + vSidePenumbra2.z) : 1.0;
-
-  float farShadow = 1.0;
-  if ( inFarPenumbra ) {
-    bool inLighterPenumbra = vBary.x < farRatios.y;
-    farShadow = inLighterPenumbra
-      ? linearConversion(vBary.x, 0.0, farRatios.y, 0.0, 0.5)
-      : linearConversion(vBary.x, farRatios.y, farRatios.x, 0.5, 1.0);
-  }
-
-  float nearShadow = 1.0;
-  if ( inNearPenumbra ) {
-    bool inLighterPenumbra = vBary.x > nearRatios.y;
-    nearShadow = inLighterPenumbra
-      ? linearConversion(vBary.x, nearRatios.x, nearRatios.y, 0.0, 0.5)
-      : linearConversion(vBary.x, nearRatios.y, nearRatios.z, 0.5, 1.0);
-  }
-
-  float shadow = side1Shadow * side2Shadow * farShadow * nearShadow;
-  float totalLight = clamp(0.0, 1.0, 1.0 - shadow);
-
-  fragColor = lightEncoding(totalLight);
+  ${PENUMBRA_FRAGMENT_CALCULATIONS}
 }`;
 
   /**
@@ -1127,11 +1146,6 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 // #define SHADOW true
 
-// From CONST.WALL_SENSE_TYPES
-#define LIMITED_WALL      10.0
-#define PROXIMATE_WALL    30.0
-#define DISTANCE_WALL     40.0
-
 uniform sampler2D uTerrainSampler;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 uniform vec4 uSceneDims;
@@ -1151,170 +1165,10 @@ flat in float fThresholdRadius2;
 
 out vec4 fragColor;
 
-${defineFunction("colorToElevationPixelUnits")}
-${defineFunction("between")}
-${defineFunction("distanceSquared")}
-${defineFunction("elevateShadowRatios")}
-${defineFunction("linearConversion")}
-${defineFunction("barycentricPointInsideTriangle")}
-
-/**
- * Get the terrain elevation at this fragment.
- * @returns {float}
- */
-float terrainElevation() {
-  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
-  float canvasElevation = uElevationRes.x;
-
-  // If outside scene bounds, elevation is set to the canvas minimum.
-  if ( !all(lessThan(evTexCoord, vec2(1.0)))
-    || !all(greaterThan(evTexCoord, vec2(0.0))) ) return canvasElevation;
-
-  // Inside scene bounds. Pull elevation from the texture.
-  vec4 evTexel = texture(uTerrainSampler, evTexCoord);
-  return colorToElevationPixelUnits(evTexel);
-}
-
-
-/**
- * Encode the amount of light in the fragment color to accommodate limited walls.
- * Percentage light is used so 2+ shadows can be multiplied together.
- * For example, if two shadows each block 50% of the light, would expect 25% of light to get through.
- * @param {float} light   Percent of light for this fragment, between 0 and 1.
- * @returns {vec4}
- *   - r: percent light for a non-limited wall fragment
- *   - g: wall type: limited (1.0) or non-limited (0.5) (again, for multiplication: .5 * .5 = .25)
- *   - b: percent light for a limited wall fragment
- *   - a: unused (1.0)
- * @example
- * light = 0.8
- * r: (0.8 * (1. - ltd)) + ltd
- * g: 1. - (0.5 * ltd)
- * b: (0.8 * ltd) + (1. - ltd)
- * limited == 0: 0.8, 1.0, 1.0
- * limited == 1: 1.0, 0.5, 0.8
- *
- * light = 1.0
- * limited == 0: 1.0, 1.0, 1.0
- * limited == 1: 1.0, 0.5, 1.0
- *
- * light = 0.0
- * limited == 0: 0.0, 1.0, 1.0
- * limited == 1: 1.0, 0.5, 0.0
- */
-
-// If not in shadow, need to treat limited wall as non-limited
-vec4 noShadow() {
-  #ifdef SHADOW
-  return vec4(0.0);
-  #endif
-  return vec4(1.0);
-}
-
-vec4 lightEncoding(in float light) {
-  if ( light == 1.0 ) return noShadow();
-
-  float ltd = fWallSenseType == LIMITED_WALL ? 1.0 : 0.0;
-  float ltdInv = 1.0 - ltd;
-
-  vec4 c = vec4((light * ltdInv) + ltd, 1.0 - (0.5 * ltd), (light * ltd) + ltdInv, 1.0);
-
-  #ifdef SHADOW
-  // For testing, return the amount of shadow, which can be directly rendered to the canvas.
-  // if ( light < 1.0 && light > 0.0 ) return vec4(0.0, 1.0, 0.0, 1.0);
-
-  c = vec4(vec3(0.0), (1.0 - light) * 0.7);
-  #endif
-
-  return c;
-}
+${PENUMBRA_FRAGMENT_FUNCTIONS}
 
 void main() {
-  // Assume no shadow as the default
-  fragColor = noShadow();
-
-  // If in front of the wall, no shadow.
-  if ( vBary.x > fWallRatio ) return;
-
-//   fragColor = vec4(vBary, 0.8);
-//   return;
-
-  // If a threshold applies, we may be able to ignore the wall.
-  if ( (fWallSenseType == DISTANCE_WALL || fWallSenseType == PROXIMATE_WALL)
-    && fThresholdRadius2 != 0.0
-    && distanceSquared(vVertexPosition, uLightPosition.xy) < fThresholdRadius2 ) return;
-
-  // The light position is artificially set to the intersection of the outer two penumbra
-  // lines. So all fragment points must be either in a penumbra or in the umbra.
-  // (I.e., not possible to be outside the side penumbras.)
-
-  // Get the elevation at this fragment.
-  float canvasElevation = uElevationRes.x;
-  float elevation = terrainElevation();
-
-  // Determine the start and end of the shadow, relative to the light.
-  vec3 nearRatios = fNearRatios;
-  vec3 farRatios = fFarRatios;
-
-  if ( elevation > canvasElevation ) {
-    // Elevation change relative the canvas.
-    float elevationChange = elevation - canvasElevation;
-
-    // Wall heights relative to the canvas.
-    vec2 wallHeights = max(fWallHeights - canvasElevation, 0.0); // top, bottom
-
-    // Adjust the near and far shadow borders based on terrain height for this fragment.
-    nearRatios = elevateShadowRatios(nearRatios, wallHeights.y, fWallRatio, elevationChange);
-    farRatios = elevateShadowRatios(farRatios, wallHeights.x, fWallRatio, elevationChange);
-  }
-
-  // If in front of the near shadow or behind the far shadow, then no shadow.
-  if ( between(farRatios.z, nearRatios.x, vBary.x) == 0.0 ) return;
-
-  // ----- Calculate percentage of light ----- //
-
-  // Determine if the fragment is within one or more penumbra.
-  // x, y, z ==> u, v, w barycentric
-  bool inSidePenumbra1 = barycentricPointInsideTriangle(vSidePenumbra1);
-  bool inSidePenumbra2 = barycentricPointInsideTriangle(vSidePenumbra2);
-  bool inFarPenumbra = vBary.x < farRatios.x; // And vBary.x > 0.0
-  bool inNearPenumbra = vBary.x > nearRatios.z; // && vBary.x < nearRatios.x; // handled by in front of wall test.
-
-//   For testing
-//   if ( !inSidePenumbra1 && !inSidePenumbra2 && !inFarPenumbra && !inNearPenumbra ) fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-//   else fragColor = vec4(vec3(0.0), 0.8);
-//   return;
-
-//   fragColor = vec4(vec3(0.0), 0.8);
-//   if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
-//   if ( inFarPenumbra ) fragColor.b = 1.0;
-//   if ( inNearPenumbra ) fragColor.g = 1.0;
-//   return;
-
-  // Blend the two side penumbras if overlapping by multiplying the light amounts.
-  float side1Shadow = inSidePenumbra1 ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
-  float side2Shadow = inSidePenumbra2 ? vSidePenumbra2.z / (vSidePenumbra2.y + vSidePenumbra2.z) : 1.0;
-
-  float farShadow = 1.0;
-  if ( inFarPenumbra ) {
-    bool inLighterPenumbra = vBary.x < farRatios.y;
-    farShadow = inLighterPenumbra
-      ? linearConversion(vBary.x, 0.0, farRatios.y, 0.0, 0.5)
-      : linearConversion(vBary.x, farRatios.y, farRatios.x, 0.5, 1.0);
-  }
-
-  float nearShadow = 1.0;
-  if ( inNearPenumbra ) {
-    bool inLighterPenumbra = vBary.x > nearRatios.y;
-    nearShadow = inLighterPenumbra
-      ? linearConversion(vBary.x, nearRatios.x, nearRatios.y, 0.0, 0.5)
-      : linearConversion(vBary.x, nearRatios.y, nearRatios.z, 0.5, 1.0);
-  }
-
-  float shadow = side1Shadow * side2Shadow * farShadow * nearShadow;
-  float totalLight = clamp(0.0, 1.0, 1.0 - shadow);
-
-  fragColor = lightEncoding(totalLight);
+  ${PENUMBRA_FRAGMENT_CALCULATIONS}
 }`;
 
   /**
@@ -1528,7 +1382,7 @@ function barycentric(p, a, b, c) {
 }
 
 function zChangeForElevationAngle(elevationAngle) {
-  elevationAngle = Math.clamped(elevationAngle, 0, Math.PI_1_2);
+  // elevationAngle = Math.clamped(elevationAngle, 0, Math.PI_1_2);
   const pt = PIXI.Point.fromAngle(new PIXI.Point(0, 0), elevationAngle, 1.0);
   const z = pt.x == 0.0 ? 1.0 : pt.y / pt.x;
   return -z;
@@ -1586,8 +1440,33 @@ zChangeLightWallTop = new Point3d(
 );
 zChangeLightWallBottom = Point3d.fromObject(zChangeLightWallTop)
 
+// Determine which side of the wall the light is on.
+oWallLight = Math.sign(foundry.utils.orient2dFast(wall2d[0], wall2d[1], wall2d[0].add(lightDirection2d)));
+
+// Adjust azimuth by the solarAngle.
+// Determine the direction of the outer penumbra rays from light --> wallCorner1 / wallCorner2.
+// The angle for the penumbra is the azimuth ± the solarAngle.
+solarWallAngle = solarAngle * oWallLight;
+dirOuterSidePenumbra = [
+  PIXI.Point.fromAngle(new PIXI.Point(0.0), uAzimuth + solarWallAngle, 1.0).multiplyScalar(-1),
+  PIXI.Point.fromAngle(new PIXI.Point(0.0), uAzimuth - solarWallAngle, 1.0).multiplyScalar(-1.0)
+];
+
+dirInnerSidePenumbra = [
+  PIXI.Point.fromObject(dirOuterSidePenumbra[1]),
+  PIXI.Point.fromObject(dirOuterSidePenumbra[0])
+];
 
 
+
+// Test: Draw from endpoint toward canvas for each direction
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirOuterSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.orange })
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirMidSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.blue })
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirInnerSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.red })
+
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirOuterSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.orange })
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirMidSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.blue })
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirInnerSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.red })
 
 
 */
