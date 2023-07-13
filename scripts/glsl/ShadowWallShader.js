@@ -81,17 +81,24 @@ function zChangeForElevationAngle(elevationAngle) {
 
 */
 
+// NOTE: PENUMBRA_VERTEX_FUNCTIONS
 const PENUMBRA_VERTEX_FUNCTIONS =
 `
 ${defineFunction("projectRay")}
 
-float calculateRatio(in vec3 wallEndpoint, in vec3 dir, in vec2 furthestPoint, in Plane canvasPlane) {
+float calculateRatio(in vec3 wallEndpoint, in vec3 dir, in vec2 furthestPoint, in Plane canvasPlane, in float maxDist) {
   if ( dir.z >= 0.0 ) return 0.0;
   vec3 ix;
   intersectRayPlane(Ray(wallEndpoint, dir), canvasPlane, ix);
+
+  // If the intersection lies beyond the furthestPoint, that likely means maxR was exceeded.
+  // 2d b/c maxDist is the x/y distance from wall endpoint to the furthest point.
+  if ( maxDist < distance(ix.xy, wallEndpoint.xy) ) return 0.0;
+
   return distance(furthestPoint, ix.xy);
 }`;
 
+// NOTE: PENUMBRA_VERTEX_CALCULATIONS
 const PENUMBRA_VERTEX_CALCULATIONS =
 `
 // Normalize the directional vectors
@@ -127,8 +134,9 @@ int furtherIdx = 1;
 float farLightRayZChange = zChangeLightWallTop.b;
 vec3 wall0Top3d = vec3(wall2d[0], wallTopZ);
 if ( farLightRayZChange < 0.0 ) {
+  vec3 dir = normalize(vec3(dirMidSidePenumbra[0], farLightRayZChange));
   vec3 ixCanvas;
-  intersectRayPlane(Ray(wall0Top3d, vec3(dirMidSidePenumbra[0], farLightRayZChange)), canvasPlane, ixCanvas);
+  intersectRayPlane(Ray(wall0Top3d, dir), canvasPlane, ixCanvas);
   sideMidPenumbra[0] = ixCanvas.xy;
 } else {
   // Infinite shadow.
@@ -206,30 +214,31 @@ if ( vertexNum == 2 ) {
   fFarRatios = vec3(0.0);
 
   // Light center
-  vec3 dirTmp = vec3(dirOuterSidePenumbra[0], zChangeLightWallTop.g);
-  fFarRatios.y = distShadowInv * calculateRatio(wall0Top3d, dirTmp, sidePenumbra[0], canvasPlane);
+  vec3 dirTmp = normalize(vec3(dirOuterSidePenumbra[0], zChangeLightWallTop.g));
+  fFarRatios.y = distShadowInv * calculateRatio(wall0Top3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
 
   // Light top
-  dirTmp = vec3(dirOuterSidePenumbra[0], zChangeLightWallTop.g);
-  fFarRatios.x = distShadowInv * calculateRatio(wall0Top3d, dirTmp, sidePenumbra[0], canvasPlane);
+  dirTmp = normalize(vec3(dirOuterSidePenumbra[0], zChangeLightWallTop.r));
+  fFarRatios.x = distShadowInv * calculateRatio(wall0Top3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
 
   if ( wallBottomZ > canvasElevation ) {
     vec3 wall0Bottom3d = vec3(wall2d[0], wallTopZ);
 
     // Light top
-    dirTmp = vec3(dirOuterSidePenumbra[0], zChangeLightWallBottom.r);
-    fNearRatios.x = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane);
+    dirTmp = normalize(vec3(dirOuterSidePenumbra[0], zChangeLightWallBottom.r));
+    fNearRatios.x = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
 
     // Light center
-    dirTmp = vec3(dirOuterSidePenumbra[0], zChangeLightWallBottom.g);
-    fNearRatios.y = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane);
+    dirTmp = normalize(vec3(dirOuterSidePenumbra[0], zChangeLightWallBottom.g));
+    fNearRatios.y = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
 
     // Light bottom
-    dirTmp = vec3(dirOuterSidePenumbra[0], zChangeLightWallBottom.b);
-    fNearRatios.z = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane);
+    dirTmp = normalize(vec3(dirOuterSidePenumbra[0], zChangeLightWallBottom.b));
+    fNearRatios.z = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
   }
 }`;
 
+// NOTE: PENUMBRA_FRAGMENT_FUNCTIONS
 const PENUMBRA_FRAGMENT_FUNCTIONS =
 `
 // From CONST.WALL_SENSE_TYPES
@@ -315,6 +324,7 @@ vec4 lightEncoding(in float light) {
   return c;
 }`;
 
+// NOTE: PENUMBRA_FRAGMENT_CALCULATIONS
 const PENUMBRA_FRAGMENT_CALCULATIONS =
   // eslint-disable-next-line indent
 `
@@ -400,6 +410,12 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
       ? linearConversion(vBary.x, nearRatios.x, nearRatios.y, 0.0, 0.5)
       : linearConversion(vBary.x, nearRatios.y, nearRatios.z, 0.5, 1.0);
   }
+
+//   fragColor = vec4(vec3(0.0), 0.8);
+//   if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = side1Shadow * side2Shadow;
+//   if ( inFarPenumbra ) fragColor.b = farShadow;
+//   if ( inNearPenumbra ) fragColor.g = nearShadow;
+//   return;
 
   float shadow = side1Shadow * side2Shadow * farShadow * nearShadow;
   float totalLight = clamp(0.0, 1.0, 1.0 - shadow);
@@ -874,7 +890,9 @@ ${PENUMBRA_VERTEX_FUNCTIONS}
 float zChangeForElevationAngle(in float elevationAngle) {
   // elevationAngle = clamp(elevationAngle, 0.0, PI_1_2); // 0º to 90º
   vec2 pt = fromAngle(vec2(0.0), elevationAngle, 1.0);
-  float z = pt.x == 0.0 ? 1.0 : pt.y / pt.x;
+
+  // How much z (y) change for every change in x?
+  float z = pt.x == 0.0 ? 1e06 : pt.y / pt.x;
   return -z;
   // return max(z, 1e-06); // Don't let z go to 0.
 }
@@ -917,9 +935,11 @@ void main() {
 
   // Normalize based on the mid penumbra for corner 0
   vec3 zChangeLightWallTop = vec3(
-    normalize(vec3(dirMidSidePenumbra[0], zFarUmbra)).z,
-    normalize(vec3(dirMidSidePenumbra[0], zFarMidPenumbra)).z,
-    normalize(vec3(dirMidSidePenumbra[0], zFarPenumbra)).z
+    zFarUmbra, zFarMidPenumbra, zFarPenumbra
+
+//     normalize(vec3(dirMidSidePenumbra[0], zFarUmbra)).z,
+//     normalize(vec3(dirMidSidePenumbra[0], zFarMidPenumbra)).z,
+//     normalize(vec3(dirMidSidePenumbra[0], zFarPenumbra)).z
   );
   vec3 zChangeLightWallBottom = zChangeLightWallTop;
 
@@ -1384,7 +1404,9 @@ function barycentric(p, a, b, c) {
 function zChangeForElevationAngle(elevationAngle) {
   // elevationAngle = Math.clamped(elevationAngle, 0, Math.PI_1_2);
   const pt = PIXI.Point.fromAngle(new PIXI.Point(0, 0), elevationAngle, 1.0);
-  const z = pt.x == 0.0 ? 1.0 : pt.y / pt.x;
+
+  // How much z (y) change for every change in x?
+  const z = pt.x == 0.0 ? 1e06 : pt.y / pt.x;
   return -z;
   // return Math.max(z, 1e-06); // Don't let z go to 0.
 }
@@ -1433,9 +1455,11 @@ zFarPenumbra = zChangeForElevationAngle(uElevationAngle - solarAngle); // light 
 
 // Normalize based on the mid penumbra for corner 0
 zChangeLightWallTop = new Point3d(
-  (new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, zFarUmbra)).normalize().z,
-  (new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, zFarMidPenumbra)).normalize().z,
-  (new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, zFarPenumbra)).normalize().z,
+  zFarUmbra, zFarMidPenumbra, zFarPenumbra
+
+//   (new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, zFarUmbra)).normalize().z,
+//   (new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, zFarMidPenumbra)).normalize().z,
+//   (new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, zFarPenumbra)).normalize().z,
 
 );
 zChangeLightWallBottom = Point3d.fromObject(zChangeLightWallTop)
@@ -1549,7 +1573,25 @@ Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirInnerSidePenumbra[1].multiplySc
 */
 
 /* Penumbra geometry
-// Already normalized the directional vectors
+function calculateRatio(wallEndpoint, dir, furthestPoint, canvasPlane, maxDist) {
+  if ( dir.z >= 0.0 ) return 0.0;
+  const t = canvasPlane.rayIntersection(wallEndpoint, dir)
+  const ix = wall0Top3d.projectToward(wall0Top3d.add(dir), t)
+
+  // If the intersection lies beyond the furthestPoint, that likely means maxR was exceeded.
+  if ( maxDist < PIXI.Point.distanceBetween(ix, wallEndpoint) ) return 0.0;
+
+  return PIXI.Point.distanceBetween(furthestPoint, ix);
+}
+
+
+// Normalize the vectors
+dirMidSidePenumbra[0] = dirMidSidePenumbra[0].normalize()
+dirMidSidePenumbra[1] = dirMidSidePenumbra[1].normalize()
+dirInnerSidePenumbra[0] = dirInnerSidePenumbra[0].normalize()
+dirInnerSidePenumbra[1] = dirInnerSidePenumbra[1].normalize()
+dirOuterSidePenumbra[0] = dirOuterSidePenumbra[0].normalize()
+dirOuterSidePenumbra[1] = dirOuterSidePenumbra[1].normalize()
 
 canvasElevation = uElevationRes.x;
 maxR = Math.sqrt(uSceneDims.z * uSceneDims.z + uSceneDims.w * uSceneDims.w) * 2
@@ -1566,7 +1608,7 @@ furtherIdx = 1
 farLightRayZChange = zChangeLightWallTop.z;
 wall0Top3d = new Point3d(wall2d[0].x, wall2d[0].y, wallTopZ);
 if ( farLightRayZChange < 0 ) {
-  dir = new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, farLightRayZChange)
+  dir = (new Point3d(dirMidSidePenumbra[0].x, dirMidSidePenumbra[0].y, farLightRayZChange)).normalize()
   t = canvasPlane.rayIntersection(wall0Top3d, dir)
   ixCanvas = wall0Top3d.projectToward(wall0Top3d.add(dir), t)
   sideMidPenumbra[0] = ixCanvas.to2d()
@@ -1617,10 +1659,53 @@ sideUmbra[1] = foundry.utils.lineLineIntersection(
   wall2d[1],
   wall2d[1].add(dirInnerSidePenumbra[1]));
 
+newLightCenter = foundry.utils.lineLineIntersection(sidePenumbra[0], wall2d[0], sidePenumbra[1], wall2d[1]);
+
 Draw.point(sidePenumbra[0])
 Draw.point(sidePenumbra[1])
 Draw.point(sideUmbra[0])
 Draw.point(sideUmbra[1])
+
+Draw.point(newLightCenter, { color: Draw.COLORS.yellow })
+Draw.segment({A: newLightCenter, B: sidePenumbra[0]})
+Draw.segment({A: newLightCenter, B: sidePenumbra[1]})
+
+fWallHeights = new PIXI.Point(wallTopZ, wallBottomZ);
+distShadowInv = 1.0 / PIXI.Point.distanceBetween(newLightCenter, sidePenumbra[0]);
+distWallTop = PIXI.Point.distanceBetween(wall2d[0], sidePenumbra[0]);
+fWallRatio = distWallTop * distShadowInv;
+fNearRatios = new Point3d(fWallRatio, fWallRatio, fWallRatio);
+fFarRatios = new Point3d(0, 0, 0);
+
+// Light center
+dirTmp = new Point3d(dirOuterSidePenumbra[0].x, dirOuterSidePenumbra[0].y, zChangeLightWallTop.y);
+dirTmp = dirTmp.normalize()
+fFarRatios.y = distShadowInv * calculateRatio(wall0Top3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
+
+// Light top
+dirTmp = new Point3d(dirOuterSidePenumbra[0].x, dirOuterSidePenumbra[0].y, zChangeLightWallTop.x);
+dirTmp = dirTmp.normalize()
+fFarRatios.x = distShadowInv * calculateRatio(wall0Top3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
+
+if ( wallBottomZ > canvasElevation ) {
+  vec3 wall0Bottom3d = vec3(wall2d[0], wallTopZ);
+
+  // Light top
+  dirTmp = new Point3d(dirOuterSidePenumbra[0], zChangeLightWallBottom.x);
+  dirTmp = dirTmp.normalize()
+  fNearRatios.x = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane);
+
+  // Light center
+  dirTmp = new Point3d(dirOuterSidePenumbra[0], zChangeLightWallBottom.y);
+  dirTmp = dirTmp.normalize()
+  fNearRatios.y = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane);
+
+  // Light bottom
+  dirTmp = new Point3d(dirOuterSidePenumbra[0], zChangeLightWallBottom.z);
+  dirTmp = dirTmp.normalize()
+  fNearRatios.z = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane);
+}
+
 */
 
 
