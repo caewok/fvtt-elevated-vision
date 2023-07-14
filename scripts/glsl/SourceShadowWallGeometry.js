@@ -512,8 +512,8 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
   sourceWallOrientation(wall) {
     // Wall must not be the same (2d) direction as the source
     // TODO: Do we need to add a scalar to the normalized source direction?
-    const A = new PIXI.Point(wall.A.x, wall.A.y);
-    return foundry.utils.orient2dFast(A, wall.B, A.add(this.source.lightDirection));
+    const A = PIXI.Point.fromObject(wall.A);
+    return !foundry.utils.orient2dFast(A, wall.B, A.add(this.source.lightDirection)).almostEqual(0, 1);
   }
 
   /**

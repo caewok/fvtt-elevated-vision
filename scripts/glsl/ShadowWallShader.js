@@ -96,18 +96,29 @@ float calculateRatio(in vec3 wallEndpoint, in vec3 dir, in vec2 furthestPoint, i
   if ( maxDist < distance(ix.xy, wallEndpoint.xy) ) return 0.0;
 
   return distance(furthestPoint, ix.xy);
+}
+
+/**
+ * Make sure the vector does not exceed the wall angle (i.e., does not go the "light" side)
+ */
+void cleanDirectionalVector(inout vec2[2] dirArr, in vec2[2] wall2d, float oWallLight) {
+  float oWallPenumbra = sign(orient(wall2d[0], wall2d[1], wall2d[0] + dirArr[0]));
+  if ( oWallPenumbra == oWallLight ) dirArr[0] = wall2d[0] - wall2d[1];
+
+  oWallPenumbra = sign(orient(wall2d[0], wall2d[1], wall2d[1] + dirArr[1]));
+  if ( oWallPenumbra == oWallLight ) dirArr[1] = wall2d[1] - wall2d[0];
+
+  dirArr[0] = normalize(dirArr[0]);
+  dirArr[1] = normalize(dirArr[1]);
 }`;
 
 // NOTE: PENUMBRA_VERTEX_CALCULATIONS
 const PENUMBRA_VERTEX_CALCULATIONS =
 `
-// Normalize the directional vectors
-dirMidSidePenumbra[0] = normalize(dirMidSidePenumbra[0]);
-dirMidSidePenumbra[1] = normalize(dirMidSidePenumbra[1]);
-dirInnerSidePenumbra[0] = normalize(dirInnerSidePenumbra[0]);
-dirInnerSidePenumbra[1] = normalize(dirInnerSidePenumbra[1]);
-dirOuterSidePenumbra[0] = normalize(dirOuterSidePenumbra[0]);
-dirOuterSidePenumbra[1] = normalize(dirOuterSidePenumbra[1]);
+// Normalize the directional vectors and ensure they point to the shadow side.
+cleanDirectionalVector(dirInnerSidePenumbra, wall2d, oWallLight);
+cleanDirectionalVector(dirMidSidePenumbra, wall2d, oWallLight);
+cleanDirectionalVector(dirOuterSidePenumbra, wall2d, oWallLight);
 
 // Define some terms for ease-of-reference.
 float canvasElevation = uElevationRes.x;
@@ -1124,6 +1135,9 @@ void main() {
   vec2 wallDir = normalize(aWallCorner0.xy - aWallCorner1.xy);
   vec3 wallBottom0 = vec3(aWallCorner0.xy, wallBottomZ);
 
+  // Determine which side of the wall the light is on.
+  float oWallLight = sign(orient(wall2d[0], wall2d[1], uLightPosition.xy));
+
   // Determine the z change between the light and the wall. light top / middle / bottom
   // Must be the z portion of the normalized vector between the light and the first endpoint.
   vec3 lightSizeVec = vec3(0.0, 0.0, lightSize);
@@ -1585,6 +1599,32 @@ function calculateRatio(wallEndpoint, dir, furthestPoint, canvasPlane, maxDist) 
 }
 
 
+function cleanDirectionalVector(dirArr, wall2d, oWallLight) {
+  let oWallPenumbra = Math.sign(foundry.utils.orient2dFast(wall2d[0], wall2d[1], wall2d[0].add(dirArr[0])));
+  if ( oWallPenumbra === oWallLight ) dirMidSidePenumbra[0] = wall2d[0].subtract(wall2d[1])
+
+  oWallPenumbra = Math.sign(foundry.utils.orient2dFast(wall2d[0], wall2d[1], wall2d[1].add(dirArr[1])));
+  if ( oWallPenumbra === oWallLight ) dirMidSidePenumbra[1] = wall2d[1].subtract(wall2d[0])
+
+  dirArr[0] = dirArr[0].normalize();
+  dirArr[1] = dirArr[1].normalize();
+
+  return dirArr;
+}
+
+
+
+// Confirm the directional vectors point to the side of the wall opposite the light.
+// If not, replace with a vector parallel to the wall.
+oWallLight = Math.sign(foundry.utils.orient2dFast(wall2d[0], wall2d[1], wall2d[0].add(lightDirection2d)));
+
+
+oWallPenumbra = Math.sign(foundry.utils.orient2dFast(wall2d[0], wall2d[1], wall2d[0].add(dirMidSidePenumbra[0])));
+if ( oWallPenumbra === oWallLight ) dirMidSidePenumbra[0] = wall2d[0].subtract(wall2d[1])
+
+oWallPenumbra = Math.sign(foundry.utils.orient2dFast(wall2d[0], wall2d[1], wall2d[1].add(dirMidSidePenumbra[1])));
+if ( oWallPenumbra === oWallLight ) dirMidSidePenumbra[1] = wall2d[1].subtract(wall2d[0])
+
 // Normalize the vectors
 dirMidSidePenumbra[0] = dirMidSidePenumbra[0].normalize()
 dirMidSidePenumbra[1] = dirMidSidePenumbra[1].normalize()
@@ -1592,6 +1632,7 @@ dirInnerSidePenumbra[0] = dirInnerSidePenumbra[0].normalize()
 dirInnerSidePenumbra[1] = dirInnerSidePenumbra[1].normalize()
 dirOuterSidePenumbra[0] = dirOuterSidePenumbra[0].normalize()
 dirOuterSidePenumbra[1] = dirOuterSidePenumbra[1].normalize()
+
 
 canvasElevation = uElevationRes.x;
 maxR = Math.sqrt(uSceneDims.z * uSceneDims.z + uSceneDims.w * uSceneDims.w) * 2
@@ -1614,7 +1655,9 @@ if ( farLightRayZChange < 0 ) {
   sideMidPenumbra[0] = ixCanvas.to2d()
   Draw.segment({ A: wall0Top3d, B: ixCanvas}, { color: Draw.COLORS.green })
 
-} else {
+}
+
+if ( farLightRayZChange >= 0 || PIXI.Point.distanceBetween(sideMidPenumbra[0], wall2d[0]) > maxR ){
   // if point source light
   closerIdx = PIXI.Point.distanceSquaredBetween(uLightPosition, wall2d[0]) < PIXI.Point.distanceSquaredBetween(uLightPosition, wall2d[1]) ? 0 : 1;
   furtherIdx = closerIdx % 2;
@@ -1625,6 +1668,9 @@ if ( farLightRayZChange < 0 ) {
 }
 
 // Construct a parallel ray to the wall and use that to intersect the further penumbra ray.
+Draw.segment({A: wall2d[closerIdx], B: wall2d[closerIdx].add(dirMidSidePenumbra[closerIdx].multiplyScalar(maxR))})
+Draw.segment({A: wall2d[furtherIdx], B: wall2d[furtherIdx].add(dirMidSidePenumbra[furtherIdx].multiplyScalar(maxR))})
+
 
 farParallelRay = { origin: sideMidPenumbra[closerIdx], direction: wallDir };
 sideMidPenumbra[furtherIdx] = foundry.utils.lineLineIntersection(
@@ -1634,6 +1680,9 @@ sideMidPenumbra[furtherIdx] = foundry.utils.lineLineIntersection(
   wall2d[furtherIdx].add(dirMidSidePenumbra[furtherIdx]))
 sideMidPenumbra[furtherIdx] = PIXI.Point.fromObject(sideMidPenumbra[furtherIdx])
 Draw.segment({ A: sideMidPenumbra[0], B: sideMidPenumbra[1] }, { color: Draw.COLORS.blue })
+
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirOuterSidePenumbra[0].multiplyScalar(maxR))}, { color: Draw.COLORS.red })
+Draw.segment({ A: wall2d[1], B: wall2d[0].add(dirOuterSidePenumbra[1].multiplyScalar(maxR))}, { color: Draw.COLORS.green })
 
 sidePenumbra = Array(2);
 sidePenumbra[0] = foundry.utils.lineLineIntersection(
@@ -1660,6 +1709,9 @@ sideUmbra[1] = foundry.utils.lineLineIntersection(
   wall2d[1].add(dirInnerSidePenumbra[1]));
 
 newLightCenter = foundry.utils.lineLineIntersection(sidePenumbra[0], wall2d[0], sidePenumbra[1], wall2d[1]);
+
+Draw.segment({A: wall2d[0], B: sidePenumbra[0]}, { color: Draw.COLORS.lightred })
+Draw.segment({A: wall2d[1], B: sidePenumbra[1]}, { color: Draw.COLORS.lightgreen })
 
 Draw.point(sidePenumbra[0])
 Draw.point(sidePenumbra[1])
