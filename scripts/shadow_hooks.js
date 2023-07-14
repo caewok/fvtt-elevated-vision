@@ -794,6 +794,20 @@ function deleteWallHook(wallD, _options, _userId) {
   for ( const src of sources ) src.wallRemoved(wallD.id);
 }
 
+/**
+ * Hook ambient light refresh to address the refreshElevation renderFlag.
+ * Update the source elevation.
+ * See AmbientLight.prototype._applyRenderFlags.
+ * @param {PlaceableObject} object    The object instance being refreshed
+ * @param {RenderFlags} flags
+ */
+function refreshAmbientLightHook(light, flags) {
+  if ( flags.refreshElevation ) {
+    light.source?._updateEVShadowData({ "elevation": light.elevationZ });
+    canvas.perception.update({refreshLighting: true, refreshVision: true});
+  }
+}
+
 // Hooks.on("drawAmbientLight", drawAmbientLightHook);
 
 Hooks.on("createWall", createWallHook);
@@ -803,3 +817,5 @@ Hooks.on("deleteWall", deleteWallHook);
 Hooks.on("initializeLightSourceShaders", initializeSourceShadersHook);
 Hooks.on("initializeVisionSourceShaders", initializeSourceShadersHook);
 Hooks.on("initializeDirectionalLightSourceShaders", initializeSourceShadersHook);
+
+Hooks.on("refreshAmbientLight", refreshAmbientLightHook);

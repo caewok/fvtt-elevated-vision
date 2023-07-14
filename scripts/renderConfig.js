@@ -183,7 +183,9 @@ export function updateAmbientSoundHook(doc, data, _options, _userId) {
  * @param {RenderFlags} flags
  */
 // export function refreshAmbientLightHook(light, flags) {
-  // if ( flags.refreshElevation ) {}
+//   if ( flags.refreshElevation ) {
+//
+//   }
 // }
 
 /**
