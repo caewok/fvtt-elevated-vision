@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 flattenObject,
 Hooks,
 LimitedAnglePolygon,
@@ -11,6 +12,8 @@ RenderedPointSource
 
 import { MODULE_ID, FLAGS } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
+import { Plane } from "./geometry/3d/Plane.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 import { SETTINGS, getSetting } from "./settings.js";
 
 import { ShadowWallPointSourceMesh, ShadowWallSizedPointSourceMesh } from "./glsl/ShadowWallShader.js";
@@ -279,8 +282,120 @@ export function _updateEVShadowDataRenderedPointSource(changes) {
   }
 }
 
+
+/**
+ * New method: RenderedPointSource.prototype.pointInShadow
+ * Detect whether a point is in partial or full shadow based on testing wall collisions.
+ * @param {Point3d|object} {x, y, z}    Object with x, y, and z properties. Z optional.
+ * @returns {number} Approximate shadow value between 0 (no shadow) and 1 (full shadow).
+ */
+export function pointInShadowRenderedPointSource({x, y, z} = {}) {
+  /* Testing
+  Point3d = CONFIG.GeometryLib.threeD.Point3d
+  Plane = CONFIG.GeometryLib.threeD.Plane
+  Draw = CONFIG.GeometryLib.Draw
+  let [l] = canvas.lighting.placeables
+  source = l.source
+  x = _token.center.x
+  y = _token.center.y
+  z = _token.elevationZ
+
+  // Or
+  pt = Point3d.fromToken(_token).bottom
+  let { x, y, z } = pt
+  */
+
+  z ??= canvas.elevation.elevationAt({x, y});
+  const testPt = new Point3d(x, y, z);
+  const origin = Point3d.fromPointSource(this);
+  const midCollision = hasWallCollision(origin, testPt, this);
+  const lightSize = this.data.lightSize;
+
+  /* Draw.point(origin, { color: Draw.COLORS.yellow }) */
+
+  if ( !lightSize ) return Number(midCollision);
+
+  // Test the top/bottom/left/right points of the light for penumbra shadow.
+  origin.z += lightSize;
+  const topCollision = hasWallCollision(origin, testPt, this);
+
+  origin.z -= (lightSize * 2); // B/c we already moved it up.
+  const bottomCollision = hasWallCollision(origin, testPt, this);
+
+  // Get the orthogonal direction to the origin --> testPt line at the light elevation.
+  origin.z += lightSize;
+  const dir = testPt.subtract(origin);
+  const orthoDir = (new Point3d(-dir.y, dir.x, 0)).normalize();
+  origin.copyFrom(origin.add(orthoDir.multiplyScalar(lightSize)));
+  const side0Collision = hasWallCollision(origin, testPt, this);
+
+  origin.copyFrom(origin.add(orthoDir.multiplyScalar(-lightSize * 2)));
+  const side1Collision = hasWallCollision(origin, testPt, this);
+
+  // Shadows: side0/mid/side1 = 100%; side0/mid = 50%; mid/side1 = 50%; any one = 25%
+  const sideSum = side0Collision + side1Collision + midCollision;
+  let sideShadowPercentage;
+  switch ( sideSum ) {
+    case 0: sideShadowPercentage = 0; break;
+    case 1: sideShadowPercentage = 0.25; break;
+    case 2: sideShadowPercentage = 0.50; break;
+    case 3: sideShadowPercentage = 1; break;
+  }
+
+
+  const heightSum = topCollision + bottomCollision + midCollision;
+  let heightShadowPercentage;
+  switch ( heightSum ) {
+    case 0: heightShadowPercentage = 0; break;
+    case 1: heightShadowPercentage = 0.25; break;
+    case 2: heightShadowPercentage = 0.50; break;
+    case 3: heightShadowPercentage = 1; break;
+  }
+
+  return heightShadowPercentage * sideShadowPercentage;
+}
+
+function hasWallCollision(origin, testPt, source) {
+  const type = source.constructor.sourceType;
+
+  // For Wall Height, set origin.b and origin.t to trick it into giving us the walls.
+  origin.b = Number.POSITIVE_INFINITY;
+  origin.t = Number.NEGATIVE_INFINITY;
+  const wallCollisions = CONFIG.Canvas.polygonBackends[type].testCollision(origin, testPt, {type, mode: "all", source});
+  if ( !wallCollisions.length ) return false;
+
+  const dir = testPt.subtract(origin);
+  return wallCollisions.some(c => {
+    const w = c.edges.values().next().value.wall;
+    if ( !isFinite(w.topE) && !isFinite(w.bottomE) ) return true;
+
+    const wallPts = Point3d.fromWall(w);
+    const v0 = wallPts.A.top;
+    const v1 = wallPts.A.bottom;
+    const v2 = wallPts.B.bottom;
+    const v3 = wallPts.B.top;
+    return Plane.rayIntersectionQuad3dLD(origin, dir, v0, v1, v2, v3); // Null or t value
+  });
+}
+
+/**
+ * Detect whether a point is in partial or full shadow based on checking the shadow texture.
+ * Currently works only for canvas elevation, accounting for terrain.
+ * Returns the exact percentage.
+ */
+export function canvasPointInShadow(x, y) {
+
+}
+
 // NOTE: LightSource shadow methods and getters
 // Use the advanced penumbra shader
+
+// Patches for AmbientLight
+export const BRIGHTNESS_LEVEL = {
+  NONE: 0,
+  DIM: 1,
+  BRIGHT: 2
+};
 
 /**
  * New method: LightSource.prototype._initializeEVShadowMesh

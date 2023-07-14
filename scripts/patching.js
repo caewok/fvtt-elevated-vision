@@ -87,7 +87,10 @@ import {
   _updateEVShadowDataVisionSource,
   _updateEVShadowDataGlobalLightSource,
 
-  _createPolygonLightSource } from "./shadow_hooks.js";
+  _createPolygonLightSource,
+
+  BRIGHTNESS_LEVEL,
+  pointInShadowRenderedPointSource } from "./shadow_hooks.js";
 
 import {
   _drawAmbientLight,
@@ -260,6 +263,10 @@ export function registerAdditions() {
   addClassMethod(AmbientLight.prototype, "_drawTooltip", _drawTooltipAmbientLight);
   addClassMethod(AmbientLight.prototype, "_getTooltipText", _getTooltipTextAmbientLight);
   addClassMethod(AmbientLight, "_getTextStyle", _getTextStyleAmbientLight);
+
+  // For vision in dim/bright/shadows
+  addClassMethod(LightSource, "BRIGHTNESS_LEVEL", BRIGHTNESS_LEVEL);
+  addClassMethod(RenderedPointSource.prototype, "pointInShadow", pointInShadowRenderedPointSource);
 }
 
 
