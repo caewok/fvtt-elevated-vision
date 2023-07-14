@@ -294,7 +294,9 @@ async function buildDirPath(dirs, idx = dirs.length) {
 
   const path = dirs.slice(0, idx).join("/");
   const res = await FilePicker.createDirectory("data", path).catch(err => { return err; });
-  if ( res.message ) {
+
+  // For The Forge, FilePicker.createDirectory may return undefined if nothing was created.
+  if ( res && res.message ) {
     // If this path exists, we can move down in the folder hierarchy
     if ( res.message.includes("EEXIST: file already exists") ) return buildDirPath(dirs, idx + 1);
 
