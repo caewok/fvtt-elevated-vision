@@ -90,7 +90,8 @@ import {
   _createPolygonLightSource,
 
   BRIGHTNESS_LEVEL,
-  pointInShadowRenderedPointSource } from "./shadow_hooks.js";
+  pointInShadowRenderedPointSource,
+  terrainPointInShadowRenderedSource } from "./shadow_hooks.js";
 
 import {
   _drawAmbientLight,
@@ -267,6 +268,7 @@ export function registerAdditions() {
   // For vision in dim/bright/shadows
   addClassMethod(LightSource, "BRIGHTNESS_LEVEL", BRIGHTNESS_LEVEL);
   addClassMethod(RenderedPointSource.prototype, "pointInShadow", pointInShadowRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "terrainPointInShadow", terrainPointInShadowRenderedSource);
 }
 
 

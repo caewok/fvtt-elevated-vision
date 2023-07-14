@@ -94,10 +94,20 @@ export class ShadowTextureRenderer {
    * Cache the pixels on-demand.
    */
   get pixelCache() {
-    return this.#pixelCache || (this.#pixelCache = PixelCache.fromTexture(this.renderTexture, {
+    if ( this.#pixelCache ) return this.#pixelCache;
+
+    const { x, y } = shadowRenderer.meshPosition;
+    return (this.#pixelCache = PixelCache.fromTexture(this.renderTexture, {
+      x: -x,
+      y: -y,
       arrayClass: Float32Array,
       combineFn: this.constructor.shadowPixelCacheCombineFn }));
   }
+
+  /**
+   * Clear pixel cache. Primarily for debugging.
+   */
+  clearPixelCache() { this.#pixelCache = undefined; }
 
   /**
    * Render a shadow mesh to the texture.

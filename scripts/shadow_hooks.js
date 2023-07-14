@@ -379,12 +379,83 @@ function hasWallCollision(origin, testPt, source) {
 }
 
 /**
+ * New method: RenderedSource.prototype.terrainPointInShadow
  * Detect whether a point is in partial or full shadow based on checking the shadow texture.
  * Currently works only for canvas elevation, accounting for terrain.
- * Returns the exact percentage.
+ * Returns the exact percentage or undefined if the shadow render texture is not present.
  */
-export function canvasPointInShadow(x, y) {
+export function terrainPointInShadowRenderedSource(x, y) {
+  /* Testing
+  api = game.modules.get("elevatedvision").api
+  PixelCache = api.PixelCache
+  ShadowTextureRenderer = api.ShadowTextureRenderer
+  Draw = CONFIG.GeometryLib.Draw
+  Point3d = CONFIG.GeometryLib.threeD.Point3d
 
+  let [l] = canvas.lighting.placeables
+  source = l.source
+  texture = l.source.elevatedvision.shadowRenderer.renderTexture
+
+  shadowRenderer = l.source.elevatedvision.shadowRenderer;
+  shadowCache = shadowRenderer.pixelCache;
+  let { x, y } = shadowRenderer.meshPosition;
+
+
+  redCache = PixelCache.fromTexture(texture, { channel: 0, x: -x, y: -y })
+  greenCache = PixelCache.fromTexture(texture, { channel: 1, x: -x, y: -y })
+  blueCache = PixelCache.fromTexture(texture, { channel: 2, x: -x, y: -y })
+
+  pt = Point3d.fromToken(_token).bottom
+  Draw.point(pt)
+
+  r = redCache.pixelAtCanvas(pt.x, pt.y)
+  g = greenCache.pixelAtCanvas(pt.x, pt.y)
+  b = blueCache.pixelAtCanvas(pt.x, pt.y)
+  ShadowTextureRenderer.shadowPixelCacheCombineFn(r, g, b)
+
+  shadowCache.pixelAtCanvas(pt.x, pt.y)
+
+  ln = redCache.pixels.length;
+  for ( let i = 0; i < ln; i += 100 ) {
+    const r = redCache.pixels[i];
+    const pt = redCache._canvasAtIndex(i);
+    if ( r ) Draw.point(pt, { radius: 1, color: Draw.COLORS.red, alpha: r /255 })
+  }
+
+  // Benchmark
+  function noCache(source, pt) {
+    source.elevatedvision.shadowRenderer.clearPixelCache()
+    return source.terrainPointInShadow(pt.x, pt.y);
+  }
+
+  function cache(source, pt) {
+    return source.terrainPointInShadow(pt.x, pt.y);
+  }
+
+  function collision(source, pt) {
+    return source.pointInShadow(pt)
+  }
+
+
+  await foundry.utils.benchmark(noCache, 10, source, pt)
+  await foundry.utils.benchmark(cache, 1000, source, pt)
+  await foundry.utils.benchmark(collision, 1000, source, pt)
+
+  // single cache
+  source.elevatedvision.shadowRenderer.clearPixelCache()
+  await foundry.utils.benchmark(cache, 1000, source, pt)
+
+
+
+
+  */
+
+  const shadowRenderer = this[MODULE_ID]?.shadowRenderer;
+  if ( !shadowRenderer ) return undefined;
+
+  // Determine the shadow value for the light at this point.
+  const cache = shadowRenderer.pixelCache;
+  return 1 - cache.pixelAtCanvas(x, y);
 }
 
 // NOTE: LightSource shadow methods and getters
