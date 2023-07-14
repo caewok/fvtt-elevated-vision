@@ -3,6 +3,9 @@ canvas,
 PIXI
 */
 "use strict";
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
+
+import { PixelCache } from "../PixelCache.js";
 
 /**
  * Take the output of a shadow mesh and render to a texture representing the light amount.
@@ -13,6 +16,9 @@ export class ShadowTextureRenderer {
 
   /** @type {number} */
   static MAX_TEXTURE_SIZE = 4096;
+
+  /** @type {PixelCache} */
+  #pixelCache;
 
   /** @type PIXI.RenderTexture */
   renderTexture;
@@ -48,7 +54,7 @@ export class ShadowTextureRenderer {
     const { width, height } = this;
 
     let resolution = 1;
-    const maxSize = Math.min(this.constructor.MAX_TEXTURE_SIZE,  resolution * Math.max(width, height));
+    const maxSize = Math.min(this.constructor.MAX_TEXTURE_SIZE, resolution * Math.max(width, height));
     if ( width >= height ) resolution = maxSize / width;
     else resolution = maxSize / height;
 
@@ -69,15 +75,40 @@ export class ShadowTextureRenderer {
   }
 
   /**
+   * Combine the shadow pixel values to a single shadow percentage.
+   * Same methodology as used for estimating light shadows.
+   * @param {number} r    Red channel pixel value
+   * @param {number} g    Green channel pixel value
+   * @param {number} b    Blue channel pixel value
+   * @param {number} a    Alpha channel pixel value
+   * @returns {number} Percent shadow
+   */
+  static shadowPixelCacheCombineFn(r, g, b, _a) {
+    let lightAmount = r / 255;
+    g = g / 255;
+    if ( g < 0.5 ) lightAmount *= (b / 255);
+    return 1 - lightAmount;
+  }
+
+  /**
+   * Cache the pixels on-demand.
+   */
+  get pixelCache() {
+    return this.#pixelCache || (this.#pixelCache = PixelCache.fromTexture(this.renderTexture, {
+      arrayClass: Float32Array,
+      combineFn: this.constructor.shadowPixelCacheCombineFn }));
+  }
+
+  /**
    * Render a shadow mesh to the texture.
    * @param {ShadowWallPointSourceMesh} mesh
    * @returns {PIXI.RenderTexture}
    */
   renderShadowMeshToTexture() {
-    const tl = this.topLeft;
     this.mesh.position.set(this.meshPosition.x, this.meshPosition.y);
     canvas.app.renderer.render(this.mesh, { renderTexture: this.renderTexture, clear: true });
     this.mesh.position.set(0, 0);
+    this.#pixelCache = undefined;
     return this.renderTexture;
   }
 
