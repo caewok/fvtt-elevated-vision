@@ -144,9 +144,9 @@ export class DirectionalLightSource extends LightSource {
     const tip = new PreciseText(text, style);
     tip.anchor.set(0.5, 0.5);
 
-  // From #drawControlIcon
-  //     const size = Math.max(Math.round((canvas.dimensions.size * 0.5) / 20) * 20, 40);
-  //     tip.position.set(0, 0);
+    // From #drawControlIcon
+    //     const size = Math.max(Math.round((canvas.dimensions.size * 0.5) / 20) * 20, 40);
+    //     tip.position.set(0, 0);
     return tip;
   }
 
@@ -266,15 +266,6 @@ export class DirectionalLightSource extends LightSource {
   // NOTE: EV Shadows
 
   /**
-   * When shaders are initialized, swap out the lighting geometry for a quad.
-   * Trick the light shader into thinking its center point is at the edge of the canvas.
-   */
-  _initializeEVShadows() {
-    super._initializeEVShadows();
-    // console.log("DirectionalLight _initializeEVShadows.");
-  }
-
-  /**
    * Use DirectionalSourceShadowWallGeometry, which does not restrict based on source bounds.
    * While there is a radius, it is pointless to test for it b/c we are including all walls.
    */
@@ -326,10 +317,6 @@ export class DirectionalLightSource extends LightSource {
     super._destroy();
   }
 }
-
-
-// Patches for AmbientLight
-
 
 /**
  * Hook AmbientLight hover in and hover out
