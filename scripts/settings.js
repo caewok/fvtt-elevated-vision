@@ -38,6 +38,7 @@ export const SETTINGS = {
     LIGHT_SIZE: "point-light-size"
   },
 
+  LIGHTS_FULL_PENUMBRA: "lights-full-penumbra",
   VISION_USE_SHADER: "vision-use-shader",  // Deprecated
   AUTO_ELEVATION: "auto-change-elevation",
   AUTO_AVERAGING: "auto-change-elevation.averaging",
@@ -162,16 +163,6 @@ export function registerSettings() {
     onChange: setTokenCalculator
   });
 
-  game.settings.register(MODULE_ID, SETTINGS.CLOCKWISE_SWEEP, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.CLOCKWISE_SWEEP}.name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.CLOCKWISE_SWEEP}.hint`),
-    scope: "world",
-    config: true,
-    default: false,
-    requiresReload: true,
-    type: Boolean
-  });
-
   if ( game.modules.get("color-picker")?.active ) {
     ColorPicker.register(MODULE_ID, SETTINGS.COLOR.MIN, {
       name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COLOR.MIN}.name`),
@@ -218,6 +209,26 @@ export function registerSettings() {
       onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMaxColor(value)
     });
   }
+
+  game.settings.register(MODULE_ID, SETTINGS.LIGHTS_FULL_PENUMBRA, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LIGHTS_FULL_PENUMBRA}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LIGHTS_FULL_PENUMBRA}.hint`),
+    scope: "world",
+    config: true,
+    default: true,
+    requiresReload: true,
+    type: Boolean
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.CLOCKWISE_SWEEP, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.CLOCKWISE_SWEEP}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.CLOCKWISE_SWEEP}.hint`),
+    scope: "world",
+    config: true,
+    default: false,
+    requiresReload: true,
+    type: Boolean
+  });
 }
 
 function setTokenCalculator() {
