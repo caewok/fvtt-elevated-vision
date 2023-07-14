@@ -1,3 +1,6 @@
+# 0.4.12
+Correct error when loading scene for the first time. https://ptb.discord.com/channels/170995199584108546/722566083499786352/1129186088515280946
+
 # 0.4.11
 Correct issue with 0.4.10 release.
 
