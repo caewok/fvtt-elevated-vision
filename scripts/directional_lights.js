@@ -271,7 +271,7 @@ export class DirectionalLightSource extends LightSource {
    */
   _initializeEVShadows() {
     super._initializeEVShadows();
-    console.log("DirectionalLight _initializeEVShadows.");
+    // console.log("DirectionalLight _initializeEVShadows.");
   }
 
   /**
