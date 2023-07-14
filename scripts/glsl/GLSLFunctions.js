@@ -380,6 +380,23 @@ Ray2d normalizeRay(in Ray2d r) {
   return Ray2d(r.origin, normalize(r.direction));
 }`;
 
+GLSLFunctions.projectRay =
+`
+${defineStruct("Ray")}
+${defineStruct("Ray2d")}
+
+/**
+ * Project the ray a given distance multiplier of the ray length.
+ * If ray is normalized, this will project the ray the given distance.
+ */
+vec2 projectRay(in Ray2d r, in float distanceMultiplier) {
+  return r.origin + (r.direction * distanceMultiplier);
+}
+
+vec3 projectRay(in Ray r, in float distanceMultiplier) {
+  return r.origin + (r.direction * distanceMultiplier);
+}`;
+
 
 // NOTE: Geometry lines
 
