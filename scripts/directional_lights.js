@@ -316,6 +316,15 @@ export class DirectionalLightSource extends LightSource {
       ev.shadowRenderer.update();
     }
   }
+
+  /**
+   * Note: hook on destroy already removes the EV objects.
+   */
+  _destroy() {
+    // Prevent the grid from getting stuck "on".
+    canvas.lighting.removeChild(DirectionalLightSource._elevationAngleGrid);
+    super._destroy();
+  }
 }
 
 
