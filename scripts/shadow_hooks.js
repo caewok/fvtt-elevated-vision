@@ -510,10 +510,14 @@ export function _initializeLightSource(wrapped, data) {
 export function _createPolygonLightSource(wrapped) {
   this.originalShape = wrapped();
 
-  // Instead of the actual polygon, pass an unblocked circle as the shape.
-  // TODO: Can we just pass a rectangle and shadow portions of the light outside the radius?
-  const cir = new PIXI.Circle(this.x, this.y, this.radius);
-  return cir.toPolygon();
+  if ( getSetting(SETTINGS.LIGHTS_FULL_PENUMBRA) ) {
+    // Instead of the actual polygon, pass an unblocked circle as the shape.
+    // TODO: Can we just pass a rectangle and shadow portions of the light outside the radius?
+    const cir = new PIXI.Circle(this.x, this.y, this.radius);
+    return cir.toPolygon();
+  }
+
+  return this.originalShape;
 }
 
 
