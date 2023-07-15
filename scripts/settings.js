@@ -37,7 +37,7 @@ export const SETTINGS = {
     LIGHT_SIZE: "point-light-size"
   },
 
-  LIGHTS_TEST_VISIBILITY: "lights-test-visibility",
+  TEST_VISIBILITY: "test-visibility",
   LIGHTS_FULL_PENUMBRA: "lights-full-penumbra",
   VISION_USE_SHADER: "vision-use-shader",  // Deprecated
   AUTO_ELEVATION: "auto-change-elevation",
@@ -59,6 +59,7 @@ export async function setSetting(settingName, value) {
 
 export function getSceneSetting(settingName, scene) {
   scene ??= canvas.scene;
+  // TODO: Do we still need this?
   // if ( canvas.performance.mode === CONST.CANVAS_PERFORMANCE_MODES.LOW ) return SETTINGS.SHADING.NONE;
   return scene.flags[MODULE_ID]?.[settingName] ?? defaultSceneSetting(settingName);
 }
@@ -210,9 +211,9 @@ export function registerSettings() {
     });
   }
 
-  game.settings.register(MODULE_ID, SETTINGS.LIGHTS_TEST_VISIBILITY, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LIGHTS_TEST_VISIBILITY}.name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LIGHTS_TEST_VISIBILITY}.hint`),
+  game.settings.register(MODULE_ID, SETTINGS.TEST_VISIBILITY, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.TEST_VISIBILITY}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.TEST_VISIBILITY}.hint`),
     scope: "world",
     config: true,
     default: true,
