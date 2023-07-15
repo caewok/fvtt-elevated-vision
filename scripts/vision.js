@@ -2,15 +2,14 @@
 canvas,
 ClockwiseSweepPolygon,
 GlobalLightSource,
-Token
+Token,
+TokenDocument
 */
 "use strict";
 
-// import { drawPolygonWithHolesPV } from "./util.js";
-// import { ShadowShader } from "./glsl/ShadowShader.js";
-// import { ShadowShaderNoRadius } from "./glsl/ShadowShaderNoRadius.js";
 import { getSceneSetting, SETTINGS } from "./settings.js";
 import { MODULE_ID } from "./const.js";
+import { DirectionalLightSource } from "./directional_lights.js";
 
 // NOTE: Polygon and Shader methods
 
@@ -91,14 +90,17 @@ export function refreshVisibilityCanvasVisibility() {
 
   vision.fov.tokens.clear();
   vision.fov.tokens.removeChildren();
+  // Currently unused
   // vision.fov.tokens.beginFill(fillColor, 1.0);
 
   vision.los.clear();
   if ( vision.los.children.length > 1 ) vision.los.removeChildren(1); // Keep the vision.los.preview child.
+  // Currently unused
   // vision.los.beginFill(fillColor, 1.0);
 
   vision.los.preview.clear();
   vision.los.preview.removeChildren();
+  // Currently unused
   // vision.los.preview.beginFill(fillColor, 1.0);
 
   // Iterating over each light source
@@ -236,6 +238,83 @@ export function cacheLightsCanvasVisibility(clearTexture) {
   this.vision.fov.lights.renderable = false;
 }
 
+/**
+ * Override DetectionMode.prototype._testLOS
+ * Test using shadow texture or ray-wall collisions
+ */
+export function _testLOSDetectionMode(visionSource, mode, target, test) {
+  // LOS has no radius limitation.
+  if ( !this._testAngle(visionSource, mode, target, test) ) return false;
+
+  let hasLOS = test.los.get(visionSource);
+  if ( hasLOS === undefined ) {
+    hasLOS = !isTargetInSourceShadow(visionSource, target, test);
+    test.los.set(visionSource, hasLOS);
+  }
+  return hasLOS;
+}
+
+/**
+ * Override DetectionModeBasicSight.prototype._testPoint
+ * Test using shadow texture or ray-wall collisions
+ */
+export function _testPointDetectionModeBasicSight(visionSource, mode, target, test) {
+  if ( !this._testLOS(visionSource, mode, target, test) ) return false;
+  if ( this._testRange(visionSource, mode, target, test) ) return true;
+
+  for ( const lightSource of canvas.effects.lightSources.values() ) {
+    if ( !lightSource.active ) continue;
+    if ( lightSource instanceof GlobalLightSource ) return true;
+    if ( !testWithinRadius(lightSource, test) ) continue;
+    if ( !testSourceAngle(lightSource, test) ) continue;
+    if ( !isTargetInSourceShadow(lightSource, target, test) ) return true;
+  }
+  return false;
+}
+
+/* Testing
+api = game.modules.get("elevatedvision").api
+DirectionalLightSource = api.DirectionalLightSource
+Draw = CONFIG.GeometryLib.Draw
+
+
+
+*/
+
+
+// see DetectionMode.prototype._testRange.
+function testWithinRadius(source, test) {
+  if ( source instanceof DirectionalLightSource || source instanceof GlobalLightSource ) return true;
+  const radius = source.radius || source.data.externalRadius;
+  const dx = test.point.x - source.x;
+  const dy = test.point.y - source.y;
+  return ((dx * dx) + (dy * dy)) <= (radius * radius);
+}
+
+function testSourceAngle(source, test) {
+  const { angle, rotation, externalRadius } = source.data;
+  if ( angle >= 360 ) return true;
+  const point = test.point;
+  const dx = point.x - source.x;
+  const dy = point.y - source.y;
+  if ( (dx * dx) + (dy * dy) <= (externalRadius * externalRadius) ) return true;
+  const aMin = rotation + 90 - (angle / 2);
+  const a = Math.toDegrees(Math.atan2(dy, dx));
+  return (((a - aMin) % 360) + 360) % 360 <= angle;
+}
+
+function isTargetInSourceShadow(source, target, test) {
+  // If the target is on the terrain (likely), we can use the faster test using pixelCache.
+  const calc = target instanceof Token
+    ? new canvas.elevation.TokenElevationCalculator(target)
+    : new canvas.elevation.CoordinateElevationCalculator(test.point);
+
+  test.point.z ??= target.elevationZ;
+  const shadowPercentage  = source.pointInShadow(test.point);
+//   const shadowPercentage = calc.isOnGround()
+//     ? source.terrainPointInShadow(test.point) : source.pointInShadow(test.point);
+  return shadowPercentage > 0.5;
+}
 
 /**
  * Override DetectionModeTremor.prototype._canDetect

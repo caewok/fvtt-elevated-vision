@@ -37,6 +37,8 @@ import {
   checkLightsCanvasVisibility,
   _tearDownCanvasVisibility,
   cacheLightsCanvasVisibility,
+  _testLOSDetectionMode,
+  _testPointDetectionModeBasicSight,
   _canDetectDetectionModeTremor } from "./vision.js";
 
 import {
@@ -90,6 +92,7 @@ import {
 
   _createPolygonLightSource,
 
+  // Shadow visibility testing.
   BRIGHTNESS_LEVEL,
   pointInShadowRenderedPointSource,
   terrainPointInShadowRenderedSource } from "./shadow_hooks.js";
@@ -203,6 +206,12 @@ export function registerPatches() {
   // ----- Penumbra lighting shadows ----- //
   wrap("LightSource.prototype._initialize", _initializeLightSource);
   wrap("LightSource.prototype._createPolygon", _createPolygonLightSource);
+
+  // ----- Shadow visibility testing ----- //
+  if ( getSetting(SETTINGS.TEST_VISIBILITY) ) {
+    override("DetectionMode.prototype._testLOS", _testLOSDetectionMode, { perf_mode: libWrapper.PERF_FAST });
+    override("DetectionModeBasicSight.prototype._testPoint", _testPointDetectionModeBasicSight, { perf_mode: libWrapper.PERF_FAST });
+  }
 
   // ----- Tremor visibility detection ----- //
   override("DetectionModeTremor.prototype._canDetect", _canDetectDetectionModeTremor, { perf_mode: libWrapper.PERF_FAST });

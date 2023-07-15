@@ -96,7 +96,7 @@ export class ShadowTextureRenderer {
   get pixelCache() {
     if ( this.#pixelCache ) return this.#pixelCache;
 
-    const { x, y } = shadowRenderer.meshPosition;
+    const { x, y } = this.meshPosition;
     return (this.#pixelCache = PixelCache.fromTexture(this.renderTexture, {
       x: -x,
       y: -y,

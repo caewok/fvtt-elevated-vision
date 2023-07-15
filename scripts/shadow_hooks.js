@@ -384,7 +384,7 @@ function hasWallCollision(origin, testPt, source) {
  * Currently works only for canvas elevation, accounting for terrain.
  * Returns the exact percentage or undefined if the shadow render texture is not present.
  */
-export function terrainPointInShadowRenderedSource(x, y) {
+export function terrainPointInShadowRenderedSource({x, y} = {}) {
   /* Testing
   api = game.modules.get("elevatedvision").api
   PixelCache = api.PixelCache
