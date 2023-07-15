@@ -2,7 +2,6 @@
 canvas,
 ColorPicker,
 CONFIG,
-CONST,
 game
 */
 "use strict";
@@ -38,6 +37,7 @@ export const SETTINGS = {
     LIGHT_SIZE: "point-light-size"
   },
 
+  LIGHTS_TEST_VISIBILITY: "lights-test-visibility",
   LIGHTS_FULL_PENUMBRA: "lights-full-penumbra",
   VISION_USE_SHADER: "vision-use-shader",  // Deprecated
   AUTO_ELEVATION: "auto-change-elevation",
@@ -171,7 +171,7 @@ export function registerSettings() {
       config: true,
       default: SETTINGS.COLOR.DEFAULT_MIN,
       format: "hexa",
-      mode: 'HVS',
+      mode: "HVS",
       onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMinColor(value)
     });
 
@@ -182,7 +182,7 @@ export function registerSettings() {
       config: true,
       default: SETTINGS.COLOR.DEFAULT_MAX,
       format: "hexa",
-      mode: 'HVS',
+      mode: "HVS",
       onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMaxColor(value)
     });
 
@@ -209,6 +209,16 @@ export function registerSettings() {
       onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMaxColor(value)
     });
   }
+
+  game.settings.register(MODULE_ID, SETTINGS.LIGHTS_TEST_VISIBILITY, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LIGHTS_TEST_VISIBILITY}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LIGHTS_TEST_VISIBILITY}.hint`),
+    scope: "world",
+    config: true,
+    default: true,
+    requiresReload: true,
+    type: Boolean
+  });
 
   game.settings.register(MODULE_ID, SETTINGS.LIGHTS_FULL_PENUMBRA, {
     name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LIGHTS_FULL_PENUMBRA}.name`),
