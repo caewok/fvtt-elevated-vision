@@ -182,11 +182,6 @@ export class CoordinateElevationCalculator {
    * Determine if the x,y,z point is on the terrain
    * @returns {boolean}
    */
-  static isOnTerrain(point, opts) {
-    const calc = new this(point, opts);
-    return this.isOnTerrain();
-  }
-
   isOnTerrain() {
     const terrainE = this.terrainElevation();
     return this.elevation.almostEqual(terrainE);
@@ -209,11 +204,6 @@ export class CoordinateElevationCalculator {
    * Determine if the coordinate is on the ground, meaning on a tile or terrain
    * @returns {boolean}
    */
-  static isOnGround(point, opts) {
-    const calc = new this(point, opts);
-    return this.isOnGround();
-  }
-
   isOnGround() {
     return this.groundElevation().almostEqual(this.elevation);
   }
