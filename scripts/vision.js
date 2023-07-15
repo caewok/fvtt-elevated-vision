@@ -235,3 +235,15 @@ export function cacheLightsCanvasVisibility(clearTexture) {
   });
   this.vision.fov.lights.renderable = false;
 }
+
+
+/**
+ * Override DetectionModeTremor.prototype._canDetect
+ * Use actual check for whether token is on the ground. Tiles count.
+ */
+export function _canDetectDetectionModeTremor(visionSource, target) {
+  const tgt = target?.document;
+  if ( !(tgt instanceof TokenDocument) ) return false;
+  const calc = new canvas.elevation.TokenElevationCalculator(target);
+  return calc.isOnGround();
+}

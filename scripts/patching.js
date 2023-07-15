@@ -36,7 +36,8 @@ import {
   refreshVisibilityCanvasVisibility,
   checkLightsCanvasVisibility,
   _tearDownCanvasVisibility,
-  cacheLightsCanvasVisibility } from "./vision.js";
+  cacheLightsCanvasVisibility,
+  _canDetectDetectionModeTremor } from "./vision.js";
 
 import {
   _computeClockwiseSweepPolygon,
@@ -202,6 +203,9 @@ export function registerPatches() {
   // ----- Penumbra lighting shadows ----- //
   wrap("LightSource.prototype._initialize", _initializeLightSource);
   wrap("LightSource.prototype._createPolygon", _createPolygonLightSource);
+
+  // ----- Tremor visibility detection ----- //
+  override("DetectionModeTremor.prototype._canDetect", _canDetectDetectionModeTremor, { perf_mode: libWrapper.PERF_FAST });
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
