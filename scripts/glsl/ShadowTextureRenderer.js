@@ -86,7 +86,7 @@ export class ShadowTextureRenderer {
   static shadowPixelCacheCombineFn(r, g, b, _a) {
     let lightAmount = r / 255;
     g = g / 255;
-    if ( g < 0.5 ) lightAmount *= (b / 255);
+    if ( g < 0.3 ) lightAmount *= (b / 255);
     return 1 - lightAmount;
   }
 

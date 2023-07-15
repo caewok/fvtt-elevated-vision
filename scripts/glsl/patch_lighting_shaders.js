@@ -40,7 +40,7 @@ function addShadowFragmentCode(source) {
         if ( uEVShadows ) {
           vec4 EV_shadowTexel = texture2D(uEVShadowSampler, vUvs);
           float EV_lightAmount = EV_shadowTexel.r;
-          if ( EV_shadowTexel.g < 0.5) EV_lightAmount *= EV_shadowTexel.b;
+          if ( EV_shadowTexel.g < 0.3) EV_lightAmount *= EV_shadowTexel.b;
           depth *= EV_lightAmount;
         }
         gl_FragColor =`)
