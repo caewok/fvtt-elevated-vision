@@ -43,13 +43,13 @@ export class CoordinateElevationCalculator {
   options = {};
 
   /** @type {Point3d} */
-  #point;
+  #point = new Point3d();
 
   /** @type {Tile[]} */
   #tiles;
 
   constructor(point, opts = {}) {
-    this.#point = new Point3d(point.x, point.y, point.z);
+    this.#point.copyFrom(point);
     if ( opts.elevation ) this.elevation = opts.elevation;
     this._configure(opts);
   }
@@ -74,7 +74,7 @@ export class CoordinateElevationCalculator {
   }
 
   set coordinate(point) {
-    this.#point = new Point3d(point.x, point.y, point.z);
+    this.#point.copyFrom(point);
     this._refreshLocation();
     this._refreshElevation();
   }
@@ -84,6 +84,7 @@ export class CoordinateElevationCalculator {
   }
 
   set location(value) {
+    // Don't use copyFrom in case value has a z property.
     this.#point.x = value.x;
     this.#point.y = value.y;
     this._refreshLocation();
@@ -181,6 +182,11 @@ export class CoordinateElevationCalculator {
    * Determine if the x,y,z point is on the terrain
    * @returns {boolean}
    */
+  static isOnTerrain(point, opts) {
+    const calc = new this(point, opts);
+    return this.isOnTerrain();
+  }
+
   isOnTerrain() {
     const terrainE = this.terrainElevation();
     return this.elevation.almostEqual(terrainE);
@@ -203,6 +209,11 @@ export class CoordinateElevationCalculator {
    * Determine if the coordinate is on the ground, meaning on a tile or terrain
    * @returns {boolean}
    */
+  static isOnGround(point, opts) {
+    const calc = new this(point, opts);
+    return this.isOnGround();
+  }
+
   isOnGround() {
     return this.groundElevation().almostEqual(this.elevation);
   }
