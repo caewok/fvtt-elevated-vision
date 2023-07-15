@@ -36,7 +36,10 @@ import {
   refreshVisibilityCanvasVisibility,
   checkLightsCanvasVisibility,
   _tearDownCanvasVisibility,
-  cacheLightsCanvasVisibility } from "./vision.js";
+  cacheLightsCanvasVisibility,
+  _testLOSDetectionMode,
+  _testPointDetectionModeBasicSight,
+  _canDetectDetectionModeTremor } from "./vision.js";
 
 import {
   _computeClockwiseSweepPolygon,
@@ -84,8 +87,16 @@ import {
 
   _updateEVShadowDataRenderedPointSource,
   _updateEVShadowDataLightSource,
-  _updateEVShadowDataVisionSource,
-  _updateEVShadowDataGlobalLightSource } from "./shadow_hooks.js";
+  _updateEVShadowDataGlobalLightSource,
+
+  _createPolygonLightSource,
+
+  // Shadow visibility testing.
+  BRIGHTNESS_LEVEL,
+  pointInShadowRenderedPointSource,
+  targetInShadowRenderedSource,
+  targetInShadowVisionSource,
+  hasWallCollisionRenderedPointSource } from "./shadow_hooks.js";
 
 import {
   _drawAmbientLight,
@@ -195,6 +206,16 @@ export function registerPatches() {
 
   // ----- Penumbra lighting shadows ----- //
   wrap("LightSource.prototype._initialize", _initializeLightSource);
+  wrap("LightSource.prototype._createPolygon", _createPolygonLightSource);
+
+  // ----- Shadow visibility testing ----- //
+  if ( getSetting(SETTINGS.TEST_VISIBILITY) ) {
+    override("DetectionMode.prototype._testLOS", _testLOSDetectionMode, { perf_mode: libWrapper.PERF_FAST });
+    override("DetectionModeBasicSight.prototype._testPoint", _testPointDetectionModeBasicSight, { perf_mode: libWrapper.PERF_FAST });
+  }
+
+  // ----- Tremor visibility detection ----- //
+  override("DetectionModeTremor.prototype._canDetect", _canDetectDetectionModeTremor, { perf_mode: libWrapper.PERF_FAST });
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
@@ -237,7 +258,6 @@ export function registerAdditions() {
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
 
   addClassMethod(LightSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshLightSource);
-  addClassMethod(LightSource.prototype, "_updateEVShadowData", _updateEVShadowDataLightSource);
 
   addClassMethod(VisionSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryVisionSource);
   addClassMethod(VisionSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererVisionSource);
@@ -250,13 +270,20 @@ export function registerAdditions() {
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskGlobalLightSource);
 
   addClassMethod(RenderedPointSource.prototype, "_updateEVShadowData", _updateEVShadowDataRenderedPointSource);
-  addClassMethod(VisionSource.prototype, "_updateEVShadowData", _updateEVShadowDataVisionSource);
+  addClassMethod(LightSource.prototype, "_updateEVShadowData", _updateEVShadowDataLightSource);
   addClassMethod(GlobalLightSource.prototype, "_updateEVShadowData", _updateEVShadowDataGlobalLightSource);
 
   // For light elevation tooltip
   addClassMethod(AmbientLight.prototype, "_drawTooltip", _drawTooltipAmbientLight);
   addClassMethod(AmbientLight.prototype, "_getTooltipText", _getTooltipTextAmbientLight);
   addClassMethod(AmbientLight, "_getTextStyle", _getTextStyleAmbientLight);
+
+  // For vision in dim/bright/shadows
+  addClassMethod(LightSource, "BRIGHTNESS_LEVEL", BRIGHTNESS_LEVEL);
+  addClassMethod(RenderedPointSource.prototype, "pointInShadow", pointInShadowRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "targetInShadow", targetInShadowRenderedSource);
+  addClassMethod(VisionSource.prototype, "targetInShadow", targetInShadowVisionSource);
+  addClassMethod(RenderedPointSource.prototype, "hasWallCollision", hasWallCollisionRenderedPointSource);
 }
 
 

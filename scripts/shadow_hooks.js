@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 flattenObject,
 Hooks,
 LimitedAnglePolygon,
@@ -11,6 +12,8 @@ RenderedPointSource
 
 import { MODULE_ID, FLAGS } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
+import { Plane } from "./geometry/3d/Plane.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 import { SETTINGS, getSetting } from "./settings.js";
 
 import { ShadowWallPointSourceMesh, ShadowWallSizedPointSourceMesh } from "./glsl/ShadowWallShader.js";
@@ -279,8 +282,193 @@ export function _updateEVShadowDataRenderedPointSource(changes) {
   }
 }
 
+
+/**
+ * New method: RenderedPointSource.prototype.pointInShadow
+ * Detect whether a point is in partial or full shadow based on testing wall collisions.
+ * @param {Point3d|object} {x, y, z}    Object with x, y, and z properties. Z optional.
+ * @returns {number} Approximate shadow value between 0 (no shadow) and 1 (full shadow).
+ */
+export function pointInShadowRenderedPointSource({x, y, z} = {}) {
+  /* Testing
+  Point3d = CONFIG.GeometryLib.threeD.Point3d
+  Plane = CONFIG.GeometryLib.threeD.Plane
+  Draw = CONFIG.GeometryLib.Draw
+  let [l] = canvas.lighting.placeables
+  source = l.source
+  x = _token.center.x
+  y = _token.center.y
+  z = _token.elevationZ
+
+  // Or
+  pt = Point3d.fromToken(_token).bottom
+  let { x, y, z } = pt
+  */
+
+  z ??= canvas.elevation.elevationAt({x, y});
+  const testPt = new Point3d(x, y, z);
+  const origin = Point3d.fromPointSource(this);
+  const midCollision = this.hasWallCollision(origin, testPt);
+  const lightSize = this.data.lightSize;
+
+  /* Draw.point(origin, { color: Draw.COLORS.yellow }) */
+
+  if ( !lightSize ) return Number(midCollision);
+
+  // Test the top/bottom/left/right points of the light for penumbra shadow.
+  let dir = new Point3d(0, 0, lightSize);
+  const topCollision = this.hasWallCollision(origin.add(dir), testPt);
+  const bottomCollision = this.hasWallCollision(origin.subtract(dir), testPt);
+
+  // Get the orthogonal direction to the origin --> testPt line at the light elevation.
+  dir = testPt.subtract(origin);
+  const orthoDir = (new Point3d(-dir.y, dir.x, 0)).normalize();
+  dir = orthoDir.multiplyScalar(lightSize);
+  const side0Collision = this.hasWallCollision(origin.add(dir), testPt);
+  const side1Collision = this.hasWallCollision(origin.subtract(dir), testPt);
+
+  // Shadows: side0/mid/side1 = 100%; side0/mid = 50%; mid/side1 = 50%; any one = 25%
+  const sideSum = side0Collision + side1Collision + midCollision;
+  let sideShadowPercentage;
+  switch ( sideSum ) {
+    case 0: sideShadowPercentage = 0; break;
+    case 1: sideShadowPercentage = 0.25; break;
+    case 2: sideShadowPercentage = 0.50; break;
+    case 3: sideShadowPercentage = 1; break;
+  }
+
+  const heightSum = topCollision + bottomCollision + midCollision;
+  let heightShadowPercentage;
+  switch ( heightSum ) {
+    case 0: heightShadowPercentage = 0; break;
+    case 1: heightShadowPercentage = 0.25; break;
+    case 2: heightShadowPercentage = 0.50; break;
+    case 3: heightShadowPercentage = 1; break;
+  }
+
+  return heightShadowPercentage * sideShadowPercentage;
+}
+
+export function hasWallCollisionRenderedPointSource(origin, testPt) {
+  const type = this.constructor.sourceType;
+
+  // For Wall Height, set origin.b and origin.t to trick it into giving us the walls.
+  origin.b = Number.POSITIVE_INFINITY;
+  origin.t = Number.NEGATIVE_INFINITY;
+  const wallCollisions = CONFIG.Canvas.polygonBackends[type].testCollision(origin, testPt, {type, mode: "all", source: this});
+  if ( !wallCollisions.length ) return false;
+
+  const dir = testPt.subtract(origin);
+  return wallCollisions.some(c => {
+    const w = c.edges.values().next().value.wall;
+    if ( !isFinite(w.topE) && !isFinite(w.bottomE) ) return true;
+
+    const wallPts = Point3d.fromWall(w);
+    const v0 = wallPts.A.top;
+    const v1 = wallPts.A.bottom;
+    const v2 = wallPts.B.bottom;
+    const v3 = wallPts.B.top;
+    return Plane.rayIntersectionQuad3dLD(origin, dir, v0, v1, v2, v3); // Null or t value
+  });
+}
+
+/**
+ * New method: RenderedSource.prototype.terrainPointInShadow
+ * Detect whether a point is in partial or full shadow based on checking the shadow texture.
+ * Currently works only for canvas elevation, accounting for terrain.
+ * Returns the exact percentage or undefined if the shadow render texture is not present.
+ */
+export function targetInShadowRenderedSource(target, testPoint) {
+  /* Testing
+  api = game.modules.get("elevatedvision").api
+  PixelCache = api.PixelCache
+  ShadowTextureRenderer = api.ShadowTextureRenderer
+  Draw = CONFIG.GeometryLib.Draw
+  Point3d = CONFIG.GeometryLib.threeD.Point3d
+
+  let [l] = canvas.lighting.placeables
+  source = l.source
+  texture = source.elevatedvision.shadowRenderer.renderTexture
+
+  shadowRenderer = source.elevatedvision.shadowRenderer;
+  shadowCache = shadowRenderer.pixelCache;
+  let { x, y } = shadowRenderer.meshPosition;
+
+
+  redCache = PixelCache.fromTexture(texture, { channel: 0, x: -x, y: -y })
+  greenCache = PixelCache.fromTexture(texture, { channel: 1, x: -x, y: -y })
+  blueCache = PixelCache.fromTexture(texture, { channel: 2, x: -x, y: -y })
+
+  pt = Point3d.fromToken(_token).bottom
+  Draw.point(pt)
+
+  r = redCache.pixelAtCanvas(pt.x, pt.y)
+  g = greenCache.pixelAtCanvas(pt.x, pt.y)
+  b = blueCache.pixelAtCanvas(pt.x, pt.y)
+  ShadowTextureRenderer.shadowPixelCacheCombineFn(r, g, b)
+
+  shadowCache.pixelAtCanvas(pt.x, pt.y)
+
+  ln = redCache.pixels.length;
+  for ( let i = 0; i < ln; i += 1000 ) {
+    const r = redCache.pixels[i];
+    const pt = redCache._canvasAtIndex(i);
+    if ( r ) Draw.point(pt, { radius: 1, color: Draw.COLORS.red, alpha: r /255 })
+  }
+
+  // Benchmark
+  function noCache(source, pt) {
+    source.elevatedvision.shadowRenderer.clearPixelCache()
+    return source.terrainPointInShadow(pt.x, pt.y);
+  }
+
+  function cache(source, pt) {
+    return source.terrainPointInShadow(pt.x, pt.y);
+  }
+
+  function collision(source, pt) {
+    return source.pointInShadow(pt)
+  }
+
+
+  await foundry.utils.benchmark(noCache, 10, source, pt)
+  await foundry.utils.benchmark(cache, 1000, source, pt)
+  await foundry.utils.benchmark(collision, 1000, source, pt)
+
+  // single cache
+  source.elevatedvision.shadowRenderer.clearPixelCache()
+  await foundry.utils.benchmark(cache, 1000, source, pt)
+  */
+
+  testPoint ??= target;
+  const shadowRenderer = this[MODULE_ID]?.shadowRenderer;
+  if ( !shadowRenderer ) return this.pointInShadow(testPoint);
+
+  // If the target is on the terrain (likely), we can use the faster test using pixelCache.
+  const calc = target instanceof Token
+    ? new canvas.elevation.TokenElevationCalculator(target)
+    : new canvas.elevation.CoordinateElevationCalculator(test.point);
+
+  return calc.isOnTerrain()
+    ? shadowPercentageFromCache(shadowRenderer.pixelCache, testPoint.x, testPoint.y)
+    : this.pointInShadow(testPoint);
+}
+
+const PIXEL_INV = 1 / 255;
+function shadowPercentageFromCache(pixelCache, x, y) {
+  const lightAmount = pixelCache.pixelAtCanvas(x, y);
+  return 1 - (lightAmount * PIXEL_INV);
+}
+
 // NOTE: LightSource shadow methods and getters
 // Use the advanced penumbra shader
+
+// Patches for AmbientLight
+export const BRIGHTNESS_LEVEL = {
+  NONE: 0,
+  DIM: 1,
+  BRIGHT: 2
+};
 
 /**
  * New method: LightSource.prototype._initializeEVShadowMesh
@@ -318,6 +506,23 @@ export function _initializeLightSource(wrapped, data) {
     ?? 0;
 }
 
+/**
+ * Wrap method: LightSource.prototype._createPolygon()
+ */
+export function _createPolygonLightSource(wrapped) {
+  this.originalShape = wrapped();
+
+  if ( getSetting(SETTINGS.LIGHTS_FULL_PENUMBRA) ) {
+    // Instead of the actual polygon, pass an unblocked circle as the shape.
+    // TODO: Can we just pass a rectangle and shadow portions of the light outside the radius?
+    const cir = new PIXI.Circle(this.x, this.y, this.radius);
+    return cir.toPolygon();
+  }
+
+  return this.originalShape;
+}
+
+
 // NOTE: VisionSource shadow methods and getters
 
 /**
@@ -331,18 +536,22 @@ export function _initializeEVShadowGeometryVisionSource() {
 
 /**
  * New method: VisionSource.prototype._initializeEVShadowRenderer
- * Add a second LOS renderer that covers the entire canvas.
+ * Render to the entire canvas to represent LOS.
  */
 export function _initializeEVShadowRendererVisionSource() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowVisionLOSRenderer ) return;
+  if ( ev.shadowRenderer ) return;
 
-  // Instead of super._initializeEVShadowTexture()
-  RenderedPointSource.prototype._initializeEVShadowRenderer.call(this);
+  // Force a uniform update, to avoid ghosting of placeables in the light radius.
+  // TODO: Find the underlying issue and fix this!
+  // Must be a new uniform variable (one that is not already in uniforms)
+  this.layers.background.shader.uniforms.uEVtmpfix = 0;
+  this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
+  this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
 
   // Render LOS to a texture for use by other shaders.
-  ev.shadowVisionLOSRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh);
-  ev.shadowVisionLOSRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
+  ev.shadowRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh);
+  ev.shadowRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
 }
 
 /**
@@ -355,27 +564,9 @@ export function _initializeEVShadowMaskVisionSource() {
 
   // Build the mask for the LOS based on the canvas dimensions rectangle.
   // Mask that colors red areas that are lit / are viewable.
-  const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowVisionLOSRenderer.renderTexture);
+  const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowRenderer.renderTexture);
   ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
-/**
- * New method: VisionSource.prototype._updateEVShadowData
- */
-export function _updateEVShadowDataVisionSource(changes) {
-  const ev = this[MODULE_ID];
-  if ( !ev || !ev.wallGeometry) return;
-
-  // Instead of super._updateEVShadowData()
-  RenderedPointSource.prototype._updateEVShadowData.call(this, changes);
-
-  const changedPosition = Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
-  const changedRadius = Object.hasOwn(changes, "radius");
-  const changedElevation = Object.hasOwn(changes, "elevation");
-
-  if ( changedPosition || changedElevation ) ev.shadowVisionLOSRenderer.update();
-  if ( changedRadius ) ev.shadowVisionLOSRenderer.updateSourceRadius();
-}
-
 
 /**
  * New getter: VisionSource.prototype.EVVisionLOSMask
@@ -440,6 +631,15 @@ function addShapeToShadowMask(shape, shadowMask) {
   draw.shape(shape, { width: 0, fill: 0xFF0000 });
   c.addChild(g);
   return c;
+}
+
+/**
+ * New method: VisionSource.prototype.targetInShadow
+ * Do not use the shadow texture cache b/c it takes too long to construct and vision moves a lot.
+ */
+export function targetInShadowVisionSource(target, testPoint) {
+  testPoint ??= target;
+  return this.pointInShadow(testPoint);
 }
 
 // NOTE: GlobalLightSource shadow methods and getters
@@ -595,6 +795,20 @@ function deleteWallHook(wallD, _options, _userId) {
   for ( const src of sources ) src.wallRemoved(wallD.id);
 }
 
+/**
+ * Hook ambient light refresh to address the refreshElevation renderFlag.
+ * Update the source elevation.
+ * See AmbientLight.prototype._applyRenderFlags.
+ * @param {PlaceableObject} object    The object instance being refreshed
+ * @param {RenderFlags} flags
+ */
+function refreshAmbientLightHook(light, flags) {
+  if ( flags.refreshElevation ) {
+    light.source?._updateEVShadowData({ elevation: light.elevationZ });
+    canvas.perception.update({refreshLighting: true, refreshVision: true});
+  }
+}
+
 // Hooks.on("drawAmbientLight", drawAmbientLightHook);
 
 Hooks.on("createWall", createWallHook);
@@ -604,3 +818,5 @@ Hooks.on("deleteWall", deleteWallHook);
 Hooks.on("initializeLightSourceShaders", initializeSourceShadersHook);
 Hooks.on("initializeVisionSourceShaders", initializeSourceShadersHook);
 Hooks.on("initializeDirectionalLightSourceShaders", initializeSourceShadersHook);
+
+Hooks.on("refreshAmbientLight", refreshAmbientLightHook);

@@ -27,6 +27,9 @@ Display of the elevation number when in the elevation layer is now faster.
 
 WebGL shadows disabled until a more robust solution can be implemented.
 
+# 0.4.12
+Correct error when loading scene for the first time.
+
 # 0.4.11
 Correct issue with 0.4.10 release.
 

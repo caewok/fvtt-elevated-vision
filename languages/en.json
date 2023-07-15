@@ -36,6 +36,12 @@
   "elevatedvision.settings.color-min.string_hint": "Set the color used to display the minimum elevation (above the scene minimum) on the elevation layer. Install the Color Picker module to get a color picker here.",
   "elevatedvision.settings.color-max.string_hint": "Set the color used to display the maximum elevation on the elevation layer. Colors between min and max will be interpolated. Install the Color Picker module to get a color picker here.",
 
+  "elevatedvision.settings.lights-full-penumbra.name": "Full Shadow Penumbra",
+  "elevatedvision.settings.lights-full-penumbra.hint": "When enabled, lighting for all walls will display a full penumbra for the shadow. When disabled, the penumbra shadow for infinite-height walls may display differently than the shadow for limited-height walls. Disabling may improve compatibility with other modules. Only applies when WebGL shadows are enabled.",
+
+  "elevatedvision.settings.test-visibility.name": "Override Visibility Tests",
+  "elevatedvision.settings.test-visibility.hint": "When enabled, Elevated Vision will override the Foundry default visibility testing. This is necessary if you want token visibility to work with directional lighting, limited height walls, or with the Full Shadow Penumbra setting. Disable if some other module is taking over visibility testing.",
+
   "elevatedvision.controls.fill-by-grid.name": "Fill by grid",
   "elevatedvision.controls.fill-by-los.name": "Fill by line-of-sight",
   "elevatedvision.controls.fill-space.name": "Fill space enclosed by walls",

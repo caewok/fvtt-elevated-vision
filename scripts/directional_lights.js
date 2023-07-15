@@ -144,9 +144,9 @@ export class DirectionalLightSource extends LightSource {
     const tip = new PreciseText(text, style);
     tip.anchor.set(0.5, 0.5);
 
-  // From #drawControlIcon
-  //     const size = Math.max(Math.round((canvas.dimensions.size * 0.5) / 20) * 20, 40);
-  //     tip.position.set(0, 0);
+    // From #drawControlIcon
+    //     const size = Math.max(Math.round((canvas.dimensions.size * 0.5) / 20) * 20, 40);
+    //     tip.position.set(0, 0);
     return tip;
   }
 
@@ -239,7 +239,7 @@ export class DirectionalLightSource extends LightSource {
    * From a point on the canvas toward the light.
    * @param {number} azimuth          Canvas x/y light angle, in radians, between 0 and 360º
    * @param {number} elevationAngle   Canvas z angle of the light, in radians, between 0 and 90º
-   * @returns {Point3d} Direction vector sized to 1 unit. (Not necessarily normalized.)
+   * @returns {Point3d} Normalized direction vector.
    */
   static lightDirection(azimuth, elevationAngle) {
     // Round values that are very nearly 0 or very nearly 1
@@ -258,21 +258,12 @@ export class DirectionalLightSource extends LightSource {
     const pt = Point3d.fromAngle(startPt, azimuth, 1, fn(zPt.y / zPt.x));
     pt.x = fn(pt.x);
     pt.y = fn(pt.y);
-    return pt;
+    return pt.normalize();
   }
 
   get lightDirection() { return this.constructor.lightDirection(this.azimuth, this.elevationAngle); }
 
   // NOTE: EV Shadows
-
-  /**
-   * When shaders are initialized, swap out the lighting geometry for a quad.
-   * Trick the light shader into thinking its center point is at the edge of the canvas.
-   */
-  _initializeEVShadows() {
-    super._initializeEVShadows();
-    // console.log("DirectionalLight _initializeEVShadows.");
-  }
 
   /**
    * Use DirectionalSourceShadowWallGeometry, which does not restrict based on source bounds.
@@ -316,11 +307,84 @@ export class DirectionalLightSource extends LightSource {
       ev.shadowRenderer.update();
     }
   }
+
+  /**
+   * Note: hook on destroy already removes the EV objects.
+   */
+  _destroy() {
+    // Prevent the grid from getting stuck "on".
+    canvas.lighting.removeChild(DirectionalLightSource._elevationAngleGrid);
+    super._destroy();
+  }
+
+  /**
+   * Detect whether a point is in partial or full shadow based on testing wall collisions.
+   * @param {Point3d|object} {x, y, z}    Object with x, y, and z properties. Z optional.
+   * @returns {number} Approximate shadow value between 0 (no shadow) and 1 (full shadow).
+   */
+  pointInShadowRenderedPointSource({x, y, z} = {}) {
+    /* Testing
+    Point3d = CONFIG.GeometryLib.threeD.Point3d
+    Plane = CONFIG.GeometryLib.threeD.Plane
+    Draw = CONFIG.GeometryLib.Draw
+    let [l] = canvas.lighting.placeables
+    source = l.source
+    x = _token.center.x
+    y = _token.center.y
+    z = _token.elevationZ
+
+    // Or
+    pt = Point3d.fromToken(_token).bottom
+    let { x, y, z } = pt
+    */
+
+    z ??= canvas.elevation.elevationAt({x, y});
+    const testPt = new Point3d(x, y, z);
+
+    // Project a point out beyond the canvas to stand in for the light position.
+    const maxR = canvas.dimensions.maxR;
+    const { azimuth, elevationAngle, solarAngle } = this;
+    const midCollision = directionalCollision(this, testPt, azimuth, elevationAngle);
+
+    this.hasWallCollision(origin, testPt);
+
+    /* Draw.point(origin, { color: Draw.COLORS.yellow }) */
+    if ( !solarAngle ) return Number(midCollision);
+
+    // Test the top/bottom/left/right points of the light for penumbra shadow.
+    const topCollision = directionalCollision(this, testPt, azimuth, elevationAngle + solarAngle);
+    const bottomCollision = directionalCollision(this, testPt, azimuth, elevationAngle - solarAngle);
+    const side0Collision = directionalCollision(this, testPt, azimuth + solarAngle, elevationAngle);
+    const side1Collision = directionalCollision(this, testPt, azimuth - solarAngle, elevationAngle);
+
+    // Shadows: side0/mid/side1 = 100%; side0/mid = 50%; mid/side1 = 50%; any one = 25%
+    const sideSum = side0Collision + side1Collision + midCollision;
+    let sideShadowPercentage;
+    switch ( sideSum ) {
+      case 0: sideShadowPercentage = 0; break;
+      case 1: sideShadowPercentage = 0.25; break;
+      case 2: sideShadowPercentage = 0.50; break;
+      case 3: sideShadowPercentage = 1; break;
+    }
+
+    const heightSum = topCollision + bottomCollision + midCollision;
+    let heightShadowPercentage;
+    switch ( heightSum ) {
+      case 0: heightShadowPercentage = 0; break;
+      case 1: heightShadowPercentage = 0.25; break;
+      case 2: heightShadowPercentage = 0.50; break;
+      case 3: heightShadowPercentage = 1; break;
+    }
+
+    return heightShadowPercentage * sideShadowPercentage;
+  }
 }
 
-
-// Patches for AmbientLight
-
+function directionalCollision(source, testPt, azimuth, elevationAngle) {
+  const dir = DirectionalLightSource.lightDirection(azimuth, elevationAngle);
+  const origin = testPt.add(dir.multiplyScalar(canvas.dimensions.maxR));
+  return source.hasWallCollision(origin, testPt);
+}
 
 /**
  * Hook AmbientLight hover in and hover out
