@@ -248,7 +248,7 @@ export function _testLOSDetectionMode(visionSource, mode, target, test) {
 
   let hasLOS = test.los.get(visionSource);
   if ( hasLOS === undefined ) {
-    hasLOS = !isTargetInSourceShadow(visionSource, target, test);
+    hasLOS = visionSource.targetInShadow(target, test.point) < 0.5;
     test.los.set(visionSource, hasLOS);
   }
   return hasLOS;
@@ -267,7 +267,7 @@ export function _testPointDetectionModeBasicSight(visionSource, mode, target, te
     if ( lightSource instanceof GlobalLightSource ) return true;
     if ( !testWithinRadius(lightSource, test) ) continue;
     if ( !testSourceAngle(lightSource, test) ) continue;
-    if ( !isTargetInSourceShadow(lightSource, target, test) ) return true;
+    if ( lightSource.targetInShadow(target, test.point) < 0.5 ) return true;
   }
   return false;
 }
@@ -276,9 +276,6 @@ export function _testPointDetectionModeBasicSight(visionSource, mode, target, te
 api = game.modules.get("elevatedvision").api
 DirectionalLightSource = api.DirectionalLightSource
 Draw = CONFIG.GeometryLib.Draw
-
-
-
 */
 
 
@@ -301,19 +298,6 @@ function testSourceAngle(source, test) {
   const aMin = rotation + 90 - (angle / 2);
   const a = Math.toDegrees(Math.atan2(dy, dx));
   return (((a - aMin) % 360) + 360) % 360 <= angle;
-}
-
-function isTargetInSourceShadow(source, target, test) {
-  // If the target is on the terrain (likely), we can use the faster test using pixelCache.
-  const calc = target instanceof Token
-    ? new canvas.elevation.TokenElevationCalculator(target)
-    : new canvas.elevation.CoordinateElevationCalculator(test.point);
-
-  test.point.z ??= target.elevationZ;
-  const shadowPercentage  = source.pointInShadow(test.point);
-//   const shadowPercentage = calc.isOnGround()
-//     ? source.terrainPointInShadow(test.point) : source.pointInShadow(test.point);
-  return shadowPercentage > 0.5;
 }
 
 /**

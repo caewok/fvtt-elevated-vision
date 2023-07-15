@@ -87,7 +87,6 @@ import {
 
   _updateEVShadowDataRenderedPointSource,
   _updateEVShadowDataLightSource,
-  _updateEVShadowDataVisionSource,
   _updateEVShadowDataGlobalLightSource,
 
   _createPolygonLightSource,
@@ -95,7 +94,9 @@ import {
   // Shadow visibility testing.
   BRIGHTNESS_LEVEL,
   pointInShadowRenderedPointSource,
-  terrainPointInShadowRenderedSource } from "./shadow_hooks.js";
+  targetInShadowRenderedSource,
+  targetInShadowVisionSource,
+  hasWallCollisionRenderedPointSource } from "./shadow_hooks.js";
 
 import {
   _drawAmbientLight,
@@ -257,7 +258,6 @@ export function registerAdditions() {
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
 
   addClassMethod(LightSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshLightSource);
-  addClassMethod(LightSource.prototype, "_updateEVShadowData", _updateEVShadowDataLightSource);
 
   addClassMethod(VisionSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryVisionSource);
   addClassMethod(VisionSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererVisionSource);
@@ -270,7 +270,7 @@ export function registerAdditions() {
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskGlobalLightSource);
 
   addClassMethod(RenderedPointSource.prototype, "_updateEVShadowData", _updateEVShadowDataRenderedPointSource);
-  addClassMethod(VisionSource.prototype, "_updateEVShadowData", _updateEVShadowDataVisionSource);
+  addClassMethod(LightSource.prototype, "_updateEVShadowData", _updateEVShadowDataLightSource);
   addClassMethod(GlobalLightSource.prototype, "_updateEVShadowData", _updateEVShadowDataGlobalLightSource);
 
   // For light elevation tooltip
@@ -281,7 +281,9 @@ export function registerAdditions() {
   // For vision in dim/bright/shadows
   addClassMethod(LightSource, "BRIGHTNESS_LEVEL", BRIGHTNESS_LEVEL);
   addClassMethod(RenderedPointSource.prototype, "pointInShadow", pointInShadowRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "terrainPointInShadow", terrainPointInShadowRenderedSource);
+  addClassMethod(RenderedPointSource.prototype, "targetInShadow", targetInShadowRenderedSource);
+  addClassMethod(VisionSource.prototype, "targetInShadow", targetInShadowVisionSource);
+  addClassMethod(RenderedPointSource.prototype, "hasWallCollision", hasWallCollisionRenderedPointSource);
 }
 
 
