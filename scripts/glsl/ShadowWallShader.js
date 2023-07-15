@@ -745,19 +745,16 @@ void main() {
 //   }
 //   return;
 
-  // Get the elevation at this fragment.
-  float canvasElevation = uElevationRes.x;
-  float elevation = terrainElevation();
 
   // Assume no shadow as the default
   fragColor = noShadow();
 
   // If elevation is above the light, then shadow.
   // Equal to light elevation should cause shadow, but foundry defaults to lights at elevation 0.
-  if ( elevation > uLightPosition.z ) {
-    fragColor = lightEncoding(0.0);
-    return;
-  }
+//   if ( elevation > uLightPosition.z ) {
+//     fragColor = lightEncoding(0.0);
+//     return;
+//   }
 
   // If in front of the wall, can return early.
   if ( vBary.x > fWallRatio ) return;
@@ -766,6 +763,10 @@ void main() {
   if ( (fWallSenseType == DISTANCE_WALL || fWallSenseType == PROXIMATE_WALL)
     && fThresholdRadius2 != 0.0
     && distanceSquared(vVertexPosition, uLightPosition.xy) < fThresholdRadius2 ) return;
+
+  // Get the elevation at this fragment.
+  float canvasElevation = uElevationRes.x;
+  float elevation = terrainElevation();
 
   // If elevation is above the wall, then no shadow.
   if ( elevation > fWallHeights.x ) {
