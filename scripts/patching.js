@@ -36,7 +36,6 @@ import {
   _testPointDetectionModeBasicSight,
   _canDetectDetectionModeTremor } from "./vision.js";
 
-import { getEVPixelCacheTile } from "./tiles.js";
 
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
@@ -47,6 +46,7 @@ import { PATCHES as PATCHES_PIXI_Graphics } from "./PIXI_Graphics.js";
 import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
 import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
 import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
+import { PATCHES as PATCHES_Tile } from "./Tile.js";
 
 import {
   EVVisionLOSMaskVisionSource,
@@ -172,8 +172,7 @@ export function registerAdditions() {
   addClassMethod(ClockwiseSweepPolygon.prototype, "_drawShadows", PATCHES_ClockwiseSweepPolygon.POLYGONS.METHODS._drawShadows);
   addClassMethod(Token.prototype, "getTopLeft", getTopLeftTokenCorner);
 
-  addClassGetter(Tile.prototype, "evPixelCache", getEVPixelCacheTile);
-  addClassMethod(Tile.prototype, "_evPixelCache", undefined);
+  addClassGetter(Tile.prototype, "evPixelCache", PATCHES_Tile.BASIC.GETTERS.getEVPixelCache);
 
   // For Polygons shadows -- Nothing added
 

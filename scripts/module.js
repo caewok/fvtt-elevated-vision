@@ -46,7 +46,6 @@ import { updateFlyTokenControl } from "./scenes.js";
 
 // Hooks
 import { preUpdateTokenHook, refreshTokenHook, createOrRemoveActiveEffectHook } from "./tokens.js";
-import { updateTileHook } from "./tiles.js";
 
 import {
   renderAmbientLightConfigHook,
@@ -56,6 +55,7 @@ import {
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_AmbientSound } from "./AmbientSound.js";
 import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
+import { PATCHES as PATCHES_Tile } from "./Tile.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -255,7 +255,7 @@ Hooks.on("refreshToken", refreshTokenHook);
 Hooks.on("createActiveEffect", createOrRemoveActiveEffectHook);
 Hooks.on("deleteActiveEffect", createOrRemoveActiveEffectHook);
 
-Hooks.on("updateTile", updateTileHook);
+Hooks.on("updateTile", PATCHES_Tile.BASIC.HOOKS.updateTile);
 Hooks.on("renderTileConfig", renderTileConfigHook);
 
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
