@@ -47,16 +47,17 @@ import { updateFlyTokenControl } from "./scenes.js";
 // Hooks
 import { preUpdateTokenHook, refreshTokenHook, createOrRemoveActiveEffectHook } from "./tokens.js";
 
-import {
-  renderAmbientLightConfigHook,
-  renderAmbientSoundConfigHook,
-  renderTileConfigHook } from "./renderConfig.js";
 
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_AmbientSound } from "./AmbientSound.js";
 import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
 import { PATCHES as PATCHES_Tile } from "./Tile.js";
-import { PATCHES as PATCHES_WALL } from "./Wall.js";
+import { PATCHES as PATCHES_Wall } from "./Wall.js";
+
+import {
+  PATCHES_AmbientLightConfig,
+  PATCHES_AmbientSoundConfig,
+  PATCHES_TileConfig } from "./render_configs.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -256,10 +257,10 @@ Hooks.on("createActiveEffect", createOrRemoveActiveEffectHook);
 Hooks.on("deleteActiveEffect", createOrRemoveActiveEffectHook);
 
 Hooks.on("updateTile", PATCHES_Tile.BASIC.HOOKS.updateTile);
-Hooks.on("renderTileConfig", renderTileConfigHook);
+Hooks.on("renderTileConfig", PATCHES_TileConfig.BASIC.HOOKS.renderTileConfig);
 
-Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
-Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
+Hooks.on("renderAmbientLightConfig", PATCHES_AmbientLightConfig.BASIC.HOOKS.renderAmbientLightConfig);
+Hooks.on("renderAmbientSoundConfig", PATCHES_AmbientSoundConfig.BASIC.HOOKS.renderAmbientSoundConfig);
 Hooks.on("updateAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.updateAmbientLight);
 Hooks.on("updateAmbientSound", PATCHES_AmbientSound.BASIC.HOOKS.updateAmbientSound);
 Hooks.on("refreshAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.refreshAmbientLight);

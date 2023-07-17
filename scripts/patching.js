@@ -22,20 +22,8 @@ import { MODULE_ID } from "./const.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
 import {
-  defaultOptionsAmbientSoundConfig,
-  getDataTileConfig,
-  _onChangeInputTileConfig
-} from "./renderConfig.js";
-
-import {
   cloneToken
 } from "./tokens.js";
-
-import {
-  _testLOSDetectionMode,
-  _testPointDetectionModeBasicSight,
-  _canDetectDetectionModeTremor } from "./vision.js";
-
 
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
@@ -53,6 +41,10 @@ import {
   PATCHES_DetectionMode,
   PATCHES_DetectionModeBasicSight,
   PATCHES_DetectionModeTremor } from "./detection_modes.js";
+
+import {
+  PATCHES_AmbientSoundConfig,
+  PATCHES_TileConfig } from "./render_configs.js";
 
 /**
  * Helper to wrap methods.
@@ -129,9 +121,9 @@ export function registerPatches() {
   wrap("Token.prototype.clone", cloneToken, { perf_mode: libWrapper.PERF_FAST });
 
   // ----- Application rendering configurations ----- //
-  wrap("AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig);
-  wrap("TileConfig.prototype.getData", getDataTileConfig);
-  wrap("TileConfig.prototype._onChangeInput", _onChangeInputTileConfig);
+  wrap("AmbientSoundConfig.defaultOptions", PATCHES_AmbientSoundConfig.BASIC.STATIC_WRAPS.defaultOptions);
+  wrap("TileConfig.prototype.getData", PATCHES_TileConfig.BASIC.WRAPS.getData);
+  wrap("TileConfig.prototype._onChangeInput", PATCHES_TileConfig.BASIC.WRAPS._onChangeInput);
 
   // ----- Clockwise sweep enhancements ----- //
   if ( getSetting(SETTINGS.CLOCKWISE_SWEEP) ) {
