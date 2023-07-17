@@ -57,7 +57,7 @@ import {
 
 import { refreshAmbientLightHook } from "./lighting_elevation_tooltip.js";
 
-import { hoverAmbientLightHook } from "./directional_lights.js";
+import { hoverAmbientLightHook } from "./DirectionalLightSource.js";
 
 // Other self-executing hooks
 import "./changelog.js";

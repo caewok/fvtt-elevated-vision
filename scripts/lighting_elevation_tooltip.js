@@ -7,7 +7,7 @@ PreciseText
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { DirectionalLightSource } from "./directional_lights.js";
+import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Draw elevation for lights similar to that of tokens.
 

@@ -9,7 +9,7 @@ TokenDocument
 
 import { getSceneSetting, SETTINGS } from "./settings.js";
 import { MODULE_ID } from "./const.js";
-import { DirectionalLightSource } from "./directional_lights.js";
+import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // NOTE: Polygon and Shader methods
 
