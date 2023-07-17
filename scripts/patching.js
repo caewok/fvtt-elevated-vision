@@ -32,7 +32,6 @@ import {
 } from "./tokens.js";
 
 import {
-  drawShapePIXIGraphics,
   _testLOSDetectionMode,
   _testPointDetectionModeBasicSight,
   _canDetectDetectionModeTremor } from "./vision.js";
@@ -44,6 +43,7 @@ import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
+import { PATCHES as PATCHES_PIXI_Graphics } from "./PIXI_Graphics.js";
 import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
 import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
 import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
@@ -289,7 +289,7 @@ function registerNoShadowPatches() {
 
 function registerPolygonShadowPatches() {
   deregisterShadowPatches();
-  shaderWrap("PIXI.LegacyGraphics.prototype.drawShape", drawShapePIXIGraphics, { perf_mode: libWrapper.PERF_FAST });
+  shaderWrap("PIXI.LegacyGraphics.prototype.drawShape", PATCHES_PIXI_Graphics.POLYGONS.WRAPS.drawShape, { perf_mode: libWrapper.PERF_FAST });
 }
 
 function registerWebGLShadowPatches() {
