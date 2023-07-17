@@ -56,11 +56,11 @@ import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_AmbientSound } from "./AmbientSound.js";
 import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
 import { PATCHES as PATCHES_Tile } from "./Tile.js";
+import { PATCHES as PATCHES_WALL } from "./Wall.js";
 
 // Other self-executing hooks
 import "./changelog.js";
 import "./controls.js";
-import "./shadow_hooks.js";
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -268,5 +268,10 @@ Hooks.on("hoverAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.hoverAmbientLight
 Hooks.on("initializeLightSourceShaders", PATCHES_RenderedPointSource.WEBGL.HOOKS.initializeLightSourceShaders);
 Hooks.on("initializeVisionSourceShaders", PATCHES_RenderedPointSource.WEBGL.HOOKS.initializeVisionSourceShaders);
 Hooks.on("initializeDirectionalLightSourceShaders", PATCHES_RenderedPointSource.WEBGL.HOOKS.initializeDirectionalLightSourceShaders);
+
+Hooks.on("createWall", PATCHES_Wall.WEBGL.HOOKS.createWall);
+Hooks.on("updateWall", PATCHES_Wall.WEBGL.HOOKS.updateWall);
+Hooks.on("deleteWall", PATCHES_Wall.WEBGL.HOOKS.deleteWall);
+
 
 // Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);
