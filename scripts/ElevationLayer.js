@@ -26,7 +26,7 @@ import {
   drawPolygonWithHoles,
   quotient256,
   mod256 } from "./util.js";
-import { testWallsForIntersections } from "./clockwise_sweep.js";
+import { testWallsForIntersections } from "./ClockwiseSweepPolygon.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { setSceneSetting, getSceneSetting, getSetting, SETTINGS } from "./settings.js";
