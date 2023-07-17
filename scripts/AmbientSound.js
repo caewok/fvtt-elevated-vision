@@ -5,7 +5,7 @@ flattenObject
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 import { MODULE_ID, FLAGS } from "./const.js";
 
-const PATCHES = {};
+export const PATCHES = {};
 PATCHES.BASIC = {};
 
 /**

@@ -114,8 +114,10 @@ Animating for any given location:
 */
 
 
-const PATCHES_Token = {};
+export const PATCHES_Token = {};
 PATCHES_Token.BASIC = {};
+
+export const PATCHES_ActiveEffect = {};
 
 // NOTE: Token hooks
 
@@ -333,7 +335,7 @@ function createOrRemoveActiveEffectHook(effect, _opts, _userId) {
   tokens.forEach(t => t.vision._updateEVShadowData({changedElevation: true}));
 }
 
-export const PATCHES_ActiveEffect = {};
+
 PATCHES_ActiveEffect.BASIC = {};
 PATCHES_ActiveEffect.BASIC = {
   createActiveEffect: createOrRemoveActiveEffectHook,

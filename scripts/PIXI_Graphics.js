@@ -5,7 +5,7 @@ ClockwiseSweepPolygon
 
 import { getSceneSetting, SETTINGS } from "./settings.js";
 
-const PATCHES = {};
+export const PATCHES = {};
 PATCHES.POLYGONS = {};
 
 /**

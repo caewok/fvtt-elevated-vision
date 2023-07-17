@@ -10,7 +10,9 @@ import { MODULE_ID } from "./const.js";
 import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
 
 // Import objects of patch functions for each applicable Foundry class type
+import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
+import { PATCHES as PATCHES_AmbientSound } from "./AmbientSound.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
@@ -21,7 +23,6 @@ import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js
 import { PATCHES as PATCHES_Tile } from "./Tile.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
-import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 
 // Some patches are already grouped by class
 import {
@@ -62,6 +63,7 @@ export const PATCHES = {
   AdaptiveLightingShader: PATCHES_AdaptiveLightingShader,
   AmbientLight: PATCHES_AmbientLight,
   AmbientLightConfig: PATCHES_AmbientLightConfig,
+  AmbientSound: PATCHES_AmbientSound,
   AmbientSoundConfig: PATCHES_AmbientSoundConfig,
   Canvas: PATCHES_Canvas,
   CanvasVisibility: PATCHES_CanvasVisibility,

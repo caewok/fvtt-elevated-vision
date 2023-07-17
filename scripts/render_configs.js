@@ -11,9 +11,9 @@ import { MODULE_ID } from "./const.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 import { SETTINGS, getSetting } from "./settings.js";
 
-const PATCHES_AmbientLightConfig = {};
-const PATCHES_AmbientSoundConfig = {};
-const PATCHES_TileConfig = {};
+export const PATCHES_AmbientLightConfig = {};
+export const PATCHES_AmbientSoundConfig = {};
+export const PATCHES_TileConfig = {};
 
 PATCHES_AmbientLightConfig.BASIC = {};
 PATCHES_AmbientSoundConfig.BASIC = {};

@@ -13,7 +13,7 @@ import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // AmbientLight patches, methods, hooks
 
-const PATCHES = {};
+export const PATCHES = {};
 PATCHES.BASIC = {};
 
 /**
