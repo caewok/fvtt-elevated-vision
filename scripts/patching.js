@@ -21,10 +21,6 @@ VisionSource
 import { MODULE_ID } from "./const.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
-import {
-  cloneToken
-} from "./tokens.js";
-
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
@@ -45,6 +41,8 @@ import {
 import {
   PATCHES_AmbientSoundConfig,
   PATCHES_TileConfig } from "./render_configs.js";
+
+import { PATCHES_Token } from "./Token.js";
 
 /**
  * Helper to wrap methods.
@@ -118,7 +116,7 @@ export function registerPatches() {
   wrap("ClockwiseSweepPolygon.prototype._compute", PATCHES_ClockwiseSweepPolygon.POLYGONS.WRAPS._compute, { perf_mode: libWrapper.PERF_FAST });
 
   // ----- Token animation and elevation change ---- //
-  wrap("Token.prototype.clone", cloneToken, { perf_mode: libWrapper.PERF_FAST });
+  wrap("Token.prototype.clone", PATCHES_Token.BASIC.WRAPS.clone, { perf_mode: libWrapper.PERF_FAST });
 
   // ----- Application rendering configurations ----- //
   wrap("AmbientSoundConfig.defaultOptions", PATCHES_AmbientSoundConfig.BASIC.STATIC_WRAPS.defaultOptions);

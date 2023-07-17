@@ -45,14 +45,13 @@ import { SETTINGS, registerSettings, getSceneSetting, setSceneSetting } from "./
 import { updateFlyTokenControl } from "./scenes.js";
 
 // Hooks
-import { preUpdateTokenHook, refreshTokenHook, createOrRemoveActiveEffectHook } from "./tokens.js";
-
-
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_AmbientSound } from "./AmbientSound.js";
 import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
 import { PATCHES as PATCHES_Tile } from "./Tile.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
+
+import { PATCHES_Token, PATCHES_ActiveEffect } from "./Token.js";
 
 import {
   PATCHES_AmbientLightConfig,
@@ -251,10 +250,10 @@ function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
 
-Hooks.on("preUpdateToken", preUpdateTokenHook);
-Hooks.on("refreshToken", refreshTokenHook);
-Hooks.on("createActiveEffect", createOrRemoveActiveEffectHook);
-Hooks.on("deleteActiveEffect", createOrRemoveActiveEffectHook);
+Hooks.on("preUpdateToken", PATCHES_Token.BASIC.HOOKS.preUpdateToken);
+Hooks.on("refreshToken", PATCHES_Token.BASIC.HOOKS.refreshToken);
+Hooks.on("createActiveEffect", PATCHES_ActiveEffect.createActiveEffect);
+Hooks.on("deleteActiveEffect", PATCHES_ActiveEffect.deleteActiveEffect);
 
 Hooks.on("updateTile", PATCHES_Tile.BASIC.HOOKS.updateTile);
 Hooks.on("renderTileConfig", PATCHES_TileConfig.BASIC.HOOKS.renderTileConfig);
