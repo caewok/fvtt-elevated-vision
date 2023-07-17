@@ -23,6 +23,7 @@ import { getSetting, SETTINGS } from "./settings.js";
 
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
+import { PATCHES as PATCHES_AmbientSound } from "./AmbientSound.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
@@ -32,6 +33,7 @@ import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
 import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
 import { PATCHES as PATCHES_Tile } from "./Tile.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
+import { PATCHES as PATCHES_Wall } from "./Wall.js";
 
 import {
   PATCHES_DetectionMode,
@@ -39,10 +41,53 @@ import {
   PATCHES_DetectionModeTremor } from "./detection_modes.js";
 
 import {
+  PATCHES_AmbientLightConfig,
   PATCHES_AmbientSoundConfig,
   PATCHES_TileConfig } from "./render_configs.js";
 
-import { PATCHES_Token } from "./Token.js";
+import { PATCHES_Token, PATCHES_ActiveEffect } from "./Token.js";
+
+
+/**
+ * Groupings:
+ * - BASIC        Always in effect
+ * - POLYGON      When Polygon shadow setting is selected
+ * - WEBGL        When WebGL shadow setting is selected
+ * - SWEEP        When Sweep enhancement setting is selected
+ * - VISIBILITY   When EV is responsibility for testing visibility
+ *
+ * Patching options:
+ * - WRAPS
+ * - OVERRIDES
+ * - METHODS
+ * - GETTERS
+ * - STATIC_WRAPS
+ */
+export const PATCHES = {
+  ActiveEffect: PATCHES_ActiveEffect,
+  AdaptiveLightingShader: PATCHES_AdaptiveLightingShader,
+  AmbientLight: PATCHES_AmbientLight,
+  AmbientLightConfig: PATCHES_AmbientLightConfig,
+  AmbientSound: PATCHES_AmbientSound,
+  AmbientSoundConfig: PATCHES_AmbientSoundConfig,
+  Canvas: PATCHES_Canvas,
+  CanvasVisibility: PATCHES_CanvasVisibility,
+  ClockwiseSweepPolygon: PATCHES_ClockwiseSweepPolygon,
+  DetectionMode: PATCHES_DetectionMode,
+  DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
+  DetectionModeTremor: PATCHES_DetectionModeTremor,
+  GlobalLightSource: PATCHES_GlobalLightSource,
+  LightSource: PATCHES_LightSource,
+  PIXI_Graphics: PATCHES_PIXI_Graphics,
+  RenderedPointSource: PATCHES_RenderedPointSource,
+  Tile: PATCHES_Tile,
+  TileConfig: PATCHES_TileConfig,
+  Token: PATCHES_Token,
+  VisionSource: PATCHES_VisionSource,
+  Wall: PATCHES_Wall
+};
+
+
 
 /**
  * Helper to wrap methods.
