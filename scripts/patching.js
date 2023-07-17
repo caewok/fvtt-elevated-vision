@@ -109,7 +109,7 @@ import {
   convertToDirectionalLightAmbientLight,
   convertFromDirectionalLightAmbientLight,
   cloneAmbientLight,
-  _onUpdateAmbientLight } from "./directional_lights.js";
+  _onUpdateAmbientLight } from "./DirectionalLightSource.js";
 
 
 /**
