@@ -33,10 +33,6 @@ import {
 
 import {
   drawShapePIXIGraphics,
-  refreshVisibilityCanvasVisibility,
-  checkLightsCanvasVisibility,
-  _tearDownCanvasVisibility,
-  cacheLightsCanvasVisibility,
   _testLOSDetectionMode,
   _testPointDetectionModeBasicSight,
   _canDetectDetectionModeTremor } from "./vision.js";
@@ -49,9 +45,10 @@ import {
 
 import { getEVPixelCacheTile } from "./tiles.js";
 
-import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
+import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
+import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 
 import {
   _configureRenderedPointSource,
@@ -226,10 +223,10 @@ export function registerAdditions() {
   addClassMethod(RenderedPointSource.prototype, "wallRemoved", wallRemovedRenderedPointSource);
   addClassGetter(RenderedPointSource.prototype, "bounds", boundsRenderedPointSource);
 
-  addClassMethod(CanvasVisibility.prototype, "checkLights", checkLightsCanvasVisibility);
-  addClassMethod(CanvasVisibility.prototype, "cacheLights", cacheLightsCanvasVisibility);
-  addClassMethod(CanvasVisibility.prototype, "renderTransform", new PIXI.Matrix());
-  addClassMethod(CanvasVisibility.prototype, "pointSourcesStates", new Map());
+  addClassMethod(CanvasVisibility.prototype, "checkLights", PATCHES_CanvasVisibility.WEBGL.METHODS.checkLights);
+  addClassMethod(CanvasVisibility.prototype, "cacheLights", PATCHES_CanvasVisibility.WEBGL.METHODS.cacheLights);
+  addClassMethod(CanvasVisibility.prototype, "renderTransform", PATCHES_CanvasVisibility.WEBGL.METHODS.renderTransform);
+  addClassMethod(CanvasVisibility.prototype, "pointSourcesStates", PATCHES_CanvasVisibility.WEBGL.METHODS.pointSourcesStates);
 
   // For WebGL shadows -- shadow properties
   addClassGetter(RenderedPointSource.prototype, "EVVisionMask", EVVisionMaskRenderedPointSource);
@@ -334,8 +331,8 @@ function registerPolygonShadowPatches() {
 
 function registerWebGLShadowPatches() {
   deregisterShadowPatches();
-  shaderOverride("CanvasVisibility.prototype.refreshVisibility", refreshVisibilityCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
-  shaderWrap("CanvasVisibility.prototype._tearDown", _tearDownCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
+  shaderOverride("CanvasVisibility.prototype.refreshVisibility", PATCHES_CanvasVisibility.WEBGL.OVERRIDES.refreshVisibility, { perf_mode: libWrapper.PERF_FAST });
+  shaderWrap("CanvasVisibility.prototype._tearDown", PATCHES_CanvasVisibility.WEBGL.WRAPS._tearDown, { perf_mode: libWrapper.PERF_FAST });
 
   shaderWrap("AdaptiveLightingShader.create", PATCHES_AdaptiveLightingShader.BASIC.STATIC_WRAPS.create);
 
