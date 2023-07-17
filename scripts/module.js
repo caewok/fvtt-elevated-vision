@@ -51,10 +51,10 @@ import { updateTileHook } from "./tiles.js";
 import {
   renderAmbientLightConfigHook,
   renderAmbientSoundConfigHook,
-  renderTileConfigHook,
-  updateAmbientSoundHook } from "./renderConfig.js";
+  renderTileConfigHook } from "./renderConfig.js";
 
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
+import { PATCHES as PATCHES_AmbientSound } from "./AmbientSound.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -260,7 +260,7 @@ Hooks.on("renderTileConfig", renderTileConfigHook);
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
 Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
 Hooks.on("updateAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.updateAmbientLight);
-Hooks.on("updateAmbientSound", updateAmbientSoundHook);
+Hooks.on("updateAmbientSound", PATCHES_AmbientSound.BASIC.HOOKS.updateAmbientSound);
 Hooks.on("refreshAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.refreshAmbientLight);
 Hooks.on("hoverAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.hoverAmbientLight);
 
