@@ -52,12 +52,9 @@ import {
   renderAmbientLightConfigHook,
   renderAmbientSoundConfigHook,
   renderTileConfigHook,
-  updateAmbientLightHook,
   updateAmbientSoundHook } from "./renderConfig.js";
 
-import { refreshAmbientLightHook } from "./lighting_elevation_tooltip.js";
-
-import { hoverAmbientLightHook } from "./directional_lights.js";
+import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -262,9 +259,9 @@ Hooks.on("renderTileConfig", renderTileConfigHook);
 
 Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
 Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
-Hooks.on("updateAmbientLight", updateAmbientLightHook);
+Hooks.on("updateAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.updateAmbientLight);
 Hooks.on("updateAmbientSound", updateAmbientSoundHook);
-Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
-Hooks.on("hoverAmbientLight", hoverAmbientLightHook);
+Hooks.on("refreshAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.refreshAmbientLight);
+Hooks.on("hoverAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.hoverAmbientLight);
 
 // Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);

@@ -51,6 +51,7 @@ import { getEVPixelCacheTile } from "./tiles.js";
 
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
+import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 
 import {
   _configureRenderedPointSource,
@@ -96,20 +97,6 @@ import {
   targetInShadowRenderedSource,
   targetInShadowVisionSource,
   hasWallCollisionRenderedPointSource } from "./shadow_hooks.js";
-
-import {
-  _drawAmbientLight,
-  _drawTooltipAmbientLight,
-  _getTooltipTextAmbientLight,
-  _getTextStyleAmbientLight,
-  refreshControlAmbientLight } from "./lighting_elevation_tooltip.js";
-
-import {
-  convertToDirectionalLightAmbientLight,
-  convertFromDirectionalLightAmbientLight,
-  cloneAmbientLight,
-  _onUpdateAmbientLight } from "./directional_lights.js";
-
 
 /**
  * Helper to wrap methods.
@@ -196,12 +183,12 @@ export function registerPatches() {
   }
 
   // ----- Lighting elevation tooltip ----- //
-  wrap("AmbientLight.prototype._draw", _drawAmbientLight);
+  wrap("AmbientLight.prototype._draw", PATCHES_AmbientLight.BASIC.WRAPS._draw);
 
   // ----- Directional lighting ----- //
-  wrap("AmbientLight.prototype.clone", cloneAmbientLight);
-  wrap("AmbientLight.prototype._onUpdate", _onUpdateAmbientLight);
-  wrap("AmbientLight.prototype.refreshControl", refreshControlAmbientLight);
+  wrap("AmbientLight.prototype.clone", PATCHES_AmbientLight.BASIC.WRAPS.clone);
+  wrap("AmbientLight.prototype._onUpdate", PATCHES_AmbientLight.BASIC.WRAPS._onUpdate);
+  wrap("AmbientLight.prototype.refreshControl", PATCHES_AmbientLight.BASIC.WRAPS.refreshControl);
 
   // ----- Penumbra lighting shadows ----- //
   wrap("LightSource.prototype._initialize", _initializeLightSource);
@@ -230,8 +217,8 @@ export function registerAdditions() {
   // For Polygons shadows -- Nothing added
 
   // For Directional Lighting
-  addClassMethod(AmbientLight.prototype, "convertToDirectionalLight", convertToDirectionalLightAmbientLight);
-  addClassMethod(AmbientLight.prototype, "convertFromDirectionalLight", convertFromDirectionalLightAmbientLight);
+  addClassMethod(AmbientLight.prototype, "convertToDirectionalLight", PATCHES_AmbientLight.BASIC.METHODS.convertToDirectionalLight);
+  addClassMethod(AmbientLight.prototype, "convertFromDirectionalLight", PATCHES_AmbientLight.BASIC.METHODS.convertFromDirectionalLight);
 
   // For WebGL shadows
   addClassMethod(RenderedPointSource.prototype, "wallAdded", wallAddedRenderedPointSource);
@@ -273,9 +260,9 @@ export function registerAdditions() {
   addClassMethod(GlobalLightSource.prototype, "_updateEVShadowData", _updateEVShadowDataGlobalLightSource);
 
   // For light elevation tooltip
-  addClassMethod(AmbientLight.prototype, "_drawTooltip", _drawTooltipAmbientLight);
-  addClassMethod(AmbientLight.prototype, "_getTooltipText", _getTooltipTextAmbientLight);
-  addClassMethod(AmbientLight, "_getTextStyle", _getTextStyleAmbientLight);
+  addClassMethod(AmbientLight.prototype, "_drawTooltip", PATCHES_AmbientLight.BASIC.METHODS._drawTooltip);
+  addClassMethod(AmbientLight.prototype, "_getTooltipText", PATCHES_AmbientLight.BASIC.METHODS._getTooltipText);
+  addClassMethod(AmbientLight, "_getTextStyle", PATCHES_AmbientLight.BASIC.STATIC_METHODS._getTextStyle);
 
   // For vision in dim/bright/shadows
   addClassMethod(LightSource, "BRIGHTNESS_LEVEL", BRIGHTNESS_LEVEL);
