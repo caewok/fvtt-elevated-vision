@@ -49,6 +49,7 @@ import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLighti
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
+import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
 
 import {
   _configureRenderedPointSource,
@@ -75,12 +76,6 @@ import {
   _initializeEVShadowGeometryVisionSource,
   _initializeEVShadowRendererVisionSource,
   _initializeEVShadowMaskVisionSource,
-
-  _initializeEVShadowsGlobalLightSource,
-  _initializeEVShadowGeometryGlobalLightSource,
-  _initializeEVShadowMeshGlobalLightSource,
-  _initializeEVShadowRendererGlobalLightSource,
-  _initializeEVShadowMaskGlobalLightSource,
 
   _updateEVShadowDataRenderedPointSource,
   _updateEVShadowDataLightSource,
@@ -231,7 +226,7 @@ export function registerAdditions() {
   // For WebGL shadows -- shadow properties
   addClassGetter(RenderedPointSource.prototype, "EVVisionMask", EVVisionMaskRenderedPointSource);
   addClassGetter(VisionSource.prototype, "EVVisionLOSMask", EVVisionLOSMaskVisionSource);
-  addClassGetter(GlobalLightSource.prototype, "EVVisionMask", EVVisionMaskGlobalLightSource);
+  addClassGetter(GlobalLightSource.prototype, "EVVisionMask", PATCHES_GlobalLightSource.WEBGL.GETTERS.EVVisionMask);
   addClassGetter(VisionSource.prototype, "EVVisionMask", EVVisionMaskVisionSource);
 
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadows", _initializeEVShadowsRenderedPointSource);
@@ -246,11 +241,11 @@ export function registerAdditions() {
   addClassMethod(VisionSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererVisionSource);
   addClassMethod(VisionSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskVisionSource);
 
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadows", _initializeEVShadowsGlobalLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryGlobalLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshGlobalLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererGlobalLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskGlobalLightSource);
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadows", PATCHES_GlobalLightSource.WEBGL.METHODS._initializeEVShadows);
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowGeometry", PATCHES_GlobalLightSource.WEBGL.METHODS._initializeEVShadowGeometry);
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMesh", PATCHES_GlobalLightSource.WEBGL.METHODS._initializeEVShadowMesh);
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowRenderer", PATCHES_GlobalLightSource.WEBGL.METHODS._initializeEVShadowRenderer);
+  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", PATCHES_GlobalLightSource.WEBGL.METHODS._initializeEVShadowMask);
 
   addClassMethod(RenderedPointSource.prototype, "_updateEVShadowData", _updateEVShadowDataRenderedPointSource);
   addClassMethod(LightSource.prototype, "_updateEVShadowData", _updateEVShadowDataLightSource);
