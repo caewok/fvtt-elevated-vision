@@ -1,7 +1,6 @@
 /* globals
 AmbientLight,
 canvas,
-flattenObject,
 LightSource,
 PIXI
 PreciseText
@@ -342,7 +341,6 @@ export class DirectionalLightSource extends LightSource {
     const testPt = new Point3d(x, y, z);
 
     // Project a point out beyond the canvas to stand in for the light position.
-    const maxR = canvas.dimensions.maxR;
     const { azimuth, elevationAngle, solarAngle } = this;
     const midCollision = directionalCollision(this, testPt, azimuth, elevationAngle);
 
@@ -450,6 +448,8 @@ export function _onUpdateAmbientLight(wrap, data, options, userId) {
 
   return wrap(data, options, userId);
 }
+
+
 
 /**
  * Linear interpolation of x and y numeric values based on "a" weight. Comparable to GLSL mix function.
