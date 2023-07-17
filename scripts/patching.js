@@ -50,6 +50,7 @@ import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
+import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
 
 import {
   _configureRenderedPointSource,
@@ -61,7 +62,6 @@ import {
 
   EVVisionMaskRenderedPointSource,
   EVVisionLOSMaskVisionSource,
-  EVVisionMaskGlobalLightSource,
   EVVisionMaskVisionSource,
 
   _initializeEVShadowsRenderedPointSource,
@@ -70,18 +70,11 @@ import {
   _initializeEVShadowRendererRenderedPointSource,
   _initializeEVShadowMaskRenderedPointSource,
 
-  _initializeEVShadowMeshLightSource,
-  _initializeLightSource,
-
   _initializeEVShadowGeometryVisionSource,
   _initializeEVShadowRendererVisionSource,
   _initializeEVShadowMaskVisionSource,
 
   _updateEVShadowDataRenderedPointSource,
-  _updateEVShadowDataLightSource,
-  _updateEVShadowDataGlobalLightSource,
-
-  _createPolygonLightSource,
 
   // Shadow visibility testing.
   BRIGHTNESS_LEVEL,
@@ -183,8 +176,8 @@ export function registerPatches() {
   wrap("AmbientLight.prototype.refreshControl", PATCHES_AmbientLight.BASIC.WRAPS.refreshControl);
 
   // ----- Penumbra lighting shadows ----- //
-  wrap("LightSource.prototype._initialize", _initializeLightSource);
-  wrap("LightSource.prototype._createPolygon", _createPolygonLightSource);
+  wrap("LightSource.prototype._initialize", PATCHES_LightSource.WEBGL.WRAPS._initialize);
+  wrap("LightSource.prototype._createPolygon", PATCHES_LightSource.WEBGL.WRAPS._createPolygon);
 
   // ----- Shadow visibility testing ----- //
   if ( getSetting(SETTINGS.TEST_VISIBILITY) ) {
@@ -235,7 +228,7 @@ export function registerAdditions() {
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
 
-  addClassMethod(LightSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshLightSource);
+  addClassMethod(LightSource.prototype, "_initializeEVShadowMesh", PATCHES_LightSource.WEBGL.METHODS._initializeEVShadowMesh);
 
   addClassMethod(VisionSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryVisionSource);
   addClassMethod(VisionSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererVisionSource);
@@ -248,8 +241,8 @@ export function registerAdditions() {
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", PATCHES_GlobalLightSource.WEBGL.METHODS._initializeEVShadowMask);
 
   addClassMethod(RenderedPointSource.prototype, "_updateEVShadowData", _updateEVShadowDataRenderedPointSource);
-  addClassMethod(LightSource.prototype, "_updateEVShadowData", _updateEVShadowDataLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_updateEVShadowData", _updateEVShadowDataGlobalLightSource);
+  addClassMethod(LightSource.prototype, "_updateEVShadowData", PATCHES_LightSource.WEBGL.METHODS._updateEVShadowData);
+  addClassMethod(GlobalLightSource.prototype, "_updateEVShadowData", PATCHES_GlobalLightSource.WEBGL.METHODS._updateEVShadowData);
 
   // For light elevation tooltip
   addClassMethod(AmbientLight.prototype, "_drawTooltip", PATCHES_AmbientLight.BASIC.METHODS._drawTooltip);
@@ -257,7 +250,6 @@ export function registerAdditions() {
   addClassMethod(AmbientLight, "_getTextStyle", PATCHES_AmbientLight.BASIC.STATIC_METHODS._getTextStyle);
 
   // For vision in dim/bright/shadows
-  addClassMethod(LightSource, "BRIGHTNESS_LEVEL", BRIGHTNESS_LEVEL);
   addClassMethod(RenderedPointSource.prototype, "pointInShadow", pointInShadowRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "targetInShadow", targetInShadowRenderedSource);
   addClassMethod(VisionSource.prototype, "targetInShadow", targetInShadowVisionSource);
