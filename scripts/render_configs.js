@@ -1,6 +1,5 @@
 /* globals
 canvas,
-flattenObject,
 FormDataExtended,
 foundry,
 game,
@@ -8,20 +7,32 @@ renderTemplate
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
-import { MODULE_ID, FLAGS } from "./const.js";
+import { MODULE_ID } from "./const.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 import { SETTINGS, getSetting } from "./settings.js";
+
+const PATCHES_AmbientLightConfig = {};
+const PATCHES_AmbientSoundConfig = {};
+const PATCHES_TileConfig = {};
+
+PATCHES_AmbientLightConfig.BASIC = {};
+PATCHES_AmbientSoundConfig.BASIC = {};
+PATCHES_TileConfig.BASIC = {};
 
 /**
  * Inject html to add controls to the ambient light configuration to allow user to set elevation.
  */
-export async function renderAmbientLightConfigHook(app, html, data) {
+async function renderAmbientLightConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-ambient-source-config.html`;
   const findString = "div[data-tab='basic']:last";
   calculateDirectionalData(app, data);
   await injectConfiguration(app, html, data, template, findString);
   activateLightConfigListeners(app, html);
 }
+
+PATCHES_AmbientLightConfig.BASIC.HOOKS = {
+  renderAmbientLightConfig: renderAmbientLightConfigHook
+};
 
 /**
  * Calculate directional data based on position.
@@ -43,20 +54,29 @@ function calculateDirectionalData(app, data) {
 /**
  * Inject html to add controls to the ambient sound configuration to allow user to set elevation.
  */
-export async function renderAmbientSoundConfigHook(app, html, data) {
+async function renderAmbientSoundConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-ambient-source-config.html`;
   const findString = ".form-group:last";
   await injectConfiguration(app, html, data, template, findString);
 }
 
+PATCHES_AmbientSoundConfig.BASIC.HOOKS = {
+  renderAmbientSoundConfig: renderAmbientSoundConfigHook
+};
+
 /**
  * Inject html to add controls to the tile configuration to allow user to set elevation.
  */
-export async function renderTileConfigHook(app, html, data) {
+async function renderTileConfigHook(app, html, data) {
   const template = `modules/${MODULE_ID}/templates/elevatedvision-tile-config.html`;
   const findString = "div[data-tab='basic']:last";
   await injectConfiguration(app, html, data, template, findString);
 }
+
+PATCHES_TileConfig.BASIC.HOOKS = {
+  renderTileConfig: renderTileConfigHook
+};
+
 
 /**
  * Catch when the user selects directional wall to update the submenu options.
@@ -78,10 +98,6 @@ function onChangeAzimuth(event) {
   const { x, y} = DirectionalLightSource.positionFromDirectionalParameters(azimuth, clone.source.elevationAngle);
   const newData = { x, y };
   newData[MODULE_ID] = { azimuth: Number(event.target.value) };
-
-//   const previewData = this._getSubmitData(newData);
-//   this._previewChanges(previewData);
-//   this.render();
 }
 
 /**
@@ -95,10 +111,6 @@ function onChangeElevationAngle(event) {
   const { x, y } = DirectionalLightSource.positionFromDirectionalParameters(clone.source.azimuth, elevationAngle);
   const newData = { x, y };
   newData[MODULE_ID] = { elevationAngle: Number(event.target.value) };
-
-//   const previewData = this._getSubmitData(newData);
-//   this._previewChanges(previewData);
-//   this.render();
 }
 
 /**
@@ -129,78 +141,6 @@ function onCheckDirectional(event) {
 }
 
 /**
- * Hook when the elevation flag is changed in the AmbientLightDocument.
- * Used below to update the underlying source elevation.
- * @param {Document} document                       The existing Document which was updated
- * @param {object} change                           Differential data that was used to update the document
- * @param {DocumentModificationContext} options     Additional options which modified the update request
- * @param {string} userId                           The ID of the User who triggered the update workflow
- */
-export function updateAmbientLightHook(doc, data, _options, _userId) {
-  const elevChangeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
-  const dimRadiusChangeFlag = "config.dim";
-  const brightRadiusChangeflag = "config.bright";
-
-  const flatData = flattenObject(data);
-  const changed = new Set(Object.keys(flatData));
-  if ( changed.has(elevChangeFlag) ) {
-    doc.object.renderFlags.set({
-      refreshElevation: true
-    });
-  }
-
-  if ( changed.has(dimRadiusChangeFlag) || changed.has(brightRadiusChangeflag) ) {
-    doc.object.renderFlags.set({
-      refreshRadius: true
-    });
-  }
-}
-
-/**
- * Hook when the elevation flag is changed in the AmbientSoundDocument.
- * Used below to update the underlying source elevation.
- * @param {Document} document                       The existing Document which was updated
- * @param {object} change                           Differential data that was used to update the document
- * @param {DocumentModificationContext} options     Additional options which modified the update request
- * @param {string} userId                           The ID of the User who triggered the update workflow
- */
-export function updateAmbientSoundHook(doc, data, _options, _userId) {
-  const changeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
-  const flatData = flattenObject(data);
-  const changed = new Set(Object.keys(flatData));
-  if ( !changed.has(changeFlag) ) return;
-
-  doc.object.renderFlags.set({
-    refreshElevation: true
-  });
-}
-
-/**
- * Hook ambient light refresh to address the refreshElevation renderFlag.
- * Update the source elevation.
- * See AmbientLight.prototype._applyRenderFlags.
- * @param {PlaceableObject} object    The object instance being refreshed
- * @param {RenderFlags} flags
- */
-// export function refreshAmbientLightHook(light, flags) {
-//   if ( flags.refreshElevation ) {
-//
-//   }
-// }
-
-/**
- * Hook ambient sound refresh to address the refreshElevation renderFlag.
- * Update the source elevation.
- * See AmbientSound.prototype._applyRenderFlags.
- * @param {PlaceableObject} object    The object instance being refreshed
- * @param {RenderFlags} flags
- */
-// export function refreshAmbientSoundHook(sound, flags) {
-  // if ( flags.refreshElevation ) {}
-// }
-
-
-/**
  * Helper to inject configuration html into the application config.
  */
 async function injectConfiguration(app, html, data, template, findString) {
@@ -217,18 +157,22 @@ async function injectConfiguration(app, html, data, template, findString) {
  * @param {Function} wrapper
  * @return {Object} See AmbientSoundConfig.defaultOptions.
  */
-export function defaultOptionsAmbientSoundConfig(wrapper) {
+function defaultOptionsAmbientSoundConfig(wrapper) {
   const options = wrapper();
   return foundry.utils.mergeObject(options, {
     height: "auto"
   });
 }
 
+PATCHES_AmbientSoundConfig.BASIC.STATIC_WRAPS = {
+  defaultOptions: defaultOptionsAmbientSoundConfig
+};
+
 /**
  * Wrapper for TileConfig.prototype.getData.
  * Add gridUnits value so units appear with the elevation setting.
  */
-export function getDataTileConfig(wrapper, options={}) {
+function getDataTileConfig(wrapper, options={}) {
   const data = wrapper(options);
   data.gridUnits = canvas.scene.grid.units || game.i18n.localize("GridUnits");
   return data;
@@ -239,7 +183,7 @@ export function getDataTileConfig(wrapper, options={}) {
  * Link Levels bottom elevation with EV elevation of the tile
  * If one changes, the other should change.
  */
-export async function _onChangeInputTileConfig(wrapper, event) {
+async function _onChangeInputTileConfig(wrapper, event) {
   await wrapper(event);
 
   // If EV elevation or levels bottom elevation updated, update the other.
@@ -264,4 +208,7 @@ export async function _onChangeInputTileConfig(wrapper, event) {
   this.document.object.refresh();
 }
 
-
+PATCHES_TileConfig.BASIC.WRAPS = {
+  getData: getDataTileConfig,
+  _onChangeInput: _onChangeInputTileConfig
+};

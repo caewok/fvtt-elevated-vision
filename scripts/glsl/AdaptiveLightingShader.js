@@ -5,12 +5,16 @@
 import { SETTINGS, getSceneSetting } from "../settings.js";
 import { ShaderPatcher, applyPatches } from "../perfect-vision/shader-patcher.js";
 
+export const PATCHES = {};
+PATCHES.BASIC = {}; // Basic b/c we are switching the shader uniform dynamically.
+
+
 /**
  * Wrap AdaptiveLightingShader.create
  * Inherited by AdaptiveVisionShader
  * Add shadow GLSL code to the lighting fragment shaders.
  */
-export function createAdaptiveLightingShader(wrapped, ...args) {
+function create(wrapped, ...args) {
   applyPatches(this,
     false,
     source => {
@@ -25,6 +29,8 @@ export function createAdaptiveLightingShader(wrapped, ...args) {
   shader.uniforms.uEVShadows = shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL;
   return shader;
 }
+
+PATCHES.BASIC.STATIC_WRAPS = { create };
 
 /**
  * Shadow GLSL code to add to the fragment source.

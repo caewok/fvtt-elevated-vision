@@ -1,116 +1,84 @@
 /* globals
-AmbientLight,
-canvas,
-CanvasVisibility,
-ClockwiseSweepPolygon,
-GlobalLightSource,
-libWrapper,
-LightSource,
-PIXI,
-RenderedPointSource,
-SettingsConfig,
-Tile,
-Token,
-VisionSource
+Hooks,
+libWrapper
 */
-
 "use strict";
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
-// Patches
 
 import { MODULE_ID } from "./const.js";
-import { getSetting, SETTINGS } from "./settings.js";
+import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
+
+// Import objects of patch functions for each applicable Foundry class type
+import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
+import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
+import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
+import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
+import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
+import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
+import { PATCHES as PATCHES_PIXI_Graphics } from "./PIXI_Graphics.js";
+import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
+import { PATCHES as PATCHES_Tile } from "./Tile.js";
+import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
+import { PATCHES as PATCHES_Wall } from "./Wall.js";
+import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
+
+// Some patches are already grouped by class
+import {
+  PATCHES_DetectionMode,
+  PATCHES_DetectionModeBasicSight,
+  PATCHES_DetectionModeTremor } from "./detection_modes.js";
 
 import {
-  defaultOptionsAmbientSoundConfig,
-  getDataTileConfig,
-  _onChangeInputTileConfig
-} from "./renderConfig.js";
+  PATCHES_AmbientLightConfig,
+  PATCHES_AmbientSoundConfig,
+  PATCHES_TileConfig } from "./render_configs.js";
 
 import {
-  cloneToken
-} from "./tokens.js";
+  PATCHES_Token,
+  PATCHES_ActiveEffect } from "./tokens.js";
 
-import {
-  drawShapePIXIGraphics,
-  refreshVisibilityCanvasVisibility,
-  checkLightsCanvasVisibility,
-  _tearDownCanvasVisibility,
-  cacheLightsCanvasVisibility,
-  _testLOSDetectionMode,
-  _testPointDetectionModeBasicSight,
-  _canDetectDetectionModeTremor } from "./vision.js";
+// Different types of registrations, depending on function.
+export const REG_TRACKER = {};
 
-import {
-  _computeClockwiseSweepPolygon,
-  _drawShadowsClockwiseSweepPolygon,
-  initializeClockwiseSweepPolygon
-} from "./clockwise_sweep.js";
 
-import { getEVPixelCacheTile } from "./tiles.js";
-
-import { _onMouseMoveCanvas } from "./ElevationLayer.js";
-
-import { createAdaptiveLightingShader } from "./glsl/patch_lighting_shaders.js";
-
-import {
-  _configureRenderedPointSource,
-  destroyRenderedPointSource,
-  wallAddedRenderedPointSource,
-  wallUpdatedRenderedPointSource,
-  wallRemovedRenderedPointSource,
-  boundsRenderedPointSource,
-
-  EVVisionMaskRenderedPointSource,
-  EVVisionLOSMaskVisionSource,
-  EVVisionMaskGlobalLightSource,
-  EVVisionMaskVisionSource,
-
-  _initializeEVShadowsRenderedPointSource,
-  _initializeEVShadowGeometryRenderedPointSource,
-  _initializeEVShadowMeshRenderedPointSource,
-  _initializeEVShadowRendererRenderedPointSource,
-  _initializeEVShadowMaskRenderedPointSource,
-
-  _initializeEVShadowMeshLightSource,
-  _initializeLightSource,
-
-  _initializeEVShadowGeometryVisionSource,
-  _initializeEVShadowRendererVisionSource,
-  _initializeEVShadowMaskVisionSource,
-
-  _initializeEVShadowsGlobalLightSource,
-  _initializeEVShadowGeometryGlobalLightSource,
-  _initializeEVShadowMeshGlobalLightSource,
-  _initializeEVShadowRendererGlobalLightSource,
-  _initializeEVShadowMaskGlobalLightSource,
-
-  _updateEVShadowDataRenderedPointSource,
-  _updateEVShadowDataLightSource,
-  _updateEVShadowDataGlobalLightSource,
-
-  _createPolygonLightSource,
-
-  // Shadow visibility testing.
-  BRIGHTNESS_LEVEL,
-  pointInShadowRenderedPointSource,
-  targetInShadowRenderedSource,
-  targetInShadowVisionSource,
-  hasWallCollisionRenderedPointSource } from "./shadow_hooks.js";
-
-import {
-  _drawAmbientLight,
-  _drawTooltipAmbientLight,
-  _getTooltipTextAmbientLight,
-  _getTextStyleAmbientLight,
-  refreshControlAmbientLight } from "./lighting_elevation_tooltip.js";
-
-import {
-  convertToDirectionalLightAmbientLight,
-  convertFromDirectionalLightAmbientLight,
-  cloneAmbientLight,
-  _onUpdateAmbientLight } from "./DirectionalLightSource.js";
-
+/**
+ * Groupings:
+ * - BASIC        Always in effect
+ * - POLYGON      When Polygon shadow setting is selected
+ * - WEBGL        When WebGL shadow setting is selected
+ * - SWEEP        When Sweep enhancement setting is selected
+ * - VISIBILITY   When EV is responsibility for testing visibility
+ *
+ * Patching options:
+ * - WRAPS
+ * - OVERRIDES
+ * - METHODS
+ * - GETTERS
+ * - STATIC_WRAPS
+ */
+export const PATCHES = {
+  ActiveEffect: PATCHES_ActiveEffect,
+  AdaptiveLightingShader: PATCHES_AdaptiveLightingShader,
+  AmbientLight: PATCHES_AmbientLight,
+  AmbientLightConfig: PATCHES_AmbientLightConfig,
+  AmbientSoundConfig: PATCHES_AmbientSoundConfig,
+  Canvas: PATCHES_Canvas,
+  CanvasVisibility: PATCHES_CanvasVisibility,
+  ClockwiseSweepPolygon: PATCHES_ClockwiseSweepPolygon,
+  DetectionMode: PATCHES_DetectionMode,
+  DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
+  DetectionModeTremor: PATCHES_DetectionModeTremor,
+  GlobalLightSource: PATCHES_GlobalLightSource,
+  LightSource: PATCHES_LightSource,
+  PIXI_Graphics: PATCHES_PIXI_Graphics,
+  RenderedPointSource: PATCHES_RenderedPointSource,
+  Tile: PATCHES_Tile,
+  TileConfig: PATCHES_TileConfig,
+  Token: PATCHES_Token,
+  VisionSource: PATCHES_VisionSource,
+  Wall: PATCHES_Wall
+};
 
 /**
  * Helper to wrap methods.
@@ -133,239 +101,189 @@ function override(method, fn, options = {}) {
 }
 
 /**
- * Helper to add a method to a class.
+ * Helper to add a method or a getter to a class.
  * @param {class} cl      Either Class.prototype or Class
  * @param {string} name   Name of the method
  * @param {function} fn   Function to use for the method
+ * @param {object} [opts] Optional parameters
+ * @param {boolean} [opts.getter]     True if the property should be made a getter.
+ * @param {boolean} [opts.optional]   True if the getter should not be set if it already exists.
+ * @returns {undefined|string} Either undefined if the getter already exists or the cl.prototype.name.
  */
-function addClassMethod(cl, name, fn) {
-  Object.defineProperty(cl, name, {
-    value: fn,
-    writable: true,
-    configurable: true
-  });
+function addClassMethod(cl, name, fn, { getter = false, optional = false } = {}) {
+  if ( optional && Object.hasOwn(cl, name) ) return undefined;
+  const descriptor = { writable: true, configurable: true };
+  if ( getter ) descriptor.get = fn;
+  else descriptor.value = fn;
+  Object.defineProperty(cl, name, descriptor);
+  return `${cl.name ?? cl.constructor.name}.${cl.name ? "" : "prototype."}${name}`;
 }
 
+// ----- NOTE: Track libWrapper patches, method additions, and hooks ----- //
 /**
- * Helper to add a getter to a class.
- * @param {class} cl      Either Class.prototype or Class
- * @param {string} name   Name of the method
- * @param {function} fn   Function to use for the method
+ * Decorator to register and record a patch, method, or hook.
+ * @param {function} fn   A registration function that returns an id. E.g., libWrapper or Hooks.on.
+ * @param {Map} map       The map in which to store the id along with the arguments used when registering.
+ * @returns {number} The id
  */
-function addClassGetter(cl, name, fn) {
-  if ( !Object.hasOwn(cl, name) ) {
-    Object.defineProperty(cl, name, {
-      get: fn,
-      enumerable: false,
-      configurable: true
-    });
-  }
+function regDec(fn, map) {
+  return function() {
+    const id = fn.apply(this, arguments);
+    map.set(id, arguments);
+    return id;
+  };
 }
-
-// IDs returned by libWrapper.register for the shadow shader patches.
-const libWrapperShaderIds = [];
-
-/**
- * Decorator to register and record libWrapper id for a shader function.
- * @param {function} fn   A libWrapper registration function
- */
-function regShaderPatch(fn) {
-  return function() { libWrapperShaderIds.push(fn.apply(this, arguments)); };
-}
-
-const shaderWrap = regShaderPatch(wrap);
-const shaderOverride = regShaderPatch(override);
-
-export function registerPatches() {
-  // Track mouse events
-  wrap("Canvas.prototype._onMouseMove", _onMouseMoveCanvas, { perf_mode: libWrapper.PERF_FAST });
-
-  // ----- Locating edges that create shadows in the LOS ----- //
-  wrap("ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
-
-  // ----- Token animation and elevation change ---- //
-  wrap("Token.prototype.clone", cloneToken, { perf_mode: libWrapper.PERF_FAST });
-
-  // ----- Application rendering configurations ----- //
-  wrap("AmbientSoundConfig.defaultOptions", defaultOptionsAmbientSoundConfig);
-  wrap("TileConfig.prototype.getData", getDataTileConfig);
-  wrap("TileConfig.prototype._onChangeInput", _onChangeInputTileConfig);
-
-  // ----- Clockwise sweep enhancements ----- //
-  if ( getSetting(SETTINGS.CLOCKWISE_SWEEP) ) {
-    wrap("ClockwiseSweepPolygon.prototype.initialize", initializeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
-  }
-
-  // ----- Lighting elevation tooltip ----- //
-  wrap("AmbientLight.prototype._draw", _drawAmbientLight);
-
-  // ----- Directional lighting ----- //
-  wrap("AmbientLight.prototype.clone", cloneAmbientLight);
-  wrap("AmbientLight.prototype._onUpdate", _onUpdateAmbientLight);
-  wrap("AmbientLight.prototype.refreshControl", refreshControlAmbientLight);
-
-  // ----- Penumbra lighting shadows ----- //
-  wrap("LightSource.prototype._initialize", _initializeLightSource);
-  wrap("LightSource.prototype._createPolygon", _createPolygonLightSource);
-
-  // ----- Shadow visibility testing ----- //
-  if ( getSetting(SETTINGS.TEST_VISIBILITY) ) {
-    override("DetectionMode.prototype._testLOS", _testLOSDetectionMode, { perf_mode: libWrapper.PERF_FAST });
-    override("DetectionModeBasicSight.prototype._testPoint", _testPointDetectionModeBasicSight, { perf_mode: libWrapper.PERF_FAST });
-  }
-
-  // ----- Tremor visibility detection ----- //
-  override("DetectionModeTremor.prototype._canDetect", _canDetectDetectionModeTremor, { perf_mode: libWrapper.PERF_FAST });
-
-  // Clear the prior libWrapper shader ids, if any.
-  libWrapperShaderIds.length = 0;
-}
-
-export function registerAdditions() {
-  addClassMethod(ClockwiseSweepPolygon.prototype, "_drawShadows", _drawShadowsClockwiseSweepPolygon);
-  addClassMethod(Token.prototype, "getTopLeft", getTopLeftTokenCorner);
-
-  addClassGetter(Tile.prototype, "evPixelCache", getEVPixelCacheTile);
-  addClassMethod(Tile.prototype, "_evPixelCache", undefined);
-
-  // For Polygons shadows -- Nothing added
-
-  // For Directional Lighting
-  addClassMethod(AmbientLight.prototype, "convertToDirectionalLight", convertToDirectionalLightAmbientLight);
-  addClassMethod(AmbientLight.prototype, "convertFromDirectionalLight", convertFromDirectionalLightAmbientLight);
-
-  // For WebGL shadows
-  addClassMethod(RenderedPointSource.prototype, "wallAdded", wallAddedRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "wallUpdated", wallUpdatedRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "wallRemoved", wallRemovedRenderedPointSource);
-  addClassGetter(RenderedPointSource.prototype, "bounds", boundsRenderedPointSource);
-
-  addClassMethod(CanvasVisibility.prototype, "checkLights", checkLightsCanvasVisibility);
-  addClassMethod(CanvasVisibility.prototype, "cacheLights", cacheLightsCanvasVisibility);
-  addClassMethod(CanvasVisibility.prototype, "renderTransform", new PIXI.Matrix());
-  addClassMethod(CanvasVisibility.prototype, "pointSourcesStates", new Map());
-
-  // For WebGL shadows -- shadow properties
-  addClassGetter(RenderedPointSource.prototype, "EVVisionMask", EVVisionMaskRenderedPointSource);
-  addClassGetter(VisionSource.prototype, "EVVisionLOSMask", EVVisionLOSMaskVisionSource);
-  addClassGetter(GlobalLightSource.prototype, "EVVisionMask", EVVisionMaskGlobalLightSource);
-  addClassGetter(VisionSource.prototype, "EVVisionMask", EVVisionMaskVisionSource);
-
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadows", _initializeEVShadowsRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
-
-  addClassMethod(LightSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshLightSource);
-
-  addClassMethod(VisionSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryVisionSource);
-  addClassMethod(VisionSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererVisionSource);
-  addClassMethod(VisionSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskVisionSource);
-
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadows", _initializeEVShadowsGlobalLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryGlobalLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshGlobalLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererGlobalLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskGlobalLightSource);
-
-  addClassMethod(RenderedPointSource.prototype, "_updateEVShadowData", _updateEVShadowDataRenderedPointSource);
-  addClassMethod(LightSource.prototype, "_updateEVShadowData", _updateEVShadowDataLightSource);
-  addClassMethod(GlobalLightSource.prototype, "_updateEVShadowData", _updateEVShadowDataGlobalLightSource);
-
-  // For light elevation tooltip
-  addClassMethod(AmbientLight.prototype, "_drawTooltip", _drawTooltipAmbientLight);
-  addClassMethod(AmbientLight.prototype, "_getTooltipText", _getTooltipTextAmbientLight);
-  addClassMethod(AmbientLight, "_getTextStyle", _getTextStyleAmbientLight);
-
-  // For vision in dim/bright/shadows
-  addClassMethod(LightSource, "BRIGHTNESS_LEVEL", BRIGHTNESS_LEVEL);
-  addClassMethod(RenderedPointSource.prototype, "pointInShadow", pointInShadowRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "targetInShadow", targetInShadowRenderedSource);
-  addClassMethod(VisionSource.prototype, "targetInShadow", targetInShadowVisionSource);
-  addClassMethod(RenderedPointSource.prototype, "hasWallCollision", hasWallCollisionRenderedPointSource);
-}
-
 
 /**
  * Deregister shading wrappers.
  * Used when switching shadow algorithms. Deregister all, then re-register needed wrappers.
  */
-function deregisterShadowPatches() {
-  libWrapperShaderIds.forEach(i => libWrapper.unregister(MODULE_ID, i, false));
+function deregisterPatches(map) { map.forEach((id, _args) => libWrapper.unregister(MODULE_ID, id, false)); }
+
+function deregisterHooks(map) {
+  map.forEach((id, args) => {
+    const hookName = args[0];
+    Hooks.off(hookName, id);
+  });
 }
 
-export async function updateShadowPatches(algorithm, priorAlgorithm) {
-  registerShadowPatches(algorithm);
+function deregisterMethods(map) {
+  map.forEach((_id, args) => {
+    const cl = args[0];
+    const name = args[1];
+    delete cl[name];
+  });
+}
 
-  if ( (!priorAlgorithm && algorithm !== SETTINGS.SHADING.TYPES.WEBGL)
-    || priorAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) await SettingsConfig.reloadConfirm({world: true});
-  await canvas.draw();
+export const PATCH_GROUPS = {};
+const GROUPINGS = new Set();
+function initializeRegistrationTracker() {
+  // Determine all the relevant groupings.
+  Object.values(PATCHES).forEach(obj => Object.keys(obj).forEach(k => GROUPINGS.add(k)));
 
-  if ( algorithm === SETTINGS.SHADING.TYPES.WEBGL ) {
-    const sources = [
-      ...canvas.effects.lightSources,
-      ...canvas.tokens.placeables.map(t => t.vision)
-    ];
+  // Right now, we have:
+  // - CLASS
+  //   - BASIC
+  //     - WRAPS
+  //     - METHODS
+  //     - ...
+  //   - WEBGL ...
 
-    for ( const src of sources ) {
-      const ev = src[MODULE_ID];
-      if ( !ev ) continue;
+  // Invert the patches so we have
+  // - BASIC:
+  //   - CLASS:
+  //     - WRAPS
+  //     - ...
+  // - WEBGL ...
+  //   for ( const key of GROUPINGS ) {
+  //     PATCH_GROUPS[key] = {};
+  //     for ( const [className, obj] of Object.entries(PATCHES) ) PATCH_GROUPS[key][className] = obj[key];
+  //   }
 
-      ev.wallGeometry?.refreshWalls();
-      ev.wallGeometryUnbounded?.refreshWalls();
+  // Decorate each group type and create one per option.
+  for ( const key of GROUPINGS ) {
+    const regObj = REG_TRACKER[key] = {};
+    regObj.PATCHES = new Map();
+    regObj.METHODS = new Map();
+    regObj.HOOKS = new Map();
 
-      if ( ev.shadowMesh ) {
-        ev.shadowMesh.shader.uniforms.uTerrainSampler = canvas.elevation._elevationTexture;
-        ev.shadowRenderer.update();
-      }
-
-      if ( ev.shadowVisionLOSMesh ) {
-        ev.shadowVisionLOSMesh.shader.uniforms.uTerrainSampler = canvas.elevation._elevationTexture;
-        ev.shadowVisionLOSRenderer.update();
-      }
-    }
+    regObj.regWrap = regDec(wrap, regObj.PATCHES);
+    regObj.regOverride = regDec(override, regObj.PATCHES);
+    regObj.regMethod = regDec(addClassMethod, regObj.METHODS);
+    regObj.regHook = regDec(Hooks.on, regObj.HOOKS);
   }
 }
 
-export function registerShadowPatches(algorithm) {
-  const TYPES = SETTINGS.SHADING.TYPES;
-  switch ( algorithm ) {
-    case TYPES.NONE: return registerNoShadowPatches();
-    case TYPES.POLYGONS: return registerPolygonShadowPatches();
-    case TYPES.WEBGL: return registerWebGLShadowPatches();
-  }
+
+export function initalizePatching() {
+  initializeRegistrationTracker();
+  registerGroup("BASIC");
+  registerPatchesForSettings();
 }
-
-function registerNoShadowPatches() {
-  deregisterShadowPatches();
-}
-
-function registerPolygonShadowPatches() {
-  deregisterShadowPatches();
-  shaderWrap("PIXI.LegacyGraphics.prototype.drawShape", drawShapePIXIGraphics, { perf_mode: libWrapper.PERF_FAST });
-}
-
-function registerWebGLShadowPatches() {
-  deregisterShadowPatches();
-  shaderOverride("CanvasVisibility.prototype.refreshVisibility", refreshVisibilityCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
-  shaderWrap("CanvasVisibility.prototype._tearDown", _tearDownCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
-
-  shaderWrap("AdaptiveLightingShader.create", createAdaptiveLightingShader);
-
-  shaderWrap("RenderedPointSource.prototype._configure", _configureRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
-  shaderWrap("RenderedPointSource.prototype.destroy", destroyRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
-}
-
-// NOTE: Simple functions used in additions.
 
 /**
- * Calculate the top left corner location for a token given an assumed center point.
- * Used for automatic elevation determination.
- * @param {number} x    Assumed x center coordinate
- * @param {number} y    Assumed y center coordinate
- * @returns {PIXI.Point}
+ * Register all of a given group of patches.
  */
-function getTopLeftTokenCorner(x, y) {
-  return new PIXI.Point(x - (this.w * 0.5), y - (this.h * 0.5));
+function registerGroup(groupName) {
+  for ( const className of Object.keys(PATCHES) ) registerGroupForClass(className, groupName);
+}
+
+/**
+ * For a given group of patches, register all of them.
+ */
+function registerGroupForClass(className, groupName) {
+  const {
+    WRAPS, OVERRIDES, METHODS, GETTERS,
+    HOOKS, STATIC_WRAPS, STATIC_METHODS } = PATCH_GROUPS[className][groupName];
+  registerWraps(className, WRAPS, groupName);
+  registerWraps(className, OVERRIDES, groupName, { override: true });
+  registerWraps(className, STATIC_WRAPS, groupName, { prototype: false });
+  registerMethods(className, METHODS, groupName);
+  registerMethods(className, STATIC_METHODS, groupName, { prototype: false });
+  registerMethods(className, GETTERS, groupName, { getter: true});
+  registerHooks(className, HOOKS, groupName);
+}
+
+function deregisterGroup(groupName) {
+  const regObj = REG_TRACKER[groupName];
+  deregisterPatches(regObj.PATCHES);
+  deregisterMethods(regObj.METHODS);
+  deregisterHooks(regObj.HOOKS);
+}
+
+function registerWraps(className, wraps, grouping, { prototype = true, override = false } = {}) {
+  const wrapFn = override ? "regOverride" : "regWrap";
+  for ( const [name, fn] of wraps ) {
+    const methodName = `${className}.${prototype ? "prototype." : ""}${name}`;
+    REG_TRACKER[grouping][wrapFn](methodName, fn, { perf_mode: libWrapper.PERF_FAST });
+  }
+}
+
+function registerMethods(className, methods, grouping, { prototype = true, getter = false } = {}) {
+  for ( const [name, fn] of methods ) {
+    const methodName = `${className}.${prototype ? "prototype." : ""}${name}`;
+    REG_TRACKER[grouping].regMethod(methodName, fn, { getter });
+  }
+}
+
+function registerHooks(name, hooks, grouping) {
+  for ( const [name, fn] of hooks ) {
+    REG_TRACKER[grouping].regHook(name, fn);
+  }
+}
+
+/**
+ * Register patches for the current settings
+ */
+export function registerPatchesForSettings() {
+  const visibility = getSetting(SETTINGS.TEST_VISIBILITY);
+  const sweep = getSetting(SETTINGS.CLOCKWISE_SWEEP);
+  unregisterPatchesForSettings();
+  if ( visibility ) registerGroup("VISIBILITY");
+  if ( sweep ) registerGroup("SWEEP");
+}
+
+function unregisterPatchesForSettings() {
+  deregisterGroup("VISIBILITY");
+  deregisterGroup("SWEEP");
+}
+
+/**
+ * Register patches for the current scene settings
+ */
+export function registerPatchesForSceneSettings() {
+  const { ALGORITHM, TYPES } = SETTINGS.SHADING;
+  const algorithm = getSceneSetting(ALGORITHM);
+  unregisterPatchesForSceneSettings();
+  switch ( algorithm ) {
+    case TYPES.POLYGONS: registerGroup("POLYGONS"); break;
+    case TYPES.WEBGL: registerGroup("WEBGL"); break;
+  }
+
+  // TODO: Refresh wall data? Shader uniforms?
+}
+
+function unregisterPatchesForSceneSettings() {
+  deregisterGroup("POLYGONS");
+  deregisterGroup("WEBGL");
 }

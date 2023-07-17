@@ -5,12 +5,17 @@
 
 import { TilePixelCache } from "./PixelCache.js";
 
+export const PATCHES = {};
+PATCHES.BASIC = {};
+
 /**
- * Getter for tile.mesh._evPixelCache
+ * Getter for Tile.mesh._evPixelCache
  */
-export function getEVPixelCacheTile() {
+export function evPixelCache() {
   return this._evPixelCache || (this._evPixelCache = TilePixelCache.fromOverheadTileAlpha(this));
 }
+
+PATCHES.BASIC.GETTERS = { evPixelCache };
 
 /**
  * Resize tile cache on dimension change; reset the transform matrix for local coordinates
@@ -38,3 +43,5 @@ export function updateTileHook(document, change, _options, _userId) {
     cache.clearTransforms();
   }
 }
+
+PATCHES.BASIC.HOOKS = { updateTile: updateTileHook };
