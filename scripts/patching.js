@@ -49,6 +49,11 @@ import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js
 import { PATCHES as PATCHES_Tile } from "./Tile.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 
+import {
+  PATCHES_DetectionMode,
+  PATCHES_DetectionModeBasicSight,
+  PATCHES_DetectionModeTremor } from "./detection_modes.js";
+
 /**
  * Helper to wrap methods.
  * @param {string} method       Method to wrap
@@ -147,12 +152,12 @@ export function registerPatches() {
 
   // ----- Shadow visibility testing ----- //
   if ( getSetting(SETTINGS.TEST_VISIBILITY) ) {
-    override("DetectionMode.prototype._testLOS", _testLOSDetectionMode, { perf_mode: libWrapper.PERF_FAST });
-    override("DetectionModeBasicSight.prototype._testPoint", _testPointDetectionModeBasicSight, { perf_mode: libWrapper.PERF_FAST });
+    override("DetectionMode.prototype._testLOS", PATCHES_DetectionMode.VISIBILITY.OVERRIDES._testLOS, { perf_mode: libWrapper.PERF_FAST });
+    override("DetectionModeBasicSight.prototype._testPoint", PATCHES_DetectionModeBasicSight.VISIBILITY.OVERRIDES._testPoint, { perf_mode: libWrapper.PERF_FAST });
   }
 
   // ----- Tremor visibility detection ----- //
-  override("DetectionModeTremor.prototype._canDetect", _canDetectDetectionModeTremor, { perf_mode: libWrapper.PERF_FAST });
+  override("DetectionModeTremor.prototype._canDetect", PATCHES_DetectionModeTremor.BASIC.OVERRIDES._canDetect, { perf_mode: libWrapper.PERF_FAST });
 
   // Clear the prior libWrapper shader ids, if any.
   libWrapperShaderIds.length = 0;
