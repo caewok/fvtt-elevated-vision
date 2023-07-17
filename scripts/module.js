@@ -33,7 +33,7 @@ import { TestShadowShader } from "./glsl/TestShadowShader.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Register methods, patches, settings
-import { PATCHES, registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
+import { PATCHES, REG_TRACKER, initializeRegistrationTracker, registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
 
 // For elevation layer registration and API
@@ -163,12 +163,14 @@ Hooks.once("init", function() {
     TestGeometryShader,
     DirectionalLightSource,
 
-    PATCHES
+    PATCHES,
+    REG_TRACKER
   };
 
   // These methods need to be registered early
   registerGeometry();
   registerSettings();
+  initializeRegistrationTracker();
   registerLayer();
   registerAdditions();
 

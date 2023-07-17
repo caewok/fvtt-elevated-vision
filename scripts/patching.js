@@ -4,16 +4,16 @@ canvas,
 CanvasVisibility,
 ClockwiseSweepPolygon,
 GlobalLightSource,
+Hooks,
 libWrapper,
 LightSource,
-PIXI,
 RenderedPointSource,
 SettingsConfig,
 Tile,
 Token,
 VisionSource
 */
-
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 // Patches
@@ -166,6 +166,27 @@ function deregisterMethods(map) {
     const name = args[1];
     delete cl[name];
   });
+}
+
+export const REG_TRACKER = {};
+const GROUPINGS = new Set();
+export function initializeRegistrationTracker() {
+  // Determine all the relevant groupings.
+  GROUPINGS.clear();
+  Object.values(PATCHES).forEach(obj => Object.keys(obj).forEach(k => GROUPINGS.add(k)));
+
+  // Decorate each group type and create one per option.
+  for ( const key of GROUPINGS ) {
+    const regObj = REG_TRACKER[key] = {};
+    regObj.PATCHES = new Map();
+    regObj.METHODS = new Map();
+    regObj.HOOKS = new Map();
+
+    regObj.regWrap = regDec(wrap, regObj.PATCHES);
+    regObj.regOverride = regDec(override, regObj.PATCHES);
+    regObj.regMethod = regDec(addClassMethod, regObj.METHODS);
+    regObj.regHook = regDec(Hooks.on, regObj.HOOKS);
+  }
 }
 
 // IDs returned by libWrapper.register for the shadow shader patches.

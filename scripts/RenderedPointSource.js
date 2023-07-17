@@ -68,7 +68,7 @@ _createPolygon
 */
 
 export const PATCHES = {};
-PATCHES.POLYGON = {};
+PATCHES.POLYGONS = {};
 PATCHES.VISIBILITY = {};
 PATCHES.WEBGL = {};
 
@@ -94,7 +94,7 @@ function EVVisionMaskPolygon() {
   return g;
 }
 
-PATCHES.POLYGON.METHODS = { EVVisionMask: EVVisionMaskPolygon };
+PATCHES.POLYGONS.METHODS = { EVVisionMask: EVVisionMaskPolygon };
 
 // NOTE: Polygon Methods
 
@@ -104,7 +104,7 @@ function _createPolygon(wrapped) {
   return sweep;
 }
 
-PATCHES.POLYGON.WRAPS = { _createPolygon };
+PATCHES.POLYGONS.WRAPS = { _createPolygon };
 
 // ----- NOTE: WebGL Shadows ----- //
 
