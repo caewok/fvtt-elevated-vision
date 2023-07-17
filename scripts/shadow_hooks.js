@@ -5,7 +5,8 @@ flattenObject,
 Hooks,
 LimitedAnglePolygon,
 PIXI,
-RenderedPointSource
+RenderedPointSource,
+Token
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -447,7 +448,7 @@ export function targetInShadowRenderedSource(target, testPoint) {
   // If the target is on the terrain (likely), we can use the faster test using pixelCache.
   const calc = target instanceof Token
     ? new canvas.elevation.TokenElevationCalculator(target)
-    : new canvas.elevation.CoordinateElevationCalculator(test.point);
+    : new canvas.elevation.CoordinateElevationCalculator(testPoint);
 
   return calc.isOnTerrain()
     ? shadowPercentageFromCache(shadowRenderer.pixelCache, testPoint.x, testPoint.y)
