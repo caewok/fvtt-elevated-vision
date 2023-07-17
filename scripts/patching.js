@@ -132,6 +132,42 @@ function addClassMethod(cl, name, fn, { getter = false, optional = false } = {})
   return `${prototypeName ?? cl.name }.${prototypeName ? "prototype." : ""}${name}`;
 }
 
+// ----- NOTE: Track libWrapper patches, method additions, and hooks ----- //
+/**
+ * Decorator to register and record a patch, method, or hook.
+ * @param {function} fn   A registration function that returns an id. E.g., libWrapper or Hooks.on.
+ * @param {Map} map       The map in which to store the id along with the arguments used when registering.
+ * @returns {number} The id
+ */
+function regDec(fn, map) {
+  return function() {
+    const id = fn.apply(this, arguments);
+    map.set(id, arguments);
+    return id;
+  };
+}
+
+/**
+ * Deregister shading wrappers.
+ * Used when switching shadow algorithms. Deregister all, then re-register needed wrappers.
+ */
+function deregisterPatches(map) { map.forEach((id, _args) => libWrapper.unregister(MODULE_ID, id, false)); }
+
+function deregisterHooks(map) {
+  map.forEach((id, args) => {
+    const hookName = args[0];
+    Hooks.off(hookName, id);
+  });
+}
+
+function deregisterMethods(map) {
+  map.forEach((_id, args) => {
+    const cl = args[0];
+    const name = args[1];
+    delete cl[name];
+  });
+}
+
 // IDs returned by libWrapper.register for the shadow shader patches.
 const libWrapperShaderIds = [];
 
