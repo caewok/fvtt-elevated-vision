@@ -240,6 +240,18 @@ function clone(wrapper) {
 
 PATCHES_Token.BASIC.WRAPS = { clone };
 
+/**
+ * Calculate the top left corner location for a token given an assumed center point.
+ * Used for automatic elevation determination.
+ * @param {number} x    Assumed x center coordinate
+ * @param {number} y    Assumed y center coordinate
+ * @returns {PIXI.Point}
+ */
+function getTopLeft(x, y) {
+  return new PIXI.Point(x - (this.w * 0.5), y - (this.h * 0.5));
+}
+
+PATCHES_Token.BASIC.METHODS = { getTopLeft };
 
 /**
  * Monitor for the prone active effect and update vision for affected tokens.

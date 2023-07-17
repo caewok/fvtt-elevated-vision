@@ -229,7 +229,7 @@ export function registerPatches() {
 
 export function registerAdditions() {
   addClassMethod(ClockwiseSweepPolygon.prototype, "_drawShadows", PATCHES_ClockwiseSweepPolygon.POLYGONS.METHODS._drawShadows);
-  addClassMethod(Token.prototype, "getTopLeft", getTopLeftTokenCorner);
+  addClassMethod(Token.prototype, "getTopLeft", PATCHES_Token.BASIC.METHODS.getTopLeft);
 
   addClassMethod(Tile.prototype, "evPixelCache", PATCHES_Tile.BASIC.GETTERS.getEVPixelCache, { getter: true });
 
@@ -359,17 +359,4 @@ function registerWebGLShadowPatches() {
 
   shaderWrap("RenderedPointSource.prototype._configure", PATCHES_RenderedPointSource.WEBGL.WRAPS._configure, { perf_mode: libWrapper.PERF_FAST });
   shaderWrap("RenderedPointSource.prototype.destroy", PATCHES_RenderedPointSource.WEBGL.WRAPS.destroy, { perf_mode: libWrapper.PERF_FAST });
-}
-
-// NOTE: Simple functions used in additions.
-
-/**
- * Calculate the top left corner location for a token given an assumed center point.
- * Used for automatic elevation determination.
- * @param {number} x    Assumed x center coordinate
- * @param {number} y    Assumed y center coordinate
- * @returns {PIXI.Point}
- */
-function getTopLeftTokenCorner(x, y) {
-  return new PIXI.Point(x - (this.w * 0.5), y - (this.h * 0.5));
 }
