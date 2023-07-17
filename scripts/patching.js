@@ -50,8 +50,7 @@ import {
 import { getEVPixelCacheTile } from "./tiles.js";
 
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
-
-import { createAdaptiveLightingShader } from "./glsl/patch_lighting_shaders.js";
+import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 
 import {
   _configureRenderedPointSource,
@@ -351,7 +350,7 @@ function registerWebGLShadowPatches() {
   shaderOverride("CanvasVisibility.prototype.refreshVisibility", refreshVisibilityCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
   shaderWrap("CanvasVisibility.prototype._tearDown", _tearDownCanvasVisibility, { perf_mode: libWrapper.PERF_FAST });
 
-  shaderWrap("AdaptiveLightingShader.create", createAdaptiveLightingShader);
+  shaderWrap("AdaptiveLightingShader.create", PATCHES_AdaptiveLightingShader.BASIC.STATIC_WRAPS.create);
 
   shaderWrap("RenderedPointSource.prototype._configure", _configureRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
   shaderWrap("RenderedPointSource.prototype.destroy", destroyRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
