@@ -88,7 +88,6 @@ export const PATCHES = {
 };
 
 
-
 /**
  * Helper to wrap methods.
  * @param {string} method       Method to wrap
@@ -110,33 +109,27 @@ function override(method, fn, options = {}) {
 }
 
 /**
- * Helper to add a method to a class.
+ * Helper to add a method or a getter to a class.
  * @param {class} cl      Either Class.prototype or Class
  * @param {string} name   Name of the method
  * @param {function} fn   Function to use for the method
+ * @param {object} [opts] Optional parameters
+ * @param {boolean} [opts.getter]     True if the property should be made a getter.
+ * @param {boolean} [opts.optional]   True if the getter should not be set if it already exists.
+ * @returns {undefined|string} Either undefined if the getter already exists or the cl.prototype.name.
  */
-function addClassMethod(cl, name, fn) {
-  Object.defineProperty(cl, name, {
-    value: fn,
-    writable: true,
-    configurable: true
-  });
-}
-
-/**
- * Helper to add a getter to a class.
- * @param {class} cl      Either Class.prototype or Class
- * @param {string} name   Name of the method
- * @param {function} fn   Function to use for the method
- */
-function addClassGetter(cl, name, fn) {
-  if ( !Object.hasOwn(cl, name) ) {
-    Object.defineProperty(cl, name, {
-      get: fn,
-      enumerable: false,
-      configurable: true
-    });
+function addClassMethod(cl, name, fn, { getter = false, optional = false } = {}) {
+  if ( optional && Object.hasOwn(cl, name) ) return undefined;
+  const descriptor = { configurable: true };
+  if ( getter ) descriptor.get = fn;
+  else {
+    descriptor.writable = true;
+    descriptor.value = fn;
   }
+  Object.defineProperty(cl, name, descriptor);
+
+  const prototypeName = cl.constructor?.name;
+  return `${prototypeName ?? cl.name }.${prototypeName ? "prototype." : ""}${name}`;
 }
 
 // IDs returned by libWrapper.register for the shadow shader patches.
@@ -202,7 +195,7 @@ export function registerAdditions() {
   addClassMethod(ClockwiseSweepPolygon.prototype, "_drawShadows", PATCHES_ClockwiseSweepPolygon.POLYGONS.METHODS._drawShadows);
   addClassMethod(Token.prototype, "getTopLeft", getTopLeftTokenCorner);
 
-  addClassGetter(Tile.prototype, "evPixelCache", PATCHES_Tile.BASIC.GETTERS.getEVPixelCache);
+  addClassMethod(Tile.prototype, "evPixelCache", PATCHES_Tile.BASIC.GETTERS.getEVPixelCache, { getter: true });
 
   // For Polygons shadows -- Nothing added
 
@@ -214,7 +207,7 @@ export function registerAdditions() {
   addClassMethod(RenderedPointSource.prototype, "wallAdded", PATCHES_RenderedPointSource.WEBGL.METHODS.wallAdded);
   addClassMethod(RenderedPointSource.prototype, "wallUpdated", PATCHES_RenderedPointSource.WEBGL.METHODS.wallUpdated);
   addClassMethod(RenderedPointSource.prototype, "wallRemoved", PATCHES_RenderedPointSource.WEBGL.METHODS.wallRemoved);
-  addClassGetter(RenderedPointSource.prototype, "bounds", PATCHES_RenderedPointSource.WEBGL.GETTERS.bounds);
+  addClassMethod(RenderedPointSource.prototype, "bounds", PATCHES_RenderedPointSource.WEBGL.GETTERS.bounds, { getter: true });
 
   addClassMethod(CanvasVisibility.prototype, "checkLights", PATCHES_CanvasVisibility.WEBGL.METHODS.checkLights);
   addClassMethod(CanvasVisibility.prototype, "cacheLights", PATCHES_CanvasVisibility.WEBGL.METHODS.cacheLights);
@@ -222,10 +215,10 @@ export function registerAdditions() {
   addClassMethod(CanvasVisibility.prototype, "pointSourcesStates", PATCHES_CanvasVisibility.WEBGL.METHODS.pointSourcesStates);
 
   // For WebGL shadows -- shadow properties
-  addClassGetter(RenderedPointSource.prototype, "EVVisionMask", PATCHES_RenderedPointSource.WEBGL.GETTERS.EVVisionMask);
-  addClassGetter(VisionSource.prototype, "EVVisionLOSMask", PATCHES_VisionSource.WEBGL.GETTERS.EVVisionLOSMask);
-  addClassGetter(GlobalLightSource.prototype, "EVVisionMask", PATCHES_GlobalLightSource.WEBGL.GETTERS.EVVisionMask);
-  addClassGetter(VisionSource.prototype, "EVVisionMask", PATCHES_VisionSource.WEBGL.GETTERS.EVVisionMask);
+  addClassMethod(RenderedPointSource.prototype, "EVVisionMask", PATCHES_RenderedPointSource.WEBGL.GETTERS.EVVisionMask, { getter: true });
+  addClassMethod(VisionSource.prototype, "EVVisionLOSMask", PATCHES_VisionSource.WEBGL.GETTERS.EVVisionLOSMask, { getter: true });
+  addClassMethod(GlobalLightSource.prototype, "EVVisionMask", PATCHES_GlobalLightSource.WEBGL.GETTERS.EVVisionMask, { getter: true });
+  addClassMethod(VisionSource.prototype, "EVVisionMask", PATCHES_VisionSource.WEBGL.GETTERS.EVVisionMask, { getter: true });
 
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadows", PATCHES_RenderedPointSource.WEBGL.METHODS._initializeEVShadows);
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowGeometry", PATCHES_RenderedPointSource.WEBGL.METHODS._initializeEVShadowGeometry);
