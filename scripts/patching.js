@@ -37,18 +37,13 @@ import {
   _testPointDetectionModeBasicSight,
   _canDetectDetectionModeTremor } from "./vision.js";
 
-import {
-  _computeClockwiseSweepPolygon,
-  _drawShadowsClockwiseSweepPolygon,
-  initializeClockwiseSweepPolygon
-} from "./clockwise_sweep.js";
-
 import { getEVPixelCacheTile } from "./tiles.js";
 
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
+import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
 import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
 import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
 
@@ -152,7 +147,7 @@ export function registerPatches() {
   wrap("Canvas.prototype._onMouseMove", PATCHES_Canvas.BASIC.WRAPS._onMouseMove, { perf_mode: libWrapper.PERF_FAST });
 
   // ----- Locating edges that create shadows in the LOS ----- //
-  wrap("ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
+  wrap("ClockwiseSweepPolygon.prototype._compute", PATCHES_ClockwiseSweepPolygon.POLYGONS.WRAPS._compute, { perf_mode: libWrapper.PERF_FAST });
 
   // ----- Token animation and elevation change ---- //
   wrap("Token.prototype.clone", cloneToken, { perf_mode: libWrapper.PERF_FAST });
@@ -164,7 +159,7 @@ export function registerPatches() {
 
   // ----- Clockwise sweep enhancements ----- //
   if ( getSetting(SETTINGS.CLOCKWISE_SWEEP) ) {
-    wrap("ClockwiseSweepPolygon.prototype.initialize", initializeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
+    wrap("ClockwiseSweepPolygon.prototype.initialize", PATCHES_ClockwiseSweepPolygon.POLYGONS.SWEEP.initialize, { perf_mode: libWrapper.PERF_FAST });
   }
 
   // ----- Lighting elevation tooltip ----- //
@@ -193,7 +188,7 @@ export function registerPatches() {
 }
 
 export function registerAdditions() {
-  addClassMethod(ClockwiseSweepPolygon.prototype, "_drawShadows", _drawShadowsClockwiseSweepPolygon);
+  addClassMethod(ClockwiseSweepPolygon.prototype, "_drawShadows", PATCHES_ClockwiseSweepPolygon.POLYGONS.METHODS._drawShadows);
   addClassMethod(Token.prototype, "getTopLeft", getTopLeftTokenCorner);
 
   addClassGetter(Tile.prototype, "evPixelCache", getEVPixelCacheTile);
