@@ -9,7 +9,7 @@ PreciseText
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 import { MODULE_ID, FLAGS } from "./const.js";
-import { DirectionalLightSource } from "./directional_lights.js";
+import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // AmbientLight patches, methods, hooks
 
