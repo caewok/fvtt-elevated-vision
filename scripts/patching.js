@@ -49,7 +49,7 @@ import {
 
 import { getEVPixelCacheTile } from "./tiles.js";
 
-import { _onMouseMoveCanvas } from "./ElevationLayer.js";
+import { _onMouseMoveCanvas } from "./Canvas.js";
 
 import { createAdaptiveLightingShader } from "./glsl/patch_lighting_shaders.js";
 

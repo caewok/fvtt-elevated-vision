@@ -76,11 +76,6 @@ class FullCanvasContainer extends FullCanvasObjectMixin(PIXI.Container) {
 
 }
 
-export function _onMouseMoveCanvas(wrapper, event) {
-  wrapper(event);
-  canvas.elevation._onMouseMove(event);
-}
-
 export class ElevationLayer extends InteractionLayer {
   constructor() {
     super();
