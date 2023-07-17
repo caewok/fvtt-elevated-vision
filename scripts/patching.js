@@ -46,37 +46,18 @@ import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
 import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
 import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
+import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
 
 import {
-  _configureRenderedPointSource,
-  destroyRenderedPointSource,
-  wallAddedRenderedPointSource,
-  wallUpdatedRenderedPointSource,
-  wallRemovedRenderedPointSource,
-  boundsRenderedPointSource,
-
-  EVVisionMaskRenderedPointSource,
   EVVisionLOSMaskVisionSource,
   EVVisionMaskVisionSource,
-
-  _initializeEVShadowsRenderedPointSource,
-  _initializeEVShadowGeometryRenderedPointSource,
-  _initializeEVShadowMeshRenderedPointSource,
-  _initializeEVShadowRendererRenderedPointSource,
-  _initializeEVShadowMaskRenderedPointSource,
 
   _initializeEVShadowGeometryVisionSource,
   _initializeEVShadowRendererVisionSource,
   _initializeEVShadowMaskVisionSource,
 
-  _updateEVShadowDataRenderedPointSource,
-
   // Shadow visibility testing.
-  BRIGHTNESS_LEVEL,
-  pointInShadowRenderedPointSource,
-  targetInShadowRenderedSource,
-  targetInShadowVisionSource,
-  hasWallCollisionRenderedPointSource } from "./shadow_hooks.js";
+  targetInShadowVisionSource } from "./shadow_hooks.js";
 
 /**
  * Helper to wrap methods.
@@ -201,10 +182,10 @@ export function registerAdditions() {
   addClassMethod(AmbientLight.prototype, "convertFromDirectionalLight", PATCHES_AmbientLight.BASIC.METHODS.convertFromDirectionalLight);
 
   // For WebGL shadows
-  addClassMethod(RenderedPointSource.prototype, "wallAdded", wallAddedRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "wallUpdated", wallUpdatedRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "wallRemoved", wallRemovedRenderedPointSource);
-  addClassGetter(RenderedPointSource.prototype, "bounds", boundsRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "wallAdded", PATCHES_RenderedPointSource.WEBGL.METHODS.wallAdded);
+  addClassMethod(RenderedPointSource.prototype, "wallUpdated", PATCHES_RenderedPointSource.WEBGL.METHODS.wallUpdated);
+  addClassMethod(RenderedPointSource.prototype, "wallRemoved", PATCHES_RenderedPointSource.WEBGL.METHODS.wallRemoved);
+  addClassGetter(RenderedPointSource.prototype, "bounds", PATCHES_RenderedPointSource.WEBGL.GETTERS.bounds);
 
   addClassMethod(CanvasVisibility.prototype, "checkLights", PATCHES_CanvasVisibility.WEBGL.METHODS.checkLights);
   addClassMethod(CanvasVisibility.prototype, "cacheLights", PATCHES_CanvasVisibility.WEBGL.METHODS.cacheLights);
@@ -212,16 +193,16 @@ export function registerAdditions() {
   addClassMethod(CanvasVisibility.prototype, "pointSourcesStates", PATCHES_CanvasVisibility.WEBGL.METHODS.pointSourcesStates);
 
   // For WebGL shadows -- shadow properties
-  addClassGetter(RenderedPointSource.prototype, "EVVisionMask", EVVisionMaskRenderedPointSource);
+  addClassGetter(RenderedPointSource.prototype, "EVVisionMask", PATCHES_RenderedPointSource.WEBGL.GETTERS.EVVisionMask);
   addClassGetter(VisionSource.prototype, "EVVisionLOSMask", EVVisionLOSMaskVisionSource);
   addClassGetter(GlobalLightSource.prototype, "EVVisionMask", PATCHES_GlobalLightSource.WEBGL.GETTERS.EVVisionMask);
   addClassGetter(VisionSource.prototype, "EVVisionMask", EVVisionMaskVisionSource);
 
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadows", _initializeEVShadowsRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadows", PATCHES_RenderedPointSource.WEBGL.METHODS._initializeEVShadows);
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowGeometry", PATCHES_RenderedPointSource.WEBGL.METHODS._initializeEVShadowGeometry);
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMesh", PATCHES_RenderedPointSource.WEBGL.METHODS._initializeEVShadowMesh);
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowRenderer", PATCHES_RenderedPointSource.WEBGL.METHODS._initializeEVShadowRenderer);
+  addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", PATCHES_RenderedPointSource.WEBGL.METHODS._initializeEVShadowMask);
 
   addClassMethod(LightSource.prototype, "_initializeEVShadowMesh", PATCHES_LightSource.WEBGL.METHODS._initializeEVShadowMesh);
 
@@ -235,7 +216,7 @@ export function registerAdditions() {
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowRenderer", PATCHES_GlobalLightSource.WEBGL.METHODS._initializeEVShadowRenderer);
   addClassMethod(GlobalLightSource.prototype, "_initializeEVShadowMask", PATCHES_GlobalLightSource.WEBGL.METHODS._initializeEVShadowMask);
 
-  addClassMethod(RenderedPointSource.prototype, "_updateEVShadowData", _updateEVShadowDataRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "_updateEVShadowData", PATCHES_RenderedPointSource.WEBGL.METHODS._updateEVShadowData);
   addClassMethod(LightSource.prototype, "_updateEVShadowData", PATCHES_LightSource.WEBGL.METHODS._updateEVShadowData);
   addClassMethod(GlobalLightSource.prototype, "_updateEVShadowData", PATCHES_GlobalLightSource.WEBGL.METHODS._updateEVShadowData);
 
@@ -245,10 +226,10 @@ export function registerAdditions() {
   addClassMethod(AmbientLight, "_getTextStyle", PATCHES_AmbientLight.BASIC.STATIC_METHODS._getTextStyle);
 
   // For vision in dim/bright/shadows
-  addClassMethod(RenderedPointSource.prototype, "pointInShadow", pointInShadowRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "targetInShadow", targetInShadowRenderedSource);
+  addClassMethod(RenderedPointSource.prototype, "pointInShadow", PATCHES_RenderedPointSource.VISIBILITY.METHODS.pointInShadow);
+  addClassMethod(RenderedPointSource.prototype, "targetInShadow", PATCHES_RenderedPointSource.VISIBILITY.METHODS.targetInShadow);
   addClassMethod(VisionSource.prototype, "targetInShadow", targetInShadowVisionSource);
-  addClassMethod(RenderedPointSource.prototype, "hasWallCollision", hasWallCollisionRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "hasWallCollision", PATCHES_RenderedPointSource.VISIBILITY.METHODS.hasWallCollision);
 }
 
 
@@ -318,8 +299,8 @@ function registerWebGLShadowPatches() {
 
   shaderWrap("AdaptiveLightingShader.create", PATCHES_AdaptiveLightingShader.BASIC.STATIC_WRAPS.create);
 
-  shaderWrap("RenderedPointSource.prototype._configure", _configureRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
-  shaderWrap("RenderedPointSource.prototype.destroy", destroyRenderedPointSource, { perf_mode: libWrapper.PERF_FAST });
+  shaderWrap("RenderedPointSource.prototype._configure", PATCHES_RenderedPointSource.WEBGL.WRAPS._configure, { perf_mode: libWrapper.PERF_FAST });
+  shaderWrap("RenderedPointSource.prototype.destroy", PATCHES_RenderedPointSource.WEBGL.WRAPS.destroy, { perf_mode: libWrapper.PERF_FAST });
 }
 
 // NOTE: Simple functions used in additions.

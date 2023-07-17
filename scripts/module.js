@@ -55,6 +55,7 @@ import {
 
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_AmbientSound } from "./AmbientSound.js";
+import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -197,7 +198,7 @@ Hooks.on("canvasReady", function() {
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
   setDirectionalLightSources(canvas.lighting.placeables);
-  DirectionalLightSource._refreshElevationAngleGuidelines()
+  DirectionalLightSource._refreshElevationAngleGuidelines();
 });
 
 function setDirectionalLightSources(lights) {
@@ -263,5 +264,9 @@ Hooks.on("updateAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.updateAmbientLig
 Hooks.on("updateAmbientSound", PATCHES_AmbientSound.BASIC.HOOKS.updateAmbientSound);
 Hooks.on("refreshAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.refreshAmbientLight);
 Hooks.on("hoverAmbientLight", PATCHES_AmbientLight.BASIC.HOOKS.hoverAmbientLight);
+
+Hooks.on("initializeLightSourceShaders", PATCHES_RenderedPointSource.WEBGL.HOOKS.initializeLightSourceShaders);
+Hooks.on("initializeVisionSourceShaders", PATCHES_RenderedPointSource.WEBGL.HOOKS.initializeVisionSourceShaders);
+Hooks.on("initializeDirectionalLightSourceShaders", PATCHES_RenderedPointSource.WEBGL.HOOKS.initializeDirectionalLightSourceShaders);
 
 // Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);
