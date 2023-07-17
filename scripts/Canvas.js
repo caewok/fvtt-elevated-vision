@@ -9,10 +9,10 @@ canvas
 /**
  * Track mouse events for the canvas elevation layer.
  */
-export function _onMouseMoveCanvas(wrapper, event) {
+export function _onMouseMove(wrapper, event) {
   wrapper(event);
   canvas.elevation._onMouseMove(event);
 }
 
 export const PATCHES = {};
-PATCHES.BASIC = { WRAPS: { _onMouseMove: _onMouseMoveCanvas } };
+PATCHES.BASIC = { WRAPS: { _onMouseMove } };

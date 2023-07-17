@@ -49,7 +49,7 @@ import {
 
 import { getEVPixelCacheTile } from "./tiles.js";
 
-import { _onMouseMoveCanvas } from "./Canvas.js";
+import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 
 import { createAdaptiveLightingShader } from "./glsl/patch_lighting_shaders.js";
 
@@ -178,7 +178,7 @@ const shaderOverride = regShaderPatch(override);
 
 export function registerPatches() {
   // Track mouse events
-  wrap("Canvas.prototype._onMouseMove", _onMouseMoveCanvas, { perf_mode: libWrapper.PERF_FAST });
+  wrap("Canvas.prototype._onMouseMove", PATCHES_Canvas.BASIC.WRAPS._onMouseMove, { perf_mode: libWrapper.PERF_FAST });
 
   // ----- Locating edges that create shadows in the LOS ----- //
   wrap("ClockwiseSweepPolygon.prototype._compute", _computeClockwiseSweepPolygon, { perf_mode: libWrapper.PERF_FAST });
