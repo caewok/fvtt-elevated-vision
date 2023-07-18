@@ -339,7 +339,7 @@ export class CoordinateElevationCalculator {
  * @returns {boolean}
  */
 export function tileOpaqueAt(tile, tokenCenter, alphaThreshold) {
-  const cache = tile._evPixelCache;
+  const cache = tile.evPixelCache;
   if ( !cache ) return false;
   return cache.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold);
 }
