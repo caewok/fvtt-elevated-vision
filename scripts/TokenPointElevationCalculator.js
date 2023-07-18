@@ -51,7 +51,7 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
  * @returns {boolean}
  */
 export function tileTerrainOpaqueAverageAt(tile, tokenShape, alphaThreshold, averageTiles) {
-  const cache = tile._evPixelCache;
+  const cache = tile.evPixelCache;
   if ( !cache ) return false;
 
   // This is tricky, b/c we want terrain to count if it is the same height as the tile.
@@ -75,7 +75,7 @@ function tileTerrainOpacityCountFunction(tile, alphaThreshold) {
   // In the easy cases, there is 50% coverage for either tile or terrain alone.
   // But the hard case makes us iterate over both tile and terrain at once,
   // b/c otherwise we cannot tell where the overlaps occur. E.g., 30% tile, 20% terrain?
-  const cache = tile._evPixelCache;
+  const cache = tile.evPixelCache;
   const tileE = tile.elevationE;
   const evCache = canvas.elevation.elevationPixelCache;
   const pixelE = canvas.elevation._normalizeElevation(tileE);
@@ -93,7 +93,7 @@ function tileTerrainOpacityCountFunction(tile, alphaThreshold) {
 }
 
 export function tileOpaqueAverageAt(tile, tokenShape, alphaThreshold, averageTiles) {
-  const cache = tile._evPixelCache;
+  const cache = tile.evPixelCache;
   if ( !cache ) return false;
   const pixelThreshold = MAXIMUM_TILE_PIXEL_VALUE * alphaThreshold;
   return cache.percent(tokenShape, pixelThreshold, averageTiles) > 0.5;
