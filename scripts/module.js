@@ -33,7 +33,7 @@ import { TestShadowShader } from "./glsl/TestShadowShader.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Register methods, patches, settings
-import { PATCHES, REG_TRACKER, initializePatching } from "./patching.js";
+import { PATCHES, REG_TRACKER, initializePatching, registerPatchesForSceneSettings } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
 
 // For elevation layer registration and API
@@ -191,6 +191,7 @@ Hooks.once("setup", function() {
 
 Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
+  registerPatchesForSceneSettings();
 //   registerShadowPatches(getSceneSetting(SETTINGS.SHADING.ALGORITHM));
   updateFlyTokenControl();
 });

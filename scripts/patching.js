@@ -19,7 +19,7 @@ VisionSource
 // Patches
 
 import { MODULE_ID } from "./const.js";
-import { getSetting, SETTINGS } from "./settings.js";
+import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
 
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
@@ -295,7 +295,43 @@ export function initializeRegistrationTracker() {
 export function initializePatching() {
   initializeRegistrationTracker();
   registerGroup("BASIC");
-  // registerPatchesForSettings();
+  registerPatchesForSettings();
+}
+
+/**
+ * Register patches for the current settings
+ */
+export function registerPatchesForSettings() {
+  const visibility = getSetting(SETTINGS.TEST_VISIBILITY);
+  const sweep = getSetting(SETTINGS.CLOCKWISE_SWEEP);
+  unregisterPatchesForSettings();
+  if ( visibility ) registerGroup("VISIBILITY");
+  if ( sweep ) registerGroup("SWEEP");
+}
+
+function unregisterPatchesForSettings() {
+  deregisterGroup("VISIBILITY");
+  deregisterGroup("SWEEP");
+}
+
+/**
+ * Register patches for the current scene settings
+ */
+export function registerPatchesForSceneSettings() {
+  const { ALGORITHM, TYPES } = SETTINGS.SHADING;
+  const algorithm = getSceneSetting(ALGORITHM);
+  unregisterPatchesForSceneSettings();
+  switch ( algorithm ) {
+    case TYPES.POLYGONS: registerGroup("POLYGONS"); break;
+    case TYPES.WEBGL: registerGroup("WEBGL"); break;
+  }
+
+  // TODO: Refresh wall data? Shader uniforms?
+}
+
+function unregisterPatchesForSceneSettings() {
+  deregisterGroup("POLYGONS");
+  deregisterGroup("WEBGL");
 }
 
 
