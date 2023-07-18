@@ -54,34 +54,36 @@ export function polygonShadowsRenderedPointSource(sweep) {
   ev.polygonShadows = {
     shadows: [],
     combined: [],
-    terrainWalls: new Set(),
+    limitedWalls: new Set(),
     normalWalls: new Set()
   };
+  const evS = ev.polygonShadows;
+
   const sourceType = this.constructor.sourceType;
   walls.forEach(w => {
-    if ( w.document[sourceType] === CONST.WALL_SENSE_TYPES.LIMITED ) ev.terrainWalls.add(w);
+    if ( w.document[sourceType] === CONST.WALL_SENSE_TYPES.LIMITED ) evS.limitedWalls.add(w);
     else ev.normalWalls.add(w);
   });
-  if ( !this._elevatedvision.terrainWalls.size && !this._elevatedvision.normalWalls.size) return;
+  if ( !this._elevatedvision.limitedWalls.size && !this._elevatedvision.normalWalls.size) return;
 
   // Store each shadow individually
 
   // For each terrain wall, find all other potentially blocking terrain walls.
   // Intersect the shadow for each.
-  const proj = new ShadowProjection(new Plane(), this);
-  if ( ev.terrainWalls.size > 1 ) {
+  const proj = new ShadowProjection(new Plane(), sweep);
+  if ( evS.limitedWalls.size > 1 ) {
     // Temporarily cache the wall points
-    ev.terrainWalls.forEach(w => {
+    evS.limitedWalls.forEach(w => {
       w._elevatedvision ??= {};
       w._elevatedvision.wallPoints = Point3d.fromWall(w, { finite: true });
     });
 
-    const sourceOrigin = Point3d.fromPointSource(this.config.source);
+    const sourceOrigin = Point3d.fromPointSource(source);
 
-    for ( const w of ev.terrainWalls ) {
+    for ( const w of evS.limitedWalls ) {
       const blocking = filterPotentialBlockingWalls(
         w._elevatedvision.wallPoints,
-        ev.terrainWalls,
+        ev.limitedWalls,
         sourceOrigin);
       blocking.delete(w);
 
@@ -102,17 +104,17 @@ export function polygonShadowsRenderedPointSource(sweep) {
   }
 
   // Now process all the normal walls.
-  for ( const w of ev.normalWalls ) {
+  for ( const w of evS.normalWalls ) {
     const shadowPoints = proj.constructShadowPointsForWall(w);
     if ( !shadowPoints.length ) continue;
-    ev.shadows.push(new Shadow(shadowPoints));
+    evS.shadows.push(new Shadow(shadowPoints));
   }
 
-  if ( !ev.shadows.length ) return;
+  if ( !evS.shadows.length ) return;
 
   // Combine the shadows and trim to be within the LOS
   // We want one or more LOS polygons along with non-overlapping holes.
-  ev.combinedShadows = combineBoundaryPolygonWithHoles(sweep, ev.shadows);
+  evS.combinedShadows = combineBoundaryPolygonWithHoles(sweep, evS.shadows);
 }
 
 /**

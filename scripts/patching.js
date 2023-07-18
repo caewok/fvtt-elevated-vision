@@ -27,7 +27,7 @@ import { PATCHES as PATCHES_AmbientSound } from "./AmbientSound.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
-import { PATCHES as PATCHES_PIXI_Graphics } from "./PIXI_Graphics.js";
+import { PATCHES as PATCHES_PIXI_LegacyGraphics } from "./PIXI_LegacyGraphics.js";
 import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
 import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
 import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
@@ -78,7 +78,7 @@ export const PATCHES = {
   DetectionModeTremor: PATCHES_DetectionModeTremor,
   GlobalLightSource: PATCHES_GlobalLightSource,
   LightSource: PATCHES_LightSource,
-  "PIXI.Graphics": PATCHES_PIXI_Graphics,
+  "PIXI.LegacyGraphics": PATCHES_PIXI_LegacyGraphics,
   RenderedPointSource: PATCHES_RenderedPointSource,
   Tile: PATCHES_Tile,
   TileConfig: PATCHES_TileConfig,

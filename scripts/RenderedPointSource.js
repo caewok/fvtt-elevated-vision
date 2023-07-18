@@ -100,7 +100,7 @@ PATCHES.POLYGONS.METHODS = { EVVisionMask: EVVisionMaskPolygon };
 
 function _createPolygon(wrapped) {
   const sweep = wrapped();
-  this.polygonShadows(sweep);
+  // this.polygonShadows(sweep);
   return sweep;
 }
 
