@@ -10,7 +10,7 @@ renderTemplate
 
 import { MODULE_ID } from "./const.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
-import { SETTINGS, getSetting } from "./settings.js";
+import { SETTINGS, getSetting, getSceneSetting } from "./settings.js";
 
 export const PATCHES_AmbientLightConfig = {};
 export const PATCHES_AmbientSoundConfig = {};
@@ -42,8 +42,11 @@ function calculateDirectionalData(app, data) {
   const { x, y } = app.object;
   const { azimuth, elevationAngle } = DirectionalLightSource.directionalParametersFromPosition({x, y});
   const isDirectional = Boolean(app.object.flags[MODULE_ID]?.directionalLight);
+  const { ALGORITHM, TYPES } = SETTINGS.SHADING;
+  const algorithm = getSceneSetting(ALGORITHM);
   const renderData = {};
   renderData[MODULE_ID] = {
+    directionalDisabled: algorithm !== TYPES.WEBGL,
     defaultLightSize: getSetting(SETTINGS.LIGHTING.LIGHT_SIZE),
     pixelsDistance: (1 / canvas.dimensions.distancePixels).toPrecision(1),
     azimuth: Math.normalizeDegrees(Math.toDegrees(azimuth)).toFixed(1),

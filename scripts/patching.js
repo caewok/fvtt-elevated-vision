@@ -1,17 +1,9 @@
 /* globals
-AmbientLight,
 canvas,
-CanvasVisibility,
-ClockwiseSweepPolygon,
+CONFIG,
 GlobalLightSource,
 Hooks,
-libWrapper,
-LightSource,
-RenderedPointSource,
-SettingsConfig,
-Tile,
-Token,
-VisionSource
+libWrapper
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -20,6 +12,7 @@ VisionSource
 
 import { MODULE_ID } from "./const.js";
 import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
+import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
@@ -129,7 +122,7 @@ function addClassMethod(cl, name, fn, { getter = false, optional = false } = {})
   Object.defineProperty(cl, name, descriptor);
 
   const prototypeName = cl.constructor?.name;
-  return `${prototypeName ?? cl.name }.${prototypeName ? "prototype." : ""}${name}`;
+  return `${prototypeName ?? cl.name }.${prototypeName ? "prototype." : ""}${name}`; // eslint-disable-line template-curly-spacing
 }
 
 
@@ -171,7 +164,7 @@ function deregisterHooks(map) {
 }
 
 function deregisterMethods(map) {
-  map.forEach((args, id) => {
+  map.forEach((args, _id) => {
     const cl = args[0];
     const name = args[1];
     delete cl[name];
@@ -275,7 +268,6 @@ function lookupByClassName(className, { returnPathString = false } = {}) {
   return returnPathString ? className : eval?.(`"use strict";(${className})`);
 }
 
-
 export const REG_TRACKER = {};
 const GROUPINGS = new Set();
 export function initializeRegistrationTracker() {
@@ -331,7 +323,15 @@ export function registerPatchesForSceneSettings() {
     case TYPES.WEBGL: registerGroup("WEBGL"); break;
   }
 
-  // TODO: Refresh wall data? Shader uniforms?
+  // Trigger initialization of all lights when switching so that the visibility cache is updated.
+  for ( const lightSource of canvas.effects.lightSources ) {
+    if ( lightSource instanceof GlobalLightSource ) continue;
+    if ( lightSource instanceof DirectionalLightSource
+      && algorithm !== TYPES.WEBGL ) lightSource.object.convertFromDirectionalLight();
+
+    lightSource.initialize(lightSource.data);
+  }
+  canvas.perception.update({refreshLighting: true, refreshVision: true});
 }
 
 function unregisterPatchesForSceneSettings() {
