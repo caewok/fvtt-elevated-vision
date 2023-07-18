@@ -925,8 +925,10 @@ void main() {
   // 3. Would require much different approach to the fragment shader.
 
 
+  // TODO: Some dots can appear along the edge of the directional shadows.
+
   // Define some terms for ease-of-reference.
-  float solarAngle = max(0.0, uSolarAngle);
+  float solarAngle = max(0.1, uSolarAngle); // TODO: Cannot currently go all the way to 0.
 
   // Define wall dimensions.
   float wallTopZ = aWallCorner0.z;
@@ -1127,7 +1129,7 @@ void main() {
   // B is the intersection of the line light --> wall endpointB --> canvas plane
 
   // Define some terms for ease-of-reference.
-  float lightSize = max(0.0, uLightSize);
+  float lightSize = max(1.0, uLightSize); // TODO: Cannot currently go to 0.
 
   // Define wall dimensions.
   float wallTopZ = aWallCorner0.z;
