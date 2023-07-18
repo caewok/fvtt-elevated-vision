@@ -320,7 +320,17 @@ export function registerPatchesForSceneSettings() {
   unregisterPatchesForSceneSettings();
   switch ( algorithm ) {
     case TYPES.POLYGONS: registerGroup("POLYGONS"); break;
-    case TYPES.WEBGL: registerGroup("WEBGL"); break;
+    case TYPES.WEBGL: {
+      registerGroup("WEBGL");
+      canvas.effects.lightSources.forEach(src => src._initializeEVShadows());
+      break;
+    }
+  }
+
+  if ( algorithm !== TYPES.WEBGL ) {
+    canvas.effects.lightSources.forEach(src => {
+      Object.values(src.layers).forEach(layer => layer.shader.uniforms.uEVShadows = false);
+    });
   }
 
   // Trigger initialization of all lights when switching so that the visibility cache is updated.
@@ -331,6 +341,7 @@ export function registerPatchesForSceneSettings() {
 
     lightSource.initialize(lightSource.data);
   }
+
   canvas.perception.update({refreshLighting: true, refreshVision: true});
 }
 
