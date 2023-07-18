@@ -33,7 +33,7 @@ import { TestShadowShader } from "./glsl/TestShadowShader.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Register methods, patches, settings
-import { PATCHES, REG_TRACKER, initializeRegistrationTracker, registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
+import { PATCHES, REG_TRACKER, initializePatching } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
 
 // For elevation layer registration and API
@@ -170,9 +170,8 @@ Hooks.once("init", function() {
   // These methods need to be registered early
   registerGeometry();
   registerSettings();
-  initializeRegistrationTracker();
+  initializePatching();
   registerLayer();
-  registerAdditions();
 
   // Register new render flag for elevation changes to placeables.
   CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshElevation = {};
@@ -188,12 +187,11 @@ Hooks.once("init", function() {
 
 Hooks.once("setup", function() {
   // The game.scenes object is present here
-  registerPatches();
 });
 
 Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
-  registerShadowPatches(getSceneSetting(SETTINGS.SHADING.ALGORITHM));
+//   registerShadowPatches(getSceneSetting(SETTINGS.SHADING.ALGORITHM));
   updateFlyTokenControl();
 });
 
@@ -234,7 +232,7 @@ async function disableScene() {
   }
   if ( shadowsDisabled ) {
     await setSceneSetting(SETTINGS.SHADING.ALGORITHM, SETTINGS.SHADING.TYPES.NONE);
-    registerShadowPatches(SETTINGS.SHADING.TYPES.NONE);
+    // registerShadowPatches(SETTINGS.SHADING.TYPES.NONE);
     // Looks like we don't need to redraw the scene?
     // await canvas.draw(canvas.scene);
   }
