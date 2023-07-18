@@ -30,10 +30,10 @@ import { SourceShadowWallGeometry, DirectionalSourceShadowWallGeometry, PointSou
 import { ShadowWallShader, ShadowWallPointSourceMesh, TestGeometryShader } from "./glsl/ShadowWallShader.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { TestShadowShader } from "./glsl/TestShadowShader.js";
-import { DirectionalLightSource } from "./directional_lights.js";
+import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Register methods, patches, settings
-import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
+import { PATCHES, REG_TRACKER, initializePatching, registerPatchesForSceneSettings } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
 
 // For elevation layer registration and API
@@ -44,25 +44,9 @@ import { SETTINGS, registerSettings, getSceneSetting, setSceneSetting } from "./
 
 import { updateFlyTokenControl } from "./scenes.js";
 
-// Hooks
-import { preUpdateTokenHook, refreshTokenHook, createOrRemoveActiveEffectHook } from "./tokens.js";
-import { updateTileHook } from "./tiles.js";
-
-import {
-  renderAmbientLightConfigHook,
-  renderAmbientSoundConfigHook,
-  renderTileConfigHook,
-  updateAmbientLightHook,
-  updateAmbientSoundHook } from "./renderConfig.js";
-
-import { refreshAmbientLightHook } from "./lighting_elevation_tooltip.js";
-
-import { hoverAmbientLightHook } from "./directional_lights.js";
-
 // Other self-executing hooks
 import "./changelog.js";
 import "./controls.js";
-import "./shadow_hooks.js";
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -163,14 +147,17 @@ Hooks.once("init", function() {
     ShadowTextureRenderer,
     TestShadowShader,
     TestGeometryShader,
-    DirectionalLightSource
+    DirectionalLightSource,
+
+    PATCHES,
+    REG_TRACKER
   };
 
   // These methods need to be registered early
   registerGeometry();
   registerSettings();
+  initializePatching();
   registerLayer();
-  registerAdditions();
 
   // Register new render flag for elevation changes to placeables.
   CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshElevation = {};
@@ -186,12 +173,12 @@ Hooks.once("init", function() {
 
 Hooks.once("setup", function() {
   // The game.scenes object is present here
-  registerPatches();
 });
 
 Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
-  registerShadowPatches(getSceneSetting(SETTINGS.SHADING.ALGORITHM));
+  registerPatchesForSceneSettings();
+//   registerShadowPatches(getSceneSetting(SETTINGS.SHADING.ALGORITHM));
   updateFlyTokenControl();
 });
 
@@ -200,7 +187,7 @@ Hooks.on("canvasReady", function() {
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
   setDirectionalLightSources(canvas.lighting.placeables);
-  DirectionalLightSource._refreshElevationAngleGuidelines()
+  DirectionalLightSource._refreshElevationAngleGuidelines();
 });
 
 function setDirectionalLightSources(lights) {
@@ -232,7 +219,7 @@ async function disableScene() {
   }
   if ( shadowsDisabled ) {
     await setSceneSetting(SETTINGS.SHADING.ALGORITHM, SETTINGS.SHADING.TYPES.NONE);
-    registerShadowPatches(SETTINGS.SHADING.TYPES.NONE);
+    // registerShadowPatches(SETTINGS.SHADING.TYPES.NONE);
     // Looks like we don't need to redraw the scene?
     // await canvas.draw(canvas.scene);
   }
@@ -251,20 +238,3 @@ Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
 function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
-
-Hooks.on("preUpdateToken", preUpdateTokenHook);
-Hooks.on("refreshToken", refreshTokenHook);
-Hooks.on("createActiveEffect", createOrRemoveActiveEffectHook);
-Hooks.on("deleteActiveEffect", createOrRemoveActiveEffectHook);
-
-Hooks.on("updateTile", updateTileHook);
-Hooks.on("renderTileConfig", renderTileConfigHook);
-
-Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
-Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
-Hooks.on("updateAmbientLight", updateAmbientLightHook);
-Hooks.on("updateAmbientSound", updateAmbientSoundHook);
-Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
-Hooks.on("hoverAmbientLight", hoverAmbientLightHook);
-
-// Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);

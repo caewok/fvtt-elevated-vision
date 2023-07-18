@@ -15,14 +15,18 @@ import { Plane } from "./geometry/3d/Plane.js";
 import { SETTINGS, getSceneSetting } from "./settings.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 
+export const PATCHES = {};
+PATCHES.POLYGONS = {};
+PATCHES.SWEEP = {};
+
 /**
- * Wrap ClockwisePolygonSweep.prototype._identifyEdges
+ * Wrap ClockwiseSweepPolygon.prototype._identifyEdges
  * Get walls that are below the
  * For compatibility with Wall Height and other modules, just re-run quad tree to
  * get walls below the source.
  * Wall Height will have already removed these walls from the LOS, so can just store here.
  */
-export function _computeClockwiseSweepPolygon(wrapped) {
+function _compute(wrapped) {
   wrapped();
 
   const shaderAlgorithm = getSceneSetting(SETTINGS.SHADING.ALGORITHM);
@@ -40,7 +44,7 @@ export function _computeClockwiseSweepPolygon(wrapped) {
       (b/c ground assumed to block)
   */
 
-  // From ClockwisePolygonSweep.prototype.getWalls
+  // From ClockwiseSweepPolygon.prototype.getWalls
   const bounds = this._defineBoundingBox();
   const collisionTest = (o, rect) => originalTestWallInclusion.call(this, o.t, rect);
   let walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
@@ -68,10 +72,8 @@ export function _computeClockwiseSweepPolygon(wrapped) {
     The shadows of two terrain walls is the intersection of them.
   */
 
-
   this._elevatedvision ??= {};
   this._elevatedvision.shadows = [];
-//   this._elevatedvision.terrainShadows = []; // Debugging
   this._elevatedvision.combinedShadows = [];
   this._elevatedvision.terrainWalls = new Set();
   this._elevatedvision.heightWalls = new Set();
@@ -86,11 +88,6 @@ export function _computeClockwiseSweepPolygon(wrapped) {
     if ( !isFinite(w.bottomZ) && !isFinite(w.topZ) ) return;
     this._elevatedvision.heightWalls.add(w);
   });
-
-
-  // if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
-
-  // TODO: Fix below b/c POLYGONS is only algorithm left.
 
   // Construct shadows from the walls below the light source
   // Only need to construct the combined shadows if using polygons for vision, not shader.
@@ -131,7 +128,6 @@ export function _computeClockwiseSweepPolygon(wrapped) {
           const shadowIX = shadowW.intersectPolygon(shadowBW)[0];
           if ( shadowIX && shadowIX.points.length > 5 ) {
             this._elevatedvision.shadows.push(shadowIX);
-//             this._elevatedvision.terrainShadows.push(shadowIX);
           }
         }
       }
@@ -152,6 +148,8 @@ export function _computeClockwiseSweepPolygon(wrapped) {
   // Trigger so that PIXI.Graphics.drawShape draws the holes.
   if ( this._elevatedvision.combinedShadows.length ) this._evPolygons = this._elevatedvision.combinedShadows;
 }
+
+PATCHES.POLYGONS.WRAPS = { _compute };
 
 /**
  * From point of view of a source (light or vision observer), is the wall underneath the tile?
@@ -206,9 +204,10 @@ function originalTestWallInclusion(wall, bounds) {
 }
 
 /**
+ * New method: ClockwiseSweepPolygon.prototype._drawShadows
  * For debugging: draw the shadows for this LOS object using the debug drawing tools.
  */
-export function _drawShadowsClockwiseSweepPolygon(
+function _drawShadows(
   { color = Draw.COLORS.gray, width = 1, fill = Draw.COLORS.gray, alpha = 0.5 } = {}) {
   const shadows = this.shadows;
   if ( !shadows || !shadows.length ) return;
@@ -218,6 +217,9 @@ export function _drawShadowsClockwiseSweepPolygon(
     shadow.draw({color, width, fill, alpha});
   }
 }
+
+PATCHES.POLYGONS.METHODS = { _drawShadows };
+
 
 export function testWallsForIntersections(origin, destination, walls, mode, type) {
   origin = new Point3d(origin.x, origin.y, origin.z);
@@ -321,7 +323,7 @@ function filterPotentialBlockingWalls(wallPoints, wallArr, sourceOrigin) {
  * @param {Point} origin
  * @param {object} config
  */
-export function initializeClockwiseSweepPolygon(wrapper, origin, config) {
+function initialize(wrapper, origin, config) {
   const sourceOrigin = config.source ? Point3d.fromPointSource(config.source) : new Point3d(origin.x, origin.y, 0);
   const encompassingPolygon = SCENE_GRAPH.encompassingPolygon(sourceOrigin, config.type);
   if ( encompassingPolygon ) {
@@ -330,3 +332,5 @@ export function initializeClockwiseSweepPolygon(wrapper, origin, config) {
   }
   wrapper(origin, config);
 }
+
+PATCHES.SWEEP.WRAPS = { initialize };

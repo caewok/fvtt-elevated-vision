@@ -26,7 +26,7 @@ import {
   drawPolygonWithHoles,
   quotient256,
   mod256 } from "./util.js";
-import { testWallsForIntersections } from "./clockwise_sweep.js";
+import { testWallsForIntersections } from "./ClockwiseSweepPolygon.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { setSceneSetting, getSceneSetting, getSetting, SETTINGS } from "./settings.js";
@@ -74,11 +74,6 @@ On canvas:
 // TODO: What should replace this now that FullCanvasContainer is deprecated in v11?
 class FullCanvasContainer extends FullCanvasObjectMixin(PIXI.Container) {
 
-}
-
-export function _onMouseMoveCanvas(wrapper, event) {
-  wrapper(event);
-  canvas.elevation._onMouseMove(event);
 }
 
 export class ElevationLayer extends InteractionLayer {
