@@ -1,10 +1,12 @@
 /* globals
 canvas,
+CONFIG,
 PIXI
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
+import { MODULE_ID } from "../const.js";
 import { PixelCache } from "../PixelCache.js";
 
 const PIXEL_INV = 1 / 255;
@@ -17,7 +19,7 @@ export class ShadowTextureRenderer {
   // TODO: Allow to be changed via CONFIG.
 
   /** @type {number} */
-  static MAX_TEXTURE_SIZE = 4096;
+  static get MAX_TEXTURE_SIZE() { return CONFIG[MODULE_ID].shadowTextureSize; }
 
   /** @type {PixelCache} */
   #pixelCache;
