@@ -5,7 +5,7 @@
     <div class="form-group" id="elevatedvision-config-directionallight">
       <label>{{ localize "elevatedvision.ambientconfig.directionallight.name" }} </label>
       <div class="form-fields">
-        <input type="checkbox" id="elevatedvisionDirectionalLightCheckbox" name="flags.elevatedvision.directionalLight" class="elevatedvision" {{ checked data.flags.elevatedvision.directionalLight }} />
+        <input type="checkbox" {{disabled data.elevatedvision.directionalDisabled}} id="elevatedvisionDirectionalLightCheckbox" name="flags.elevatedvision.directionalLight" class="elevatedvision" {{ checked data.flags.elevatedvision.directionalLight }} />
       </div>
       <p class="hint">{{ localize "elevatedvision.ambientconfig.directionallight.hint" }}</p>
     </div>

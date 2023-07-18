@@ -100,7 +100,7 @@ PATCHES.POLYGONS.METHODS = { EVVisionMask: EVVisionMaskPolygon };
 
 function _createPolygon(wrapped) {
   const sweep = wrapped();
-  this.polygonShadows(sweep);
+  // this.polygonShadows(sweep);
   return sweep;
 }
 
@@ -170,11 +170,15 @@ function _initializeEVShadows() {
   this._initializeEVShadowRenderer();
   this._initializeEVShadowMask();
 
-  // TODO: Does this need to be reset every time?
+  // Set uniforms used by the lighting shader.
   const ev = this[MODULE_ID];
-  this.layers.illumination.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
-  this.layers.coloration.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
-  this.layers.background.shader.uniforms.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+  Object.values(this.layers).forEach(layer => {
+    const u = layer.shader.uniforms;
+    u.uEVShadows = true;
+
+    // TODO: Does this need to be reset every time?
+    u.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+  });
 }
 
 /**
@@ -207,9 +211,11 @@ function _initializeEVShadowRenderer() {
   // Force a uniform update, to avoid ghosting of placeables in the light radius.
   // TODO: Find the underlying issue and fix this!
   // Must be a new uniform variable (one that is not already in uniforms)
-  this.layers.background.shader.uniforms.uEVtmpfix = 0;
-  this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
-  this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
+  Object.values(this.layers).forEach(layer => {
+    const u = layer.shader.uniforms;
+    delete u.uEVtmpfix;
+    u.uEVtmpfix = 0;
+  });
 
   // Render texture to store the shadow mesh for use by other shaders.
   ev.shadowRenderer = new ShadowTextureRenderer(this, ev.shadowMesh);
