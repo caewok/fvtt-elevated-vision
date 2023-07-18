@@ -79,7 +79,7 @@
   "elevatedvision.ambientconfig.lightSize.hint": "Radius of the physical light sphere. Foundry default treats lights as point sources (0-sized). Larger values create larger shadow penumbra.",
 
   "elevatedvision.ambientconfig.directionallight.name": "Directional Light",
-  "elevatedvision.ambientconfig.directionallight.hint": "Treat this light like a sun or moon—--placed at a given direction and angle above the horizon.",
+  "elevatedvision.ambientconfig.directionallight.hint": "Treat this light like a sun or moon—--placed at a given direction and angle above the horizon. Requires WebGL shadows.",
 
   "elevatedvision.ambientconfig.azimuth.name": "Azimuth",
   "elevatedvision.ambientconfig.azimuth.hint": "Canvas X/Y direction from which the directional light appears along the horizon. 0º is due east; 90º is due south. The location of this light on the canvas determines its azimuth.",
