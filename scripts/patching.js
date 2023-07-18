@@ -157,21 +157,26 @@ function regDec(fn, map) {
  * Deregister shading wrappers.
  * Used when switching shadow algorithms. Deregister all, then re-register needed wrappers.
  */
-function deregisterPatches(map) { map.forEach((id, _args) => libWrapper.unregister(MODULE_ID, id, false)); }
+function deregisterPatches(map) {
+  map.forEach((_args, id) => libWrapper.unregister(MODULE_ID, id, false));
+  map.clear();
+}
 
 function deregisterHooks(map) {
-  map.forEach((id, args) => {
+  map.forEach((args, id) => {
     const hookName = args[0];
     Hooks.off(hookName, id);
   });
+  map.clear();
 }
 
 function deregisterMethods(map) {
-  map.forEach((_id, args) => {
+  map.forEach((args, id) => {
     const cl = args[0];
     const name = args[1];
     delete cl[name];
   });
+  map.clear();
 }
 
 /**

@@ -12,7 +12,7 @@ ui
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
 import { SETTINGS, getSetting, getSceneSetting } from "./settings.js";
-import { updateShadowPatches } from "./patching.js";
+import { registerPatchesForSceneSettings } from "./patching.js";
 
 const FLY_CONTROL = {
   name: SETTINGS.FLY_BUTTON,
@@ -91,7 +91,7 @@ async function updateSceneHook(document, change, options, _userId) {
 
   const algorithm = change.flags?.[MODULE_ID]?.[SETTINGS.SHADING.ALGORITHM];
   if ( algorithm ) {
-    updateShadowPatches(algorithm, options.EValgorithm);
+    registerPatchesForSceneSettings();
     const label = game.i18n.localize(SETTINGS.SHADING.LABELS[algorithm]);
     ui.notifications.notify(`Elevated Vision scene shadows switched to ${label}.`);
   }
