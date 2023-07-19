@@ -372,3 +372,50 @@ export function linePlane3dIntersection(a, b, c, d, epsilon = 1e-8) {
   return null;
 }
 
+/**
+ * Transform a point coordinate to be in relation to a circle center and radius.
+ * Between 0 and 1 where [0.5, 0.5] is the center
+ * [0, .5] is at the edge in the westerly direction.
+ * [1, .5] is the edge in the easterly direction
+ * @param {Point} point       The point to transform
+ * @param {Point} center      The center of the source
+ * @param {number} radius     The radius of the source
+ * @param {number} [invR]     Inverse of the radius; for repeated calcs
+ * @returns {Point}
+ */
+export function pointCircleCoord(point, center, radius, invR = 1 / radius) {
+  return {
+    x: circleCoord(point.x, radius, center.x, invR),
+    y: circleCoord(point.y, radius, center.y, invR),
+    // z: point.z * 0.5 * r_inv
+  };
+}
+
+/**
+ * Transform a coordinate to be in relation to a circle center and radius.
+ * Between 0 and 1 where [0.5, 0.5] is the center.
+ * @param {number} a    Coordinate value
+ * @param {number} r    Light circle radius
+ * @param {number} [c]    Center value, along the axis of interest
+ * @param {number} [invR] Inverse of the radius; for repeated calcs
+ * @returns {number}
+ */
+function circleCoord(a, r, c = 0, invR = 1 / r) {
+  return (a - c) * invR;
+}
+
+/**
+ * Inverse of circleCoord.
+ * @param {number} p    Coordinate value, in the shader coordinate system between 0 and 1.
+ * @param {number} c    Center value, along the axis of interest
+ * @param {number} r    Radius
+ * @returns {number}
+ */
+export function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-vars
+  // ((a - c) * 1/r * 0.5) + 0.5 = p
+  // (a - c) * 1/r = (p - 0.5) / 0.5
+  // a - c = 2 * (p - 0.5) / 1/r = 2 * (p - 0.5) * r
+  // a = 2 * (p - 0.5) * r + c
+  return (p * r) + c;
+}
+
