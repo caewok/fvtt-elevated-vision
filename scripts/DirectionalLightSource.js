@@ -12,6 +12,7 @@ import { DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeom
 import { ShadowWallDirectionalSourceMesh } from "./glsl/ShadowWallShader.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Draw } from "./geometry/Draw.js";
+import { pointCircleCoord } from "./util.js";
 
 
 /* RenderedPointSource mesh geometry workflow
@@ -51,6 +52,13 @@ export class DirectionalLightSource extends LightSource {
   /** @type {boolean} */
   isDirectional = true;
 
+  /** @type {object} */
+  _originalGeometryBuffers = {
+    background: undefined,
+    coloration: undefined,
+    illumination: undefined
+  };
+
   /** @override */
   _createPolygon() {
     return canvas.dimensions.rect.toPolygon();
@@ -87,6 +95,119 @@ export class DirectionalLightSource extends LightSource {
     const ix = rect.segmentIntersections(center, projPt)[0];
     this.data.x = ix.x;
     this.data.y = ix.y;
+  }
+
+  /** @override */
+  _configure(changes) {
+    Object.entries(this.layers).forEach(([layerId, layer]) => this._restoreGeometryBuffers(layerId, layer));
+    super._configure(changes);
+
+    // Store the buffers, replace the geometry buffers and update.
+    Object.entries(this.layers).forEach(([layerId, layer]) => this._storeGeometryBuffers(layerId, layer));
+
+    const geomBuffers = this._geometryBuffers();
+    Object.entries(this.layers).forEach(([layerId, layer]) => this._replaceGeometryBuffers(layerId, layer, geomBuffers));
+  }
+
+  /**
+   * Store a copy of the original geometry buffers
+   */
+  _storeGeometryBuffers(layerId, layer) {
+    const g = layer.mesh?.geometry;
+    if ( !g ) {
+      this._originalGeometryBuffers[layerId] = undefined;
+      return;
+    }
+
+    const storedObj = this._originalGeometryBuffers[layerId] = {};
+    for ( const attrName of Object.keys(g.attributes) ) {
+      const buffer = g.getBuffer(attrName);
+      storedObj[attrName] = buffer.data;
+    }
+
+    storedObj.indexBuffer = g.indexBuffer.data;
+  }
+
+  /**
+   * Copy the stored geometry buffers to the mesh geometry (temporarily).
+   */
+  _restoreGeometryBuffers(layerId, layer) {
+    const storedObj = this._originalGeometryBuffers[layerId];
+    if ( !storedObj ) return;
+
+    const g = layer.mesh?.geometry;
+    if ( !g ) return;
+
+    for ( const attrName of Object.keys(g.attributes) ) {
+      const buffer = g.getBuffer(attrName);
+      buffer.data = storedObj[attrName];
+    }
+
+    const buffer = g.indexBuffer;
+    buffer.data = storedObj.indexBuffer;
+  }
+
+  /**
+   * Replace the buffers with the stored version. Signal a buffer update.
+   */
+  _replaceGeometryBuffers(layerId, layer, newBuffers = this._geometryBuffers()) {
+    const g = layer.mesh?.geometry;
+    if ( !g ) return;
+
+    for ( const attrName of Object.keys(g.attributes) ) {
+      const buffer = g.getBuffer(attrName);
+      // buffer.static = false;
+      buffer.data = newBuffers[attrName];
+      buffer.update();
+    }
+
+    // g.indexBuffer.static = false;
+    g.indexBuffer.data = newBuffers.indexBuffer;
+    g.indexBuffer.update();
+  }
+
+  /**
+   * Construct geometry buffers for the directional light.
+   * Quad shape with the light assumed to be on the border.
+   * Normalized values from that point.
+   */
+  _geometryBuffers() {
+    const rect = canvas.dimensions.rect;
+    const { left, right, top, bottom, center } = rect;
+    const aTextureCoord = [
+      0, 0, // TL
+      1, 0, // TR
+      1, 1, // BR
+      0, 1 // BL
+    ];
+    const aDepthValue = Array(8).fill(1);
+    const indexBuffer = [0, 1, 2, 0, 2, 3];
+
+    // Determine the position of the light on the edge of the canvas rectangle.
+    const projPt = PIXI.Point.fromAngle(center, this.azimuth, canvas.dimensions.maxR);
+    const ixs = rect.segmentIntersections(center, projPt);
+    const ix = PIXI.Point.fromObject(ixs[0]).roundDecimals();
+
+    // Normalize the rectangle coordinates inside the light circle, where 0,0 is the light center.
+    const radius = this.radius;
+    const invRadius = 1 / this.radius;
+    const TL = pointCircleCoord(new PIXI.Point(left, top), ix, radius, invRadius);
+    const TR = pointCircleCoord(new PIXI.Point(right, top), ix, radius, invRadius);
+    const BR = pointCircleCoord(new PIXI.Point(right, bottom), ix, radius, invRadius);
+    const BL = pointCircleCoord(new PIXI.Point(left, bottom), ix, radius, invRadius);
+    const aVertexPosition = [
+      TL.x, TL.y,      // TL
+      TR.x, TR.y,   // TR
+      BR.x, BR.y, // BR
+      BL.x, BL.y  // BL
+    ];
+
+    return {
+      aVertexPosition: new Float32Array(aVertexPosition),
+      aTextureCoord: new Float32Array(aTextureCoord),
+      aDepthValue: new Float32Array(aDepthValue),
+      indexBuffer: new Uint16Array(indexBuffer)
+    };
   }
 
   /**

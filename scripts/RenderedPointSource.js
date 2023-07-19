@@ -21,6 +21,30 @@ import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 
 // Methods related to RenderedPointSource
 
+/* Foundry RenderedPointSource workflow
+
+_configure
+--> #initializeMeshes
+--> If #initializeMeshes returns true or shader key changes, --> #initializeShaders
+
+#initializeShaders
+--> #createShader
+--> #updateUniforms
+--> Hooks.call(initialize[LightSource]Shader)
+
+#initializeMeshes
+--> #updateGeometry
+--> if no prior #geometry set, #createMeshes
+
+#updateGeometry
+--> Passes this.shape to the PolygonMesher
+  -- x, y, radius
+--> Triangulate the PolygonMesher output to set geometry.
+
+
+
+*/
+
 /* New Methods
 _initializeEVShadows
 - Just calls the below initialize methods
