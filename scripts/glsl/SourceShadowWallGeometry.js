@@ -11,7 +11,7 @@ Wall
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "../const.js";
-
+import { getLinkedWalls } from "../util.js";
 
 export class SourceShadowWallGeometry extends PIXI.Geometry {
 
@@ -85,7 +85,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   constructWallGeometry(walls) {
     this._triWallMap.clear();
 
-    // Default is to draw light --> wallCorner1 --> wallCorner2.
+    // Default is to draw light --> wallcorner0 --> wallcorner1.
     // Assumed that light is passed as uniform.
     // Attributes used to pass needed wall data to each vertex.
     const indices = [];
@@ -99,14 +99,14 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     for ( let i = 0; i < nWalls; i += 1 ) {
       const wall = walls[i];
       if ( !this._includeWall(wall) ) continue;
-      const {corner1, corner2 } = this.constructor.wallCornerCoordinates(wall);
+      const {corner0, corner1 } = this.wallCornerCoordinates(wall);
 
       // TODO: Instanced attributes.
       // For now, must repeat the vertices three times.
       // Should be possible to use instanced attributes to avoid this. (see PIXI.Attribute)
       // Unclear whether that would be supported using Foundry rendering options.
-      aWallCorner0.push(...corner1, ...corner1, ...corner1);
-      aWallCorner1.push(...corner2, ...corner2, ...corner2);
+      aWallCorner0.push(...corner0, ...corner0, ...corner0);
+      aWallCorner1.push(...corner1, ...corner1, ...corner1);
 
       const type = this.senseType(wall);
       aWallSenseType.push(type, type, type);
@@ -124,8 +124,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
     // TODO: Should this or a subclass set interleave to true?
     this.addIndex(indices);
-    this.addAttribute("aWallCorner0", aWallCorner0, 3);
-    this.addAttribute("aWallCorner1", aWallCorner1, 3);
+    this.addAttribute("aWallCorner0", aWallCorner0, 4);
+    this.addAttribute("aWallCorner1", aWallCorner1, 4);
     this.addAttribute("aWallSenseType", aWallSenseType, 1);
     this.addAttribute("aThresholdRadius2", aThresholdRadius2, 1);
   }
@@ -151,9 +151,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    */
   threshold2Attribute(wall) {
     if ( !this.thresholdApplies(wall) ) return 0;
-
     const { inside, outside } = this.calculateThresholdAttenuation(wall);
-    // return inside + outside;
     return Math.min(Number.MAX_SAFE_INTEGER, Math.pow(inside + outside, 2)); // Avoid infinity.
   }
 
@@ -187,7 +185,6 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const pInv = proximity ? 1 - percentDistance : Math.min(1, percentDistance - 1);
     const a = (pInv / (2 * (1 - pInv))) * CONFIG.Wall.thresholdAttenuationMultiplier;
     return { inside, outside: a * thresholdDistance };
-    // return { inside, outside: Math.min(a * thresholdDistance, outside) };
   }
 
   /**
@@ -237,10 +234,10 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       if ( !wall.document.threshold.attenuation ) return false;
 
       // Ignore reverse threshold walls if the attenuation results in full radius going through.
-//       if ( wall.document[this.sourceType] === CONST.WALL_SENSE_TYPES.DISTANCE ) {
-//         const { inside, outside } = this.calculateThresholdAttenuation(wall);
-//         if ( (inside + outside) >= this.source.radius ) return false;
-//       }
+      //       if ( wall.document[this.sourceType] === CONST.WALL_SENSE_TYPES.DISTANCE ) {
+      //         const { inside, outside } = this.calculateThresholdAttenuation(wall);
+      //         if ( (inside + outside) >= this.source.radius ) return false;
+      //       }
     }
 
     return true;
@@ -250,15 +247,22 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * Retrieve wall endpoint data for a corner.
    * A is top, B is bottom
    * @param {Wall} wall
-   * @returns { corner1: {PIXI.Point}, corner2: {PIXI.Point}, topZ: {number}, bottomZ: {number} }
+   * @returns { corner0: {PIXI.Point}, corner1: {PIXI.Point}, topZ: {number}, bottomZ: {number} }
    */
-  static wallCornerCoordinates(wall) {
+  wallCornerCoordinates(wall) {
     const { A, B, topZ, bottomZ } = wall;
-    const top = Math.min(topZ, 1e6)
-    const bottom = Math.max(bottomZ, -1e6)
+    const top = Math.min(topZ, 1e6);
+    const bottom = Math.max(bottomZ, -1e6);
+
+    // Note if wall is bound to another.
+    // Required to avoid light leakage due to penumbra in the shader.
+    // Don't include the link if it is not a valid wall for this source.
+    const { linkedA, linkedB } = getLinkedWalls(wall);
+    const hasLinkedA = linkedA.some(w => this._triWallMap.has(w.id) || this._includeWall(w)); // Quicker to check the map first.
+    const hasLinkedB = linkedB.some(w => this._triWallMap.has(w.id) || this._includeWall(w));
     return {
-      corner1: [A.x, A.y, top],
-      corner2: [B.x, B.y, bottom]
+      corner0: [A.x, A.y, top, Number(hasLinkedA)],
+      corner1: [B.x, B.y, bottom, Number(hasLinkedB)]
     };
   }
 
@@ -327,21 +331,101 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   }
 
   /**
+   * For the given added wall, determine if it changes the link status of connected walls.
+   * If so, update those linked walls.
+   * @param {Wall} wall               Wall to update
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update
+   * @returns {boolean}  Did the geometry need to be updated?
+   */
+  _checkAddedWallLinks(addedWall, update = true) {
+    const { linkedA, linkedB } = getLinkedWalls(addedWall);
+    let linkUpdated = false;
+    for ( const linkedWall of linkedA.union(linkedB) ) {
+      const res = this._updateWallLinkBuffer(linkedWall, update);
+      linkUpdated ||= res;
+    }
+    return linkUpdated;
+  }
+
+  /**
+   * For the given updated wall, determine if it changes the link status of connected walls.
+   * @param {Wall} wall               Wall to update
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update
+   * @returns {boolean} Did the geometry need to be updated based on the wall update?
+   */
+  _checkUpdatedWallLinks(updatedWall, update = true) {
+    // We cannot know what the wall links were previous to the update unless we store all that data.
+    // Instead, cycle through each checking for changes.
+    let linkUpdated = false;
+    for ( const wall of canvas.walls.placeables ) {
+      if ( wall === updatedWall ) continue;
+      const res = this._updateWallLinkBuffer(wall, update);
+      linkUpdated ||= res;
+    }
+    return linkUpdated;
+  }
+
+  /**
+   * For the given deleted wall, determine if it changes the link status of connected walls.
+   * If so, update those linked walls
+   * Because the wall is deleted, `getLinkedWalls` will no longer return the linked value.
+   * Process all walls to determine if their link status has changed.
+   * @param {Wall} wall               Wall to update
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update
+   * @returns {boolean}  Did the geometry need to be updated?
+   */
+  _checkRemovedWallLinks(removedWallId, update = true) {
+    // We cannot know what the wall links were previous to the update unless we store all that data.
+    // Instead, cycle through each checking for changes.
+    let linkUpdated = false;
+    for ( const wall of canvas.walls.placeables ) {
+      if ( wall.id === removedWallId ) continue;
+      const res = this._updateWallLinkBuffer(wall, update);
+      linkUpdated ||= res;
+    }
+    return linkUpdated;
+  }
+
+  /**
+   * Update link buffers as necessary for a given wall.
+   * Because this updates the coordinates, use this or _updateWallPosition, not both.
+   * @param {Wall} wall               Wall to update
+   * @param {number} idxToUpdate      Index of the coordinate in the buffer
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update
+   * @returns {boolean} Did the geometry need to be updated based on the wall update?
+   */
+  _updateWallLinkBuffer(wall, update = true) {
+    if ( !this._triWallMap.has(wall.id) ) return false;
+    const idxToUpdate = this._triWallMap.get(wall.id);
+
+    const { corner0, corner1 } = this.wallCornerCoordinates(wall);
+    let changedLink = this.getAttributeAtIndex("aWallCorner0", idxToUpdate)[3] !== corner0[3];
+    changedLink ||= this.getAttributeAtIndex("aWallCorner1", idxToUpdate)[3] !== corner1[3];
+    if ( changedLink ) {
+      this._updateBuffer(corner0, "aWallCorner0", idxToUpdate, update);
+      this._updateBuffer(corner1, "aWallCorner1", idxToUpdate, update);
+    }
+    return changedLink;
+  }
+
+  /**
    * Add a wall to this geometry.
    * @param {Wall} wall   Wall to add
    * @param {boolean} [update=true]  If false, buffer will not be flagged for update
    * @returns {boolean} Did the geometry need to be updated based on the wall addition?
    */
   addWall(wall, { update = true } = {}) {
-    if ( this._triWallMap.has(wall.id) ) return false;
-    if ( !this._includeWall(wall) ) return false;
+    // Theoretically, could have a link update even for a wall we are not including.
+    const linkUpdated = this._checkAddedWallLinks(wall, update);
+    if ( this._triWallMap.has(wall.id) ) return linkUpdated;
+    if ( !this._includeWall(wall) ) return linkUpdated;
 
     const idxToAdd = this._triWallMap.size;
 
     // Wall endpoints
-    const { corner1, corner2 } = this.constructor.wallCornerCoordinates(wall);
-    this._addToBuffer(corner1, "aWallCorner0", update);
-    this._addToBuffer(corner2, "aWallCorner1", update);
+    const { corner0, corner1 } = this.wallCornerCoordinates(wall);
+    this._addToBuffer(corner0, "aWallCorner0", update);
+    this._addToBuffer(corner1, "aWallCorner1", update);
 
     // Wall sense type
     this._addToBuffer([this.senseType(wall)], "aWallSenseType", update);
@@ -381,33 +465,62 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     if ( !this._triWallMap.has(wall.id) ) return this.addWall(wall, { update });
     if ( !this._includeWall(wall) ) return this.removeWall(wall.id, { update });
 
+    // Check for updates to wall link status for walls linked to this one.
+    const updatedLinkedWalls = this._checkUpdatedWallLinks(wall, update);
+
     // Note: includeWall will handle changes to the threshold.attenuation.
-
+    // Check for changes to the given coordinate set and update the buffers.
+    // Don't need to update the index
     const idxToUpdate = this._triWallMap.get(wall.id);
+    const changedPosition = this._updateWallPosition(wall, idxToUpdate, update);
+    const changedSenseType = this._updateWallSenseType(wall, idxToUpdate, update);
+    const changedThreshold = this._updateWallThreshold(wall, idxToUpdate, update);
+    return updatedLinkedWalls || changedPosition || changedSenseType || changedThreshold;
+  }
 
-    // Check for change in wall endpoints
-    let changedPosition = false;
-    const { corner1, corner2 } = this.constructor.wallCornerCoordinates(wall);
-    changedPosition = this.getAttributeAtIndex("aWallCorner0", idxToUpdate).some((x, i) => x !== corner1[i]);
-    changedPosition ||= this.getAttributeAtIndex("aWallCorner0", idxToUpdate).some((x, i) => x !== corner2[i]);
+  /**
+   * Check for change in wall endpoints or link status and update buffer accordingly.
+   * @param {Wall} wall               Wall to update
+   * @param {number} idxToUpdate      Index of the coordinate in the buffer
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update
+   * @returns {boolean} Did the geometry need to be updated based on the wall update?
+   */
+  _updateWallPosition(wall, idxToUpdate, update = true) {
+    const { corner0, corner1 } = this.wallCornerCoordinates(wall);
+    let changedPosition = this.getAttributeAtIndex("aWallCorner0", idxToUpdate).some((x, i) => x !== corner0[i]);
+    changedPosition ||= this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner1[i]);
     if ( changedPosition ) {
-      this._updateBuffer(corner1, "aWallCorner0", idxToUpdate, update);
-      this._updateBuffer(corner2, "aWallCorner1", idxToUpdate, update);
+      this._updateBuffer(corner0, "aWallCorner0", idxToUpdate, update);
+      this._updateBuffer(corner1, "aWallCorner1", idxToUpdate, update);
     }
+    return changedPosition;
+  }
 
-    // Check for change in the sense type for the wall
+  /**
+   * Check for change in the sense type for the wall and update buffer accordingly.
+   * @param {Wall} wall               Wall to update
+   * @param {number} idxToUpdate      Index of the coordinate in the buffer
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update
+   * @returns {boolean} Did the geometry need to be updated based on the wall update?
+   */
+  _updateWallSenseType(wall, idxToUpdate, update = true) {
     const senseType = this.senseType(wall);
     const changedSenseType = this.getAttributeAtIndex("aWallSenseType")[0] !== senseType;
     if ( changedSenseType ) this._updateBuffer([senseType], "aWallSenseType", idxToUpdate, update);
+    return changedSenseType;
+  }
 
-    // Check for change in the relevant threshold attribute
+  /**
+   * Check for change in the relevant threshold attribute and update buffer accordingly.
+   * @param {Wall} wall   Wall to update
+   * @param {boolean} [update=true]       If false, buffer will not be flagged for update.
+   * @returns {boolean} Did the geometry need to be updated based on the wall update?
+   */
+  _updateWallThreshold(wall, idxToUpdate, update = true) {
     const threshold = this.threshold2Attribute(wall);
     const changedThreshold = this.getAttributeAtIndex("aThresholdRadius2")[0] !== threshold;
     if ( changedThreshold ) this._updateBuffer([threshold], "aThresholdRadius2", idxToUpdate, update);
-
-    // Don't need to update the index
-
-    return changedPosition || changedSenseType || changedThreshold;
+    return changedThreshold;
   }
 
   getAttributeAtIndex(attributeName, index) {
@@ -434,10 +547,12 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    */
   removeWall(id, { update = true } = {}) {
     if ( id instanceof Wall ) id = id.id;
-    if ( !this._triWallMap.has(id) ) return false;
+
+    // Theoretically, could have a link update even for a wall we are not including.
+    const linkUpdated = this._checkRemovedWallLinks(id, update);
+    if ( !this._triWallMap.has(id) ) return linkUpdated;
 
     const idxToRemove = this._triWallMap.get(id);
-
     for ( const attr of Object.keys(this.attributes) ) {
       const size = this.getAttribute(attr).size * 3;
       const buffer = this.getBuffer(attr);
