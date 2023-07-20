@@ -96,6 +96,7 @@ PATCHES.POLYGONS = {};
 PATCHES.VISIBILITY = {};
 PATCHES.WEBGL = {};
 
+
 // ----- NOTE: Polygon Shadows ----- //
 // NOTE: Polygon Wraps
 function EVVisionMaskPolygon() {

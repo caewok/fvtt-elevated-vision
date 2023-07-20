@@ -14,6 +14,7 @@ import { MODULE_ID } from "../const.js";
 import { getLinkedWalls, pointsOppositeSideV } from "../util.js";
 import { testWallsForIntersections } from "../ClockwiseSweepPolygon.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { DirectionalLightSource } from "../DirectionalLightSource.js";
 
 export class SourceShadowWallGeometry extends PIXI.Geometry {
 
@@ -283,7 +284,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   endpointBlocks(wall, linkedWall, endpointName) {
     if ( !(this._triWallMap.has(linkedWall.id) || this._includeWall(linkedWall)) ) return false; // Quicker to check the map first.
 
-    const sharedPt = wall[endpointName];
+    const sharedPt = PIXI.Point.fromObject(wall[endpointName]);
     if ( this.isLimited(linkedWall) ) {
       let topZ = linkedWall.topZ;
       if ( !isFinite(topZ) ) topZ = 1e06;
@@ -294,48 +295,53 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // If the light and the point X of  light --> endpoint --> X are both between the two walls
     // connected by the endpoint, then the endpoint does not block.
     // i.e., the light --> endpoint --> X is a tangent off the "V" formed by the walls.
-    // TODO: Do we need to account for light size / light angle for the penumbra? What about large light size?
-    const sourceOrigin = PIXI.Point.fromObject(this.source);
-
-    // Need a destination point any distance past the endpoint on source --> endpoint ray
-    const dist2 = PIXI.Point.distanceSquaredBetween(sourceOrigin, sharedPt);
-    const sourceDest = sourceOrigin.towardsPointSquared(PIXI.Point.fromObject(sharedPt), dist2 * 2);
     const otherWallPt = wall[endpointName === "A" ? "B" : "A"];
     const otherLinkedPt = linkedWall.A.key === sharedPt.key ? linkedWall.B : linkedWall.A;
 
-    // TODO: How to handle directional lights
+    // Helper method
+    const maxR = canvas.dimensions.maxR;
+    const testDirection = dir => {
+      const src = sharedPt.add(dir.multiplyScalar(100));
+      const dest = sharedPt.subtract(dir.multiplyScalar(100));
+      return pointsOppositeSideV(sharedPt, otherWallPt, otherLinkedPt, src, dest);
+    };
 
-    // Test that the light and its penumbra points are on the same side of the V
-    // formed by the two walls. If not, then the endpoint needs to block.
-    if ( pointsOppositeSideV(sharedPt, otherWallPt, otherLinkedPt, sourceOrigin, sourceDest) ) return true;
-    const lightSize = this.source.data.lightSize;
-    if ( !lightSize ) return false;
+    if ( this.source instanceof DirectionalLightSource ) {
+      const lightDir = this.source.lightDirection.to2d();
+      if ( testDirection(lightDir) ) return true;
 
-    // Test penumbra points
-    const dir1 = (PIXI.Point.fromObject(sharedPt))
-      .subtract(otherWallPt)
-      .normalize()
-      .multiplyScalar(lightSize);
-    const source1 = sourceOrigin.add(dir1);
-    const source1Dest = source1.towardsPointSquared(PIXI.Point.fromObject(sharedPt), dist2 * 2);
-    if ( pointsOppositeSideV(sharedPt, otherWallPt, otherLinkedPt, source1, source1Dest) ) return true;
+      // Check the solar angles.
+      const { azimuth, solarAngle, elevationAngle } = this.source;
+      const maxSolarAngle = Math.max(0.1, solarAngle); // To match shader.
 
-    const source2 = sourceOrigin.subtract(dir1);
-    const source2Dest = source2.towardsPointSquared(PIXI.Point.fromObject(sharedPt), dist2 * 2);
-    if ( pointsOppositeSideV(sharedPt, otherWallPt, otherLinkedPt, source2, source2Dest) ) return true;
+      const dir1 = DirectionalLightSource.lightDirection(azimuth + maxSolarAngle, elevationAngle);
+      if ( testDirection(dir1) ) return true;
 
-    // Test for the other wall direction
-    const dir2 = (PIXI.Point.fromObject(sharedPt))
-      .subtract(otherLinkedPt)
-      .normalize()
-      .multiplyScalar(lightSize);
-    const source3 = sourceOrigin.add(dir2);
-    const source3Dest = source3.towardsPointSquared(PIXI.Point.fromObject(sharedPt), dist2 * 2);
-    if ( pointsOppositeSideV(sharedPt, otherWallPt, otherLinkedPt, source3, source3Dest) ) return true;
+      const dir2 = DirectionalLightSource.lightDirection(azimuth - maxSolarAngle, elevationAngle);
+      if ( testDirection(dir2) ) return true;
 
-    const source4 = sourceOrigin.subtract(dir2);
-    const source4Dest = source4.towardsPointSquared(PIXI.Point.fromObject(sharedPt), dist2 * 2);
-    if ( pointsOppositeSideV(sharedPt, otherWallPt, otherLinkedPt, source4, source4Dest) ) return true;
+    } else {
+      const sourceOrigin = PIXI.Point.fromObject(this.source);
+      const lightDir = sourceOrigin.subtract(sharedPt).normalize();
+      if ( testDirection(lightDir) ) return true;
+
+      // Test penumbra points for wall direction.
+      const lightSize = Math.max(this.source.data?.lightSize || 0, 1); // To match shader
+      const wallDir = sharedPt.subtract(otherWallPt).normalize().multiplyScalar(100);
+      const dir1 = sourceOrigin.add(wallDir).subtract(sharedPt).normalize();
+      if ( testDirection(dir1) ) return true;
+
+      const dir2 = sourceOrigin.subtract(wallDir).subtract(sharedPt).normalize();
+      if ( testDirection(dir2) ) return true;
+
+      // Test the linked wall direction
+      const linkedDir = sharedPt.subtract(otherLinkedPt).normalize().multiplyScalar(100);
+      const dir3 = sourceOrigin.add(linkedDir).subtract(sharedPt).normalize();
+      if ( testDirection(dir3) ) return true;
+
+      const dir4 = sourceOrigin.subtract(linkedDir).subtract(sharedPt).normalize();
+      if ( testDirection(dir4) ) return true;
+    }
 
     return false;
   }
@@ -347,13 +353,15 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @param {boolean} True if a wall is between source and destination
    */
   _wallBetween(dest, wallsToExclude = []) {
-    const xMinMax = Math.minMax(this.source.x, dest.x);
-    const yMinMax = Math.minMax(this.source.y, dest.y);
+    const origin = this.source instanceof DirectionalLightSource
+      ? dest.add(this.source.lightDirection.multiplyScalar(canvas.dimensions.maxR))
+      : Point3d.fromPointSource(this.source);
+    const xMinMax = Math.minMax(origin.x, dest.x);
+    const yMinMax = Math.minMax(origin.y, dest.y);
     const bounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
     const collisionTest = (o, _rect) => this._includeWall(o.t);
     let walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
     if ( wallsToExclude.length ) walls = walls.filter(w => !wallsToExclude.some(ex => w === ex));
-    const origin = Point3d.fromPointSource(this.source);
     return testWallsForIntersections(origin, dest, walls, "any", this.sourceType);
   }
 
