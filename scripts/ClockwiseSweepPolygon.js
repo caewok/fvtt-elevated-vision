@@ -84,8 +84,7 @@ function _compute(wrapped) {
       normalWalls: new Set()
     };
   }
-  const evS = ev.polygonShadows
-
+  const evS = ev.polygonShadows;
 
   const sourceType = source.constructor.sourceType;
   walls.forEach(w => {
@@ -220,7 +219,7 @@ function _drawShadows(
 PATCHES.POLYGONS.METHODS = { _drawShadows };
 
 
-export function testWallsForIntersections(origin, destination, walls, mode, type) {
+export function testWallsForIntersections(origin, destination, walls, mode, type, testTerrain = true) {
   origin = new Point3d(origin.x, origin.y, origin.z);
   destination = new Point3d(destination.x, destination.y, destination.z);
 
@@ -229,7 +228,9 @@ export function testWallsForIntersections(origin, destination, walls, mode, type
     const x = lineSegment3dWallIntersection(origin, destination, wall);
     if ( x ) {
       if ( mode === "any" ) {   // We may be done already
-        if ( (type && wall.document[type] === CONST.WALL_SENSE_TYPES.NORMAL) || (walls.length > 1) ) return true;
+        if ( !testTerrain
+          || (type && wall.document[type] === CONST.WALL_SENSE_TYPES.NORMAL)
+          || (walls.length > 1) ) return true;
       }
       if ( type ) x.type = wall.document[type];
       x.wall = wall;
@@ -250,7 +251,7 @@ export function testWallsForIntersections(origin, destination, walls, mode, type
 
   // Return the closest collision
   collisions.sort((a, b) => a.distance2 - b.distance2);
-  if ( collisions[0]?.type === CONST.WALL_SENSE_TYPES.LIMITED ) collisions.shift();
+  if ( testTerrain && collisions[0]?.type === CONST.WALL_SENSE_TYPES.LIMITED ) collisions.shift();
 
   if ( mode === "sorted" ) return collisions;
 

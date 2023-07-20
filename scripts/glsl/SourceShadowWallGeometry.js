@@ -11,7 +11,9 @@ Wall
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "../const.js";
-import { getLinkedWalls } from "../util.js";
+import { getLinkedWalls, pointsOppositeSideV } from "../util.js";
+import { testWallsForIntersections } from "../ClockwiseSweepPolygon.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
 
 export class SourceShadowWallGeometry extends PIXI.Geometry {
 
@@ -258,12 +260,101 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // Required to avoid light leakage due to penumbra in the shader.
     // Don't include the link if it is not a valid wall for this source.
     const { linkedA, linkedB } = getLinkedWalls(wall);
-    const hasLinkedA = linkedA.some(w => this._triWallMap.has(w.id) || this._includeWall(w)); // Quicker to check the map first.
-    const hasLinkedB = linkedB.some(w => this._triWallMap.has(w.id) || this._includeWall(w));
+    const hasLinkedA = linkedA.some(linkedWall => this.endpointBlocks(wall, linkedWall, "A"));
+    const hasLinkedB = linkedB.some(linkedWall => this.endpointBlocks(wall, linkedWall, "B"));
+
     return {
       corner0: [A.x, A.y, top, Number(hasLinkedA)],
       corner1: [B.x, B.y, bottom, Number(hasLinkedB)]
     };
+  }
+
+  /**
+   * Determine if a wall endpoint should be considered "blocking", meaning it blocks all light
+   * because it is connected to 2+ walls.
+   * Considers whether the wall is blocking for the light source, whether it is limited,
+   * and whether it is at an angle that requires blocking.
+   * Required to avoid light leakage due to penumbra in the shader.
+   * @param {Wall} wall                 Wall whose endpoint is shared with the linked wall
+   * @param {Wall} linkedWall           Linked wall to test for this endpoint
+   * @param {"A"|"B"} endpointName      Which endpoint to test
+   * @returns {boolean} Should this endpoint be considered blocking with respect to the source?
+   */
+  endpointBlocks(wall, linkedWall, endpointName) {
+    if ( !(this._triWallMap.has(linkedWall.id) || this._includeWall(linkedWall)) ) return false; // Quicker to check the map first.
+
+    const sharedPt = wall[endpointName];
+    if ( this.isLimited(linkedWall) ) {
+      let topZ = linkedWall.topZ;
+      if ( !isFinite(topZ) ) topZ = 1e06;
+      const dest = new Point3d(sharedPt.x, sharedPt.y, topZ);
+      if ( !this._wallBetween(dest, [wall, linkedWall]) ) return false;
+    }
+
+    // If the light and the point X of  light --> endpoint --> X are both between the two walls
+    // connected by the endpoint, then the endpoint does not block.
+    // i.e., the light --> endpoint --> X is a tangent off the "V" formed by the walls.
+    // TODO: Do we need to account for light size / light angle for the penumbra? What about large light size?
+    const sourceOrigin = PIXI.Point.fromObject(this.source);
+
+    // Need a destination point any distance past the endpoint on source --> endpoint ray
+    const dist2 = PIXI.Point.distanceSquaredBetween(sourceOrigin, sharedPt);
+    const sourceDest = sourceOrigin.towardsPointSquared(PIXI.Point.fromObject(sharedPt), dist2 * 2);
+    const otherWallPt = wall[endpointName === "A" ? "B" : "A"];
+    const otherLinkedPt = linkedWall.A.key === sharedPt.key ? linkedWall.B : linkedWall.A;
+
+    // TODO: How to handle directional lights
+
+    // Test that the light and its penumbra points are on the same side of the V
+    // formed by the two walls. If not, then the endpoint needs to block.
+    if ( pointsOppositeSideV(sharedPt, otherWallPt, otherLinkedPt, sourceOrigin, sourceDest) ) return true;
+    const lightSize = this.source.data.lightSize;
+    if ( !lightSize ) return false;
+
+    // Test penumbra points
+    const dir1 = (PIXI.Point.fromObject(sharedPt))
+      .subtract(otherWallPt)
+      .normalize()
+      .multiplyScalar(lightSize);
+    const source1 = sourceOrigin.add(dir1);
+    const source1Dest = source1.towardsPointSquared(PIXI.Point.fromObject(sharedPt), dist2 * 2);
+    if ( pointsOppositeSideV(sharedPt, otherWallPt, otherLinkedPt, source1, source1Dest) ) return true;
+
+    const source2 = sourceOrigin.subtract(dir1);
+    const source2Dest = source2.towardsPointSquared(PIXI.Point.fromObject(sharedPt), dist2 * 2);
+    if ( pointsOppositeSideV(sharedPt, otherWallPt, otherLinkedPt, source2, source2Dest) ) return true;
+
+    // Test for the other wall direction
+    const dir2 = (PIXI.Point.fromObject(sharedPt))
+      .subtract(otherLinkedPt)
+      .normalize()
+      .multiplyScalar(lightSize);
+    const source3 = sourceOrigin.add(dir2);
+    const source3Dest = source3.towardsPointSquared(PIXI.Point.fromObject(sharedPt), dist2 * 2);
+    if ( pointsOppositeSideV(sharedPt, otherWallPt, otherLinkedPt, source3, source3Dest) ) return true;
+
+    const source4 = sourceOrigin.subtract(dir2);
+    const source4Dest = source4.towardsPointSquared(PIXI.Point.fromObject(sharedPt), dist2 * 2);
+    if ( pointsOppositeSideV(sharedPt, otherWallPt, otherLinkedPt, source4, source4Dest) ) return true;
+
+    return false;
+  }
+
+  /**
+   * Test if one or more walls are between the source origin and a destination point.
+   * @param {Point3d} dest
+   * @param {Wall[]} wallsToExclude   One or more walls to exclude
+   * @param {boolean} True if a wall is between source and destination
+   */
+  _wallBetween(dest, wallsToExclude = []) {
+    const xMinMax = Math.minMax(this.source.x, dest.x);
+    const yMinMax = Math.minMax(this.source.y, dest.y);
+    const bounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
+    const collisionTest = (o, _rect) => this._includeWall(o.t);
+    let walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+    if ( wallsToExclude.length ) walls = walls.filter(w => !wallsToExclude.some(ex => w === ex));
+    const origin = Point3d.fromPointSource(this.source);
+    return testWallsForIntersections(origin, dest, walls, "any", this.sourceType);
   }
 
   // ----- Wall updates ----- //
