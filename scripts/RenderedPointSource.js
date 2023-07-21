@@ -96,6 +96,7 @@ PATCHES.POLYGONS = {};
 PATCHES.VISIBILITY = {};
 PATCHES.WEBGL = {};
 
+
 // ----- NOTE: Polygon Shadows ----- //
 // NOTE: Polygon Wraps
 function EVVisionMaskPolygon() {
@@ -273,9 +274,10 @@ function _updateEVShadowData(changes) {
 
   if ( !(changedPosition || changedRadius || changedElevation) ) return;
 
-  ev.wallGeometry.refreshWalls();
-  ev.shadowMesh.updateLightPosition();
+  // TODO: Simplify and make more efficient
 
+  ev.wallGeometry.updateSourcePosition();
+  ev.shadowMesh.updateLightPosition();
   if ( changedRadius ) {
     ev.shadowRenderer.updateSourceRadius();
 

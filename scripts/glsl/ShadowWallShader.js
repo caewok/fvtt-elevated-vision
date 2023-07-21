@@ -85,6 +85,13 @@ function zChangeForElevationAngle(elevationAngle) {
 const PENUMBRA_VERTEX_FUNCTIONS =
 `
 ${defineFunction("projectRay")}
+${defineFunction("toRadians")}
+${defineFunction("angleBetween")}
+${defineFunction("toDegrees")}
+${defineFunction("wallKeyCoordinates")}
+
+#define EV_ENDPOINT_LINKED_UNBLOCKED  -1.0
+#define EV_ENDPOINT_LINKED_CONCAVE    -2.0
 
 float calculateRatio(in vec3 wallEndpoint, in vec3 dir, in vec2 furthestPoint, in Plane canvasPlane, in float maxDist) {
   if ( dir.z >= 0.0 ) return 0.0;
@@ -194,20 +201,80 @@ switch ( vertexNum ) {
 
 gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
 
-// Penumbra1 triangle
-vec2 p1A = wall2d[0];
-vec2 p1B = sidePenumbra[0];
-vec2 p1C = sideUmbra[0];
-vSidePenumbra1 = barycentric(vVertexPosition, p1A, p1B, p1C);
+// If the endpoint is blocking, move the sideUmbra to match the blocking line.
+// If the sideUmbra moves past the sidePenumbra, then there will be no penumbra.
+// Must orient against the wall and light to get the correct direction
+float wallKey0 = aWallCorner0.w;
+float wallKey1 = aWallCorner1.w;
 
-// Penumbra2 triangle
-vec2 p2A = wall2d[1];
-vec2 p2C = sideUmbra[1];
-vec2 p2B = sidePenumbra[1];
-vSidePenumbra2 = barycentric(vVertexPosition, p2A, p2B, p2C);
+#ifndef EV_DIRECTIONAL_LIGHT
+bool hasSidePenumbra0 = uLightSize > 0.0;
+bool hasSidePenumbra1 = hasSidePenumbra0;
+#endif
+
+#ifdef EV_DIRECTIONAL_LIGHT
+bool hasSidePenumbra0 = uSolarAngle > 0.0;
+bool hasSidePenumbra1 = hasSidePenumbra0;
+#endif
+
+hasSidePenumbra0 = hasSidePenumbra0 && wallKey0 != EV_ENDPOINT_LINKED_CONCAVE;
+hasSidePenumbra1 = hasSidePenumbra1 && wallKey1 != EV_ENDPOINT_LINKED_CONCAVE;
+
+if ( hasSidePenumbra0 && wallKey0 != EV_ENDPOINT_LINKED_UNBLOCKED ) {
+  vec2 linkedPt = wallKeyCoordinates(wallKey0);
+
+  float oUmbraPenumbra = sign(orient(aWallCorner0.xy, sideUmbra[0], sidePenumbra[0]));
+  float oUmbraLinked = sign(orient(aWallCorner0.xy, sideUmbra[0], linkedPt));
+  float oPenumbraLinked = sign(orient(aWallCorner0.xy, sidePenumbra[0], linkedPt));
+
+  if ( oUmbraPenumbra == oUmbraLinked ) {
+    if ( oPenumbraLinked != oUmbraLinked ) {
+      // Linked wall goes through the penumbra.
+      // Move the umbra to the linked wall.
+      vec2 dirLinked = linkedPt - wall2d[0];
+      lineLineIntersection(farParallelRay, Ray2d(wall2d[0], dirLinked), sideUmbra[0]);
+    } else hasSidePenumbra0 = false; // Linked wall blocks the penumbra.
+  }
+}
+
+if ( hasSidePenumbra1 && wallKey1 != EV_ENDPOINT_LINKED_UNBLOCKED ) {
+  vec2 linkedPt = wallKeyCoordinates(wallKey1);
+
+  float oUmbraPenumbra = sign(orient(aWallCorner1.xy, sideUmbra[1], sidePenumbra[1]));
+  float oUmbraLinked = sign(orient(aWallCorner1.xy, sideUmbra[1], linkedPt));
+  float oPenumbraLinked = sign(orient(aWallCorner1.xy, sidePenumbra[1], linkedPt));
+
+  if ( oUmbraPenumbra == oUmbraLinked ) {
+    if ( oPenumbraLinked != oUmbraLinked ) {
+      // Linked wall goes through the penumbra.
+      // Move the umbra to the linked wall.
+      vec2 dirLinked = linkedPt - wall2d[1];
+      lineLineIntersection(farParallelRay, Ray2d(wall2d[1], dirLinked), sideUmbra[1]);
+    } else hasSidePenumbra1 = false; // Linked wall blocks the penumbra.
+  }
+}
+
+vSidePenumbra0 = vec3(1.0, 1.0, 1.0);
+if ( hasSidePenumbra0 ) {
+  // Penumbra0 triangle
+  vec2 p0A = wall2d[0];
+  vec2 p0B = sidePenumbra[0];
+  vec2 p0C = sideUmbra[0];
+  vSidePenumbra0 = barycentric(vVertexPosition, p0A, p0B, p0C);
+}
+
+vSidePenumbra1 = vec3(1.0, 1.0, 1.0);
+if ( hasSidePenumbra1 ) {
+  // Penumbra1 triangle
+  vec2 p1A = wall2d[1];
+  vec2 p1C = sideUmbra[1];
+  vec2 p1B = sidePenumbra[1];
+  vSidePenumbra1 = barycentric(vVertexPosition, p1A, p1B, p1C);
+}
 
 if ( vertexNum == 2 ) {
   // Calculate flat variables
+  fWallCornerLinked = vec2(aWallCorner0.a, aWallCorner1.a);
   fWallHeights = vec2(wallTopZ, wallBottomZ);
   fWallSenseType = aWallSenseType;
   #ifndef EV_DIRECTIONAL_LIGHT
@@ -337,7 +404,7 @@ vec4 lightEncoding(in float light) {
 
 // NOTE: PENUMBRA_FRAGMENT_CALCULATIONS
 const PENUMBRA_FRAGMENT_CALCULATIONS =
-  // eslint-disable-next-line indent
+// eslint-disable-next-line indent
 `
   // Assume no shadow as the default
   fragColor = noShadow();
@@ -386,25 +453,59 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
 
   // Determine if the fragment is within one or more penumbra.
   // x, y, z ==> u, v, w barycentric
+  bool inSidePenumbra0 = barycentricPointInsideTriangle(vSidePenumbra0);
   bool inSidePenumbra1 = barycentricPointInsideTriangle(vSidePenumbra1);
-  bool inSidePenumbra2 = barycentricPointInsideTriangle(vSidePenumbra2);
   bool inFarPenumbra = vBary.x < farRatios.x; // And vBary.x > 0.0
   bool inNearPenumbra = vBary.x > nearRatios.z; // && vBary.x < nearRatios.x; // handled by in front of wall test.
 
 //   For testing
-//   if ( !inSidePenumbra1 && !inSidePenumbra2 && !inFarPenumbra && !inNearPenumbra ) fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+//   if ( !inSidePenumbra0 && !inSidePenumbra1 && !inFarPenumbra && !inNearPenumbra ) fragColor = vec4(1.0, 0.0, 0.0, 1.0);
 //   else fragColor = vec4(vec3(0.0), 0.8);
 //   return;
 
-//   fragColor = vec4(vec3(0.0), 0.8);
-//   if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = 1.0;
+  // fragColor = vec4(vec3(0.0), 0.0);
+//   if ( inSidePenumbra0 && fWallCornerLinked.x > 0.5 ) fragColor.r = 1.0;
+//   if ( inSidePenumbra1 && fWallCornerLinked.y > 0.5 ) fragColor.b = 1.0;
+
+//   if ( inSidePenumbra0 || inSidePenumbra1 ) fragColor.r = 1.0;
 //   if ( inFarPenumbra ) fragColor.b = 1.0;
 //   if ( inNearPenumbra ) fragColor.g = 1.0;
 //   return;
 
+//   if ( inSidePenumbra0 && vSidePenumbra0.z < 0.5 ) fragColor = vec4(1.0, 0.0, 0.0, 0.8);
+//   if ( inSidePenumbra1 && vSidePenumbra1.z < 0.5 ) fragColor = vec4(0.0, 0.0, 1.0, 0.8);
+//   return;
+//
+//   // If a corner is linked to another wall, block penumbra light from "leaking" through the linked endpoint.
+//   if ( (inSidePenumbra0 && (fWallCornerLinked.x > 0.5)) || (inSidePenumbra1 && (fWallCornerLinked.y > 0.5)) ) {
+//     fragColor = lightEncoding(0.0);
+//     return;
+//   }
+
+//   if ( inSidePenumbra0) fragColor = vec4(vSidePenumbra0, 0.8);
+//   if ( inSidePenumbra1 ) fragColor = vec4(vSidePenumbra1, 0.8);
+//   return;
+
   // Blend the two side penumbras if overlapping by multiplying the light amounts.
+  float side0Shadow = inSidePenumbra0 ? vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z) : 1.0;
   float side1Shadow = inSidePenumbra1 ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
-  float side2Shadow = inSidePenumbra2 ? vSidePenumbra2.z / (vSidePenumbra2.y + vSidePenumbra2.z) : 1.0;
+
+  // If a corner is linked to another wall, block penumbra light from "leaking" through the linked endpoint.
+  // Directional lights have bigger risk of leakage b/c the direction is the same for each endpoint.
+//   #ifdef EV_DIRECTIONAL_LIGHT
+//   if ( fWallCornerLinked.x > 0.0 && side0Shadow > (1.0 - fWallCornerLinked.x - 0.1) ) side0Shadow = 1.0;
+//   if ( fWallCornerLinked.y > 0.0 && side1Shadow > (1.0 - fWallCornerLinked.y - 0.1) ) side1Shadow = 1.0;
+//   #endif
+//
+//   #ifndef EV_DIRECTIONAL_LIGHT
+//   if ( fWallCornerLinked.x > 0.5 && side0Shadow > 0.49 ) side0Shadow = 1.0;
+//   if ( fWallCornerLinked.y > 0.5 && side1Shadow > 0.49 ) side1Shadow = 1.0;
+//   #endif
+
+//   fragColor = vec4(vec3(0.0), 0.0);
+//   if ( inSidePenumbra0 && side0Shadow < 0.5 ) fragColor = vec4(side0Shadow, 0.0, 0.0, 0.8);
+//   if ( inSidePenumbra1 && side1Shadow < 0.5 ) fragColor = vec4(0.0, 0.0, side1Shadow, 0.8);
+//   return;
 
   float farShadow = 1.0;
   if ( inFarPenumbra ) {
@@ -423,17 +524,16 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
   }
 
 //   fragColor = vec4(vec3(0.0), 0.8);
-//   if ( inSidePenumbra1 || inSidePenumbra2 ) fragColor.r = side1Shadow * side2Shadow;
+//   if ( inSidePenumbra0 || inSidePenumbra1 ) fragColor.r = side0Shadow * side1Shadow;
 //   if ( inFarPenumbra ) fragColor.b = farShadow;
 //   if ( inNearPenumbra ) fragColor.g = nearShadow;
 //   return;
 
-  float shadow = side1Shadow * side2Shadow * farShadow * nearShadow;
+  float shadow = side0Shadow * side1Shadow * farShadow * nearShadow;
   float totalLight = clamp(0.0, 1.0, 1.0 - shadow);
 
   fragColor = lightEncoding(totalLight);
 `;
-
 
 
 export class TestGeometryShader extends AbstractEVShader {
@@ -442,8 +542,8 @@ export class TestGeometryShader extends AbstractEVShader {
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-in vec3 aWallCorner0;
-in vec3 aWallCorner1;
+in vec4 aWallCorner0;
+in vec4 aWallCorner1;
 
 out vec2 vVertexPosition;
 
@@ -513,8 +613,8 @@ export class ShadowWallShader extends AbstractEVShader {
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-in vec3 aWallCorner0;
-in vec3 aWallCorner1;
+in vec4 aWallCorner0;
+in vec4 aWallCorner1;
 in float aWallSenseType;
 in float aThresholdRadius2;
 
@@ -862,21 +962,22 @@ export class DirectionalShadowWallShader extends AbstractEVShader {
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-in vec3 aWallCorner0;
-in vec3 aWallCorner1;
+in vec4 aWallCorner0;
+in vec4 aWallCorner1;
 in float aWallSenseType;
 // Note: no thresholds for walls apply for directional lighting.
 
 out vec2 vVertexPosition;
 out vec3 vBary;
+out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
-out vec3 vSidePenumbra2;
 
 flat out float fWallSenseType;
 flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bottom
 flat out float fWallRatio;
 flat out vec3 fNearRatios; // x: penumbra, y: mid-penumbra, z: umbra
 flat out vec3 fFarRatios;  // x: penumbra, y: mid-penumbra, z: umbra
+flat out vec2 fWallCornerLinked;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -929,6 +1030,7 @@ void main() {
 
   // Define some terms for ease-of-reference.
   float solarAngle = max(0.1, uSolarAngle); // TODO: Cannot currently go all the way to 0.
+  // float solarAngle = uSolarAngle;
 
   // Define wall dimensions.
   float wallTopZ = aWallCorner0.z;
@@ -992,14 +1094,15 @@ uniform vec4 uSceneDims;
 
 in vec2 vVertexPosition;
 in vec3 vBary;
+in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
-in vec3 vSidePenumbra2;
 
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
 flat in vec3 fNearRatios;
 flat in vec3 fFarRatios;
 flat in float fWallSenseType;
+flat in vec2 fWallCornerLinked;
 
 out vec4 fragColor;
 
@@ -1075,15 +1178,15 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-in vec3 aWallCorner0;
-in vec3 aWallCorner1;
+in vec4 aWallCorner0;
+in vec4 aWallCorner1;
 in float aWallSenseType;
 in float aThresholdRadius2;
 
 out vec2 vVertexPosition;
 out vec3 vBary;
+out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
-out vec3 vSidePenumbra2;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
@@ -1091,6 +1194,7 @@ flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bo
 flat out float fWallRatio;
 flat out vec3 fNearRatios; // x: penumbra, y: mid-penumbra, z: umbra
 flat out vec3 fFarRatios;  // x: penumbra, y: mid-penumbra, z: umbra
+flat out vec2 fWallCornerLinked;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -1129,7 +1233,8 @@ void main() {
   // B is the intersection of the line light --> wall endpointB --> canvas plane
 
   // Define some terms for ease-of-reference.
-  float lightSize = max(1.0, uLightSize); // TODO: Cannot currently go to 0.
+  //float lightSize = max(1.0, uLightSize); // TODO: Cannot currently go to 0.
+  float lightSize = uLightSize;
 
   // Define wall dimensions.
   float wallTopZ = aWallCorner0.z;
@@ -1144,7 +1249,7 @@ void main() {
   // Determine the z change between the light and the wall. light top / middle / bottom
   // Must be the z portion of the normalized vector between the light and the first endpoint.
   vec3 lightSizeVec = vec3(0.0, 0.0, lightSize);
-  vec3 dirLightWallTop = aWallCorner0 - uLightPosition;
+  vec3 dirLightWallTop = aWallCorner0.xyz - uLightPosition;
   vec3 dirLightWallBottom = wallBottom0 - uLightPosition;
   vec3 zChangeLightWallTop = vec3(
     normalize(dirLightWallTop + lightSizeVec).z,
@@ -1190,8 +1295,8 @@ uniform vec3 uLightPosition;
 
 in vec2 vVertexPosition;
 in vec3 vBary;
+in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
-in vec3 vSidePenumbra2;
 
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
@@ -1199,6 +1304,7 @@ flat in vec3 fNearRatios;
 flat in vec3 fFarRatios;
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;
+flat in vec2 fWallCornerLinked;
 
 out vec4 fragColor;
 
@@ -1499,7 +1605,6 @@ dirInnerSidePenumbra = [
 ];
 
 
-
 // Test: Draw from endpoint toward canvas for each direction
 Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirOuterSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.orange })
 Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirMidSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.blue })
@@ -1508,8 +1613,6 @@ Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirInnerSidePenumbra[0].multiplySc
 Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirOuterSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.orange })
 Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirMidSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.blue })
 Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirInnerSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.red })
-
-
 */
 
 
@@ -1614,7 +1717,6 @@ function cleanDirectionalVector(dirArr, wall2d, oWallLight) {
 
   return dirArr;
 }
-
 
 
 // Confirm the directional vectors point to the side of the wall opposite the light.
@@ -1764,7 +1866,6 @@ if ( wallBottomZ > canvasElevation ) {
 */
 
 
-
 /* Checking the directional math
 [wall] = canvas.walls.controlled
 
@@ -1870,10 +1971,8 @@ rWall = new Ray(wall.A, wall.B)
 rPP.angle === rWall.angle
 
 
-
 lightCenter = foundry.utils.lineLineIntersection(outerPenumbra1, wallTop1, outerPenumbra2, wallTop2)
 Draw.point(lightCenter, { color: Draw.COLORS.yellow, radius: 10 })
-
 
 
 // Calculate flats
@@ -1971,8 +2070,6 @@ t = ((b.direction.x * diff.y) - (b.direction.y * diff.x)) / denom;
 ix = a.origin.add(a.direction.multiplyScalar(t));
 
 */
-
-
 
 /* Rotate directional vector along z axis
 Matrix = CONFIG.GeometryLib.Matrix

@@ -82,6 +82,83 @@ vec2 fromAngle(in vec2 origin, in float radians, in float distance) {
   return origin + (vec2(dx, dy) * distance);
 }`;
 
+GLSLFunctions.toRadians =
+`
+/**
+ * Convert degrees to radians.
+ * @param {float} angle
+ * @returns {float} radians
+ */
+float toRadians(in float angle) {
+  // PI_1_180 = PI / 180
+  #ifndef PI_1_180
+  #define PI_1_180 0.017453292519943295
+  #endif
+  return mod(angle, 360.0) * PI_1_180;
+}`;
+
+GLSLFunctions.toDegrees =
+`
+/**
+ * Convert radians to degrees.
+ * @param {float} radians
+ * @returns {float} degrees
+ */
+float toDegrees(in float radians) {
+  // PI_1_180_INV = 180 / PI
+  #ifndef PI_1_180_INV
+  #define PI_1_180_INV 57.29577951308232
+  #endif
+  return radians * PI_1_180_INV;
+}`;
+
+GLSLFunctions.angleBetween =
+`
+/**
+ * Get the angle between three 2d points, A --> B --> C.
+ * Assumes A|B and B|C have lengths > 0.
+ * @param {vec2} a   First point
+ * @param {vec2} b   Second point
+ * @param {vec2} c   Third point
+ * @returns {float}  CW angle, in radians. CW from C to A. 0º to 360º, in radians
+ */
+float angleBetween(in vec2 a, in vec2 b, in vec2 c) {
+  #ifndef PI_2
+  #define PI_2 6.283185307179586
+  #endif
+
+  vec2 ba = a - b;
+  vec2 bc = c - b;
+  float denom = distance(a, b) * distance(b, c);
+  if ( denom == 0.0 ) return 0.0;
+
+  float dot = dot(ba, bc);
+  float angle = acos(dot / denom);
+  if ( orient(a, b, c) > 0.0 ) angle -= PI_2; // Ensure the CW angle from C to A is returned.
+  return angle;
+}`;
+
+GLSLFunctions.wallKeyCoordinates =
+`
+/**
+ * Invert a wall key to get the coordinates.
+ * Key = (MAX_TEXTURE_SIZE * x) + y, where x and y are integers.
+ * @param {float} key
+ * @returns {vec2} coordinates
+ */
+vec2 wallKeyCoordinates(in float key) {
+  #ifndef EV_MAX_TEXTURE_SIZE
+  #define EV_MAX_TEXTURE_SIZE 65536.0
+  #endif
+  #ifndef EV_MAX_TEXTURE_SIZE_INV
+  #define EV_MAX_TEXTURE_SIZE_INV 1.0 / EV_MAX_TEXTURE_SIZE
+  #endif
+
+  float x = floor(key * EV_MAX_TEXTURE_SIZE_INV);
+  float y = key - (EV_MAX_TEXTURE_SIZE * x);
+  return vec2(x, y);
+}`;
+
 // NOTE: Matrix
 GLSLFunctions.MatrixTranslation =
 `

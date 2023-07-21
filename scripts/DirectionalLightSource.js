@@ -416,7 +416,8 @@ export class DirectionalLightSource extends LightSource {
     const ev = this[MODULE_ID];
 
     if ( Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y") ) {
-      ev.wallGeometry.refreshWalls();
+      // TODO: Can we short-circuit this if no changes resulted from the position change?
+      ev.wallGeometry.updateSourcePosition();
       ev.shadowMesh.updateAzimuth();
       ev.shadowMesh.updateElevationAngle();
       ev.shadowRenderer.update();

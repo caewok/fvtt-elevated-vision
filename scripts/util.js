@@ -3,6 +3,7 @@ game,
 foundry,
 canvas,
 ClipperLib,
+CONFIG,
 PIXI
 */
 "use strict";
@@ -12,7 +13,7 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 
 
 /**
- * n modulus 256
+ * N modulus 256
  */
 export function mod256(n) { return (n & 255); }
 
@@ -61,12 +62,12 @@ export function extractRectangleFromPixelArray(pixels, pxWidth, frame) {
   let j = 0;
   for ( let ptX = left; ptX < right; ptX += 1 ) {
     for ( let ptY = top; ptY < bottom; ptY += 1) {
-      const px = (ptY * pxWidth) + ptX
+      const px = (ptY * pxWidth) + ptX;
       arr[j] = pixels[px];
       j += 1;
     }
   }
-  return { pixels: arr, width, height };
+  return { pixels: arr, width: frame.width, height: frame.height };
 }
 
 /**
@@ -87,14 +88,14 @@ export function applyFunctionToPixelArray(pixels, pxWidth, frame, fn) {
   let j = 0;
   for ( let ptX = left; ptX < right; ptX += 1 ) {
     for ( let ptY = top; ptY < bottom; ptY += 1) {
-      const px = (ptY * pxWidth) + ptX
+      const px = (ptY * pxWidth) + ptX;
       const value = pixels[px];
       arr[j] = value;
-      fn(value, px)
+      fn(value, px);
       j += 1;
     }
   }
-  return { pixels: arr, width, height };
+  return { pixels: arr, width: frame.width, height: frame.height };
 }
 
 /**
@@ -333,7 +334,6 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
 }
 
 
-
 /**
  * Get the intersection of a 3d line with a wall extended as a plane.
  * See https://stackoverflow.com/questions/5666222/3d-line-plane-intersection
@@ -386,8 +386,8 @@ export function linePlane3dIntersection(a, b, c, d, epsilon = 1e-8) {
 export function pointCircleCoord(point, center, radius, invR = 1 / radius) {
   return {
     x: circleCoord(point.x, radius, center.x, invR),
-    y: circleCoord(point.y, radius, center.y, invR),
-    // z: point.z * 0.5 * r_inv
+    y: circleCoord(point.y, radius, center.y, invR)
+    // Unused: z: point.z * 0.5 * r_inv
   };
 }
 
@@ -419,3 +419,62 @@ export function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-v
   return (p * r) + c;
 }
 
+/**
+ * Get walls that share an endpoint with this wall.
+ * Organize by shared endpoint.
+ * See Wall.prototype.getLinkedSegments for recursive version.
+ * @param {Wall} wall
+ * @returns {object}
+ */
+export function getLinkedWalls(wall) {
+  const linkedA = new Set();
+  const linkedB = new Set();
+  const keyA = wall.A.key;
+  const keyB = wall.B.key;
+  canvas.walls.placeables.forEach(w => {
+    if ( w === wall ) return;
+    if ( w.wallKeys.has(keyA) ) linkedA.add(w);
+    else if ( w.wallKeys.has(keyB) ) linkedB.add(w);
+  });
+  return { linkedA, linkedB };
+}
+
+/**
+ * Test if point is inside a "V" formed by two walls: a --> b --> c
+ * @param {Point} a
+ * @param {Point} b
+ * @param {Point} c
+ * @param {Point} pt
+ * @returns {number} Return angle in degrees outside the "V" if point is outside; otherwise angle inside.
+ */
+export function pointVTest(a, b, c, pt) {
+  const angle = Math.toDegrees(PIXI.Point.angleBetween(a, b, c));
+  if ( isNaN(angle) || !angle ) return 180; // collinear lines
+
+  const oAC = foundry.utils.orient2dFast(b, a, c);
+  let ccwRay = { A: b, B: a };
+  let cwRay = { A: b, B: c };
+  if ( oAC > 0 ) [ccwRay, cwRay] = [cwRay, ccwRay];
+  const ptBetween = LimitedAnglePolygon.pointBetweenRays(pt, ccwRay, cwRay, angle);
+  return ptBetween ? angle : 360 - angle;
+}
+
+/**
+ * Test if two points both lie within or outside a "V" formed by two walls.
+ * @param {Point} sharedEndpoint    Shared endpoint for the two walls
+ * @param {Point} other1            Other endpoint of the first wall
+ * @param {Point} other2            Other endpoint of the second wall
+ * @param {Point} testPoint1        First test point
+ * @param {Point} testPoint2        Second test point
+ * @returns {boolean}  True if both are on the same side
+ */
+export function pointsOppositeSideV(sharedEndpoint, other1, other2, testPoint1, testPoint2) {
+  const ccw = foundry.utils.orient2dFast;
+
+  // See LimitedAnglePolygon.pointBetweenRays
+  const sourceOriginOutside = (ccw(sharedEndpoint, other1, testPoint1) <= 0)
+    && (ccw(sharedEndpoint, other2, testPoint1) >= 0);
+  const sourceDestOutside = (ccw(sharedEndpoint, other1, testPoint2) <= 0)
+    && (ccw(sharedEndpoint, other2, testPoint2) >= 0);
+  return Boolean(sourceOriginOutside ^ sourceDestOutside);
+}
