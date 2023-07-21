@@ -1030,6 +1030,7 @@ void main() {
 
   // Define some terms for ease-of-reference.
   float solarAngle = max(0.1, uSolarAngle); // TODO: Cannot currently go all the way to 0.
+  // float solarAngle = uSolarAngle;
 
   // Define wall dimensions.
   float wallTopZ = aWallCorner0.z;
@@ -1232,7 +1233,8 @@ void main() {
   // B is the intersection of the line light --> wall endpointB --> canvas plane
 
   // Define some terms for ease-of-reference.
-  float lightSize = max(1.0, uLightSize); // TODO: Cannot currently go to 0.
+  //float lightSize = max(1.0, uLightSize); // TODO: Cannot currently go to 0.
+  float lightSize = uLightSize;
 
   // Define wall dimensions.
   float wallTopZ = aWallCorner0.z;
