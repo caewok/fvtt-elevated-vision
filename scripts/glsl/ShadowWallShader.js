@@ -397,7 +397,7 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
 //   else fragColor = vec4(vec3(0.0), 0.8);
 //   return;
 
-//   fragColor = vec4(vec3(0.0), 0.8);
+  // fragColor = vec4(vec3(0.0), 0.0);
 //   if ( inSidePenumbra1 && fWallCornerLinked.x > 0.5 ) fragColor.r = 1.0;
 //   if ( inSidePenumbra2 && fWallCornerLinked.y > 0.5 ) fragColor.b = 1.0;
 
@@ -406,17 +406,40 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
 //   if ( inNearPenumbra ) fragColor.g = 1.0;
 //   return;
 
-  // If a corner is linked to another wall, block penumbra light from "leaking" through the linked endpoint.
-  if ( (inSidePenumbra1 && (fWallCornerLinked.x > 0.5)) || (inSidePenumbra2 && (fWallCornerLinked.y > 0.5)) ) {
-    fragColor = lightEncoding(0.0);
-    return;
-  }
+//   if ( inSidePenumbra1 && vSidePenumbra1.z < 0.5 ) fragColor = vec4(1.0, 0.0, 0.0, 0.8);
+//   if ( inSidePenumbra2 && vSidePenumbra2.z < 0.5 ) fragColor = vec4(0.0, 0.0, 1.0, 0.8);
+//   return;
+//
+//   // If a corner is linked to another wall, block penumbra light from "leaking" through the linked endpoint.
+//   if ( (inSidePenumbra1 && (fWallCornerLinked.x > 0.5)) || (inSidePenumbra2 && (fWallCornerLinked.y > 0.5)) ) {
+//     fragColor = lightEncoding(0.0);
+//     return;
+//   }
 
-  //return;
+//   if ( inSidePenumbra1 ) fragColor = vec4(vSidePenumbra1, 0.8);
+//   if ( inSidePenumbra2 ) fragColor = vec4(vSidePenumbra2, 0.8);
+//   return;
 
   // Blend the two side penumbras if overlapping by multiplying the light amounts.
   float side1Shadow = inSidePenumbra1 ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
   float side2Shadow = inSidePenumbra2 ? vSidePenumbra2.z / (vSidePenumbra2.y + vSidePenumbra2.z) : 1.0;
+
+  // If a corner is linked to another wall, block penumbra light from "leaking" through the linked endpoint.
+  // Directional lights have bigger risk of leakage b/c the direction is the same for each endpoint.
+//   #ifdef EV_DIRECTIONAL_LIGHT
+//   if ( fWallCornerLinked.x > 0.0 && side1Shadow > (1.0 - fWallCornerLinked.x - 0.1) ) side1Shadow = 1.0;
+//   if ( fWallCornerLinked.y > 0.0 && side2Shadow > (1.0 - fWallCornerLinked.y - 0.1) ) side2Shadow = 1.0;
+//   #endif
+//
+//   #ifndef EV_DIRECTIONAL_LIGHT
+//   if ( fWallCornerLinked.x > 0.5 && side1Shadow > 0.49 ) side1Shadow = 1.0;
+//   if ( fWallCornerLinked.y > 0.5 && side2Shadow > 0.49 ) side2Shadow = 1.0;
+//   #endif
+
+//   fragColor = vec4(vec3(0.0), 0.0);
+//   if ( inSidePenumbra1 && side1Shadow < 0.5 ) fragColor = vec4(side1Shadow, 0.0, 0.0, 0.8);
+//   if ( inSidePenumbra2 && side2Shadow < 0.5 ) fragColor = vec4(0.0, 0.0, side2Shadow, 0.8);
+//   return;
 
   float farShadow = 1.0;
   if ( inFarPenumbra ) {

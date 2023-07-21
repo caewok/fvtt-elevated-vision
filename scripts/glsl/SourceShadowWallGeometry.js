@@ -261,12 +261,23 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // Required to avoid light leakage due to penumbra in the shader.
     // Don't include the link if it is not a valid wall for this source.
     const { linkedA, linkedB } = getLinkedWalls(wall);
-    const hasLinkedA = linkedA.some(linkedWall => this.endpointBlocks(wall, linkedWall, "A"));
-    const hasLinkedB = linkedB.some(linkedWall => this.endpointBlocks(wall, linkedWall, "B"));
+    let blockPercentA = 0;
+    for ( const linkedWall of linkedA ) {
+      const blockPercent = this.endpointBlocks(wall, linkedWall, "A");
+      blockPercentA = Math.max(blockPercent, blockPercentA);
+      if ( blockPercentA === 1 ) break;
+    }
+
+    let blockPercentB = 0;
+    for ( const linkedWall of linkedB ) {
+      const blockPercent = this.endpointBlocks(wall, linkedWall, "A");
+      blockPercentB = Math.max(blockPercent, blockPercentB);
+      if ( blockPercentB === 1 ) break;
+    }
 
     return {
-      corner0: [A.x, A.y, top, Number(hasLinkedA)],
-      corner1: [B.x, B.y, bottom, Number(hasLinkedB)]
+      corner0: [A.x, A.y, top, blockPercentA],
+      corner1: [B.x, B.y, bottom, blockPercentB]
     };
   }
 
@@ -282,14 +293,14 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns {boolean} Should this endpoint be considered blocking with respect to the source?
    */
   endpointBlocks(wall, linkedWall, endpointName) {
-    if ( !(this._triWallMap.has(linkedWall.id) || this._includeWall(linkedWall)) ) return false; // Quicker to check the map first.
+    if ( !(this._triWallMap.has(linkedWall.id) || this._includeWall(linkedWall)) ) return 0; // Quicker to check the map first.
 
     const sharedPt = PIXI.Point.fromObject(wall[endpointName]);
     if ( this.isLimited(linkedWall) ) {
       let topZ = linkedWall.topZ;
       if ( !isFinite(topZ) ) topZ = 1e06;
       const dest = new Point3d(sharedPt.x, sharedPt.y, topZ);
-      if ( !this._wallBetween(dest, [wall, linkedWall]) ) return false;
+      if ( !this._wallBetween(dest, [wall, linkedWall]) ) return 0;
     }
 
     // If the light and the point X of  light --> endpoint --> X are both between the two walls
@@ -299,7 +310,6 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const otherLinkedPt = linkedWall.A.key === sharedPt.key ? linkedWall.B : linkedWall.A;
 
     // Helper method
-    const maxR = canvas.dimensions.maxR;
     const testDirection = dir => {
       const src = sharedPt.add(dir.multiplyScalar(100));
       const dest = sharedPt.subtract(dir.multiplyScalar(100));
@@ -307,43 +317,62 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     };
 
     if ( this.source instanceof DirectionalLightSource ) {
-      const lightDir = this.source.lightDirection.to2d();
-      if ( testDirection(lightDir) ) return true;
-
-      // Check the solar angles.
       const { azimuth, solarAngle, elevationAngle } = this.source;
       const maxSolarAngle = Math.max(0.1, solarAngle); // To match shader.
 
+      const lightDir = this.source.lightDirection.to2d();
       const dir1 = DirectionalLightSource.lightDirection(azimuth + maxSolarAngle, elevationAngle);
-      if ( testDirection(dir1) ) return true;
-
       const dir2 = DirectionalLightSource.lightDirection(azimuth - maxSolarAngle, elevationAngle);
-      if ( testDirection(dir2) ) return true;
+      const midBlocked = testDirection(lightDir);
+      const dir1Blocked = testDirection(dir1);
+      const dir2Blocked = testDirection(dir2);
+
+      if ( !(midBlocked || dir1Blocked || dir2Blocked) ) return 0;
+      if ( midBlocked && dir1Blocked && dir2Blocked ) return 1;
+      if ( midBlocked & !(dir1Blocked || dir2Blocked) ) return 1; // Very small wall.
+
+      if ( midBlocked && dir1Blocked ) {
+        const a = sharedPt.subtract(lightDir.multiplyScalar(100));
+        const dest1 = sharedPt.subtract(dir1.multiplyScalar(100));
+        const dest2 = sharedPt.subtract(dir2.multiplyScalar(100));
+        const clearAngle = PIXI.Point.angleBetween(a, sharedPt, dest2);
+        const blockedAngle = PIXI.Point.angleBetween(dest1, sharedPt, a);
+        return blockedAngle / (clearAngle + blockedAngle);
+      }
+
+      if ( midBlocked && dir2Blocked ) {
+        const a = sharedPt.subtract(lightDir.multiplyScalar(100));
+        const dest1 = sharedPt.subtract(dir1.multiplyScalar(100));
+        const dest2 = sharedPt.subtract(dir2.multiplyScalar(100));
+        const blockedAngle = PIXI.Point.angleBetween(a, sharedPt, dest2);
+        const clearAngle = PIXI.Point.angleBetween(dest1, sharedPt, a);
+        return blockedAngle / (clearAngle + blockedAngle);
+      }
 
     } else {
       const sourceOrigin = PIXI.Point.fromObject(this.source);
       const lightDir = sourceOrigin.subtract(sharedPt).normalize();
-      if ( testDirection(lightDir) ) return true;
+      if ( testDirection(lightDir) ) return 1;
 
       // Test penumbra points for wall direction.
       const lightSize = Math.max(this.source.data?.lightSize || 0, 1); // To match shader
-      const wallDir = sharedPt.subtract(otherWallPt).normalize().multiplyScalar(100);
+      const wallDir = sharedPt.subtract(otherWallPt).normalize().multiplyScalar(lightSize);
       const dir1 = sourceOrigin.add(wallDir).subtract(sharedPt).normalize();
-      if ( testDirection(dir1) ) return true;
+      if ( testDirection(dir1) ) return 1;
 
       const dir2 = sourceOrigin.subtract(wallDir).subtract(sharedPt).normalize();
-      if ( testDirection(dir2) ) return true;
+      if ( testDirection(dir2) ) return 1;
 
       // Test the linked wall direction
-      const linkedDir = sharedPt.subtract(otherLinkedPt).normalize().multiplyScalar(100);
+      const linkedDir = sharedPt.subtract(otherLinkedPt).normalize().multiplyScalar(lightSize);
       const dir3 = sourceOrigin.add(linkedDir).subtract(sharedPt).normalize();
-      if ( testDirection(dir3) ) return true;
+      if ( testDirection(dir3) ) return 1;
 
       const dir4 = sourceOrigin.subtract(linkedDir).subtract(sharedPt).normalize();
-      if ( testDirection(dir4) ) return true;
+      if ( testDirection(dir4) ) return 1;
     }
 
-    return false;
+    return 0;
   }
 
   /**
