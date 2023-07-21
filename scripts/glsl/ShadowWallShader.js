@@ -88,6 +88,10 @@ ${defineFunction("projectRay")}
 ${defineFunction("toRadians")}
 ${defineFunction("angleBetween")}
 ${defineFunction("toDegrees")}
+${defineFunction("wallKeyCoordinates")}
+
+#define EV_ENDPOINT_LINKED_UNBLOCKED  -1.0
+#define EV_ENDPOINT_LINKED_CONCAVE    -2.0
 
 float calculateRatio(in vec3 wallEndpoint, in vec3 dir, in vec2 furthestPoint, in Plane canvasPlane, in float maxDist) {
   if ( dir.z >= 0.0 ) return 0.0;
@@ -200,55 +204,63 @@ gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition,
 // If the endpoint is blocking, move the sideUmbra to match the blocking line.
 // If the sideUmbra moves past the sidePenumbra, then there will be no penumbra.
 // Must orient against the wall and light to get the correct direction
-float angle0 = aWallCorner0.a;
+float wallKey0 = aWallCorner0.w;
+float wallKey1 = aWallCorner1.w;
 
 #ifndef EV_DIRECTIONAL_LIGHT
 bool hasSidePenumbra0 = uLightSize > 0.0;
+bool hasSidePenumbra1 = hasSidePenumbra0;
 #endif
 
 #ifdef EV_DIRECTIONAL_LIGHT
 bool hasSidePenumbra0 = uSolarAngle > 0.0;
+bool hasSidePenumbra1 = hasSidePenumbra0;
 #endif
 
-if ( hasSidePenumbra0  && (angle0 > 0.0) ) {
-  // If the two walls at this endpoint are concave or flat, no light could leak.
-  // Orientation > 0 (ccw): angles over 180º are concave w/r/t the light.
-  // Orientation < 0 (cw): angles under 180º are concave w/r/t the light.
-  if ( (oWallLight > 0.0 && angle0 >= 180.0)
-    || (oWallLight < 0.0 && angle0 <= 180.0) ) hasSidePenumbra0 = false;
+hasSidePenumbra0 = hasSidePenumbra0 && wallKey0 != EV_ENDPOINT_LINKED_CONCAVE;
+hasSidePenumbra1 = hasSidePenumbra1 && wallKey1 != EV_ENDPOINT_LINKED_CONCAVE;
 
-  // If the line at this angle passes the sideUmbra line, then it controls the shadow extent.
-  // Orientation > 0 (ccw): the higher angle controls
-  // Orientation < 0 (cw): the lower angle controls
-  else if ( (oWallLight > 0.0 && angle0 > toDegrees(angleBetween(aWallCorner1.xy, aWallCorner0.xy, sideUmbra[0])))
-         || (oWallLight < 0.0 && angle0 < toDegrees(angleBetween(aWallCorner1.xy, aWallCorner0.xy, sideUmbra[0]))) ) {
+if ( hasSidePenumbra0 && wallKey0 != EV_ENDPOINT_LINKED_UNBLOCKED ) {
+  vec2 linkedPt = wallKeyCoordinates(wallKey0);
 
-    vec2 dirAngle0 = normalize(fromAngle(wall2d[0], toRadians(angle0), 1.0) - wall2d[0]);
-    lineLineIntersection(farParallelRay, Ray2d(wall2d[0], dirAngle0), sideUmbra[0]);
+  float oUmbraPenumbra = sign(orient(aWallCorner0.xy, sideUmbra[0], sidePenumbra[0]));
+  float oUmbraLinked = sign(orient(aWallCorner0.xy, sideUmbra[0], linkedPt));
+  float oPenumbraLinked = sign(orient(aWallCorner0.xy, sidePenumbra[0], linkedPt));
+
+  if ( oUmbraPenumbra == oUmbraLinked ) {
+    if ( oPenumbraLinked != oUmbraLinked ) {
+      // Linked wall goes through the penumbra.
+      // Move the umbra to the linked wall.
+      vec2 dirLinked = linkedPt - wall2d[0];
+      lineLineIntersection(farParallelRay, Ray2d(wall2d[0], dirLinked), sideUmbra[0]);
+    } else hasSidePenumbra0 = false; // Linked wall blocks the penumbra.
   }
 }
 
-float angle1 = aWallCorner1.a;
-bool hasSidePenumbra1 = true;
-if ( hasSidePenumbra1 && (angle1 > 0.0) ) {
-  if ( (oWallLight > 0.0 && angle1 <= 180.0)
-    || (oWallLight < 0.0 && angle1 >= 180.0) ) hasSidePenumbra1 = false;
+if ( hasSidePenumbra1 && wallKey1 != EV_ENDPOINT_LINKED_UNBLOCKED ) {
+  vec2 linkedPt = wallKeyCoordinates(wallKey1);
 
-  else if ( (oWallLight > 0.0 && angle0 < toDegrees(angleBetween(aWallCorner0.xy, aWallCorner1.xy, sideUmbra[1])))
-         || (oWallLight < 0.0 && angle0 > toDegrees(angleBetween(aWallCorner0.xy, aWallCorner1.xy, sideUmbra[1]))) ) {
+  float oUmbraPenumbra = sign(orient(aWallCorner1.xy, sideUmbra[1], sidePenumbra[1]));
+  float oUmbraLinked = sign(orient(aWallCorner1.xy, sideUmbra[1], linkedPt));
+  float oPenumbraLinked = sign(orient(aWallCorner1.xy, sidePenumbra[1], linkedPt));
 
-    vec2 dirAngle1 = normalize(fromAngle(wall2d[1], toRadians(angle1), 1.0) - wall2d[1]);
-    lineLineIntersection(farParallelRay, Ray2d(wall2d[1], dirAngle1), sideUmbra[1]);
+  if ( oUmbraPenumbra == oUmbraLinked ) {
+    if ( oPenumbraLinked != oUmbraLinked ) {
+      // Linked wall goes through the penumbra.
+      // Move the umbra to the linked wall.
+      vec2 dirLinked = linkedPt - wall2d[1];
+      lineLineIntersection(farParallelRay, Ray2d(wall2d[1], dirLinked), sideUmbra[1]);
+    } else hasSidePenumbra1 = false; // Linked wall blocks the penumbra.
   }
 }
 
 vSidePenumbra0 = vec3(1.0, 1.0, 1.0);
-if ( hasSidePenumbra1 ) {
+if ( hasSidePenumbra0 ) {
   // Penumbra0 triangle
   vec2 p0A = wall2d[0];
   vec2 p0B = sidePenumbra[0];
   vec2 p0C = sideUmbra[0];
-  vSidePenumbra1 = barycentric(vVertexPosition, p0A, p0B, p0C);
+  vSidePenumbra0 = barycentric(vVertexPosition, p0A, p0B, p0C);
 }
 
 vSidePenumbra1 = vec3(1.0, 1.0, 1.0);

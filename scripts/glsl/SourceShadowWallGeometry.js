@@ -11,7 +11,7 @@ Wall
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "../const.js";
-import { getLinkedWalls, pointsOppositeSideV } from "../util.js";
+import { getLinkedWalls, pointVTest } from "../util.js";
 import { testWallsForIntersections } from "../ClockwiseSweepPolygon.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { DirectionalLightSource } from "../DirectionalLightSource.js";
@@ -76,13 +76,18 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     return dat.some(x => x);
   }
 
+  /** @type {Point3d} */
+  get sourceOrigin() {
+    return Point3d.fromPointSource(this.source);
+  }
+
   /**
    * Orientation of a wall to the source.
    * @param {Wall} wall
    * @returns {number}  See foundry.utils.orient2dFast.
    */
   sourceWallOrientation(wall) {
-    return foundry.utils.orient2dFast(wall.A, wall.B, this.source);
+    return foundry.utils.orient2dFast(wall.A, wall.B, this.sourceOrigin);
   }
 
   constructWallGeometry(walls) {
@@ -269,33 +274,45 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       };
     }
 
-    // The blocking angle will progress counterclockwise from 0º to 360º
-    // If the light is ccw to A --> B, then for A --> B --> linked keep the max angle.
-    const origin = this.source instanceof DirectionalLightSource
-      ? PIXI.Point.fromObject(wall.A).add(this.source.lightDirection.multiplyScalar(canvas.dimensions.maxR))
-      : Point3d.fromPointSource(this.source);
-    const oAB = foundry.utils.orient2dFast(wall.A, wall.B, origin);
-    const [cmpA, cmpB] = oAB > 0 ? [Math.min, Math.max] : [Math.max, Math.min];
-    let [blockAngleA, blockAngleB] = oAB > 0 ? [360, 0] : [0, 360];
+    // Find the smallest angle between this wall and a linked wall that covers this light.
+    // If less than 180º, the light is inside a "V" and so the point of the V blocks all light.
+    // If greater than 180º, the light is outside the "V" and so the point of the V may not block all light.
 
+    let blockingWallA;
+    let blockAngleA = 360;
     for ( const linkedWall of linkedA ) {
       const blockAngle = this.endpointBlocks(wall, linkedWall, "A");
-      if ( blockAngle === -1 ) continue;
-      blockAngleA = cmpA(blockAngle, blockAngleA);
+      if ( blockAngle === -1 || blockAngle > blockAngleA ) continue;
+      blockingWallA = linkedWall;
+      blockAngleA = blockAngle;
     }
 
+    let blockingWallB;
+    let blockAngleB = 360;
     for ( const linkedWall of linkedB ) {
       const blockAngle = this.endpointBlocks(wall, linkedWall, "B");
-      if ( blockAngle === -1 ) continue;
-      blockAngleB = cmpB(blockAngle, blockAngleB);
+      if ( blockAngle === -1 || blockAngle > blockAngleB ) continue;
+      blockingWallB = linkedWall;
+      blockAngleB = blockAngle;
     }
 
-    if ( blockAngleA === 360 ) blockAngleA = 0;
-    if ( blockAngleB === 360 ) blockAngleB = 0;
+    // For a given wall, its "w" coordinate is:
+    // -2: The two walls are concave w/r/t the light, meaning light is completely blocked.
+    // -1: No blocking
+    // 0+: wall.key representing location of the opposite endpoint of the linked wall.
+    const blockWallAKey = blockAngleA === 360 ? -1
+      : blockAngleA <= 180 ? -2
+        : blockingWallA.A.key === wall.A.key ? blockingWallA.B.key
+          : blockingWallA.A.key;
+
+    const blockWallBKey = blockAngleB === 360 ? -1
+      : blockAngleB <= 180 ? -2
+        : blockingWallB.A.key === wall.A.key ? blockingWallB.B.key
+          : blockingWallB.A.key;
 
     return {
-      corner0: [A.x, A.y, top, blockAngleA],
-      corner1: [B.x, B.y, bottom, blockAngleB]
+      corner0: [A.x, A.y, top, blockWallAKey],
+      corner1: [B.x, B.y, bottom, blockWallBKey]
     };
   }
 
@@ -325,7 +342,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // Clockwise angle from wall other endpoint --> shared --> linked wall other endpoint
     const otherWallPt = wall[endpointName === "A" ? "B" : "A"];
     const otherLinkedPt = linkedWall.A.key === sharedPt.key ? linkedWall.B : linkedWall.A;
-    return Math.toDegrees(PIXI.Point.angleBetween(otherWallPt, sharedPt, otherLinkedPt, { clockwiseAngle: true }));
+    const sourceOrigin = this.sourceOrigin;
+    return pointVTest(otherWallPt, sharedPt, otherLinkedPt, sourceOrigin);
   }
 
   /** Testing endpoint blocks
@@ -342,6 +360,8 @@ DirectionalLightSource = api.DirectionalLightSource
 
 geom.endpointBlocks(wall, linkedWall, "B")
 geom.endpointBlocks(linkedWall, wall, "A")
+geom.wallCornerCoordinates(wall)
+geom.wallCornerCoordinates(linkedWall)
 
 
   */
@@ -675,7 +695,7 @@ geom.endpointBlocks(linkedWall, wall, "A")
   }
 
   /**
-   * Check all the walls in the scene b/c the source changed position or was otherwise modified.
+   * Check all the walls in the scene b/c of some change to an array of walls
    * @param {Wall[]} [walls]    Optional array of walls to consider.
    * @returns {boolean} True if any changes to the geometry buffers resulted from the refresh.
    */
@@ -700,6 +720,23 @@ geom.endpointBlocks(linkedWall, wall, "A")
     }
     this.indexBuffer.update(this.indexBuffer.data);
   }
+
+  /**
+   * On source movement, check if the linked wall coordinates need updating and update.
+   * If the source changes orientation w/r/t 2+ linked walls, the link status would update.
+   * @returns {boolean} True if an update was needed.
+   */
+  updateSourcePosition() {
+    let updated = false;
+    for ( const [id, idxToUpdate] of this._triWallMap ) {
+      const wall = canvas.walls.documentCollection.get(id).object;
+      const resLink = this._updateWallLinkBuffer(wall, false);
+      const resThreshold = this._updateWallThreshold(wall, idxToUpdate, false);
+      updated ||= resLink || resThreshold;
+    }
+    if ( updated ) this.update();
+    return updated;
+  }
 }
 
 
@@ -717,6 +754,14 @@ export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
 
 
 export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometry {
+
+  /** @type {Point3d} */
+  get sourceOrigin() {
+    const { rect, maxR } = canvas.dimensions;
+    const center = rect.center;
+    const centerPt = new Point3d(center.x, center.y, canvas.elevation.elevationMin);
+    return centerPt.add(this.source.lightDirection.multiplyScalar(maxR));
+  }
 
   /**
    * Orientation of a wall to the source.

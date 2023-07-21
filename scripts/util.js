@@ -440,6 +440,24 @@ export function getLinkedWalls(wall) {
 }
 
 /**
+ * Test if point is inside a "V" formed by two walls: a --> b --> c
+ * @param {Point} a
+ * @param {Point} b
+ * @param {Point} c
+ * @param {Point} pt
+ * @returns {number} Return angle in degrees outside the "V" if point is outside; otherwise angle inside.
+ */
+export function pointVTest(a, b, c, pt) {
+  const angle = Math.toDegrees(PIXI.Point.angleBetween(a, b, c));
+  if ( isNaN(angle) || !angle ) return 180; // collinear lines
+  const orient = foundry.utils.orient2dFast;
+  const oBA = orient(b, a, pt);
+  const oBC = orient(b, c, pt);
+  if ( (oBA * oBC) < 0 ) return angle;
+  return 360 - angle;
+}
+
+/**
  * Test if two points both lie within or outside a "V" formed by two walls.
  * @param {Point} sharedEndpoint    Shared endpoint for the two walls
  * @param {Point} other1            Other endpoint of the first wall

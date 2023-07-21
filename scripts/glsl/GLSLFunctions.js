@@ -136,8 +136,28 @@ float angleBetween(in vec2 a, in vec2 b, in vec2 c) {
   float angle = acos(dot / denom);
   if ( orient(a, b, c) > 0.0 ) angle -= PI_2; // Ensure the CW angle from C to A is returned.
   return angle;
-}
-`;
+}`;
+
+GLSLFunctions.wallKeyCoordinates =
+`
+/**
+ * Invert a wall key to get the coordinates.
+ * Key = (MAX_TEXTURE_SIZE * x) + y, where x and y are integers.
+ * @param {float} key
+ * @returns {vec2} coordinates
+ */
+vec2 wallKeyCoordinates(in float key) {
+  #ifndef EV_MAX_TEXTURE_SIZE
+  #define EV_MAX_TEXTURE_SIZE 65536.0
+  #endif
+  #ifndef EV_MAX_TEXTURE_SIZE_INV
+  #define EV_MAX_TEXTURE_SIZE_INV 1.0 / EV_MAX_TEXTURE_SIZE
+  #endif
+
+  float x = floor(key * EV_MAX_TEXTURE_SIZE_INV);
+  float y = key - (EV_MAX_TEXTURE_SIZE * x);
+  return vec2(x, y);
+}`;
 
 // NOTE: Matrix
 GLSLFunctions.MatrixTranslation =
