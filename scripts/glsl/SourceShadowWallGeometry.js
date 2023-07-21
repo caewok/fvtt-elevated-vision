@@ -272,30 +272,26 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // The blocking angle will progress counterclockwise from 0º to 360º
     // If the light is ccw to A --> B, then for A --> B --> linked keep the max angle.
     const origin = this.source instanceof DirectionalLightSource
-      ? dest.add(this.source.lightDirection.multiplyScalar(canvas.dimensions.maxR))
+      ? PIXI.Point.fromObject(wall.A).add(this.source.lightDirection.multiplyScalar(canvas.dimensions.maxR))
       : Point3d.fromPointSource(this.source);
     const oAB = foundry.utils.orient2dFast(wall.A, wall.B, origin);
-    const [cmpA, cmpB] = oAB > 0 ? [Math.min, Math.max] : [Math.max, Math.min]
-    let [blockAngleA, blockAngleB] = oAB > 0 ? [0, 360] : [360, 0];
+    const [cmpA, cmpB] = oAB > 0 ? [Math.min, Math.max] : [Math.max, Math.min];
+    let [blockAngleA, blockAngleB] = oAB > 0 ? [360, 0] : [0, 360];
 
-    let hasLinkedA = false;
     for ( const linkedWall of linkedA ) {
       const blockAngle = this.endpointBlocks(wall, linkedWall, "A");
       if ( blockAngle === -1 ) continue;
-      hasLinkedA ||= true;
-      blockPercentA = cmpA(blockAngle, blockPercentA);
+      blockAngleA = cmpA(blockAngle, blockAngleA);
     }
 
-    let hasLinkedB = false;
     for ( const linkedWall of linkedB ) {
       const blockAngle = this.endpointBlocks(wall, linkedWall, "B");
       if ( blockAngle === -1 ) continue;
-      hasLinkedB ||= true;
       blockAngleB = cmpB(blockAngle, blockAngleB);
     }
 
-    if ( !hasLinkedA ) blockAngleA = -1;
-    if ( !hasLinkedB ) blockAngleB = -1;
+    if ( blockAngleA === 360 ) blockAngleA = 0;
+    if ( blockAngleB === 360 ) blockAngleB = 0;
 
     return {
       corner0: [A.x, A.y, top, blockAngleA],
@@ -335,7 +331,9 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   /** Testing endpoint blocks
 [wall] = canvas.walls.controlled
 [linkedWall] = canvas.walls.controlled
-[l] = canvas.lighting.placeables
+let [wall, linkedWall] = canvas.walls.controlled
+
+let [l] = canvas.lighting.placeables
 geom = l.source.elevatedvision.wallGeometry
 Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
