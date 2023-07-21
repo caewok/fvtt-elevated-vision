@@ -450,11 +450,13 @@ export function getLinkedWalls(wall) {
 export function pointVTest(a, b, c, pt) {
   const angle = Math.toDegrees(PIXI.Point.angleBetween(a, b, c));
   if ( isNaN(angle) || !angle ) return 180; // collinear lines
-  const orient = foundry.utils.orient2dFast;
-  const oBA = orient(b, a, pt);
-  const oBC = orient(b, c, pt);
-  if ( (oBA * oBC) < 0 ) return angle;
-  return 360 - angle;
+
+  const oAC = foundry.utils.orient2dFast(b, a, c);
+  let ccwRay = { A: b, B: a };
+  let cwRay = { A: b, B: c };
+  if ( oAC > 0 ) [ccwRay, cwRay] = [cwRay, ccwRay];
+  const ptBetween = LimitedAnglePolygon.pointBetweenRays(pt, ccwRay, cwRay, angle);
+  return ptBetween ? angle : 360 - angle;
 }
 
 /**
