@@ -828,7 +828,7 @@ function deleteWallHook(wallD, _options, _userId) {
  */
 function refreshAmbientLightHook(light, flags) {
   if ( flags.refreshElevation ) {
-    light.source?._updateEVShadowData({ "elevation": light.elevationZ });
+    light.source?._updateEVShadowData({ elevation: light.elevationZ });
     canvas.perception.update({refreshLighting: true, refreshVision: true});
   }
 }
