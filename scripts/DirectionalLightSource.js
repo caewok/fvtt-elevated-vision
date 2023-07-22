@@ -10,6 +10,8 @@ PreciseText
 import { MODULE_ID, FLAGS } from "./const.js";
 import { DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { ShadowWallDirectionalSourceMesh } from "./glsl/ShadowWallShader.js";
+import { ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
+import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Draw } from "./geometry/Draw.js";
 import { pointCircleCoord } from "./util.js";
@@ -106,7 +108,8 @@ export class DirectionalLightSource extends LightSource {
     Object.entries(this.layers).forEach(([layerId, layer]) => this._storeGeometryBuffers(layerId, layer));
 
     const geomBuffers = this._geometryBuffers();
-    Object.entries(this.layers).forEach(([layerId, layer]) => this._replaceGeometryBuffers(layerId, layer, geomBuffers));
+    Object.entries(this.layers).forEach(([layerId, layer]) =>
+      this._replaceGeometryBuffers(layerId, layer, geomBuffers));
   }
 
   /**
@@ -156,12 +159,14 @@ export class DirectionalLightSource extends LightSource {
 
     for ( const attrName of Object.keys(g.attributes) ) {
       const buffer = g.getBuffer(attrName);
-      // buffer.static = false;
+      // Force not static?
+      buffer.static = false;
       buffer.data = newBuffers[attrName];
       buffer.update();
     }
 
-    // g.indexBuffer.static = false;
+    // Force not static?
+    g.indexBuffer.static = false;
     g.indexBuffer.data = newBuffers.indexBuffer;
     g.indexBuffer.update();
   }
@@ -403,6 +408,15 @@ export class DirectionalLightSource extends LightSource {
 
     // Mesh that describes shadows for the given geometry and source origin.
     ev.shadowMesh = new ShadowWallDirectionalSourceMesh(this, ev.wallGeometry);
+  }
+
+  /**
+   * Mask the entire canvas at once.
+   */
+  _initializeEVShadowMask() {
+    const ev = this[MODULE_ID];
+    const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowRenderer.renderTexture);
+    ev.shadowVisionMask = new EVQuadMesh(canvas.dimensions.rect, shader);
   }
 
   /**
