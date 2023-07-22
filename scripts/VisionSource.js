@@ -126,6 +126,13 @@ function EVVisionMask() {
   const r = this.radius || this.data.externalRadius;
   const cir = new PIXI.Circle(this.x, this.y, r);
   return addShapeToShadowMask(cir, this[MODULE_ID].shadowVisionLOSMask);
+  // return this[MODULE_ID].shadowVisionLOSMask;
+
+//   const g = new PIXI.Graphics();
+//   const draw = new Draw(g);
+//   draw.shape(cir, { width: 0, fill: 0xFF0000 });
+//   return g;
+
 }
 
 PATCHES.WEBGL.GETTERS = {
@@ -141,8 +148,9 @@ PATCHES.WEBGL.GETTERS = {
  * @returns {PIXI.Container}
  */
 function addShapeToShadowMask(shape, shadowMask) {
-  const c = new PIXI.Container();
-  c.addChild(shadowMask);
+  // const c = new PIXI.Container();
+  // c.addChild(shadowMask);
+  const c = shadowMask;
 
   // Draw the shape and add to the container
   // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
@@ -151,6 +159,7 @@ function addShapeToShadowMask(shape, shadowMask) {
   const draw = new Draw(g);
   draw.shape(shape, { width: 0, fill: 0xFF0000 });
   c.addChild(g);
+  c.mask = g;
   return c;
 }
 
