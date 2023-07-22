@@ -415,7 +415,7 @@ export class DirectionalLightSource extends LightSource {
    */
   _initializeEVShadowMask() {
     const ev = this[MODULE_ID];
-    const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowRenderer.renderTexture);
+    const shader = ShadowVisionMaskTokenLOSShader.create(this);
     ev.shadowVisionMask = new EVQuadMesh(canvas.dimensions.rect, shader);
   }
 

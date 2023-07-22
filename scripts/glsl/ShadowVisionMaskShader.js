@@ -81,10 +81,10 @@ void main() {
     uSourceRadius2: 1
   };
 
-  static create(source, shadowSampler, defaultUniforms = {}) {
+  static create(source, defaultUniforms = {}) {
     const radius = source.radius || source.data.externalRadius;
 
-    defaultUniforms.uShadowSampler = shadowSampler.baseTexture;
+    defaultUniforms.uShadowSampler = source.EVShadowTexture.baseTexture;
     defaultUniforms.uSourcePosition = [source.x, source.y];
     defaultUniforms.uSourceRadius2 = Math.pow(radius, 2);
 
@@ -174,8 +174,8 @@ void main() {
     uShadowSampler: 0,
   };
 
-  static create(shadowSampler, defaultUniforms = {}) {
-    defaultUniforms.uShadowSampler = shadowSampler.baseTexture;
+  static create(source, defaultUniforms = {}) {
+    defaultUniforms.uShadowSampler = source.EVShadowTexture.baseTexture;
     return super.create(defaultUniforms);
   }
 

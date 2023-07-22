@@ -60,7 +60,7 @@ function _initializeEVShadowMask() {
 
   // Build the mask for the LOS based on the canvas dimensions rectangle.
   // Mask that colors red areas that are lit / are viewable.
-  const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowRenderer.renderTexture);
+  const shader = ShadowVisionMaskTokenLOSShader.create(this);
   ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
 
@@ -125,7 +125,12 @@ function EVVisionMask() {
   // b/c the entire container is treated as a mask by the vision system.
   const r = this.radius || this.data.externalRadius;
   const cir = new PIXI.Circle(this.x, this.y, r);
-  return addShapeToShadowMask(cir, this[MODULE_ID].shadowVisionLOSMask);
+  const g = new PIXI.Graphics();
+  const draw = new Draw(g);
+  draw.shape(cir, { width: 0, fill: 0xFF0000 });
+  return g;
+
+  // return addShapeToShadowMask(cir, this[MODULE_ID].shadowVisionLOSMask);
 }
 
 PATCHES.WEBGL.GETTERS = {
