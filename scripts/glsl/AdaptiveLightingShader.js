@@ -15,6 +15,9 @@ PATCHES.BASIC = {}; // Basic b/c we are switching the shader uniform dynamically
  * Add shadow GLSL code to the lighting fragment shaders.
  */
 function create(wrapped, ...args) {
+  // Don't patch the vision shaders to avoid ghosting.
+  if ( AdaptiveVisionShader.isPrototypeOf(this) ) return wrapped(...args);
+
   applyPatches(this,
     false,
     source => {
