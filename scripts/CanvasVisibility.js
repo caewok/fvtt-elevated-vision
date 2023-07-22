@@ -7,6 +7,8 @@ Token
 
 import { MODULE_ID } from "./const.js";
 
+import { Draw } from "./geometry/Draw.js";
+
 // NOTE: Polygon and Shader methods for CanvasVisibility
 
 export const PATCHES = {};
@@ -46,58 +48,35 @@ function refreshVisibility() {
   let commitFog = false;
 
   // Checking if the lights cache need a full redraw
-  // TODO: Can we force the cache to clear if a wall within the light radius changes?
-  // let lightsFullRedraw = this.checkLights();
-  let lightsFullRedraw = true;
+  let lightsFullRedraw = this.checkLights();
   if ( lightsFullRedraw ) {
     this.pointSourcesStates.clear();
     vision.fov.lights.clear();
-    vision.fov.lights.removeChildren();
   }
-
   vision.base.clear();
-  vision.base.removeChildren();
-  // vision.base.beginFill(fillColor, 1.0);
-
-  // vision.fov.lights.beginFill(fillColor, 1.0);
-  // Already cleared with lightsFullRedraw above.
-
+  vision.base.beginFill(fillColor, 1.0);
+  vision.fov.lights.beginFill(fillColor, 1.0);
   vision.fov.tokens.clear();
-  vision.fov.tokens.removeChildren();
-  // Currently unused
-  // vision.fov.tokens.beginFill(fillColor, 1.0);
+  vision.fov.tokens.beginFill(fillColor, 1.0);
 
   vision.los.clear();
-  if ( vision.los.children.length > 1 ) vision.los.removeChildren(1); // Keep the vision.los.preview child.
-  // Currently unused
-  // vision.los.beginFill(fillColor, 1.0);
-
+  vision.los.beginFill(fillColor, 1.0);
   vision.los.preview.clear();
-  vision.los.preview.removeChildren();
-  // Currently unused
-  // vision.los.preview.beginFill(fillColor, 1.0);
+  vision.los.preview.beginFill(fillColor, 1.0);
 
   // Iterating over each light source
   for ( const lightSource of canvas.effects.lightSources ) {
-    const mask = lightSource.EVVisionMask;
-    if ( !mask && !(lightSource instanceof GlobalLightSource) ) {
-      console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|LightSource ${lightSource.object.id} has no mask.`);
-    }
-
     // The light source is providing vision and has an active layer?
     if ( lightSource.active && lightSource.data.vision ) {
-      // Global light will have data.vision = false.
-      const los = lightSource.isPreview ? vision.los.preview : vision.los;
-      los.addChild(mask);
+      if ( !lightSource.isPreview ) vision.los.drawShape(lightSource.shape);
+      else vision.los.preview.drawShape(lightSource.shape);
     }
 
     // The light source is emanating from a token?
     if ( lightSource.object instanceof Token ) {
-      // Global light cannot emanate from a token.
       if ( !lightSource.active ) continue;
-      const los = lightSource.isPreview ? vision.base : vision.fov.tokens;
-      const mask = lightSource[MODULE_ID].shadowVisionMask;
-      los.addChild(mask);
+      if ( !lightSource.isPreview ) vision.fov.tokens.drawShape(lightSource.shape);
+      else vision.base.drawShape(lightSource.shape);
       continue;
     }
 
@@ -114,8 +93,7 @@ function refreshVisibility() {
 
     if ( !lightSource.active ) continue;
     refreshCache = true;
-    if ( draw ) vision.fov.lights.addChild(mask);
-
+    if ( draw ) vision.fov.lights.drawShape(lightSource.shape);
   }
 
   // Do we need to cache the lights into the lightsSprite render texture?
@@ -125,35 +103,23 @@ function refreshVisibility() {
   // Iterating over each vision source
   for ( const visionSource of canvas.effects.visionSources ) {
     if ( !visionSource.active ) continue;
-
-    const fovMask = visionSource.EVVisionMask;
-    const losMask = visionSource.EVVisionLOSMask;
-    if ( !fovMask ) console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|visionSource ${visionSource.object.id} has no fov mask.`);
-    if ( !losMask ) console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|visionSource ${visionSource.object.id} has no los mask.`);
-
     // Draw FOV polygon or provide some baseline visibility of the token's space
     if ( (visionSource.radius > 0) && !visionSource.data.blinded && !visionSource.isPreview ) {
-      vision.fov.tokens.addChild(fovMask);
-    } else {
-      vision.base.beginFill(fillColor, 1.0);
-      vision.base.drawShape(visionSource.fov);
-      vision.base.endFill();
-    }
+      vision.fov.tokens.drawShape(visionSource.fov);
+    } else vision.base.drawShape(visionSource.fov);
     // Draw LOS mask (with exception for blinded tokens)
     if ( !visionSource.data.blinded && !visionSource.isPreview ) {
-      vision.los.addChild(losMask);
+      vision.los.drawShape(visionSource.los);
       commitFog = true;
-    } else vision.los.preview.addChild(visionSource.data.blinded ? fovMask : losMask);
+    } else vision.los.preview.drawShape(visionSource.data.blinded ? visionSource.fov : visionSource.los);
   }
 
   // Fill operations are finished for LOS and FOV lights and tokens
-  // vision.base.endFill();
-  // vision.fov.lights.endFill();
-
-  // Not needed with the masks:
-  // vision.fov.tokens.endFill();
-  // vision.los.endFill();
-  // vision.los.preview.endFill();
+  vision.base.endFill();
+  vision.fov.lights.endFill();
+  vision.fov.tokens.endFill();
+  vision.los.endFill();
+  vision.los.preview.endFill();
 
   // Update fog of war texture (if fow is activated)
   if ( commitFog ) canvas.fog.commit();

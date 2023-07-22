@@ -82,7 +82,12 @@ function EVVisionLOSMask() {
   //     return addShapeToShadowMask(ltdPoly, this[MODULE_ID].shadowVisionLOSMask);
   //   }
 
-  return this[MODULE_ID].shadowVisionLOSMask;
+  const g = new PIXI.Graphics();
+  const draw = new Draw(g);
+  draw.shape(this.shape, { width: 0, fill: 0xFF0000 });
+  return g;
+
+  // return this[MODULE_ID].shadowVisionLOSMask;
 }
 
 /**
@@ -125,7 +130,17 @@ function EVVisionMask() {
   // b/c the entire container is treated as a mask by the vision system.
   const r = this.radius || this.data.externalRadius;
   const cir = new PIXI.Circle(this.x, this.y, r);
-  return addShapeToShadowMask(cir, this[MODULE_ID].shadowVisionLOSMask);
+  // return addShapeToShadowMask(cir, this[MODULE_ID].shadowVisionLOSMask);
+
+  const g = new PIXI.Graphics();
+//   g.height = canvas.dimensions.height;
+//   g.width = canvas.dimensions.width;
+//   g.x = 0;
+//   g.y = 0;
+  const draw = new Draw(g);
+  draw.shape(cir, { width: 0, fill: 0xFF0000 });
+  return g;
+
 }
 
 PATCHES.WEBGL.GETTERS = {
