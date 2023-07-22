@@ -96,7 +96,8 @@ import {
   BRIGHTNESS_LEVEL,
   pointInShadowRenderedPointSource,
   targetInShadowRenderedSource,
-  targetInShadowVisionSource } from "./shadow_hooks.js";
+  targetInShadowVisionSource,
+  hasWallCollisionRenderedPointSource } from "./shadow_hooks.js";
 
 import {
   _drawAmbientLight,
@@ -284,7 +285,7 @@ export function registerAdditions() {
   addClassMethod(RenderedPointSource.prototype, "pointInShadow", pointInShadowRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "targetInShadow", targetInShadowRenderedSource);
   addClassMethod(VisionSource.prototype, "targetInShadow", targetInShadowVisionSource);
-  //addClassMethod(RenderedPointSource.prototype, "hasWallCollision", hasWallCollisionRenderedPointSource);
+  addClassMethod(RenderedPointSource.prototype, "hasWallCollision", hasWallCollisionRenderedPointSource);
 }
 
 

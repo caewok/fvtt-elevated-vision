@@ -308,7 +308,7 @@ export function pointInShadowRenderedPointSource({x, y, z} = {}) {
   z ??= canvas.elevation.elevationAt({x, y});
   const testPt = new Point3d(x, y, z);
   const origin = Point3d.fromPointSource(this);
-  const midCollision = hasWallCollision(origin, testPt, this);
+  const midCollision = this.hasWallCollision(origin, testPt);
   const lightSize = this.data.lightSize;
 
   /* Draw.point(origin, { color: Draw.COLORS.yellow }) */
@@ -316,21 +316,16 @@ export function pointInShadowRenderedPointSource({x, y, z} = {}) {
   if ( !lightSize ) return Number(midCollision);
 
   // Test the top/bottom/left/right points of the light for penumbra shadow.
-  origin.z += lightSize;
-  const topCollision = hasWallCollision(origin, testPt, this);
-
-  origin.z -= (lightSize * 2); // B/c we already moved it up.
-  const bottomCollision = hasWallCollision(origin, testPt, this);
+  let dir = new Point3d(0, 0, lightSize);
+  const topCollision = this.hasWallCollision(origin.add(dir), testPt);
+  const bottomCollision = this.hasWallCollision(origin.subtract(dir), testPt);
 
   // Get the orthogonal direction to the origin --> testPt line at the light elevation.
-  origin.z += lightSize;
-  const dir = testPt.subtract(origin);
+  dir = testPt.subtract(origin);
   const orthoDir = (new Point3d(-dir.y, dir.x, 0)).normalize();
-  origin.copyFrom(origin.add(orthoDir.multiplyScalar(lightSize)));
-  const side0Collision = hasWallCollision(origin, testPt, this);
-
-  origin.copyFrom(origin.add(orthoDir.multiplyScalar(-lightSize * 2)));
-  const side1Collision = hasWallCollision(origin, testPt, this);
+  dir = orthoDir.multiplyScalar(lightSize);
+  const side0Collision = this.hasWallCollision(origin.add(dir), testPt);
+  const side1Collision = this.hasWallCollision(origin.subtract(dir), testPt);
 
   // Shadows: side0/mid/side1 = 100%; side0/mid = 50%; mid/side1 = 50%; any one = 25%
   const sideSum = side0Collision + side1Collision + midCollision;
@@ -341,7 +336,6 @@ export function pointInShadowRenderedPointSource({x, y, z} = {}) {
     case 2: sideShadowPercentage = 0.50; break;
     case 3: sideShadowPercentage = 1; break;
   }
-
 
   const heightSum = topCollision + bottomCollision + midCollision;
   let heightShadowPercentage;
@@ -355,13 +349,13 @@ export function pointInShadowRenderedPointSource({x, y, z} = {}) {
   return heightShadowPercentage * sideShadowPercentage;
 }
 
-function hasWallCollision(origin, testPt, source) {
-  const type = source.constructor.sourceType;
+export function hasWallCollisionRenderedPointSource(origin, testPt) {
+  const type = this.constructor.sourceType;
 
   // For Wall Height, set origin.b and origin.t to trick it into giving us the walls.
   origin.b = Number.POSITIVE_INFINITY;
   origin.t = Number.NEGATIVE_INFINITY;
-  const wallCollisions = CONFIG.Canvas.polygonBackends[type].testCollision(origin, testPt, {type, mode: "all", source});
+  const wallCollisions = CONFIG.Canvas.polygonBackends[type].testCollision(origin, testPt, {type, mode: "all", source: this});
   if ( !wallCollisions.length ) return false;
 
   const dir = testPt.subtract(origin);
