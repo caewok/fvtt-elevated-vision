@@ -60,7 +60,7 @@ function _initializeEVShadowMask() {
 
   // Build the mask for the LOS based on the canvas dimensions rectangle.
   // Mask that colors red areas that are lit / are viewable.
-  const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowRenderer.renderTexture);
+  const shader = ShadowVisionMaskTokenLOSShader.create(this);
   ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
 

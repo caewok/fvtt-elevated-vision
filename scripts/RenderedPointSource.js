@@ -77,6 +77,9 @@ EVVisionMask
 - Retrieve the mask corresponding to this source. Passed to CanvasVisibility to mask vision.
 - Distinct version for
 
+EVShadowTexture
+- Retrieve the shadow texture corresponding to this source. Used for lighting shaders and vision masking
+
 */
 
 /* Wrapped Methods
@@ -200,8 +203,6 @@ function _initializeEVShadows() {
   Object.values(this.layers).forEach(layer => {
     const u = layer.shader.uniforms;
     u.uEVShadows = true;
-
-    // TODO: Does this need to be reset every time?
     u.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
   });
 }
@@ -247,7 +248,7 @@ function _initializeEVShadowMask() {
   if ( ev.shadowVisionMask ) return;
 
   // Mask that colors red areas that are lit / are viewable.
-  const shader = ShadowVisionMaskShader.create(this, ev.shadowRenderer.renderTexture);
+  const shader = ShadowVisionMaskShader.create(this);
   ev.shadowVisionMask = new EVQuadMesh(this.bounds, shader);
 }
 
@@ -509,9 +510,22 @@ PATCHES.VISIBILITY.METHODS = {
 // NOTE: WebGL Getters
 
 /**
+ * New getter: RenderedPointSource.prototype.EVShadowTexture
+ */
+function EVShadowTexture() {
+  const ev = this[MODULE_ID];
+  if ( !ev || !ev.shadowRenderer ) this._initializeEVShadows();
+  return ev.shadowRenderer.renderTexture;
+}
+
+/**
  * New getter: RenderedPointSource.prototype.EVVisionMask
  */
-function EVVisionMask() { return this[MODULE_ID].shadowVisionMask; }
+function EVVisionMask() {
+  const ev = this[MODULE_ID];
+  if ( !ev || !ev.shadowVisionMask ) this._initializeEVShadows();
+  return ev.shadowVisionMask;
+}
 
 /**
  * New getter: RenderedPointSource.prototype.bounds
@@ -526,6 +540,7 @@ export function bounds() {
 }
 
 PATCHES.WEBGL.GETTERS = {
+  EVShadowTexture,
   EVVisionMask,
   bounds
 };

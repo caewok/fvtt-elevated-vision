@@ -36,6 +36,7 @@ export class ShadowTextureRenderer {
     this.renderTexture = PIXI.RenderTexture.create(this.configureTexture());
     this.renderTexture.baseTexture.clearColor = [1, 1, 1, 1];
     this.renderTexture.baseTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
+    this.renderShadowMeshToTexture();
   }
 
   /**
