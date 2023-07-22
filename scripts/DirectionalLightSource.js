@@ -421,11 +421,16 @@ export class DirectionalLightSource extends LightSource {
       ev.shadowMesh.updateAzimuth();
       ev.shadowMesh.updateElevationAngle();
       ev.shadowRenderer.update();
+
+      ev.shadowVisionMask.updateGeometry(this.bounds);
+      ev.shadowVisionMask.shader.updateSourcePosition(this);
     }
 
     if ( Object.hasOwn(changes, "solarAngle") ) {
       ev.shadowMesh.updateSolarAngle();
       ev.shadowRenderer.update();
+
+      ev.shadowVisionMask.updateGeometry(this.bounds);
     }
   }
 
