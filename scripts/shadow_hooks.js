@@ -544,14 +544,11 @@ export function _initializeEVShadowGeometryVisionSource() {
  */
 export function _initializeEVShadowRendererVisionSource() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowVisionLOSRenderer ) return;
-
-  // Instead of super._initializeEVShadowTexture()
-  RenderedPointSource.prototype._initializeEVShadowRenderer.call(this);
+  if ( ev.shadowRenderer ) return;
 
   // Render LOS to a texture for use by other shaders.
-  ev.shadowVisionLOSRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh);
-  ev.shadowVisionLOSRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
+  ev.shadowRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh);
+  ev.shadowRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
 }
 
 /**
@@ -564,7 +561,7 @@ export function _initializeEVShadowMaskVisionSource() {
 
   // Build the mask for the LOS based on the canvas dimensions rectangle.
   // Mask that colors red areas that are lit / are viewable.
-  const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowVisionLOSRenderer.renderTexture);
+  const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowRenderer.renderTexture);
   ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
 /**
@@ -581,8 +578,8 @@ export function _updateEVShadowDataVisionSource(changes) {
   const changedRadius = Object.hasOwn(changes, "radius");
   const changedElevation = Object.hasOwn(changes, "elevation");
 
-  if ( changedPosition || changedElevation ) ev.shadowVisionLOSRenderer.update();
-  if ( changedRadius ) ev.shadowVisionLOSRenderer.updateSourceRadius();
+  if ( changedPosition || changedElevation ) ev.shadowRenderer.update();
+  if ( changedRadius ) ev.shadowRenderer.updateSourceRadius();
 }
 
 

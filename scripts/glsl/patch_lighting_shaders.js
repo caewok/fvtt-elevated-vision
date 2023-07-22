@@ -11,6 +11,8 @@ import { ShaderPatcher, applyPatches } from "../perfect-vision/shader-patcher.js
  * Add shadow GLSL code to the lighting fragment shaders.
  */
 export function createAdaptiveLightingShader(wrapped, ...args) {
+  if ( AdaptiveVisionShader.isPrototypeOf(this) ) return wrapped(...args);
+
   applyPatches(this,
     false,
     source => {
