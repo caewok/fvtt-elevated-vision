@@ -95,7 +95,8 @@ import {
   // Shadow visibility testing.
   BRIGHTNESS_LEVEL,
   pointInShadowRenderedPointSource,
-  terrainPointInShadowRenderedSource } from "./shadow_hooks.js";
+  targetInShadowRenderedSource,
+  targetInShadowVisionSource } from "./shadow_hooks.js";
 
 import {
   _drawAmbientLight,
@@ -281,7 +282,8 @@ export function registerAdditions() {
   // For vision in dim/bright/shadows
   addClassMethod(LightSource, "BRIGHTNESS_LEVEL", BRIGHTNESS_LEVEL);
   addClassMethod(RenderedPointSource.prototype, "pointInShadow", pointInShadowRenderedPointSource);
-  addClassMethod(RenderedPointSource.prototype, "terrainPointInShadow", terrainPointInShadowRenderedSource);
+  addClassMethod(RenderedPointSource.prototype, "targetInShadow", targetInShadowRenderedSource);
+  addClassMethod(VisionSource.prototype, "targetInShadow", targetInShadowVisionSource);
 }
 
 
