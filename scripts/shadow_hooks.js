@@ -628,7 +628,12 @@ export function EVVisionMaskVisionSource() {
   // b/c the entire container is treated as a mask by the vision system.
   const r = this.radius || this.data.externalRadius;
   const cir = new PIXI.Circle(this.x, this.y, r);
-  return addShapeToShadowMask(cir, this[MODULE_ID].shadowVisionLOSMask);
+  const g = new PIXI.Graphics();
+  const draw = new Draw(g);
+  draw.shape(cir, { width: 0, fill: 0xFF0000 });
+  return g;
+
+  //return addShapeToShadowMask(cir, this[MODULE_ID].shadowVisionLOSMask);
 }
 
 /**
