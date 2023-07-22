@@ -48,9 +48,9 @@ function refreshVisibility() {
   let commitFog = false;
 
   // Checking if the lights cache need a full redraw
-  let lightsFullRedraw = this.checkLights();
+  let lightsFullRedraw = this.EV_checkLights();
   if ( lightsFullRedraw ) {
-    this.pointSourcesStates.clear();
+    this.EV_pointSourcesStates.clear();
     vision.fov.lights.clear();
   }
   vision.base.clear();
@@ -83,12 +83,12 @@ function refreshVisibility() {
     // Determine whether this light source needs to be drawn to the texture
     let draw = lightsFullRedraw;
     if ( !lightsFullRedraw ) {
-      const priorState = this.pointSourcesStates.get(lightSource);
+      const priorState = this.EV_pointSourcesStates.get(lightSource);
       if ( !priorState || priorState.wasActive === false ) draw = lightSource.active;
     }
 
     // Save the state of this light source
-    this.pointSourcesStates.set(lightSource,
+    this.EV_pointSourcesStates.set(lightSource,
       {wasActive: lightSource.active, updateId: lightSource.updateId});
 
     if ( !lightSource.active ) continue;
@@ -98,7 +98,7 @@ function refreshVisibility() {
 
   // Do we need to cache the lights into the lightsSprite render texture?
   // Note: With a full redraw, we need to refresh the texture cache, even if no elements are present
-  if ( refreshCache || lightsFullRedraw ) this.cacheLights(lightsFullRedraw);
+  if ( refreshCache || lightsFullRedraw ) this.EV_cacheLights(lightsFullRedraw);
 
   // Iterating over each vision source
   for ( const visionSource of canvas.effects.visionSources ) {
@@ -134,7 +134,7 @@ PATCHES.WEBGL.OVERRIDES = { refreshVisibility };
  * Clear the pointSourcesStates in tear down.
  */
 async function _tearDown(wrapped, options) {
-  this.pointSourcesStates.clear();
+  this.EV_pointSourcesStates.clear();
   return wrapped(options);
 }
 
@@ -154,13 +154,13 @@ function checkLights() {
   // First checking states changes for the current effects lightsources
   for ( const lightSource of canvas.effects.lightSources ) {
     if ( lightSource.object instanceof Token ) continue;
-    const state = this.pointSourcesStates.get(lightSource);
+    const state = this.EV_pointSourcesStates.get(lightSource);
     if ( !state ) continue;
     if ( (state.updateId !== lightSource.updateId) || (state.wasActive && !lightSource.active) ) return true;
     lightCount++;
   }
   // Then checking if some lightsources were deleted
-  return this.pointSourcesStates.size > lightCount;
+  return this.EV_pointSourcesStates.size > lightCount;
 }
 
 
@@ -177,21 +177,21 @@ function checkLights() {
 function cacheLights(clearTexture) {
   this.vision.fov.lights.renderable = true;
   const dims = canvas.dimensions;
-  this.renderTransform.tx = -dims.sceneX;
-  this.renderTransform.ty = -dims.sceneY;
+  this.EV_renderTransform.tx = -dims.sceneX;
+  this.EV_renderTransform.ty = -dims.sceneY;
 
   // Render the currently revealed vision to the texture
   canvas.app.renderer.render(this.vision.fov.lights, {
     renderTexture: this.vision.fov.lightsSprite.texture,
     clear: clearTexture,
-    transform: this.renderTransform
+    transform: this.EV_renderTransform
   });
   this.vision.fov.lights.renderable = false;
 }
 
 PATCHES.WEBGL.METHODS = {
-  checkLights,
-  cacheLights,
-  renderTransform: new PIXI.Matrix(),
-  pointSourcesStates: new Map()
+  EV_checkLights: checkLights,
+  EV_cacheLights: cacheLights,
+  EV_renderTransform: new PIXI.Matrix(),
+  EV_pointSourcesStates: new Map()
 };
