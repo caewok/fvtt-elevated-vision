@@ -57,9 +57,9 @@ function refreshVisibility() {
 
   vision.base.clear();
   vision.base.removeChildren();
-  //vision.base.beginFill(fillColor, 1.0);
+  // vision.base.beginFill(fillColor, 1.0);
 
-  //vision.fov.lights.beginFill(fillColor, 1.0);
+  // vision.fov.lights.beginFill(fillColor, 1.0);
   // Already cleared with lightsFullRedraw above.
 
   vision.fov.tokens.clear();

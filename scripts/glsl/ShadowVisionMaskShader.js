@@ -260,8 +260,4 @@ mask = source.elevatedvision.shadowVisionLOSMask;
 canvas.stage.addChild(mask)
 canvas.stage.removeChild(mask)
 
-mask = source.EVVisionLOSMask
-mask = source.EVVisionMask
-
-
 */
