@@ -258,7 +258,6 @@ export function registerAdditions() {
   addClassMethod(RenderedPointSource.prototype, "_initializeEVShadowMask", _initializeEVShadowMaskRenderedPointSource);
 
   addClassMethod(LightSource.prototype, "_initializeEVShadowMesh", _initializeEVShadowMeshLightSource);
-  addClassMethod(LightSource.prototype, "_updateEVShadowData", _updateEVShadowDataLightSource);
 
   addClassMethod(VisionSource.prototype, "_initializeEVShadowGeometry", _initializeEVShadowGeometryVisionSource);
   addClassMethod(VisionSource.prototype, "_initializeEVShadowRenderer", _initializeEVShadowRendererVisionSource);
@@ -272,6 +271,7 @@ export function registerAdditions() {
 
   addClassMethod(RenderedPointSource.prototype, "_updateEVShadowData", _updateEVShadowDataRenderedPointSource);
   addClassMethod(VisionSource.prototype, "_updateEVShadowData", _updateEVShadowDataVisionSource);
+  addClassMethod(LightSource.prototype, "_updateEVShadowData", _updateEVShadowDataLightSource);
   addClassMethod(GlobalLightSource.prototype, "_updateEVShadowData", _updateEVShadowDataGlobalLightSource);
 
   // For light elevation tooltip
@@ -284,6 +284,7 @@ export function registerAdditions() {
   addClassMethod(RenderedPointSource.prototype, "pointInShadow", pointInShadowRenderedPointSource);
   addClassMethod(RenderedPointSource.prototype, "targetInShadow", targetInShadowRenderedSource);
   addClassMethod(VisionSource.prototype, "targetInShadow", targetInShadowVisionSource);
+  //addClassMethod(RenderedPointSource.prototype, "hasWallCollision", hasWallCollisionRenderedPointSource);
 }
 
 

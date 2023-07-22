@@ -384,7 +384,7 @@ function hasWallCollision(origin, testPt, source) {
  * Currently works only for canvas elevation, accounting for terrain.
  * Returns the exact percentage or undefined if the shadow render texture is not present.
  */
-export function terrainPointInShadowRenderedSource({x, y} = {}) {
+export function targetInShadowRenderedSource(target, testPoint) {
   /* Testing
   api = game.modules.get("elevatedvision").api
   PixelCache = api.PixelCache
@@ -450,12 +450,24 @@ export function terrainPointInShadowRenderedSource({x, y} = {}) {
 
   */
 
+  testPoint ??= target;
   const shadowRenderer = this[MODULE_ID]?.shadowRenderer;
-  if ( !shadowRenderer ) return undefined;
+  if ( !shadowRenderer ) return this.pointInShadow(testPoint);
 
-  // Determine the shadow value for the light at this point.
-  const cache = shadowRenderer.pixelCache;
-  return 1 - cache.pixelAtCanvas(x, y);
+  // If the target is on the terrain (likely), we can use the faster test using pixelCache.
+  const calc = target instanceof Token
+    ? new canvas.elevation.TokenElevationCalculator(target)
+    : new canvas.elevation.CoordinateElevationCalculator(test.point);
+
+  return calc.isOnTerrain()
+    ? shadowPercentageFromCache(shadowRenderer.pixelCache, testPoint.x, testPoint.y)
+    : this.pointInShadow(testPoint);
+}
+
+const PIXEL_INV = 1 / 255;
+function shadowPercentageFromCache(pixelCache, x, y) {
+  const lightAmount = pixelCache.pixelAtCanvas(x, y);
+  return 1 - (lightAmount * PIXEL_INV);
 }
 
 // NOTE: LightSource shadow methods and getters
@@ -643,6 +655,15 @@ function addShapeToShadowMask(shape, shadowMask) {
   draw.shape(shape, { width: 0, fill: 0xFF0000 });
   c.addChild(g);
   return c;
+}
+
+/**
+ * New method: VisionSource.prototype.targetInShadow
+ * Do not use the shadow texture cache b/c it takes too long to construct and vision moves a lot.
+ */
+export function targetInShadowVisionSource(target, testPoint) {
+  testPoint ??= target;
+  return this.pointInShadow(testPoint);
 }
 
 // NOTE: GlobalLightSource shadow methods and getters
