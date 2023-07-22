@@ -182,23 +182,14 @@ export class ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer {
 
 /* Testing
 let [l] = canvas.lighting.placeables;
-source = l.source
+lightSource = l.source;
+mesh = l.source.elevatedvision.shadowMesh
 
-
-
-
-str = new ShadowTextureRenderer(source, mesh);
+str = new ShadowTextureRenderer(lightSource, mesh);
 rt = str.renderShadowMeshToTexture()
 
 s = new PIXI.Sprite(rt);
 canvas.stage.addChild(s)
 canvas.stage.removeChild(s)
-
-source = _token.vision
-mesh = source.elevatedvision.shadowMesh
-str = source.elevatedvision.shadowRenderer
-
-
-
 
 */
