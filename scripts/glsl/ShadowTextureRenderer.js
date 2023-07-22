@@ -7,6 +7,8 @@ PIXI
 
 import { PixelCache } from "../PixelCache.js";
 
+const PIXEL_INV = 1 / 255;
+
 /**
  * Take the output of a shadow mesh and render to a texture representing the light amount.
  * TODO: Combine with multiple tile shadow meshes to get total light amount.
@@ -81,13 +83,15 @@ export class ShadowTextureRenderer {
    * @param {number} g    Green channel pixel value
    * @param {number} b    Blue channel pixel value
    * @param {number} a    Alpha channel pixel value
-   * @returns {number} Percent shadow
+   * @returns {number} Percent shadow, represented as number between 0 and 255.
    */
   static shadowPixelCacheCombineFn(r, g, b, _a) {
-    let lightAmount = r / 255;
-    g = g / 255;
-    if ( g < 0.3 ) lightAmount *= (b / 255);
-    return 1 - lightAmount;
+    let lightAmount = r; // Between 0 and 255.
+
+    // 76 is 0.3 * 255
+    // Divide b by 255 to keep the appropriate units.
+    if ( g < 76 ) lightAmount *= (b * PIXEL_INV);
+    return lightAmount;
   }
 
   /**
@@ -100,7 +104,7 @@ export class ShadowTextureRenderer {
     return (this.#pixelCache = PixelCache.fromTexture(this.renderTexture, {
       x: -x,
       y: -y,
-      arrayClass: Float32Array,
+      arrayClass: Uint8ClampedArray,
       combineFn: this.constructor.shadowPixelCacheCombineFn }));
   }
 
