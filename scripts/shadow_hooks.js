@@ -211,9 +211,9 @@ export function _initializeEVShadowRendererRenderedPointSource() {
   // Force a uniform update, to avoid ghosting of placeables in the light radius.
   // TODO: Find the underlying issue and fix this!
   // Must be a new uniform variable (one that is not already in uniforms)
-  this.layers.background.shader.uniforms.uEVtmpfix = 0;
-  this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
-  this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
+//   this.layers.background.shader.uniforms.uEVtmpfix = 0;
+//   this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
+//   this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
 
   // Render texture to store the shadow mesh for use by other shaders.
   ev.shadowRenderer = new ShadowTextureRenderer(this, ev.shadowMesh);
