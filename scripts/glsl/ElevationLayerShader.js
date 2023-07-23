@@ -24,6 +24,7 @@ export class ElevationLayerShader extends AbstractEVShader {
 #version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
+in vec2 aVertexPosition;
 in vec2 aTextureCoord;
 
 out vec2 vTextureCoord;
