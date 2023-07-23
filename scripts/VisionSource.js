@@ -21,6 +21,8 @@ export const PATCHES = {};
 PATCHES.WEBGL = {};
 PATCHES.VISIBILITY = {};
 
+// ----- NOTE: Methods -----
+
 /**
  * New method: VisionSource.prototype._initializeEVShadowGeometry
  * Use SourceShadowWallGeometry, which does not restrict based on source bounds.
@@ -69,20 +71,20 @@ function _initializeEVShadowMask() {
  * Line of sight for this vision source
  */
 function EVVisionLOSMask() {
-  if ( !this[MODULE_ID]?.shadowVisionLOSMask ) {
+  const ev = this[MODULE_ID];
+
+  if ( !ev?.shadowVisionLOSMask ) {
     console.error("elevatedvision|EVVisionLOSMaskVisionSource|No shadowVisionLOSMask.");
   }
 
-  // This seems to cause problems; do this in FOV instead.
-  //   if ( this.object.hasLimitedSourceAngle ) {
-  //     // Add a mask for the limited angle polygon.
-  //     const { angle, rotation, externalRadius } = this.data;
-  //     const radius = canvas.dimensions.maxR;
-  //     const ltdPoly = new LimitedAnglePolygon(this, { radius, angle, rotation, externalRadius });
-  //     return addShapeToShadowMask(ltdPoly, this[MODULE_ID].shadowVisionLOSMask);
-  //   }
+  if ( this.object.hasLimitedSourceAngle ) {
+    const c = new PIXI.Container();
+    c.addChild(ev.graphicsLOS);
+    c.addChild(ev.shadowVisionLOSMask);
+    return c;
+  }
 
-  return this[MODULE_ID].shadowVisionLOSMask;
+  return ev.shadowVisionLOSMask;
 }
 
 /**
@@ -104,33 +106,20 @@ PATCHES.VISIBILITY.METHODS = {
   targetInShadow
 }
 
+// ----- NOTE: Getters -----
+
 /**
  * New getter: VisionSource.prototype.EVVisionMask
  * Field-of-view (FOV) for this vision source.
  */
 function EVVisionMask() {
-  if ( !this[MODULE_ID]?.shadowVisionLOSMask ) {
-    console.error("elevatedvision|EVVisionMaskVisionSource|No shadowVisionLOSMask.");
+  const ev = this[MODULE_ID];
+
+  if ( !ev?.graphicsFOV ) {
+    console.error("elevatedvision|EVVisionMaskVisionSource|No graphicsFOV.");
   }
 
-  if ( this.object.hasLimitedSourceAngle ) {
-    // Add a mask for the limited angle polygon.
-    const { radius, angle, rotation, externalRadius } = this.data;
-    const ltdPoly = new LimitedAnglePolygon(this, { radius, angle, rotation, externalRadius });
-    return addShapeToShadowMask(ltdPoly, this[MODULE_ID].shadowVisionLOSMask);
-  }
-
-  // Mask the radius circle for this vision source.
-  // Do not add as mask to container; can simply add to container as a child
-  // b/c the entire container is treated as a mask by the vision system.
-  const r = this.radius || this.data.externalRadius;
-  const cir = new PIXI.Circle(this.x, this.y, r);
-  const g = new PIXI.Graphics();
-  const draw = new Draw(g);
-  draw.shape(cir, { width: 0, fill: 0xFF0000 });
-  return g;
-
-  // return addShapeToShadowMask(cir, this[MODULE_ID].shadowVisionLOSMask);
+  return ev.graphicsFOV;
 }
 
 PATCHES.WEBGL.GETTERS = {
@@ -138,24 +127,39 @@ PATCHES.WEBGL.GETTERS = {
   EVVisionMask
 };
 
-// ----- Note: Helper functions -----
-/**
- * Build a new container with two children: the shadowMask and the shape, as a graphic.
- * @param {PIXI.Circle|PIXI.Rectangle|PIXI.Polygon} shape
- * @param {PIXI.Mesh} shadowMask
- * @returns {PIXI.Container}
- */
-function addShapeToShadowMask(shape, shadowMask) {
-  const c = new PIXI.Container();
-  c.addChild(shadowMask);
+// ----- NOTE: Wraps -----
 
-  // Draw the shape and add to the container
-  // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
-  // and that causes a border to appear outside the shape.
-  const g = new PIXI.Graphics();
-  const draw = new Draw(g);
-  draw.shape(shape, { width: 0, fill: 0xFF0000 });
-  c.addChild(g);
-  return c;
+/**
+ * Wrap VisionSource.prototype._createRestrictedPolygon
+ * Create/update the graphics used for the FOV.
+ */
+function _createRestrictedPolygon(wrapped) {
+  const ev = this[MODULE_ID] ??= {};
+  ev.graphicsFOV ??= new PIXI.Graphics;
+  const draw = new Draw(ev.graphicsFOV);
+  draw.clearDrawings();
+
+  // Mask the radius circle for this vision source.
+  const fill = 0xFF0000;
+  const width = 0;
+  const origin = {x: this.data.x, y: this.data.y};
+  const radius = this.data.radius || this.data.externalRadius;
+  const circle = new PIXI.Circle(origin.x, origin.y, radius);
+  draw.shape(circle, { width, fill });
+
+  // Mask the limited angle vision for this vision source.
+  if ( this.object.hasLimitedSourceAngle ) {
+    ev.graphicsLOS ??= new PIXI.Graphics;
+    const draw = new Draw(ev.graphicsLOS);
+    draw.clearDrawings();
+    const { radius, angle, rotation, externalRadius } = this.data;
+    const ltdPoly = new LimitedAnglePolygon(this, { radius, angle, rotation, externalRadius });
+    draw.shape(ltdPoly, { width, fill });
+  }
+
+  return wrapped();
 }
 
+PATCHES.WEBGL.WRAPS = {
+  _createRestrictedPolygon
+}
