@@ -1447,6 +1447,9 @@ mesh = ev.shadowMesh
 canvas.stage.addChild(mesh)
 canvas.stage.removeChild(mesh)
 
+mesh = ev.terrainShadowMesh
+
+
 
 dir = mesh.shader.uniforms.uLightDirection
 dirV = new PIXI.Point(dir[0], dir[1])

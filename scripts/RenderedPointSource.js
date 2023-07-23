@@ -290,9 +290,16 @@ function _updateEVShadowData(changes, changeObj = {}) {
   // wallGeometry, shadowMesh, terrainShadowMesh.
 
   let shadowsChanged = false;
+
+  // Shadow geometry and mesh
   if ( changeObj.changedPosition ) shadowsChanged = ev.wallGeometry.updateSourcePosition();
   if ( ev.shadowMesh.shader.sourceUpdated(this, changeObj) ) shadowsChanged ||= true;
+
+  // Terrain shadow geometry and mesh
+  if ( changeObj.changedPosition || changeObj.changedRadius ) ev.terrainShadowMesh.updateGeometry(this.bounds);
   if ( ev.terrainShadowMesh.shader.sourceUpdated(this, changeObj) ) shadowsChanged ||= true;
+
+  // Renderer and mask
   if ( shadowsChanged ) ev.shadowRenderer.updatedSource(changeObj); // TODO: Do we need a separate check for changedRadius here?
   ev.shadowVisionMask.shader.updatedSource(this, changeObj);
 }

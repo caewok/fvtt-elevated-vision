@@ -77,15 +77,15 @@ ${defineFunction("toRadians")}
 ${defineFunction("terrainElevation")}
 
 void main() {
+  // If we are outside the radius; ignore
+  // float dist2 = distanceSquared(vVertexPosition, uSourcePosition.xy);
+  // if ( dist2 > uSourceRadius2 ) discard;
+
   bool fullShadow = false;
 
-  // Shadow pixels outside the source radius
   // Shadow pixels outside the limited angle
-  float dist2 = distanceSquared(vVertexPosition, uSourcePosition.xy);
-  fullShadow = fullShadow
-    || dist2 > uSourceRadius2
-    || (uEmissionAngle != 360.0
-      && !pointBetweenRays(vVertexPosition, uSourcePosition.xy, rMinMax.xy, rMinMax.zw, uEmissionAngle));
+  fullShadow = fullShadow  || (uEmissionAngle != 360.0
+    && !pointBetweenRays(vVertexPosition, uSourcePosition.xy, rMinMax.xy, rMinMax.zw, uEmissionAngle));
 
   if ( !fullShadow ) {
     // Test terrain elevation
@@ -151,12 +151,12 @@ void main() {
    * @param {boolean} [changes.changedEmissionAngle]  True if the source changed emission angle
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  sourceUpdated(source, { changedPosition, changedRadius, changedRotation, changedEmissionAngle } = {}) {
-    if ( changedPosition ) this.updateSourcePosition(source);
+  sourceUpdated(source, { changedPosition, changedElevation, changedRadius, changedRotation, changedEmissionAngle } = {}) {
+    if ( changedPosition || changedElevation ) this.updateSourcePosition(source);
     if ( changedRadius ) this.updateSourceRadius(source);
     if ( changedRotation ) this.updateSourceRotation(source);
     if ( changedEmissionAngle ) this.updateSourceEmissionAngle(source);
-    return changedPosition || changedRadius || changedRotation || changedEmissionAngle;
+    return changedPosition || changedElevation || changedRadius || changedRotation || changedEmissionAngle;
   }
 
   updateSourcePosition(source) {
