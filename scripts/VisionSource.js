@@ -91,10 +91,6 @@ function EVVisionFOVMask() {
   return ev.graphicsFOV;
 }
 
-
-/**
- * New getter:  VisionSource.prototype.EVVisionMask
-
 PATCHES.WEBGL.GETTERS = {
   EVVisionFOVMask
 };
