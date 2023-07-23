@@ -194,6 +194,9 @@ void main() {
   }
 
   // Disable unused methods.
+
+  updatedSource(_source) { return; } // eslint-disable-line no-useless-return
+
   updateSourcePosition(_source) { return; } // eslint-disable-line no-useless-return
 
   updateSourceRadius(_source) { return; } // eslint-disable-line no-useless-return

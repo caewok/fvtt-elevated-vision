@@ -617,6 +617,7 @@ uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 uniform vec3 uLightPosition;
 uniform vec4 uSceneDims;
+uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 
 ${defineFunction("normalizeRay")}
 ${defineFunction("rayFromPoints")}

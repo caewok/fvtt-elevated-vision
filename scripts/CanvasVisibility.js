@@ -126,8 +126,8 @@ function refreshVisibility() {
   for ( const visionSource of canvas.effects.visionSources ) {
     if ( !visionSource.active ) continue;
 
-    const fovMask = visionSource.EVVisionMask;
-    const losMask = visionSource.EVVisionLOSMask;
+    const fovMask = visionSource.EVVisionFOVMask;
+    const losMask = visionSource.EVVisionMask;
     if ( !fovMask ) console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|visionSource ${visionSource.object.id} has no fov mask.`);
     if ( !losMask ) console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|visionSource ${visionSource.object.id} has no los mask.`);
 

@@ -48,26 +48,12 @@ function _initializeEVShadowRenderer() {
  */
 function _initializeEVShadowMask() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowVisionLOSMask ) return;
+  if ( ev.shadowVisionMask ) return;
 
   // Build the mask for the LOS based on the canvas dimensions rectangle.
   // Mask that colors red areas that are lit / are viewable.
   const shader = ShadowVisionMaskTokenLOSShader.create(this);
-  ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
-}
-
-/**
- * New getter: VisionSource.prototype.EVVisionLOSMask
- * Line of sight for this vision source
- */
-function EVVisionLOSMask() {
-  const ev = this[MODULE_ID];
-
-  if ( !ev?.shadowVisionLOSMask ) {
-    console.error("elevatedvision|EVVisionLOSMaskVisionSource|No shadowVisionLOSMask.");
-  }
-
-  return ev.shadowVisionLOSMask;
+  ev.shadowVisionMask = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
 
 /**
@@ -95,7 +81,7 @@ PATCHES.VISIBILITY.METHODS = {
  * New getter: VisionSource.prototype.EVVisionMask
  * Field-of-view (FOV) for this vision source.
  */
-function EVVisionMask() {
+function EVVisionFOVMask() {
   const ev = this[MODULE_ID];
 
   if ( !ev?.graphicsFOV ) {
@@ -105,9 +91,12 @@ function EVVisionMask() {
   return ev.graphicsFOV;
 }
 
+
+/**
+ * New getter:  VisionSource.prototype.EVVisionMask
+
 PATCHES.WEBGL.GETTERS = {
-  EVVisionLOSMask,
-  EVVisionMask
+  EVVisionFOVMask
 };
 
 // ----- NOTE: Wraps -----
