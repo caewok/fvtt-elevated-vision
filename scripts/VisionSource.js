@@ -1,8 +1,6 @@
 /* globals
 canvas,
-LimitedAnglePolygon,
 PIXI
-
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -40,16 +38,8 @@ function _initializeEVShadowRenderer() {
   const ev = this[MODULE_ID];
   if ( ev.shadowRenderer ) return;
 
-  // Force a uniform update, to avoid ghosting of placeables in the light radius.
-  // TODO: Find the underlying issue and fix this!
-  // Must be a new uniform variable (one that is not already in uniforms)
-//   this.layers.background.shader.uniforms.uEVtmpfix = 0;
-//   this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
-//   this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
-
   // Render LOS to a texture for use by other shaders.
-  ev.shadowRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh);
-  ev.shadowRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
+  ev.shadowRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh, ev.terrainShadowMesh);
 }
 
 /**
@@ -97,7 +87,7 @@ PATCHES.WEBGL.METHODS = {
 
 PATCHES.VISIBILITY.METHODS = {
   targetInShadow
-}
+};
 
 // ----- NOTE: Getters -----
 
@@ -128,7 +118,7 @@ PATCHES.WEBGL.GETTERS = {
  */
 function _createRestrictedPolygon(wrapped) {
   const ev = this[MODULE_ID] ??= {};
-  ev.graphicsFOV ??= new PIXI.Graphics;
+  ev.graphicsFOV ??= new PIXI.Graphics();
   const draw = new Draw(ev.graphicsFOV);
   draw.clearDrawings();
 
@@ -145,4 +135,4 @@ function _createRestrictedPolygon(wrapped) {
 
 PATCHES.WEBGL.WRAPS = {
   _createRestrictedPolygon
-}
+};

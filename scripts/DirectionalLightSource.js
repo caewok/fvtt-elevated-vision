@@ -9,7 +9,7 @@ PreciseText
 
 import { MODULE_ID, FLAGS } from "./const.js";
 import { DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-import { ShadowWallDirectionalSourceMesh } from "./glsl/ShadowWallShader.js";
+import { DirectionalShadowWallShader, ShadowMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
@@ -396,7 +396,8 @@ export class DirectionalLightSource extends LightSource {
    */
   _initializeEVShadowGeometry() {
     const ev = this[MODULE_ID];
-    ev.wallGeometry ??= new DirectionalSourceShadowWallGeometry(this);
+    if ( ev.wallGeometry ) console.debug("Directional Source Wall geometry already defined.");
+    ev.wallGeometry = new DirectionalSourceShadowWallGeometry(this);
   }
 
   /**
@@ -404,11 +405,14 @@ export class DirectionalLightSource extends LightSource {
    */
   _initializeEVShadowMesh() {
     const ev = this[MODULE_ID];
-    if ( ev.shadowRenderer ) return;
+    if ( ev.shadowMesh ) console.debug("Directional Source shadowMesh already defined.");
 
     // Mesh that describes shadows for the given geometry and source origin.
-    ev.shadowMesh = new ShadowWallDirectionalSourceMesh(this, ev.wallGeometry);
+    const shader = DirectionalShadowWallShader.create(this);
+    ev.shadowMesh = new ShadowMesh(ev.wallGeometry, shader);
   }
+
+  // TODO: Probably need distinct terrain shadow mesh for directional.
 
   /**
    * Mask the entire canvas at once.
@@ -426,26 +430,13 @@ export class DirectionalLightSource extends LightSource {
   /**
    * Update shadow data when the light is moved or solarAngle is updated.
    */
-  _updateEVShadowData(changes) {
-    const ev = this[MODULE_ID];
-
+  _updateEVShadowData(changes, changeObj = {}) {
     if ( Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y") ) {
-      // TODO: Can we short-circuit this if no changes resulted from the position change?
-      ev.wallGeometry.updateSourcePosition();
-      ev.shadowMesh.updateAzimuth();
-      ev.shadowMesh.updateElevationAngle();
-      ev.shadowRenderer.update();
-
-      ev.shadowVisionMask.updateGeometry(this.bounds);
-      ev.shadowVisionMask.shader.updateSourcePosition(this);
+      changeObj.changedAzimuth = true;
+      changeObj.changedElevationAngle = true;
     }
-
-    if ( Object.hasOwn(changes, "solarAngle") ) {
-      ev.shadowMesh.updateSolarAngle();
-      ev.shadowRenderer.update();
-
-      ev.shadowVisionMask.updateGeometry(this.bounds);
-    }
+    changeObj.changedSolarAngle = Object.hasOwn(changes, "solarAngle");
+    super._updateEVShadowData(changes, changeObj);
   }
 
   /**

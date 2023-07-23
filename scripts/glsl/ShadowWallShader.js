@@ -4,12 +4,10 @@ PIXI
 */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
-import { PointSourceShadowWallGeometry } from "./SourceShadowWallGeometry.js";
 
 
 // Calculation used to construct penumbra vertices from a set of light directions.
@@ -89,6 +87,7 @@ ${defineFunction("toRadians")}
 ${defineFunction("angleBetween")}
 ${defineFunction("toDegrees")}
 ${defineFunction("wallKeyCoordinates")}
+${defineFunction("terrainElevation")}
 
 #define EV_ENDPOINT_LINKED_UNBLOCKED  -1.0
 #define EV_ENDPOINT_LINKED_CONCAVE    -2.0
@@ -272,6 +271,9 @@ if ( hasSidePenumbra1 ) {
   vSidePenumbra1 = barycentric(vVertexPosition, p1A, p1B, p1C);
 }
 
+// Calculate the terrain texture coordinate at this vertex based on scene dimensions.
+vTerrainTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
+
 if ( vertexNum == 2 ) {
   // Calculate flat variables
   fWallCornerLinked = vec2(aWallCorner0.a, aWallCorner1.a);
@@ -314,6 +316,7 @@ if ( vertexNum == 2 ) {
     dirTmp = normalize(vec3(dirOuterSidePenumbra[0], zChangeLightWallBottom.b));
     fNearRatios.z = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
   }
+
 }`;
 
 // NOTE: PENUMBRA_FRAGMENT_FUNCTIONS
@@ -324,30 +327,12 @@ const PENUMBRA_FRAGMENT_FUNCTIONS =
 #define PROXIMATE_WALL    30.0
 #define DISTANCE_WALL     40.0
 
-${defineFunction("colorToElevationPixelUnits")}
+${defineFunction("terrainElevation")}
 ${defineFunction("between")}
 ${defineFunction("distanceSquared")}
 ${defineFunction("elevateShadowRatios")}
 ${defineFunction("linearConversion")}
 ${defineFunction("barycentricPointInsideTriangle")}
-
-/**
- * Get the terrain elevation at this fragment.
- * @returns {float}
- */
-float terrainElevation() {
-  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
-  float canvasElevation = uElevationRes.x;
-
-  // If outside scene bounds, elevation is set to the canvas minimum.
-  if ( !all(lessThan(evTexCoord, vec2(1.0)))
-    || !all(greaterThan(evTexCoord, vec2(0.0))) ) return canvasElevation;
-
-  // Inside scene bounds. Pull elevation from the texture.
-  vec4 evTexel = texture(uTerrainSampler, evTexCoord);
-  return colorToElevationPixelUnits(evTexel);
-}
-
 
 /**
  * Encode the amount of light in the fragment color to accommodate limited walls.
@@ -428,7 +413,7 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
 
   // Get the elevation at this fragment.
   float canvasElevation = uElevationRes.x;
-  float elevation = terrainElevation();
+  float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
 
   // Determine the start and end of the shadow, relative to the light.
   vec3 nearRatios = fNearRatios;
@@ -602,6 +587,7 @@ void main() {
  * Draw shadow for wall without shading for penumbra and without the outer penumbra.
  */
 export class ShadowWallShader extends AbstractEVShader {
+  // NOTE: ShadowWallShader.vertexShader
   /**
    * Vertices are light --> wall corner to intersection on surface.
    * 3 vertices: light, ix for corner 1, ix for corner 2
@@ -619,6 +605,7 @@ in float aWallSenseType;
 in float aThresholdRadius2;
 
 out vec2 vVertexPosition;
+out vec2 vTerrainTexCoord;
 out vec3 vBary;
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
@@ -628,8 +615,8 @@ flat out float fNearRatio;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
-uniform vec4 uElevationRes;
 uniform vec3 uLightPosition;
+uniform vec4 uSceneDims;
 
 ${defineFunction("normalizeRay")}
 ${defineFunction("rayFromPoints")}
@@ -711,9 +698,14 @@ void main() {
   }
 
   vVertexPosition = ixFarShadow.xy;
+
+  // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
+  vTerrainTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
+
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
 }`;
 
+  // NOTE: ShadowWallShader.fragmentShader
   /**
    * Shadow shaders use an encoding for the percentage of light present at the fragment.
    * See lightEncoding.
@@ -732,11 +724,11 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 #define DISTANCE_WALL     40.0
 
 uniform sampler2D uTerrainSampler;
-uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
-uniform vec4 uSceneDims;
 uniform vec3 uLightPosition;
+uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 
 in vec2 vVertexPosition;
+in vec2 vTerrainTexCoord;
 in vec3 vBary;
 
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
@@ -747,26 +739,9 @@ flat in float fThresholdRadius2;
 
 out vec4 fragColor;
 
-${defineFunction("colorToElevationPixelUnits")}
+${defineFunction("terrainElevation")}
 ${defineFunction("between")}
 ${defineFunction("distanceSquared")}
-
-/**
- * Get the terrain elevation at this fragment.
- * @returns {float}
- */
-float terrainElevation() {
-  vec2 evTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
-  float canvasElevation = uElevationRes.x;
-
-  // If outside scene bounds, elevation is set to the canvas minimum.
-  if ( !all(lessThan(evTexCoord, vec2(1.0)))
-    || !all(greaterThan(evTexCoord, vec2(0.0))) ) return canvasElevation;
-
-  // Inside scene bounds. Pull elevation from the texture.
-  vec4 evTexel = texture(uTerrainSampler, evTexCoord);
-  return colorToElevationPixelUnits(evTexel);
-}
 
 /**
  * Shift the front and end percentages of the wall, relative to the light, based on height
@@ -866,7 +841,7 @@ void main() {
 
   // Get the elevation at this fragment.
   float canvasElevation = uElevationRes.x;
-  float elevation = terrainElevation();
+  float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
 
   // If elevation is above the wall, then no shadow.
   if ( elevation > fWallHeights.x ) {
@@ -917,7 +892,7 @@ void main() {
    * @param {object} defaultUniforms    Changes from the default uniforms set here.
    * @returns {ShadowMaskWallShader}
    */
-  static create(defaultUniforms = {}) {
+  static create(source, defaultUniforms = {}) {
     const { sceneRect, distancePixels } = canvas.dimensions;
     defaultUniforms.uSceneDims ??= [
       sceneRect.x,
@@ -934,7 +909,24 @@ void main() {
       distancePixels
     ];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
+
+    const lightPosition = Point3d.fromPointSource(source);
+    defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
+
     return super.create(defaultUniforms);
+  }
+
+  /**
+   * Update based on indicated changes to the source.
+   * @param {RenderedSourcePoint} source
+   * @param {object} [changes]    Object indicating which properties of the source changed
+   * @param {boolean} [changes.changedPosition]   True if the source changed position
+   * @param {boolean} [changes.changedElevation]  True if the source changed elevation
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   */
+  sourceUpdated(source, { changedPosition, changedElevation } = {}) {
+    if ( changedPosition || changedElevation ) this.updateLightPosition(source);
+    return changedPosition || changedElevation;
   }
 
   /**
@@ -943,7 +935,10 @@ void main() {
    * @param {number} y
    * @param {number} z
    */
-  updateLightPosition(x, y, z) { this.uniforms.uLightPosition = [x, y, z]; }
+  updateLightPosition(source) {
+    const lightPosition = Point3d.fromPointSource(source);
+    this.uniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
+  }
 }
 
 /**
@@ -951,6 +946,7 @@ void main() {
  * https://www.researchgate.net/publication/266204563_Calculation_of_the_shadow-penumbra_relation_and_its_application_on_efficient_architectural_design
  */
 export class DirectionalShadowWallShader extends AbstractEVShader {
+  // NOTE: DirectionalShadowWallShader.vertexShader
   /**
    * Vertices are light --> wall corner to intersection on surface.
    * 3 vertices: light, ix for corner 1, ix for corner 2
@@ -968,6 +964,7 @@ in float aWallSenseType;
 // Note: no thresholds for walls apply for directional lighting.
 
 out vec2 vVertexPosition;
+out vec2 vTerrainTexCoord;
 out vec3 vBary;
 out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
@@ -981,11 +978,10 @@ flat out vec2 fWallCornerLinked;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
-uniform vec4 uElevationRes;
+uniform vec4 uSceneDims;
 uniform float uAzimuth; // radians
 uniform float uElevationAngle; // radians
 uniform float uSolarAngle; // radians
-uniform vec4 uSceneDims;
 
 #define PI_1_2 1.5707963267948966
 #define EV_DIRECTIONAL_LIGHT
@@ -1075,6 +1071,7 @@ void main() {
   ${PENUMBRA_VERTEX_CALCULATIONS}
 }`;
 
+  // NOTE: DirectionalShadowWallShader.fragmentShader
   /**
    * Shadow shaders use an encoding for the percentage of light present at the fragment.
    * See lightEncoding.
@@ -1093,6 +1090,7 @@ uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 uniform vec4 uSceneDims;
 
 in vec2 vVertexPosition;
+in vec2 vTerrainTexCoord;
 in vec3 vBary;
 in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
@@ -1134,7 +1132,7 @@ void main() {
    * @param {object} defaultUniforms    Changes from the default uniforms set here.
    * @returns {ShadowMaskWallShader}
    */
-  static create(defaultUniforms = {}) {
+  static create(source, defaultUniforms = {}) {
     const { sceneRect, distancePixels } = canvas.dimensions;
     defaultUniforms.uSceneDims ??= [
       sceneRect.x,
@@ -1151,14 +1149,34 @@ void main() {
       distancePixels
     ];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
+
+    defaultUniforms.uAzimuth = source.azimuth;
+    defaultUniforms.uElevationAngle = source.elevationAngle;
+    defaultUniforms.uSolarAngle = source.solarAngle;
+
     return super.create(defaultUniforms);
   }
 
-  updateAzimuth(azimuth) { this.uniforms.uAzimuth = azimuth; }
+  /**
+   * Update based on indicated changes to the source.
+   * @param {RenderedSourcePoint} source
+   * @param {object} [changes]    Object indicating which properties of the source changed
+   * @param {boolean} [changes.changedPosition]   True if the source changed position
+   * @param {boolean} [changes.changedElevation]  True if the source changed elevation
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   */
+  sourceUpdated(source, { changedAzimuth, changedElevationAngle, changedSolarAngle } = {}) {
+    if ( changedAzimuth ) this.updateAzimuth(source);
+    if ( changedElevationAngle ) this.updateElevationAngle(source);
+    if ( changedSolarAngle ) this.updateSolarAngle(source);
+    return changedAzimuth || changedElevationAngle || changedSolarAngle;
+  }
 
-  updateElevationAngle(elevationAngle) { this.uniforms.uElevationAngle = elevationAngle; }
+  updateAzimuth(source) { this.uniforms.uAzimuth = source.azimuth; }
 
-  updateSolarAngle(solarAngle) { this.uniforms.uSolarAngle = solarAngle; }
+  updateElevationAngle(source) { this.uniforms.uElevationAngle = source.elevationAngle; }
+
+  updateSolarAngle(source) { this.uniforms.uSolarAngle = source.solarAngle; }
 }
 
 /**
@@ -1166,6 +1184,7 @@ void main() {
  * https://www.researchgate.net/publication/266204563_Calculation_of_the_shadow-penumbra_relation_and_its_application_on_efficient_architectural_design
  */
 export class SizedPointSourceShadowWallShader extends AbstractEVShader {
+  // NOTE: SizedPointSourceShadowWallShader.vertexShader
   /**
    * Wall shadow with side, near, and far penumbra.
    * Vertices are light --> wall corner to intersection on surface.
@@ -1184,6 +1203,7 @@ in float aWallSenseType;
 in float aThresholdRadius2;
 
 out vec2 vVertexPosition;
+out vec2 vTerrainTexCoord;
 out vec3 vBary;
 out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
@@ -1276,6 +1296,7 @@ void main() {
   ${PENUMBRA_VERTEX_CALCULATIONS}
 }`;
 
+  // NOTE: SizedPointSourceShadowWallShader.fragmentShader
   /**
    * Shadow shaders use an encoding for the percentage of light present at the fragment.
    * See lightEncoding.
@@ -1289,11 +1310,11 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 // #define SHADOW true
 
 uniform sampler2D uTerrainSampler;
-uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
-uniform vec4 uSceneDims;
 uniform vec3 uLightPosition;
+uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 
 in vec2 vVertexPosition;
+in vec2 vTerrainTexCoord;
 in vec3 vBary;
 in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
@@ -1335,7 +1356,7 @@ void main() {
    * @param {object} defaultUniforms    Changes from the default uniforms set here.
    * @returns {ShadowMaskWallShader}
    */
-  static create(defaultUniforms = {}) {
+  static create(source, defaultUniforms = {}) {
     const { sceneRect, distancePixels } = canvas.dimensions;
     defaultUniforms.uSceneDims ??= [
       sceneRect.x,
@@ -1352,97 +1373,41 @@ void main() {
       distancePixels
     ];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
+
+    const lightPosition = Point3d.fromPointSource(source);
+    defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
+    defaultUniforms.uLightSize = source.data.lightSize;
+
     return super.create(defaultUniforms);
   }
 
-  updateLightPosition(x, y, z) { this.uniforms.uLightPosition = [x, y, z]; }
-
-  updateLightSize(lightSize) { this.uniforms.uLightSize = lightSize; }
-}
-
-export class ShadowWallPointSourceMesh extends PIXI.Mesh {
-  constructor(source, geometry, shader, state, drawMode) {
-    geometry ??= source[MODULE_ID]?.wallGeometry ?? new PointSourceShadowWallGeometry(source);
-    if ( !shader ) {
-      const lightPosition = Point3d.fromPointSource(source);
-      const uniforms = {
-        uSourceLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z]
-      };
-      shader = ShadowWallShader.create(uniforms);
-    }
-
-    super(geometry, shader, state, drawMode);
-    this.blendMode = PIXI.BLEND_MODES.MULTIPLY;
-
-    /** @type {LightSource} */
-    this.source = source;
-  }
-
   /**
-   * Update the source position.
+   * Update based on indicated changes to the source.
+   * @param {RenderedSourcePoint} source
+   * @param {object} [changes]    Object indicating which properties of the source changed
+   * @param {boolean} [changes.changedPosition]   True if the source changed position
+   * @param {boolean} [changes.changedElevation]  True if the source changed elevation
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  updateLightPosition() {
-    const { x, y, elevationZ } = this.source;
-    this.shader.updateLightPosition(x, y, elevationZ);
+  sourceUpdated(source, { changedPosition, changedElevation, changedLightSize } = {}) {
+    if ( changedPosition || changedElevation ) this.updateLightPosition(source);
+    if ( changedLightSize ) this.updateLightSize(source);
+    return changedPosition || changedElevation || changedLightSize;
   }
+
+  updateLightPosition(source) {
+    const lightPosition = Point3d.fromPointSource(source);
+    this.uniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
+  }
+
+  updateLightSize(source) { this.uniforms.uLightSize = source.data.lightSize; }
 }
 
-export class ShadowWallDirectionalSourceMesh extends PIXI.Mesh {
-  constructor(source, geometry, shader, state, drawMode) {
-    geometry ??= source[MODULE_ID]?.wallGeometry ?? new PointSourceShadowWallGeometry(source);
-    if ( !shader ) {
-      const { azimuth, elevationAngle, solarAngle } = source;
-      const uniforms = {
-        uAzimuth: azimuth,
-        uElevationAngle: elevationAngle,
-        uSolarAngle: solarAngle
-      };
-      shader = DirectionalShadowWallShader.create(uniforms);
-    }
-
-    super(geometry, shader, state, drawMode);
+export class ShadowMesh extends PIXI.Mesh {
+  constructor(...args) {
+    super(...args);
     this.blendMode = PIXI.BLEND_MODES.MULTIPLY;
-
-    /** @type {LightSource} */
-    this.source = source;
   }
-
-  updateAzimuth() { this.shader.updateAzimuth(this.source.azimuth); }
-
-  updateElevationAngle() { this.shader.updateElevationAngle(this.source.elevationAngle); }
-
-  updateSolarAngle() { this.shader.updateSolarAngle(this.source.solarAngle); }
-}
-
-export class ShadowWallSizedPointSourceMesh extends PIXI.Mesh {
-  constructor(source, geometry, shader, state, drawMode) {
-    geometry ??= source[MODULE_ID]?.wallGeometry ?? new PointSourceShadowWallGeometry(source);
-    if ( !shader ) {
-      const lightPosition = Point3d.fromPointSource(source);
-      const uLightSize = source.data.lightSize;
-      const uniforms = {
-        uSourceLightPosition: [lightPosition.x, lightPosition.y, lightPosition.z],
-        uLightSize
-      };
-      shader = SizedPointSourceShadowWallShader.create(uniforms);
-    }
-
-    super(geometry, shader, state, drawMode);
-    this.blendMode = PIXI.BLEND_MODES.MULTIPLY;
-
-    /** @type {LightSource} */
-    this.source = source;
-  }
-
-  /**
-   * Update the source position.
-   */
-  updateLightPosition() {
-    const { x, y, elevationZ } = this.source;
-    this.shader.updateLightPosition(x, y, elevationZ);
-  }
-
-  updateLightSize() { this.shader.updateLightSize(this.source.data.lightSize); }
 }
 
 /* Testing

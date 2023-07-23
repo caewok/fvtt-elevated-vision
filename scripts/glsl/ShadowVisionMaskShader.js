@@ -1,8 +1,8 @@
 /* globals
-canvas,
 PIXI
 */
 "use strict";
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
@@ -93,6 +93,20 @@ void main() {
     return out;
   }
 
+  /**
+   * Update based on indicated changes to the source.
+   * @param {RenderedSourcePoint} source
+   * @param {object} [changes]    Object indicating which properties of the source changed
+   * @param {boolean} [changes.changedPosition]   True if the source changed position
+   * @param {boolean} [changes.changedElevation]  True if the source changed elevation
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   */
+  updatedSource(source, { changedPosition, changedRadius } = {}) {
+    if ( changedPosition ) this.updateSourcePosition(source);
+    if ( changedRadius ) this.updateSourceRadius(source);
+    return changedPosition || changedRadius;
+  }
+
   updateSourcePosition(source) {
     this.uniforms.uSourcePosition = [source.x, source.y];
   }
@@ -171,7 +185,7 @@ void main() {
    * uMaxNormalizedElevation: Maximum elevation, normalized units
    */
   static defaultUniforms = {
-    uShadowSampler: 0,
+    uShadowSampler: 0
   };
 
   static create(source, defaultUniforms = {}) {
@@ -180,9 +194,9 @@ void main() {
   }
 
   // Disable unused methods.
-  updateSourcePosition(source) { return; }
+  updateSourcePosition(_source) { return; } // eslint-disable-line no-useless-return
 
-  updateSourceRadius(source) { return; }
+  updateSourceRadius(_source) { return; } // eslint-disable-line no-useless-return
 
 }
 

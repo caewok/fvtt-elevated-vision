@@ -30,9 +30,14 @@ export class ShadowTextureRenderer {
   /** @type {RenderedPointSource} */
   source;
 
-  constructor(source, mesh) {
+  /** @type {PIXI.Container} */
+  meshContainer = new PIXI.Container();
+
+  constructor(source, shadowMesh, terrainShadowMesh) {
     this.source = source;
-    this.mesh = mesh;
+    this.meshContainer.addChild(shadowMesh);
+    this.meshContainer.addChild(terrainShadowMesh);
+
     this.renderTexture = PIXI.RenderTexture.create(this.configureTexture());
     this.renderTexture.baseTexture.clearColor = [1, 1, 1, 1];
     this.renderTexture.baseTexture.alphaMode = PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA;
@@ -123,11 +128,10 @@ export class ShadowTextureRenderer {
    * @returns {PIXI.RenderTexture}
    */
   renderShadowMeshToTexture() {
-    this.mesh.position.set(this.meshPosition.x, this.meshPosition.y);
-    canvas.app.renderer.render(this.mesh, { renderTexture: this.renderTexture, clear: true });
-    this.mesh.position.set(0, 0);
+    // TODO: Does this result in the correct combination of the two shadow meshes?
+    this.meshContainer.position.set(this.meshPosition.x, this.meshPosition.y);
+    canvas.app.renderer.render(this.meshContainer, { renderTexture: this.renderTexture, clear: true });
     this.#pixelCache = undefined;
-    return this.renderTexture;
   }
 
   configureTexture() {
@@ -138,14 +142,19 @@ export class ShadowTextureRenderer {
     };
   }
 
+  updatedSource({ changedRadius } = {}) {
+    if ( changedRadius ) this.updatedSourceRadius();
+    else this.update();
+  }
+
   /**
    * Adjust the texture size based on change to source radius.
    * @returns {PIXI.RenderTexture} Updated render texture.
    */
-  updateSourceRadius() {
+  updatedSourceRadius() {
     this.renderTexture.setResolution(this.resolution);
     this.renderTexture.resize(this.width, this.height, true);
-    return this.renderShadowMeshToTexture();
+    this.update();
   }
 
   /**
@@ -153,13 +162,14 @@ export class ShadowTextureRenderer {
    * @returns {PIXI.RenderTexture} Updated render texture.
    */
   update() {
-    return this.renderShadowMeshToTexture();
+    this.renderShadowMeshToTexture();
   }
 
   /**
    * Destroy the underlying render texture.
    */
   destroy() {
+    this.meshContainer.destroy(); // Leave the children mesh alone.
     this.renderTexture.destroy();
   }
 }
@@ -177,8 +187,10 @@ export class ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer {
    */
   get meshPosition() { return new PIXI.Point(0, 0); }
 
+  updatedSource() { this.update(); }
+
   // Disable updating source radius b/c not needed.
-  updateSourceRadius() { return; }
+  updateSourceRadius() { return; } // eslint-disable-line no-useless-return
 }
 
 /* Testing

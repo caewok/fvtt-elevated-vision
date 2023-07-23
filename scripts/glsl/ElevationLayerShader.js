@@ -24,17 +24,14 @@ export class ElevationLayerShader extends AbstractEVShader {
 #version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-in vec2 aVertexPosition;
 in vec2 aTextureCoord;
 
-out vec2 vVertexPosition;
 out vec2 vTextureCoord;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 
 void main() {
-  vVertexPosition = aVertexPosition;
   vTextureCoord = aTextureCoord;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
 }`;
@@ -51,7 +48,6 @@ in vec2 vTextureCoord;
 out vec4 fragColor;
 
 uniform sampler2D uTerrainSampler; // Elevation Texture
-uniform vec4 uElevationRes;
 uniform vec4 uMinColor;
 uniform vec4 uMaxColor;
 uniform float uMaxNormalizedElevation;
@@ -92,14 +88,12 @@ void main() {
 
   /**
    * Uniforms:
-   * uElevationRes: [minElevation, elevationStep, maxElevation, gridScale]
    * uTerrainSampler: elevation texture
    * uMinColor: Color to use at the minimum elevation: minElevation + elevationStep
    * uMaxColor: Color to use at the maximum current elevation: uMaxNormalizedElevation
    * uMaxNormalizedElevation: Maximum elevation, normalized units
    */
   static defaultUniforms = {
-    uElevationRes: [0, 1, 256 * 256, 1],
     uTerrainSampler: 0,
     uMinColor: [1, 0, 0, 1],
     uMaxColor: [0, 0, 1, 1],
@@ -108,12 +102,6 @@ void main() {
 
   static create(defaultUniforms = {}) {
     const ev = canvas.elevation;
-    defaultUniforms.uElevationRes ??= [
-      ev.elevationMin,
-      ev.elevationStep,
-      ev.elevationMax,
-      canvas.dimensions.distancePixels
-    ];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
     defaultUniforms.uMinColor = this.getDefaultColorArray("MIN");
     defaultUniforms.uMaxColor = this.getDefaultColorArray("MAX");
