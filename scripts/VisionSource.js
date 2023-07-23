@@ -77,13 +77,6 @@ function EVVisionLOSMask() {
     console.error("elevatedvision|EVVisionLOSMaskVisionSource|No shadowVisionLOSMask.");
   }
 
-  if ( this.object.hasLimitedSourceAngle ) {
-    const c = new PIXI.Container();
-    c.addChild(ev.graphicsLOS);
-    c.addChild(ev.shadowVisionLOSMask);
-    return c;
-  }
-
   return ev.shadowVisionLOSMask;
 }
 
@@ -146,16 +139,6 @@ function _createRestrictedPolygon(wrapped) {
   const radius = this.data.radius || this.data.externalRadius;
   const circle = new PIXI.Circle(origin.x, origin.y, radius);
   draw.shape(circle, { width, fill });
-
-  // Mask the limited angle vision for this vision source.
-  if ( this.object.hasLimitedSourceAngle ) {
-    ev.graphicsLOS ??= new PIXI.Graphics;
-    const draw = new Draw(ev.graphicsLOS);
-    draw.clearDrawings();
-    const { radius, angle, rotation, externalRadius } = this.data;
-    const ltdPoly = new LimitedAnglePolygon(this, { radius, angle, rotation, externalRadius });
-    draw.shape(ltdPoly, { width, fill });
-  }
 
   return wrapped();
 }
