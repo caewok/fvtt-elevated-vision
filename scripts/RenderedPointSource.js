@@ -18,7 +18,7 @@ import { ShadowTerrainShader } from "./glsl/ShadowTerrainShader.js";
 import { PointSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { ShadowVisionMaskShader } from "./glsl/ShadowVisionMaskShader.js";
-import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
+import { EVUpdatingQuadMesh } from "./glsl/EVQuadMesh.js";
 
 // Methods related to RenderedPointSource
 
@@ -242,7 +242,7 @@ function _initializeEVShadowMesh() {
 function _initializeEVTerrainShadowMesh() {
   const ev = this[MODULE_ID];
   const shader = ShadowTerrainShader.create(this);
-  ev.terrainShadowMesh = new EVQuadMesh(this.bounds, shader);
+  ev.terrainShadowMesh = new EVUpdatingQuadMesh(this.bounds, shader);
 }
 
 /**
@@ -268,7 +268,7 @@ function _initializeEVShadowMask() {
 
   // Mask that colors red areas that are lit / are viewable.
   const shader = ShadowVisionMaskShader.create(this);
-  ev.shadowVisionMask = new EVQuadMesh(this.bounds, shader);
+  ev.shadowVisionMask = new EVUpdatingQuadMesh(this.bounds, shader);
 }
 
 /**
@@ -301,6 +301,7 @@ function _updateEVShadowData(changes, changeObj = {}) {
 
   // Renderer and mask
   if ( shadowsChanged ) ev.shadowRenderer.updatedSource(changeObj); // TODO: Do we need a separate check for changedRadius here?
+  if ( changeObj.changedPosition || changeObj.changedRadius ) ev.shadowVisionMask.updateGeometry(this.bounds);
   ev.shadowVisionMask.shader.updatedSource(this, changeObj);
 }
 
