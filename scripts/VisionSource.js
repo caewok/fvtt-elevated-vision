@@ -7,6 +7,7 @@ PIXI
 
 import { MODULE_ID } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
+import { ShadowTerrainShader } from "./glsl/ShadowTerrainShader.js";
 import { ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
 import { SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
@@ -28,6 +29,17 @@ PATCHES.VISIBILITY = {};
 function _initializeEVShadowGeometry() {
   const ev = this[MODULE_ID];
   ev.wallGeometry ??= new SourceShadowWallGeometry(this);
+}
+
+/**
+ * New method: RenderedPointSource.prototype._initializeEVTerrainShadowMesh
+ * Build terrain shadow + limited angle
+ * Uses a quad sized to the canvas.
+ */
+function _initializeEVTerrainShadowMesh() {
+  const ev = this[MODULE_ID];
+  const shader = ShadowTerrainShader.create(this);
+  ev.terrainShadowMesh = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
 
 /**
@@ -67,6 +79,7 @@ function targetInShadow(target, testPoint) {
 
 PATCHES.WEBGL.METHODS = {
   _initializeEVShadowGeometry,
+  _initializeEVTerrainShadowMesh,
   _initializeEVShadowRenderer,
   _initializeEVShadowMask
 };

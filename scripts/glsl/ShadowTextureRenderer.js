@@ -36,7 +36,7 @@ export class ShadowTextureRenderer {
   constructor(source, shadowMesh, terrainShadowMesh) {
     this.source = source;
     this.meshContainer.addChild(shadowMesh);
-    //this.meshContainer.addChild(terrainShadowMesh);
+    this.meshContainer.addChild(terrainShadowMesh);
 
     this.renderTexture = PIXI.RenderTexture.create(this.configureTexture());
     this.renderTexture.baseTexture.clearColor = [1, 1, 1, 1];
