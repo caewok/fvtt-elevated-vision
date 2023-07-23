@@ -1,8 +1,8 @@
 /* globals
-canvas,
 PIXI
 */
 "use strict";
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
@@ -22,8 +22,24 @@ out vec2 vTextureCoord;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
+uniform vec2 uSourcePosition;
+uniform float uRotation; // Radians
+uniform float uEmissionAngle; // Degrees
+
+flat out vec4 rMinMax;
+
+${defineFunction("fromAngle")}
+${defineFunction("toRadians")}
 
 void main() {
+  // Calculate the min (ccw) and max (cw) bounding rays if angle not 360º
+  if ( uEmissionAngle != 360.0 ) {
+    float rad = toRadians(uEmissionAngle * 0.5);
+    vec2 rMin = fromAngle(uSourcePosition, uRotation - rad, 10.0);
+    vec2 rMax = fromAngle(uSourcePosition, uRotation + rad, 10.0);
+    rMinMax = vec4(rMin, rMax);
+  }
+
   vTextureCoord = aTextureCoord;
   vVertexPosition = aVertexPosition;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
@@ -32,7 +48,7 @@ void main() {
   static fragmentShader =
   // eslint-disable-next-line indent
 `#version 300 es
-precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+precision ${PIXI.settings.PRECISION_VERTEX} float;
 precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
 
 in vec2 vVertexPosition;
@@ -43,14 +59,22 @@ out vec4 fragColor;
 uniform sampler2D uShadowSampler;
 uniform vec2 uSourcePosition;
 uniform float uSourceRadius2;
+uniform float uEmissionAngle; // Degrees
+
+flat in vec4 rMinMax;
 
 ${defineFunction("between")}
 ${defineFunction("distanceSquared")}
+${defineFunction("pointBetweenRays")}
+${defineFunction("toRadians")}
 
 void main() {
   // if ( any(equal(between(0.0, 1.0, vTextureCoord), vec2(0.0))) ) discard;
-  float dist2 = distanceSquared(vVertexPosition, uSourcePosition);
-  if ( dist2 > uSourceRadius2 ) discard;
+  if ( distanceSquared(vVertexPosition, uSourcePosition) > uSourceRadius2 ) discard;
+
+  // Discard pixels outside the angle of the source.
+  if ( uEmissionAngle != 360.0
+    && pointBetweenRays(vVertexPosition, uSourcePosition, rMinMax.xy, rMinMax.zw, uEmissionAngle) ) discard;
 
   vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
   float lightAmount = shadowTexel.r;
@@ -78,7 +102,9 @@ void main() {
   static defaultUniforms = {
     uShadowSampler: 0,
     uSourcePosition: [0, 0],
-    uSourceRadius2: 1
+    uSourceRadius2: 1,
+    uRotation: 0, // In radians. Between 1º and 360º
+    uEmissionAngle: 360 // In degrees. Between 1º and 360º (0º === 360º)
   };
 
   static create(source, defaultUniforms = {}) {
@@ -87,6 +113,13 @@ void main() {
     defaultUniforms.uShadowSampler = source.EVShadowTexture.baseTexture;
     defaultUniforms.uSourcePosition = [source.x, source.y];
     defaultUniforms.uSourceRadius2 = Math.pow(radius, 2);
+
+    // Light source
+    // Angle (Emission Angle): angle is split on either side of the line from source in direction of rotation
+    // Rotation: 0º / 360º points due south; 90º due west. Rotate so 0º is due west; 90º is due south
+    const rot = source.data.rotation || 360;
+    defaultUniforms.uRotation = Math.normalizeRadians(Math.toRadians(rot + 90));
+    defaultUniforms.uEmissionAngle = source.data.angle || 360;
 
     const out = super.create(defaultUniforms);
     out.source = source;
@@ -100,6 +133,15 @@ void main() {
   updateSourceRadius(source) {
     const radius = source.radius || source.data.externalRadius;
     this.uniforms.uSourceRadius2 = Math.pow(radius, 2);
+  }
+
+  updateSourceRotation(source) {
+    const rot = source.data.rotation || 360;
+    this.uniforms.uRotation = Math.normalizeRadians(Math.toRadians(rot + 90));
+  }
+
+  updateSourceEmissionAngle(source) {
+    this.uniforms.uEmissionAngle = source.data.angle || 360;
   }
 }
 
@@ -171,7 +213,7 @@ void main() {
    * uMaxNormalizedElevation: Maximum elevation, normalized units
    */
   static defaultUniforms = {
-    uShadowSampler: 0,
+    uShadowSampler: 0
   };
 
   static create(source, defaultUniforms = {}) {
@@ -180,9 +222,9 @@ void main() {
   }
 
   // Disable unused methods.
-  updateSourcePosition(source) { return; }
+  updateSourcePosition(_source) { return; } // eslint-disable-line no-useless-return
 
-  updateSourceRadius(source) { return; }
+  updateSourceRadius(_source) { return; } // eslint-disable-line no-useless-return
 
 }
 
