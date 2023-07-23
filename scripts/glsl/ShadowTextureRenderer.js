@@ -8,6 +8,7 @@ PIXI
 
 import { MODULE_ID } from "../const.js";
 import { PixelCache } from "../PixelCache.js";
+import { Draw } from "../geometry/Draw.js";
 
 const PIXEL_INV = 1 / 255;
 
@@ -123,9 +124,20 @@ export class ShadowTextureRenderer {
    * @returns {PIXI.RenderTexture}
    */
   renderShadowMeshToTexture() {
-    this.mesh.position.set(this.meshPosition.x, this.meshPosition.y);
-    canvas.app.renderer.render(this.mesh, { renderTexture: this.renderTexture, clear: true });
-    this.mesh.position.set(0, 0);
+    const c = new PIXI.Container();
+    const { radius, angle, rotation, externalRadius } = this.source.data;
+    const ltdPoly = new LimitedAnglePolygon(this.source, { radius, angle, rotation, externalRadius });
+    const g = new PIXI.Graphics();
+    const draw = new Draw(g);
+    draw.shape(ltdPoly, { width: 0, fill: 0xFF0000 });
+
+    c.addChild(this.mesh);
+    c.addChild(g);
+    c.mask = g;
+
+    c.position.set(this.meshPosition.x, this.meshPosition.y);
+    canvas.app.renderer.render(c, { renderTexture: this.renderTexture, clear: true });
+    // this.mesh.position.set(0, 0);
     this.#pixelCache = undefined;
     return this.renderTexture;
   }

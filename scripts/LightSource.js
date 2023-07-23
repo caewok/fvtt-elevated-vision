@@ -36,7 +36,8 @@ function _initializeEVShadows() {
   Object.values(this.layers).forEach(layer => {
     const u = layer.shader.uniforms;
     u.uEVrMinMax = rMinMax;
-    u.uEVEmissionAngle = emissionAngle;
+    // u.uEVEmissionAngle = emissionAngle;
+    u.uEVEmissionAngle = 360;
   });
 }
 
