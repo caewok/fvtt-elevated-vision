@@ -979,6 +979,7 @@ flat out vec2 fWallCornerLinked;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
+uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 uniform vec4 uSceneDims;
 uniform float uAzimuth; // radians
 uniform float uElevationAngle; // radians
