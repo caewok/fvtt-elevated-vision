@@ -41,8 +41,6 @@ _configure
   -- x, y, radius
 --> Triangulate the PolygonMesher output to set geometry.
 
-
-
 */
 
 /* New Methods

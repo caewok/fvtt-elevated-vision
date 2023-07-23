@@ -8,11 +8,37 @@ RenderedPointSource
 import { MODULE_ID, FLAGS } from "./const.js";
 import { SETTINGS, getSetting } from "./settings.js";
 import { ShadowWallSizedPointSourceMesh } from "./glsl/ShadowWallShader.js";
+import { pointCircleCoordNorm } from "./util.js";
 
 // Methods related to LightSource
 
 export const PATCHES = {};
 PATCHES.WEBGL = {};
+
+/**
+ * New method: LightSource.prototype._initializeEVShadows
+ * Add uniforms for limited angle
+ */
+function _initializeEVShadows() {
+  // Instead of super._initializeEVShadows()
+  RenderedPointSource.prototype._initializeEVShadows.call(this);
+
+  // Set uniforms used by the lighting shader for limited angle lighting
+  const rot = this.data.rotation || 360;
+  const emissionAngle = this.data.angle || 360;
+  const rotRad = Math.normalizeRadians(Math.toRadians(rot + 90));
+  const halfAngle = Math.toRadians(emissionAngle * 0.5);
+  const rMin = PIXI.Point.fromAngle(PIXI.Point.fromObject(this), rotRad - halfAngle, 100.0);
+  const rMax = PIXI.Point.fromAngle(PIXI.Point.fromObject(this), rotRad + halfAngle, 100.0);
+  const rMinUV = pointCircleCoordNorm(rMin, this, this.radius);
+  const rMaxUV = pointCircleCoordNorm(rMax, this, this.radius);
+  const rMinMax = [rMinUV.x, rMinUV.y, rMaxUV.x, rMaxUV.y];
+  Object.values(this.layers).forEach(layer => {
+    const u = layer.shader.uniforms;
+    u.uEVrMinMax = rMinMax;
+    u.uEVEmissionAngle = emissionAngle;
+  });
+}
 
 /**
  * New method: LightSource.prototype._initializeEVShadowMesh
@@ -39,6 +65,7 @@ function _updateEVShadowData(changes) {
 }
 
 PATCHES.WEBGL.METHODS = {
+  _initializeEVShadows,
   _initializeEVShadowMesh,
   _updateEVShadowData
 };

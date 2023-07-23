@@ -344,6 +344,27 @@ float orient(in vec2 a, in vec2 b, in vec2 c) {
 }
 `;
 
+GLSLFunctions.pointBetweenRays =
+`
+${defineFunction("orient")}
+
+/**
+ * Test whether a 2d location lies between two boundary rays.
+ * @param {vec2} pt     Point to test
+ * @param {vec2} v      Vertex point
+ * @param {vec2} ccw    Counter-clockwise point
+ * @param {vec2} cw     Clockwise point
+ * @param {float} angle Angle being tested, in degrees
+ * @returns {bool}
+ */
+bool pointBetweenRays(in vec2 pt, in vec2 v, in vec2 ccw, in vec2 cw, in float angle) {
+  if ( angle > 180.0 ) {
+    bool outside = orient(v, cw, pt) <= 0.0 && orient(v, ccw, pt) >= 0.0;
+    return !outside;
+  }
+  return orient(v, ccw, pt) <= 0.0 && orient(v, cw, pt) >= 0.0;
+}`;
+
 // NOTE: Barycentric
 // Calculate barycentric position within a given triangle
 // For point p and triangle abc, return the barycentric uvw as a vec3 or vec2.

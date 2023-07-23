@@ -404,6 +404,19 @@ function circleCoord(a, r, c = 0, invR = 1 / r) {
   return (a - c) * invR;
 }
 
+export function pointCircleCoordNorm(point, center, radius, invR = 1 / radius) {
+  return {
+    x: circleCoordNorm(point.x, radius, center.x, invR),
+    y: circleCoordNorm(point.y, radius, center.y, invR)
+    // Unused: z: point.z * 0.5 * r_inv
+  };
+}
+
+function circleCoordNorm(a, r, c = 0, invR = 1 / r) {
+  return ((a - c) * invR * 0.5) + 0.5;
+}
+
+
 /**
  * Inverse of circleCoord.
  * @param {number} p    Coordinate value, in the shader coordinate system between 0 and 1.
