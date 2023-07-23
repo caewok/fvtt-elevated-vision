@@ -7,7 +7,7 @@ RenderedPointSource
 
 import { MODULE_ID, FLAGS } from "./const.js";
 import { SETTINGS, getSetting } from "./settings.js";
-import { ShadowWallSizedPointSourceMesh } from "./glsl/ShadowWallShader.js";
+import { SizedPointSourceShadowWallShader, ShadowMesh } from "./glsl/ShadowWallShader.js";
 
 // Methods related to LightSource
 
@@ -20,22 +20,20 @@ PATCHES.WEBGL = {};
  */
 function _initializeEVShadowMesh() {
   const ev = this[MODULE_ID];
-  ev.shadowMesh ??= new ShadowWallSizedPointSourceMesh(this, ev.wallGeometry);
+  if ( ev.shadowMesh ) console.log("LightSource shadowMesh already defined.");
+  const shader = SizedPointSourceShadowWallShader.create(this);
+  ev.shadowMesh = new ShadowMesh(ev.wallGeometry, shader);
 }
 
 /**
  * New method: LightSource.prototype._updateEVShadowData
  */
-function _updateEVShadowData(changes) {
-  // Instead of super._updateEVShadowData()
-  RenderedPointSource.prototype._updateEVShadowData.call(this, changes);
+function _updateEVShadowData(changes, changeObj = {}) {
+  // Sized point source shader must track light size.
+  changeObj.changedLightSize = Object.hasOwn(changes, "lightSize");
 
-  const ev = this[MODULE_ID];
-  const changedLightSize = Object.hasOwn(changes, "lightSize");
-  if ( changedLightSize ) {
-    ev.shadowMesh.updateLightSize();
-    ev.shadowRenderer.update();
-  }
+  // Instead of super._updateEVShadowData()
+  RenderedPointSource.prototype._updateEVShadowData.call(this, changes, changeObj);
 }
 
 PATCHES.WEBGL.METHODS = {

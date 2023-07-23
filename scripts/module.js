@@ -22,14 +22,6 @@ import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.j
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 
-import { AbstractEVShader } from "./glsl/AbstractEVShader.js";
-import { defineFunction } from "./glsl/GLSLFunctions.js";
-import { ElevationLayerShader } from "./glsl/ElevationLayerShader.js";
-import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
-import { SourceShadowWallGeometry, DirectionalSourceShadowWallGeometry, PointSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-import { ShadowWallShader, ShadowWallPointSourceMesh, TestGeometryShader } from "./glsl/ShadowWallShader.js";
-import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
-import { TestShadowShader } from "./glsl/TestShadowShader.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Register methods, patches, settings
@@ -141,19 +133,6 @@ Hooks.once("init", function() {
     CoordinateElevationCalculator,
     TokenPointElevationCalculator,
     TokenAverageElevationCalculator,
-    ElevationLayerShader,
-
-    AbstractEVShader,
-    SourceShadowWallGeometry,
-    PointSourceShadowWallGeometry,
-    DirectionalSourceShadowWallGeometry,
-    defineFunction,
-    ShadowWallShader,
-    ShadowWallPointSourceMesh,
-    EVQuadMesh,
-    ShadowTextureRenderer,
-    TestShadowShader,
-    TestGeometryShader,
     DirectionalLightSource,
 
     PATCHES,

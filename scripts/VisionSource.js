@@ -1,14 +1,13 @@
 /* globals
 canvas,
-LimitedAnglePolygon,
 PIXI
-
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
+import { ShadowTerrainShader } from "./glsl/ShadowTerrainShader.js";
 import { ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
 import { SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
@@ -33,6 +32,17 @@ function _initializeEVShadowGeometry() {
 }
 
 /**
+ * New method: RenderedPointSource.prototype._initializeEVTerrainShadowMesh
+ * Build terrain shadow + limited angle
+ * Uses a quad sized to the canvas.
+ */
+function _initializeEVTerrainShadowMesh() {
+  const ev = this[MODULE_ID];
+  const shader = ShadowTerrainShader.create(this);
+  ev.terrainShadowMesh = new EVQuadMesh(canvas.dimensions.rect, shader);
+}
+
+/**
  * New method: VisionSource.prototype._initializeEVShadowRenderer
  * Render to the entire canvas to represent LOS.
  */
@@ -40,16 +50,8 @@ function _initializeEVShadowRenderer() {
   const ev = this[MODULE_ID];
   if ( ev.shadowRenderer ) return;
 
-  // Force a uniform update, to avoid ghosting of placeables in the light radius.
-  // TODO: Find the underlying issue and fix this!
-  // Must be a new uniform variable (one that is not already in uniforms)
-//   this.layers.background.shader.uniforms.uEVtmpfix = 0;
-//   this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
-//   this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
-
   // Render LOS to a texture for use by other shaders.
-  ev.shadowRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh);
-  ev.shadowRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
+  ev.shadowRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh, ev.terrainShadowMesh);
 }
 
 /**
@@ -58,26 +60,12 @@ function _initializeEVShadowRenderer() {
  */
 function _initializeEVShadowMask() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowVisionLOSMask ) return;
+  if ( ev.shadowVisionMask ) return;
 
   // Build the mask for the LOS based on the canvas dimensions rectangle.
   // Mask that colors red areas that are lit / are viewable.
   const shader = ShadowVisionMaskTokenLOSShader.create(this);
-  ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
-}
-
-/**
- * New getter: VisionSource.prototype.EVVisionLOSMask
- * Line of sight for this vision source
- */
-function EVVisionLOSMask() {
-  const ev = this[MODULE_ID];
-
-  if ( !ev?.shadowVisionLOSMask ) {
-    console.error("elevatedvision|EVVisionLOSMaskVisionSource|No shadowVisionLOSMask.");
-  }
-
-  return ev.shadowVisionLOSMask;
+  ev.shadowVisionMask = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
 
 /**
@@ -91,13 +79,14 @@ function targetInShadow(target, testPoint) {
 
 PATCHES.WEBGL.METHODS = {
   _initializeEVShadowGeometry,
+  _initializeEVTerrainShadowMesh,
   _initializeEVShadowRenderer,
   _initializeEVShadowMask
 };
 
 PATCHES.VISIBILITY.METHODS = {
   targetInShadow
-}
+};
 
 // ----- NOTE: Getters -----
 
@@ -105,7 +94,7 @@ PATCHES.VISIBILITY.METHODS = {
  * New getter: VisionSource.prototype.EVVisionMask
  * Field-of-view (FOV) for this vision source.
  */
-function EVVisionMask() {
+function EVVisionFOVMask() {
   const ev = this[MODULE_ID];
 
   if ( !ev?.graphicsFOV ) {
@@ -116,8 +105,7 @@ function EVVisionMask() {
 }
 
 PATCHES.WEBGL.GETTERS = {
-  EVVisionLOSMask,
-  EVVisionMask
+  EVVisionFOVMask
 };
 
 // ----- NOTE: Wraps -----
@@ -128,7 +116,7 @@ PATCHES.WEBGL.GETTERS = {
  */
 function _createRestrictedPolygon(wrapped) {
   const ev = this[MODULE_ID] ??= {};
-  ev.graphicsFOV ??= new PIXI.Graphics;
+  ev.graphicsFOV ??= new PIXI.Graphics();
   const draw = new Draw(ev.graphicsFOV);
   draw.clearDrawings();
 
@@ -145,4 +133,4 @@ function _createRestrictedPolygon(wrapped) {
 
 PATCHES.WEBGL.WRAPS = {
   _createRestrictedPolygon
-}
+};
