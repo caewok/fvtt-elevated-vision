@@ -88,7 +88,7 @@ function addShadowFragmentCode(source) {
           // Shadow outside the angle of the light.
           // Done here b/c the shadow shader only shades behind walls.
           if ( uEVEmissionAngle != 360.0
-            && pointBetweenRays(vUvs, vec2(0.5), uEVrMinMax.xy, uEVrMinMax.zw, uEVEmissionAngle) ) depth = 0.0;
+            && !pointBetweenRays(vUvs, vec2(0.5), uEVrMinMax.xy, uEVrMinMax.zw, uEVEmissionAngle) ) depth = 0.0;
           if ( depth > 0.0 ) {
             vec4 EV_shadowTexel = texture2D(uEVShadowSampler, vUvs);
             float EV_lightAmount = EV_shadowTexel.r;

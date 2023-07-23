@@ -74,7 +74,7 @@ void main() {
 
   // Discard pixels outside the angle of the source.
   if ( uEmissionAngle != 360.0
-    && pointBetweenRays(vVertexPosition, uSourcePosition, rMinMax.xy, rMinMax.zw, uEmissionAngle) ) discard;
+    && !pointBetweenRays(vVertexPosition, uSourcePosition, rMinMax.xy, rMinMax.zw, uEmissionAngle) ) discard;
 
   vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
   float lightAmount = shadowTexel.r;
@@ -114,7 +114,6 @@ void main() {
     defaultUniforms.uSourcePosition = [source.x, source.y];
     defaultUniforms.uSourceRadius2 = Math.pow(radius, 2);
 
-    // Light source
     // Angle (Emission Angle): angle is split on either side of the line from source in direction of rotation
     // Rotation: 0º / 360º points due south; 90º due west. Rotate so 0º is due west; 90º is due south
     const rot = source.data.rotation || 360;
@@ -164,16 +163,33 @@ out vec2 vTextureCoord;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
+uniform vec2 uSourcePosition;
+uniform float uRotation; // Radians
+uniform float uEmissionAngle; // Degrees
+
+flat out vec4 rMinMax;
+
+${defineFunction("fromAngle")}
+${defineFunction("toRadians")}
 
 void main() {
+  // Calculate the min (ccw) and max (cw) bounding rays if angle not 360º
+  if ( uEmissionAngle != 360.0 ) {
+    float rad = toRadians(uEmissionAngle * 0.5);
+    vec2 rMin = fromAngle(uSourcePosition, uRotation - rad, 10.0);
+    vec2 rMax = fromAngle(uSourcePosition, uRotation + rad, 10.0);
+    rMinMax = vec4(rMin, rMax);
+  }
+
   vTextureCoord = aTextureCoord;
+  vVertexPosition = aVertexPosition;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
 }`;
 
   static fragmentShader =
   // eslint-disable-next-line indent
 `#version 300 es
-precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+precision ${PIXI.settings.PRECISION_VERTEX} float;
 precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
 
 in vec2 vVertexPosition;
@@ -182,11 +198,23 @@ in vec2 vTextureCoord;
 out vec4 fragColor;
 
 uniform sampler2D uShadowSampler;
+uniform vec2 uSourcePosition;
+uniform float uSourceRadius2;
+uniform float uEmissionAngle; // Degrees
+
+flat in vec4 rMinMax;
 
 ${defineFunction("between")}
+${defineFunction("distanceSquared")}
+${defineFunction("pointBetweenRays")}
+${defineFunction("toRadians")}
 
 void main() {
   if ( any(equal(between(0.0, 1.0, vTextureCoord), vec2(0.0))) ) discard;
+
+  // Discard pixels outside the angle of the source.
+  if ( uEmissionAngle != 360.0
+    && !pointBetweenRays(vVertexPosition, uSourcePosition, rMinMax.xy, rMinMax.zw, uEmissionAngle) ) discard;
 
   vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
 
@@ -213,19 +241,40 @@ void main() {
    * uMaxNormalizedElevation: Maximum elevation, normalized units
    */
   static defaultUniforms = {
-    uShadowSampler: 0
+    uShadowSampler: 0,
+    uSourcePosition: [0, 0],
+    uRotation: 0, // In radians. Between 1º and 360º
+    uEmissionAngle: 360 // In degrees. Between 1º and 360º (0º === 360º)
   };
 
   static create(source, defaultUniforms = {}) {
     defaultUniforms.uShadowSampler = source.EVShadowTexture.baseTexture;
+
+    // Angle (Emission Angle): angle is split on either side of the line from source in direction of rotation
+    // Rotation: 0º / 360º points due south; 90º due west. Rotate so 0º is due west; 90º is due south
+    defaultUniforms.uSourcePosition = [source.x, source.y];
+    const rot = source.data.rotation || 360;
+    defaultUniforms.uRotation = Math.normalizeRadians(Math.toRadians(rot + 90));
+    defaultUniforms.uEmissionAngle = source.data.angle || 360;
+
     return super.create(defaultUniforms);
   }
 
   // Disable unused methods.
-  updateSourcePosition(_source) { return; } // eslint-disable-line no-useless-return
+  updateSourcePosition(_source) {
+    this.uniforms.uSourcePosition = [source.x, source.y];
+  } // eslint-disable-line no-useless-return
 
   updateSourceRadius(_source) { return; } // eslint-disable-line no-useless-return
 
+  updateSourceRotation(source) {
+    const rot = source.data.rotation || 360;
+    this.uniforms.uRotation = Math.normalizeRadians(Math.toRadians(rot + 90));
+  }
+
+  updateSourceEmissionAngle(source) {
+    this.uniforms.uEmissionAngle = source.data.angle || 360;
+  }
 }
 
 /* Testing
