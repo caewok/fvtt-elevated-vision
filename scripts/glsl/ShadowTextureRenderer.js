@@ -36,7 +36,7 @@ export class ShadowTextureRenderer {
   constructor(source, shadowMesh, terrainShadowMesh) {
     this.source = source;
     this.meshContainer.addChild(shadowMesh);
-    this.meshContainer.addChild(terrainShadowMesh);
+    //this.meshContainer.addChild(terrainShadowMesh);
 
     this.renderTexture = PIXI.RenderTexture.create(this.configureTexture());
     this.renderTexture.baseTexture.clearColor = [1, 1, 1, 1];
@@ -195,14 +195,15 @@ export class ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer {
 
 /* Testing
 let [l] = canvas.lighting.placeables;
-lightSource = l.source;
-mesh = l.source.elevatedvision.shadowMesh
+source = l.source;
+shadowRenderer = source.elevatedvision.shadowRenderer
 
-str = new ShadowTextureRenderer(lightSource, mesh);
-rt = str.renderShadowMeshToTexture()
 
-s = new PIXI.Sprite(rt);
+s = new PIXI.Sprite(shadowRenderer.renderTexture);
 canvas.stage.addChild(s)
 canvas.stage.removeChild(s)
+
+
+
 
 */

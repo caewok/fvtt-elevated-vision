@@ -218,7 +218,7 @@ function _initializeEVShadows() {
 function _initializeEVShadowGeometry() {
   const ev = this[MODULE_ID];
 
-  if ( ev.wallGeometry ) console.debug("Wall geometry already defined.");
+  if ( ev.wallGeometry ) console.log("Wall geometry already defined.");
   ev.wallGeometry = new PointSourceShadowWallGeometry(this);
 }
 
@@ -228,7 +228,7 @@ function _initializeEVShadowGeometry() {
  */
 function _initializeEVShadowMesh() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowMesh ) console.debug("shadowMesh already defined.");
+  if ( ev.shadowMesh ) console.log("shadowMesh already defined.");
 
   const shader = ShadowWallShader.create(this);
   ev.shadowMesh = new ShadowMesh(ev.wallGeometry, shader);
@@ -293,7 +293,7 @@ function _updateEVShadowData(changes, changeObj = {}) {
   if ( changeObj.changedPosition ) shadowsChanged = ev.wallGeometry.updateSourcePosition();
   if ( ev.shadowMesh.shader.sourceUpdated(this, changeObj) ) shadowsChanged ||= true;
   if ( ev.terrainShadowMesh.shader.sourceUpdated(this, changeObj) ) shadowsChanged ||= true;
-  if ( changeObj.shadowsChanged || changeObj.changedRadius ) ev.shadowRenderer.updatedSource(changeObj);
+  if ( shadowsChanged || changeObj.changedRadius ) ev.shadowRenderer.updatedSource(changeObj);
   ev.shadowVisionMask.shader.updatedSource(this, changeObj);
 }
 

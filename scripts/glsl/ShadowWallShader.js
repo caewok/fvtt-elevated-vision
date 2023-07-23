@@ -1417,13 +1417,6 @@ Point3d = CONFIG.GeometryLib.threeD.Point3d
 Draw = CONFIG.GeometryLib.Draw
 Plane = CONFIG.GeometryLib.threeD.Plane
 api = game.modules.get("elevatedvision").api
-PointSourceShadowWallGeometry = api.PointSourceShadowWallGeometry
-defineFunction = api.defineFunction;
-AbstractEVShader = api.AbstractEVShader
-ShadowWallShader = api.ShadowWallShader
-ShadowWallPointSourceMesh = api.ShadowWallPointSourceMesh
-TestGeometryShader = api.TestGeometryShader
-ShadowTextureRenderer = api.ShadowTextureRenderer
 DirectionalLightSource = api.DirectionalLightSource
 
 let [l] = canvas.lighting.placeables;
