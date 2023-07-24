@@ -165,8 +165,16 @@ function destroy(wrapped) {
   const ev = this[MODULE_ID];
   if ( !ev ) return wrapped();
 
+
+  return wrapped;
+}
+
+
+function destroyEVAssets(ev) {
   const assets = [
     "shadowMesh",
+    "shadowTerrainMesh",
+    "graphicsFOV",
     "shadowRenderer",
     "shadowVisionMask",
     "wallGeometry"
@@ -177,8 +185,6 @@ function destroy(wrapped) {
     ev[asset].destroy();
     ev[asset] = undefined;
   }
-
-  return wrapped;
 }
 
 PATCHES.WEBGL.WRAPS = {
@@ -217,8 +223,7 @@ function _initializeEVShadows() {
  */
 function _initializeEVShadowGeometry() {
   const ev = this[MODULE_ID];
-
-  if ( ev.wallGeometry ) console.log("Wall geometry already defined.");
+  if ( ev.wallGeometry ) return;
   ev.wallGeometry = new PointSourceShadowWallGeometry(this);
 }
 
@@ -228,8 +233,7 @@ function _initializeEVShadowGeometry() {
  */
 function _initializeEVShadowMesh() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowMesh ) console.log("shadowMesh already defined.");
-
+  if ( ev.shadowMesh ) return;
   const shader = ShadowWallShader.create(this);
   ev.shadowMesh = new ShadowMesh(ev.wallGeometry, shader);
 }
@@ -241,6 +245,8 @@ function _initializeEVShadowMesh() {
  */
 function _initializeEVTerrainShadowMesh() {
   const ev = this[MODULE_ID];
+  if ( ev.terrainShadowMesh ) return;
+
   const shader = ShadowTerrainShader.create(this);
   ev.terrainShadowMesh = new EVUpdatingQuadMesh(this.bounds, shader);
 }

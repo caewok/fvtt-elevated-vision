@@ -28,7 +28,8 @@ PATCHES.VISIBILITY = {};
  */
 function _initializeEVShadowGeometry() {
   const ev = this[MODULE_ID];
-  ev.wallGeometry ??= new SourceShadowWallGeometry(this);
+  if ( ev.wallGeometry ) return;
+  ev.wallGeometry = new SourceShadowWallGeometry(this);
 }
 
 /**
@@ -38,6 +39,7 @@ function _initializeEVShadowGeometry() {
  */
 function _initializeEVTerrainShadowMesh() {
   const ev = this[MODULE_ID];
+  if ( ev.terrainShadowMesh ) return;
   const shader = ShadowTerrainShader.create(this);
   ev.terrainShadowMesh = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
@@ -96,11 +98,7 @@ PATCHES.VISIBILITY.METHODS = {
  */
 function EVVisionFOVMask() {
   const ev = this[MODULE_ID];
-
-  if ( !ev?.graphicsFOV ) {
-    console.error("elevatedvision|EVVisionMaskVisionSource|No graphicsFOV.");
-  }
-
+  if ( !ev.graphicsFOV ) this._createRestrictedPolygon();
   return ev.graphicsFOV;
 }
 
