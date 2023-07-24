@@ -125,7 +125,9 @@ Hooks.once("ready", () => {
                   are also modeled. For directional lighting, solar angle changes how much penumbra will be present in the shadows.
 
                 Apologies in advance for any bugs with these new changes! I intend to continue to iterate on the
-                lighting shadows and also have some ideas for how to better incorporate terrain shadows.`
+                lighting shadows and also have some ideas for how to better incorporate terrain shadows. And directional
+                shadows is proof-of-concept at this point; I intend to address the pixelation along the edges that can sometimes be seen
+                with directional shadows. Please submit bug reports to the [Git issue tracker](https://github.com/caewok/fvtt-elevated-vision/issues).`
         })
 
         .build()

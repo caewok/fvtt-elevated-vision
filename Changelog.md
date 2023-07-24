@@ -8,6 +8,7 @@ Rework of the switching between lighting algorithms in a scene, to avoid reloadi
 - Fix for bridge effect not working with tiles (issue #62).
 - Update geometry lib to v0.2.3.
 - Include fix from 0.4.12 when loading a scene in The Forge the first time.
+- Possible fixes for issues #61 (can't move tokens) and #63 (darkvision).
 
 # 0.5.4
 Fix for storing elevation data in The Forge. Resolves issue #60. See v0.4.9 and 0.4.10.
