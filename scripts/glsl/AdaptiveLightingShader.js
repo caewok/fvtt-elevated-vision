@@ -28,8 +28,8 @@ function create(wrapped, ...args) {
 
   const shader = wrapped(...args);
   const shaderAlgorithm = getSceneSetting(SETTINGS.SHADING.ALGORITHM);
-  shader.uniforms.uEVShadowSampler = 0;
-  shader.uniforms.uEVShadows = shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL;
+  shader.uniforms.uEVShadowSampler = PIXI.Texture.EMPTY;
+  shader.uniforms.uEVShadows = false;
   return shader;
 }
 

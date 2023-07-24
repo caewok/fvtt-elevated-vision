@@ -206,8 +206,8 @@ function _initializeEVShadows() {
   const ev = this[MODULE_ID];
   Object.values(this.layers).forEach(layer => {
     const u = layer.shader.uniforms;
-    u.uEVShadows = true;
     u.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+    u.uEVShadows = true;
   });
 }
 
@@ -253,6 +253,15 @@ function _initializeEVTerrainShadowMesh() {
 function _initializeEVShadowRenderer() {
   const ev = this[MODULE_ID];
   if ( ev.shadowRenderer ) return;
+
+  // Force a uniform update, to avoid ghosting of placeables in the light radius.
+  // TODO: Find the underlying issue and fix this!
+  // Must be a new uniform variable (one that is not already in uniforms)
+//   Object.values(this.layers).forEach(layer => {
+//     const u = layer.shader.uniforms;
+//     delete u.uEVtmpfix;
+//     u.uEVtmpfix = 0;
+//   });
 
   // Render texture to store the shadow mesh for use by other shaders.
   ev.shadowRenderer = new ShadowTextureRenderer(this, ev.shadowMesh, ev.terrainShadowMesh);
