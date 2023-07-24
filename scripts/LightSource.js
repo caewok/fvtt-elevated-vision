@@ -20,7 +20,10 @@ PATCHES.WEBGL = {};
  */
 function _initializeEVShadowMesh() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowMesh ) console.log("LightSource shadowMesh already defined.");
+  if ( ev.shadowMesh ) {
+    console.log("LightSource shadowMesh already defined.");
+    return;
+  }
   const shader = SizedPointSourceShadowWallShader.create(this);
   ev.shadowMesh = new ShadowMesh(ev.wallGeometry, shader);
 }

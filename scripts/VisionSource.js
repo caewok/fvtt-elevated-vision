@@ -28,7 +28,12 @@ PATCHES.VISIBILITY = {};
  */
 function _initializeEVShadowGeometry() {
   const ev = this[MODULE_ID];
-  ev.wallGeometry ??= new SourceShadowWallGeometry(this);
+
+  if ( ev.wallGeometry ) {
+    console.debug("VisionSource Wall geometry already defined.");
+  }
+
+  ev.wallGeometry = new SourceShadowWallGeometry(this);
 }
 
 /**
@@ -38,6 +43,12 @@ function _initializeEVShadowGeometry() {
  */
 function _initializeEVTerrainShadowMesh() {
   const ev = this[MODULE_ID];
+
+  if ( ev.terrainShadowMesh ) {
+    console.debug("VisionSource terrainShadowMesh already defined.");
+    return;
+  }
+
   const shader = ShadowTerrainShader.create(this);
   ev.terrainShadowMesh = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
@@ -48,7 +59,10 @@ function _initializeEVTerrainShadowMesh() {
  */
 function _initializeEVShadowRenderer() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowRenderer ) return;
+  if ( ev.shadowRenderer ) {
+    console.debug("VisionSource shadowRenderer already defined.");
+    return;
+  }
 
   // Render LOS to a texture for use by other shaders.
   ev.shadowRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh, ev.terrainShadowMesh);
@@ -60,7 +74,10 @@ function _initializeEVShadowRenderer() {
  */
 function _initializeEVShadowMask() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowVisionMask ) return;
+  if ( ev.shadowVisionMask ) {
+    console.debug("VisionSource shadowVisionMask already defined.");
+    return;
+  }
 
   // Build the mask for the LOS based on the canvas dimensions rectangle.
   // Mask that colors red areas that are lit / are viewable.
@@ -96,11 +113,7 @@ PATCHES.VISIBILITY.METHODS = {
  */
 function EVVisionFOVMask() {
   const ev = this[MODULE_ID];
-
-  if ( !ev?.graphicsFOV ) {
-    console.error("elevatedvision|EVVisionMaskVisionSource|No graphicsFOV.");
-  }
-
+  if ( !ev.graphicsFOV ) this._createRestrictedPolygon();
   return ev.graphicsFOV;
 }
 

@@ -165,8 +165,16 @@ function destroy(wrapped) {
   const ev = this[MODULE_ID];
   if ( !ev ) return wrapped();
 
+
+  return wrapped;
+}
+
+
+function destroyEVAssets(ev) {
   const assets = [
     "shadowMesh",
+    "shadowTerrainMesh",
+    "graphicsFOV",
     "shadowRenderer",
     "shadowVisionMask",
     "wallGeometry"
@@ -177,8 +185,6 @@ function destroy(wrapped) {
     ev[asset].destroy();
     ev[asset] = undefined;
   }
-
-  return wrapped;
 }
 
 PATCHES.WEBGL.WRAPS = {
@@ -218,7 +224,10 @@ function _initializeEVShadows() {
 function _initializeEVShadowGeometry() {
   const ev = this[MODULE_ID];
 
-  if ( ev.wallGeometry ) console.log("Wall geometry already defined.");
+  if ( ev.wallGeometry ) {
+    console.debug("Wall geometry already defined.");
+    return;
+  }
   ev.wallGeometry = new PointSourceShadowWallGeometry(this);
 }
 
@@ -228,7 +237,10 @@ function _initializeEVShadowGeometry() {
  */
 function _initializeEVShadowMesh() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowMesh ) console.log("shadowMesh already defined.");
+  if ( ev.shadowMesh ) {
+    console.debug("shadowMesh already defined.");
+    return;
+  }
 
   const shader = ShadowWallShader.create(this);
   ev.shadowMesh = new ShadowMesh(ev.wallGeometry, shader);
@@ -241,6 +253,11 @@ function _initializeEVShadowMesh() {
  */
 function _initializeEVTerrainShadowMesh() {
   const ev = this[MODULE_ID];
+  if ( ev.terrainShadowMesh ) {
+    console.debug("terrainShadowMesh already defined.");
+    return;
+  }
+
   const shader = ShadowTerrainShader.create(this);
   ev.terrainShadowMesh = new EVUpdatingQuadMesh(this.bounds, shader);
 }
@@ -252,7 +269,10 @@ function _initializeEVTerrainShadowMesh() {
  */
 function _initializeEVShadowRenderer() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowRenderer ) return;
+  if ( ev.shadowRenderer ) {
+    console.debug("shadowRenderer already defined.");
+    return;
+  }
 
   // Force a uniform update, to avoid ghosting of placeables in the light radius.
   // TODO: Find the underlying issue and fix this!
@@ -273,7 +293,10 @@ function _initializeEVShadowRenderer() {
  */
 function _initializeEVShadowMask() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowVisionMask ) return;
+  if ( ev.shadowVisionMask ) {
+    console.debug("shadowVisionMask already defined.");
+    return;
+  }
 
   // Mask that colors red areas that are lit / are viewable.
   const shader = ShadowVisionMaskShader.create(this);
