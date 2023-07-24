@@ -107,6 +107,29 @@ Hooks.once("ready", () => {
                   the new height.`
         })
 
+        .addEntry({
+            version: "0.5.5",
+            title: "Directional lighting",
+            body: `\
+                - **Directional lighting:** In the lighting configuration, a new "Directional Light" checkbox
+                  is available if you have WebGL shading selected for the scene. A directional light physically
+                  models a distant light source, like the sun or moon. Dragging the light around the scene will
+                  change its azimuth and elevation angle (closer to the center is higher elevation angle).
+
+                  A directional light covers the entire scene with light, but respects walls. Try it with the Sunburst,
+                  Star Light, or Smoke Patch animations!
+
+                - **Shadow penumbra:** With WebGL shading, you now get shadow penumbra for all lights. These are physically
+                  modeled penumbra based on the new light size property in the lighting configuration, which lets you
+                  set how large of a sphere is modeled for the light. For limited height walls, the top and bottom
+                  are also modeled. For directional lighting, solar angle changes how much penumbra will be present in the shadows.
+
+                Apologies in advance for any bugs with these new changes! I intend to continue to iterate on the
+                lighting shadows and also have some ideas for how to better incorporate terrain shadows. And directional
+                shadows is proof-of-concept at this point; I intend to address the pixelation along the edges that can sometimes be seen
+                with directional shadows. Please submit bug reports to the [Git issue tracker](https://github.com/caewok/fvtt-elevated-vision/issues).`
+        })
+
         .build()
         ?.render(true);
 });
