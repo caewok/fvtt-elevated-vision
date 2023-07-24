@@ -396,10 +396,7 @@ export class DirectionalLightSource extends LightSource {
    */
   _initializeEVShadowGeometry() {
     const ev = this[MODULE_ID];
-    if ( ev.wallGeometry ) {
-      console.debug("Directional Source Wall geometry already defined.");
-      return;
-    }
+    if ( ev.wallGeometry ) return;
     ev.wallGeometry = new DirectionalSourceShadowWallGeometry(this);
   }
 
@@ -408,10 +405,7 @@ export class DirectionalLightSource extends LightSource {
    */
   _initializeEVShadowMesh() {
     const ev = this[MODULE_ID];
-    if ( ev.shadowMesh ) {
-      console.debug("Directional Source shadowMesh already defined.");
-      return;
-    }
+    if ( ev.shadowMesh ) return;
 
     // Mesh that describes shadows for the given geometry and source origin.
     const shader = DirectionalShadowWallShader.create(this);
@@ -425,11 +419,7 @@ export class DirectionalLightSource extends LightSource {
    */
   _initializeEVShadowMask() {
     const ev = this[MODULE_ID];
-    if ( ev.shadowVisionMask ) {
-      console.debug("Directional Source shadowVisionMask already defined.");
-      return;
-    }
-
+    if ( ev.shadowVisionMask ) return;
     const shader = ShadowVisionMaskTokenLOSShader.create(this);
     ev.shadowVisionMask = new EVQuadMesh(canvas.dimensions.rect, shader);
   }
