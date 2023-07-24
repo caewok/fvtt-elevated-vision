@@ -13,11 +13,12 @@ import { Draw } from "./geometry/Draw.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Plane } from "./geometry/3d/Plane.js";
 
-import { ShadowWallPointSourceMesh } from "./glsl/ShadowWallShader.js";
+import { ShadowWallShader, ShadowMesh } from "./glsl/ShadowWallShader.js";
+import { ShadowTerrainShader } from "./glsl/ShadowTerrainShader.js";
 import { PointSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { ShadowVisionMaskShader } from "./glsl/ShadowVisionMaskShader.js";
-import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
+import { EVUpdatingQuadMesh } from "./glsl/EVQuadMesh.js";
 
 // Methods related to RenderedPointSource
 
@@ -41,8 +42,6 @@ _configure
   -- x, y, radius
 --> Triangulate the PolygonMesher output to set geometry.
 
-
-
 */
 
 /* New Methods
@@ -54,6 +53,10 @@ _initializeEVShadowGeometry
 
 _initializeEVShadowMesh
 - Shadows for walls coded to handle terrain walls.
+
+_initializeEVTerrainShadowMesh
+- Shadow terrain when source is below.
+- Also shadow based on limited angle
 
 _initializeEVShadowRenderer
 - Render the wall shadows
@@ -76,6 +79,9 @@ targetInShadow(target, testPoint)
 EVVisionMask
 - Retrieve the mask corresponding to this source. Passed to CanvasVisibility to mask vision.
 - Distinct version for
+
+EVShadowTexture
+- Retrieve the shadow texture corresponding to this source. Used for lighting shaders and vision masking
 
 */
 
@@ -125,7 +131,7 @@ PATCHES.POLYGONS.METHODS = { EVVisionMask: EVVisionMaskPolygon };
 
 function _createPolygon(wrapped) {
   const sweep = wrapped();
-  // this.polygonShadows(sweep);
+  // TODO: this.polygonShadows(sweep);
   return sweep;
 }
 
@@ -159,8 +165,16 @@ function destroy(wrapped) {
   const ev = this[MODULE_ID];
   if ( !ev ) return wrapped();
 
+
+  return wrapped;
+}
+
+
+function destroyEVAssets(ev) {
   const assets = [
     "shadowMesh",
+    "shadowTerrainMesh",
+    "graphicsFOV",
     "shadowRenderer",
     "shadowVisionMask",
     "wallGeometry"
@@ -171,8 +185,6 @@ function destroy(wrapped) {
     ev[asset].destroy();
     ev[asset] = undefined;
   }
-
-  return wrapped;
 }
 
 PATCHES.WEBGL.WRAPS = {
@@ -192,6 +204,7 @@ function _initializeEVShadows() {
   // Build the geometry, shadow texture, and vision mask.
   this._initializeEVShadowGeometry();
   this._initializeEVShadowMesh();
+  this._initializeEVTerrainShadowMesh();
   this._initializeEVShadowRenderer();
   this._initializeEVShadowMask();
 
@@ -199,10 +212,8 @@ function _initializeEVShadows() {
   const ev = this[MODULE_ID];
   Object.values(this.layers).forEach(layer => {
     const u = layer.shader.uniforms;
-    u.uEVShadows = true;
-
-    // TODO: Does this need to be reset every time?
     u.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+    u.uEVShadows = true;
   });
 }
 
@@ -212,20 +223,36 @@ function _initializeEVShadows() {
  */
 function _initializeEVShadowGeometry() {
   const ev = this[MODULE_ID];
-  ev.wallGeometry ??= new PointSourceShadowWallGeometry(this);
+  if ( ev.wallGeometry ) return;
+  ev.wallGeometry = new PointSourceShadowWallGeometry(this);
 }
 
 /**
  * New method: RenderedPointSource.prototype._initializeEVShadowMesh
  * Mesh that describes shadows for the given geometry and source origin.
- *
  */
 function _initializeEVShadowMesh() {
   const ev = this[MODULE_ID];
-  ev.shadowMesh ??= new ShadowWallPointSourceMesh(this, ev.wallGeometry);
+  if ( ev.shadowMesh ) return;
+  const shader = ShadowWallShader.create(this);
+  ev.shadowMesh = new ShadowMesh(ev.wallGeometry, shader);
 }
 
 /**
+ * New method: RenderedPointSource.prototype._initializeEVTerrainShadowMesh
+ * Build terrain shadow + limited angle
+ * Uses a quad sized to the source.
+ */
+function _initializeEVTerrainShadowMesh() {
+  const ev = this[MODULE_ID];
+  if ( ev.terrainShadowMesh ) return;
+
+  const shader = ShadowTerrainShader.create(this);
+  ev.terrainShadowMesh = new EVUpdatingQuadMesh(this.bounds, shader);
+}
+
+/**
+ * Render texture to store the shadow mesh for use by other shaders.
  * New method: RenderedPointSource.prototype._initializeEVShadowRenderer
  * Render the shadow mesh to a texture.
  */
@@ -236,15 +263,14 @@ function _initializeEVShadowRenderer() {
   // Force a uniform update, to avoid ghosting of placeables in the light radius.
   // TODO: Find the underlying issue and fix this!
   // Must be a new uniform variable (one that is not already in uniforms)
-  Object.values(this.layers).forEach(layer => {
-    const u = layer.shader.uniforms;
-    delete u.uEVtmpfix;
-    u.uEVtmpfix = 0;
-  });
+//   Object.values(this.layers).forEach(layer => {
+//     const u = layer.shader.uniforms;
+//     delete u.uEVtmpfix;
+//     u.uEVtmpfix = 0;
+//   });
 
   // Render texture to store the shadow mesh for use by other shaders.
-  ev.shadowRenderer = new ShadowTextureRenderer(this, ev.shadowMesh);
-  ev.shadowRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
+  ev.shadowRenderer = new ShadowTextureRenderer(this, ev.shadowMesh, ev.terrainShadowMesh);
 }
 
 /**
@@ -256,49 +282,42 @@ function _initializeEVShadowMask() {
   if ( ev.shadowVisionMask ) return;
 
   // Mask that colors red areas that are lit / are viewable.
-  const shader = ShadowVisionMaskShader.create(this, ev.shadowRenderer.renderTexture);
-  ev.shadowVisionMask = new EVQuadMesh(this.bounds, shader);
+  const shader = ShadowVisionMaskShader.create(this);
+  ev.shadowVisionMask = new EVUpdatingQuadMesh(this.bounds, shader);
 }
 
 /**
  * New method: RenderedPointSource.prototype._updateEVShadowData
  * @param {object} changes    Object of change data corresponding to source.data properties.
  */
-function _updateEVShadowData(changes) {
+function _updateEVShadowData(changes, changeObj = {}) {
   const ev = this[MODULE_ID];
   if ( !ev || !ev.wallGeometry) return;
 
-  const changedPosition = Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
-  const changedRadius = Object.hasOwn(changes, "radius");
-  const changedElevation = Object.hasOwn(changes, "elevation");
+  changeObj.changedPosition = Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
+  changeObj.changedRadius = Object.hasOwn(changes, "radius");
+  changeObj.changedElevation = Object.hasOwn(changes, "elevation");
+  changeObj.changedRotation = Object.hasOwn(changes, "rotation");
+  changeObj.changedEmissionAngle = Object.hasOwn(changes, "angle");
 
-  if ( !(changedPosition || changedRadius || changedElevation) ) return;
+  if ( !Object.values(changeObj).some(x => x) ) return;
+  // Shadow renderer must be updated after updates to
+  // wallGeometry, shadowMesh, terrainShadowMesh.
 
-  // TODO: Simplify and make more efficient
+  let shadowsChanged = false;
 
-  ev.wallGeometry.updateSourcePosition();
-  ev.shadowMesh.updateLightPosition();
-  if ( changedRadius ) {
-    ev.shadowRenderer.updateSourceRadius();
+  // Shadow geometry and mesh
+  if ( changeObj.changedPosition ) shadowsChanged = ev.wallGeometry.updateSourcePosition();
+  if ( ev.shadowMesh.shader.sourceUpdated(this, changeObj) ) shadowsChanged ||= true;
 
-    // VisionSource does not have shadowVisionMask
-    ev.shadowVisionMask?.shader.updateSourceRadius(this);
-  }
+  // Terrain shadow geometry and mesh
+  if ( changeObj.changedPosition || changeObj.changedRadius ) ev.terrainShadowMesh.updateGeometry(this.bounds);
+  if ( ev.terrainShadowMesh.shader.sourceUpdated(this, changeObj) ) shadowsChanged ||= true;
 
-  if ( changedPosition ) {
-    ev.shadowRenderer.update();
-
-    // VisionSource does not have shadowVisionMask
-    ev.shadowVisionMask?.updateGeometry(this.bounds);
-    ev.shadowVisionMask?.shader.updateSourcePosition(this);
-
-  } else if ( changedRadius ) {
-    // VisionSource does not have shadowVisionMask
-    ev.shadowVisionMask?.updateGeometry(this.bounds);
-
-  } else if ( changedElevation ) {
-    ev.shadowRenderer.update();
-  }
+  // Renderer and mask
+  if ( shadowsChanged ) ev.shadowRenderer.updatedSource(changeObj); // TODO: Do we need a separate check for changedRadius here?
+  if ( changeObj.changedPosition || changeObj.changedRadius ) ev.shadowVisionMask.updateGeometry(this.bounds);
+  ev.shadowVisionMask.shader.updatedSource(this, changeObj);
 }
 
 /**
@@ -500,6 +519,7 @@ PATCHES.WEBGL.METHODS = {
   _initializeEVShadows,
   _initializeEVShadowGeometry,
   _initializeEVShadowMesh,
+  _initializeEVTerrainShadowMesh,
   _initializeEVShadowRenderer,
   _initializeEVShadowMask,
   _updateEVShadowData,
@@ -518,9 +538,22 @@ PATCHES.VISIBILITY.METHODS = {
 // NOTE: WebGL Getters
 
 /**
+ * New getter: RenderedPointSource.prototype.EVShadowTexture
+ */
+function EVShadowTexture() {
+  const ev = this[MODULE_ID];
+  if ( !ev || !ev.shadowRenderer ) this._initializeEVShadows();
+  return ev.shadowRenderer.renderTexture;
+}
+
+/**
  * New getter: RenderedPointSource.prototype.EVVisionMask
  */
-function EVVisionMask() { return this[MODULE_ID].shadowVisionMask; }
+function EVVisionMask() {
+  const ev = this[MODULE_ID];
+  if ( !ev || !ev.shadowVisionMask ) this._initializeEVShadows();
+  return ev.shadowVisionMask;
+}
 
 /**
  * New getter: RenderedPointSource.prototype.bounds
@@ -535,6 +568,7 @@ export function bounds() {
 }
 
 PATCHES.WEBGL.GETTERS = {
+  EVShadowTexture,
   EVVisionMask,
   bounds
 };

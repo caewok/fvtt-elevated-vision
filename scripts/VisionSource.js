@@ -1,14 +1,13 @@
 /* globals
 canvas,
-LimitedAnglePolygon,
 PIXI
-
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
+import { ShadowTerrainShader } from "./glsl/ShadowTerrainShader.js";
 import { ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
 import { SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
@@ -21,13 +20,28 @@ export const PATCHES = {};
 PATCHES.WEBGL = {};
 PATCHES.VISIBILITY = {};
 
+// ----- NOTE: Methods -----
+
 /**
  * New method: VisionSource.prototype._initializeEVShadowGeometry
  * Use SourceShadowWallGeometry, which does not restrict based on source bounds.
  */
 function _initializeEVShadowGeometry() {
   const ev = this[MODULE_ID];
-  ev.wallGeometry ??= new SourceShadowWallGeometry(this);
+  if ( ev.wallGeometry ) return;
+  ev.wallGeometry = new SourceShadowWallGeometry(this);
+}
+
+/**
+ * New method: RenderedPointSource.prototype._initializeEVTerrainShadowMesh
+ * Build terrain shadow + limited angle
+ * Uses a quad sized to the canvas.
+ */
+function _initializeEVTerrainShadowMesh() {
+  const ev = this[MODULE_ID];
+  if ( ev.terrainShadowMesh ) return;
+  const shader = ShadowTerrainShader.create(this);
+  ev.terrainShadowMesh = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
 
 /**
@@ -38,16 +52,8 @@ function _initializeEVShadowRenderer() {
   const ev = this[MODULE_ID];
   if ( ev.shadowRenderer ) return;
 
-  // Force a uniform update, to avoid ghosting of placeables in the light radius.
-  // TODO: Find the underlying issue and fix this!
-  // Must be a new uniform variable (one that is not already in uniforms)
-  this.layers.background.shader.uniforms.uEVtmpfix = 0;
-  this.layers.coloration.shader.uniforms.uEVtmpfix = 0;
-  this.layers.illumination.shader.uniforms.uEVtmpfix = 0;
-
   // Render LOS to a texture for use by other shaders.
-  ev.shadowRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh);
-  ev.shadowRenderer.renderShadowMeshToTexture(); // TODO: Is this necessary here?
+  ev.shadowRenderer = new ShadowVisionLOSTextureRenderer(this, ev.shadowMesh, ev.terrainShadowMesh);
 }
 
 /**
@@ -56,33 +62,12 @@ function _initializeEVShadowRenderer() {
  */
 function _initializeEVShadowMask() {
   const ev = this[MODULE_ID];
-  if ( ev.shadowVisionLOSMask ) return;
+  if ( ev.shadowVisionMask ) return;
 
   // Build the mask for the LOS based on the canvas dimensions rectangle.
   // Mask that colors red areas that are lit / are viewable.
-  const shader = ShadowVisionMaskTokenLOSShader.create(ev.shadowRenderer.renderTexture);
-  ev.shadowVisionLOSMask = new EVQuadMesh(canvas.dimensions.rect, shader);
-}
-
-/**
- * New getter: VisionSource.prototype.EVVisionLOSMask
- * Line of sight for this vision source
- */
-function EVVisionLOSMask() {
-  if ( !this[MODULE_ID]?.shadowVisionLOSMask ) {
-    console.error("elevatedvision|EVVisionLOSMaskVisionSource|No shadowVisionLOSMask.");
-  }
-
-  // This seems to cause problems; do this in FOV instead.
-  //   if ( this.object.hasLimitedSourceAngle ) {
-  //     // Add a mask for the limited angle polygon.
-  //     const { angle, rotation, externalRadius } = this.data;
-  //     const radius = canvas.dimensions.maxR;
-  //     const ltdPoly = new LimitedAnglePolygon(this, { radius, angle, rotation, externalRadius });
-  //     return addShapeToShadowMask(ltdPoly, this[MODULE_ID].shadowVisionLOSMask);
-  //   }
-
-  return this[MODULE_ID].shadowVisionLOSMask;
+  const shader = ShadowVisionMaskTokenLOSShader.create(this);
+  ev.shadowVisionMask = new EVQuadMesh(canvas.dimensions.rect, shader);
 }
 
 /**
@@ -96,61 +81,54 @@ function targetInShadow(target, testPoint) {
 
 PATCHES.WEBGL.METHODS = {
   _initializeEVShadowGeometry,
+  _initializeEVTerrainShadowMesh,
   _initializeEVShadowRenderer,
   _initializeEVShadowMask
 };
 
 PATCHES.VISIBILITY.METHODS = {
   targetInShadow
-}
+};
+
+// ----- NOTE: Getters -----
 
 /**
  * New getter: VisionSource.prototype.EVVisionMask
  * Field-of-view (FOV) for this vision source.
  */
-function EVVisionMask() {
-  if ( !this[MODULE_ID]?.shadowVisionLOSMask ) {
-    console.error("elevatedvision|EVVisionMaskVisionSource|No shadowVisionLOSMask.");
-  }
-
-  if ( this.object.hasLimitedSourceAngle ) {
-    // Add a mask for the limited angle polygon.
-    const { radius, angle, rotation, externalRadius } = this.data;
-    const ltdPoly = new LimitedAnglePolygon(this, { radius, angle, rotation, externalRadius });
-    return addShapeToShadowMask(ltdPoly, this[MODULE_ID].shadowVisionLOSMask);
-  }
-
-  // Mask the radius circle for this vision source.
-  // Do not add as mask to container; can simply add to container as a child
-  // b/c the entire container is treated as a mask by the vision system.
-  const r = this.radius || this.data.externalRadius;
-  const cir = new PIXI.Circle(this.x, this.y, r);
-  return addShapeToShadowMask(cir, this[MODULE_ID].shadowVisionLOSMask);
+function EVVisionFOVMask() {
+  const ev = this[MODULE_ID];
+  if ( !ev.graphicsFOV ) this._createRestrictedPolygon();
+  return ev.graphicsFOV;
 }
 
 PATCHES.WEBGL.GETTERS = {
-  EVVisionLOSMask,
-  EVVisionMask
+  EVVisionFOVMask
 };
 
-// ----- Note: Helper functions -----
-/**
- * Build a new container with two children: the shadowMask and the shape, as a graphic.
- * @param {PIXI.Circle|PIXI.Rectangle|PIXI.Polygon} shape
- * @param {PIXI.Mesh} shadowMask
- * @returns {PIXI.Container}
- */
-function addShapeToShadowMask(shape, shadowMask) {
-  const c = new PIXI.Container();
-  c.addChild(shadowMask);
+// ----- NOTE: Wraps -----
 
-  // Draw the shape and add to the container
-  // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
-  // and that causes a border to appear outside the shape.
-  const g = new PIXI.Graphics();
-  const draw = new Draw(g);
-  draw.shape(shape, { width: 0, fill: 0xFF0000 });
-  c.addChild(g);
-  return c;
+/**
+ * Wrap VisionSource.prototype._createRestrictedPolygon
+ * Create/update the graphics used for the FOV.
+ */
+function _createRestrictedPolygon(wrapped) {
+  const ev = this[MODULE_ID] ??= {};
+  ev.graphicsFOV ??= new PIXI.Graphics();
+  const draw = new Draw(ev.graphicsFOV);
+  draw.clearDrawings();
+
+  // Mask the radius circle for this vision source.
+  const fill = 0xFF0000;
+  const width = 0;
+  const origin = {x: this.data.x, y: this.data.y};
+  const radius = this.data.radius || this.data.externalRadius;
+  const circle = new PIXI.Circle(origin.x, origin.y, radius);
+  draw.shape(circle, { width, fill });
+
+  return wrapped();
 }
 
+PATCHES.WEBGL.WRAPS = {
+  _createRestrictedPolygon
+};

@@ -15,6 +15,9 @@ PATCHES.BASIC = {}; // Basic b/c we are switching the shader uniform dynamically
  * Add shadow GLSL code to the lighting fragment shaders.
  */
 function create(wrapped, ...args) {
+  // Don't patch the vision shaders to avoid ghosting.
+  if ( AdaptiveVisionShader.isPrototypeOf(this) ) return wrapped(...args);
+
   applyPatches(this,
     false,
     source => {
@@ -25,8 +28,8 @@ function create(wrapped, ...args) {
 
   const shader = wrapped(...args);
   const shaderAlgorithm = getSceneSetting(SETTINGS.SHADING.ALGORITHM);
-  shader.uniforms.uEVShadowSampler = 0;
-  shader.uniforms.uEVShadows = shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL;
+  shader.uniforms.uEVShadowSampler = PIXI.Texture.EMPTY;
+  shader.uniforms.uEVShadows = false;
   return shader;
 }
 

@@ -299,12 +299,12 @@ GLSLFunctions.scaleNormalizedElevation =
 `
 /**
  * Return the scaled elevation value for a given normalized value.
- * @param {float} value   The normalized elevation between 0 and 65,536
+ * @param {float} value         The normalized elevation between 0 and 65,536
+ * @param {float} elevationMin  Minimum elevation for the scene
+ * @param {float} elevationStep Elevation step size for the scene
  * @returns {float} Scaled elevation value based on scene settings, in grid units
  */
-float scaleNormalizedElevation(in float value) {
-  float elevationMin = uElevationRes.r;
-  float elevationStep = uElevationRes.g;
+float scaleNormalizedElevation(in float value, in float elevationMin, in float elevationStep) {
   return elevationMin + (round(value * elevationStep * 10.0) * 0.1);
 }`;
 
@@ -313,26 +313,51 @@ GLSLFunctions.gridUnitsToPixels =
 /**
  * Convert grid to pixel units.
  * @param {float} value     Number, in grid units
+ * @param {float} gridDist  Pixel distance
  * @returns {float} The equivalent number in pixel units based on grid distance
  */
-float gridUnitsToPixels(in float value) {
-  float distancePixels = uElevationRes.a;
-  return value * distancePixels;
+float gridUnitsToPixels(in float value, in float gridDist) {
+  return value * gridDist;
 }`;
 
-GLSLFunctions.colorToElevationPixelUnits =
+GLSLFunctions.texelToElevationPixelUnits =
 `
 ${defineFunction("decodeElevationChannels")}
 ${defineFunction("scaleNormalizedElevation")}
 ${defineFunction("gridUnitsToPixels")}
 
 /**
- * Convert a color pixel to a scaled elevation value, in pixel units.
+ * Convert a color pixel pulled from elevation terrain texture to a scaled elevation value, in pixel units.
+ * @param {vec4} evTexel          Texel pulled from elevation terrain texture
+ * @param {vec4} elevationRes     Elevation resolution: min/step/max/pixel distance
+ * @returns {float} Elevation value in pixel units.
  */
-float colorToElevationPixelUnits(in vec4 color) {
-  float e = decodeElevationChannels(color);
-  e = scaleNormalizedElevation(e);
-  return gridUnitsToPixels(e);
+float texelToElevationPixelUnits(in vec4 evTexel, in vec4 elevationRes) {
+  float e = decodeElevationChannels(evTexel);
+  e = scaleNormalizedElevation(e, elevationRes.r, elevationRes.g);
+  return gridUnitsToPixels(e, elevationRes.a);
+}`;
+
+GLSLFunctions.terrainElevation =
+`
+${defineFunction("texelToElevationPixelUnits")}
+
+/**
+ * Get the terrain elevation at this fragment.
+ * vTerrainTexCoord must be scaled to the scene dimensions.
+ * @param {sampler2D} terrainTex  The terrain elevation texture
+ * @param {vec2} texCoord         The texture coordinate
+ * @param {vec4} elevationRes     Elevation resolution: min/step/max/pixel distance
+ * @returns {float}
+ */
+float terrainElevation(in sampler2D terrainTex, in vec2 texCoord, in vec4 elevationRes) {
+  // If outside scene bounds, elevation is set to the minimum elevation.
+  if ( !all(lessThan(texCoord, vec2(1.0)))
+    || !all(greaterThan(texCoord, vec2(0.0))) ) return elevationRes.x;
+
+  // Inside scene bounds. Pull elevation from the texture.
+  vec4 evTexel = texture(terrainTex, texCoord);
+  return texelToElevationPixelUnits(evTexel, elevationRes);
 }`;
 
 // NOTE: Orientation
@@ -343,6 +368,27 @@ float orient(in vec2 a, in vec2 b, in vec2 c) {
   return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
 }
 `;
+
+GLSLFunctions.pointBetweenRays =
+`
+${defineFunction("orient")}
+
+/**
+ * Test whether a 2d location lies between two boundary rays.
+ * @param {vec2} pt     Point to test
+ * @param {vec2} v      Vertex point
+ * @param {vec2} ccw    Counter-clockwise point
+ * @param {vec2} cw     Clockwise point
+ * @param {float} angle Angle being tested, in degrees
+ * @returns {bool}
+ */
+bool pointBetweenRays(in vec2 pt, in vec2 v, in vec2 ccw, in vec2 cw, in float angle) {
+  if ( angle > 180.0 ) {
+    bool outside = orient(v, cw, pt) <= 0.0 && orient(v, ccw, pt) >= 0.0;
+    return !outside;
+  }
+  return orient(v, ccw, pt) <= 0.0 && orient(v, cw, pt) >= 0.0;
+}`;
 
 // NOTE: Barycentric
 // Calculate barycentric position within a given triangle

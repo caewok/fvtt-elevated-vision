@@ -57,9 +57,9 @@ function refreshVisibility() {
 
   vision.base.clear();
   vision.base.removeChildren();
-  vision.base.beginFill(fillColor, 1.0);
+  // vision.base.beginFill(fillColor, 1.0);
 
-  vision.fov.lights.beginFill(fillColor, 1.0);
+  // vision.fov.lights.beginFill(fillColor, 1.0);
   // Already cleared with lightsFullRedraw above.
 
   vision.fov.tokens.clear();
@@ -126,15 +126,19 @@ function refreshVisibility() {
   for ( const visionSource of canvas.effects.visionSources ) {
     if ( !visionSource.active ) continue;
 
-    const fovMask = visionSource.EVVisionMask;
-    const losMask = visionSource.EVVisionLOSMask;
+    const fovMask = visionSource.EVVisionFOVMask;
+    const losMask = visionSource.EVVisionMask;
     if ( !fovMask ) console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|visionSource ${visionSource.object.id} has no fov mask.`);
     if ( !losMask ) console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|visionSource ${visionSource.object.id} has no los mask.`);
 
     // Draw FOV polygon or provide some baseline visibility of the token's space
     if ( (visionSource.radius > 0) && !visionSource.data.blinded && !visionSource.isPreview ) {
       vision.fov.tokens.addChild(fovMask);
-    } else vision.base.drawShape(visionSource.fov);
+    } else {
+      vision.base.beginFill(fillColor, 1.0);
+      vision.base.drawShape(visionSource.fov);
+      vision.base.endFill();
+    }
     // Draw LOS mask (with exception for blinded tokens)
     if ( !visionSource.data.blinded && !visionSource.isPreview ) {
       vision.los.addChild(losMask);
@@ -143,8 +147,8 @@ function refreshVisibility() {
   }
 
   // Fill operations are finished for LOS and FOV lights and tokens
-  vision.base.endFill();
-  vision.fov.lights.endFill();
+  // vision.base.endFill();
+  // vision.fov.lights.endFill();
 
   // Not needed with the masks:
   // vision.fov.tokens.endFill();

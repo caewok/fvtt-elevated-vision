@@ -2,6 +2,7 @@
 PIXI
 */
 "use strict";
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 /**
  * Mesh that takes a rectangular frame instead of a geometry.
@@ -50,6 +51,10 @@ export class EVQuadMesh extends PIXI.Mesh {
     return this.constructor.aVertexPosition(this.rect);
   }
 
+  updateGeometry(_newRect) { return; } // eslint-disable-line no-useless-return
+}
+
+export class EVUpdatingQuadMesh extends EVQuadMesh {
   updateGeometry(newRect) {
     if ( this.rect.x === newRect.x
       && this.rect.y === newRect.y
