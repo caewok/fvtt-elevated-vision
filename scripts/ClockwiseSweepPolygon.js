@@ -7,31 +7,37 @@ foundry
 */
 "use strict";
 
+import { MODULE_ID } from "./const.js";
 import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 import { Shadow, ShadowProjection } from "./geometry/Shadow.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Plane } from "./geometry/3d/Plane.js";
-import { SETTINGS, getSceneSetting } from "./settings.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 
+export const PATCHES = {};
+PATCHES.POLYGONS = {};
+PATCHES.SWEEP = {};
+
 /**
- * Wrap ClockwisePolygonSweep.prototype._identifyEdges
+ * Wrap ClockwiseSweepPolygon.prototype._identifyEdges
  * Get walls that are below the
  * For compatibility with Wall Height and other modules, just re-run quad tree to
  * get walls below the source.
  * Wall Height will have already removed these walls from the LOS, so can just store here.
  */
-export function _computeClockwiseSweepPolygon(wrapped) {
+function _compute(wrapped) {
   wrapped();
 
-  const shaderAlgorithm = getSceneSetting(SETTINGS.SHADING.ALGORITHM);
-  if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.NONE ) return;
+  const sweep = this;
+  const source = sweep.config.source;
 
-  // Ignore lights set with default of positive infinity
-  const source = this.config.source;
-  const sourceZ = source?.elevationZ;
-  if ( !isFinite(sourceZ) ) return;
+  let sourceZ = source.elevationZ;
+  if ( !isFinite(sourceZ) ) sourceZ = 1e06;
+
+  const bounds = sweep._defineBoundingBox();
+  const collisionTest = (o, rect) => originalTestWallInclusion.call(sweep, o.t, rect);
+  let walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
 
   /* Ignoring walls
     Limited-height walls removed by Wall Height; shadows must be separate.
@@ -40,18 +46,11 @@ export function _computeClockwiseSweepPolygon(wrapped) {
       (b/c ground assumed to block)
   */
 
-  // From ClockwisePolygonSweep.prototype.getWalls
-  const bounds = this._defineBoundingBox();
-  const collisionTest = (o, rect) => originalTestWallInclusion.call(this, o.t, rect);
-  let walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
-
-  // Filter out walls that are below ground if the observer is above ground
-  // For now, treat the ground as 0.
-  // TODO: Measure ground as ground elevation directly below the source?
-  // Or measure as ground elevation directly above/under the wall?
   const rect = new PIXI.Rectangle(source.x - 1, source.y - 1, 2, 2);
   const tiles = canvas.tiles.quadtree.getObjects(rect);
-  walls = walls.filter(w => w.bottomZ <= sourceZ && !isWallUnderneathTile(source, w, tiles));
+  walls = walls.filter(w => w.bottomZ <= sourceZ && !isWallUnderneathTile(this, w, tiles));
+  if ( sourceZ >= 0 ) walls = walls.filter(w => w.topZ >= 0);
+  else walls = walls.filter(w => w.bottomZ <= 0); // Source below ground; drop tiles above
 
   if ( sourceZ >= 0 ) walls = walls.filter(w => w.topZ >= 0);
   else walls = walls.filter(w => w.bottomZ <= 0); // Source below ground; drop tiles above
@@ -68,90 +67,87 @@ export function _computeClockwiseSweepPolygon(wrapped) {
     The shadows of two terrain walls is the intersection of them.
   */
 
+  const ev = sweep[MODULE_ID] ??= {};
+  if ( ev.polygonShadows ) {
+    const evS = ev.polygonShadows;
+    evS.shadows.length = 0;
+    evS.combined.length = 0;
+    evS.limitedWalls.clear();
+    evS.normalWalls.clear();
 
-  this._elevatedvision ??= {};
-  this._elevatedvision.shadows = [];
-//   this._elevatedvision.terrainShadows = []; // Debugging
-  this._elevatedvision.combinedShadows = [];
-  this._elevatedvision.terrainWalls = new Set();
-  this._elevatedvision.heightWalls = new Set();
+  } else {
+    ev.polygonShadows = {
+      shadowProjection: new ShadowProjection(new Plane(), source),
+      shadows: [],
+      combined: [],
+      limitedWalls: new Set(),
+      normalWalls: new Set()
+    };
+  }
+  const evS = ev.polygonShadows;
 
+  const sourceType = source.constructor.sourceType;
   walls.forEach(w => {
-    if ( isLimitedWallForSource(w, source) ) {
-      this._elevatedvision.terrainWalls.add(w);
-      return;
-    }
-
-    // Only keep limited-height walls. (Infinite-height walls incorporated into LOS polygon.)
-    if ( !isFinite(w.bottomZ) && !isFinite(w.topZ) ) return;
-    this._elevatedvision.heightWalls.add(w);
+    if ( w.document[sourceType] === CONST.WALL_SENSE_TYPES.LIMITED ) evS.limitedWalls.add(w);
+    else evS.normalWalls.add(w);
   });
-
-
-  // if ( shaderAlgorithm === SETTINGS.SHADING.TYPES.WEBGL ) return;
-
-  // TODO: Fix below b/c POLYGONS is only algorithm left.
-
-  // Construct shadows from the walls below the light source
-  // Only need to construct the combined shadows if using polygons for vision, not shader.
-  if ( !this._elevatedvision.terrainWalls.size && !this._elevatedvision.heightWalls.size ) return;
+  if ( !evS.limitedWalls.size && !evS.normalWalls.size) return;
 
   // Store each shadow individually
-  source._elevatedvision ??= {};
-  source._elevatedvision.ShadowProjection ??= new ShadowProjection(new Plane(), source);
-  const proj = source._elevatedvision.ShadowProjection;
 
   // For each terrain wall, find all other potentially blocking terrain walls.
   // Intersect the shadow for each.
-  if ( this._elevatedvision.terrainWalls.size > 1 ) {
+
+  if ( evS.limitedWalls.size > 1 ) {
     // Temporarily cache the wall points
-    this._elevatedvision.terrainWalls.forEach(w => {
+    evS.limitedWalls.forEach(w => {
       w._elevatedvision ??= {};
       w._elevatedvision.wallPoints = Point3d.fromWall(w, { finite: true });
     });
 
-    const sourceOrigin = Point3d.fromPointSource(this.config.source);
+    const sourceOrigin = Point3d.fromPointSource(source);
 
-    for ( const w of this._elevatedvision.terrainWalls ) {
+    for ( const w of evS.limitedWalls ) {
       const blocking = filterPotentialBlockingWalls(
         w._elevatedvision.wallPoints,
-        this._elevatedvision.terrainWalls,
+        evS.limitedWalls,
         sourceOrigin);
       blocking.delete(w);
 
       if ( blocking.size ) {
-        const shadowWPts = proj._constructShadowPointsForWallPoints(w._elevatedvision.wallPoints);
+        const shadowWPts = evS.shadowProjection._constructShadowPointsForWallPoints(w._elevatedvision.wallPoints);
         if ( !shadowWPts.length ) continue;
         const shadowW = new Shadow(shadowWPts);
 
         for ( const bw of blocking ) {
-          const shadowBWPts = proj.constructShadowPointsForWall(bw);
+          const shadowBWPts = evS.shadowProjection.constructShadowPointsForWall(bw);
           if ( !shadowBWPts.length ) continue;
           const shadowBW = new Shadow(shadowBWPts);
           const shadowIX = shadowW.intersectPolygon(shadowBW)[0];
-          if ( shadowIX && shadowIX.points.length > 5 ) {
-            this._elevatedvision.shadows.push(shadowIX);
-//             this._elevatedvision.terrainShadows.push(shadowIX);
-          }
+          if ( shadowIX && shadowIX.points.length > 5 ) evS.shadows.push(shadowIX);
         }
       }
     }
   }
 
-  for ( const w of this._elevatedvision.heightWalls ) {
-    const shadowPoints = proj.constructShadowPointsForWall(w);
+  // Now process all the normal walls.
+  for ( const w of evS.normalWalls ) {
+    const shadowPoints = evS.shadowProjection.constructShadowPointsForWall(w);
     if ( !shadowPoints.length ) continue;
-    this._elevatedvision.shadows.push(new Shadow(shadowPoints));
+    evS.shadows.push(new Shadow(shadowPoints));
   }
-  if ( !this._elevatedvision.shadows.length ) return;
+
+  if ( !evS.shadows.length ) return;
 
   // Combine the shadows and trim to be within the LOS
   // We want one or more LOS polygons along with non-overlapping holes.
-  this._elevatedvision.combinedShadows = combineBoundaryPolygonWithHoles(this, this._elevatedvision.shadows);
+  evS.combinedShadows = combineBoundaryPolygonWithHoles(sweep, evS.shadows);
 
   // Trigger so that PIXI.Graphics.drawShape draws the holes.
-  if ( this._elevatedvision.combinedShadows.length ) this._evPolygons = this._elevatedvision.combinedShadows;
+  if ( evS.combinedShadows.length ) sweep._evPolygons = evS.combinedShadows;
 }
+
+PATCHES.POLYGONS.WRAPS = { _compute };
 
 /**
  * From point of view of a source (light or vision observer), is the wall underneath the tile?
@@ -206,9 +202,10 @@ function originalTestWallInclusion(wall, bounds) {
 }
 
 /**
+ * New method: ClockwiseSweepPolygon.prototype._drawShadows
  * For debugging: draw the shadows for this LOS object using the debug drawing tools.
  */
-export function _drawShadowsClockwiseSweepPolygon(
+function _drawShadows(
   { color = Draw.COLORS.gray, width = 1, fill = Draw.COLORS.gray, alpha = 0.5 } = {}) {
   const shadows = this.shadows;
   if ( !shadows || !shadows.length ) return;
@@ -219,7 +216,10 @@ export function _drawShadowsClockwiseSweepPolygon(
   }
 }
 
-export function testWallsForIntersections(origin, destination, walls, mode, type) {
+PATCHES.POLYGONS.METHODS = { _drawShadows };
+
+
+export function testWallsForIntersections(origin, destination, walls, mode, type, testTerrain = true) {
   origin = new Point3d(origin.x, origin.y, origin.z);
   destination = new Point3d(destination.x, destination.y, destination.z);
 
@@ -228,7 +228,9 @@ export function testWallsForIntersections(origin, destination, walls, mode, type
     const x = lineSegment3dWallIntersection(origin, destination, wall);
     if ( x ) {
       if ( mode === "any" ) {   // We may be done already
-        if ( (type && wall.document[type] === CONST.WALL_SENSE_TYPES.NORMAL) || (walls.length > 1) ) return true;
+        if ( !testTerrain
+          || (type && wall.document[type] === CONST.WALL_SENSE_TYPES.NORMAL)
+          || (walls.length > 1) ) return true;
       }
       if ( type ) x.type = wall.document[type];
       x.wall = wall;
@@ -249,42 +251,11 @@ export function testWallsForIntersections(origin, destination, walls, mode, type
 
   // Return the closest collision
   collisions.sort((a, b) => a.distance2 - b.distance2);
-  if ( collisions[0]?.type === CONST.WALL_SENSE_TYPES.LIMITED ) collisions.shift();
+  if ( testTerrain && collisions[0]?.type === CONST.WALL_SENSE_TYPES.LIMITED ) collisions.shift();
 
   if ( mode === "sorted" ) return collisions;
 
   return collisions[0] || null;
-}
-
-/**
- * Determine if the wall is restricted for the given source.
- * @param {Wall} wall
- * @param {PointSource} source
- * @returns {boolean} True if limited
- */
-function isLimitedWallForSource(wall, source) {
-  let type;
-  switch ( source.constructor.name ) {
-    case "LightSource":
-      type = "light";
-      break;
-
-    case "MovementSource":
-      type = "move";
-      break;
-
-    case "SoundSource":
-      type = "sound";
-      break;
-
-    case "VisionSource":
-      type = "sight";
-      break;
-
-    default: return false;
-  }
-
-  return wall.document[type] === CONST.WALL_SENSE_TYPES.LIMITED;
 }
 
 /**
@@ -321,7 +292,7 @@ function filterPotentialBlockingWalls(wallPoints, wallArr, sourceOrigin) {
  * @param {Point} origin
  * @param {object} config
  */
-export function initializeClockwiseSweepPolygon(wrapper, origin, config) {
+function initialize(wrapper, origin, config) {
   const sourceOrigin = config.source ? Point3d.fromPointSource(config.source) : new Point3d(origin.x, origin.y, 0);
   const encompassingPolygon = SCENE_GRAPH.encompassingPolygon(sourceOrigin, config.type);
   if ( encompassingPolygon ) {
@@ -330,3 +301,5 @@ export function initializeClockwiseSweepPolygon(wrapper, origin, config) {
   }
   wrapper(origin, config);
 }
+
+PATCHES.SWEEP.WRAPS = { initialize };

@@ -1,8 +1,8 @@
 /* globals
-canvas,
 PIXI
 */
 "use strict";
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
@@ -81,16 +81,30 @@ void main() {
     uSourceRadius2: 1
   };
 
-  static create(source, shadowSampler, defaultUniforms = {}) {
+  static create(source, defaultUniforms = {}) {
     const radius = source.radius || source.data.externalRadius;
 
-    defaultUniforms.uShadowSampler = shadowSampler.baseTexture;
+    defaultUniforms.uShadowSampler = source.EVShadowTexture.baseTexture;
     defaultUniforms.uSourcePosition = [source.x, source.y];
     defaultUniforms.uSourceRadius2 = Math.pow(radius, 2);
 
     const out = super.create(defaultUniforms);
     out.source = source;
     return out;
+  }
+
+  /**
+   * Update based on indicated changes to the source.
+   * @param {RenderedSourcePoint} source
+   * @param {object} [changes]    Object indicating which properties of the source changed
+   * @param {boolean} [changes.changedPosition]   True if the source changed position
+   * @param {boolean} [changes.changedElevation]  True if the source changed elevation
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   */
+  updatedSource(source, { changedPosition, changedRadius } = {}) {
+    if ( changedPosition ) this.updateSourcePosition(source);
+    if ( changedRadius ) this.updateSourceRadius(source);
+    return changedPosition || changedRadius;
   }
 
   updateSourcePosition(source) {
@@ -171,13 +185,22 @@ void main() {
    * uMaxNormalizedElevation: Maximum elevation, normalized units
    */
   static defaultUniforms = {
-    uShadowSampler: 0,
+    uShadowSampler: 0
   };
 
-  static create(shadowSampler, defaultUniforms = {}) {
-    defaultUniforms.uShadowSampler = shadowSampler.baseTexture;
+  static create(source, defaultUniforms = {}) {
+    defaultUniforms.uShadowSampler = source.EVShadowTexture.baseTexture;
     return super.create(defaultUniforms);
   }
+
+  // Disable unused methods.
+
+  updatedSource(_source) { return; } // eslint-disable-line no-useless-return
+
+  updateSourcePosition(_source) { return; } // eslint-disable-line no-useless-return
+
+  updateSourceRadius(_source) { return; } // eslint-disable-line no-useless-return
+
 }
 
 /* Testing

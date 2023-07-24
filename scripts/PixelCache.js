@@ -1268,7 +1268,7 @@ export class TilePixelCache extends PixelCache {
     const resolution = localWidth / texWidth;
 
     // Resolution consistent with `_createTextureData` which divides by 4.
-    return new this(tile._textureData.pixels, texWidth, { tile, resolution });
+    return new this(tile.mesh._textureData.pixels, texWidth, { tile, resolution });
   }
 
   /**

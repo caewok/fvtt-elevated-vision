@@ -1,8 +1,9 @@
 /* globals
-Ray,
+CONFIG,
+Ray
 */
-/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { log } from "./util.js";
 import { getSceneSetting, SETTINGS } from "./settings.js";
@@ -111,11 +112,17 @@ Animating for any given location:
   - fly: use fly elevation
 */
 
+export const PATCHES_Token = {};
+export const PATCHES_ActiveEffect = {};
+PATCHES_Token.BASIC = {};
+PATCHES_ActiveEffect.BASIC = {};
+
+
 // NOTE: Token hooks
 
 // Reset the token elevation when moving the token after a cloned drag operation.
 // Token refresh is then used to update the elevation as the token is moved.
-export function preUpdateTokenHook(tokenD, changes, _options, _userId) {
+function preUpdateTokenHook(tokenD, changes, _options, _userId) {
   const token = tokenD.object;
   log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
   log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
@@ -142,7 +149,7 @@ export function preUpdateTokenHook(tokenD, changes, _options, _userId) {
  * Hook Token refresh
  * Adjust elevation as the token moves.
  */
-export function refreshTokenHook(token, flags) {
+function refreshTokenHook(token, flags) {
   if ( !flags.refreshPosition ) return;
   if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
   log(`EV refreshToken for ${token.name} at ${token.position.x},${token.position.y}. Token is ${token._original ? "Clone" : "Original"}. Token is ${token._animation ? "" : "not "}animating.`);
@@ -185,87 +192,25 @@ export function refreshTokenHook(token, flags) {
       tec.location = tokenCenter;
       change.currE = tec.terrainElevation();
     }
-    //options.elevation ||= this.document.elevation !== change.currE;
     if ( token.document.elevation !== change.currE ) {
       token.document.updateSource({ elevation: change.currE });
       token.renderFlags.set({refreshElevation: true});
     }
-
-    // token.document.elevation = change.currE;
     log(`Token Original: {x: ${tokenCenter.x}, y: ${tokenCenter.y}, e: ${change.currE} }`, ev.travel);
   }
 }
 
-// _refreshToken(wrapper, options) {
-//   if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return wrapper(options);
-//
-//   // Old position: this.position
-//   // New position: this.document
-//
-//   // Drag starts with position set to 0, 0 (likely, not yet set).
-//   if ( !this.position.x && !this.position.y ) return wrapper(options);
-//
-//   if ( this.position.x === this.document.x && this.position.y === this.document.y ) return wrapper(options);
-//
-//   log(`token _refresh at ${this.document.x},${this.document.y} (center ${this.center.x},${this.center.y}) with elevation ${this.document.elevation} animate: ${Boolean(this._animation)}`);
-//
-//
-//   const ev = this._elevatedVision;
-//   if ( !ev || !ev.tokenAdjustElevation ) {
-//     log("Token _refresh: Adjust elevation is false.");
-//     return wrapper(options);
-//   }
-//
-//   if ( this._original ) {
-//     log("token _refresh is clone.");
-//     // This token is a clone in a drag operation.
-//     // Adjust elevation of the clone by calculating the elevation from origin to line.
-//     const { startPosition, startElevation, te } = ev;
-//
-//     // Update the previous travel ray
-//     te.travelRay = new Ray(startPosition, this.center);
-//
-//     // Determine the new final elevation.
-//     const finalElevation = te.calculateFinalElevation(startElevation);
-//     log(`{x: ${te.travelRay.A.x}, y: ${te.travelRay.A.y}, e: ${startElevation} } --> {x: ${te.travelRay.B.x}, y: ${te.travelRay.B.y}, e: ${finalElevation} }`, te);
-//     this.document.elevation = finalElevation;
-//
-//   } else if ( this._animation ) {
-//     // Adjust the elevation as the token is moved by locating where we are on the travel ray.
-//     log("token _refresh: animation");
-//     const tokenCenter = this.center;
-//     const { travelRay, elevationChanges } = ev.travel;
-//     const currT = travelRay.tConversion(tokenCenter);
-//     const ln = elevationChanges.length;
-//     let change = elevationChanges[ln - 1];
-//     for ( let i = 1; i < ln; i += 1 ) {
-//       if ( elevationChanges[i].ix.t0 > currT ) {
-//         change = elevationChanges[i-1];
-//         break;
-//       }
-//     }
-//
-//     const TERRAIN = TravelElevationCalculator.TOKEN_ELEVATION_STATE.TERRAIN;
-//     change ??= { currState: TERRAIN };
-//     if ( change.currState === TERRAIN ) {
-//       const tec = ev.te.TEC;
-//       tec.location = tokenCenter;
-//       change.currE = tec.terrainElevation();
-//     }
-//     options.elevation ||= this.document.elevation !== change.currE;
-//
-//     this.document.elevation = change.currE;
-//     log(`{x: ${tokenCenter.x}, y: ${tokenCenter.y}, e: ${change.currE} }`, ev.travel);
-//   }
-//
-//   return wrapper(options);
-// }
+PATCHES_Token.BASIC.HOOKS = {
+  preUpdateToken: preUpdateTokenHook,
+  refreshToken: refreshTokenHook
+};
+
 
 /**
  * Wrap Token.prototype.clone
  * Determine if the clone should adjust elevation
  */
-export function cloneToken(wrapper) {
+function clone(wrapper) {
   log(`cloneToken ${this.name} at elevation ${this.document.elevation}`);
   const clone = wrapper();
 
@@ -293,12 +238,26 @@ export function cloneToken(wrapper) {
   return clone;
 }
 
+PATCHES_Token.BASIC.WRAPS = { clone };
+
+/**
+ * Calculate the top left corner location for a token given an assumed center point.
+ * Used for automatic elevation determination.
+ * @param {number} x    Assumed x center coordinate
+ * @param {number} y    Assumed y center coordinate
+ * @returns {PIXI.Point}
+ */
+function getTopLeft(x, y) {
+  return new PIXI.Point(x - (this.w * 0.5), y - (this.h * 0.5));
+}
+
+PATCHES_Token.BASIC.METHODS = { getTopLeft };
 
 /**
  * Monitor for the prone active effect and update vision for affected tokens.
  * This will cause shadows to change based on the changed token height.
  */
-export function createOrRemoveActiveEffectHook(effect, _opts, _userId) {
+function createOrRemoveActiveEffectHook(effect, _opts, _userId) {
   if ( !effect.statuses.has(CONFIG.GeometryLib.proneStatusId) ) return;
 
   const tokens = effect.parent?.getActiveTokens();
@@ -306,3 +265,8 @@ export function createOrRemoveActiveEffectHook(effect, _opts, _userId) {
 
   tokens.forEach(t => t.vision._updateEVShadowData({changedElevation: true}));
 }
+
+PATCHES_ActiveEffect.BASIC.HOOKS = {
+  createActiveEffect: createOrRemoveActiveEffectHook,
+  deleteActiveEffect: createOrRemoveActiveEffectHook
+};

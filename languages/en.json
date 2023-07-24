@@ -2,7 +2,7 @@
   "elevatedvision.name": "Elevation",
 
   "elevatedvision.settings.shading-algorithm.name": "Default for elevation shadows",
-  "elevatedvision.settings.shading-algorithm.hint": "Set the default shadow method for new scenes. Can adjust per-scene using the scene configuration. Polygons: Represent shadows caused by limited-height walls using polygons for token vision. WebGL: Use WebGL for light shadows and token vision caused by limited height walls. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively.",
+  "elevatedvision.settings.shading-algorithm.hint": "Set the default shadow method for new scenes. Can adjust per-scene using the scene configuration. Polygons: Represent shadows caused by limited-height walls using polygons for token vision. WebGL: Use WebGL for light shadows and token vision caused by limited height walls. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively. Enables directional lighting.",
 
   "elevatedvision.settings.shading-none": "None",
   "elevatedvision.settings.shading-polygons": "Polygons",
@@ -13,6 +13,9 @@
 
   "elevatedvision.settings.elevationstep.name": "Default elevation increment",
   "elevatedvision.settings.elevationstep.hint": "Default elevation increment for new scenes. Can adjust per-scene using the scene configuration.",
+
+  "elevatedvision.settings.point-light-size.name": "Default light size",
+  "elevatedvision.settings.point-light-size.hint": "Default radius of the physical light sphere. Foundry default treats lights as point sources (0-sized). Larger values create larger shadow penumbra.",
 
   "elevatedvision.settings.auto-change-elevation.name": "Default for automatic token elevation",
   "elevatedvision.settings.auto-change-elevation.hint": "Set the default automatic token method for new scenes. Can adjust per-scene using the scene configuration. If enabled, will automatically adjust token elevation based on elevation layer data. Token elevation is only adjusted if the token is currently 'on the ground', meaning the token's starting elevation equals the terrain elevation.",
@@ -33,6 +36,12 @@
   "elevatedvision.settings.color-min.string_hint": "Set the color used to display the minimum elevation (above the scene minimum) on the elevation layer. Install the Color Picker module to get a color picker here.",
   "elevatedvision.settings.color-max.string_hint": "Set the color used to display the maximum elevation on the elevation layer. Colors between min and max will be interpolated. Install the Color Picker module to get a color picker here.",
 
+  "elevatedvision.settings.lights-full-penumbra.name": "Full Shadow Penumbra",
+  "elevatedvision.settings.lights-full-penumbra.hint": "When enabled, lighting for all walls will display a full penumbra for the shadow. When disabled, the penumbra shadow for infinite-height walls may display differently than the shadow for limited-height walls. Disabling may improve compatibility with other modules. Only applies when WebGL shadows are enabled.",
+
+  "elevatedvision.settings.test-visibility.name": "Override Visibility Tests",
+  "elevatedvision.settings.test-visibility.hint": "When enabled, Elevated Vision will override the Foundry default visibility testing. This is necessary if you want token visibility to work with directional lighting, limited height walls, or with the Full Shadow Penumbra setting. Disable if some other module is taking over visibility testing.",
+
   "elevatedvision.controls.fill-by-grid.name": "Fill by grid",
   "elevatedvision.controls.fill-by-los.name": "Fill by line-of-sight",
   "elevatedvision.controls.fill-space.name": "Fill space enclosed by walls",
@@ -42,6 +51,7 @@
   "elevatedvision.controls.upload.name": "Upload elevation data and replace in scene",
   "elevatedvision.controls.download.name": "Download elevation data",
   "elevatedvision.controls.undo.name": "Undo",
+  "elevatedvision.controls.directional-light.name": "Directional Light",
 
   "elevatedvision.controls.add-fly-button.name": "Elevated Tokens Fly",
 
@@ -59,11 +69,27 @@
   "elevatedvision.sceneconfig.autoelevate.hint": "When enabled, tokens automatically adjust elevation based on elevation layer data when moving. Token elevation is only adjusted if the token is currently 'on the ground.'",
 
   "elevatedvision.sceneconfig.shading-algorithm.name": "Display Elevation Shadows",
-  "elevatedvision.sceneconfig.shading-algorithm.hint": "Polygons: Represent shadows caused by limited-height walls using polygons for token vision. WebGL: Use WebGL for light shadows and token vision caused by limited height walls. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively. Will force scene reload if changed.",
+  "elevatedvision.sceneconfig.shading-algorithm.hint": "Polygons: Represent shadows caused by limited-height walls using polygons for token vision. WebGL: Use WebGL for light shadows and token vision caused by limited height walls. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively. Enables directional lighting for the scene.",
 
   "elevatedvision.ambientconfig.legendtitle": "Elevated Vision",
   "elevatedvision.ambientconfig.elevation.name": "Elevation",
-  "elevatedvision.ambientconfig.elevation.hint": "Elevation of this source.",
+  "elevatedvision.ambientconfig.elevation.hint": "Elevation of this point source.",
+
+  "elevatedvision.ambientconfig.lightSize.name": "Light Size",
+  "elevatedvision.ambientconfig.lightSize.hint": "Radius of the physical light sphere. Foundry default treats lights as point sources (0-sized). Larger values create larger shadow penumbra.",
+
+  "elevatedvision.ambientconfig.directionallight.name": "Directional Light",
+  "elevatedvision.ambientconfig.directionallight.hint": "Treat this light like a sun or moon—--placed at a given direction and angle above the horizon. Requires WebGL shadows.",
+
+  "elevatedvision.ambientconfig.azimuth.name": "Azimuth",
+  "elevatedvision.ambientconfig.azimuth.hint": "Canvas X/Y direction from which the directional light appears along the horizon. 0º is due east; 90º is due south. The location of this light on the canvas determines its azimuth.",
+
+  "elevatedvision.ambientconfig.elevationAngle.name": "Elevation Angle",
+  "elevatedvision.ambientconfig.elevationAngle.hint": "Angle of the directional light above the horizon. 90º is directly overhead, and results in no shadows. Distance of this light from the canvas center controls elevation angle; the elevation angle increases as the light approaches the center.",
+
+  "elevatedvision.ambientconfig.solarAngle.name": "Solar Angle",
+  "elevatedvision.ambientconfig.solarAngle.hint": "Controls the amount of the penumbra (the fuzzy area) in the wall shadow. Approximates the angle of the directional light as seen at the canvas level. A smaller angle results in a smaller penumbra.",
+
 
   "elevatedvision.tileconfig.legendtitle": "Elevated Vision",
   "elevatedvision.tileconfig.elevation.name": "Elevation",

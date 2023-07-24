@@ -8,7 +8,7 @@ ui
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, FLAGS } from "./const.js";
 import { log } from "./util.js";
 
 // API imports
@@ -22,17 +22,10 @@ import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.j
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
 
-import { AbstractEVShader } from "./glsl/AbstractEVShader.js";
-import { defineFunction } from "./glsl/GLSLFunctions.js";
-import { ElevationLayerShader } from "./glsl/ElevationLayerShader.js";
-import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
-import { SourceShadowWallGeometry, DirectionalSourceShadowWallGeometry, PointSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-import { ShadowWallShader, ShadowWallPointSourceMesh, TestGeometryShader } from "./glsl/ShadowWallShader.js";
-import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
-import { TestShadowShader } from "./glsl/TestShadowShader.js";
+import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Register methods, patches, settings
-import { registerAdditions, registerPatches, registerShadowPatches } from "./patching.js";
+import { PATCHES, REG_TRACKER, initializePatching, registerPatchesForSceneSettings } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
 
 // For elevation layer registration and API
@@ -43,23 +36,9 @@ import { SETTINGS, registerSettings, getSceneSetting, setSceneSetting } from "./
 
 import { updateFlyTokenControl } from "./scenes.js";
 
-// Hooks
-import { preUpdateTokenHook, refreshTokenHook, createOrRemoveActiveEffectHook } from "./tokens.js";
-import { updateTileHook } from "./tiles.js";
-
-import {
-  renderAmbientLightConfigHook,
-  renderAmbientSoundConfigHook,
-  renderTileConfigHook,
-  updateAmbientLightHook,
-  updateAmbientSoundHook } from "./renderConfig.js";
-
-import { refreshAmbientLightHook } from "./lighting_elevation_tooltip.js";
-
 // Other self-executing hooks
 import "./changelog.js";
 import "./controls.js";
-import "./shadow_hooks.js";
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -67,6 +46,8 @@ Hooks.once("init", function() {
   // CONFIG.debug.hooks = true;
   console.debug(`${MODULE_ID}|init`);
 
+  CONFIG.controlIcons.directionalLight = "icons/svg/sun.svg";
+  CONFIG.controlIcons.directionalLightOff = "icons/svg/cancel.svg";
 
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
@@ -129,6 +110,13 @@ Hooks.once("init", function() {
      * @type {number}
      */
     averageTiles: 2,
+
+    /**
+     * WebGL shadows.
+     * Maximum texture size used to represent shadows.
+     * @type {number}
+     */
+    shadowTextureSize: 4096
   };
 
   game.modules.get(MODULE_ID).api = {
@@ -145,26 +133,17 @@ Hooks.once("init", function() {
     CoordinateElevationCalculator,
     TokenPointElevationCalculator,
     TokenAverageElevationCalculator,
-    ElevationLayerShader,
+    DirectionalLightSource,
 
-    AbstractEVShader,
-    SourceShadowWallGeometry,
-    PointSourceShadowWallGeometry,
-    DirectionalSourceShadowWallGeometry,
-    defineFunction,
-    ShadowWallShader,
-    ShadowWallPointSourceMesh,
-    EVQuadMesh,
-    ShadowTextureRenderer,
-    TestShadowShader,
-    TestGeometryShader
+    PATCHES,
+    REG_TRACKER
   };
 
   // These methods need to be registered early
   registerGeometry();
   registerSettings();
+  initializePatching();
   registerLayer();
-  registerAdditions();
 
   // Register new render flag for elevation changes to placeables.
   CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshElevation = {};
@@ -180,12 +159,11 @@ Hooks.once("init", function() {
 
 Hooks.once("setup", function() {
   // The game.scenes object is present here
-  registerPatches();
 });
 
 Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
-  registerShadowPatches(getSceneSetting(SETTINGS.SHADING.ALGORITHM));
+  registerPatchesForSceneSettings();
   updateFlyTokenControl();
 });
 
@@ -193,7 +171,17 @@ Hooks.on("canvasReady", function() {
   // Set the elevation grid now that we know scene dimensions
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
+  setDirectionalLightSources(canvas.lighting.placeables);
+  DirectionalLightSource._refreshElevationAngleGuidelines();
 });
+
+function setDirectionalLightSources(lights) {
+  lights.forEach(l => {
+    // Assuming all lights currently are non-directional.
+    if ( !l.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED) ) return;
+    l.convertToDirectionalLight();
+  });
+}
 
 Hooks.on("3DCanvasSceneReady", function(_previewArr) {
   disableScene();
@@ -216,7 +204,7 @@ async function disableScene() {
   }
   if ( shadowsDisabled ) {
     await setSceneSetting(SETTINGS.SHADING.ALGORITHM, SETTINGS.SHADING.TYPES.NONE);
-    registerShadowPatches(SETTINGS.SHADING.TYPES.NONE);
+
     // Looks like we don't need to redraw the scene?
     // await canvas.draw(canvas.scene);
   }
@@ -235,18 +223,3 @@ Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
 function registerLayer() {
   CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
 }
-
-Hooks.on("preUpdateToken", preUpdateTokenHook);
-Hooks.on("refreshToken", refreshTokenHook);
-Hooks.on("createActiveEffect", createOrRemoveActiveEffectHook);
-Hooks.on("deleteActiveEffect", createOrRemoveActiveEffectHook);
-
-Hooks.on("updateTile", updateTileHook);
-Hooks.on("renderTileConfig", renderTileConfigHook);
-
-Hooks.on("renderAmbientLightConfig", renderAmbientLightConfigHook);
-Hooks.on("renderAmbientSoundConfig", renderAmbientSoundConfigHook);
-Hooks.on("updateAmbientLight", updateAmbientLightHook);
-Hooks.on("updateAmbientSound", updateAmbientSoundHook);
-Hooks.on("refreshAmbientLight", refreshAmbientLightHook);
-// Hooks.on("refreshAmbientSound", refreshAmbientSoundHook);

@@ -1,43 +1,16 @@
 /* globals
 canvas,
-ClockwiseSweepPolygon,
 GlobalLightSource,
 Token
 */
 "use strict";
 
-// import { drawPolygonWithHolesPV } from "./util.js";
-// import { ShadowShader } from "./glsl/ShadowShader.js";
-// import { ShadowShaderNoRadius } from "./glsl/ShadowShaderNoRadius.js";
-import { getSceneSetting, SETTINGS } from "./settings.js";
 import { MODULE_ID } from "./const.js";
 
-// NOTE: Polygon and Shader methods
+// NOTE: Polygon and Shader methods for CanvasVisibility
 
-/**
- * Wrap PIXI.Graphics.drawShape.
- * If passed a polygon with an array of polygons property, use that to draw with holes.
- */
-export function drawShapePIXIGraphics(wrapped, shape) {
-  if ( !(shape instanceof ClockwiseSweepPolygon) ) return wrapped(shape);
-
-  const { ALGORITHM, TYPES } = SETTINGS.SHADING;
-  const shaderAlgorithm = getSceneSetting(ALGORITHM) ?? TYPES.NONE;
-  if ( (shaderAlgorithm === TYPES.POLYGONS || shaderAlgorithm === TYPES.WEBGL) && Object.hasOwn(shape, "_evPolygons") ) {
-    for ( const poly of shape._evPolygons ) {
-      if ( poly.isHole ) {
-        this.beginHole();
-        this.drawShape(poly);
-        this.endHole();
-      } else this.drawShape(poly);
-    }
-  } else {
-    return wrapped(shape);
-  }
-
-  return this;
-}
-
+export const PATCHES = {};
+PATCHES.WEBGL = {};
 
 /**
  * Override CanvasVisibility.prototype.refreshVisibility
@@ -61,7 +34,7 @@ export function drawShapePIXIGraphics(wrapped, shape) {
  * - vision.base √
  * - vision.fov.lights √
  */
-export function refreshVisibilityCanvasVisibility() {
+function refreshVisibility() {
   if ( !this.vision?.children.length ) return;
   const fillColor = 0xFF0000;
   const vision = this.vision;
@@ -84,21 +57,24 @@ export function refreshVisibilityCanvasVisibility() {
 
   vision.base.clear();
   vision.base.removeChildren();
-  vision.base.beginFill(fillColor, 1.0);
+  // vision.base.beginFill(fillColor, 1.0);
 
-  vision.fov.lights.beginFill(fillColor, 1.0);
+  // vision.fov.lights.beginFill(fillColor, 1.0);
   // Already cleared with lightsFullRedraw above.
 
   vision.fov.tokens.clear();
   vision.fov.tokens.removeChildren();
+  // Currently unused
   // vision.fov.tokens.beginFill(fillColor, 1.0);
 
   vision.los.clear();
   if ( vision.los.children.length > 1 ) vision.los.removeChildren(1); // Keep the vision.los.preview child.
+  // Currently unused
   // vision.los.beginFill(fillColor, 1.0);
 
   vision.los.preview.clear();
   vision.los.preview.removeChildren();
+  // Currently unused
   // vision.los.preview.beginFill(fillColor, 1.0);
 
   // Iterating over each light source
@@ -150,15 +126,19 @@ export function refreshVisibilityCanvasVisibility() {
   for ( const visionSource of canvas.effects.visionSources ) {
     if ( !visionSource.active ) continue;
 
-    const fovMask = visionSource.EVVisionMask;
-    const losMask = visionSource.EVVisionLOSMask;
+    const fovMask = visionSource.EVVisionFOVMask;
+    const losMask = visionSource.EVVisionMask;
     if ( !fovMask ) console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|visionSource ${visionSource.object.id} has no fov mask.`);
     if ( !losMask ) console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|visionSource ${visionSource.object.id} has no los mask.`);
 
     // Draw FOV polygon or provide some baseline visibility of the token's space
     if ( (visionSource.radius > 0) && !visionSource.data.blinded && !visionSource.isPreview ) {
       vision.fov.tokens.addChild(fovMask);
-    } else vision.base.drawShape(visionSource.fov);
+    } else {
+      vision.base.beginFill(fillColor, 1.0);
+      vision.base.drawShape(visionSource.fov);
+      vision.base.endFill();
+    }
     // Draw LOS mask (with exception for blinded tokens)
     if ( !visionSource.data.blinded && !visionSource.isPreview ) {
       vision.los.addChild(losMask);
@@ -167,8 +147,8 @@ export function refreshVisibilityCanvasVisibility() {
   }
 
   // Fill operations are finished for LOS and FOV lights and tokens
-  vision.base.endFill();
-  vision.fov.lights.endFill();
+  // vision.base.endFill();
+  // vision.fov.lights.endFill();
 
   // Not needed with the masks:
   // vision.fov.tokens.endFill();
@@ -179,6 +159,21 @@ export function refreshVisibilityCanvasVisibility() {
   if ( commitFog ) canvas.fog.commit();
 }
 
+PATCHES.WEBGL.OVERRIDES = { refreshVisibility };
+
+// TODO: Use refreshVisibility override for polygons as well? What about "none"?
+
+/**
+ * Wrap CanvasVisibility.prototype._tearDown
+ * Clear the pointSourcesStates in tear down.
+ */
+async function _tearDown(wrapped, options) {
+  this.pointSourcesStates.clear();
+  return wrapped(options);
+}
+
+PATCHES.WEBGL.WRAPS = { _tearDown };
+
 /**
  * Copy CanvasVisibility.prototype.#checkLights into public method.
  * Required to override CanvasVisibility.prototype.refreshVisibility.
@@ -187,7 +182,7 @@ export function refreshVisibilityCanvasVisibility() {
  * Check if the lightsSprite render texture cache needs to be fully redrawn.
  * @returns {boolean}              return true if the lights need to be redrawn.
  */
-export function checkLightsCanvasVisibility() {
+function checkLights() {
   // Counter to detect deleted light source
   let lightCount = 0;
   // First checking states changes for the current effects lightsources
@@ -202,14 +197,6 @@ export function checkLightsCanvasVisibility() {
   return this.pointSourcesStates.size > lightCount;
 }
 
-/**
- * Wrap CanvasVisibility.prototype._tearDown
- * Clear the pointSourcesStates in tear down.
- */
-export async function _tearDownCanvasVisibility(wrapped, options) {
-  this.pointSourcesStates.clear();
-  return wrapped(options);
-}
 
 /**
  * Copy CanvasVisibility.prototype.#cacheLights to a public method.
@@ -221,7 +208,7 @@ export async function _tearDownCanvasVisibility(wrapped, options) {
  * Note: A full cache redraw needs the texture to be cleared.
  * @param {boolean} clearTexture       If the texture need to be cleared before rendering.
  */
-export function cacheLightsCanvasVisibility(clearTexture) {
+function cacheLights(clearTexture) {
   this.vision.fov.lights.renderable = true;
   const dims = canvas.dimensions;
   this.renderTransform.tx = -dims.sceneX;
@@ -235,3 +222,10 @@ export function cacheLightsCanvasVisibility(clearTexture) {
   });
   this.vision.fov.lights.renderable = false;
 }
+
+PATCHES.WEBGL.METHODS = {
+  checkLights,
+  cacheLights,
+  renderTransform: new PIXI.Matrix(),
+  pointSourcesStates: new Map()
+};

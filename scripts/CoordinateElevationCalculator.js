@@ -43,13 +43,13 @@ export class CoordinateElevationCalculator {
   options = {};
 
   /** @type {Point3d} */
-  #point;
+  #point = new Point3d();
 
   /** @type {Tile[]} */
   #tiles;
 
   constructor(point, opts = {}) {
-    this.#point = new Point3d(point.x, point.y, point.z);
+    this.#point.copyFrom(point);
     if ( opts.elevation ) this.elevation = opts.elevation;
     this._configure(opts);
   }
@@ -74,7 +74,7 @@ export class CoordinateElevationCalculator {
   }
 
   set coordinate(point) {
-    this.#point = new Point3d(point.x, point.y, point.z);
+    this.#point.copyFrom(point);
     this._refreshLocation();
     this._refreshElevation();
   }
@@ -84,6 +84,7 @@ export class CoordinateElevationCalculator {
   }
 
   set location(value) {
+    // Don't use copyFrom in case value has a z property.
     this.#point.x = value.x;
     this.#point.y = value.y;
     this._refreshLocation();
@@ -338,7 +339,7 @@ export class CoordinateElevationCalculator {
  * @returns {boolean}
  */
 export function tileOpaqueAt(tile, tokenCenter, alphaThreshold) {
-  const cache = tile._evPixelCache;
+  const cache = tile.evPixelCache;
   if ( !cache ) return false;
   return cache.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold);
 }

@@ -1,5 +1,17 @@
+# 0.5.5
+GM can set a "light size" in the ambient light configuration. This controls the amount of penumbra in the shadow. Lights are modeled physically as 3d spheres, with penumbra appearing for the left and right edges of walls and top/bottom edges of limited height walls when the light source is above the wall.
+
+GM can change an ambient light to a "directional light", which models a light source such as the sun or moon that is very far away. Moving the light around the scene controls its azimuth and elevation angle, with elevation angle approaching 90º as the light reaches the center of the canvas. GM can also set the solar angle, which controls the amount of penumbra in the shadow. All properties are physically modeled, allowing light to stream across the entire canvas. Lighting animations work as normal, although some are a lot better than others (sunburst, starlight, and fog are pretty good).
+
+Rework of the switching between lighting algorithms in a scene, to avoid reloading the scene.
+
+- Fix for bridge effect not working with tiles (issue #62).
+- Update geometry lib to v0.2.3.
+- Include fix from 0.4.12 when loading a scene in The Forge the first time.
+- Possible fixes for issues #61 (can't move tokens) and #63 (darkvision).
+
 # 0.5.4
-Fix for storing elevation data in the Forge. Resolves issue #60. See v0.4.9 and 0.4.10.
+Fix for storing elevation data in The Forge. Resolves issue #60. See v0.4.9 and 0.4.10.
 
 # 0.5.3
 WebGL shadows rewritten entirely. No longer a limit on the number of walls it can consider when calculating shadows using the GPU. (Technically, may be limited by the number of attributes that can be passed to a shader, but that should be sufficiently large for most use cases.) WebGL shadows also should be a lot more performant because shadows are drawn to a texture which is then used for rendering---this avoids a lot of calculations in the fragment shader on the fly.
@@ -26,6 +38,9 @@ Updated for Foundry v11. Update geometry lib to v0.2.1.
 Display of the elevation number when in the elevation layer is now faster.
 
 WebGL shadows disabled until a more robust solution can be implemented.
+
+# 0.4.12
+Correct error when loading scene for the first time.
 
 # 0.4.11
 Correct issue with 0.4.10 release.
