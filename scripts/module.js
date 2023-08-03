@@ -25,7 +25,7 @@ import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculat
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Register methods, patches, settings
-import { PATCHES, REG_TRACKER, initializePatching, registerPatchesForSceneSettings } from "./patching.js";
+import { PATCHER, initializePatching, registerPatchesForSceneSettings } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
 
 // For elevation layer registration and API
@@ -135,8 +135,7 @@ Hooks.once("init", function() {
     TokenAverageElevationCalculator,
     DirectionalLightSource,
 
-    PATCHES,
-    REG_TRACKER
+    PATCHER
   };
 
   // These methods need to be registered early
