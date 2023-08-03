@@ -88,12 +88,13 @@ export function registerSettings() {
     hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.SHADING.ALGORITHM}.hint`),
     scope: "world",
     config: true,
-    default: STYPES.POLYGONS,
+    default: STYPES.WEBGL,
     type: String,
     requiresReload: false,
     choices: {
       [STYPES.NONE]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.NONE}`),
-      [STYPES.POLYGONS]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.POLYGONS}`)
+      [STYPES.POLYGONS]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.POLYGONS}`),
+      [STYPES.WEBGL]: game.i18n.localize(`${MODULE_ID}.settings.${STYPES.WEBGL}`)
     }
   });
 
