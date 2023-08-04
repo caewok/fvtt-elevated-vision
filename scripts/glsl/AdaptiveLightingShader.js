@@ -62,16 +62,23 @@ void main() {
     return source;
   }
 }
+
+/**
+ * Add Shadow GLSL code to the fragment source.
+ * Mark shadow areas using the depth parameter---moving toward full shadow decreases depth to 0.
+ */
 function addShadowFragmentCode(source) {
   try {
     source = new ShaderPatcher("frag")
       .setSource(source)
       .addUniform("uEVShadowSampler", "sampler2D")
       .addUniform("uEVShadows", "bool")
-
+      .addUniform("uEVDirectional", "bool")
+      .addVarying("vEVCanvasUV", "vec2")
       .replace(/gl_FragColor = /, `
         if ( uEVShadows ) {
-          vec4 EV_shadowTexel = texture2D(uEVShadowSampler, vUvs);
+          vec2 texCoordEV = uEVDirectional ? vEVCanvasUV : vUvs;
+          vec4 EV_shadowTexel = texture2D(uEVShadowSampler, texCoordEV);
           float EV_lightAmount = EV_shadowTexel.r;
           if ( EV_shadowTexel.g < 0.3) EV_lightAmount *= EV_shadowTexel.b;
           depth *= EV_lightAmount;
