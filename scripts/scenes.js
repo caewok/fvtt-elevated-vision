@@ -80,16 +80,25 @@ async function preUpdateSceneHook(document, change, options, _userId) {
 
 async function updateSceneHook(document, change, options, _userId) {
   if ( canvas.scene.id !== document.id ) return;
+  const modFlags = change.flags?.[MODULE_ID];
+  if ( !modFlags || isEmpty(modFlags) ) return;
+
+  // If the scene elevation step size is changed, set the current elevation in the toolbar to the nearest step.
+  if ( Object.hasOwn(modFlags, SETTINGS.ELEVATION_INCREMENT) ) {
+    const newStep = modFlags[SETTINGS.ELEVATION_INCREMENT];
+    const oldValue = canvas.elevation.controls.currentElevation ?? newStep;
+    canvas.elevation.controls.currentElevation = oldValue.toNearest(newStep);
+  }
 
   // If the updated scene is currently the active scene, then update patches and fly controls.
-  const autoelevate = change.flags?.[MODULE_ID]?.[SETTINGS.AUTO_ELEVATION];
+  const autoelevate = modFlags[SETTINGS.AUTO_ELEVATION];
   if ( typeof autoelevate !== "undefined" ) {
     updateFlyTokenControl(autoelevate);
     if ( autoelevate === true ) ui.notifications.notify("Elevated Vision autoelevate enabled for scene.");
     else if ( autoelevate === false ) ui.notifications.notify("Elevated Vision autoelevate disabled for scene.");
   }
 
-  const algorithm = change.flags?.[MODULE_ID]?.[SETTINGS.SHADING.ALGORITHM];
+  const algorithm = modFlags[SETTINGS.SHADING.ALGORITHM];
   if ( algorithm ) {
     registerPatchesForSceneSettings();
     const label = game.i18n.localize(SETTINGS.SHADING.LABELS[algorithm]);

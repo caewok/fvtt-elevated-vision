@@ -13,9 +13,9 @@ export class ElevationLayerToolBar extends Application {
   constructor() {
     super(...arguments);
 
-    // As the elevation default to 0, it makes sense to start at 1 unit of elevation.
+    // Start the elevation at the current step size or 1 grid unit
     this.elevation = canvas.elevation;
-    this.currentElevation = canvas.scene.dimensions.distance;
+    this.currentElevation = canvas.elevation.elevationStep || canvas.scene.dimensions.distance;
   }
 
   get elevationStep() {
