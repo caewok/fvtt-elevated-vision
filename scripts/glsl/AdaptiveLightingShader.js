@@ -50,9 +50,11 @@ function addShadowVertexCode(source) {
       .addUniform("uEVSourceOrigin", "vec2") // x, y source center
       .addUniform("uEVSourceRadius", "float")
       .addVarying("vEVCanvasUV", "vec2")
+
       .wrapMain(`
 void main() {
   vEVCanvasUV =  ((aVertexPosition * uEVSourceRadius) + uEVSourceOrigin) / uEVCanvasDimensions.xy;
+  @main();
 }`)
       .getSource();
 
