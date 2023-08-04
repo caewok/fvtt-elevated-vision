@@ -194,7 +194,7 @@ PATCHES.WEBGL.WRAPS = {
  * New method: RenderedPointSource.prototype._initializeEVShadows
  * Build all the shadow properties: mesh, geometry, renderer.
  */
-function _initializeEVShadows() {
+function _initializeEVShadows(initializeMask = true) {
   if ( !this[MODULE_ID] ) this[MODULE_ID] = {};
 
   // Build the geometry, shadow texture, and vision mask.
@@ -202,7 +202,7 @@ function _initializeEVShadows() {
   this._initializeEVShadowMesh();
   this._initializeEVTerrainShadowMesh();
   this._initializeEVShadowRenderer();
-  this._initializeEVShadowMask();
+  if ( initializeMask ) this._initializeEVShadowMask();
 
   // Set uniforms used by the lighting shader.
   const ev = this[MODULE_ID];
@@ -605,8 +605,9 @@ PATCHES.VISIBILITY.METHODS = {
  */
 function EVShadowTexture() {
   const ev = this[MODULE_ID];
-  if ( !ev || !ev.shadowRenderer ) this._initializeEVShadows();
-  return ev.shadowRenderer.renderTexture;
+  // Don't init the shadow mask in case the mask called this getter; avoid circularity.
+  if ( !ev || !ev.shadowRenderer ) this._initializeEVShadows(false);
+  return this[MODULE_ID].shadowRenderer.renderTexture;
 }
 
 /**
@@ -615,7 +616,7 @@ function EVShadowTexture() {
 function EVVisionMask() {
   const ev = this[MODULE_ID];
   if ( !ev || !ev.shadowVisionMask ) this._initializeEVShadows();
-  return ev.shadowVisionMask;
+  return this[MODULE_ID].shadowVisionMask;
 }
 
 /**
