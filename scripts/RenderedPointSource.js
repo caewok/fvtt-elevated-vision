@@ -242,7 +242,6 @@ function _initializeEVShadowMesh() {
 function _initializeEVTerrainShadowMesh() {
   const ev = this[MODULE_ID];
   if ( ev.terrainShadowMesh ) return;
-
   const shader = ShadowTerrainShader.create(this);
   ev.terrainShadowMesh = new EVUpdatingQuadMesh(this.bounds, shader);
 }
@@ -255,29 +254,17 @@ function _initializeEVTerrainShadowMesh() {
 function _initializeEVShadowRenderer() {
   const ev = this[MODULE_ID];
   if ( ev.shadowRenderer ) return;
-
-  // Force a uniform update, to avoid ghosting of placeables in the light radius.
-  // TODO: Find the underlying issue and fix this!
-  // Must be a new uniform variable (one that is not already in uniforms)
-  //   Object.values(this.layers).forEach(layer => {
-  //     const u = layer.shader.uniforms;
-  //     delete u.uEVtmpfix;
-  //     u.uEVtmpfix = 0;
-  //   });
-
-  // Render texture to store the shadow mesh for use by other shaders.
   ev.shadowRenderer = new ShadowTextureRenderer(this, ev.shadowMesh, ev.terrainShadowMesh);
 }
 
 /**
  * New method: RenderedPointSource.prototype._initializeEVShadowMask
  * Initialize the mask used by CanvasVisibility and EVVisionMask.
+ * Mask that colors red areas that are lit / are viewable.
  */
 function _initializeEVShadowMask() {
   const ev = this[MODULE_ID];
   if ( ev.shadowVisionMask ) return;
-
-  // Mask that colors red areas that are lit / are viewable.
   const shader = ShadowVisionMaskShader.create(this);
   ev.shadowVisionMask = new EVUpdatingQuadMesh(this.bounds, shader);
 }
