@@ -620,8 +620,7 @@ geom.wallCornerCoordinates(linkedWall)
     if ( id instanceof Wall ) id = id.id;
 
     // Theoretically, could have a link update even for a wall we are not including.
-    const linkUpdated = this._checkRemovedWallLinks(id, update);
-    if ( !this._triWallMap.has(id) ) return linkUpdated;
+    if ( !this._triWallMap.has(id) ) return this._checkRemovedWallLinks(id, update);
 
     const idxToRemove = this._triWallMap.get(id);
     for ( const attr of Object.keys(this.attributes) ) {
@@ -639,6 +638,9 @@ geom.wallCornerCoordinates(linkedWall)
 
     // Currently, the index buffer is consecutive.
     this.indexBuffer.data = this.indexBuffer.data.map((value, index) => index);
+
+    // Remove wall links at the end, so the removed wall is reflected properly.
+    this._checkRemovedWallLinks(id, update);
 
     // Flag the updated buffers for uploading to the GPU.
     if ( update ) this.update();
