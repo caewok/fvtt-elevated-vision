@@ -449,8 +449,9 @@ geom.wallCornerCoordinates(linkedWall)
     // We cannot know what the wall links were previous to the update unless we store all that data.
     // Instead, cycle through each checking for changes.
     let linkUpdated = false;
-    for ( const wall of canvas.walls.placeables ) {
-      if ( wall.id === removedWallId ) continue;
+    for ( const wallId of this._triWallMap.keys() ) {
+      if ( wallId === removedWallId ) continue;
+      const wall = canvas.walls.documentCollection.get(wallId).object;
       const res = this._updateWallLinkBuffer(wall, update);
       linkUpdated ||= res;
     }
