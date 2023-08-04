@@ -32,6 +32,12 @@ function _updateEVShadowData(changes, changeObj = {}) {
   // Sized point source shader must track light size.
   changeObj.changedLightSize = Object.hasOwn(changes, "lightSize");
 
+  // Update the uniforms b/c they are not necessarily updated in drag operations.
+  for ( const layer of Object.values(this.layers) ) {
+    const shader = layer.shader;
+    this._updateCommonUniforms(shader);
+  }
+
   // Instead of super._updateEVShadowData()
   RenderedPointSource.prototype._updateEVShadowData.call(this, changes, changeObj);
 }

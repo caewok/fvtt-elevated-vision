@@ -4,7 +4,6 @@ CONFIG,
 CONST,
 foundry,
 PIXI,
-PointSourcePolygon,
 Wall
 */
 "use strict";
@@ -227,13 +226,6 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // Don't include the link if it is not a valid wall for this source.
     const { linkedA, linkedB } = getLinkedWalls(wall);
 
-    if ( !(linkedA.size || linkedB.size) ) {
-      return {
-        corner0: [A.x, A.y, top, -1],
-        corner1: [B.x, B.y, bottom, -1]
-      };
-    }
-
     // Find the smallest angle between this wall and a linked wall that covers this light.
     // If less than 180º, the light is inside a "V" and so the point of the V blocks all light.
     // If greater than 180º, the light is outside the "V" and so the point of the V may not block all light.
@@ -427,38 +419,18 @@ geom.wallCornerCoordinates(linkedWall)
   }
 
   /**
-   * For the given updated wall, determine if it changes the link status of connected walls.
-   * @param {Wall} wall               Wall to update
+   * For the given updated or removed wall, determine if it changes the link status of connected walls.
+   * @param {string} updatedWallId    ID of updated or removed wall
    * @param {boolean} [update=true]   If false, buffer will not be flagged for update
    * @returns {boolean} Did the geometry need to be updated based on the wall update?
    */
-  _checkUpdatedWallLinks(updatedWall, update = true) {
+  _checkWallLinks(updatedWallId, update = true) {
     // We cannot know what the wall links were previous to the update unless we store all that data.
     // Instead, cycle through each checking for changes.
     let linkUpdated = false;
-    for ( const wall of canvas.walls.placeables ) {
-      if ( wall === updatedWall ) continue;
-      const res = this._updateWallLinkBuffer(wall, update);
-      linkUpdated ||= res;
-    }
-    return linkUpdated;
-  }
-
-  /**
-   * For the given deleted wall, determine if it changes the link status of connected walls.
-   * If so, update those linked walls
-   * Because the wall is deleted, `getLinkedWalls` will no longer return the linked value.
-   * Process all walls to determine if their link status has changed.
-   * @param {Wall} wall               Wall to update
-   * @param {boolean} [update=true]   If false, buffer will not be flagged for update
-   * @returns {boolean}  Did the geometry need to be updated?
-   */
-  _checkRemovedWallLinks(removedWallId, update = true) {
-    // We cannot know what the wall links were previous to the update unless we store all that data.
-    // Instead, cycle through each checking for changes.
-    let linkUpdated = false;
-    for ( const wall of canvas.walls.placeables ) {
-      if ( wall.id === removedWallId ) continue;
+    for ( const wallId of this._triWallMap.keys() ) {
+      if ( wallId === updatedWallId ) continue;
+      const wall = canvas.walls.documentCollection.get(wallId).object;
       const res = this._updateWallLinkBuffer(wall, update);
       linkUpdated ||= res;
     }
@@ -545,7 +517,7 @@ geom.wallCornerCoordinates(linkedWall)
     if ( !this._includeWall(wall) ) return this.removeWall(wall.id, { update });
 
     // Check for updates to wall link status for walls linked to this one.
-    const updatedLinkedWalls = this._checkUpdatedWallLinks(wall, update);
+    const updatedLinkedWalls = this._checkWallLinks(wall.id, update);
 
     // Note: includeWall will handle changes to the threshold.attenuation.
     // Check for changes to the given coordinate set and update the buffers.
@@ -628,8 +600,7 @@ geom.wallCornerCoordinates(linkedWall)
     if ( id instanceof Wall ) id = id.id;
 
     // Theoretically, could have a link update even for a wall we are not including.
-    const linkUpdated = this._checkRemovedWallLinks(id, update);
-    if ( !this._triWallMap.has(id) ) return linkUpdated;
+    if ( !this._triWallMap.has(id) ) return this._checkWallLinks(id, update);
 
     const idxToRemove = this._triWallMap.get(id);
     for ( const attr of Object.keys(this.attributes) ) {
@@ -647,6 +618,9 @@ geom.wallCornerCoordinates(linkedWall)
 
     // Currently, the index buffer is consecutive.
     this.indexBuffer.data = this.indexBuffer.data.map((value, index) => index);
+
+    // Remove wall links at the end, so the removed wall is reflected properly.
+    this._checkWallLinks(id, update);
 
     // Flag the updated buffers for uploading to the GPU.
     if ( update ) this.update();
@@ -682,18 +656,33 @@ geom.wallCornerCoordinates(linkedWall)
   }
 
   /**
-   * On source movement, check if the linked wall coordinates need updating and update.
-   * If the source changes orientation w/r/t 2+ linked walls, the link status would update.
+   * On source movement, check:
+   * - wall links. If the source changes orientation w/r/t 2+ linked walls, the link status would update.
+   * - whether the wall is included. If the source changes position, the wall may not be included
    * @returns {boolean} True if an update was needed.
    */
   updateSourcePosition() {
     let updated = false;
+    const wallsChecked = new Set();
     for ( const [id, idxToUpdate] of this._triWallMap ) {
       const wall = canvas.walls.documentCollection.get(id).object;
-      const resLink = this._updateWallLinkBuffer(wall, false);
-      const resThreshold = this._updateWallThreshold(wall, idxToUpdate, false);
-      updated ||= resLink || resThreshold;
+      wallsChecked.add(wall);
+      if ( !this._includeWall(wall) ) {
+        const wasUpdated = this.removeWall(wall.id, { update: false });
+        updated ||= wasUpdated;
+      } else {
+        const resLink = this._updateWallLinkBuffer(wall, false);
+        const resThreshold = this._updateWallThreshold(wall, idxToUpdate, false);
+        updated ||= (resLink || resThreshold);
+      }
     }
+
+    const wallsToAdd = this.source._getWalls().difference(wallsChecked);
+    wallsToAdd.forEach(w => {
+      const wasUpdated = this.addWall(w, { update: false });
+      updated ||= wasUpdated;
+    });
+
     if ( updated ) this.update();
     return updated;
   }
