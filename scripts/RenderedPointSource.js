@@ -1,9 +1,7 @@
 /* globals
 canvas,
-CONFIG,
 PIXI,
 Token
-
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -102,7 +100,6 @@ PATCHES.POLYGONS = {};
 PATCHES.VISIBILITY = {};
 PATCHES.WEBGL = {};
 
-
 // ----- NOTE: Polygon Shadows ----- //
 // NOTE: Polygon Wraps
 function EVVisionMaskPolygon() {
@@ -164,8 +161,7 @@ function _configure(wrapped, changes) {
 function destroy(wrapped) {
   const ev = this[MODULE_ID];
   if ( !ev ) return wrapped();
-
-
+  destroyEVAssets(ev);
   return wrapped;
 }
 
@@ -263,11 +259,11 @@ function _initializeEVShadowRenderer() {
   // Force a uniform update, to avoid ghosting of placeables in the light radius.
   // TODO: Find the underlying issue and fix this!
   // Must be a new uniform variable (one that is not already in uniforms)
-//   Object.values(this.layers).forEach(layer => {
-//     const u = layer.shader.uniforms;
-//     delete u.uEVtmpfix;
-//     u.uEVtmpfix = 0;
-//   });
+  //   Object.values(this.layers).forEach(layer => {
+  //     const u = layer.shader.uniforms;
+  //     delete u.uEVtmpfix;
+  //     u.uEVtmpfix = 0;
+  //   });
 
   // Render texture to store the shadow mesh for use by other shaders.
   ev.shadowRenderer = new ShadowTextureRenderer(this, ev.shadowMesh, ev.terrainShadowMesh);
@@ -491,30 +487,6 @@ function wallUpdated(wall, changes) {
  */
 function wallRemoved(wallId) { handleWallChange(this, wallId, "removeWall"); }
 
-function hasWallCollision(origin, testPt) {
-  const type = this.constructor.sourceType;
-
-  // For Wall Height, set origin.b and origin.t to trick it into giving us the walls.
-  origin.b = Number.POSITIVE_INFINITY;
-  origin.t = Number.NEGATIVE_INFINITY;
-  const wallCollisions = CONFIG.Canvas.polygonBackends[type].testCollision(origin, testPt, {type, mode: "all", source: this});
-  if ( !wallCollisions.length ) return false;
-
-  const dir = testPt.subtract(origin);
-  return wallCollisions.some(c => {
-    const w = c.edges.values().next().value.wall;
-    if ( !isFinite(w.topE) && !isFinite(w.bottomE) ) return true;
-
-    const wallPts = Point3d.fromWall(w);
-    const v0 = wallPts.A.top;
-    const v1 = wallPts.A.bottom;
-    const v2 = wallPts.B.bottom;
-    const v3 = wallPts.B.top;
-    return Plane.rayIntersectionQuad3dLD(origin, dir, v0, v1, v2, v3); // Null or t value
-  });
-}
-
-
 PATCHES.WEBGL.METHODS = {
   _initializeEVShadows,
   _initializeEVShadowGeometry,
@@ -529,8 +501,99 @@ PATCHES.WEBGL.METHODS = {
   wallRemoved
 };
 
+
+/**
+ * New method: RenderedPointSource.prototype._getWalls
+ * Find the set of of walls that could potentially interact with this source.
+ * Does not consider 3d collisions, just whether the wall potentially blocks.
+ * @param {PIXI.Rectangle} bounds
+ * @returns {Set<Wall>}
+ */
+function _getWalls(bounds) {
+  const origin = PIXI.Point.fromObject(this);
+  bounds ??= this.bounds;
+  const collisionTest = o => this._testWallInclusion(o.t, origin);
+  return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+}
+
+/**
+ * New method: RenderedPointSource.prototype._testWallInclusion
+ * Comparable to PointSourcePolygon.prototype._testWallInclusion
+ * Test for whether a given wall interacts with this source.
+ * Used to filter walls in the quadtree in _getWalls
+ * @param {Wall} wall
+ * @param {PIXI.Point} origin
+ * @returns {boolean}
+ */
+function _testWallInclusion(wall, origin) {
+  // Ignore walls that are non-blocking for this type.
+  const type = this.constructor.sourceType;
+  if ( !wall.document[type] || wall.isOpen ) return false;
+
+  // If wall is entirely above the light, do not keep.
+  if ( wall.bottomZ > this.elevationZ ) return false;
+
+  // If wall is entirely below the canvas and source is above, do not keep.
+  const minCanvasE = canvas.elevation?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
+  if ( wall.topZ <= minCanvasE && this.elevationZ > minCanvasE ) return false;
+
+  // Ignore collinear walls
+  const side = wall.orientPoint(origin);
+  if ( !side ) return false;
+
+  // Ignore one-directional walls facing away from the origin.
+  if ( side === wall.document.dir ) return false;
+
+  // Ignore non-attenuated threshold walls where the threshold applies.
+  if ( !wall.document.threshold.attenuation && this.thresholdApplies(wall) ) return false;
+
+  return true;
+}
+
+/**
+ * For threshold walls, determine if threshold applies.
+ * @param {Wall} wall
+ * @returns {boolean} True if the threshold applies.
+ */
+function thresholdApplies(wall) {
+  return wall.applyThreshold(this.constructor.sourceType, this, this.data.externalRadius);
+}
+
+/**
+ * Test if this source has a wall collision between this source origin and test point.
+ * Does not consider whether the test point is within radius of the source origin.
+ * @param {PIXI.Point} testPt           Point to test against source origin
+* @returns {boolean}
+ */
+function hasWallCollision(testPt) {
+  const origin = PIXI.Point.fromObject(this);
+  const xMinMax = Math.minMax(origin.x, testPt.x);
+  const yMinMax = Math.minMax(origin.y, testPt.y);
+  const lineBounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
+  const walls = this._getWalls(lineBounds);
+  if ( !walls.size ) return false;
+
+  // Test the intersection of the ray with each wall.
+  const dir = testPt.subtract(origin);
+  return walls.some(w => {
+    if ( !isFinite(w.topE) && !isFinite(w.bottomE) ) return true;
+
+    // Check if the test point falls within an attenuation area.
+
+    const wallPts = Point3d.fromWall(w);
+    const v0 = wallPts.A.top;
+    const v1 = wallPts.A.bottom;
+    const v2 = wallPts.B.bottom;
+    const v3 = wallPts.B.top;
+    return Plane.rayIntersectionQuad3dLD(origin, dir, v0, v1, v2, v3); // Null or t value
+  });
+}
+
 PATCHES.VISIBILITY.METHODS = {
   hasWallCollision,
+  _getWalls,
+  _testWallInclusion,
+  thresholdApplies,
   pointInShadow,
   targetInShadow
 };
@@ -617,5 +680,3 @@ function handleWallChange(source, wall, updateFn, opts = {}) {
   // For vision sources, update the LOS geometry.
   if ( ev.wallGeometryUnbounded?.[updateFn](wall, opts) ) ev.shadowVisionLOSRenderer.update();
 }
-
-

@@ -1,13 +1,15 @@
 /* globals
 AmbientLight,
 canvas,
+CONST,
 LightSource,
-PIXI
+PIXI,
 PreciseText
 */
 "use strict";
 
 import { MODULE_ID, FLAGS } from "./const.js";
+import { Plane } from "./geometry/3d/Plane.js";
 import { DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { DirectionalShadowWallShader, ShadowMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
@@ -65,6 +67,8 @@ export class DirectionalLightSource extends LightSource {
   _createPolygon() {
     return canvas.dimensions.rect.toPolygon();
   }
+
+  get elevationE() { return Number.MAX_SAFE_INTEGER; }
 
   /**
    * Holds a grid delineating elevation angle breaks that can be displayed when hovering over or
@@ -475,18 +479,16 @@ export class DirectionalLightSource extends LightSource {
 
     // Project a point out beyond the canvas to stand in for the light position.
     const { azimuth, elevationAngle, solarAngle } = this;
-    const midCollision = directionalCollision(this, testPt, azimuth, elevationAngle);
-
-    this.hasWallCollision(origin, testPt);
+    const midCollision = this.hasWallCollision(testPt, azimuth, elevationAngle);
 
     /* Draw.point(origin, { color: Draw.COLORS.yellow }) */
     if ( !solarAngle ) return Number(midCollision);
 
     // Test the top/bottom/left/right points of the light for penumbra shadow.
-    const topCollision = directionalCollision(this, testPt, azimuth, elevationAngle + solarAngle);
-    const bottomCollision = directionalCollision(this, testPt, azimuth, elevationAngle - solarAngle);
-    const side0Collision = directionalCollision(this, testPt, azimuth + solarAngle, elevationAngle);
-    const side1Collision = directionalCollision(this, testPt, azimuth - solarAngle, elevationAngle);
+    const topCollision = this.hasWallCollision(testPt, azimuth, elevationAngle + solarAngle);
+    const bottomCollision = this.hasWallCollision(testPt, testPt, azimuth, elevationAngle - solarAngle);
+    const side0Collision = this.hasWallCollision(testPt, testPt, azimuth + solarAngle, elevationAngle);
+    const side1Collision = this.hasWallCollision(testPt, testPt, azimuth - solarAngle, elevationAngle);
 
     // Shadows: side0/mid/side1 = 100%; side0/mid = 50%; mid/side1 = 50%; any one = 25%
     const sideSum = side0Collision + side1Collision + midCollision;
@@ -509,12 +511,82 @@ export class DirectionalLightSource extends LightSource {
 
     return heightShadowPercentage * sideShadowPercentage;
   }
-}
 
-function directionalCollision(source, testPt, azimuth, elevationAngle) {
-  const dir = DirectionalLightSource.lightDirection(azimuth, elevationAngle);
-  const origin = testPt.add(dir.multiplyScalar(canvas.dimensions.maxR));
-  return source.hasWallCollision(origin, testPt);
+  /**
+   * Comparable to PointSourcePolygon.prototype._testWallInclusion
+   * Test for whether a given wall interacts with this source.
+   * Used to filter walls in the quadtree in _getWalls
+   * @param {Wall} wall
+   * @param {number} azimuth
+   * @param {number} elevationAngle
+   * @returns {boolean}
+   */
+  _testWallInclusion(wall, azimuth, elevationAngle) {
+    // Ignore reverse proximity walls (b/c this is a near-infinite light source)
+    const type = this.constructor.sourceType;
+    if ( wall.document[type] === CONST.WALL_SENSE_TYPES.DISTANCE ) return false;
+
+    // Ignore walls that are non-blocking for this type.
+    if ( !wall.document[type] || wall.isOpen ) return false;
+
+    // Ignore collinear walls
+    // Create a fake source origin point to test orientation\
+    azimuth ??= this.azimuth;
+    elevationAngle ??= this.elevationAngle;
+    const dir = DirectionalLightSource.lightDirection(azimuth, elevationAngle);
+    const origin = PIXI.Point.fromObject(wall.B).add(dir.multiplyScalar(canvas.dimensions.maxR));
+    const side = wall.orientPoint(origin);
+    if ( !side ) return false;
+
+    // Ignore one-directional walls facing away from the origin.
+    if ( side === wall.document.dir ) return false;
+
+    // If wall is entirely below the canvas, do not keep.
+    const minCanvasE = canvas.elevation?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
+    if ( wall.topZ <= minCanvasE ) return false;
+
+    return true;
+  }
+
+  _getWalls(bounds, azimuth, elevationAngle) {
+    bounds ??= this.bounds;
+    const collisionTest = o => this._testWallInclusion(o.t, azimuth, elevationAngle);
+    return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+  }
+
+  /**
+   * Use a fake origin to test for collision.
+   * Allow azimuth and elevationAngle to be adjusted.
+   */
+  hasWallCollision(testPt, azimuth, elevationAngle) {
+    azimuth ??= this.azimuth;
+    elevationAngle ??= this.elevationAngle;
+    const dir = DirectionalLightSource.lightDirection(azimuth, elevationAngle);
+    const origin = testPt.add(dir.multiplyScalar(canvas.dimensions.maxR));
+
+    const xMinMax = Math.minMax(origin.x, testPt.x);
+    const yMinMax = Math.minMax(origin.y, testPt.y);
+    const lineBounds = new PIXI.Rectangle(
+      xMinMax.min,
+      yMinMax.min,
+      xMinMax.max - xMinMax.min,
+      yMinMax.max - yMinMax.min);
+    const walls = this._getWalls(lineBounds, azimuth, elevationAngle);
+    if ( !walls.size ) return false;
+
+    // Test the intersection of the ray with each wall.
+    const rayDir = testPt.subtract(origin);
+    return walls.some(w => {
+      if ( !isFinite(w.topE) && !isFinite(w.bottomE) ) return true;
+
+      const wallPts = Point3d.fromWall(w);
+      const v0 = wallPts.A.top;
+      const v1 = wallPts.A.bottom;
+      const v2 = wallPts.B.bottom;
+      const v3 = wallPts.B.top;
+      return Plane.rayIntersectionQuad3dLD(origin, rayDir, v0, v1, v2, v3); // Null or t value
+    });
+  }
 }
 
 /**

@@ -200,7 +200,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @param {Wall} wall
    * @returns {boolean} True if the threshold applies.
    */
-  thresholdApplies(wall) { return wall.applyThreshold(this.sourceType, this.source); }
+  thresholdApplies(wall) { return wall.applyThreshold(this.sourceType, this.source, this.source.data.externalRadius); }
 
   /**
    * Should this wall be included in the geometry for this source shadow?
@@ -208,47 +208,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns {boolean}   True if wall should be included
    */
   _includeWall(wall) {
-    // See PointSourcePolygon.prototype._testWallInclusion
-
-    // TODO: Interior walls underneath active roof tiles?
-
-    // Ignore walls that are not blocking for this polygon type
-    if ( !wall.document[this.sourceType] || wall.isOpen ) return false;
-
-    const { topZ, bottomZ } = wall;
-    const sourceZ = this.source.elevationZ;
-
-    // If wall is entirely above the light, do not keep.
-    if ( bottomZ > sourceZ ) return false;
-
-    // If wall is entirely below the canvas, do not keep.
-    const minCanvasE = canvas.elevation?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
-    if ( topZ <= minCanvasE ) return false;
-
-    // Ignore walls that are nearly collinear with the origin.
-    const side = this.sourceWallOrientation(wall);
-    if ( !side ) return false;
-
-    // Ignore one-directional walls facing away from the origin
-    // TODO: Do we care about the other direction modes?
-    const wallDirectionMode = PointSourcePolygon.WALL_DIRECTION_MODES.NORMAL;
-    const wdm = PointSourcePolygon.WALL_DIRECTION_MODES;
-    if ( wall.document.dir
-      && (wallDirectionMode !== wdm.BOTH)
-      && (wallDirectionMode === wdm.NORMAL) === (side === wall.document.dir) ) return false;
-
-    if ( this.thresholdApplies(wall) ) {
-      // Ignore threshold walls with non-attenuated thresholds.
-      if ( !wall.document.threshold.attenuation ) return false;
-
-      // Ignore reverse threshold walls if the attenuation results in full radius going through.
-      //       if ( wall.document[this.sourceType] === CONST.WALL_SENSE_TYPES.DISTANCE ) {
-      //         const { inside, outside } = this.calculateThresholdAttenuation(wall);
-      //         if ( (inside + outside) >= this.source.radius ) return false;
-      //       }
-    }
-
-    return true;
+    return this.source._testWallInclusion(wall, PIXI.Point.fromObject(this.source));
   }
 
   /**
