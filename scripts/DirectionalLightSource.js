@@ -68,6 +68,8 @@ export class DirectionalLightSource extends LightSource {
     return canvas.dimensions.rect.toPolygon();
   }
 
+  get elevationE() { return Number.MAX_SAFE_INTEGER; }
+
   /**
    * Holds a grid delineating elevation angle breaks that can be displayed when hovering over or
    * dragging the source.
@@ -538,6 +540,10 @@ export class DirectionalLightSource extends LightSource {
 
     // Ignore one-directional walls facing away from the origin.
     if ( side === wall.document.dir ) return false;
+
+    // If wall is entirely below the canvas, do not keep.
+    const minCanvasE = canvas.elevation?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
+    if ( wall.topZ <= minCanvasE ) return false;
 
     return true;
   }

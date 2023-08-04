@@ -530,6 +530,13 @@ function _testWallInclusion(wall, origin) {
   const type = this.constructor.sourceType;
   if ( !wall.document[type] || wall.isOpen ) return false;
 
+  // If wall is entirely above the light, do not keep.
+  if ( wall.bottomZ > this.elevationZ ) return false;
+
+  // If wall is entirely below the canvas and source is above, do not keep.
+  const minCanvasE = canvas.elevation?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
+  if ( wall.topZ <= minCanvasE && this.elevationZ > minCanvasE ) return false;
+
   // Ignore collinear walls
   const side = wall.orientPoint(origin);
   if ( !side ) return false;
@@ -537,10 +544,19 @@ function _testWallInclusion(wall, origin) {
   // Ignore one-directional walls facing away from the origin.
   if ( side === wall.document.dir ) return false;
 
-  // Condition walls on whether their threshold proximity is set.
-  if ( !wall.applyThreshold(type, origin, this.data.externalRadius) ) return false;
+  // Ignore non-attenuated threshold walls where the threshold applies.
+  if ( !wall.document.threshold.attenuation && this.thresholdApplies(wall) ) return false;
 
   return true;
+}
+
+/**
+ * For threshold walls, determine if threshold applies.
+ * @param {Wall} wall
+ * @returns {boolean} True if the threshold applies.
+ */
+function thresholdApplies(wall) {
+  return wall.applyThreshold(this.constructor.sourceType, this, this.data.externalRadius);
 }
 
 /**
@@ -562,6 +578,8 @@ function hasWallCollision(testPt) {
   return walls.some(w => {
     if ( !isFinite(w.topE) && !isFinite(w.bottomE) ) return true;
 
+    // Check if the test point falls within an attenuation area.
+
     const wallPts = Point3d.fromWall(w);
     const v0 = wallPts.A.top;
     const v1 = wallPts.A.bottom;
@@ -575,6 +593,7 @@ PATCHES.VISIBILITY.METHODS = {
   hasWallCollision,
   _getWalls,
   _testWallInclusion,
+  thresholdApplies,
   pointInShadow,
   targetInShadow
 };
