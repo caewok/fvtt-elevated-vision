@@ -4,7 +4,6 @@ CONFIG,
 CONST,
 foundry,
 PIXI,
-PointSourcePolygon,
 Wall
 */
 "use strict";
@@ -226,13 +225,6 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // Required to avoid light leakage due to penumbra in the shader.
     // Don't include the link if it is not a valid wall for this source.
     const { linkedA, linkedB } = getLinkedWalls(wall);
-
-    if ( !(linkedA.size || linkedB.size) ) {
-      return {
-        corner0: [A.x, A.y, top, -1],
-        corner1: [B.x, B.y, bottom, -1]
-      };
-    }
 
     // Find the smallest angle between this wall and a linked wall that covers this light.
     // If less than 180º, the light is inside a "V" and so the point of the V blocks all light.
@@ -682,18 +674,33 @@ geom.wallCornerCoordinates(linkedWall)
   }
 
   /**
-   * On source movement, check if the linked wall coordinates need updating and update.
-   * If the source changes orientation w/r/t 2+ linked walls, the link status would update.
+   * On source movement, check:
+   * - wall links. If the source changes orientation w/r/t 2+ linked walls, the link status would update.
+   * - whether the wall is included. If the source changes position, the wall may not be included
    * @returns {boolean} True if an update was needed.
    */
   updateSourcePosition() {
     let updated = false;
+    const wallsChecked = new Set();
     for ( const [id, idxToUpdate] of this._triWallMap ) {
       const wall = canvas.walls.documentCollection.get(id).object;
-      const resLink = this._updateWallLinkBuffer(wall, false);
-      const resThreshold = this._updateWallThreshold(wall, idxToUpdate, false);
-      updated ||= resLink || resThreshold;
+      wallsChecked.add(wall);
+      if ( !this._includeWall(wall) ) {
+        const wasUpdated = this.removeWall(wall.id, { update: false });
+        updated ||= wasUpdated;
+      } else {
+        const resLink = this._updateWallLinkBuffer(wall, false);
+        const resThreshold = this._updateWallThreshold(wall, idxToUpdate, false);
+        updated ||= (resLink || resThreshold);
+      }
     }
+
+    const wallsToAdd = this.source._getWalls().difference(wallsChecked);
+    wallsToAdd.forEach(w => {
+      const wasUpdated = this.addWall(w, { update: false });
+      updated ||= wasUpdated;
+    });
+
     if ( updated ) this.update();
     return updated;
   }
