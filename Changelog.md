@@ -1,3 +1,7 @@
+# 0.5.6
+Add back WebGL as choice of default algorithm for new scenes. Closes issue #66.
+Fix error when moving tokens with Levels module enabled. Closes issues #64 and #61.
+
 # 0.5.5
 GM can set a "light size" in the ambient light configuration. This controls the amount of penumbra in the shadow. Lights are modeled physically as 3d spheres, with penumbra appearing for the left and right edges of walls and top/bottom edges of limited height walls when the light source is above the wall.
 
