@@ -13,6 +13,7 @@ import { Plane } from "./geometry/3d/Plane.js";
 import { DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { DirectionalShadowWallShader, ShadowMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
+import { ShadowDirectionalTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Draw } from "./geometry/Draw.js";
@@ -68,6 +69,7 @@ export class DirectionalLightSource extends LightSource {
     return canvas.dimensions.rect.toPolygon();
   }
 
+  /** @type {number}  Source elevation infinitely high. */
   get elevationE() { return Number.MAX_SAFE_INTEGER; }
 
   /**
@@ -295,11 +297,6 @@ export class DirectionalLightSource extends LightSource {
   get elevationAngle() { return this.data.elevationAngle; }
 
   /**
-   * Source elevation infinitely high.
-   */
-  get elevationE() { return Number.POSITIVE_INFINITY; }
-
-  /**
    * Perceived angle of the light on the surface. Used for constructing penumbra.
    * A smaller angle means smaller penumbra.
    * @type {number}
@@ -416,6 +413,17 @@ export class DirectionalLightSource extends LightSource {
     ev.shadowMesh = new ShadowMesh(ev.wallGeometry, shader);
   }
 
+  /**
+   * Render texture to store the shadow mesh for use by other shaders.
+   * New method: RenderedPointSource.prototype._initializeEVShadowRenderer
+   * Render the shadow mesh to a texture.
+   */
+  _initializeEVShadowRenderer() {
+    const ev = this[MODULE_ID];
+    if ( ev.shadowRenderer ) return;
+    ev.shadowRenderer = new ShadowDirectionalTextureRenderer(this, ev.shadowMesh, ev.terrainShadowMesh);
+  }
+
   // TODO: Probably need distinct terrain shadow mesh for directional.
 
   /**
@@ -442,6 +450,14 @@ export class DirectionalLightSource extends LightSource {
     }
     changeObj.changedSolarAngle = Object.hasOwn(changes, "solarAngle");
     super._updateEVShadowData(changes, changeObj);
+  }
+
+  /**
+   * Set the uEVDirectional uniform so that the we can pass a canvas-sized shadow texture.
+   */
+  _updateCommonUniforms(shader) {
+    super._updateCommonUniforms(shader);
+    shader.uniforms.uEVDirectional = true;
   }
 
   /**

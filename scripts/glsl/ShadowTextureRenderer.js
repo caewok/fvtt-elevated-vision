@@ -193,6 +193,25 @@ export class ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer {
   updateSourceRadius() { return; } // eslint-disable-line no-useless-return
 }
 
+export class ShadowDirectionalTextureRenderer extends ShadowTextureRenderer {
+  /** @type {number} */
+  get width() { return canvas.dimensions.width; }
+
+  /** @type {number} */
+  get height() { return canvas.dimensions.height; }
+
+  /**
+   * Here, the render texture and the mesh are the same coordinate system: the canvas
+   * @type {PIXI.Point}
+   */
+  get meshPosition() { return new PIXI.Point(0, 0); }
+
+  updatedSource() { this.update(); }
+
+  // Disable updating source radius b/c not needed.
+  updateSourceRadius() { return; } // eslint-disable-line no-useless-return
+}
+
 /* Testing
 let [l] = canvas.lighting.placeables;
 source = l.source;
