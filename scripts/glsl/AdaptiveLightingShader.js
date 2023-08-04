@@ -19,7 +19,10 @@ function create(wrapped, ...args) {
   if ( AdaptiveVisionShader.isPrototypeOf(this) ) return wrapped(...args);
 
   applyPatches(this,
-    false,
+    source => {
+      source = addShadowVertexCode(source);
+      return source;
+    },
     source => {
       source = addShadowFragmentCode(source);
       return source;
@@ -36,8 +39,27 @@ function create(wrapped, ...args) {
 PATCHES.BASIC.STATIC_WRAPS = { create };
 
 /**
- * Shadow GLSL code to add to the fragment source.
+ * Add Shadow GLSL code to the vertex source.
+ * Calculate canvas position and pass as uv coordinate between 0 and 1.
  */
+function addShadowVertexCode(source) {
+  try {
+    source = new ShaderPatcher("vert")
+      .setSource(source)
+      .addUniform("uEVCanvasDimensions", "vec2")  // width, height of the canvas rect
+      .addUniform("uEVSourceOrigin", "vec2") // x, y source center
+      .addUniform("uEVSourceRadius", "float")
+      .addVarying("vEVCanvasUV", "vec2")
+      .wrapMain(`
+void main() {
+  vEVCanvasUV =  ((aVertexPosition * uEVSourceRadius) + uEVSourceOrigin) / uEVCanvasDimensions.xy;
+}`)
+      .getSource();
+
+  } finally {
+    return source;
+  }
+}
 function addShadowFragmentCode(source) {
   try {
     source = new ShaderPatcher("frag")
