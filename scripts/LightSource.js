@@ -69,7 +69,22 @@ function _createPolygon(wrapped) {
   return this.originalShape;
 }
 
+/**
+ * Wrap method: LightSource.prototype.updateCommonUniforms
+ */
+function _updateCommonUniforms(wrapped, shader) {
+  wrapped(shader);
+  const u = shader.uniforms;
+  u.uEVCanvasDimensions = [canvas.dimensions.width, canvas.dimensions.height];
+  u.uEVSourceOrigin = [this.x, this.y];
+  u.uEVSourceRadius = this.radius;
+  u.uEVShadowSampler = this.EVShadowTexture.baseTexture;
+  u.uEVShadows = true;
+  u.EVDirectional = false;
+}
+
 PATCHES.WEBGL.WRAPS = {
   _initialize,
-  _createPolygon
+  _createPolygon,
+  _updateCommonUniforms
 };

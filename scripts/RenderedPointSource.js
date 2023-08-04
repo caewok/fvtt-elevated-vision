@@ -205,12 +205,12 @@ function _initializeEVShadows(initializeMask = true) {
   if ( initializeMask ) this._initializeEVShadowMask();
 
   // Set uniforms used by the lighting shader.
-  const ev = this[MODULE_ID];
-  Object.values(this.layers).forEach(layer => {
-    const u = layer.shader.uniforms;
-    u.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
-    u.uEVShadows = true;
-  });
+//   const ev = this[MODULE_ID];
+//   Object.values(this.layers).forEach(layer => {
+//     const u = layer.shader.uniforms;
+//     u.uEVShadowSampler = ev.shadowRenderer.renderTexture.baseTexture;
+//     u.uEVShadows = true;
+//   });
 }
 
 /**
