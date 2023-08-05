@@ -20,7 +20,7 @@ Ray
 
 import { extractPixels } from "./perfect-vision/extract-pixels.js";
 import { Draw } from "./geometry/Draw.js";
-import { roundFastPositive } from "./util.js";
+import { roundFastPositive, bresenhamLine, trimLineSegmentToRectangle } from "./util.js";
 import { Matrix } from "./geometry/Matrix.js";
 
 /* Testing
@@ -93,7 +93,10 @@ cacheOrig.draw({ alphaAdder: .2})
 cacheSmall.draw({ color: Draw.COLORS.red })
 
 cacheOrig2 = PixelCache.fromTexture(evTexture, { frame: _token.bounds, scalingMethod: PixelCache.boxDownscaling })
-cacheSmall2 = PixelCache.fromTexture(evTexture, { frame: _token.bounds, resolution: gridPrecision / gridSize, scalingMethod: PixelCache.boxDownscaling })
+cacheSmall2 = PixelCache.fromTexture(evTexture, {
+  frame: _token.bounds,
+  resolution: gridPrecision / gridSize,
+  scalingMethod: PixelCache.boxDownscaling })
 
 
 colors = {}
@@ -187,7 +190,7 @@ Combined ---> 1000 x 750. Which is 0.5 * 0.5 = 0.25.
 // Original function:
 // function fastFixed(num, n) {
 //   const pow10 = Math.pow(10,n);
-//   return Math.round(num*pow10)/pow10; // roundFastPositive fails for large numbers
+//   return Math.round(num*pow10)/pow10; // roundFastPositive fails for very large numbers
 // }
 
 /**
@@ -248,11 +251,7 @@ export class PixelCache extends PIXI.Rectangle {
     const localWidth = Math.round(width * resolution);
     const nPixels = pixels.length;
     height ??= nPixels / (localWidth * resolution);
-
-    if ( !Number.isInteger(height) ) {
-      //console.warn(`PixelCache: width ${width} does not evenly divide into ${pixels.length} pixels.`);
-      height = Math.floor(height);
-    }
+    if ( !Number.isInteger(height) ) height = Math.floor(height);
 
     super(x, y, width, height);
     this.pixels = pixels;
@@ -361,12 +360,12 @@ export class PixelCache extends PIXI.Rectangle {
       for ( let y = top; y < bottom; y += 1 ) {
         const a = this.pixelAtCanvas(x, y);
         if ( a > threshold ) {
-           minX = Math.min(x, minX);
-           minY = Math.min(y, minY);
+          minX = Math.min(x, minX);
+          minY = Math.min(y, minY);
 
-           // Flip to handle the right side. Treat same as left side; move from end --> center.
-           maxX = Math.min(1 - x, maxX);
-           maxY = Math.min(1 - y, maxY);
+          // Flip to handle the right side. Treat same as left side; move from end --> center.
+          maxX = Math.min(1 - x, maxX);
+          maxY = Math.min(1 - y, maxY);
         }
       }
     }
@@ -378,33 +377,6 @@ export class PixelCache extends PIXI.Rectangle {
     // The maximums will be off by one.
     maxX += 1;
     maxY += 1;
-
-//     // Map the pixels
-//     const pixels = this.pixels;
-//     const ln = pixels.length;
-//     for ( let i = 0; i < ln; i += 1 ) {
-//       const a = pixels[i];
-//       const { x, y } = this._canvasAtIndex(i);
-//       if ( a > threshold ) {
-//         minX = Math.min(x, minX);
-//         minY = Math.min(y, minY);
-//
-//         // Flip to handle the right side. Treat same as left side; move from end --> center.
-//         maxX = Math.min(1 - x, maxX);
-//         maxY = Math.min(1 - y, maxY);
-//       }
-//     }
-//
-//     // Flip back the right-side coordinates.
-//     maxX = 1 - maxX;
-//     maxY = 1 - maxY;
-//
-//     // Increase the border based on resolution.
-//     const pad = Math.max(1, ~~(1 / this.scale.resolution));
-//    //  minX -= pad;
-// //     minY -= pad;
-//     maxX += pad;
-//     maxY += pad;
 
     return (new PIXI.Rectangle(minX, minY, maxX - minX, maxY - minY)).normalize();
   }
@@ -418,7 +390,7 @@ export class PixelCache extends PIXI.Rectangle {
   _indexAtLocal(x, y) {
     // Use floor to ensure consistency when converting to/from coordinates <--> index.
     return ((~~y) * this.#localWidth) + (~~x);
-    // return (roundFastPositive(y) * this.#localWidth) + roundFastPositive(x);
+    // Equivalent: return (roundFastPositive(y) * this.#localWidth) + roundFastPositive(x);
   }
 
   /**
@@ -609,9 +581,131 @@ export class PixelCache extends PIXI.Rectangle {
   pixelAtCanvas(x, y) { return this.pixels[this._indexAtCanvas(x, y)]; }
 
   /**
+   * Extract pixel values for a line by transforming to a Bresenham line.
+   * The line will be intersected with the pixel cache bounds.
+   * Points outside the bounds will be given null values.
+   * @param {Point} a                       Starting coordinate
+   * @param {Point} b                       Ending coordinate
+   * @param {object} [opts]                 Optional parameters
+   * @param {number} [opts.alphaThreshold]  Percent between 0 and 1.
+   *   If defined, a and b will be intersected at the alpha boundary.
+   * @param {number} [opts.skip]            How many pixels to skip along the walk
+   * @param {function} [opts.markPixelFn]   Function to mark pixels along the walk.
+   *   Function takes prev, curr, idx, and maxIdx; returns boolean. True if pixel should be marked.
+   * @returns {object|null}  If the a --> b never overlaps the rectangle, then null.
+   *   Otherwise, object with:
+   *   - {number[]} coords: bresenham path coordinates between the boundsIx. These are in local coordinates.
+   *   - {number[]} pixels: pixels corresponding to the path
+   *   - {Point[]}  boundsIx: the intersection points with this frame
+   *   - {object[]} markers: If markPixelFn, the marked pixel information.
+   *      Object has x, y, currPixel, prevPixel, tLocal (% of total)
+   */
+  pixelValuesForLine(a, b, { alphaThreshold, skip = 0, markPixelFn } = {}) {
+    // Find the points within the bounds (or alpha bounds) of this cache.
+    const bounds = alphaThreshold ? this.getThresholdCanvasBoundingBox(alphaThreshold) : this;
+    const boundsIx = trimLineSegmentToRectangle(bounds, a, b);
+    if ( !boundsIx ) return null; // Segment never intersects the cache bounds.
+
+    const out = this._pixelValuesForLine(boundsIx[0], boundsIx[1], markPixelFn, skip);
+    out.boundsIx = boundsIx;
+    out.skip = skip; // All coords are returned but only some pixels if skip ≠ 0.
+    return out;
+  }
+
+  /**
+   * Retrieve the pixel values (along the local bresenham line) between two points.
+   * @param {Point} a           Start point, in canvas coordinates
+   * @param {Point} b           End point, in canvas coordinates
+   * @param {number} [skip=0]   How many pixels to skip along the walk
+   * @returns {object}
+   *  - {number[]} coords     Local pixel coordinates, in [x0, y0, x1, y1]
+   *  - {number[]} pixels     Pixel value at each coordinate
+   *  - {object[]} markers    Pixels that meet the markPixelFn, if any
+   */
+  _pixelValuesForLine(a, b, markPixelFn, skip = 0) {
+    const aLocal = this._fromCanvasCoordinates(a.x, a.y);
+    const bLocal = this._fromCanvasCoordinates(b.x, b.y);
+    const coords = bresenhamLine(aLocal.x, aLocal.y, bLocal.x, bLocal.y);
+    const nCoords = coords.length;
+    const jIncr = skip + 1;
+    return markPixelFn
+      ? this.#markPixelsForLocalCoords(coords, jIncr, markPixelFn)
+      : this.#pixelValuesForLocalCoords(coords, jIncr);
+  }
+
+  /**
+   * Retrieve pixel values for coordinate set at provided intervals.
+   * @param {number[]} coords   Coordinate array, in [x0, y0, x1, y1, ...] for which to pull pixels.
+   * @param {number} jIncr      How to increment the walk over the pixels (i.e., skip?)
+   * @returns {object}
+   *  - {number[]} coords     Local pixel coordinates, in [x0, y0, x1, y1]
+   *  - {number[]} pixels     Pixel value at each coordinate
+   */
+  #pixelValuesForLocalCoords(coords, jIncr) {
+    const nCoords = coords.length;
+    const width = this.#localWidth;
+    const iIncr = jIncr * 2;
+    const pixels = new this.pixels.constructor(nCoords * 0.5 * (1 / jIncr));
+    for ( let i = 0, j = 0; i < nCoords; i += iIncr, j += jIncr ) {
+      // No need to floor the coordinates b/c already done in bresenham.
+      const x = coords[i];
+      const y = coords[i + 1];
+      const idx = (y * width) + x;
+      pixels[j] = this.pixels[idx];
+    }
+    return { coords, pixels };
+  }
+
+  /**
+   * Retrieve pixel values for coordinate set at provided intervals.
+   * Also mark pixel values along the walk, based on some test function.
+   * @param {number[]} coords       Coordinate array, in [x0, y0, x1, y1, ...] for which to pull pixels.
+   * @param {number} jIncr          How to increment the walk over the pixels (i.e., skip?)
+   * @param {function} markPixelFn  Function to mark pixels along the walk.
+   * @returns {object}
+   *  - {number[]} coords     Local pixel coordinates, in [x0, y0, x1, y1]
+   *  - {object[]} markers    Pixels that meet the markPixelFn
+   */
+  #markPixelsForLocalCoords(coords, jIncr, markPixelFn) {
+    const nCoords = coords.length;
+    const nCoordsInv = 1 / nCoords;
+    const width = this.#localWidth;
+    const markers = [];
+
+    // Add a starting marker
+    const x = coords[0];
+    const y = coords[1];
+    const startingMarker = {
+      x,
+      y,
+      tLocal: 0,
+      currPixel: this.pixels[(y * width) + x],
+      prevPixel: null
+    };
+    markers.push(startingMarker);
+
+    let prevPixel = startingMarker.currPixel;
+    const iIncr = jIncr * 2;
+    for ( let i = iIncr, j = jIncr; i < nCoords; i += iIncr, j += jIncr ) {
+      // No need to floor the coordinates b/c already done in bresenham.
+      const x = coords[i];
+      const y = coords[i + 1];
+      const idx = (y * width) + x;
+      const currPixel = this.pixels[idx];
+      if ( markPixelFn(prevPixel, currPixel, i, nCoords) ) {
+        markers.push({ x, y, currPixel, prevPixel, tLocal: i * nCoordsInv });
+      }
+      prevPixel = currPixel;
+    }
+
+    return { coords, markers };
+  }
+
+  /**
    * Calculate the average pixel value, over an optional framing shape.
    * @param {object} [options]        Options that affect the calculation
-   * @param {PIXI.Rectangle|PIXI.Polygon} [options.shape]  Shape, in canvas coordinates, over which to average the pixels
+   * @param {PIXI.Rectangle|PIXI.Polygon} [options.shape]  Shape, in canvas coordinates,
+   *   over which to average the pixels
    * @param {number} [options.skip=1]         Skip every N pixels in the frame. 1 means test them all.
    *                                          Should be an integer greater than 0 (this is not checked).
    * @returns {number}
@@ -717,15 +811,6 @@ export class PixelCache extends PIXI.Rectangle {
       }
     }
 
-//     let denom = 0;
-//     for ( let ptX = leftSkip; ptX < right; ptX += skip ) {
-//       for ( let ptY = topSkip; ptY < bottom; ptY += skip) {
-//         const px = this._indexAtLocal(ptX, ptY);
-//         const value = this.pixels[px];
-//         fn(value, px, ptX, ptY);
-//         denom += 1;
-//       }
-//     }
     return denom;
   }
 
@@ -777,9 +862,7 @@ export class PixelCache extends PIXI.Rectangle {
       frame = this._shapeToLocalCoordinates(frame);
       foundPt = this._nextPixelValueAlongLocalRayFrame(localRay, cmp, frame, countFn, skip, stepT, startT);
     } else if ( spacer ) {
-      spacer = PIXI.Point.distanceBetween(
-      this._fromCanvasCoordinates(0, 0),
-      this._fromCanvasCoordinates(spacer, 0));
+      spacer = PIXI.Point.distanceBetween( this._fromCanvasCoordinates(0, 0), this._fromCanvasCoordinates(spacer, 0));
       foundPt = this._nextPixelValueAlongLocalRaySpacer(localRay, cmp, spacer, stepT, startT);
     } else foundPt = this._nextPixelValueAlongLocalRay(localRay, cmp, stepT, startT);
 
