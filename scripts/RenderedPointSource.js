@@ -553,7 +553,9 @@ function thresholdApplies(wall) {
 * @returns {boolean}
  */
 function hasWallCollision(testPt) {
-  const origin = PIXI.Point.fromObject(this);
+  const origin = Point3d.fromPointSource(this);
+  testPt = Point3d.fromObject(testPt);
+
   const xMinMax = Math.minMax(origin.x, testPt.x);
   const yMinMax = Math.minMax(origin.y, testPt.y);
   const lineBounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
@@ -566,7 +568,6 @@ function hasWallCollision(testPt) {
     if ( !isFinite(w.topE) && !isFinite(w.bottomE) ) return true;
 
     // Check if the test point falls within an attenuation area.
-
     const wallPts = Point3d.fromWall(w);
     const v0 = wallPts.A.top;
     const v1 = wallPts.A.bottom;
