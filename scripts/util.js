@@ -478,3 +478,81 @@ export function pointsOppositeSideV(sharedEndpoint, other1, other2, testPoint1, 
     && (ccw(sharedEndpoint, other2, testPoint2) >= 0);
   return Boolean(sourceOriginOutside ^ sourceDestOutside);
 }
+
+
+/**
+ * Bresenham line algorithm to generate pixel coordinates for a line between two points.
+ * All coordinates must be positive or zero.
+ * @param {number} x0   First coordinate x value
+ * @param {number} y0   First coordinate y value
+ * @param {number} x1   Second coordinate x value
+ * @param {number} y1   Second coordinate y value
+ * @testing
+Draw = CONFIG.GeometryLib.Draw
+let [t0, t1] = canvas.tokens.controlled
+pixels = bresenhamLine(t0.center.x, t0.center.y, t1.center.x, t1.center.y)
+for ( let i = 0; i < pixels.length; i += 2 ) {
+  Draw.point({ x: pixels[i], y: pixels[i + 1]}, { radius: 1 });
+}
+ */
+export function bresenhamLine(x0, y0, x1, y1) {
+  x0 = roundFastPositive(x0); // Could accept negative pixels if Math.round used here instead.
+  y0 = roundFastPositive(y0);
+  x1 = roundFastPositive(x1);
+  y1 = roundFastPositive(y1);
+
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const sx = (x0 < x1) ? 1 : -1;
+  const sy = (y0 < y1) ? 1 : -1;
+  let err = dx - dy;
+
+  const pixels = [x0, y0];
+  while ( !((x0 === x1) && (y0 === y1)) ) {
+    const e2 = err << 1; // 2 * err.
+    if ( e2 > -dy ) {
+      err -= dy;
+      x0 += sx;
+    }
+    if ( e2 < dx ) {
+      err += dx;
+      y0 += sy;
+    }
+
+    pixels.push(x0, y0);
+  }
+  return pixels;
+}
+
+/**
+ * Trim line segment to its intersection points with a rectangle.
+ * If the endpoint is inside the rectangle, keep it.
+ * @param {PIXI.Rectangle} rect
+ * @param {Point} a
+ * @param {Point} b
+ * @returns { Point[2]|null } Null if both are outside.
+ */
+export function trimLineSegmentToRectangle(rect, a, b) {
+  if ( !rect.lineSegmentIntersects(a, b, { inside: true }) ) return null;
+
+  const ixs = rect.segmentIntersections(a, b);
+  if ( ixs.length === 2 ) return ixs;
+  if ( ixs.length === 0 ) return [a, b];
+
+  // If only 1 intersection:
+  //   1. a || b is inside and the other is outside.
+  //   2. a || b is on the edge and the other is outside.
+  //   3. a || b is on the edge and the other is inside.
+  // Point on edge will be considered inside by _getZone.
+
+  // 1 or 2 for a
+  const aOutside = rect._getZone(a) !== PIXI.Rectangle.CS_ZONES.INSIDE;
+  if ( aOutside ) return [ixs[0], b];
+
+  // 1 or 2 for b
+  const bOutside = rect._getZone(b) !== PIXI.Rectangle.CS_ZONES.INSIDE;
+  if ( bOutside ) return [a, ixs[0]];
+
+  // 3. One point on the edge; other inside. Doesn't matter which.
+  return [a, b];
+}

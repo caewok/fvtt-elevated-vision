@@ -20,7 +20,7 @@ Ray
 
 import { extractPixels } from "./perfect-vision/extract-pixels.js";
 import { Draw } from "./geometry/Draw.js";
-import { roundFastPositive } from "./util.js";
+import { roundFastPositive, bresenhamLine, trimLineSegmentToRectangle } from "./util.js";
 import { Matrix } from "./geometry/Matrix.js";
 
 /* Testing
@@ -187,7 +187,7 @@ Combined ---> 1000 x 750. Which is 0.5 * 0.5 = 0.25.
 // Original function:
 // function fastFixed(num, n) {
 //   const pow10 = Math.pow(10,n);
-//   return Math.round(num*pow10)/pow10; // roundFastPositive fails for large numbers
+//   return Math.round(num*pow10)/pow10; // roundFastPositive fails for very large numbers
 // }
 
 /**
@@ -607,6 +607,56 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {number}
    */
   pixelAtCanvas(x, y) { return this.pixels[this._indexAtCanvas(x, y)]; }
+
+  /**
+   * Extract pixel values for a line by transforming to a Bresenham line.
+   * The line will be intersected with the pixel cache bounds.
+   * Points outside the bounds will be given null values.
+   * @param {Point} a                       Starting coordinate
+   * @param {Point} b                       Ending coordinate
+   * @param {object} [opts]                 Optional parameters
+   * @param {number} [opts.alphaThreshold]  Percent between 0 and 1.
+   *   If defined, a and b will be intersected at the alpha boundary.
+   * @returns {object|null}  If the a --> b never overlaps the rectangle, then null.
+   *   Otherwise, object with:
+   *   - {number[]} coords: bresenham path coordinates between the boundsIx. These are in local coordinates.
+   *   - {number[]} pixels: pixels corresponding to the path
+   *   - {Point[]} boundsIx: the intersection points with this frame
+   */
+  pixelValuesForLine(a, b, { alphaThreshold } = {}) {
+    // Find the points within the bounds (or alpha bounds) of this cache.
+    const bounds = alphaThreshold ? this.getThresholdCanvasBoundingBox(alphaThreshold) : this;
+    const boundsIx = trimLineSegmentToRectangle(bounds, a, b);
+    if ( !boundsIx ) return null; // Segment never intersects the cache bounds.
+
+    const { coords, pixels } = this._pixelValuesForLine(boundsIx[0], boundsIx[1]);
+    return { coords, pixels, boundsIx };
+  }
+
+  /**
+   * Retrieve the pixel values (along the local bresenham line) between two points.
+   * @param {Point} a   Start point, in canvas coordinates
+   * @param {Point} b   End point, in canvas coordinates
+   * @returns {object}
+   *  - {number[]} coords     Local pixel coordinates, in [x0, y0, x1, y1]
+   *  - {number[]} pixels     Pixel value at each coordinate
+   */
+  _pixelValuesForLine(a, b) {
+    const aLocal = this._fromCanvasCoordinates(a.x, a.y);
+    const bLocal = this._fromCanvasCoordinates(b.x, b.y);
+    const coords = bresenhamLine(aLocal.x, aLocal.y, bLocal.x, bLocal.y);
+    const nCoords = coords.length;
+    const pixels = new this.pixels.constructor(nCoords * 0.5);
+    const width = this.#localWidth;
+    for ( let i = 0, j = 0; i < nCoords; i += 2, j += 1 ) {
+      // No need to floor the coordinates b/c already done in bresenham.
+      const x = coords[i];
+      const y = coords[i + 1];
+      const idx = (y * width) + x;
+      pixels[j] = this.pixels[idx];
+    }
+    return { coords, pixels };
+  }
 
   /**
    * Calculate the average pixel value, over an optional framing shape.
