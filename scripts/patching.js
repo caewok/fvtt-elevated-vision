@@ -24,7 +24,6 @@ import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js
 import { PATCHES as PATCHES_Tile } from "./Tile.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
-import { PATCHES as PATCHES_LightingLayer } from "./LightingLayer.js";
 
 import {
   PATCHES_DetectionMode,
@@ -68,7 +67,6 @@ export const PATCHES = {
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
   DetectionModeTremor: PATCHES_DetectionModeTremor,
   GlobalLightSource: PATCHES_GlobalLightSource,
-  LightingLayer: PATCHES_LightingLayer,
   LightSource: PATCHES_LightSource,
   "PIXI.LegacyGraphics": PATCHES_PIXI_LegacyGraphics,
   RenderedPointSource: PATCHES_RenderedPointSource,
