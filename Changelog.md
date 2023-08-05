@@ -1,7 +1,4 @@
 # 0.5.7
-- Add back WebGL as choice of default algorithm for new scenes. Closes issue #66.
-- Fix error when moving tokens with Levels module enabled. Closes issues #64 and #61.
-- Set the elevation in the toolbar to the nearest elevation step.
 - Improve directional light shadow resolution by rendering only the shadow texture for the scene instead of the entire light radius.
 - Keep the directional light position at the original x,y coordinates to allow more flexibility in displaying directional lighting that is meant to be overhead on a map. This also gives more options for animating directional lights. Note that directional lights can be set to 0 bright radius if you don't want the bright circle on the canvas.
 - Set elevation angle of the directional light based on only the scene rectangle, which should fix issues with changing to the padding %. Closes issue #68.
