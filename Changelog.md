@@ -1,4 +1,4 @@
-# 0.5.6
+# 0.5.7
 - Add back WebGL as choice of default algorithm for new scenes. Closes issue #66.
 - Fix error when moving tokens with Levels module enabled. Closes issues #64 and #61.
 - Set the elevation in the toolbar to the nearest elevation step.
@@ -7,6 +7,11 @@
 - Set elevation angle of the directional light based on only the scene rectangle, which should fix issues with changing to the padding %. Closes issue #68.
 - Fix handling of door updates so the shadows properly update when opening/closing doors. Closes issue #71.
 - Fix handling of light position updates so that shadows properly update for threshold walls when the light is dragged. Closes issue #67.
+
+# 0.5.6
+Add back WebGL as choice of default algorithm for new scenes. Closes issue #66.
+Fix error when moving tokens with Levels module enabled. Closes issues #64 and #61.
+Set the elevation in the toolbar to the nearest elevation step.
 
 # 0.5.5
 GM can set a "light size" in the ambient light configuration. This controls the amount of penumbra in the shadow. Lights are modeled physically as 3d spheres, with penumbra appearing for the left and right edges of walls and top/bottom edges of limited height walls when the light source is above the wall.
