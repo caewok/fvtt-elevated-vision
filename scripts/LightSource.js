@@ -1,4 +1,6 @@
 /* globals
+canvas,
+GlobalLightSource
 PIXI,
 RenderedPointSource
 */
@@ -80,13 +82,18 @@ function _createPolygon(wrapped) {
  */
 function _updateCommonUniforms(wrapped, shader) {
   const u = shader.uniforms;
+  if ( this instanceof GlobalLightSource ) {
+    u.uEVShadows = false;
+    u.uEVDirectional = false;
+    return wrapped(shader);
+  }
+
   u.uEVCanvasDimensions = [canvas.dimensions.width, canvas.dimensions.height];
   u.uEVSourceOrigin = [this.x, this.y];
   u.uEVSourceRadius = this.radius;
   u.uEVShadowSampler = this.EVShadowTexture.baseTexture;
   u.uEVShadows = true;
   u.uEVDirectional = false;
-
   wrapped(shader);
 }
 
