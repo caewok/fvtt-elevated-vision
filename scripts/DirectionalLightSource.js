@@ -13,6 +13,7 @@ import { Plane } from "./geometry/3d/Plane.js";
 import { DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { DirectionalShadowWallShader, ShadowMesh } from "./glsl/ShadowWallShader.js";
 import { ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
+import { ShadowDirectionalTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Draw } from "./geometry/Draw.js";
@@ -68,6 +69,7 @@ export class DirectionalLightSource extends LightSource {
     return canvas.dimensions.rect.toPolygon();
   }
 
+  /** @type {number}  Source elevation infinitely high. */
   get elevationE() { return Number.MAX_SAFE_INTEGER; }
 
   /**
@@ -93,14 +95,6 @@ export class DirectionalLightSource extends LightSource {
     this.data.elevationAngle = elevationAngle;
     this.data.solarAngle = Math.toRadians(this.object.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.SOLAR_ANGLE)
       ?? 1);
-
-    // Set the x,y position to an edge of canvas based on the azimuth.
-    const { rect, maxR } = canvas.dimensions;
-    const center = rect.center;
-    const projPt = PIXI.Point.fromAngle(center, azimuth, maxR);
-    const ix = rect.segmentIntersections(center, projPt)[0];
-    this.data.x = ix.x;
-    this.data.y = ix.y;
   }
 
   /** @override */
@@ -177,12 +171,12 @@ export class DirectionalLightSource extends LightSource {
 
   /**
    * Construct geometry buffers for the directional light.
-   * Quad shape with the light assumed to be on the border.
+   * Quad shape with the light center somewhere within the quad.
    * Normalized values from that point.
    */
   _geometryBuffers() {
     const rect = canvas.dimensions.rect;
-    const { left, right, top, bottom, center } = rect;
+    const { left, right, top, bottom } = rect;
     const aTextureCoord = [
       0, 0, // TL
       1, 0, // TR
@@ -192,18 +186,13 @@ export class DirectionalLightSource extends LightSource {
     const aDepthValue = Array(8).fill(1);
     const indexBuffer = [0, 1, 2, 0, 2, 3];
 
-    // Determine the position of the light on the edge of the canvas rectangle.
-    const projPt = PIXI.Point.fromAngle(center, this.azimuth, canvas.dimensions.maxR);
-    const ixs = rect.segmentIntersections(center, projPt);
-    const ix = PIXI.Point.fromObject(ixs[0]).roundDecimals();
-
     // Normalize the rectangle coordinates inside the light circle, where 0,0 is the light center.
     const radius = this.radius;
     const invRadius = 1 / this.radius;
-    const TL = pointCircleCoord(new PIXI.Point(left, top), ix, radius, invRadius);
-    const TR = pointCircleCoord(new PIXI.Point(right, top), ix, radius, invRadius);
-    const BR = pointCircleCoord(new PIXI.Point(right, bottom), ix, radius, invRadius);
-    const BL = pointCircleCoord(new PIXI.Point(left, bottom), ix, radius, invRadius);
+    const TL = pointCircleCoord(new PIXI.Point(left, top), this, radius, invRadius);
+    const TR = pointCircleCoord(new PIXI.Point(right, top), this, radius, invRadius);
+    const BR = pointCircleCoord(new PIXI.Point(right, bottom), this, radius, invRadius);
+    const BL = pointCircleCoord(new PIXI.Point(left, bottom), this, radius, invRadius);
     const aVertexPosition = [
       TL.x, TL.y,      // TL
       TR.x, TR.y,   // TR
@@ -295,11 +284,6 @@ export class DirectionalLightSource extends LightSource {
   get elevationAngle() { return this.data.elevationAngle; }
 
   /**
-   * Source elevation infinitely high.
-   */
-  get elevationE() { return Number.POSITIVE_INFINITY; }
-
-  /**
    * Perceived angle of the light on the surface. Used for constructing penumbra.
    * A smaller angle means smaller penumbra.
    * @type {number}
@@ -309,7 +293,7 @@ export class DirectionalLightSource extends LightSource {
   /**
    * Calculate azimuth and elevation based on position of the light.
    * elevationAngle decreases proportionally based on distance from the center.
-   * Uses the smallest of canvas width or height to determine the full radius.
+   * Uses the smallest of scene width or height to determine the full radius.
    * Azimuth set based on angle measured from canvas center.
    * @param {PIXI.Point} position
    * @returns { azimuth: {number}, elevationAngle: {number} }
@@ -318,7 +302,7 @@ export class DirectionalLightSource extends LightSource {
     position = PIXI.Point.fromObject(position);
 
     // Calculate azimuth based on the angle of the ray from center --> position.
-    const rect = canvas.dimensions.rect;
+    const rect = canvas.dimensions.sceneRect;
     const center = rect.center;
     const delta = position.subtract(center);
     const angle = Math.atan2(delta.y, delta.x);
@@ -347,7 +331,7 @@ export class DirectionalLightSource extends LightSource {
     elevationAngle = Math.clamped(elevationAngle, 0, Math.PI_1_2);
 
     // Calculate distance from the center based on elevationAngle.
-    const rect = canvas.dimensions.rect;
+    const rect = canvas.dimensions.sceneRect;
     const maxDist = Math.min(rect.width, rect.height) * 0.5;
     const proportion = Math.clamped(1 - (elevationAngle / Math.PI_1_2), 0, 1);
     const dist = proportion * maxDist;
@@ -416,6 +400,17 @@ export class DirectionalLightSource extends LightSource {
     ev.shadowMesh = new ShadowMesh(ev.wallGeometry, shader);
   }
 
+  /**
+   * Render texture to store the shadow mesh for use by other shaders.
+   * New method: RenderedPointSource.prototype._initializeEVShadowRenderer
+   * Render the shadow mesh to a texture.
+   */
+  _initializeEVShadowRenderer() {
+    const ev = this[MODULE_ID];
+    if ( ev.shadowRenderer ) return;
+    ev.shadowRenderer = new ShadowDirectionalTextureRenderer(this, ev.shadowMesh, ev.terrainShadowMesh);
+  }
+
   // TODO: Probably need distinct terrain shadow mesh for directional.
 
   /**
@@ -442,6 +437,14 @@ export class DirectionalLightSource extends LightSource {
     }
     changeObj.changedSolarAngle = Object.hasOwn(changes, "solarAngle");
     super._updateEVShadowData(changes, changeObj);
+  }
+
+  /**
+   * Set the uEVDirectional uniform so that the we can pass a canvas-sized shadow texture.
+   */
+  _updateCommonUniforms(shader) {
+    super._updateCommonUniforms(shader);
+    shader.uniforms.uEVDirectional = true;
   }
 
   /**
