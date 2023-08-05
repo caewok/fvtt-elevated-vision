@@ -171,7 +171,7 @@ export class CoordinateElevationCalculator {
   }
 
   groundElevation() {
-    const matchingTile = this.findSupportingTile();
+    const matchingTile = this.findHighestTile();
     const terrainE = this.terrainElevation();
 
     // If the terrain is above the tile, use the terrain elevation. (Math.max(null, 5) returns 5.)
