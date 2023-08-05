@@ -60,8 +60,7 @@ export class Patcher {
     regObj.PATCHES = new Map();
     regObj.METHODS = new Map();
     regObj.HOOKS = new Map();
-    regObj.regWrap = regDec(wrap, regObj.PATCHES);
-    regObj.regOverride = regDec(override, regObj.PATCHES);
+    regObj.regLibWrapper = regDec(addLibWrapperPatch, regObj.PATCHES);
     regObj.regMethod = regDec(this.constructor.addClassMethod, regObj.METHODS);
     regObj.regHook = regDec(addHook, regObj.HOOKS);
   }
@@ -81,18 +80,22 @@ export class Patcher {
     if ( !grp ) return;
     for ( const [key, obj] of Object.entries(grp) ) {
       const prototype = !key.includes("STATIC");
-      let override = false;
+      const libWrapperType = key.includes("OVERRIDES")
+        ? libWrapper.OVERRIDE : key.includes("MIXES") ? libWrapper.MIXED : libWrapper.WRAPPER;
       let getter = false;
       switch ( key ) {
-        case "HOOKS": this._registerHooks(obj, groupName); break;
-        case "STATIC_OVERRIDES":
-        case "OVERRIDES":
-          override = true;
-        case "STATIC_WRAPS": // eslint-disable-line no-fallthrough
-        case "WRAPS":
-          this._registerWraps(obj, groupName, className, { override, prototype });
+        case "HOOKS":
+          this._registerHooks(obj, groupName);
           break;
-        case "STATIC_GETTERS":
+        case "STATIC_OVERRIDES": // eslint-disable-line no-fallthrough
+        case "OVERRIDES":
+        case "STATIC_MIXES":
+        case "MIXES":
+        case "STATIC_WRAPS":
+        case "WRAPS":
+          this._registerWraps(obj, groupName, className, { libWrapperType, prototype });
+          break;
+        case "STATIC_GETTERS":  // eslint-disable-line no-fallthrough
         case "GETTERS":
           getter = true;
         default:  // eslint-disable-line no-fallthrough
@@ -111,14 +114,16 @@ export class Patcher {
    * @param {boolean} [opt.override]                  If true, use override in libWrapper
    * @param {libWrapper.PERF_FAST|PERF_AUTO|PERF_NORMAL}
    */
-  _registerWraps(wraps, groupName, className,
-    { prototype = true, override = false, perf_mode = libWrapper.PERF_FAST } = {}) {
+  _registerWraps(wraps, groupName, className, { prototype, libWrapperType, perf_mode } = {}) {
+    prototype ??= true;
+    libWrapperType ??= libWrapper.WRAPPER;
+    perf_mode ??= libWrapper.PERF_FAST;
+
     className = this.constructor.lookupByClassName(className, { returnPathString: true });
     if ( prototype ) className = `${className}.prototype`;
-    const wrapFn = override ? "regOverride" : "regWrap";
     for ( const [name, fn] of Object.entries(wraps) ) {
       const methodName = `${className}.${name}`;
-      this.regTracker[groupName][wrapFn](methodName, fn, { perf_mode });
+      this.regTracker[groupName].regLibWrapper(methodName, fn, libWrapperType, { perf_mode });
     }
   }
 
@@ -253,23 +258,13 @@ export class Patcher {
  * Helper to wrap/mix/override methods.
  * @param {string} method       Method to wrap
  * @param {function} fn         Function to use for the wrap
+ * @param {libWrapper.TYPES}    libWrapper.WRAPPED, MIXED, OVERRIDE
  * @param {object} [options]    Options passed to libWrapper.register. E.g., { perf_mode: libWrapper.PERF_FAST}
  * @returns {object<id{number}, args{string}} libWrapper ID and the method used
  */
-function wrap(method, fn, options = {}) {
-  const id = libWrapper.register(MODULE_ID, method, fn, libWrapper.WRAPPER, options);
-  return { id, args: method }
-}
-
-// Currently unused
-// function mixed(method, fn, options = {}) {
-//   const id = libWrapper.register(MODULE_ID, method, fn, libWrapper.MIXED, options);
-//   return { id, args: method }
-// }
-
-function override(method, fn, options = {}) {
-  const id = libWrapper.register(MODULE_ID, method, fn, libWrapper.OVERRIDE, options)
-  return { id, args: method }
+function addLibWrapperPatch(method, fn, libWrapperType, options) {
+  const id = libWrapper.register(MODULE_ID, method, fn, libWrapperType, options);
+  return { id, args: method };
 }
 
 /**
