@@ -626,7 +626,6 @@ export class PixelCache extends PIXI.Rectangle {
     const aLocal = this._fromCanvasCoordinates(a.x, a.y);
     const bLocal = this._fromCanvasCoordinates(b.x, b.y);
     const coords = bresenhamLine(aLocal.x, aLocal.y, bLocal.x, bLocal.y);
-    const nCoords = coords.length;
     const jIncr = skip + 1;
     return markPixelFn
       ? this.#markPixelsForLocalCoords(coords, jIncr, markPixelFn)
@@ -671,25 +670,23 @@ export class PixelCache extends PIXI.Rectangle {
     const nCoordsInv = 1 / nCoords;
     const width = this.#localWidth;
     const markers = [];
-    markers._pixelCache = this;
 
     // Add a starting marker
     const x = coords[0];
     const y = coords[1];
-    let index = 0;
     const startingMarker = {
       x,
       y,
       markers,
       tLocal: 0,
-      index,
       currPixel: this.pixels[(y * width) + x],
       prevPixel: null
     };
-    index += 1;
     markers.push(startingMarker);
 
+    let prevMarker = startingMarker;
     let prevPixel = startingMarker.currPixel;
+    let reachedEnd = false;
     const iIncr = jIncr * 2;
     for ( let i = iIncr, j = jIncr; i < nCoords; i += iIncr, j += jIncr ) {
       // No need to floor the coordinates b/c already done in bresenham.
@@ -698,11 +695,29 @@ export class PixelCache extends PIXI.Rectangle {
       const idx = (y * width) + x;
       const currPixel = this.pixels[idx];
       if ( markPixelFn(prevPixel, currPixel, i, nCoords) ) {
-        markers.push({ x, y, markers, index, currPixel, prevPixel, tLocal: i * nCoordsInv });
-        index += 1;
+        const newMarker = markers.push({ x, y, markers, currPixel, prevPixel, tLocal: i * nCoordsInv });
+        prevMarker.next = newMarker;
+        prevMarker = newMarker;
+        reachedEnd = i === nCoords - 1;
       }
       prevPixel = currPixel;
     }
+
+    // Add an end marker.
+    if ( !reachedEnd ) {
+      const x = coords[nCoords - 2];
+      const y = coords[nCoords - 1];
+      const endingMarker = {
+        x,
+        y,
+        markers,
+        tLocal: 1,
+        currPixel: this.pixels[(y * width) + x],
+        prevPixel
+      };
+      markers.push(endingMarker);
+    }
+
 
     return { coords, markers };
   }
