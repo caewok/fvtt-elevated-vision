@@ -671,17 +671,22 @@ export class PixelCache extends PIXI.Rectangle {
     const nCoordsInv = 1 / nCoords;
     const width = this.#localWidth;
     const markers = [];
+    markers._pixelCache = this;
 
     // Add a starting marker
     const x = coords[0];
     const y = coords[1];
+    let index = 0;
     const startingMarker = {
       x,
       y,
+      markers,
       tLocal: 0,
+      index,
       currPixel: this.pixels[(y * width) + x],
       prevPixel: null
     };
+    index += 1;
     markers.push(startingMarker);
 
     let prevPixel = startingMarker.currPixel;
@@ -693,7 +698,8 @@ export class PixelCache extends PIXI.Rectangle {
       const idx = (y * width) + x;
       const currPixel = this.pixels[idx];
       if ( markPixelFn(prevPixel, currPixel, i, nCoords) ) {
-        markers.push({ x, y, currPixel, prevPixel, tLocal: i * nCoordsInv });
+        markers.push({ x, y, markers, index, currPixel, prevPixel, tLocal: i * nCoordsInv });
+        index += 1;
       }
       prevPixel = currPixel;
     }

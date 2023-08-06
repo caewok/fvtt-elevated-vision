@@ -259,8 +259,281 @@ await foundry.utils.benchmark(bench3, N, cache, token1, 10)
 */
 
 
+class TravelElevationRay {
+   /** @enum {number} */
+  static ELEVATION_STATE = {
+    TERRAIN: 0, // Important that terrain is set to zero, so it can be checked for true/false.
+    TILE: 1
+  };
+
+  /** @type {TokenElevationCalculator} */
+  TEC;
+
+  /** @type {PIXI.Point} */
+  destination = new PIXI.Point();
+
+  /** @type {PIXI.Point} */
+  origin = new PIXI.Point();
+
+  /** @type {number} */
+  tokenStartElevation = 0;
+
+  /** @type {object} */
+  opts = {};
+
+  /** @type {Set<Tile>} */
+  reachableTiles = new Set();
+
+  /** @type {object} */
+  terrainWalk;
+
+  /** @type {Map<string;object>} */
+  tileWalks = new Map();
+
+  /** @type {object[]} */
+  path = [];
+
+  /**
+   * @param {Token} token               Token that is undertaking the movement
+   * @param {PIXI.Point} destination    {x,y} destination for the movement
+   * @param {object} [opts]                 Options passed to canvas.elevation.TokenElevationCalculator
+   * @param {Point} [opts.tokenCenter]      Assumed token center at start
+   * @param {number} [opts.tokenElevation]  Assumed token elevation at start
+   */
+  constructor(token, destination, opts = {}) {
+    this.destination.copyFrom(destination);
+    this.opts = opts;
+    this.TEC = new canvas.elevation.TokenElevationCalculator(token, opts);
+    this.origin.copyFrom(this.TEC.point);
+
+    // Assist TEC by limiting the tiles to those along the ray.
+    const fn = this.constructor.elevationTilesOnLineSegment
+    this.TEC.tiles = fn(this.origin, destination, this.TEC.options.alphaThreshold);
+  }
+
+  elevationAtT(t) {
+
+  }
+
+  elevationAtClosestPoint(x, y) {
+
+  }
+
+  get startingElevation { return this.TEC.groundElevation(); }
+
+  get endingElevation() {
+
+  }
+
+  /**
+   * @typedef {object} elevationMarker
+   * @property {number} t       Where on the start --> end ray is this, between 0 and 1
+   * @property {}
+   */
+
+  _walkPath() {
+    this.path.length = 0;
+    this.tileWalks.clear();
+
+    const threshold = 255 * this.TEC.options.alphaThreshold;
+    const markTilePixelFn = (prev, curr) => (prev < threshold) ^ (curr < threshold);
+    const markTerrainPixelFn =  (prev, curr) => prev !== curr;
+
+    // Find all changes in terrain elevation along the path
+    const terrainCache = canvas.elevation.elevationPixelCache;
+    this.terrainWalk = terrainCache.pixelValuesForLine(this.origin, this.destination, { markPixelFn: markTerrainPixelFn });
 
 
+    // Find the max terrain elevation over the path.
+    const canvas.elevation._scaleNormalizedElevation(maxPixelValue);
+    const maxPixelValue = this.terrainWalk.markers.reduce((acc, curr) => Math.max(acc, curr.currPixel), 0);
+    const maxTerrainElevation = CONFIG.GeometryLib.utils.gridUnitsToPixels(canvas.elevation._scaleNormalizedElevation(maxPixelValue))
+
+    // Get all tiles less than tile step from max terrain elevation.
+    // Recursively search for tiles that could be reached from the max tile.
+    let currElevation = this.startingElevation;
+    for ( const terrainMarker of this.terrainWalk ) {
+      const terrainElevation = CONFIG.GeometryLib.utils.gridUnitsToPixels(elevation._normalizeElevation(canvas.elevation._scaleNormalizedElevation(terrainMarker.currPixel)));
+      currElevation = Math.max(currElevation, terrainElevation);
+    }
+
+    // Find all tiles less than or equal to the max elevation.
+    // Then add in tiles that are within tile step, repeatedly.
+    this.reachableTiles.clear();
+    this.TEC.tiles.forEach(t => if ( t.elevationZ <= currElevation ) this.reachableTiles.add(t));
+    this._findTilesWithinReach(currElevation, this._reachableTiles);
+
+    // Replace the TEC tiles with this filtered set based on maximum elevation.
+    this.TEC.tiles = [...this.reachableTiles];
+    this.TEC.tiles.sort((a, b) => b.elevationE - a.elevationE); // elevationE is faster than Z
+
+    // At the starting point, are we dropping to terrain or a tile?
+    const startTile = this.TEC.findSupportingTile();
+    const startMarker = {};
+    if ( startTile ) {
+      const tileWalk = t.evPixelCache.pixelValuesForLine(this.origin, this.destination, { markPixelFn: markTilePixelFn });
+      tileWalk.tile = tile;
+      this.tileWalks.set(tile, tileWalk);
+      this.path.push({ t: 0, elevation: this.startingElevation, type: ELEVATION_STATE.TILE, tileWalk });
+    } else {
+      this.path.push({ t: 0, elevation: this.startingElevation, type: ELEVATION_STATE.TERRAIN });
+    }
+
+
+    /*
+    "walk" = set of markers for a given object. Here, tile or terrain
+
+    marker: {
+      t,
+      idx: <-- how to find in the walk markers
+      markers: <-- the "walk" array of markers that includes this one
+      x: local x
+      y: local y
+      currPixel: current pixel value
+      prevPixel: previous pixel value
+    }
+
+    Move from one marker to the next in order for the current object.
+    For tiles,
+
+
+
+    */
+
+
+
+
+    // Now we have all tiles that are possibly under the token at any given point.
+    // Process the line for each.
+    // TODO: Can we make this so we only process if absolutely necessary?
+    this.tileWalks.clear();
+    const threshold = 255 * this.TEC.options.alphaThreshold;
+    markPixelFn = (prev, curr) => (prev < threshold) ^ (curr < threshold);
+    this.reachableTiles.forEach(t => {
+      const tileWalk = t.evPixelCache.pixelValuesForLine(this.origin, this.destination, { markPixelFn });
+      tileWalk.tile = tile;
+      tileWalk.t =
+
+      this.tileWalks.set(tile, tileWalk);
+    });
+
+    // Construct an array of terrain and tile marker points, in order from a --> b.
+    this.path.length = 0;
+    this.path.push(...this.terrainWalk.markers);
+    this.tileWalks.forEach(tileWalk => this.path.push(...tileWalk.markers));
+
+    // Calculate the t-value (from 0 at a to 1 at b) for each marker.
+    this.path.forEach(marker => {
+      marker.canvasPt = marker.
+    })
+
+  }
+
+  _findTilesWithinReach(currElevation, tileSet = new Set()) {
+    let newElevation = currElevation;
+    this.TEC.tiles.forEach(t => {
+      if ( !tileSet.has(t)
+        && t.elevationZ > currElevation
+        && t.elevationZ <= (currElevation + this.TEC.opts.tileStep) ) {
+        newElevation = Math.max(newElevation, t.elevationZ);
+        tileSet.add(t);
+      }
+    });
+    if ( !withinReach.length ) return tileSet;
+    return this._findTilesWithinReach(newElevation, tileSet);
+  }
+
+  /**
+   * Find overhead elevation tiles along a line segment (ray).
+   * @param {Point} a                   Starting point
+   * @param {Point} b                   Ending point
+   * @param {number} [alphaThreshold]   Tile portions lower than this alpha do not count for bounds.
+   * @returns {Tile[]}
+   */
+  static elevationTilesOnLineSegment(a, b, alphaThreshold) {
+    // First, get all tiles within bounds of a --> b
+    const xMinMax = Math.minMax(a.x, b.x);
+    const yMinMax = Math.minMax(a.y, b.y);
+    const bounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
+    bounds.width ||= 1; // If a --> b is vertical, add width to bounds
+    bounds.height ||= 1; // if a --> b is horizontal, add height to bounds
+    const collisionTest = (o, _rect) => o.t.document.overhead && isFinite(o.t.elevationZ);
+    let tiles = [...canvas.tiles.quadtree.getObjects(bounds, { collisionTest })];
+
+    // Only keep tiles that actually intersect the ray.
+    tiles = tiles.filter(t => {
+      const cache = t.evPixelCache;
+      const bounds = alphaThreshold ? cache.getThresholdCanvasBoundingBox : cache;
+      return bounds.lineSegmentIntersects(a, b, { inside: true });
+    });
+
+    // If a and b have elevations, only keep tiles within that elevation range.
+    if ( Object.hasOwn(a, "z") && Object.hasOwn(b, "z") ) {
+      const zMinMax = Math.minMax(a.z, b.z);
+      tiles = tiles.filter(t => {
+        const elevationZ = t.elevationZ;
+        return (elevationZ >= zMinMax.min) && (elevationZ <= zMinMax.max);
+      });
+    }
+
+    // Sort tiles by elevation, highest to lowest.
+    // This will help with finding relevant tiles later.
+    tiles.sort((a, b) => b.elevationZ - a.elevationZ);
+    return tiles;
+  }
+
+
+}
+
+
+class TravelElevationRayTokenAveraging extends TravelElevationRay {
+
+
+  /**
+   * Find overhead elevation tiles along a line segment (ray).
+   * Account for token size and capture all tiles under the token.
+   * @param {Point} a                   Starting point
+   * @param {Point} b                   Ending point
+   * @param {number} [alphaThreshold]   Tile portions lower than this alpha do not count for bounds.
+   * @returns {Tile[]}
+   */
+  static elevationTilesOnLineSegment(a, b, alphaThreshold, tokenBounds) {
+    const aElevation = a.z;
+    const bElevation = b.z;
+    const minWidth = tokenBounds.width;
+    const minHeight = tokenBounds.height;
+    const dist2Rev = -Math.pow(minWidth, 2) + Math.pow(minHeight, 2); // Diagonal along the bounds
+    a = PIXI.Point.fromObject(a);
+    b = PIXI.Point.fromObject(b);
+    a = a.towardsPointSquared(b, dist2Rev);
+    b = b.towardsPointSquared(a, dist2Rev);
+
+
+    // First, get all tiles within bounds of a --> b
+    const xMinMax = Math.minMax(a.x, b.x);
+    const yMinMax = Math.minMax(a.y, b.y);
+    const bounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
+    bounds.width ||= minWidth; // If a --> b is vertical, add width to bounds
+    bounds.height ||= minHeight; // if a --> b is horizontal, add height to bounds
+    const collisionTest = (o, _rect) => o.t.document.overhead && isFinite(o.t.elevationZ);
+    let tiles = [...canvas.tiles.quadtree.getObjects(bounds, { collisionTest })];
+
+    // If a and b have elevations, only keep tiles within that elevation range.
+    if ( typeof aElevation !== "undefined" && typeof bElevation !== "undefined" ) {
+      const zMinMax = Math.minMax(aElevation, bElevation);
+      tiles = tiles.filter(t => {
+        const elevationZ = t.elevationZ;
+        return (elevationZ >= zMinMax.min) && (elevationZ <= zMinMax.max);
+      });
+    }
+
+    // Sort tiles by elevation, highest to lowest.
+    // This will help with finding relevant tiles later.
+    tiles.sort((a, b) => b.elevationZ - a.elevationZ);
+    return tiles;
+  }
+
+}
 
 
 

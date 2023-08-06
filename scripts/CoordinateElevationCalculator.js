@@ -37,6 +37,8 @@ export class CoordinateElevationCalculator {
   /**
    * @typedef {object} PointElevationOptions
    * @property {number} alphaThreshold    Threshold under which a tile pixel is considered a (transparent) hole.
+   * @property {number} tileStep          Tile at elevation or within tileStep above considered within reach.
+   * @property {number} terrainStep       Terrain at elevation or below considered contiguous and is not a cliff
    */
 
   /** @type {PointElevationOptions} */
@@ -311,15 +313,17 @@ export class CoordinateElevationCalculator {
 
   /**
    * Find the supporting tile for the coordinate, if any.
-   * Tile is below the coordinate and would support the coordinate (w/in tile step)
+   * Highest tile that supports the coordinate.
    * @returns {Tile|null}
    */
   findSupportingTile() {
+    const terrainE = this.terrainElevation();
     const excludeFn = excludeUndergroundTilesFn(this.#point, this.elevation);
-    for ( const tile of this.tiles ) {
+    for ( const tile of this.tiles ) { // Tiles are sorted highest --> lowest.
       const tileE = tile.elevationE;
+      if ( tileE <= terrainE ) break;
       if ( excludeFn(tileE) ) continue;
-      if ( this.tileSupports(tile) ) return tile;
+      if ( this.tileCouldSupport(tile) ) return tile;
     }
     return null;
   }
