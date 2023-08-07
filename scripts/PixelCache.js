@@ -415,11 +415,12 @@ export class PixelCache extends PIXI.Rectangle {
     // (Faster or equal to the old method that used one double non-breaking loop.)
     threshold = threshold * this.#maximumPixelValue;
 
-    let minLeft;
-    let maxRight;
-    let minTop;
-    let maxBottom;
+    // By definition, the local frame uses 0 or positive integers. So we can use -1 as a placeholder value.
     const { left, right, top, bottom } = this.localFrame;
+    let minLeft = -1;
+    let maxRight = -1;
+    let minTop = -1;
+    let maxBottom = -1;
 
     // Test left side
     for ( let x = left; x <= right; x += 1 ) {
@@ -430,9 +431,9 @@ export class PixelCache extends PIXI.Rectangle {
           break;
         }
       }
-      if ( typeof minLeft !== "undefined" ) break;
+      if ( ~minLeft ) break;
     }
-    if ( typeof minLeft === "undefined" ) return new PIXI.Rectangle();
+    if ( !~minLeft ) return new PIXI.Rectangle();
 
     // Test right side
     for ( let x = right; x >= left; x -= 1 ) {
@@ -443,7 +444,7 @@ export class PixelCache extends PIXI.Rectangle {
           break;
         }
       }
-      if ( typeof maxRight !== "undefined" ) break;
+      if ( ~maxRight ) break;
     }
 
     // Test top side
@@ -455,7 +456,7 @@ export class PixelCache extends PIXI.Rectangle {
           break;
         }
       }
-      if ( typeof minTop !== "undefined" ) break;
+      if ( ~minTop ) break;
     }
 
     // Test bottom side
@@ -467,7 +468,7 @@ export class PixelCache extends PIXI.Rectangle {
           break;
         }
       }
-      if ( typeof maxBottom !== "undefined" ) break;
+      if ( ~maxBottom ) break;
     }
 
     return (new PIXI.Rectangle(minLeft, minTop, maxRight - minLeft, maxBottom - minTop));
