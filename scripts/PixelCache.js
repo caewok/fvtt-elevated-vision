@@ -347,6 +347,71 @@ export class PixelCache extends PIXI.Rectangle {
    */
   #calculateCanvasBoundingBox(threshold=0.75) {
     threshold = threshold * this.#maximumPixelValue;
+
+    let minLeft = Number.POSITIVE_INFINITY;
+    let maxRight = Number.NEGATIVE_INFINITY;
+    let minTop = Number.POSITIVE_INFINITY;
+    let maxBottom = Number.NEGATIVE_INFINITY;
+
+    const { left, right, top, bottom } = this;
+
+    // Test left side
+    for ( let x = left; x <= right; x += 1 ) {
+      for ( let y = top; y <= bottom; y += 1 ) {
+        const a = this.pixelAtCanvas(x, y);
+        if ( a > threshold ) {
+          minLeft = x;
+          break;
+        }
+      }
+      if ( isFinite(minLeft) ) break;
+    }
+    if ( !isFinite(minLeft)  ) return new PIXI.Rectangle();
+
+    // Test right side
+    for ( let x = right; x >= left; x -= 1 ) {
+      for ( let y = top; y <= bottom; y += 1 ) {
+        const a = this.pixelAtCanvas(x, y);
+        if ( a > threshold ) {
+          maxRight = x;
+          break;
+        }
+      }
+      if ( isFinite(maxRight) ) break;
+    }
+
+    // Test top side
+    for ( let y = top; y <= bottom; y += 1 ) {
+      for ( let x = left; x <= right; x += 1 ) {
+        const a = this.pixelAtCanvas(x, y);
+        if ( a > threshold ) {
+          minTop = y;
+          break;
+        }
+      }
+      if ( isFinite(minTop) ) break;
+    }
+
+    // Test bottom side
+    for ( let y = bottom; y >= top; y -= 1 ) {
+      for ( let x = left; x <= right; x += 1 ) {
+        const a = this.pixelAtCanvas(x, y);
+        if ( a > threshold ) {
+          maxBottom = y;
+          break;
+        }
+      }
+      if ( isFinite(maxBottom) ) break;
+    }
+
+    return (new PIXI.Rectangle(minLeft, minTop, maxRight - minLeft, maxBottom - minTop));
+  }
+
+  __calculateCanvasBoundingBox(threshold=0.75) {
+    return this.#calculateCanvasBoundingBox(threshold);
+  }
+  _calculateCanvasBoundingBox_Old(threshold=0.75) {
+    threshold = threshold * this.#maximumPixelValue;
     let minX = Number.POSITIVE_INFINITY;
     let maxX = Number.POSITIVE_INFINITY;
     let minY = Number.POSITIVE_INFINITY;
