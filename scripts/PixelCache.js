@@ -1210,6 +1210,33 @@ export class PixelCache extends PIXI.Rectangle {
       Draw.point(pt, { color, alpha: .9, radius: 1 });
     }
   }
+
+  drawCanvasCoords({color = Draw.COLORS.blue, gammaCorrect = false, skip = 10, radius = 1 } = {}) {
+    const gammaExp = gammaCorrect ? 1 / 2.2 : 1;
+    const { right, left, top, bottom } = this;
+    skip *= Math.round(1 / cache.scale.resolution);
+    for ( let x = left; x <= right; x += skip ) {
+      for ( let y = top; y <= bottom; y += skip ) {
+        const value = this.pixelAtCanvas(x, y);
+        if ( !value ) continue;
+        const alpha = Math.pow(value / 255, gammaExp);
+        Draw.point({x, y}, { color, alpha, radius });
+      }
+    }
+  }
+
+  drawLocalCoords({color = Draw.COLORS.blue, gammaCorrect = false, skip = 10, radius = 2 } = {}) {
+    const gammaExp = gammaCorrect ? 1 / 2.2 : 1;
+    const { right, left, top, bottom } = this.localFrame;
+    for ( let x = left; x <= right; x += skip ) {
+      for ( let y = top; y <= bottom; y += skip ) {
+        const value = this._pixelAtLocal(x, y);
+        if ( !value ) continue;
+        const alpha = Math.pow(value / 255, gammaExp);
+        Draw.point({x, y}, { color, alpha, radius });
+      }
+    }
+  }
 }
 
 
