@@ -21,6 +21,7 @@ import { PixelCache, TilePixelCache } from "./PixelCache.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
 import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
+import { TravelElevationRay } from "./TravelElevationRay.js";
 
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
@@ -134,6 +135,7 @@ Hooks.once("init", function() {
     TokenPointElevationCalculator,
     TokenAverageElevationCalculator,
     DirectionalLightSource,
+    TravelElevationRay,
 
     PATCHER
   };
