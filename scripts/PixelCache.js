@@ -394,8 +394,8 @@ export class PixelCache extends PIXI.Rectangle {
 
     // Can the box be represented with a rectangle? Points must be horizontal and vertical.
     // Could also be rotated 90º
-    if ( TL.x.almostEqual(BL.x) && TL.y.almostEqual(TR.y)
-      || TL.x.almostEqual(TR.x) && TL.y.almostEqual(BL.y) ) {
+    if ( (TL.x.almostEqual(BL.x) && TL.y.almostEqual(TR.y))
+      || (TL.x.almostEqual(TR.x) && TL.y.almostEqual(BL.y)) ) {
       const xMinMax = Math.minMax(TL.x, TR.x, BL.x, BR.x);
       const yMinMax = Math.minMax(TL.y, TR.y, BL.y, BR.y);
       return new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
