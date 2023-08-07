@@ -804,16 +804,8 @@ export class PixelCache extends PIXI.Rectangle {
   #markPixelsForLocalCoords(coords, jIncr, markPixelFn) {
     const nCoords = coords.length;
     const nCoordsInv = 1 / (nCoords - 2);
-    const width = this.#localWidth;
     const markers = [];
-    const createMarker = (i, prevPixel) => {
-      // No need to floor the coordinates b/c already done in bresenham.
-      const x = coords[i];
-      const y = coords[i+1];
-      const idx = (y * width) + x;
-      const currPixel = this.pixels[idx];
-      return { tLocal: i * nCoordsInv, x, y, markers, currPixel, prevPixel };
-    };
+    const createMarker = Marker.createMarkerFn(this, coords, nCoordsInv);
 
     // Add a starting marker
     const startingMarker = createMarker(0, null);
@@ -1575,5 +1567,58 @@ export class TilePixelCache extends PixelCache {
         return this._polygonToLocalCoordinates(poly);
       }
     }
+  }
+}
+
+/**
+ * Class used by #markPixelsForLocalCoords to store relevant data for the pixel point.
+ */
+export class Marker {
+  /** @type {PIXI.Point} */
+  point = new PIXI.Point();
+
+  /** @type {number} */
+  prevPixel = -1;
+
+  /** @type {number} */
+  currPixel = -1;
+
+  /** @type {number} */
+  t = -1;
+
+  /** @type {Marker} */
+  next;
+
+  /** @type {PixelCache} */
+  pixelCache;
+
+  constructor(x, y, currPixel, prevPixel, t, cache) {
+    this.point.x = x;
+    this.point.y = y;
+    this.x = x;
+    this.y = y;
+    this.currPixel = currPixel;
+    this.prevPixel = prevPixel;
+    this.tLocal = t;
+    this.pixelCache = cache;
+  }
+
+  /**
+   * Factory function used by #markPixelsForLocalCoords
+   * @param {PixelCache} cache      Cache from which to generate markers
+   * @param {number[]} coords       Coordinates to test for marking
+   * @param {number} nCoordsInv     Pre-calculated inverse coordinate - 2 length.
+   * @returns {function}
+   */
+  static createMarkerFn(cache, coords, nCoordsInv) {
+    const width = cache.localFrame.width;
+    return (i, prevPixel) => {
+      const x = coords[i];
+      const y = coords[i+1];
+      const idx = (y * width) + x;
+      const currPixel = cache.pixels[idx];
+      const t = i * nCoordsInv;
+      return new Marker(x, y, currPixel, prevPixel, t, cache);
+    };
   }
 }
