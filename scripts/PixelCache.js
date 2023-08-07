@@ -216,7 +216,7 @@ export class PixelCache extends PIXI.Rectangle {
   #localWidth = 0;
 
   /** @type {PIXI.Rectangle} */
-  #localFrame;
+  #localFrame = new PIXI.Rectangle();
 
   /** @type {number} */
   #maximumPixelValue = 255;
@@ -242,21 +242,36 @@ export class PixelCache extends PIXI.Rectangle {
 
   /**
    * @param {number[]} pixels     Array of integer values.
-   * @param {number} width        The width of the rectangle.
-   * @param {object} [options]    Optional translation
-   * @param {number} [options.x]  Starting left canvas coordinate
-   * @param {number} [options.y]  Starting top canvas coordinate
+   * @param {number} pixelWidth   The width of the pixel rectangle.
+   * @param {object} [opts]       Optional translation
+   * @param {number} [opts.x]           Starting left canvas coordinate
+   * @param {number} [opts.y]           Starting top canvas coordinate
+   * @param {number} [opts.resolution]  Ratio between pixel width and canvas width:
+   *   pixel width * resolution = canvas width.
    */
-  constructor(pixels, width, { x = 0, y = 0, height, resolution = 1 } = {}) {
-    const localWidth = Math.round(width * resolution);
+  constructor(pixels, pixelWidth, { x = 0, y = 0, pixelHeight, resolution = 1 } = {}) {
+    // Clean up pixel width and define pixel height if not already.
     const nPixels = pixels.length;
-    height ??= nPixels / (localWidth * resolution);
-    if ( !Number.isInteger(height) ) height = Math.floor(height);
+    pixelWidth = roundFastPositive(pixelWidth)
+    pixelHeight ??= nPixels / pixelWidth;
+    if ( !Number.isInteger(pixelHeight) ) {
+      console.warn("PixelCache pixelHeight is non-integer: ${pixelHeight}");
+      pixelHeight = Math.ceil(pixelHeight);
+    }
 
-    super(x, y, width, height);
+    // Define the canvas rectangle.
+    const invResolution = 1 / resolution;
+    const canvasWidth = Math.ceil(pixelWidth * invResolution);
+    const canvasHeight = Math.ceil(pixelHeight * invResolution);
+    super(x, y, canvasWidth, canvasHeight);
+
+    // Store values needed to translate between local and canvas coordinates.
     this.pixels = pixels;
     this.scale.resolution = resolution;
-    this.#localWidth = localWidth;
+    this.scale.invResolution = invResolution;
+    this.#localWidth = pixelWidth; // Just for convenience.
+    this.#localFrame.width = pixelWidth;
+    this.#localFrame.height = pixelHeight;
   }
 
   /**
@@ -453,6 +468,8 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {number}
    */
   _indexAtLocal(x, y) {
+    if ( x < 0 || y < 0 ) return -1;
+
     // Use floor to ensure consistency when converting to/from coordinates <--> index.
     return ((~~y) * this.#localWidth) + (~~x);
     // Equivalent: return (roundFastPositive(y) * this.#localWidth) + roundFastPositive(x);
@@ -1085,7 +1102,7 @@ export class PixelCache extends PIXI.Rectangle {
     opts.x += x;
     opts.y += y;
     opts.resolution *= texture.resolution;
-    opts.height = texture.height;
+    opts.pixelHeight = texture.height;
     return new this(arr, texture.width, opts);
   }
 
@@ -1362,12 +1379,22 @@ export class TilePixelCache extends PixelCache {
 
   /**
    * Resize canvas dimensions for the tile.
+   * Account for rotation and scale by converting from local frame.
    */
-  _resize(x, y, width, height) {
-    this.x = x ?? this.tileX;
-    this.y = y ?? this.tileY;
-    this.width = width ?? this.tileWidth;
-    this.height = height ?? this.tileHeight;
+  _resize() {
+    const { width, height } = this.localFrame;
+    const TL = this._toCanvasCoordinates(0, 0);
+    const TR = this._toCanvasCoordinates(width, 0);
+    const BL = this._toCanvasCoordinates(0, height);
+    const BR = this._toCanvasCoordinates(width, height);
+
+    const xMinMax = Math.minMax(TL.x, TR.x, BL.x, BR.x);
+    const yMinMax = Math.minMax(TL.y, TR.y, BL.y, BR.y);
+    this.x = xMinMax.min;
+    this.y = yMinMax.min;
+    this.width = xMinMax.max - xMinMax.min;
+    this.height = yMinMax.max - yMinMax.min;
+
     this.clearTransforms();
   }
 
@@ -1378,7 +1405,7 @@ export class TilePixelCache extends PixelCache {
   _calculateToLocalTransform() {
     // 1. Clear the rotation
     // Translate so the center is 0,0
-    const { x, y, width, height } = this;
+    const { x, y, width, height } = this.tile.document;
     const mCenterTranslate = Matrix.translation(-(width * 0.5) - x, -(height * 0.5) - y);
 
     // Rotate around the Z axis
@@ -1441,14 +1468,13 @@ export class TilePixelCache extends PixelCache {
     if ( !tile.document.overhead ) return this.fromTileAlpha(tile);
     if ( !tile.mesh._textureData ) tile.mesh.updateTextureData();
 
-    // Texture width/height not necessarily same as canvas width/height for tiles.
-    // The aw and ah properties must be rounded to determine the dimensions.
-    const localWidth = tile.mesh._textureData.aw;
-    const texWidth = tile.texture.width;
-    const resolution = localWidth / texWidth;
-
     // Resolution consistent with `_createTextureData` which divides by 4.
-    return new this(tile.mesh._textureData.pixels, texWidth, { tile, resolution });
+    const pixelWidth = tile.mesh._textureData.aw;
+    const texWidth = tile.mesh.texture.baseTexture.realWidth;
+    const pixelHeight = tile.mesh._textureData.ah;
+    const resolution = pixelWidth / texWidth;
+
+    return new this(tile.mesh._textureData.pixels, pixelWidth, { pixelHeight, tile, resolution });
   }
 
   /**
