@@ -206,23 +206,23 @@ function fastFixed(x) {
 
 /**
  * Class representing a rectangular array of pixels, typically pulled from a texture.
- * The underlying rectangle is in canvas coordinates.
+ * The underlying rectangle is in local coordinates.
  */
 export class PixelCache extends PIXI.Rectangle {
   /** @type {Uint8ClampedArray} */
   pixels = new Uint8ClampedArray(0);
 
   /** @type {number} */
-  #localWidth = 0;
+  #canvasWidth = 0;
 
   /** @type {PIXI.Rectangle} */
-  #localFrame;
+  #canvasFrame;
 
   /** @type {number} */
   #maximumPixelValue = 255;
 
   /** @type {Map<PIXI.Rectangle>} */
-  #thresholdCanvasBoundingBoxes = new Map();
+  #thresholdLocalBoundingBoxes = new Map();
 
   /**
    * @type {object}
@@ -230,9 +230,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @property {number} y           Translation in y direction
    * @property {number} resolution  Ratio of pixels to canvas values.
    */
-  scale = {
-    resolution: 1
-  };
+  scale = { resolution: 1 };
 
   /** @type {Matrix} */
   #toLocalTransform;
@@ -247,16 +245,24 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} [options.x]  Starting left canvas coordinate
    * @param {number} [options.y]  Starting top canvas coordinate
    */
-  constructor(pixels, width, { x = 0, y = 0, height, resolution = 1 } = {}) {
-    const localWidth = Math.round(width * resolution);
+  constructor(pixels, localWidth, { x = 0, y = 0, width, height, resolution = 1 } = {}) {
     const nPixels = pixels.length;
-    height ??= nPixels / (localWidth * resolution);
-    if ( !Number.isInteger(height) ) height = Math.floor(height);
+    if ( !localWidth ) {
+      resolution ??= nPixels / (width * height);
+      localWidth = width * resolution * 2;
+    }
+    localWidth = roundFastPositive(localWidth);
+    localHeight = nPixels / localWidth;
+    if ( !Number.isInteger(localHeight) ) {
+      console.error("PixelCache localWidth and localHeight should be integers; pixel length should be divisible by both.");
+      localWidth = Math.ceiling(localHeight);
+    }
+    super(x, y, localWidth, localHeight);
+    resolution ??= (localWidth * localHeight) / (width * height);
 
-    super(x, y, width, height);
     this.pixels = pixels;
     this.scale.resolution = resolution;
-    this.#localWidth = localWidth;
+    this.#canvasWidth = width;
   }
 
   /**
@@ -335,8 +341,10 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
    */
   getThresholdCanvasBoundingBox(threshold = 0.75) {
-    const map = this.#thresholdCanvasBoundingBoxes;
-    if ( !map.has(threshold) ) map.set(threshold, this.#calculateCanvasBoundingBox(threshold));
+
+
+    const map = this.#thresholdLocalBoundingBoxes;
+    if ( !map.has(threshold) ) map.set(threshold, this.#calculateLocalBoundingBox(threshold));
     return map.get(threshold);
   }
 
@@ -345,12 +353,26 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} [threshold=0.75]   Values lower than this will be ignored around the edges.
    * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
    */
-  #calculateCanvasBoundingBox(threshold=0.75) {
+  #calculateLocalBoundingBox(threshold=0.75) {
     threshold = threshold * this.#maximumPixelValue;
     let minX = Number.POSITIVE_INFINITY;
     let maxX = Number.POSITIVE_INFINITY;
     let minY = Number.POSITIVE_INFINITY;
     let maxY = Number.POSITIVE_INFINITY;
+
+    // Move left --> right, top --> bottom
+    const { left, right, top, bottom } = this;
+    for ( let x = left; x < right; x += 1 ) {
+      for ( let y = top; y < bottom; y += 1 ) {
+        const a = this._pixelAtLocal(x, y);
+        if ( a > threshold ) {
+
+        }
+
+      }
+    }
+
+
 
     // Mapping pixels would be faster, but the different resolution, width/height, and scaleX, scaley
     // makes that inaccurate.
