@@ -25,9 +25,6 @@ export class TravelElevationRay {
   /** @type {number} */
   startElevation = 0;
 
-  /** @type {object} */
-  opts = {};
-
   /** @type {Set<Tile>} */
   reachableTiles = new Set();
 
@@ -47,12 +44,11 @@ export class TravelElevationRay {
    * @param {Point} [opts.tokenCenter]      Assumed token center at start
    * @param {number} [opts.tokenElevation]  Assumed token elevation at start
    */
-  constructor(token, destination, opts = {}) {
+  constructor(token, destination, opts) {
     this.destination.copyFrom(destination);
-    this.opts = opts;
     this.TEC = new canvas.elevation.TokenElevationCalculator(token, opts);
     this.origin.copyFrom(this.TEC.location);
-    this.startElevation = this.TEC.opts.elevation;
+    this.startElevation = this.TEC.options.elevation;
 
     // Assist TEC by limiting the tiles to those along the ray.
     const fn = this.constructor.elevationTilesOnLineSegment;
@@ -88,7 +84,7 @@ export class TravelElevationRay {
   /**
    * Initialize the objects needed when walking a path along the ray a --> b
    */
-  _initializePathObject() {
+  _initializePathObjects() {
     const { origin, destination, path, tileWalks, reachableTiles } = this;
     path.length = 0;
     tileWalks.clear();
@@ -132,6 +128,7 @@ export class TravelElevationRay {
    */
   _walkPath() {
     const { origin, startElevation, path, TEC } = this;
+    path.length = 0;
 
     // At the starting point, are we dropping to terrain or a tile?
     TEC.location = origin;
@@ -178,7 +175,7 @@ export class TravelElevationRay {
     this.TEC.tiles.forEach(t => {
       if ( !tileSet.has(t)
         && t.elevationZ > currElevation
-        && t.elevationZ <= (currElevation + this.TEC.opts.tileStep) ) {
+        && t.elevationZ <= (currElevation + this.TEC.options.tileStep) ) {
         newElevation = Math.max(newElevation, t.elevationZ);
         tileSet.add(t);
         newWithinReach ||= true;
@@ -265,7 +262,7 @@ export class TravelElevationRay {
     // Only keep tiles that actually intersect the ray.
     tiles = tiles.filter(t => {
       const cache = t.evPixelCache;
-      const bounds = alphaThreshold ? cache.getThresholdCanvasBoundingBox : cache;
+      const bounds = alphaThreshold ? cache.getThresholdCanvasBoundingBox() : cache;
       return bounds.lineSegmentIntersects(a, b, { inside: true });
     });
 
