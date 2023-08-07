@@ -177,7 +177,11 @@ export class TravelElevationRay {
   drawPath() {
     for ( const marker of this.path ) {
       const color = marker.tile ? Draw.COLORS.orange : Draw.COLORS.green;
-      Draw.point(this.pointAtT(marker.t0), { color, radius: 2 });
+      const pt = this.pointAtT(marker.t0);
+      Draw.point(pt, { color, radius: 2 });
+
+      const e = marker.tile ? marker.tile.elevationE : canvas.elevation._scaleNormalizedElevation(marker.currPixel);
+      Draw.labelPoint(pt, e);
     }
   }
 
@@ -185,6 +189,7 @@ export class TravelElevationRay {
     for ( const tile of this.reachableTiles ) {
       const cache = tile.evPixelCache;
       Draw.shape(cache.getThresholdCanvasBoundingBox(), { color: Draw.COLORS.orange });
+      Draw.labelPoint(tile, tile.elevationE);
     }
   }
 
@@ -406,8 +411,8 @@ function setTValuesForWalk(walk, a, b, tile) {
   // Use intersection points to determine the t values for the walk
   const delta = b.subtract(a);
   const deltaMag = delta.magnitudeSquared();
-  const dist2_0 = PIXI.Point.distanceSquaredBetween(a, walk.boundsIx[0]);
-  const dist2_1 = PIXI.Point.distanceSquaredBetween(a, walk.boundsIx[1]);
+  const dist2_0 = PIXI.Point.distanceSquaredBetween(a, walk.canvasBoundsIx[0]);
+  const dist2_1 = PIXI.Point.distanceSquaredBetween(a, walk.canvasBoundsIx[1]);
   const t0 = walk.t0 = Math.sqrt(dist2_0 / deltaMag);
   const t1 = walk.t1 = Math.sqrt(dist2_1 / deltaMag);
 

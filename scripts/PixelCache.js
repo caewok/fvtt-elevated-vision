@@ -740,11 +740,12 @@ export class PixelCache extends PIXI.Rectangle {
 
     // Find the points within the bounds (or alpha bounds) of this cache.
     const bounds = alphaThreshold ? this.getThresholdLocalBoundingBox(alphaThreshold) : this.localFrame;
-    const boundsIx = trimLineSegmentToRectangle(bounds, a, b);
-    if ( !boundsIx ) return null; // Segment never intersects the cache bounds.
+    const localBoundsIx = trimLineSegmentToRectangle(bounds, aLocal, bLocal);
+    if ( !localBoundsIx ) return null; // Segment never intersects the cache bounds.
 
-    const out = this._pixelValuesForLine(boundsIx[0], boundsIx[1], markPixelFn, skip);
-    out.boundsIx = boundsIx;
+    const out = this._pixelValuesForLocalLine(localBoundsIx[0], localBoundsIx[1], markPixelFn, skip);
+    out.localBoundsIx = localBoundsIx;
+    out.canvasBoundsIx = localBoundsIx.map(pt => this._toCanvasCoordinates(pt.x, pt.y)); // Used by TravelElevationRay
     out.skip = skip; // All coords are returned but only some pixels if skip ≠ 0.
     return out;
   }
@@ -759,10 +760,8 @@ export class PixelCache extends PIXI.Rectangle {
    *  - {number[]} pixels     Pixel value at each coordinate
    *  - {object[]} markers    Pixels that meet the markPixelFn, if any
    */
-  _pixelValuesForLine(a, b, markPixelFn, skip = 0) {
-    const aLocal = this._fromCanvasCoordinates(a.x, a.y);
-    const bLocal = this._fromCanvasCoordinates(b.x, b.y);
-    const coords = bresenhamLine(aLocal.x, aLocal.y, bLocal.x, bLocal.y);
+  _pixelValuesForLocalLine(a, b, markPixelFn, skip = 0) {
+    const coords = bresenhamLine(a.x, a.y, b.x, b.y);
     const jIncr = skip + 1;
     return markPixelFn
       ? this.#markPixelsForLocalCoords(coords, jIncr, markPixelFn)
