@@ -252,10 +252,10 @@ export class PixelCache extends PIXI.Rectangle {
   constructor(pixels, pixelWidth, { x = 0, y = 0, pixelHeight, resolution = 1 } = {}) {
     // Clean up pixel width and define pixel height if not already.
     const nPixels = pixels.length;
-    pixelWidth = roundFastPositive(pixelWidth)
+    pixelWidth = roundFastPositive(pixelWidth);
     pixelHeight ??= nPixels / pixelWidth;
     if ( !Number.isInteger(pixelHeight) ) {
-      console.warn("PixelCache pixelHeight is non-integer: ${pixelHeight}");
+      console.warn(`PixelCache pixelHeight is non-integer: ${pixelHeight}`);
       pixelHeight = Math.ceil(pixelHeight);
     }
 
@@ -758,7 +758,7 @@ export class PixelCache extends PIXI.Rectangle {
       const y = coords[i+1];
       const idx = (y * width) + x;
       const currPixel = this.pixels[idx];
-      return { tLocal: i  * nCoordsInv, x, y, markers, currPixel, prevPixel };
+      return { tLocal: i * nCoordsInv, x, y, markers, currPixel, prevPixel };
     };
 
     // Add a starting marker
@@ -767,7 +767,6 @@ export class PixelCache extends PIXI.Rectangle {
 
     let prevMarker = startingMarker;
     let prevPixel = startingMarker.currPixel;
-    let reachedEnd = false;
     const iIncr = jIncr * 2;
     for ( let i = iIncr; i < nCoords; i += iIncr) {
       const newMarker = createMarker(i, prevPixel);
@@ -1296,7 +1295,7 @@ export class PixelCache extends PIXI.Rectangle {
   drawCanvasCoords({color = Draw.COLORS.blue, gammaCorrect = false, skip = 10, radius = 1 } = {}) {
     const gammaExp = gammaCorrect ? 1 / 2.2 : 1;
     const { right, left, top, bottom } = this;
-    skip *= Math.round(1 / cache.scale.resolution);
+    skip *= Math.round(1 / this.scale.resolution);
     for ( let x = left; x <= right; x += skip ) {
       for ( let y = top; y <= bottom; y += skip ) {
         const value = this.pixelAtCanvas(x, y);
