@@ -735,8 +735,11 @@ export class PixelCache extends PIXI.Rectangle {
    *      Object has x, y, currPixel, prevPixel, tLocal (% of total)
    */
   pixelValuesForLine(a, b, { alphaThreshold, skip = 0, markPixelFn } = {}) {
+    const aLocal = this._fromCanvasCoordinates(a.x, a.y);
+    const bLocal = this._fromCanvasCoordinates(b.x, b.y);
+
     // Find the points within the bounds (or alpha bounds) of this cache.
-    const bounds = alphaThreshold ? this.getThresholdCanvasBoundingBox(alphaThreshold) : this;
+    const bounds = alphaThreshold ? this.getThresholdLocalBoundingBox(alphaThreshold) : this.localFrame;
     const boundsIx = trimLineSegmentToRectangle(bounds, a, b);
     if ( !boundsIx ) return null; // Segment never intersects the cache bounds.
 
@@ -1153,8 +1156,8 @@ export class PixelCache extends PIXI.Rectangle {
     opts.x += x;
     opts.y += y;
     opts.resolution *= texture.resolution;
-    opts.pixelHeight = texture.height;
-    return new this(arr, texture.width, opts);
+    opts.pixelHeight = height;
+    return new this(arr, width, opts);
   }
 
   /**
