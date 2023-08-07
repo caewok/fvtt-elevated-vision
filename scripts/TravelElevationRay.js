@@ -179,9 +179,7 @@ export class TravelElevationRay {
       const color = marker.tile ? Draw.COLORS.orange : Draw.COLORS.green;
       const pt = this.pointAtT(marker.t0);
       Draw.point(pt, { color, radius: 2 });
-
-      const e = marker.tile ? marker.tile.elevationE : canvas.elevation._scaleNormalizedElevation(marker.currPixel);
-      Draw.labelPoint(pt, e);
+      Draw.labelPoint(pt, marker.elevation);
     }
   }
 
