@@ -196,7 +196,7 @@ export class CoordinateElevationCalculator {
    * @returns {boolean}
    */
   isOnTile(tile) {
-    if ( !tile ) return Boolean(this.findTileAtElevation());
+    if ( !tile ) return Boolean(this.findSupportingTileAtElevation());
     const tileE = tile.elevationE;
     if ( !this.elevation.almostEqual(tileE) ) return false;
     return tileOpaqueAt(tile, this.#point, this.options.alphaThreshold);
@@ -258,13 +258,25 @@ export class CoordinateElevationCalculator {
     return almostBetween(this.elevation, tileE, tileE + this.options.tileStep);
   }
 
-  /*
-   * Terrain is within a permitted step from provided elevation.
-   * @param {number} terrainE     Tile to test
+  /**
+   * Tile is equal or above the current elevation but within tile step of that elevation.
+   * In addition, the tile could support this point.
+   * @param {Tile}
    * @returns {boolean}
    */
-  terrainWithinStep(terrainE) {
-    return almostBetween(this.elevation, terrainE, terrainE + this.options.terrainStep);
+  tileWithinReach(tile) {
+    const tileE = tile.elevationE;
+    if ( !almostBetween(this.elevation, tileE, tileE + this.options.tileStep) ) return false;
+    return this.tileCouldSupport(tile);
+  }
+
+  /**
+   * Terrain equal or below the current elevation but within terrain step of that elevation.
+   * @returns {boolean}
+   */
+  terrainWithinStep() {
+    const terrainE = this.terrainElevation();
+    return almostBetween(this.elevation, terrainE - this.options.terrainStep, terrainE);
   }
 
   /**
@@ -312,8 +324,21 @@ export class CoordinateElevationCalculator {
   }
 
   /**
-   * Find the supporting tile for the coordinate, if any.
-   * Highest tile that supports the coordinate.
+   * Find supporting tile equal or above the current elevation but within tile step of that elevation.
+   * @param {Tile} [excludeTile]    Optional tile to exclude from search
+   * @returns {Tile|null}
+   */
+  findSupportingTileWithinReach(excludeTile) {
+    for ( const tile of this.tiles ) {
+      if ( tile === excludeTile ) continue;
+      if ( this.tileWithinReach(tile) ) return tile;
+    }
+    return null;
+  }
+
+  /**
+   * Find supporting tile below the current elevation.
+   * @param {Tile} [excludeTile]    Optional tile to exclude from search
    * @returns {Tile|null}
    */
   findSupportingTile() {
@@ -323,10 +348,44 @@ export class CoordinateElevationCalculator {
       const tileE = tile.elevationE;
       if ( tileE <= terrainE ) break;
       if ( excludeFn(tileE) ) continue;
+
       if ( this.tileCouldSupport(tile) ) return tile;
     }
     return null;
   }
+
+  /**
+   * Find supporting tile below the current elevation.
+   * @param {Tile} [excludeTile]    Optional tile to exclude from search
+   * @param {number} [floor]        Don't search below this value
+   * @returns {Tile|null}
+   */
+  findSupportingTileBelow(excludeTile, floor) {
+    floor ??= this.terrainElevation();
+    const e = this.elevation;
+    for ( const tile of this.tiles ) {
+      if ( tile === excludeTile ) continue;
+      if ( tile.elevationE >= e ) continue;
+      if ( tile.elevationE < floor ) break;
+      if ( this.tileCouldSupport(tile) ) return tile;
+    }
+    return null;
+  }
+
+  /**
+   * Find supporting tile at elevation.
+   * @returns {Tile|null}
+   */
+  findSupportingTileAtElevation(excludeTile) {
+    const e = this.elevation;
+    for ( const tile of this.tiles ) {
+      if ( tile === excludeTile ) continue;
+      if ( !this.tileCouldSuport(tile) ) continue;
+      if ( e.almostEqual(tile.elevationE) ) return tile;
+    }
+    return null;
+  }
+
 }
 
 /**
