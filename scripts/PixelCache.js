@@ -221,7 +221,10 @@ export class PixelCache extends PIXI.Rectangle {
   /** @type {number} */
   #maximumPixelValue = 255;
 
-  /** @type {Map<PIXI.Rectangle>} */
+  /** @type {Map<number,PIXI.Rectangle>} */
+  #thresholdLocalBoundingBoxes = new Map();
+
+  /** @type {Map<number,PIXI.Rectangle>} */
   #thresholdCanvasBoundingBoxes = new Map();
 
   /**
@@ -328,6 +331,17 @@ export class PixelCache extends PIXI.Rectangle {
   }
 
   /**
+   * Clear the threshold bounding boxes. Should be rare, if ever, b/c these are local rects
+   * based on supposedly unchanging pixels.
+   */
+  _clearLocalThresholdBoundingBoxes() {
+    this.#thresholdCanvasBoundingBoxes.clear();
+    this.#thresholdLocalBoundingBoxes.clear();
+  }
+
+  _clearCanvasThresholdBoundingBoxes() { this.#thresholdCanvasBoundingBoxes.clear(); }
+
+  /**
    * Matrix that takes a canvas point and transforms to a local point.
    * @returns {Matrix}
    */
@@ -349,6 +363,17 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} [threshold=0.75]   Values lower than this will be ignored around the edges.
    * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
    */
+  getThresholdLocalBoundingBox(threshold = 0.75) {
+    const map = this.#thresholdLocalBoundingBoxes;
+    if ( !map.has(threshold) ) map.set(threshold, this.#calculateLocalBoundingBox(threshold));
+    return map.get(threshold);
+  }
+
+  /**
+   * Get a canvas bounding polygon or box based on a specific threshold.
+   * If you require a rectangle, use getThresholdLocalBoundingBox
+   * @returns {PIXI.Rectangle|PIXI.Polygon}    Rectangle or polygon in canvas coordinates.
+   */
   getThresholdCanvasBoundingBox(threshold = 0.75) {
     const map = this.#thresholdCanvasBoundingBoxes;
     if ( !map.has(threshold) ) map.set(threshold, this.#calculateCanvasBoundingBox(threshold));
@@ -356,75 +381,102 @@ export class PixelCache extends PIXI.Rectangle {
   }
 
   /**
+   * Calculate a canvas bounding box based on a specific threshold.
+   */
+  #calculateCanvasBoundingBox(threshold=0.75) {
+    const localRect = this.getThresholdLocalBoundingBox(threshold);
+
+    const { left, right, top, bottom } = localRect;
+    const TL = this._toCanvasCoordinates(left, top);
+    const TR = this._toCanvasCoordinates(right, top);
+    const BL = this._toCanvasCoordinates(left, bottom);
+    const BR = this._toCanvasCoordinates(right, bottom);
+
+    // Can the box be represented with a rectangle? Points must be horizontal and vertical.
+    // Could also be rotated 90º
+    if ( TL.x.almostEqual(BL.x) && TL.y.almostEqual(TR.y)
+      || TL.x.almostEqual(TR.x) && TL.y.almostEqual(BL.y) ) {
+      const xMinMax = Math.minMax(TL.x, TR.x, BL.x, BR.x);
+      const yMinMax = Math.minMax(TL.y, TR.y, BL.y, BR.y);
+      return new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
+    }
+
+    // Alternatively, represent as polygon, which allows for a tighter contains test.
+    return new PIXI.Polygon(TL, TR, BR, BL);
+  }
+
+
+  /**
    * Calculate a bounding box based on a specific threshold.
    * @param {number} [threshold=0.75]   Values lower than this will be ignored around the edges.
    * @returns {PIXI.Rectangle} Rectangle based on local coordinates.
    */
-  #calculateCanvasBoundingBox(threshold=0.75) {
+  #calculateLocalBoundingBox(threshold=0.75) {
+    // (Faster or equal to the old method that used one double non-breaking loop.)
     threshold = threshold * this.#maximumPixelValue;
 
-    let minLeft = Number.POSITIVE_INFINITY;
-    let maxRight = Number.NEGATIVE_INFINITY;
-    let minTop = Number.POSITIVE_INFINITY;
-    let maxBottom = Number.NEGATIVE_INFINITY;
-
-    const { left, right, top, bottom } = this;
+    let minLeft;
+    let maxRight;
+    let minTop;
+    let maxBottom;
+    const { left, right, top, bottom } = this.localFrame;
 
     // Test left side
     for ( let x = left; x <= right; x += 1 ) {
       for ( let y = top; y <= bottom; y += 1 ) {
-        const a = this.pixelAtCanvas(x, y);
+        const a = this._pixelAtLocal(x, y);
         if ( a > threshold ) {
           minLeft = x;
           break;
         }
       }
-      if ( isFinite(minLeft) ) break;
+      if ( typeof minLeft !== "undefined" ) break;
     }
-    if ( !isFinite(minLeft)  ) return new PIXI.Rectangle();
+    if ( typeof minLeft === "undefined" ) return new PIXI.Rectangle();
 
     // Test right side
     for ( let x = right; x >= left; x -= 1 ) {
       for ( let y = top; y <= bottom; y += 1 ) {
-        const a = this.pixelAtCanvas(x, y);
+        const a = this._pixelAtLocal(x, y);
         if ( a > threshold ) {
           maxRight = x;
           break;
         }
       }
-      if ( isFinite(maxRight) ) break;
+      if ( typeof maxRight !== "undefined" ) break;
     }
 
     // Test top side
     for ( let y = top; y <= bottom; y += 1 ) {
       for ( let x = left; x <= right; x += 1 ) {
-        const a = this.pixelAtCanvas(x, y);
+        const a = this._pixelAtLocal(x, y);
         if ( a > threshold ) {
           minTop = y;
           break;
         }
       }
-      if ( isFinite(minTop) ) break;
+      if ( typeof minTop !== "undefined" ) break;
     }
 
     // Test bottom side
     for ( let y = bottom; y >= top; y -= 1 ) {
       for ( let x = left; x <= right; x += 1 ) {
-        const a = this.pixelAtCanvas(x, y);
+        const a = this._pixelAtLocal(x, y);
         if ( a > threshold ) {
           maxBottom = y;
           break;
         }
       }
-      if ( isFinite(maxBottom) ) break;
+      if ( typeof maxBottom !== "undefined" ) break;
     }
 
     return (new PIXI.Rectangle(minLeft, minTop, maxRight - minLeft, maxBottom - minTop));
   }
 
-  __calculateCanvasBoundingBox(threshold=0.75) {
+  _calculateCanvasBoundingBox(threshold=0.75) {
     return this.#calculateCanvasBoundingBox(threshold);
   }
+
   _calculateCanvasBoundingBox_Old(threshold=0.75) {
     threshold = threshold * this.#maximumPixelValue;
     let minX = Number.POSITIVE_INFINITY;
@@ -435,10 +487,10 @@ export class PixelCache extends PIXI.Rectangle {
     // Mapping pixels would be faster, but the different resolution, width/height, and scaleX, scaley
     // makes that inaccurate.
     // Possibly could map pixels and pad, if padding could be calculated correctly.
-    const { left, right, top, bottom } = this;
+    const { left, right, top, bottom } = this.localFrame;
     for ( let x = left; x < right; x += 1 ) {
       for ( let y = top; y < bottom; y += 1 ) {
-        const a = this.pixelAtCanvas(x, y);
+        const a = this._pixelAtLocal(x, y);
         if ( a > threshold ) {
           minX = Math.min(x, minX);
           minY = Math.min(y, minY);
