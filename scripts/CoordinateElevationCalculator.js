@@ -380,7 +380,7 @@ export class CoordinateElevationCalculator {
     const e = this.elevation;
     for ( const tile of this.tiles ) {
       if ( tile === excludeTile ) continue;
-      if ( !this.tileCouldSuport(tile) ) continue;
+      if ( !this.tileCouldSupport(tile) ) continue;
       if ( e.almostEqual(tile.elevationE) ) return tile;
     }
     return null;

@@ -5,6 +5,8 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { Draw } from "./geometry/Draw.js";
+
 export class TravelElevationRay {
   /** @enum {number} */
   static ELEVATION_STATE = {
@@ -107,7 +109,7 @@ export class TravelElevationRay {
     // Find all tiles less than or equal to the max elevation.
     // Then add in tiles that are within tile step, repeatedly.
     this.TEC.tiles.forEach(t => {
-      if ( t.elevationZ <= maxTerrainElevation ) reachableTiles.add(t);
+      if ( t.elevationE <= maxTerrainElevation ) reachableTiles.add(t);
     });
     this._findTilesWithinReach(maxTerrainElevation, reachableTiles);
 
@@ -135,12 +137,12 @@ export class TravelElevationRay {
     TEC.elevation = startElevation;
     const startTile = TEC.findSupportingTile();
     let currMarker = startTile
-      ? this._constructTileMarkerAt(startTile, 0) : this._constructElevationMarkerAt(0);
+      ? this._constructTileMarkerAt(0, startTile) : this._constructElevationMarkerAt(0);
     path.push(currMarker);
     currMarker = currMarker.next;
 
     // For each currMarker, is it the valid next location/elevation? If not, locate a new one and add.
-    while ( currMarker.t0 < 1 ) {
+    while ( currMarker && currMarker.t0 < 1 ) {
       // Draw.point(terrainCache._toCanvasCoordinates(currMarker.x, currMarker.y), { radius: 1, color: Draw.COLORS.gray })
 
       if ( currMarker.tile ) {
@@ -148,25 +150,42 @@ export class TravelElevationRay {
         const tileMarker = this._findSupportingTileMarkerAtT(
           currMarker.t0, currMarker.tile.elevationE, currMarker.tile, undefined, true);
         if ( tileMarker ) currMarker = tileMarker;
+        else currMarker = this._constructElevationMarkerAt(currMarker.t0);
 
       } else if ( currMarker.prevPixel > currMarker.currPixel && !currMarker.tile ) {
         // Moving down in terrain
         // Draw.point(terrainCache._toCanvasCoordinates(currMarker.x, currMarker.y), { radius: 1, color: Draw.COLORS.green })
         // Look for tile to switch to.
-        const destE = canvas.elevation._scaleNormalizedElevation(currMarker.currPixel);
-        const tileMarker = this._findSupportingTileMarkerAtT(currMarker.t0, destE);
+        const prevE = canvas.elevation._scaleNormalizedElevation(currMarker.prevPixel);
+        const currE = canvas.elevation._scaleNormalizedElevation(currMarker.currPixel);
+        const reach = (currE - prevE) < TEC.options.tileStep;
+        const tileMarker = this._findSupportingTileMarkerAtT(currMarker.t0, prevE, undefined, currE, reach);
         if ( tileMarker ) currMarker = tileMarker;
-
 
       } else if ( currMarker.prevPixel < currMarker.currPixel && !currMarker.tile ) {
         // Moving up in terrain
         // Nothing to do.
       }
 
-      currMarker = currMarker.next;
+      // We may be left with a terrain marker that requires elevation to be set.
+      currMarker.elevation ??= canvas.elevation._scaleNormalizedElevation(currMarker.currPixel);
       path.push(currMarker);
+      currMarker = currMarker.next;
     }
+  }
 
+  drawPath() {
+    for ( const marker of this.path ) {
+      const color = marker.tile ? Draw.COLORS.orange : Draw.COLORS.green;
+      Draw.point(this.pointAtT(marker.t0), { color, radius: 2 });
+    }
+  }
+
+  drawReachableTiles() {
+    for ( const tile of this.reachableTiles ) {
+      const cache = tile.evPixelCache;
+      Draw.shape(cache.getThresholdCanvasBoundingBox(), { color: Draw.COLORS.orange });
+    }
   }
 
   _findTilesWithinReach(currElevation, tileSet = new Set()) {
@@ -196,7 +215,7 @@ export class TravelElevationRay {
     // Retrieve and format the tile walk.
     const tileWalk = tile.evPixelCache.pixelValuesForLine(origin, destination, { markPixelFn: markTilePixelFn });
     tileWalk.tile = tile;
-    setTValuesForWalk(tileWalk, origin, destination);
+    setTValuesForWalk(tileWalk, origin, destination, tile);
     this.tileWalks.set(tile, tileWalk);
     return tileWalk;
   }
@@ -204,22 +223,22 @@ export class TravelElevationRay {
   /**
    * Construct a skeleton tile marker for when the token falls somewhere on the tile (not at a marker).
    */
-  _constructTileMarkerAt(tile, t) {
-    const next = this._getTileWalk(tile).markers.find(m => m.t0 > t);
+  _constructTileMarkerAt(t0, tile) {
+    const next = this._getTileWalk(tile).markers.find(m => m.t0 > t0);
     const elevation = tile.elevationE;
-    return { t, elevation, tile, next };
+    return { t0, elevation, tile, next };
   }
 
   /**
    * Construct a skeleton elevation marker for when the token falls somewhere from a tile (not at a marker).
    */
-  _constructElevationMarkerAt(t, elevation) {
+  _constructElevationMarkerAt(t0, elevation) {
     if ( typeof elevation === "undefined" ) {
-      this.TEC.location = this.origin.projectToward(this.destination, t);
+      this.TEC.location = this.origin.projectToward(this.destination, t0);
       elevation = this.TEC.terrainElevation();
     }
-    const next = this.terrainWalk.markers.find(m => m.t0 > t);
-    return { t, elevation, next };
+    const next = this.terrainWalk.markers.find(m => m.t0 > t0);
+    return { t0, elevation, next };
   }
 
   /**
@@ -233,13 +252,11 @@ export class TravelElevationRay {
     const TEC = this.TEC;
     TEC.location = this.pointAtT(t0);
     TEC.elevation = elevation;
-    const findAtElevation = reach ? TEC.findSupportingTileWithinReach : TEC.findSupportingTileAtElevation;
-    let tile = findAtElevation(excludeTile);
+    let tile = reach ? TEC.findSupportingTileWithinReach(excludeTile) : TEC.findSupportingTileAtElevation(excludeTile);
     tile ??= TEC.findSupportingTileBelow(excludeTile, floor);
     if ( !tile ) return null;
 
-    const tileWalk = this._getTileWalk(tile);
-    return this._constructTileMarkerAt(tileWalk, t0);
+    return this._constructTileMarkerAt(t0, tile);
   }
 
   /**
@@ -385,7 +402,7 @@ class Marker {
  * @param {PIXI.Point} b
  * @returns {elevationWalk}
  */
-function setTValuesForWalk(walk, a, b) {
+function setTValuesForWalk(walk, a, b, tile) {
   // Use intersection points to determine the t values for the walk
   const delta = b.subtract(a);
   const deltaMag = delta.magnitudeSquared();
@@ -396,6 +413,9 @@ function setTValuesForWalk(walk, a, b) {
 
   // Then scale the markers' tLocal values accordingly.
   const diff = t1 - t0;
-  for ( const marker of walk.markers ) marker.t0 = t0 + (diff * marker.tLocal);
+  for ( const marker of walk.markers ) {
+    marker.t0 = t0 + (diff * marker.tLocal);
+    marker.tile = tile;
+  }
   return walk;
 }
