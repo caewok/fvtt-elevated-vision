@@ -1,6 +1,7 @@
 /* globals
 PIXI,
 canvas,
+foundry,
 Ray
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -765,7 +766,7 @@ export class PixelCache extends PIXI.Rectangle {
     const coords = bresenhamLine(a.x, a.y, b.x, b.y);
     const jIncr = skip + 1;
     return markPixelFn
-      ? this.#markPixelsForLocalCoords(coords, jIncr, markPixelFn)
+      ? this.#markPixelsForLocalCoords(coords, jIncr, markPixelFn, a, b)
       : this.#pixelValuesForLocalCoords(coords, jIncr);
   }
 
@@ -802,32 +803,34 @@ export class PixelCache extends PIXI.Rectangle {
    *  - {number[]} coords     Local pixel coordinates, in [x0, y0, x1, y1]
    *  - {object[]} markers    Pixels that meet the markPixelFn
    */
-  #markPixelsForLocalCoords(coords, jIncr, markPixelFn) {
+  #markPixelsForLocalCoords(coords, jIncr, markPixelFn, start, end) {
     const nCoords = coords.length;
     const nCoordsInv = 1 / (nCoords - 2);
     const markers = [];
-    const createMarker = Marker.createMarkerFn(this, coords, nCoordsInv);
-
-    // Add a starting marker
-    const startingMarker = createMarker(0, null);
+    const markerOpts = PixelMarker.calculateOptsFn(this, coords);
+    const startingMarker = new PixelMarker(0, start, end, markerOpts(0));
     markers.push(startingMarker);
 
+    // Cycle over the coordinates, adding new markers whenever the markPixelFn test is met.
     let prevMarker = startingMarker;
-    let prevPixel = startingMarker.currPixel;
+    let prevPixel = startingMarker.options.currPixel;
     const iIncr = jIncr * 2;
     for ( let i = iIncr; i < nCoords; i += iIncr) {
-      const newMarker = createMarker(i, prevPixel);
-      if ( markPixelFn(prevPixel, newMarker.currPixel, i, nCoords) ) {
-        markers.push(newMarker);
-        prevMarker.next = newMarker;
-        prevMarker = newMarker;
+      const opts = markerOpts(i);
+      if ( markPixelFn(prevPixel, opts.currPixel, i, nCoords) ) {
+        const t = i * nCoordsInv;
+        opts.prevPixel = prevPixel;
+        prevMarker = prevMarker._addSubsequentMarkerFast(t, opts);
+        markers.push(prevMarker);
       }
-      prevPixel = newMarker.currPixel;
+      prevPixel = opts.currPixel;
     }
 
     // Add an end marker if not already done.
-    if ( markers.at(-1).tLocal !== 1 ) {
-      const endingMarker = createMarker(nCoords - 2, prevPixel);
+    if ( prevMarker.t !== 1 ) {
+      const opts = markerOpts(nCoords - 2);
+      opts.prevPixel = prevPixel;
+      const endingMarker = prevMarker._addSubsequentMarkerFast(1, opts);
       markers.push(endingMarker);
     }
 
@@ -1571,55 +1574,96 @@ export class TilePixelCache extends PixelCache {
   }
 }
 
+// ----- Marker class ----- //
+
 /**
- * Class used by #markPixelsForLocalCoords to store relevant data for the pixel point.
+ * Store a point, a t value, and the underlying coordinate system
  */
 export class Marker {
   /** @type {PIXI.Point} */
-  point = new PIXI.Point();
-
-  /** @type {number} */
-  prevPixel = -1;
-
-  /** @type {number} */
-  currPixel = -1;
+  #point;
 
   /** @type {number} */
   t = -1;
 
+  /** @type {object} */
+  range = {
+    start: new PIXI.Point(),  /** @type {PIXI.Point} */
+    end: new PIXI.Point()       /** @type {PIXI.Point} */
+  };
+
+  /** @type {object} */
+  options = {};
+
   /** @type {Marker} */
   next;
 
-  /** @type {PixelCache} */
-  pixelCache;
+  constructor(t, start, end, opts = {}) {
+    this.t = t;
+    this.options = opts;
+    this.range.start.copyFrom(start);
+    this.range.end.copyFrom(end);
+  }
 
-  constructor(x, y, currPixel, prevPixel, t, cache) {
-    this.point.x = x;
-    this.point.y = y;
-    this.x = x;
-    this.y = y;
-    this.currPixel = currPixel;
-    this.prevPixel = prevPixel;
-    this.tLocal = t;
-    this.pixelCache = cache;
+  /** @type {PIXI.Point} */
+  get point() { return this.#point ?? (this.#point = this.pointAtT(this.t)); }
+
+  /**
+   * Given a t position, project the location given this marker's range.
+   * @param {number} t
+   * @returns {PIXI.Point}
+   */
+  pointAtT(t) { return this.range.start.projectToward(this.range.end, t); }
+
+  /**
+   * Build a new marker and link it as the next marker to this one.
+   * If this marker has a next marker, insert in-between.
+   * Will insert at later spot as necessary
+   * @param {number} t      Must be greater than or equal to this t.
+   * @param {object} opts   Will be combined with this marker options.
+   * @returns {Marker}
+   */
+  addSubsequentMarker(t, opts) {
+    if ( this.t === t ) return this;
+
+    // Insert further down the line if necessary.
+    if ( this.next && this.next.t < t ) return this.next.addSubsequentMarker(t, opts);
+
+    // Merge the options with this marker's options and create a new marker.
+    opts = foundry.utils.mergeObject(this.options, opts, { inplace: false });
+    if ( t < this.t ) console.error("Marker asked to create a next marker with a previous t value.");
+    const next = new this.constructor(t, this.range.start, this.range.end, opts);
+
+    // Insert at the correct position.
+    if ( this.next ) next.next = this.next;
+    this.next = next;
+    return next;
   }
 
   /**
-   * Factory function used by #markPixelsForLocalCoords
-   * @param {PixelCache} cache      Cache from which to generate markers
-   * @param {number[]} coords       Coordinates to test for marking
-   * @param {number} nCoordsInv     Pre-calculated inverse coordinate - 2 length.
-   * @returns {function}
+   * Like addSubsequentMarker but does not merge options and performs less checks.
+   * Assumes it should be the very next item and does not check for existing next object.
    */
-  static createMarkerFn(cache, coords, nCoordsInv) {
+  _addSubsequentMarkerFast(t, opts) {
+    const next = new this.constructor(t, this.range.start, this.range.end, opts);
+    this.next = next;
+    return next;
+  }
+}
+
+/**
+ * Class used by #markPixelsForLocalCoords to store relevant data for the pixel point.
+ */
+export class PixelMarker extends Marker {
+
+  static calculateOptsFn(cache, coords, ) {
     const width = cache.localFrame.width;
-    return (i, prevPixel) => {
-      const x = coords[i];
-      const y = coords[i+1];
-      const idx = (y * width) + x;
+    return i => {
+      const localX = coords[i];
+      const localY = coords[i+1];
+      const idx = (localY * width) + localX;
       const currPixel = cache.pixels[idx];
-      const t = i * nCoordsInv;
-      return new Marker(x, y, currPixel, prevPixel, t, cache);
+      return { localX, localY, currPixel };
     };
   }
 }
