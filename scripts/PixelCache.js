@@ -1624,15 +1624,14 @@ export class Marker {
    * @returns {Marker}
    */
   addSubsequentMarker(t, opts) {
-    if ( this.t === t ) return this;
+    if ( this.t === t ) { return this; }
 
     // Insert further down the line if necessary.
     if ( this.next && this.next.t < t ) return this.next.addSubsequentMarker(t, opts);
 
     // Merge the options with this marker's options and create a new marker.
-    opts = foundry.utils.mergeObject(this.options, opts, { inplace: false });
     if ( t < this.t ) console.error("Marker asked to create a next marker with a previous t value.");
-    const next = new this.constructor(t, this.range.start, this.range.end, opts);
+    const next = new this.constructor(t, this.range.start, this.range.end, { ...this.options, ...opts });
 
     // Insert at the correct position.
     if ( this.next ) next.next = this.next;

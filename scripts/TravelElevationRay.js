@@ -425,7 +425,8 @@ class TerrainMarker extends ElevationMarker {
   get elevation() {
     if ( typeof this.#elevation === "undefined") {
       const { elevation, currPixel } = this.options;
-      this.#elevation = elevation ?? (currPixel ? this.constructor.elevationFromPixel(currPixel) : undefined);
+      if ( typeof elevation !== "undefined" ) this.#elevation = elevation;
+      else if ( typeof currPixel !== "undefined" ) this.#elevation = this.constructor.elevationFromPixel(currPixel);
     }
     return this.#elevation;
   }
