@@ -290,6 +290,9 @@ export class TravelElevationCalculator {
   /** @type {number} */
   #interval = 1;
 
+  /** @type {Tile[]} */
+  tiles = [];
+
   // ----- NOTE: Preset Configuration Parameters ----- //
 
   /** @type {number} */
@@ -299,7 +302,7 @@ export class TravelElevationCalculator {
     this.TEC = new canvas.elevation.TokenElevationCalculator(token, opts);
     this.travelRay = travelRay;
 
-    this.TEC.tiles = this._elevationTilesOnRay();
+    this.tiles = this._elevationTilesOnRay();
 
     // When stepping along the ray, move in steps based on the grid precision.
     const gridPrecision = canvas.walls.gridPrecision;
@@ -343,7 +346,7 @@ export class TravelElevationCalculator {
     this.#travelRay = ray;
 
     // Update tiles present based on new ray.
-    this.TEC.tiles = this._elevationTilesOnRay();
+    this.tiles = this._elevationTilesOnRay();
   }
 
   /**
@@ -529,7 +532,7 @@ export class TravelElevationCalculator {
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
     out.checkTerrain = true;
     out.adjustElevation = true;
-    if ( !fly && !tec.tiles.length ) {
+    if ( !fly && !this.tiles.length ) {
       tec.location = travelRay.B;
       out.finalElevation = tec.terrainElevation();
       return out;
@@ -1033,7 +1036,7 @@ export class TravelElevationCalculator {
    */
   _tileRayIntersections() {
     const tileIxs = [];
-    for ( const tile of this.TEC.tiles ) {
+    for ( const tile of this.tiles ) {
       const cache = tile._evPixelCache;
       if ( !cache ) continue;
 
@@ -1052,7 +1055,7 @@ export class TravelElevationCalculator {
    */
   draw() {
     Draw.segment(this.travelRay);
-    for ( const tile of this.TEC.tiles ) {
+    for ( const tile of this.tiles ) {
       const cache = tile._evPixelCache;
       if ( !cache ) {
         Draw.shape(tile.getBounds, { color: Draw.COLORS.red });

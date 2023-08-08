@@ -119,7 +119,7 @@ export class CoordinateElevationCalculator {
   }
 
   get tiles() {
-    return this.#tiles ?? (this.#tiles = CoordinateElevationCalculator.locateTiles(this.bounds));
+    return this.options.tiles ?? this.#tiles ?? (this.#tiles = CoordinateElevationCalculator.locateTiles(this.bounds));
   }
 
   set tiles(value) {

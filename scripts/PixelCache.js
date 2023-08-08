@@ -289,8 +289,7 @@ export class PixelCache extends PIXI.Rectangle {
   containsPixel(x, y, alphaThreshold = 0.75) {
     // First test against the bounding box
     const bounds = this.getThresholdCanvasBoundingBox(alphaThreshold);
-    if ( (x < bounds.left) || (x > bounds.right) ) return false;
-    if ( (y < bounds.top) || (y > bounds.bottom) ) return false;
+    if ( !bounds.contains(x, y) ) return false;
 
     // Next test a specific pixel
     const value = this.pixelAtCanvas(x, y);
@@ -1102,19 +1101,31 @@ export class PixelCache extends PIXI.Rectangle {
   /**
    * Find the points at which a pixel cache boundary intersects a ray,
    * given a specific threshold defining the boundary.
-   * @param {Ray} ray             The ray to test against the boundary
+   * @param {Ray} ray             The ray to test against the boundary, in canvas coordinates.
    * @param {number} threshold    Threshold for the boundary.
    * @returns {Point[]}  Points. Intersection positions along ray will be marked with t0,
    *   where t0 = 0 is endpoint A and t0 = 1 is endpoint B.
    */
   rayIntersectsBoundary(ray, threshold = 0.75) {
     const { A, B } = ray;
-    const bounds = this.getThresholdCanvasBoundingBox(threshold);
+    const a = this._fromCanvasCoordinates(A.x, A.y);
+    const b = this._fromCanvasCoordinates(B.x, B.y);
+    const localBounds = this.getThresholdLocalBoundingBox(threshold);
     const CSZ = PIXI.Rectangle.CS_ZONES;
+    const ixs = localBounds.segmentIntersections(a, b);
+
+    // Return the intersections to canvas coordinates.
+    ixs.map(ix => {
+      const canvasIx = this._toCanvasCoordinates(ix.x, ix.y);
+      ix.x = canvasIx.x;
+      ix.y = canvasIx.y;
+      return ix;
+    });
+
     return {
-      aInside: bounds._getZone(A) === CSZ.INSIDE,
-      bInside: bounds._getZone(B) === CSZ.INSIDE,
-      ixs: bounds.segmentIntersections(A, B)
+      aInside: localBounds._getZone(a) === CSZ.INSIDE,
+      bInside: localBounds._getZone(b) === CSZ.INSIDE,
+      ixs
     };
   }
 

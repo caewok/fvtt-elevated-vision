@@ -108,8 +108,8 @@ export class TravelElevationRay {
     this._findTilesWithinReach(maxTerrainElevation, reachableTiles);
 
     // Replace the TEC tiles with this filtered set based on maximum elevation.
-    this.TEC.tiles = [...reachableTiles];
-    this.TEC.tiles.sort((a, b) => b.elevationE - a.elevationE);
+    this.TEC.options.tiles = [...reachableTiles];
+    this.TEC.options.tiles.sort((a, b) => b.elevationE - a.elevationE);
   }
 
   /**
