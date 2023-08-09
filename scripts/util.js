@@ -508,8 +508,8 @@ export function bresenhamLine(x0, y0, x1, y1) {
   let err = dx - dy;
 
   const pixels = [x0, y0];
-  while ( !((x0 === x1) && (y0 === y1)) ) {
-    const e2 = err << 1; // 2 * err.
+  while ( x0 !== x1 || y0 !== y1 ) {
+    const e2 = err * 2;
     if ( e2 > -dy ) {
       err -= dy;
       x0 += sx;
@@ -522,6 +522,33 @@ export function bresenhamLine(x0, y0, x1, y1) {
     pixels.push(x0, y0);
   }
   return pixels;
+}
+
+export function* bresenhamLineIterator(x0, y0, x1, y1) {
+  x0 = Math.round(x0);
+  y0 = Math.round(y0);
+  x1 = Math.round(x1);
+  y1 = Math.round(y1);
+
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const sx = (x0 < x1) ? 1 : -1;
+  const sy = (y0 < y1) ? 1 : -1;
+  let err = dx - dy;
+  yield { x: x0, y: y0 };
+  while ( x0 !== x1 || y0 !== y1 ) {
+    const e2 = err * 2;
+    if ( e2 > -dy ) {
+      err -= dy;
+      x0 += sx;
+    }
+    if ( e2 < dx ) {
+      err += dx;
+      y0 += sy;
+    }
+
+    yield { x: x0, y: y0 };
+  }
 }
 
 /**
