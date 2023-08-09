@@ -1,7 +1,6 @@
 /* globals
 PIXI,
 canvas,
-foundry,
 Ray
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -21,7 +20,7 @@ Ray
 
 import { extractPixels } from "./perfect-vision/extract-pixels.js";
 import { Draw } from "./geometry/Draw.js";
-import { roundFastPositive, bresenhamLine, trimLineSegmentToRectangle } from "./util.js";
+import { roundFastPositive, bresenhamLine, bresenhamLineIterator, trimLineSegmentToRectangle } from "./util.js";
 import { Matrix } from "./geometry/Matrix.js";
 
 /* Testing
@@ -714,6 +713,165 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {number}
    */
   pixelAtCanvas(x, y) { return this.pixels[this._indexAtCanvas(x, y)]; }
+
+  /**
+   * Extract all pixel values for a canvas ray.
+   * @param {Point} a   Starting location, in local coordinates
+   * @param {Point} b   Ending location, in local coordinates
+   * @returns {number[]}    The pixel values
+   */
+  _extractAllPixelValuesAlongCanvasRay(a, b, { alphaThreshold } = {}) {
+    const aLocal = this._fromCanvasCoordinates(a.x, a.y);
+    const bLocal = this._fromCanvasCoordinates(b.x, b.y);
+    const localBoundsIx = this._trimToLocalBounds(aLocal, bLocal, alphaThreshold);
+    if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
+
+    const pixels = this._extractAllPixelValuesAlongLocalRay(localBoundsIx[0], localBoundsIx[1]);
+    pixels.forEach(pt => this.#localToCanvasInline(pt));
+    return pixels;
+  }
+
+  /**
+   * Trim a line segment to only the portion that intersects this cache bounds.
+   * @param {Point} a     Starting location, in local coordinates
+   * @param {Point} b     Ending location, in local coordinates
+   * @param {number} alphaThreshold   Value of threshold, if threshold bounds should be used.
+   * @returns {Point[2]|null}
+   */
+  _trimToLocalBounds(a, b, alphaThreshold) {
+    // Local coordinates start at 0.
+    const aBounded = { x: Math.max(a.x, 0), y: Math.max(a.y, 0) };
+    const bBounded = { x: Math.max(b.x, 0), y: Math.max(b.y, 0) };
+
+    const bounds = alphaThreshold ? this.getThresholdLocalBoundingBox(alphaThreshold) : this.localFrame;
+    return trimLineSegmentToRectangle(bounds, aBounded, bBounded);
+  }
+
+  // Convert a local point to canvas point, overwriting the local point.
+  #localToCanvasInline(pt) {
+    const canvasPt = this._toCanvasCoordinates(pt.x, pt.y);
+    pt.x = canvasPt.x;
+    pt.y = canvasPt.y;
+    return pt;
+  }
+
+  /**
+   * Extract all pixel values for a local ray.
+   * It is assumed, without checking, that a and be are within the bounds of the shape.
+   * @param {Point} a   Starting location, in local coordinates
+   * @param {Point} b   Ending location, in local coordinates
+   * @param {object} [opts]                 Optional parameters
+   * @param {number} [opts.alphaThreshold]  Percent between 0 and 1.
+   * @returns {number[]}    The pixel values
+   */
+  _extractAllPixelValuesAlongLocalRay(a, b) {
+    const bresPts = bresenhamLine(a.x, a.y, b.x, b.y);
+    const nPts = bresPts.length;
+    const pixels = Array(nPts * 0.5);
+    for ( let i = 0, j = 0; i < nPts; i += 2, j += 1 ) {
+      const x = bresPts[i];
+      const y = bresPts[i + 1];
+      const currPixel = this._pixelAtLocal(x, y);
+      pixels[j] = { x, y, currPixel };
+    }
+    return pixels;
+  }
+
+  /**
+   * Extract all pixels values along a canvas ray that meet a test function.
+   * @param {Point} a   Starting location, in canvas coordinates
+   * @param {Point} b   Ending location, in canvas coordinates
+   * @param {function} markPixelFn    Function to test pixels.
+   *   Function takes current pixel, previous pixel
+   * @returns {object[]} Array of objects, each of which have:
+   *   - {number} x           Canvas coordinates
+   *   - {number} y           Canvas coordinates
+   *   - {number} currPixel
+   *   - {number} prevPixel
+   */
+  _extractAllMarkedPixelValuesAlongCanvasRay(a, b, markPixelFn, { alphaThreshold } = {}) {
+    const aLocal = this._fromCanvasCoordinates(a.x, a.y);
+    const bLocal = this._fromCanvasCoordinates(b.x, b.y);
+    const localBoundsIx = this._trimToLocalBounds(aLocal, bLocal, alphaThreshold);
+    if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
+
+    const pixels = this._extractAllMarkedPixelValuesAlongLocalRay(localBoundsIx[0], localBoundsIx[1], markPixelFn);
+    pixels.forEach(pt => this.#localToCanvasInline(pt));
+    return pixels;
+  }
+
+  /**
+   * Extract all pixel values along a local ray that meet a test function.
+   * @param {Point} a   Starting location, in local coordinates
+   * @param {Point} b   Ending location, in local coordinates
+   * @param {function} markPixelFn    Function to test pixels.
+   *   Function takes current pixel, previous pixel
+   * @returns {object[]} Array of objects, each of which have:
+   *   - {number} x           Local coordinates
+   *   - {number} y           Local coordinates
+   *   - {number} currPixel
+   *   - {number} prevPixel
+   */
+  _extractAllMarkedPixelValuesAlongLocalRay(a, b, markPixelFn) {
+    const bresPts = bresenhamLine(a.x, a.y, b.x, b.y);
+    const pixels = [];
+    let prevPixel;
+    for ( let i = 0; i < nPts; i += 2 ) {
+      const x = bresPts[i];
+      const y = bresPts[i + 1];
+      const currPixel = this._pixelAtLocal(x, y);
+      if ( markPixelFn(currPixel, prevPixel) ) pixels.push({ currPixel, prevPixel, x, y });
+      prevPixel = currPixel;
+    }
+    return pixels;
+  }
+
+  /**
+   * Convenience function.
+   * Extract the first pixel value along a canvas ray that meets a test function.
+   * @param {Point} a   Starting location, in canvas coordinates
+   * @param {Point} b   Ending location, in canvas coordinates
+   * @param {function} markPixelFn    Function to test pixels.
+   *   Function takes current pixel, previous pixel
+   * @returns {object|null} If pixel found, returns:
+   *   - {number} x           Canvas coordinate
+   *   - {number} y           Canvas coordinate
+   *   - {number} currPixel
+   *   - {number} prevPixel
+   */
+  _extractNextMarkedPixelValueAlongCanvasRay(a, b, markPixelFn, { alphaThreshold } = {}) {
+    const aLocal = this._fromCanvasCoordinates(a.x, a.y);
+    const bLocal = this._fromCanvasCoordinates(b.x, b.y);
+    const localBoundsIx = this._trimToLocalBounds(aLocal, bLocal, alphaThreshold);
+    if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
+
+    const pixel = this._extractNextPixelValueAlongLocalRay(localBoundsIx[0], localBoundsIx[1], markPixelFn);
+    if ( !pixel ) return pixel;
+    this.#localToCanvasInline(pixel);
+    return pixel;
+  }
+
+  /**
+   * Extract the first pixel value along a local ray that meets a test function.
+   * @param {Point} a   Starting location, in local coordinates
+   * @param {Point} b   Ending location, in local coordinates
+   * @param {function} markPixelFn    Function to test pixels.
+   *   Function takes current pixel, previous pixel
+   * @returns {object|null} If pixel found, returns:
+   *   - {number} x         Local coordinate
+   *   - {number} y         Local coordinate
+   *   - {number} currPixel
+   *   - {number} prevPixel
+   */
+  _extractNextMarkedPixelValueAlongLocalRay(a, b, markPixelFn) {
+    const bresIter = bresenhamLineIterator(a.x, a.y, b.x, b.y);
+    let prevPixel;
+    for ( const pt of bresIter ) {
+      const currPixel = this._pixelAtLocal(pt.x, pt.y);
+      if ( markPixelFn(currPixel, prevPixel) ) return { currPixel, prevPixel, x: pt.x, y: pt.y };
+    }
+    return null;
+  }
 
   /**
    * Extract pixel values for a line by transforming to a Bresenham line.
@@ -1666,7 +1824,7 @@ export class Marker {
  */
 export class PixelMarker extends Marker {
 
-  static calculateOptsFn(cache, coords, ) {
+  static calculateOptsFn(cache, coords ) {
     const width = cache.localFrame.width;
     return i => {
       const localX = coords[i];
