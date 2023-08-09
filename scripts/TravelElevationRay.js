@@ -6,7 +6,6 @@ PIXI
 "use strict";
 
 import { Draw } from "./geometry/Draw.js";
-import { Marker } from "./PixelCache.js";
 
 export class TravelElevationRay {
   /** @type {TokenElevationCalculator} */
@@ -33,6 +32,12 @@ export class TravelElevationRay {
   /** @type {object[]} */
   path = [];
 
+  /** @type {Map<Tile|"terrain",Point[2]} */
+  localRays = new Map();
+
+  /** @type {object[]} */
+  terrainMarkers = [];
+
   /**
    * @param {Token} token               Token that is undertaking the movement
    * @param {PIXI.Point} destination    {x,y} destination for the movement
@@ -50,6 +55,9 @@ export class TravelElevationRay {
     const fn = this.constructor.elevationTilesOnLineSegment;
     this.TEC.tiles = fn(this.origin, destination, this.TEC.options.alphaThreshold);
   }
+
+  /** @type {number} */
+  get alphaThreshold() { return this.TEC.options.alphaThreshold; }
 
   elevationAtT(t) {
 
@@ -77,40 +85,29 @@ export class TravelElevationRay {
    * @property {}
    */
 
+  #markTerrainFn = (curr, prev) => prev !== curr;
+
   /**
    * Initialize the objects needed when walking a path along the ray a --> b
    */
   _initializePathObjects() {
-    const { origin, destination, path, tileWalks, reachableTiles } = this;
+    // TODO: How to give the token calculator a limited set of tiles or use an intersection test on the tiles?
+    // Could make our own quadtree, but updating could be problematic if the tile moves.
+
+    const { origin, destination, path, localRays } = this;
     path.length = 0;
-    tileWalks.clear();
-    reachableTiles.clear();
+    localRays.clear();
 
+    // Pull all the terrain markers along the ray.
     // Mark any terrain location that changes elevation along the a --> b ray.
-    // Also, get the maximum elevation value.
-    let maxTerrainElevation = 0; // Because these are normalized pixel values, can use 0 here.
-    const markTerrainPixelFn = (prev, curr) => {
-      maxTerrainElevation = Math.max(maxTerrainElevation, prev, curr);
-      return prev !== curr;
-    };
     const terrainCache = canvas.elevation.elevationPixelCache;
-    this.terrainWalk = terrainCache.pixelValuesForLine(origin, destination, { markPixelFn: markTerrainPixelFn });
-    maxTerrainElevation = canvas.elevation._scaleNormalizedElevation(maxTerrainElevation);
+    this.terrainMarkers = terrainCache._extractAllMarkedPixelValuesAlongCanvasRay(
+      origin, destination, this.#markTerrainFn);
 
-    // Construct the Terrain markers from the pixel values.
-    TerrainMarker.convertPixelWalk(this.terrainWalk, origin, destination);
-
-    // Find all tiles less than or equal to the max elevation.
-    // Then add in tiles that are within tile step, repeatedly.
-    this.TEC.tiles.forEach(t => {
-      if ( t.elevationE <= maxTerrainElevation ) reachableTiles.add(t);
-    });
-    this._findTilesWithinReach(maxTerrainElevation, reachableTiles);
-
-    // Replace the TEC tiles with this filtered set based on maximum elevation.
-    this.TEC.options.tiles = [...reachableTiles];
-    this.TEC.options.tiles.sort((a, b) => b.elevationE - a.elevationE);
+    // Do we care about reachable tiles?
+    // Reachable and along the ray?
   }
+
 
   /**
    * Options for path:
@@ -124,8 +121,31 @@ export class TravelElevationRay {
    */
   _walkPath() {
     const { startElevation, path, TEC } = this;
-    const TYPES = ElevationMarker.TYPES;
+    const TYPES = { TERRAIN: 0, TILE: 1 };
     path.length = 0;
+    const terrainMarkerIter = this.terrainMarkers[Symbol.iterator]();
+
+    // At the starting point, are we dropping to terrain or a tile?
+    let terrainMarker = terrainMarkerIter.next().value;
+    let currTile = this._findSupportingTileAtT(0, startElevation, undefined, undefined, true);
+
+
+
+    // Class to track how far along we are with each terrain / tile ?
+    // Get the next marker. Class stores the current marker location. So if it is called again,
+    // can get the next one on demand. And if necessary, skip to one further along.
+    // Can also track local terrain position, which would help. So at given iteration,
+    // we have the canvas position, the terrain local, choice of tile or terrain, and the corresponding elevation.
+//
+//     tileTracker = saved in Map or create new class.
+//     tileTracker.nextMarker(canvasX, canvasY); <<-- ensure we go past the current position on the ray
+//
+//     or
+//
+//     terrainTracker.nextMarker(localX, localY);
+
+
+
 
     // At the starting point, are we dropping to terrain or a tile?
     const startTile = this._findSupportingTileAtT(0, startElevation, undefined, undefined, true);
@@ -209,12 +229,25 @@ export class TravelElevationRay {
     return tileWalk;
   }
 
+
+
   /**
-   * Construct a skeleton tile marker for when the token falls somewhere on the tile (not at a marker).
+   * Retrieve the next transparent position along this tile.
+   * Uses the tile's alpha threshold borders.
+   * @param {Tile} tile
+   * @param {Point} canvasPosition      Starting position to search from
+   * @returns {object} Either the next transparent point or the end of the tile along the ray.
+   *   Null if the tile and ray don't intersect.
    */
-  _constructTileMarkerAt(t, tile) {
-    return this._getTileWalk(tile).markers[0].addSubsequentMarker(t);
-  }
+//   _getNextTileMarker(tile, canvasPosition) {
+//     const marker = tile.evPixelCache._extractNextMarkedPixelValueAlongCanvasRay(
+//       canvasPosition, this.destination, this.#markTransparentTileFn,
+//       { alphaThreshold: this.alphaThreshold, skipFirst: true, forceLast: true });
+//
+//     // TODO: Does this work properly for the tile edges?
+//
+//     return marker;
+//   }
 
   /**
    * Construct a skeleton elevation marker for when the token falls somewhere from a tile (not at a marker).
@@ -335,108 +368,60 @@ class TravelElevationRayTokenAveraging extends TravelElevationRay {
 
 }
 
-// ----- NOTE: Marker classes ----- //
-class ElevationMarker extends Marker {
-  /** @enum {number} */
-  static TYPES = {
-    TERRAIN: 0,
-    TILE: 1
-  };
+// Utility class to keep track of elevation and tile markers and provide the next one.
+class MarkerTracker {
+  /**
+   * Sorted queue to track markers by their canvas location, using t value against the travel ray.
+   * Reverse sorted so we can just pop elements.
+   * @type {object}
+   */
+  reverseQueue = [];
 
-  /** @type {number} */
-  get elevation() { return this.options.elevation; }
+  /** @type {Iterator<object>} */
+  terrainMarkerIter;
 
-  addSubsequentMarker(t, opts) {
-    const next = super.addSubsequentMarker(t, opts);
-    next.options.prevElevation = this.elevation;
-    return next;
-  }
+  /** @type {PIXI.Point} */
+  #tmpPoint = new PIXI.Point();
 
-  _addSubsequentMarkerFast(t, opts) {
-    const next = super._addSubsequentMarkerFast(t, opts);
-    next.options.prevElevation = this.elevation;
-    return next;
+  /** @type {function} */
+  #markTransparentTileFn;
+
+  constructor(travelRay) {
+    this.travelRay = travelRay;
   }
 
   /**
-   * Provide function that will convert range of t values to another, based on linear scaling.
-   * @param {PIXI.Point} targetStart
-   * @param {PIXI.Point} targetEnd
-   * @param {PIXI.Point} formerStart
-   * @param {PIXI.Point} formerEnd
-   * @returns {function}
+   * Create a terrain marker iterator and add the first to the queue.
    */
-  static convertRangeFn(targetStart, targetEnd, formerStart, formerEnd) {
-    // Compare the former length to the target length and quantify the overlap.
-    const delta = targetEnd.subtract(targetStart);
-    const deltaMag = delta.magnitudeSquared();
-    const dist2_0 = PIXI.Point.distanceSquaredBetween(targetStart, formerStart);
-    const dist2_1 = PIXI.Point.distanceSquaredBetween(targetStart, formerEnd);
-    const t0 = Math.sqrt(dist2_0 / deltaMag);
-    const t1 = Math.sqrt(dist2_1 / deltaMag);
-
-    // Provide function to scale the t values.
-    const diff = t1 - t0;
-    return t => t0 + (diff * t);
+  initialize() {
+    this.terrainMarkerIter = this.travelRay.terrainMarkers[Symbol.iterator]();
+    const firstTerrain = this.terrainMarkerIter.next().value;
+    firstTerrain.t = 0;
+    this.queue.push(firstTerrain);
+    this.#markTransparentTileFn = this.#initializeMarkTransparentTileFn();
   }
 
-  /**
-   * Convert each marker in pixel walk to this subclass.
-   * Transforms the t values from the pixel walk to the positions on this travel ray.
-   * @param {object} walk         Walk from PixelCache
-   * @param {PIXI.Point} start    The starting position of the travel ray; used to convert walk marker t values
-   * @param {PIXI.Point} end      The ending position of the travel ray; used to convert walk marker t values
-   * @param {object} optsToAdd    Options to pass to the options parameter of the marker
-   * @returns {object} The walk object, updated with a new marker array
-   */
-  static convertPixelWalk(walk, start, end, optsToAdd) {
-    const nMarkers = walk.markers.length;
-    if ( !nMarkers ) return;
+  get nextMarker() { return this.reverseQueue.pop(); }
 
-    // Use intersection points to convert the t values for the walk
-    const convertT = this.convertRangeFn(start, end, walk.canvasBoundsIx[0], walk.canvasBoundsIx[1]);
-
-    // Construct the starting marker.
-    let currMarker;
-    const toConvert = walk.markers[0];
-    const t = convertT(toConvert.t);
-    const opts = { ...toConvert.options, ...optsToAdd }
-    walk.markers[0] = currMarker = new this(t, start, end, opts);
-
-    // Iterate through rest of the markers, building off the previous.
-    for ( let i = 1; i < nMarkers; i += 1 ) {
-      const toConvert = walk.markers[i];
-      const t = convertT(toConvert.t);
-      const opts = { ...toConvert.options, ...optsToAdd };
-      walk.markers[i] = currMarker = currMarker._addSubsequentMarkerFast(t, opts);
-    }
-
-    return walk;
-  }
-}
-
-class TerrainMarker extends ElevationMarker {
-  /** @type {TYPES} */
-  type = ElevationMarker.TYPES.TERRAIN;
-
-  /** @type {number} */
-  #elevation;
-
-  get elevation() {
-    if ( typeof this.#elevation === "undefined") {
-      const { elevation, currPixel } = this.options;
-      if ( typeof elevation !== "undefined" ) this.#elevation = elevation;
-      else if ( typeof currPixel !== "undefined" ) this.#elevation = this.constructor.elevationFromPixel(currPixel);
-    }
-    return this.#elevation;
+  #initializeMarkTransparentTileFn() {
+    const threshold = 255 * this.travelRay.alphaThreshold;
+    const fn = curr => curr < threshold;
+    return fn;
   }
 
-  static elevationFromPixel(pixel) { return canvas.elevation._scaleNormalizedElevation(pixel); }
-}
+  addNextTileMarkerAfter(canvasPosition, tile) {
+    const marker = tile.evPixelCache._extractNextMarkedPixelValueAlongCanvasRay(
+      canvasPosition, this.travelRay.destination, this.#markTransparentTileFn,
+      { alphaThreshold: this.travelRay.alphaThreshold, skipFirst: true, forceLast: true });
 
-class TileMarker extends ElevationMarker {
-  /** @type {TYPES} */
-  type = ElevationMarker.TYPES.TILE;
+    marker.tile = tile;
+    this.#tmpPoint.copyFrom(marker);
+    marker.t = this.travelRay.pointAtT(this.#tmpPoint);
 
-  get elevation() { return this.options.tile.elevationE; }
+    // Probably not worth binary or radix search b/c we don't have that many markers in the queue.
+    // Also, a naive binary implementation proves to be slower than find.
+    const findFn = element => element.t > marker.t;
+    const idx = this.reverseQueue.findLastIndex(findFn);
+    this.reverseQueue.splice(idx, 0, marker);
+  }
 }
