@@ -785,13 +785,13 @@ export class PixelCache extends PIXI.Rectangle {
    *   - {number} currPixel
    *   - {number} prevPixel
    */
-  _extractAllMarkedPixelValuesAlongCanvasRay(a, b, markPixelFn, { alphaThreshold } = {}) {
+  _extractAllMarkedPixelValuesAlongCanvasRay(a, b, markPixelFn, { alphaThreshold, skipFirst } = {}) {
     const aLocal = this._fromCanvasCoordinates(a.x, a.y);
     const bLocal = this._fromCanvasCoordinates(b.x, b.y);
     const localBoundsIx = this._trimToLocalBounds(aLocal, bLocal, alphaThreshold);
     if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
 
-    const pixels = this._extractAllMarkedPixelValuesAlongLocalRay(localBoundsIx[0], localBoundsIx[1], markPixelFn);
+    const pixels = this._extractAllMarkedPixelValuesAlongLocalRay(localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst);
     pixels.forEach(pt => this.#localToCanvasInline(pt));
     return pixels;
   }
@@ -808,10 +808,17 @@ export class PixelCache extends PIXI.Rectangle {
    *   - {number} currPixel
    *   - {number} prevPixel
    */
-  _extractAllMarkedPixelValuesAlongLocalRay(a, b, markPixelFn) {
+  _extractAllMarkedPixelValuesAlongLocalRay(a, b, markPixelFn, skipFirst = false) {
     const bresPts = bresenhamLine(a.x, a.y, b.x, b.y);
     const pixels = [];
     let prevPixel;
+    if ( skipFirst ) {
+      const x = bresPts.shift();
+      const y = bresPts.shift();
+      if ( typeof y === "undefined" ) return pixels; // No more pixels!
+      prevPixel = this._pixelAtLocal(x, y);
+    }
+
     const nPts = bresPts.length;
     for ( let i = 0; i < nPts; i += 2 ) {
       const x = bresPts[i];
