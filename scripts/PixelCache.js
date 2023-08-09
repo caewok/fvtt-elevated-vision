@@ -796,11 +796,11 @@ export class PixelCache extends PIXI.Rectangle {
    *   - {number} currPixel
    *   - {number} prevPixel
    */
-  _extractAllMarkedPixelValuesAlongCanvasRay(a, b, markPixelFn, { alphaThreshold, skipFirst } = {}) {
+  _extractAllMarkedPixelValuesAlongCanvasRay(a, b, markPixelFn, { alphaThreshold, skipFirst, forceLast } = {}) {
     const localBoundsIx = this._trimCanvasRayToLocalBounds(a, b, alphaThreshold);
     if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
 
-    const pixels = this._extractAllMarkedPixelValuesAlongLocalRay(localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst);
+    const pixels = this._extractAllMarkedPixelValuesAlongLocalRay(localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst, forceLast);
     pixels.forEach(pt => this.#localToCanvasInline(pt));
     return pixels;
   }
@@ -817,7 +817,7 @@ export class PixelCache extends PIXI.Rectangle {
    *   - {number} currPixel
    *   - {number} prevPixel
    */
-  _extractAllMarkedPixelValuesAlongLocalRay(a, b, markPixelFn, skipFirst = false) {
+  _extractAllMarkedPixelValuesAlongLocalRay(a, b, markPixelFn, skipFirst = false, forceLast = false) {
     const bresPts = bresenhamLine(a.x, a.y, b.x, b.y);
     const pixels = [];
     let prevPixel;
@@ -836,6 +836,14 @@ export class PixelCache extends PIXI.Rectangle {
       if ( markPixelFn(currPixel, prevPixel) ) pixels.push({ currPixel, prevPixel, x, y });
       prevPixel = currPixel;
     }
+
+    if ( forceLast ) {
+      const x = bresPts.at(-2);
+      const y = bresPts.at(-1);
+      // Add the last pixel regardless.
+      pixels.push({ currPixel: prevPixel, x, y, forceLast })
+    }
+
     return pixels;
   }
 
@@ -852,11 +860,11 @@ export class PixelCache extends PIXI.Rectangle {
    *   - {number} currPixel
    *   - {number} prevPixel
    */
-  _extractNextMarkedPixelValueAlongCanvasRay(a, b, markPixelFn, { alphaThreshold, skipFirst } = {}) {
+  _extractNextMarkedPixelValueAlongCanvasRay(a, b, markPixelFn, { alphaThreshold, skipFirst, forceLast } = {}) {
     const localBoundsIx = this._trimCanvasRayToLocalBounds(a, b, alphaThreshold);
     if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
 
-    const pixel = this._extractNextMarkedPixelValueAlongLocalRay(localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst);
+    const pixel = this._extractNextMarkedPixelValueAlongLocalRay(localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst, forceLast);
     if ( !pixel ) return pixel;
     this.#localToCanvasInline(pixel);
     return pixel;
@@ -874,22 +882,30 @@ export class PixelCache extends PIXI.Rectangle {
    *   - {number} currPixel
    *   - {number} prevPixel
    */
-  _extractNextMarkedPixelValueAlongLocalRay(a, b, markPixelFn, skipFirst = false) {
+  _extractNextMarkedPixelValueAlongLocalRay(a, b, markPixelFn, skipFirst = false, forceLast = false) {
     const bresIter = bresenhamLineIterator(a.x, a.y, b.x, b.y);
     let prevPixel;
+    let pt; // Needed to recall the last point for forceLast.
     if ( skipFirst ) {
-      const pt = bresIter.next.value();
+      // Iterate over the first value
+      pt = bresIter.next.value();
       if ( !pt ) return null; // No more pixels!
       prevPixel = this._pixelAtLocal(pt.x, pt.y);
     }
 
-    for ( const pt of bresIter ) {
+    for ( pt of bresIter ) {
       const currPixel = this._pixelAtLocal(pt.x, pt.y);
       if ( markPixelFn(currPixel, prevPixel) ) return { currPixel, prevPixel, x: pt.x, y: pt.y };
       prevPixel = currPixel;
     }
+
+    if ( forceLast ) return { currPixel: prevPixel, x: pt.x, y: pt.y, forceLast }; // Might be repeat but this is faster than checking.
+
     return null;
   }
+
+  let pt;
+  for ( pt of bresIter ) console.log(`${pt.x},${pt.y}`)
 
   /**
    * Extract pixel values for a line by transforming to a Bresenham line.
