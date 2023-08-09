@@ -812,6 +812,7 @@ export class PixelCache extends PIXI.Rectangle {
     const bresPts = bresenhamLine(a.x, a.y, b.x, b.y);
     const pixels = [];
     let prevPixel;
+    const nPts = bresPts.length;
     for ( let i = 0; i < nPts; i += 2 ) {
       const x = bresPts[i];
       const y = bresPts[i + 1];
@@ -895,7 +896,7 @@ export class PixelCache extends PIXI.Rectangle {
 
     // Find the points within the bounds (or alpha bounds) of this cache.
     const bounds = alphaThreshold ? this.getThresholdLocalBoundingBox(alphaThreshold) : this.localFrame;
-    const localBoundsIx = trimLineSegmentToRectangle(bounds, aLocal, bLocal);
+    const localBoundsIx = trimLineSegmentToPixelRectangle(bounds, aLocal, bLocal);
     if ( !localBoundsIx ) return null; // Segment never intersects the cache bounds.
 
     const out = this._pixelValuesForLocalLine(localBoundsIx[0], localBoundsIx[1], markPixelFn, skip);
