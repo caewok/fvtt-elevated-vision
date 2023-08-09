@@ -721,9 +721,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {number[]}    The pixel values
    */
   _extractAllPixelValuesAlongCanvasRay(a, b, { alphaThreshold } = {}) {
-    const aLocal = this._fromCanvasCoordinates(a.x, a.y);
-    const bLocal = this._fromCanvasCoordinates(b.x, b.y);
-    const localBoundsIx = this._trimToLocalBounds(aLocal, bLocal, alphaThreshold);
+    const localBoundsIx = this._trimCanvasRayToLocalBounds(a, b, alphaThreshold);
     if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
 
     const pixels = this._extractAllPixelValuesAlongLocalRay(localBoundsIx[0], localBoundsIx[1]);
@@ -733,12 +731,25 @@ export class PixelCache extends PIXI.Rectangle {
 
   /**
    * Trim a line segment to only the portion that intersects this cache bounds.
+   * @param {Point} a     Starting location, in canvas coordinates
+   * @param {Point} b     Ending location, in canvas coordinates
+   * @param {number} alphaThreshold   Value of threshold, if threshold bounds should be used.
+   * @returns {Point[2]|null} Points, in local coordinates.
+   */
+  _trimCanvasRayToLocalBounds(a, b, alphaThreshold) {
+    const aLocal = this._fromCanvasCoordinates(a.x, a.y);
+    const bLocal = this._fromCanvasCoordinates(b.x, b.y);
+    return this._trimLocalRayToLocalBounds(aLocal, bLocal, alphaThreshold);
+  }
+
+  /**
+   * Trim a line segment to only the portion that intersects this cache bounds.
    * @param {Point} a     Starting location, in local coordinates
    * @param {Point} b     Ending location, in local coordinates
    * @param {number} alphaThreshold   Value of threshold, if threshold bounds should be used.
-   * @returns {Point[2]|null}
+   * @returns {Point[2]|null}  Points, in local coordinates
    */
-  _trimToLocalBounds(a, b, alphaThreshold) {
+  _trimLocalRayToLocalBounds(a, b, alphaThreshold) {
     const bounds = alphaThreshold ? this.getThresholdLocalBoundingBox(alphaThreshold) : this.localFrame;
     return trimLineSegmentToPixelRectangle(bounds, a, b);
   }
@@ -786,9 +797,7 @@ export class PixelCache extends PIXI.Rectangle {
    *   - {number} prevPixel
    */
   _extractAllMarkedPixelValuesAlongCanvasRay(a, b, markPixelFn, { alphaThreshold, skipFirst } = {}) {
-    const aLocal = this._fromCanvasCoordinates(a.x, a.y);
-    const bLocal = this._fromCanvasCoordinates(b.x, b.y);
-    const localBoundsIx = this._trimToLocalBounds(aLocal, bLocal, alphaThreshold);
+    const localBoundsIx = this._trimCanvasRayToLocalBounds(a, b, alphaThreshold);
     if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
 
     const pixels = this._extractAllMarkedPixelValuesAlongLocalRay(localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst);
@@ -844,9 +853,7 @@ export class PixelCache extends PIXI.Rectangle {
    *   - {number} prevPixel
    */
   _extractNextMarkedPixelValueAlongCanvasRay(a, b, markPixelFn, { alphaThreshold, skipFirst } = {}) {
-    const aLocal = this._fromCanvasCoordinates(a.x, a.y);
-    const bLocal = this._fromCanvasCoordinates(b.x, b.y);
-    const localBoundsIx = this._trimToLocalBounds(aLocal, bLocal, alphaThreshold);
+    const localBoundsIx = this._trimCanvasRayToLocalBounds(a, b, alphaThreshold);
     if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
 
     const pixel = this._extractNextMarkedPixelValueAlongLocalRay(localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst);
