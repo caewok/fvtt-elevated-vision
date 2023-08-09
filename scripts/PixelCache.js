@@ -20,7 +20,7 @@ Ray
 
 import { extractPixels } from "./perfect-vision/extract-pixels.js";
 import { Draw } from "./geometry/Draw.js";
-import { roundFastPositive, bresenhamLine, bresenhamLineIterator, trimLineSegmentToRectangle } from "./util.js";
+import { roundFastPositive, bresenhamLine, bresenhamLineIterator, trimLineSegmentToPixelRectangle } from "./util.js";
 import { Matrix } from "./geometry/Matrix.js";
 
 /* Testing
@@ -739,12 +739,8 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {Point[2]|null}
    */
   _trimToLocalBounds(a, b, alphaThreshold) {
-    // Local coordinates start at 0.
-    const aBounded = { x: Math.max(a.x, 0), y: Math.max(a.y, 0) };
-    const bBounded = { x: Math.max(b.x, 0), y: Math.max(b.y, 0) };
-
     const bounds = alphaThreshold ? this.getThresholdLocalBoundingBox(alphaThreshold) : this.localFrame;
-    return trimLineSegmentToRectangle(bounds, aBounded, bBounded);
+    return trimLineSegmentToPixelRectangle(bounds, a, b);
   }
 
   // Convert a local point to canvas point, overwriting the local point.

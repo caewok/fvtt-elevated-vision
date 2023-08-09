@@ -554,12 +554,15 @@ export function* bresenhamLineIterator(x0, y0, x1, y1) {
 /**
  * Trim line segment to its intersection points with a rectangle.
  * If the endpoint is inside the rectangle, keep it.
+ * Note: points on the right or bottom border of the rectangle do not count b/c we want the pixel positions.
  * @param {PIXI.Rectangle} rect
  * @param {Point} a
  * @param {Point} b
  * @returns { Point[2]|null } Null if both are outside.
  */
-export function trimLineSegmentToRectangle(rect, a, b) {
+export function trimLineSegmentToPixelRectangle(rect, a, b) {
+  rect = new PIXI.Rectangle(rect.x, rect.y, rect.width - 1, rect.height - 1);
+
   if ( !rect.lineSegmentIntersects(a, b, { inside: true }) ) return null;
 
   const ixs = rect.segmentIntersections(a, b);
