@@ -890,7 +890,7 @@ export class PixelCache extends PIXI.Rectangle {
     let pt; // Needed to recall the last point for forceLast.
     if ( skipFirst ) {
       // Iterate over the first value
-      pt = bresIter.next.value();
+      pt = bresIter.next().value;
       if ( !pt ) return null; // No more pixels!
       prevPixel = this._pixelAtLocal(pt.x, pt.y);
     }
