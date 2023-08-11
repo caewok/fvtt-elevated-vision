@@ -1,5 +1,6 @@
 /* globals
 canvas,
+foundry,
 PIXI
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -12,10 +13,10 @@ export class TravelElevationRay {
   TEC;
 
   /** @type {PIXI.Point} */
-  destination = new PIXI.Point();
+  #destination = new PIXI.Point();
 
   /** @type {PIXI.Point} */
-  origin = new PIXI.Point();
+  #origin = new PIXI.Point();
 
   /** @type {number} */
   startElevation = 0;
@@ -46,24 +47,60 @@ export class TravelElevationRay {
    * @param {number} [opts.tokenElevation]  Assumed token elevation at start
    */
   constructor(token, destination, opts) {
-    this.destination.copyFrom(destination);
+    this.#destination.copyFrom(destination);
     this.TEC = new canvas.elevation.TokenElevationCalculator(token, opts);
-    this.origin.copyFrom(this.TEC.location);
+    this.#origin.copyFrom(this.TEC.location);
     this.startElevation = this.TEC.options.elevation;
+    this.markerTracker = new MarkerTracker(this);
 
-
+    // TODO: How to give the token calculator a limited set of tiles or use an intersection test on the tiles?
+    // Could make our own quadtree, but updating could be problematic if the tile moves.
   }
 
   /** @type {number} */
   get alphaThreshold() { return this.TEC.options.alphaThreshold; }
 
-//   elevationAtT(t) {
-//
-//   }
-//
-//   elevationAtClosestPoint(x, y) {
-//
-//   }
+  /** @type {number} */
+  get startingElevation() { return this.TEC.groundElevation(); }
+
+  /** @type {number} */
+  get endingElevation() { return this.elevationAtT(1); }
+
+  /** @type {PIXI.Point} */
+  get origin() { return this.#origin; }
+
+  set origin(value) {
+    this.#origin.copyFrom(value);
+    this.path.length = 0;
+  }
+
+  /** @type {PIXI.Point} */
+  get destination() { return this.#destination; }
+
+  set destination(value) {
+    this.#destination.copyFrom(value);
+    this.path.length = 0;
+  }
+
+  /**
+   * @param {number} t    Percent distance along the ray
+   * @returns {number} Elevation value at that location
+   */
+  elevationAtT(t) {
+    if ( !this.path.length ) this._walkPath();
+    if ( t >= 1 ) return this.path.at(-1).elevation;
+    if ( t <= 0 ) return this.path.at(0).elevation;
+    const mark = this.path.findLast(mark => mark.t <= t);
+    if ( !~mark ) return undefined;
+    return mark.elevation;
+  }
+
+  /**
+   * Get the elevation on the ray nearest to a point on the canvas.
+   * @param {Point} pt    Point to check
+   * @returns {number} Elevation value nearest to that location on the ray.
+   */
+  elevationAtClosestPoint(pt) { return this.elevationAtT(this.tForPoint(pt)); }
 
   /**
    * @param {number} t      Percent distance along origin --> destination ray.
@@ -71,28 +108,18 @@ export class TravelElevationRay {
    */
   pointAtT(t) { return this.origin.projectToward(this.destination, t); }
 
-  get startingElevation() { return this.TEC.groundElevation(); }
-
-//   get endingElevation() {
-//
-//   }
-
-
   /**
-   * Initialize the objects needed when walking a path along the ray a --> b
+   * Get the closest point on the ray and return the t value for that location.
+   * @param {Point} pt    Point to use to determine the closest point to the ray
+   * @returns {number} The t value, where origin = 0, destination = 1
    */
-  _initializePathObjects() {
-    // TODO: How to give the token calculator a limited set of tiles or use an intersection test on the tiles?
-    // Could make our own quadtree, but updating could be problematic if the tile moves.
-
-    // Initialize the tracker to store elevation and tile markers.
-    this.path.length = 0;
-    this.markerTracker = new MarkerTracker(this);
-
-    // Do we care about reachable tiles?
-    // Reachable and along the ray?
+  tForPoint(pt) {
+    const { origin, destination } = this;
+    const rayPt = foundry.utils.closestPointToSegment(pt, origin, destination);
+    const dist2 = PIXI.Point.distanceSquaredBetween(origin, rayPt);
+    const delta = destination.subtract(origin);
+    return Math.sqrt(dist2 / delta.magnitudeSquared());
   }
-
 
   /**
    * Options for path:
@@ -103,6 +130,7 @@ export class TravelElevationRay {
    *   - switch to any tile between the prev and current elevation
    * 2. On tile: check for terrain breaching tile space; switch to terrain
    * 3. On tile end: Prefer tile at elevation; tile within reach; or tile/terrain below.
+   * @returns {object[]}
    */
   _walkPath() {
     const { startElevation, path, markerTracker } = this;
@@ -130,6 +158,8 @@ export class TravelElevationRay {
       }
       nextMarkers = markerTracker.pullNextMarkers();
     }
+
+    return this.path;
   }
 
   #identifyNextMarkerFromTileLocation(nextMarkers, currMarker, nextTerrainMarker) {
@@ -141,13 +171,14 @@ export class TravelElevationRay {
       && nextTerrainMarker.elevation > currTile.elevationE ) return nextTerrainMarker;
 
     // If only terrain markers or other tile markers, continue moving along this tile.
-    if ( !~nextMarkers.find(m => m.tile === currTile) ) return null;
+    const tileEndMarker = nextMarkers.find(m => m.tile === currTile)
+    if ( !tileEndMarker ) return null;
 
     // If one of the markers is this tile, it signifies either a hole or the end of the tile.
     // Either way, search for new supporting tile or drop to elevation.
     if ( !nextTerrainMarker ) {
       this.TEC.location = currMarker;
-      nextTerrainMarker = this.markerTracker.constructElevationMarkerAt(currMarker, this.TEC.terrainElevation());
+      nextTerrainMarker = this.markerTracker.constructElevationMarkerAt(tileEndMarker, this.TEC.terrainElevation());
     }
     return this.#checkForSupportingTile(nextTerrainMarker, currMarker.elevation, currTile, undefined, true);
   }
@@ -164,12 +195,14 @@ export class TravelElevationRay {
       nextTerrainMarker, nextTerrainMarker.prevE, undefined, nextTerrainMarker.elevation, reach);
   }
 
-  drawPath() {
-    for ( const marker of this.path ) {
-      const color = marker.tile ? Draw.COLORS.orange : Draw.COLORS.green;
-      const pt = this.pointAtT(marker.t);
+  drawPath(path) {
+    path ??= this.path;
+    for ( const marker of path ) {
+      const { tile, t, elevation } = marker;
+      const color = tile ? Draw.COLORS.orange : Draw.COLORS.green;
+      const pt = this.pointAtT(t);
       Draw.point(pt, { color, radius: 2 });
-      Draw.labelPoint(pt, marker.elevation);
+      Draw.labelPoint(pt, elevation);
     }
   }
 
@@ -367,7 +400,6 @@ class MarkerTracker {
       mark.elevation = ev._scaleNormalizedElevation(mark.currPixel);
       mark.prevE = ev._scaleNormalizedElevation(mark.prevPixel); // May be NaN if no previous.
     });
-
   }
 
   #calculateRayDeltaMag2() {
@@ -376,6 +408,7 @@ class MarkerTracker {
     return delta.magnitudeSquared();
   }
 
+  // Note: Assumes but does not test that the canvas point is actually on the ray.
   tForCanvasPoint(canvasPt) {
     const dist2 = PIXI.Point.distanceSquaredBetween(this.travelRay.origin, canvasPt);
     return Math.sqrt(dist2 / this.#deltaMag2);
