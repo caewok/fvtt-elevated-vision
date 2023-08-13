@@ -215,8 +215,11 @@ export class PixelCache extends PIXI.Rectangle {
   /** @type {number} */
   #localWidth = 0;
 
+  /** @type {number} */
+  #localHeight = 0;
+
   /** @type {PIXI.Rectangle} */
-  #localFrame = new PIXI.Rectangle();
+  localFrame = new PIXI.Rectangle();
 
   /** @type {number} */
   #maximumPixelValue = 255;
@@ -272,9 +275,10 @@ export class PixelCache extends PIXI.Rectangle {
     this.pixels = pixels;
     this.scale.resolution = resolution;
     this.scale.invResolution = invResolution;
-    this.#localWidth = pixelWidth; // Just for convenience.
-    this.#localFrame.width = pixelWidth;
-    this.#localFrame.height = pixelHeight;
+    this.#localWidth = pixelWidth;
+    this.#localHeight = pixelHeight;
+    this.localFrame.width = this.#localWidth;
+    this.localFrame.height = this.#localHeight;
   }
 
   /**
@@ -293,17 +297,6 @@ export class PixelCache extends PIXI.Rectangle {
     // Next test a specific pixel
     const value = this.pixelAtCanvas(x, y);
     return value > (alphaThreshold * this.#maximumPixelValue);
-  }
-
-  /** @type {PIXI.Rectangle} */
-  get localFrame() {
-    if ( typeof this.#localFrame === "undefined" ) {
-      const ln = this.pixels.length;
-      const localWidth = this.#localWidth;
-      const localHeight = ~~(ln / localWidth);
-      this.#localFrame = new PIXI.Rectangle(0, 0, localWidth, localHeight);
-    }
-    return this.#localFrame;
   }
 
   /** @type {Matrix} */
@@ -520,7 +513,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @returns {number}
    */
   _indexAtLocal(x, y) {
-    if ( x < 0 || y < 0 ) return -1;
+    if ( x < 0 || y < 0 || x >= this.#localWidth || y >= this.#localHeight ) return -1;
 
     // Use floor to ensure consistency when converting to/from coordinates <--> index.
     return ((~~y) * this.#localWidth) + (~~x);
@@ -704,7 +697,9 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} y    Local y coordinate
    * @returns {number}
    */
-  _pixelAtLocal(x, y) { return this.pixels[this._indexAtLocal(x, y)]; }
+  _pixelAtLocal(x, y) {
+    return this.pixels[this._indexAtLocal(x, y)]; }
+  }
 
   /**
    * Get a pixel value given canvas coordinates.
@@ -846,6 +841,102 @@ export class PixelCache extends PIXI.Rectangle {
     }
 
     return pixels;
+  }
+
+  /**
+   * For a given location, retrieve a set of points based on x/y differences
+   * @param {number} x          The x offset
+   * @param {number} y          The y offset
+   * @param {number[]} offsets  Array of offsets: [x0, y0, x1, y1]
+   * @returns {number|undefined[]} Array of pixels
+   *   Each pixel is the value at x + x0, y + y0, ...
+   */
+  _pixelsForRelativePoints(x, y, offsets) {
+    offsets ??= [0,0];
+    const nOffsets = offsets.length;
+    const out = this.pixels.constructor(nOffsets * 0.5);
+    for ( let i = 0, j = 0; i < nOffsets; i += 2, j += 1 ) {
+      out[j] = this._pixelAtLocal(x + offsets[i], y = offsets[i + 1]);
+    }
+    return out;
+  }
+
+  /**
+   * For a rectangle, construct an array of inner pixel offsets and perimeter pixel offsets,
+   * based on an offset from the center of the rectangle.
+   * Forces the rectangle to be symmetric around the center with respect to pixels.
+   * @param {PIXI.Rectangle} rect
+   * @returns {object{ inner: {number[]}, outer: {number[]}}}
+   */
+  _rectanglePixelOffsets(rect) {
+    // Number of pixels on each side of the center, not including the center.
+    const w_1_2 = Math.floor((rect.width - 1) * 0.5);
+    const h_1_2 = Math.floor((rect.height - 1) * 0.5);
+
+    /* Rectangle: rect = new PIXI.Rectangle(100, 110, 7, 5)
+    // for w_1_2 = 3; h_1_2 = 2:
+    . . . . . . .
+    . . . . . . .
+    . . . . . . .
+    . . . . . . .
+    . . . . . . .
+    */
+    const nOuter = (w_1_2 * 4) + 2 + ((h_1_2 - 1) * 4) + 2;
+    const nInner = ((w_1_2 * 2) - 1) * ((h_1_2 * 2) - 1);
+    const outer = Array(nOuter * 2); // Each point has 2 coordinates.
+    const inner = Array(nInner * 2);
+    const x = Array.fromRange((w_1_2 * 2) + 1, -w_1_2);
+    const y = Array.fromRange((h_1_2 * 2) + 1, -h_1_2);
+    const nX = x.length - 1;
+    const nY = y.length - 1;
+
+    Draw.clearDrawings()
+    pts = [];
+    for ( let i = 0; i < outer.length; i += 2 ) {
+      Draw.point({ x: outer[i] * 100, y: outer[i + 1] * 100 });
+      pts.push({x: outer[i], y: outer[i + 1]})
+    }
+    console.table(pts, ["x", "y"])
+
+    // Walk around perimeter
+
+    offset = (nX * 4) + (nY * 2)
+    x.forEach((coord, idx) => {
+      // x, yTop
+      const i = idx * 2;
+      outer[i] = coord;
+      outer[i + 1] = -h_1_2;
+
+      // x, yBottom
+      const j = offset - i;
+      outer[j] = coord;
+      outer[j + 1] = h_1_2;
+    });
+
+    // xLeft, y
+    offset1 = (nX * 2) + 2;
+    offset2 = (nX * 4) + (nY * 2) + 2;
+    y.slice(1, -1).forEach((coord, idx) => {
+      // xRight, y
+      const i = offset1 + (idx * 2);
+      outer[i] = w_1_2;
+      outer[i + 1] = coord;
+
+      // xLeft, y
+      const j = offset2 + (idx * 2);
+      outer[j] = -w_1_2;
+      outer[j + 1] = coord;
+    });
+
+
+
+
+
+
+
+
+
+
   }
 
   /**
