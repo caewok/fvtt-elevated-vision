@@ -575,7 +575,7 @@ function hasWallCollision(origin, testPt) {
     //if user does not have wall height or does not give a wall height, this prevents NaN from infinity and -infinity values
     if (!isFinite(v0.z)) v0.z = 9999;
     if (!isFinite(v1.z)) v1.z = -9999;
-    if (!isFinite(v2.z)) v2.z = -9999:
+    if (!isFinite(v2.z)) v2.z = -9999;
     if (!isFinite(v3.z)) v3.z = 9999;
     
     return Plane.rayIntersectionQuad3dLD(origin, dir, v0, v1, v2, v3); // Null or t value
