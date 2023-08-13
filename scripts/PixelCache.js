@@ -318,7 +318,6 @@ export class PixelCache extends PIXI.Rectangle {
   clearTransforms() {
     this.#toLocalTransform = undefined;
     this.#toCanvasTransform = undefined;
-    this.#localFrame = undefined;
     this.#thresholdCanvasBoundingBoxes.clear();
   }
 
@@ -697,9 +696,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} y    Local y coordinate
    * @returns {number}
    */
-  _pixelAtLocal(x, y) {
-    return this.pixels[this._indexAtLocal(x, y)]; }
-  }
+  _pixelAtLocal(x, y) { return this.pixels[this._indexAtLocal(x, y)]; }
 
   /**
    * Get a pixel value given canvas coordinates.
@@ -852,7 +849,7 @@ export class PixelCache extends PIXI.Rectangle {
    *   Each pixel is the value at x + x0, y + y0, ...
    */
   _pixelsForRelativePoints(x, y, offsets) {
-    offsets ??= [0,0];
+    offsets ??= [0, 0];
     const nOffsets = offsets.length;
     const out = this.pixels.constructor(nOffsets * 0.5);
     for ( let i = 0, j = 0; i < nOffsets; i += 2, j += 1 ) {
@@ -862,81 +859,113 @@ export class PixelCache extends PIXI.Rectangle {
   }
 
   /**
-   * For a rectangle, construct an array of inner pixel offsets and perimeter pixel offsets,
-   * based on an offset from the center of the rectangle.
-   * Forces the rectangle to be symmetric around the center with respect to pixels.
+   * For a rectangle, construct an array of pixel offsets from the center of the rectangle.
    * @param {PIXI.Rectangle} rect
-   * @returns {object{ inner: {number[]}, outer: {number[]}}}
+   * @returns {number[]}
    */
-  _rectanglePixelOffsets(rect) {
-    // Number of pixels on each side of the center, not including the center.
-    const w_1_2 = Math.floor((rect.width - 1) * 0.5);
-    const h_1_2 = Math.floor((rect.height - 1) * 0.5);
+  static rectanglePixelOffsets(rect, skip = 0) {
+    /* Example
+    Draw = CONFIG.GeometryLib.Draw
+    api = game.modules.get("elevatedvision").api
+    PixelCache = api.PixelCache
 
-    /* Rectangle: rect = new PIXI.Rectangle(100, 110, 7, 5)
-    // for w_1_2 = 3; h_1_2 = 2:
-    . . . . . . .
-    . . . . . . .
-    . . . . . . .
-    . . . . . . .
-    . . . . . . .
-    */
-    const nOuter = (w_1_2 * 4) + 2 + ((h_1_2 - 1) * 4) + 2;
-    const nInner = ((w_1_2 * 2) - 1) * ((h_1_2 * 2) - 1);
-    const outer = Array(nOuter * 2); // Each point has 2 coordinates.
-    const inner = Array(nInner * 2);
-    const x = Array.fromRange((w_1_2 * 2) + 1, -w_1_2);
-    const y = Array.fromRange((h_1_2 * 2) + 1, -h_1_2);
-    const nX = x.length - 1;
-    const nY = y.length - 1;
+    rect = new PIXI.Rectangle(100, 200, 275, 300)
+    offsets = PixelCache.rectanglePixelOffsets(rect, skip = 10)
 
-    Draw.clearDrawings()
-    pts = [];
-    for ( let i = 0; i < outer.length; i += 2 ) {
-      Draw.point({ x: outer[i] * 100, y: outer[i + 1] * 100 });
-      pts.push({x: outer[i], y: outer[i + 1]})
+    tmpPt = new PIXI.Point;
+    center = rect.center;
+    for ( let i = 0; i < offsets.length; i += 2 ) {
+      tmpPt.copyFrom({ x: offsets[i], y: offsets[i + 1] });
+      tmpPt.translate(center.x, center.y, tmpPt);
+      Draw.point(tmpPt, { radius: 1 })
+      if ( !rect.contains(tmpPt.x, tmpPt.y) )
+        console.debug(`Rectangle does not contain {tmpPt.x},${tmpPt.y} (${offsets[i]},${offsets[i+1]})`)
     }
-    console.table(pts, ["x", "y"])
+    Draw.shape(rect)
 
-    // Walk around perimeter
+    */
 
-    offset = (nX * 4) + (nY * 2)
-    x.forEach((coord, idx) => {
-      // x, yTop
-      const i = idx * 2;
-      outer[i] = coord;
-      outer[i + 1] = -h_1_2;
+    const width = Math.floor(rect.width);
+    const height = Math.floor(rect.height);
+    const incr = skip + 1;
+    const w_1_2 = Math.floor(width / 2);
+    const h_1_2 = Math.floor(height / 2);
+    const xiMax = width - w_1_2;
+    const yiMax = height - h_1_2;
 
-      // x, yBottom
-      const j = offset - i;
-      outer[j] = coord;
-      outer[j + 1] = h_1_2;
-    });
+    // To make skipping pixels work well, set up so it always captures edges and corners
+    // and works its way in.
+    // And always add the 0,0 point.
+    const offsets = [0, 0];
+    for ( let xi = xiMax - 1; xi > 0; xi -= incr ) {
+      for ( let yi = yiMax - 1; yi > 0; yi -= incr ) {
+        // BL quadrant
+        offsets.push(
+          xi, yi,     // BL quadrant
+          -xi, yi,    // BR quadrant
+          -xi, -yi,   // TL quadrant
+          xi, -yi     // TR quadrant
+        );
+      }
+    }
 
-    // xLeft, y
-    offset1 = (nX * 2) + 2;
-    offset2 = (nX * 4) + (nY * 2) + 2;
-    y.slice(1, -1).forEach((coord, idx) => {
-      // xRight, y
-      const i = offset1 + (idx * 2);
-      outer[i] = w_1_2;
-      outer[i + 1] = coord;
+    // Handle 0 row and 0 column. Add only if it would have been added by the increment.
+    if ( ((xiMax - 1) % incr) === 0 ) {
+      for ( let yi = yiMax - 1; yi > 0; yi -= incr ) {
+        offsets.push(0, yi, 0, -yi);
+      }
+    }
 
-      // xLeft, y
-      const j = offset2 + (idx * 2);
-      outer[j] = -w_1_2;
-      outer[j + 1] = coord;
-    });
+    if ( ((yiMax - 1) % incr) === 0 ) {
+      for ( let xi = xiMax - 1; xi > 0; xi -= incr ) {
+        offsets.push(xi, 0, -xi, 0);
+      }
+    }
+    return offsets;
+  }
 
+  // For checking that offsets are not repeated:
+  //   s = new Set();
+  //   pts = []
+  //   for ( let i = 0; i < offsets.length; i += 2 ) {
+  //     pt = new PIXI.Point(offsets[i], offsets[i + 1]);
+  //     pts.push(pt)
+  //     s.add(pt.key)
+  //   }
 
-
-
-
-
-
-
-
-
+  /**
+   * For a polygon, construct an array of pixel offsets from the bounds center.
+   * @param {PIXI.Rectangle} poly
+   * @param {number} skip
+   * @param {Point} refPoint
+   * @returns {number[]}
+   */
+  static polygonPixelOffsets(poly, skip = 0) {
+    /* Example
+    poly = new PIXI.Polygon({x: 100, y: 100}, {x: 200, y: 100}, {x: 150, y: 300});
+    offsets = PixelCache.polygonPixelOffsets(poly, skip = 10)
+    tmpPt = new PIXI.Point;
+    center = poly.getBounds().center;
+    for ( let i = 0; i < offsets.length; i += 2 ) {
+      tmpPt.copyFrom({ x: offsets[i], y: offsets[i + 1] });
+      tmpPt.translate(center.x, center.y, tmpPt);
+      Draw.point(tmpPt, { radius: 1 })
+      if ( !poly.contains(tmpPt.x, tmpPt.y) )
+        console.debug(`Poly does not contain {tmpPt.x},${tmpPt.y} (${offsets[i]},${offsets[i+1]})`)
+    }
+    Draw.shape(poly)
+    */
+    const bounds = poly.getBounds();
+    const offsets = this.rectanglePixelOffsets(bounds, skip);
+    const center = bounds.center;
+    const polyOffsets = []; // Unclear how many pixels until we test containment.
+    const nOffsets = offsets.length;
+    for ( let i = 0; i < nOffsets; i += 2 ) {
+      const xOffset = offsets[i];
+      const yOffset = offsets[i + 1];
+      if ( poly.contains(center.x + xOffset, center.y + yOffset) ) polyOffsets.push(xOffset, yOffset);
+    }
+    return polyOffsets;
   }
 
   /**
