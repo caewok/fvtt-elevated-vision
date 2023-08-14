@@ -1037,7 +1037,7 @@ export class PixelCache extends PIXI.Rectangle {
     const numPixels = pixels.length;
     if ( numPixels < 2 ) return pixels[0];
 
-    reducerFn?.initialize();
+    if ( reducerFn.initialize ) reducerFn.initialize();
     let acc = startValue;
     let startI = 0;
     if ( typeof startValue === "undefined" ) {
@@ -1054,6 +1054,7 @@ export class PixelCache extends PIXI.Rectangle {
   static pixelOffsets(shape, skip = 0) {
     if ( shape instanceof PIXI.Rectangle ) return this.rectanglePixelOffsets(shape, skip);
     if ( shape instanceof PIXI.Polygon ) return this.polygonPixelOffsets(shape, skip);
+    if ( shape instanceof PIXI.Circle ) return this.shapePixelOffsets(shape, skip);
     console.warn("PixelCache|pixelOffsets|shape not recognized.", shape);
     return this.polygonPixelOffsets(shape.toPolygon(), skip);
   }
@@ -1170,9 +1171,9 @@ export class PixelCache extends PIXI.Rectangle {
 
   /**
    * For a polygon, construct an array of pixel offsets from the bounds center.
+   * Uses a faster multiple contains test specific to PIXI.Polygon.
    * @param {PIXI.Rectangle} poly
    * @param {number} skip
-   * @param {Point} refPoint
    * @returns {number[]}
    */
   static polygonPixelOffsets(poly, skip = 0) {
@@ -1191,18 +1192,72 @@ export class PixelCache extends PIXI.Rectangle {
     Draw.shape(poly)
     */
     const bounds = poly.getBounds();
-    const offsets = this.rectanglePixelOffsets(bounds, skip);
     const { x, y } = bounds.center;
+    const offsets = this.rectanglePixelOffsets(bounds, skip);
+    const nOffsets = offsets.length;
+    const testPoints = new Array(offsets.length);
+    for ( let i = 0; i < nOffsets; i += 2 ) {
+      testPoints[i] = x + offsets[i];
+      testPoints[i + 1] = y + offsets[i + 1];
+    }
+    const isContained = this.polygonMultipleContains(poly, testPoints);
     const polyOffsets = []; // Unclear how many pixels until we test containment.
     polyOffsets._centerPoint = offsets._centerPoint;
-    const nOffsets = offsets.length;
-    for ( let i = 0; i < nOffsets; i += 2 ) {
-      const xOffset = offsets[i];
-      const yOffset = offsets[i + 1];
-      if ( poly.contains(x + xOffset, y + yOffset) ) polyOffsets.push(xOffset, yOffset);
+    for ( let i = 0, j = 0; i < nOffsets; i += 2 ) {
+      if ( isContained[j++] ) polyOffsets.push(offsets[i], offsets[i + 1]);
     }
     return polyOffsets;
   }
+
+  /**
+   * For an arbitrary shape with contains and bounds methods,
+   * construct a grid of pixels from the bounds center that are within the shape.
+   * @param {object} shape      Shape to test
+   * @param {number} [skip=0]   How many pixels to skip when constructing the grid
+   * @returns {number[]}
+   */
+  static shapePixelOffsets(shape, skip = 0) {
+    const bounds = shape.getBounds();
+    const { x, y } = bounds.center;
+    const offsets = this.rectanglePixelOffsets(bounds, skip);
+    const nOffsets = offsets.length;
+    const shapeOffsets = []; // Unclear how many pixels until we test containment.
+    shapeOffsets._centerPoint = offsets._centerPoint;
+    for ( let i = 0; i < nOffsets; i += 2 ) {
+      const xOffset = offsets[i];
+      const yOffset = offsets[i + 1];
+      if ( shape.contains(x + xOffset, y + yOffset) ) shapeOffsets.push(xOffset, yOffset);
+    }
+    return shapeOffsets;
+  }
+
+  /**
+   * Run contains test on a polygon for multiple points.
+   * @param {PIXI.Polygon} poly
+   * @param {number[]} testPoints     Array of [x0, y0, x1, y1,...] coordinates
+   * @returns {number[]} Array of 0 or 1 values
+   */
+  static polygonMultipleContains(poly, testPoints) {
+    // Modification of PIXI.Polygon.prototype.contains
+    const nPoints = testPoints.length;
+    if ( nPoints < 2 ) return undefined;
+    const res = new Uint8Array(nPoints * 0.5); // If we really need speed, could use bit packing
+    const r = poly.points.length / 2;
+    for ( let n = 0, o = r - 1; n < r; o = n++ ) {
+      const a = poly.points[n * 2];
+      const h = poly.points[(n * 2) + 1];
+      const l = poly.points[o * 2];
+      const c = poly.points[(o * 2) + 1];
+
+      for ( let i = 0, j = 0; i < nPoints; i += 2, j += 1 ) {
+        const x = testPoints[i];
+        const y = testPoints[i + 1];
+        h > y != c > y && x < (l - a) * ((y - h) / (c - h)) + a && (res[j] = !res[j])
+      }
+    }
+    return res;
+  }
+
 
 
   /**
