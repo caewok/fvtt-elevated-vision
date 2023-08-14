@@ -707,21 +707,6 @@ export class PixelCache extends PIXI.Rectangle {
   pixelAtCanvas(x, y) { return this.pixels[this._indexAtCanvas(x, y)]; }
 
   /**
-   * Extract all pixel values for a canvas ray.
-   * @param {Point} a   Starting location, in local coordinates
-   * @param {Point} b   Ending location, in local coordinates
-   * @returns {number[]}    The pixel values
-   */
-  _extractAllPixelValuesAlongCanvasRay(a, b, { alphaThreshold } = {}) {
-    const localBoundsIx = this._trimCanvasRayToLocalBounds(a, b, alphaThreshold);
-    if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
-
-    const pixels = this._extractAllPixelValuesAlongLocalRay(localBoundsIx[0], localBoundsIx[1]);
-    pixels.forEach(pt => this.#localToCanvasInline(pt));
-    return pixels;
-  }
-
-  /**
    * Trim a line segment to only the portion that intersects this cache bounds.
    * @param {Point} a     Starting location, in canvas coordinates
    * @param {Point} b     Ending location, in canvas coordinates
@@ -754,23 +739,49 @@ export class PixelCache extends PIXI.Rectangle {
     return pt;
   }
 
+  // TODO: Combine the extraction functions so there is less repetition of code.
+
+  /**
+   * Extract all pixel values for a canvas ray.
+   * @param {Point} a   Starting location, in local coordinates
+   * @param {Point} b   Ending location, in local coordinates
+   * @param {object} [opts]                 Optional parameters
+   * @param {number} [opts.alphaThreshold]  Percent between 0 and 1, used to trim the pixel bounds
+   * @param {number[]} [opts.localOffsets]  Numbers to add to the local x,y position when pulling the pixel(s)
+   * @param {function} [opts.reducerFn]     Function that takes pixel array and reduces to a value or object to return
+   * @returns {number[]}    The pixel values
+   */
+  _extractAllPixelValuesAlongCanvasRay(a, b, { alphaThreshold, localOffsets, reducerFn } = {}) {
+    const localBoundsIx = this._trimCanvasRayToLocalBounds(a, b, alphaThreshold);
+    if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
+
+    const pixels = this._extractAllPixelValuesAlongLocalRay(
+      localBoundsIx[0], localBoundsIx[1], localOffsets, reducerFn);
+    pixels.forEach(pt => this.#localToCanvasInline(pt));
+    return pixels;
+  }
+
   /**
    * Extract all pixel values for a local ray.
    * It is assumed, without checking, that a and be are within the bounds of the shape.
    * @param {Point} a   Starting location, in local coordinates
    * @param {Point} b   Ending location, in local coordinates
-   * @param {object} [opts]                 Optional parameters
-   * @param {number} [opts.alphaThreshold]  Percent between 0 and 1.
+   * @param {number[]} [localOffsets]  Numbers to add to the local x,y position when pulling the pixel(s)
+   * @param {function} [reducerFn]     Function that takes pixel array and reduces to a value or object to return
    * @returns {number[]}    The pixel values
    */
-  _extractAllPixelValuesAlongLocalRay(a, b) {
+  _extractAllPixelValuesAlongLocalRay(a, b, localOffsets, reducerFn) {
+    localOffsets ??= [0, 0];
+    reducerFn ??= this.constructor.pixelAggregator("first");
+
     const bresPts = bresenhamLine(a.x, a.y, b.x, b.y);
     const nPts = bresPts.length;
     const pixels = Array(nPts * 0.5);
     for ( let i = 0, j = 0; i < nPts; i += 2, j += 1 ) {
       const x = bresPts[i];
       const y = bresPts[i + 1];
-      const currPixel = this._pixelAtLocal(x, y);
+      const pixelsAtPoint = this._pixelsForRelativePointsFromLocal(x, y, localOffsets);
+      const currPixel = reducerFn(pixelsAtPoint);
       pixels[j] = { x, y, currPixel };
     }
     return pixels;
@@ -780,20 +791,26 @@ export class PixelCache extends PIXI.Rectangle {
    * Extract all pixels values along a canvas ray that meet a test function.
    * @param {Point} a   Starting location, in canvas coordinates
    * @param {Point} b   Ending location, in canvas coordinates
-   * @param {function} markPixelFn    Function to test pixels.
-   *   Function takes current pixel, previous pixel
+   * @param {function} markPixelFn    Function to test pixels: (current pixel, previous pixel); returns true to mark
+   * @param {object} [opts]                 Optional parameters
+   * @param {number} [opts.alphaThreshold]  Percent between 0 and 1, used to trim the pixel bounds
+   * @param {boolean} [opts.skipFirst]      Skip the first pixel if true
+   * @param {boolean} [opts.forceLast]      Include the last pixel (at b) even if unmarked
+   * @param {number[]} [opts.localOffsets]  Numbers to add to the local x,y position when pulling the pixel(s)
+   * @param {function} [opts.reducerFn]     Function that takes pixel array and reduces to a value or object to return
    * @returns {object[]} Array of objects, each of which have:
    *   - {number} x           Canvas coordinates
    *   - {number} y           Canvas coordinates
    *   - {number} currPixel
    *   - {number} prevPixel
    */
-  _extractAllMarkedPixelValuesAlongCanvasRay(a, b, markPixelFn, { alphaThreshold, skipFirst, forceLast } = {}) {
+  _extractAllMarkedPixelValuesAlongCanvasRay(a, b, markPixelFn,
+    { alphaThreshold, skipFirst, forceLast, localOffsets, reducerFn } = {}) {
     const localBoundsIx = this._trimCanvasRayToLocalBounds(a, b, alphaThreshold);
     if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
 
     const pixels = this._extractAllMarkedPixelValuesAlongLocalRay(
-      localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst, forceLast);
+      localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst, forceLast, localOffsets, reducerFn);
     pixels.forEach(pt => this.#localToCanvasInline(pt));
     return pixels;
   }
@@ -802,15 +819,23 @@ export class PixelCache extends PIXI.Rectangle {
    * Extract all pixel values along a local ray that meet a test function.
    * @param {Point} a   Starting location, in local coordinates
    * @param {Point} b   Ending location, in local coordinates
-   * @param {function} markPixelFn    Function to test pixels.
-   *   Function takes current pixel, previous pixel
+   * @param {function} markPixelFn    Function to test pixels: (currentPixel, previousPixel); returns true to mark
+   * @param {boolean} skipFirst       Skip the first pixel if true
+   * @param {boolean} forceLast        Include the last pixel (at b) even if unmarked
+   * @param {number[]} [localOffsets]  Numbers to add to the local x,y position when pulling the pixel(s)
+   * @param {function} [reducerFn]     Function that takes pixel array and reduces to a value or object to return
    * @returns {object[]} Array of objects, each of which have:
    *   - {number} x           Local coordinates
    *   - {number} y           Local coordinates
    *   - {number} currPixel
    *   - {number} prevPixel
    */
-  _extractAllMarkedPixelValuesAlongLocalRay(a, b, markPixelFn, skipFirst = false, forceLast = false) {
+  _extractAllMarkedPixelValuesAlongLocalRay(a, b, markPixelFn, skipFirst, forceLast, localOffsets, reducerFn) {
+    skipFirst ??= false;
+    forceLast ??= false;
+    localOffsets ??= [0, 0];
+    reducerFn ??= this.constructor.pixelAggregator("first");
+
     const bresPts = bresenhamLine(a.x, a.y, b.x, b.y);
     const pixels = [];
     let prevPixel;
@@ -818,14 +843,16 @@ export class PixelCache extends PIXI.Rectangle {
       const x = bresPts.shift();
       const y = bresPts.shift();
       if ( typeof y === "undefined" ) return pixels; // No more pixels!
-      prevPixel = this._pixelAtLocal(x, y);
+      const pixelsAtPoint = this._pixelsForRelativePointsFromLocal(x, y, localOffsets);
+      prevPixel = reducerFn(pixelsAtPoint);
     }
 
     const nPts = bresPts.length;
     for ( let i = 0; i < nPts; i += 2 ) {
       const x = bresPts[i];
       const y = bresPts[i + 1];
-      const currPixel = this._pixelAtLocal(x, y);
+      const pixelsAtPoint = this._pixelsForRelativePointsFromLocal(x, y, localOffsets);
+      const currPixel = reducerFn(pixelsAtPoint);
       if ( markPixelFn(currPixel, prevPixel) ) pixels.push({ currPixel, prevPixel, x, y });
       prevPixel = currPixel;
     }
@@ -838,6 +865,73 @@ export class PixelCache extends PIXI.Rectangle {
     }
 
     return pixels;
+  }
+
+  /**
+   * Convenience function.
+   * Extract the first pixel value along a canvas ray that meets a test function.
+   * @param {Point} a   Starting location, in canvas coordinates
+   * @param {Point} b   Ending location, in canvas coordinates
+   * @param {function} markPixelFn    Function to test pixels.
+   *   Function takes current pixel, previous pixel
+   * @returns {object|null} If pixel found, returns:
+   *   - {number} x           Canvas coordinate
+   *   - {number} y           Canvas coordinate
+   *   - {number} currPixel
+   *   - {number} prevPixel
+   */
+  _extractNextMarkedPixelValueAlongCanvasRay(a, b, markPixelFn,
+    { alphaThreshold, skipFirst, forceLast, localOffsets, reducerFn } = {}) {
+
+    const localBoundsIx = this._trimCanvasRayToLocalBounds(a, b, alphaThreshold);
+    if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
+
+    const pixel = this._extractNextMarkedPixelValueAlongLocalRay(
+      localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst, forceLast, localOffsets, reducerFn);
+    if ( !pixel ) return pixel;
+    this.#localToCanvasInline(pixel);
+    return pixel;
+  }
+
+  /**
+   * Extract the first pixel value along a local ray that meets a test function.
+   * @param {Point} a   Starting location, in local coordinates
+   * @param {Point} b   Ending location, in local coordinates
+   * @param {function} markPixelFn    Function to test pixels.
+   *   Function takes current pixel, previous pixel
+   * @returns {object|null} If pixel found, returns:
+   *   - {number} x         Local coordinate
+   *   - {number} y         Local coordinate
+   *   - {number} currPixel
+   *   - {number} prevPixel
+   */
+  _extractNextMarkedPixelValueAlongLocalRay(a, b, markPixelFn, skipFirst, forceLast, localOffsets, reducerFn) {
+    skipFirst ??= false;
+    forceLast ??= false;
+    localOffsets ??= [0, 0];
+    reducerFn ??= this.constructor.pixelAggregator("first");
+
+    const bresIter = bresenhamLineIterator(a.x, a.y, b.x, b.y);
+    let prevPixel;
+    let pt; // Needed to recall the last point for forceLast.
+    if ( skipFirst ) {
+      // Iterate over the first value
+      pt = bresIter.next().value;
+      if ( !pt ) return null; // No more pixels!
+      const pixelsAtPoint = this._pixelsForRelativePointsFromLocal(pt.x, pt.y, localOffsets);
+      prevPixel = reducerFn(pixelsAtPoint);
+    }
+
+    for ( pt of bresIter ) {
+      const pixelsAtPoint = this._pixelsForRelativePointsFromLocal(pt.x, pt.y, localOffsets);
+      const currPixel = reducerFn(pixelsAtPoint);
+      if ( markPixelFn(currPixel, prevPixel) ) return { currPixel, prevPixel, x: pt.x, y: pt.y };
+      prevPixel = currPixel;
+    }
+
+    if ( forceLast ) return { currPixel: prevPixel, x: pt.x, y: pt.y, forceLast }; // Might be repeat but this is faster than checking.
+
+    return null;
   }
 
   /**
@@ -871,59 +965,90 @@ export class PixelCache extends PIXI.Rectangle {
     return this._pixelsForRelativePointsFromLocal(pt.x, pt.y, offsets);
   }
 
-  /**
-   * Apply a function to an array of pixels, tracking undefined pixels separately.
-   * @param {number[]} pixels
-   * @param {function} reducerFn
-   * @returns { result: {number}, percentUndefined: {number} }
-   */
-  static applyPixelAggregationFunction(pixels, reducerFn, startValue) {
-    const numPixels = pixels.length;
-    let numUndefined = Number(typeof pixels[0] === "undefined");
-    if ( numPixels < 2 ) return { result: pixels[0], numUndefined, numPixels };
+  // Function to aggregate pixels. Must handle undefined pixels.
 
-    // Store some commonly used methods for convenience.
-    switch ( reducerFn ) {
-      case "min": reducerFn = (acc, curr) => Math.min(acc, curr); break;
-      case "max": reducerFn = (acc, curr) => Math.max(acc, curr); break;
-      case "sum": reducerFn = (acc, curr) => acc + curr; break;
-      case "count": {
-        const threshold = startValue;
-        startValue = 0;
-        reducerFn = (acc, curr) => acc + Number(curr > threshold);
+  /**
+   * Utility method to construct a function that can aggregate pixel array generated from offsets
+   * @param {string} type     Type of aggregation to perform
+   *   - first: take the first value, which in the case of offsets will be [0,0]
+   *   - min: Minimum pixel value, excluding undefined pixels.
+   *   - max: Maximum pixel value, excluding undefined pixels
+   *   - sum: Add pixels. Returns object with total, numUndefined, numPixels.
+   *   - countThreshold: Count pixels greater than a threshold.
+   *     Returns object with count, numUndefined, numPixels, threshold.
+   * @param {number} [threshold]    Optional pixel value used by "count" methods
+   * @returns {function}
+   */
+  static pixelAggregator(type, threshold = -1) {
+    let reducerFn;
+    let startValue;
+    switch ( type ) {
+      case "first": return pixels => pixels[0];
+      case "min": {
+        reducerFn = (acc, curr) => {
+          if ( typeof curr === "undefined" ) return acc;
+          return Math.min(acc, curr);
+        };
         break;
       }
-      case "mode": {
-        startValue = {};
+      case "max": {
         reducerFn = (acc, curr) => {
-          acc[curr] ??= 0;
-          acc[curr]+= 1;
+          if ( typeof curr === "undefined" ) return acc;
+          return Math.min(acc, curr);
+        };
+        break;
+      }
+      case "sum": {
+        startValue = { numUndefined: 0, numPixels: 0, total: 0 };
+        reducerFn = (acc, curr) => {
+          acc.numPixels += 1;
+          if ( typeof curr === "undefined" ) acc.numUndefined += 1;
+          else acc.total += curr;
           return acc;
-        }
+        };
+        break;
+      }
+      case "countThreshold": {
+        startValue = { numUndefined: 0, numPixels: 0, threshold, count: 0 };
+        reducerFn = (acc, curr) => {
+          acc.numPixels += 1;
+          if ( typeof curr === "undefined" ) acc.numUndefined += 1;
+          else if ( curr > acc.threshold ) acc.count += 1;
+          return acc;
+        };
+        break;
+        // TODO: Do we need to re-zero the start values if called repeatedly?
       }
     }
 
-    // Instead of reduce, use a for loop to improve speed and reduce some complexity with the start value.
+    const reducePixels = this.reducePixels;
+    return pixels => reducePixels(pixels, reducerFn, startValue);
+  }
+
+  /**
+   * Version of array.reduce that improves speed and handles some unique cases.
+   * @param {number[]} pixels
+   * @param {function} reducerFn      Function that takes accumulated values and current value
+   *   If startValue is undefined, the first acc will be pixels[0]; the first curr will be pixels[1].
+   * @param {object} startValue
+   * @returns {object} The object returned by the reducerFn
+   */
+  static reducePixels(pixels, reducerFn, startValue) {
+    const numPixels = pixels.length;
+    if ( numPixels < 2 ) return pixels[0];
+
+    reducerFn?.initialize();
     let acc = startValue;
     let startI = 0;
     if ( typeof startValue === "undefined" ) {
       acc = pixels[0];
       startI = 1;
     }
-
     for ( let i = startI; i < numPixels; i += 1 ) {
       const curr = pixels[i];
-      if ( typeof curr === "undefined" ) numUndefined += 1;
-      else acc = reducerFn(acc, curr);
+      acc = reducerFn(acc, curr);
     }
-
-    // For mode, we have to cheat a bit.
-    if ( reducerFn === "mode" ) {
-      const maxValue = Math.max(...Object.values(acc));
-      acc = Number(Object.entries(acc).find(([key, value]) => value === maxValue)[0]);
-    }
-
-    return { result: acc, numUndefined, numPixels };
+    return acc;
   }
 
   static pixelOffsets(shape, skip = 0) {
@@ -975,10 +1100,10 @@ export class PixelCache extends PIXI.Rectangle {
     // Faster to pre-allocate the array, although the math is hard.
     const xMod = Boolean((xiMax - 1) % incr);
     const yMod = Boolean((yiMax - 1) % incr);
-    const numX = (xiMax < 2) ? 0 : Math.floor((xiMax - 1) / incr) + xMod
-    const numY = (yiMax < 2) ? 0 : Math.floor((yiMax - 1) / incr) + yMod
-    const total = numX * numY * 4 * 2 + (addZeroX * 4 * numY) + (addZeroY * 4 * numX) + 2;
-    const offsets = new Array(total)
+    const numX = (xiMax < 2) ? 0 : Math.floor((xiMax - 1) / incr) + xMod;
+    const numY = (yiMax < 2) ? 0 : Math.floor((yiMax - 1) / incr) + yMod;
+    const total = (numX * numY * 4 * 2) + (addZeroX * 4 * numY) + (addZeroY * 4 * numX) + 2;
+    const offsets = new Array(total);
 
     // To make skipping pixels work well, set up so it always captures edges and corners
     // and works its way in.
@@ -1079,69 +1204,6 @@ export class PixelCache extends PIXI.Rectangle {
     return polyOffsets;
   }
 
-  /**
-   * Convenience function.
-   * Extract the first pixel value along a canvas ray that meets a test function.
-   * @param {Point} a   Starting location, in canvas coordinates
-   * @param {Point} b   Ending location, in canvas coordinates
-   * @param {function} markPixelFn    Function to test pixels.
-   *   Function takes current pixel, previous pixel
-   * @returns {object|null} If pixel found, returns:
-   *   - {number} x           Canvas coordinate
-   *   - {number} y           Canvas coordinate
-   *   - {number} currPixel
-   *   - {number} prevPixel
-   */
-  _extractNextMarkedPixelValueAlongCanvasRay(a, b, markPixelFn,
-    { alphaThreshold, skipFirst, forceLast, localOffsets, reducerFn } = {}) {
-
-    const localBoundsIx = this._trimCanvasRayToLocalBounds(a, b, alphaThreshold);
-    if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
-
-    const pixel = this._extractNextMarkedPixelValueAlongLocalRay(
-      localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst, forceLast, localOffsets, reducerFn);
-    if ( !pixel ) return pixel;
-    this.#localToCanvasInline(pixel);
-    return pixel;
-  }
-
-  /**
-   * Extract the first pixel value along a local ray that meets a test function.
-   * @param {Point} a   Starting location, in local coordinates
-   * @param {Point} b   Ending location, in local coordinates
-   * @param {function} markPixelFn    Function to test pixels.
-   *   Function takes current pixel, previous pixel
-   * @returns {object|null} If pixel found, returns:
-   *   - {number} x         Local coordinate
-   *   - {number} y         Local coordinate
-   *   - {number} currPixel
-   *   - {number} prevPixel
-   */
-  _extractNextMarkedPixelValueAlongLocalRay(a, b, markPixelFn,
-    skipFirst = false, forceLast = false, localOffsets, reducerFn) {
-
-    const bresIter = bresenhamLineIterator(a.x, a.y, b.x, b.y);
-    let prevPixel;
-    let pt; // Needed to recall the last point for forceLast.
-    if ( skipFirst ) {
-      // Iterate over the first value
-      pt = bresIter.next().value;
-      if ( !pt ) return null; // No more pixels!
-      const pixels = this._pixelsForRelativePointsFromLocal(pt.x, pt.y, localOffsets);
-      prevPixel = this.constructor.applyPixelAggregationFunction(pixels, reducerFn);
-    }
-
-    for ( pt of bresIter ) {
-      const pixels = this._pixelsForRelativePointsFromLocal(pt.x, pt.y, localOffsets);
-      const currPixel = this.constructor.applyPixelAggregationFunction(pixels, reducerFn);
-      if ( markPixelFn(currPixel, prevPixel) ) return { currPixel, prevPixel, x: pt.x, y: pt.y };
-      prevPixel = currPixel;
-    }
-
-    if ( forceLast ) return { currPixel: prevPixel, x: pt.x, y: pt.y, forceLast }; // Might be repeat but this is faster than checking.
-
-    return null;
-  }
 
   /**
    * Extract pixel values for a line by transforming to a Bresenham line.
@@ -1271,21 +1333,23 @@ export class PixelCache extends PIXI.Rectangle {
     const localBounds = localShape instanceof PIXI.Rectangle ? localShape : localShape.getBounds();
     const { x, y } = localBounds.center;
     const pixels = this._pixelsForRelativePointsFromLocal(x, y, offsets);
-    return this.constructor.applyPixelAggregationFunction(pixels, reducerFn);
+    return reducerFn(pixels);
   }
 
   total2(shape, skip) {
-    const aggregation = this._aggregation(shape, skip, "sum");
-    return aggregation.result;
+    const reducerFn = this.constructor.pixelAggregator("sum");
+    const aggregation = this._aggregation(shape, skip, reducerFn);
+    return aggregation.total;
   }
 
   average2(shape, skip) {
-    const aggregation = this._aggregation(shape, skip, "sum");
-    return aggregation.result / (aggregation.numPixels - aggregation.numUndefined);
+    const reducerFn = this.constructor.pixelAggregator("sum");
+    const aggregation = this._aggregation(shape, skip, reducerFn);
+    return aggregation.total / (aggregation.numPixels - aggregation.numUndefined);
   }
 
   count2(shape, threshold, skip) {
-    const reducerFn = (acc, curr) => acc + (curr > threshold);
+    const reducerFn = this.constructor.pixelAggregator("countThreshold", threshold);
     return this._aggregation(shape, skip, reducerFn);
   }
 

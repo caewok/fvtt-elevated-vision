@@ -44,7 +44,7 @@ export const SETTINGS = {
       MODE: "elevation-mode",
       AVERAGE: "elevation-average"
     }
-  }
+  },
 
   TEST_VISIBILITY: "test-visibility",
   LIGHTS_FULL_PENUMBRA: "lights-full-penumbra",

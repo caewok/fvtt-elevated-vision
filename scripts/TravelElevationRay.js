@@ -7,6 +7,7 @@ PIXI
 "use strict";
 
 import { Draw } from "./geometry/Draw.js";
+import { PixelCache } from "./PixelCache.js";
 
 /* Averaging pixel values
 
@@ -32,7 +33,7 @@ import { Draw } from "./geometry/Draw.js";
 - Tile opacity measured as average of all pixels. Undefined count as non-opaque.
 - Tile opacity can be tested for 50+% opaque: opaque and defined.
 
-*?
+*/
 
 
 
@@ -81,8 +82,8 @@ export class TravelElevationRay {
     this.startElevation = this.TEC.options.elevation;
     this.markerTracker = new MarkerTracker(this);
 
-    this._pixelAggregationFn = this.#pixelAggregationFn();
-    this._markTransparentTileFn = this.#markTrnasparentTileFn();
+//     this._pixelAggregationFn = this.#pixelAggregationFn();
+//     this._markTransparentTileFn = this.#markTransparentTileFn();
 
     // TODO: How to give the token calculator a limited set of tiles or use an intersection test on the tiles?
     // Could make our own quadtree, but updating could be problematic if the tile moves.
@@ -113,26 +114,34 @@ export class TravelElevationRay {
     this.path.length = 0;
   }
 
-  #initializeMarkTransparentTileFn() {
-    // curr is { result, numUndefined, numPixels }
-    const threshold = 255 * this.alphaThreshold;
-    return curr => curr.result < threshold ||
-
-
+  #initializeTerrainOffsets() {
+    const tokenShape = canvas.elevation._tokenShape(this.token, this.token.w, this.token.h);
+    const localShape = canvas.elevation.elevationPixelCache._shapeToLocalCoordinates(tokenShape);
+    const skip = Math.round(Math.min(this.token.w, this.token.h) * 0.1);
+    return PixelCache.pixelOffsets(localShape, skip);
   }
 
-  #initializePixelReducerFn() {
+  #initializeMarkTransparentTileFn() {
+//     // curr is { result, numUndefined, numPixels }
+//     const threshold = 255 * this.alphaThreshold;
+//     return curr => curr.result < threshold ||
+//
+//
+  }
+
+  #initializeTerrainPixelReducerFn() {
+
 
   }
 
 
   #pixelAggregationFn() {
-    const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
-    switch ( this.options.setting.elevationMeasurement ) {
-      case TYPES.POINT: return "sum";
-      case TYPES.MODE: return "mode";
-      case TYPES.AVERAGE: return "sum";
-    }
+//     const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
+//     switch ( this.options.setting.elevationMeasurement ) {
+//       case TYPES.POINT: return "sum";
+//       case TYPES.MODE: return "mode";
+//       case TYPES.AVERAGE: return "sum";
+//     }
   }
 
 
@@ -494,6 +503,8 @@ class MarkerTracker {
     const threshold = 255 * this.travelRay.alphaThreshold;
 
     // curr is { result, numUndefined, numPixels }
+    fn
+
 
     const fn = curr => curr < threshold;
     return fn;
