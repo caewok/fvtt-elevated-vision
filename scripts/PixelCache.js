@@ -1006,6 +1006,14 @@ export class PixelCache extends PIXI.Rectangle {
           else acc.total += curr;
           return acc;
         };
+
+        // Re-zero values in case of rerunning with the same reducer function.
+        reducerFn.initializer = () => {
+          startValue.numUndefined = 0;
+          startValue.numPixels = 0;
+          startValue.count = 0;
+        };
+
         break;
       }
       case "countThreshold": {
@@ -1016,8 +1024,36 @@ export class PixelCache extends PIXI.Rectangle {
           else if ( curr > acc.threshold ) acc.count += 1;
           return acc;
         };
+
+        // Re-zero values in case of rerunning with the same reducer function.
+        reducerFn.initializer = () => {
+          startValue.numUndefined = 0;
+          startValue.numPixels = 0;
+          startValue.count = 0;
+        };
+
         break;
-        // TODO: Do we need to re-zero the start values if called repeatedly?
+      }
+      case "median_no_undefined": {
+        return pixels => {
+          pixels = pixels.filter(x => x != null); // Strip null or undefined.
+          const nPixels = pixels.length;
+          const half = Math.floor(nPixels / 2);
+          pixels.sort((a, b) => a - b);
+          if ( nPixels % 2 ) return pixels[half];
+          else return Math.round((pixels[half - 1] + pixels[half]) / 2);
+        }
+      }
+
+      case "median_zero_undefined": {
+        return pixels => {
+          pixels = pixels.map(x => x ?? 0); // Zero null or undefined. Sorting puts undefined at end, null in front.
+          const nPixels = pixels.length;
+          const half = Math.floor(nPixels / 2);
+          pixels.sort((a, b) => a - b);
+          if ( nPixels % 2 ) return pixels[half];
+          else return Math.round((pixels[half - 1] + pixels[half]) / 2);
+        }
       }
     }
 
@@ -1048,6 +1084,8 @@ export class PixelCache extends PIXI.Rectangle {
       const curr = pixels[i];
       acc = reducerFn(acc, curr);
     }
+
+    if ( reducerFn.finalize ) acc = reducerFn.finalize(acc);
     return acc;
   }
 

@@ -122,6 +122,8 @@ export class TravelElevationRay {
   }
 
   #initializeMarkTransparentTileFn() {
+
+
 //     // curr is { result, numUndefined, numPixels }
 //     const threshold = 255 * this.alphaThreshold;
 //     return curr => curr.result < threshold ||
@@ -129,19 +131,69 @@ export class TravelElevationRay {
 //
   }
 
+  /**
+   * Function used to calculate a terrain pixel value from an array of terrain pixels.
+   * Terrain pixels represent an elevation, and so some sort of averaging is appropriate.
+   * For the single-pixel option, use the first pixel.
+   * For points, use median.
+   * For average, use sum (from which an average will be derived).
+   * @returns {function}
+   */
   #initializeTerrainPixelReducerFn() {
-
-
+    const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
+    switch ( this.options.setting.elevationMeasurement ) {
+      case TYPES.POINT: return PixelCache.pixelAggregator("first");
+      case TYPES.POINTS_CLOSE:
+      case TYPES.POINTS_FAR: return PixelCache.pixelAggregator("median");
+      case TYPES.AVERAGE: {
+        const aggFn = PixelCache.pixelAggregator("sum");
+        aggFn.finalize = acc => acc.numPixels / acc.total; // Treats undefined as 0.
+        return aggFn;
+      }
+    }
   }
 
+//  t = Math.min(_token.w, _token.h) / 4;  <-- / 10 for close is pretty good
+//  offsets = t > 0 ? [[0, 0], [-t, -t], [-t, t], [t, t], [t, -t], [-t, 0], [t, 0], [0, -t], [0, t]] : [[0, 0]];
+//  offsets.forEach(o => Draw.point({x: _token.center.x + o[0], y: _token.center.y + o[1]}, { radius: 1}))
 
-  #pixelAggregationFn() {
-//     const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
-//     switch ( this.options.setting.elevationMeasurement ) {
-//       case TYPES.POINT: return "sum";
-//       case TYPES.MODE: return "mode";
-//       case TYPES.AVERAGE: return "sum";
-//     }
+  /**
+   * Function used to calculate a tile pixel value from an array of tile pixels.
+   * Tile pixels are checked for opacity, so the percentage of pixels that are opaque
+   * is the relevant question.
+   * For the single pixel option, use the first pixel.
+   * Otherwise, use count (from which percentage can be derived).
+   * @returns {function}
+   */
+  #initializeTilePixelReducerFn() {
+    const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
+    switch ( this.options.setting.elevationMeasurement ) {
+      case TYPES.POINT: return PixelCache.pixelAggregator("first");
+      case TYPES.POINTS_CLOSE:
+      case TYPES.POINTS_FAR: {
+        const threshold = this.alphaThreshold;
+
+        return PixelCache.pixelAggregator("count");
+      }
+      case TYPES.POINTS_AVERAGE: return PixelCache.pixelAggregator("sum"); // Sum or count here?
+    }
+  }
+
+  /**
+   * Function used to mark a terrain pixel change.
+   * For single, this marks every pixel change.
+   * For points, this marks every pixel change (already calculated as median).
+   * For average, this determines the average terrain value, treating undefined as 0.
+   * @returns {function}
+   */
+  #initializeTerrainMarkerFn() {
+    const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
+    switch ( this.options.setting.elevationMeasurement ) {
+      case TYPES.POINT:
+      case TYPES.POINTS_CLOSE:
+      case TYPES.POINTS_FAR: return (curr, prev) => prev !== curr;
+      case TYPES.POINTS_AVERAGE: return (curr, prev)
+    }
   }
 
 
