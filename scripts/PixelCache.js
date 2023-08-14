@@ -957,39 +957,58 @@ export class PixelCache extends PIXI.Rectangle {
     const numX = (xiMax < 2) ? 0 : Math.floor((xiMax - 1) / incr) + xMod
     const numY = (yiMax < 2) ? 0 : Math.floor((yiMax - 1) / incr) + yMod
     const total = numX * numY * 4 * 2 + (addZeroX * 4 * numY) + (addZeroY * 4 * numX) + 2;
-
+    const offsets = new Array(total)
 
     // To make skipping pixels work well, set up so it always captures edges and corners
     // and works its way in.
     // And always add the 0,0 point.
-    const offsets = [0, 0];
+    offsets[0] = 0;
+    offsets[1] = 0;
     offsets._centerPoint = rect.center; // Helpful when processing pixel values later.
+    let j = 2;
     for ( let xi = xiMax - 1; xi > 0; xi -= incr ) {
       for ( let yi = yiMax - 1; yi > 0; yi -= incr ) {
-        // BL quadrant
-        offsets.push(
-          xi, yi,     // BL quadrant
-          -xi, yi,    // BR quadrant
-          -xi, -yi,   // TL quadrant
-          xi, -yi     // TR quadrant
-        );
+        offsets[j++] = xi;
+        offsets[j++] = yi;
+        offsets[j++] = -xi;
+        offsets[j++] = yi;
+        offsets[j++] = -xi;
+        offsets[j++] = -yi;
+        offsets[j++] = xi;
+        offsets[j++] = -yi;
+
+
+//         offsets.push(
+//           xi, yi,     // BL quadrant
+//           -xi, yi,    // BR quadrant
+//           -xi, -yi,   // TL quadrant
+//           xi, -yi     // TR quadrant
+//         );
       }
     }
 
     // Handle 0 row and 0 column. Add only if it would have been added by the increment or half increment.
     if ( addZeroX ) {
       for ( let yi = yiMax - 1; yi > 0; yi -= incr ) {
-        offsets.push(0, yi, 0, -yi);
+        offsets[j++] = 0;
+        offsets[j++] = yi;
+        offsets[j++] = 0;
+        offsets[j++] = -yi;
+        //offsets.push(0, yi, 0, -yi);
       }
     }
 
     if ( addZeroY ) {
       for ( let xi = xiMax - 1; xi > 0; xi -= incr ) {
-        offsets.push(xi, 0, -xi, 0);
+        offsets[j++] = xi;
+        offsets[j++] = 0;
+        offsets[j++] = -xi;
+        offsets[j++] = 0;
+        // offsets.push(xi, 0, -xi, 0);
       }
     }
 
-    if ( offsets.length !== total ) console.error(`rectanglePixelOffsets failed for ${xiMax}, ${yiMax}, ${incr}`);
+    // if ( offsets.length !== total ) console.error(`rectanglePixelOffsets failed for ${xiMax}, ${yiMax}, ${incr}`);
 
     return offsets;
   }
