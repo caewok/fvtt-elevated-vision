@@ -841,21 +841,75 @@ export class PixelCache extends PIXI.Rectangle {
   }
 
   /**
-   * For a given location, retrieve a set of points based on x/y differences
-   * @param {number} x          The x offset
-   * @param {number} y          The y offset
+   * For a given location, retrieve a set of pixel values based on x/y differences
+   * @param {number} x          The center x coordinate, in local coordinates
+   * @param {number} y          The center y coordinate, in local coordinates
    * @param {number[]} offsets  Array of offsets: [x0, y0, x1, y1]
    * @returns {number|undefined[]} Array of pixels
    *   Each pixel is the value at x + x0, y + y0, ...
    */
-  _pixelsForRelativePoints(x, y, offsets) {
+  _pixelsForRelativePointsFromLocal(x, y, offsets) {
     offsets ??= [0, 0];
     const nOffsets = offsets.length;
-    const out = this.pixels.constructor(nOffsets * 0.5);
+    const out = new this.pixels.constructor(nOffsets * 0.5);
     for ( let i = 0, j = 0; i < nOffsets; i += 2, j += 1 ) {
-      out[j] = this._pixelAtLocal(x + offsets[i], y = offsets[i + 1]);
+      out[j] = this._pixelAtLocal(x + offsets[i], y + offsets[i + 1]);
     }
     return out;
+  }
+
+  /**
+   * For a given canvas location, retrieve a set of pixel values based on x/y differences
+   * @param {number} x          The center x coordinate, in local coordinates
+   * @param {number} y          The center y coordinate, in local coordinates
+   * @param {number[]} offsets  Array of offsets: [x0, y0, x1, y1]. Offsets are pixel values, in local
+   * @returns {number|undefined[]} Array of pixels
+   *   Each pixel is the value at x + x0, y + y0, ...
+   */
+  pixelsForRelativePointsFromCanvas(x, y, offsets) {
+    const pt = this._fromCanvasCoordinates(x, y);
+    return this._pixelsForRelativePointsFromLocal(pt.x, pt.y, offsets);
+  }
+
+  /**
+   * Apply a function to an array of pixels, tracking undefined pixels separately.
+   * @param {number[]} pixels
+   * @param {function} reducerFn
+   * @returns { result: {number}, percentUndefined: {number} }
+   */
+  static applyPixelAggregationFunction(pixels, reducerFn, startValue) {
+    const numPixels = pixels.length;
+    let numUndefined = Number(typeof pixels[0] === "undefined");
+    if ( numPixels < 2 ) return { result: pixels[0], numUndefined, numPixels };
+
+    // Store some commonly used methods for convenience.
+    switch ( reducerFn ) {
+      case "min": reducerFn = (acc, curr) => Math.min(acc, curr); break;
+      case "max": reducerFn = (acc, curr) => Math.max(acc, curr); break;
+      case "sum": reducerFn = (acc, curr) => acc + curr; break;
+    }
+
+    // Instead of reduce, use a for loop to improve speed and reduce some complexity with the start value.
+    let acc = startValue;
+    let startI = 0;
+    if ( typeof startValue === "undefined" ) {
+      acc = pixels[0];
+      startI = 1;
+    }
+
+    for ( let i = startI; i < numPixels; i += 1 ) {
+      const curr = pixels[i];
+      if ( typeof curr === "undefined" ) numUndefined += 1;
+      else acc = reducerFn(acc, curr);
+    }
+    return { result: acc, numUndefined, numPixels };
+  }
+
+  static pixelOffsets(shape, skip = 0) {
+    if ( shape instanceof PIXI.Rectangle ) return this.rectanglePixelOffsets(shape, skip);
+    if ( shape instanceof PIXI.Polygon ) return this.polygonPixelOffsets(shape, skip);
+    console.warn("PixelCache|pixelOffsets|shape not recognized.", shape);
+    return this.polygonPixelOffsets(shape.toPolygon(), skip);
   }
 
   /**
@@ -888,15 +942,28 @@ export class PixelCache extends PIXI.Rectangle {
     const width = Math.floor(rect.width);
     const height = Math.floor(rect.height);
     const incr = skip + 1;
-    const w_1_2 = Math.floor(width / 2);
-    const h_1_2 = Math.floor(height / 2);
+    const w_1_2 = Math.floor(width * 0.5);
+    const h_1_2 = Math.floor(height * 0.5);
     const xiMax = width - w_1_2;
     const yiMax = height - h_1_2;
+
+    // Handle 0 row and 0 column. Add only if it would have been added by the increment or half increment.
+    const addZeroX = ((xiMax - 1) % (Math.ceil(incr * 0.5))) === 0;
+    const addZeroY = ((yiMax - 1) % (Math.ceil(incr * 0.5))) === 0;
+
+    // Faster to pre-allocate the array, although the math is hard.
+    const xMod = Boolean((xiMax - 1) % incr);
+    const yMod = Boolean((yiMax - 1) % incr);
+    const numX = (xiMax < 2) ? 0 : Math.floor((xiMax - 1) / incr) + xMod
+    const numY = (yiMax < 2) ? 0 : Math.floor((yiMax - 1) / incr) + yMod
+    const total = numX * numY * 4 * 2 + (addZeroX * 4 * numY) + (addZeroY * 4 * numX) + 2;
+
 
     // To make skipping pixels work well, set up so it always captures edges and corners
     // and works its way in.
     // And always add the 0,0 point.
     const offsets = [0, 0];
+    offsets._centerPoint = rect.center; // Helpful when processing pixel values later.
     for ( let xi = xiMax - 1; xi > 0; xi -= incr ) {
       for ( let yi = yiMax - 1; yi > 0; yi -= incr ) {
         // BL quadrant
@@ -909,18 +976,21 @@ export class PixelCache extends PIXI.Rectangle {
       }
     }
 
-    // Handle 0 row and 0 column. Add only if it would have been added by the increment.
-    if ( ((xiMax - 1) % incr) === 0 ) {
+    // Handle 0 row and 0 column. Add only if it would have been added by the increment or half increment.
+    if ( addZeroX ) {
       for ( let yi = yiMax - 1; yi > 0; yi -= incr ) {
         offsets.push(0, yi, 0, -yi);
       }
     }
 
-    if ( ((yiMax - 1) % incr) === 0 ) {
+    if ( addZeroY ) {
       for ( let xi = xiMax - 1; xi > 0; xi -= incr ) {
         offsets.push(xi, 0, -xi, 0);
       }
     }
+
+    if ( offsets.length !== total ) console.error(`rectanglePixelOffsets failed for ${xiMax}, ${yiMax}, ${incr}`);
+
     return offsets;
   }
 
@@ -957,15 +1027,90 @@ export class PixelCache extends PIXI.Rectangle {
     */
     const bounds = poly.getBounds();
     const offsets = this.rectanglePixelOffsets(bounds, skip);
-    const center = bounds.center;
+    const { x, y } = bounds.center;
     const polyOffsets = []; // Unclear how many pixels until we test containment.
+    polyOffsets._centerPoint = offsets._centerPoint;
     const nOffsets = offsets.length;
     for ( let i = 0; i < nOffsets; i += 2 ) {
       const xOffset = offsets[i];
       const yOffset = offsets[i + 1];
-      if ( poly.contains(center.x + xOffset, center.y + yOffset) ) polyOffsets.push(xOffset, yOffset);
+      if ( poly.contains(x + xOffset, y + yOffset) ) polyOffsets.push(xOffset, yOffset);
     }
     return polyOffsets;
+  }
+
+  static polygonPixelOffsets2(poly, skip = 0) {
+    /* Example
+    Draw = CONFIG.GeometryLib.Draw
+    api = game.modules.get("elevatedvision").api
+    PixelCache = api.PixelCache
+
+    rect = new PIXI.Rectangle(100, 200, 275, 300)
+    offsets = PixelCache.rectanglePixelOffsets(rect, skip = 10)
+
+    tmpPt = new PIXI.Point;
+    center = rect.center;
+    for ( let i = 0; i < offsets.length; i += 2 ) {
+      tmpPt.copyFrom({ x: offsets[i], y: offsets[i + 1] });
+      tmpPt.translate(center.x, center.y, tmpPt);
+      Draw.point(tmpPt, { radius: 1 })
+      if ( !rect.contains(tmpPt.x, tmpPt.y) )
+        console.debug(`Rectangle does not contain {tmpPt.x},${tmpPt.y} (${offsets[i]},${offsets[i+1]})`)
+    }
+    Draw.shape(rect)
+
+    */
+    const rect = poly.getBounds();
+    const { x, y } = rect.center;
+    const width = Math.floor(rect.width);
+    const height = Math.floor(rect.height);
+    const incr = skip + 1;
+    const w_1_2 = Math.floor(width * 0.5);
+    const h_1_2 = Math.floor(height * 0.5);
+    const xiMax = width - w_1_2;
+    const yiMax = height - h_1_2;
+
+    // To make skipping pixels work well, set up so it always captures edges and corners
+    // and works its way in.
+    // And always add the 0,0 point.
+    const offsets = [0, 0];
+    offsets._centerPoint = rect.center; // Helpful when processing pixel values later.
+
+    for ( let xi = xiMax - 1; xi > 0; xi -= incr ) {
+      for ( let yi = yiMax - 1; yi > 0; yi -= incr ) {
+        if ( poly.contains(x + xi, y + yi) ) offsets.push(xi, yi);
+        if ( poly.contains(x - xi, y + yi) ) offsets.push(-xi, yi);
+        if ( poly.contains(x - xi, y - yi) ) offsets.push(-xi, -yi);
+        if ( poly.contains(x + xi, y - yi) ) offsets.push(xi, -yi);
+
+        // BL quadrant
+//         offsets.push(
+//           xi, yi,     // BL quadrant
+//           -xi, yi,    // BR quadrant
+//           -xi, -yi,   // TL quadrant
+//           xi, -yi     // TR quadrant
+//         );
+      }
+    }
+
+    // Handle 0 row and 0 column. Add only if it would have been added by the increment or half increment.
+    if ( ((xiMax - 1) % (Math.ceil(incr * 0.5))) === 0 ) {
+      for ( let yi = yiMax - 1; yi > 0; yi -= incr ) {
+        if ( poly.contains(x, y + yi) ) offsets.push(0, yi);
+        if ( poly.contains(x, y - yi) ) offsets.push(0, -yi);
+        // offsets.push(0, yi, 0, -yi);
+      }
+    }
+
+    if ( ((yiMax - 1) % (Math.ceil(incr * 0.5))) === 0 ) {
+      for ( let xi = xiMax - 1; xi > 0; xi -= incr ) {
+        if ( poly.contains(x + xi, y) ) offsets.push(xi, 0);
+        if ( poly.contains(x - xi, y) ) offsets.push(-xi, 0);
+        // offsets.push(xi, 0, -xi, 0);
+      }
+    }
+
+    return offsets;
   }
 
   /**
@@ -1145,6 +1290,31 @@ export class PixelCache extends PIXI.Rectangle {
     }
 
     return { coords, markers };
+  }
+
+  // Use the new pixel offsets to calculate average, percent, total.
+  _aggregation(shape, skip, reducerFn) {
+    const localShape = this._shapeToLocalCoordinates(shape);
+    const offsets = this.constructor.pixelOffsets(localShape, skip);
+    const localBounds = localShape instanceof PIXI.Rectangle ? localShape : localShape.getBounds();
+    const { x, y } = localBounds.center;
+    const pixels = this._pixelsForRelativePointsFromLocal(x, y, offsets);
+    return this.constructor.applyPixelAggregationFunction(pixels, reducerFn);
+  }
+
+  total2(shape, skip) {
+    const aggregation = this._aggregation(shape, skip, "sum");
+    return aggregation.result;
+  }
+
+  average2(shape, skip) {
+    const aggregation = this._aggregation(shape, skip, "sum");
+    return aggregation.result / (aggregation.numPixels - aggregation.numUndefined);
+  }
+
+  count2(shape, threshold, skip) {
+    const reducerFn = (acc, curr) => acc + (curr > threshold);
+    return this._aggregation(shape, skip, reducerFn);
   }
 
   /**
