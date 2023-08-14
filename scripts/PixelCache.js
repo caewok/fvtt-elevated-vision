@@ -694,9 +694,9 @@ export class PixelCache extends PIXI.Rectangle {
    * Get a pixel value given local coordinates.
    * @param {number} x    Local x coordinate
    * @param {number} y    Local y coordinate
-   * @returns {number}
+   * @returns {number|null}  Return null otherwise. Sort will put nulls between -1 and 0.
    */
-  _pixelAtLocal(x, y) { return this.pixels[this._indexAtLocal(x, y)]; }
+  _pixelAtLocal(x, y) { return this.pixels[this._indexAtLocal(x, y)] ?? null; }
 
   /**
    * Get a pixel value given canvas coordinates.
@@ -704,7 +704,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} y    Canvas y coordinate
    * @returns {number}
    */
-  pixelAtCanvas(x, y) { return this.pixels[this._indexAtCanvas(x, y)]; }
+  pixelAtCanvas(x, y) { return this.pixels[this._indexAtCanvas(x, y)] ?? null; }
 
   /**
    * Trim a line segment to only the portion that intersects this cache bounds.
@@ -1362,15 +1362,10 @@ export class PixelCache extends PIXI.Rectangle {
    */
   #pixelValuesForLocalCoords(coords, jIncr) {
     const nCoords = coords.length;
-    const width = this.#localWidth;
     const iIncr = jIncr * 2;
     const pixels = new this.pixels.constructor(nCoords * 0.5 * (1 / jIncr));
     for ( let i = 0, j = 0; i < nCoords; i += iIncr, j += jIncr ) {
-      // No need to floor the coordinates b/c already done in bresenham.
-      const x = coords[i];
-      const y = coords[i + 1];
-      const idx = (y * width) + x;
-      pixels[j] = this.pixels[idx];
+      pixels[j] = this.pixelsAtLocal(coords[i], coords[i + 1])
     }
     return { coords, pixels };
   }
@@ -1527,14 +1522,14 @@ export class PixelCache extends PIXI.Rectangle {
     for ( let ptX = midX; ptX < right; ptX += skip ) {
       for ( let ptY = midY; ptY < bottom; ptY += skip ) {
         const px = this._indexAtLocal(ptX, ptY);
-        const value = this.pixels[px];
+        const value = this._pixelAtLocal[ptX, ptY];
         fn(value, px, ptX, ptY);
         denom += 1;
       }
 
       for ( let ptY = yDec; ptY > top; ptY -= skip ) {
         const px = this._indexAtLocal(ptX, ptY);
-        const value = this.pixels[px];
+        const value = this._pixelAtLocal[ptX, ptY];
         fn(value, px, ptX, ptY);
         denom += 1;
       }
@@ -1543,14 +1538,14 @@ export class PixelCache extends PIXI.Rectangle {
     for ( let ptX = xDec; ptX > left; ptX -= skip ) {
       for ( let ptY = midY; ptY < bottom; ptY += skip ) {
         const px = this._indexAtLocal(ptX, ptY);
-        const value = this.pixels[px];
+        const value = this._pixelAtLocal[ptX, ptY];
         fn(value, px, ptX, ptY);
         denom += 1;
       }
 
       for ( let ptY = yDec; ptY > top; ptY -= skip ) {
         const px = this._indexAtLocal(ptX, ptY);
-        const value = this.pixels[px];
+        const value = this._pixelAtLocal[ptX, ptY];
         fn(value, px, ptX, ptY);
         denom += 1;
       }
