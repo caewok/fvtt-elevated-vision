@@ -887,6 +887,14 @@ export class PixelCache extends PIXI.Rectangle {
       case "min": reducerFn = (acc, curr) => Math.min(acc, curr); break;
       case "max": reducerFn = (acc, curr) => Math.max(acc, curr); break;
       case "sum": reducerFn = (acc, curr) => acc + curr; break;
+      case "mode": {
+        startValue = {};
+        reducerFn = (acc, curr) => {
+          acc[curr] ??= 0;
+          acc[curr]+= 1;
+          return acc;
+        }
+      }
     }
 
     // Instead of reduce, use a for loop to improve speed and reduce some complexity with the start value.
@@ -902,6 +910,13 @@ export class PixelCache extends PIXI.Rectangle {
       if ( typeof curr === "undefined" ) numUndefined += 1;
       else acc = reducerFn(acc, curr);
     }
+
+    // For mode, we have to cheat a bit.
+    if ( reducerFn === "mode" ) {
+      const maxValue = Math.max(...Object.values(acc));
+      acc = Number(Object.entries(acc).find(([key, value]) => value === maxValue)[0]);
+    }
+
     return { result: acc, numUndefined, numPixels };
   }
 
@@ -1071,12 +1086,14 @@ export class PixelCache extends PIXI.Rectangle {
    *   - {number} currPixel
    *   - {number} prevPixel
    */
-  _extractNextMarkedPixelValueAlongCanvasRay(a, b, markPixelFn, { alphaThreshold, skipFirst, forceLast } = {}) {
+  _extractNextMarkedPixelValueAlongCanvasRay(a, b, markPixelFn,
+    { alphaThreshold, skipFirst, forceLast, localOffsets, reducerFn } = {}) {
+
     const localBoundsIx = this._trimCanvasRayToLocalBounds(a, b, alphaThreshold);
     if ( !localBoundsIx ) return []; // Ray never intersects the cache bounds.
 
     const pixel = this._extractNextMarkedPixelValueAlongLocalRay(
-      localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst, forceLast);
+      localBoundsIx[0], localBoundsIx[1], markPixelFn, skipFirst, forceLast, localOffsets, reducerFn);
     if ( !pixel ) return pixel;
     this.#localToCanvasInline(pixel);
     return pixel;
@@ -1094,7 +1111,9 @@ export class PixelCache extends PIXI.Rectangle {
    *   - {number} currPixel
    *   - {number} prevPixel
    */
-  _extractNextMarkedPixelValueAlongLocalRay(a, b, markPixelFn, skipFirst = false, forceLast = false) {
+  _extractNextMarkedPixelValueAlongLocalRay(a, b, markPixelFn,
+    skipFirst = false, forceLast = false, localOffsets, reducerFn) {
+
     const bresIter = bresenhamLineIterator(a.x, a.y, b.x, b.y);
     let prevPixel;
     let pt; // Needed to recall the last point for forceLast.
@@ -1102,11 +1121,13 @@ export class PixelCache extends PIXI.Rectangle {
       // Iterate over the first value
       pt = bresIter.next().value;
       if ( !pt ) return null; // No more pixels!
-      prevPixel = this._pixelAtLocal(pt.x, pt.y);
+      const pixels = this._pixelsForRelativePointsFromLocal(pt.x, pt.y, localOffsets);
+      prevPixel = this.constructor.applyPixelAggregationFunction(pixels, reducerFn);
     }
 
     for ( pt of bresIter ) {
-      const currPixel = this._pixelAtLocal(pt.x, pt.y);
+      const pixels = this._pixelsForRelativePointsFromLocal(pt.x, pt.y, localOffsets);
+      const currPixel = this.constructor.applyPixelAggregationFunction(pixels, reducerFn);
       if ( markPixelFn(currPixel, prevPixel) ) return { currPixel, prevPixel, x: pt.x, y: pt.y };
       prevPixel = currPixel;
     }

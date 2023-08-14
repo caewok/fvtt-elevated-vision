@@ -8,6 +8,34 @@ PIXI
 
 import { Draw } from "./geometry/Draw.js";
 
+/* Averaging pixel values
+
+3 settings:
+
+1. Single pixel
+- Terrain measured as value at the center pixel.
+- Tile opacity measured as value at the center pixel.
+
+2. 9 point (mode)
+- Foundry 9 points used (center + points around inset square)
+- Value appearing most often wins. Undefined does not count. Fallback to min elevation
+- Tile opacity can be tested for 50%+ opaque: opaque & defined
+
+
+3. All points (average)
+- All points used. Skip based on shape size, to ensure 10% coverage across, 1% coverage total.
+  So if 100 x 100, skip is 100 * .1 = 10. 100 pixels instead of 10,000
+  If 500 x 300, skip is 300 * .1 = 30. 16 * 10 = 160 pixels instead of 150,000
+  (10% * 10% = 1%)
+- CONFIG setting to adjust
+- Terrain measured as average of all pixels. Undefined does not count. Fallback to min elevation
+- Tile opacity measured as average of all pixels. Undefined count as non-opaque.
+- Tile opacity can be tested for 50+% opaque: opaque and defined.
+
+*?
+
+
+
 export class TravelElevationRay {
   /** @type {TokenElevationCalculator} */
   TEC;
@@ -53,6 +81,9 @@ export class TravelElevationRay {
     this.startElevation = this.TEC.options.elevation;
     this.markerTracker = new MarkerTracker(this);
 
+    this._pixelAggregationFn = this.#pixelAggregationFn();
+    this._markTransparentTileFn = this.#markTrnasparentTileFn();
+
     // TODO: How to give the token calculator a limited set of tiles or use an intersection test on the tiles?
     // Could make our own quadtree, but updating could be problematic if the tile moves.
   }
@@ -81,6 +112,29 @@ export class TravelElevationRay {
     this.#destination.copyFrom(value);
     this.path.length = 0;
   }
+
+  #initializeMarkTransparentTileFn() {
+    // curr is { result, numUndefined, numPixels }
+    const threshold = 255 * this.alphaThreshold;
+    return curr => curr.result < threshold ||
+
+
+  }
+
+  #initializePixelReducerFn() {
+
+  }
+
+
+  #pixelAggregationFn() {
+    const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
+    switch ( this.options.setting.elevationMeasurement ) {
+      case TYPES.POINT: return "sum";
+      case TYPES.MODE: return "mode";
+      case TYPES.AVERAGE: return "sum";
+    }
+  }
+
 
   /**
    * @param {number} t    Percent distance along the ray
@@ -438,9 +492,14 @@ class MarkerTracker {
 
   #initializeMarkTransparentTileFn() {
     const threshold = 255 * this.travelRay.alphaThreshold;
+
+    // curr is { result, numUndefined, numPixels }
+
     const fn = curr => curr < threshold;
     return fn;
   }
+
+
 
   addNextTileMarkerAfter(marker, tile) {
     const nextMarker = tile.evPixelCache._extractNextMarkedPixelValueAlongCanvasRay(

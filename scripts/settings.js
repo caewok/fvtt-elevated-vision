@@ -37,6 +37,15 @@ export const SETTINGS = {
     LIGHT_SIZE: "point-light-size"
   },
 
+  ELEVATION_MEASUREMENT: {
+    ALGORITHM: "elevation-measurement",
+    TYPES: {
+      POINT: "elevation-point",
+      MODE: "elevation-mode",
+      AVERAGE: "elevation-average"
+    }
+  }
+
   TEST_VISIBILITY: "test-visibility",
   LIGHTS_FULL_PENUMBRA: "lights-full-penumbra",
   VISION_USE_SHADER: "vision-use-shader",  // Deprecated
