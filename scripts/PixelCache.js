@@ -887,6 +887,12 @@ export class PixelCache extends PIXI.Rectangle {
       case "min": reducerFn = (acc, curr) => Math.min(acc, curr); break;
       case "max": reducerFn = (acc, curr) => Math.max(acc, curr); break;
       case "sum": reducerFn = (acc, curr) => acc + curr; break;
+      case "count": {
+        const threshold = startValue;
+        startValue = 0;
+        reducerFn = (acc, curr) => acc + Number(curr > threshold);
+        break;
+      }
       case "mode": {
         startValue = {};
         reducerFn = (acc, curr) => {
