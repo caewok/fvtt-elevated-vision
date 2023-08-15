@@ -56,7 +56,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
 
   /** @type {number[]} */
   get canvasOffsetGrid() {
-    return this.#canvasOffsetGrid || (this.#canvasOffsetGrid = this.#calculateTokenOffsets);
+    return this.#canvasOffsetGrid || (this.#canvasOffsetGrid = this.#calculateTokenOffsets());
   }
 
   /**
@@ -79,11 +79,23 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    * @returns {number[]}
    */
   _getLocalOffsets(key) {
-    let localOffsets = this.#localOffsetsMap(key);
+    let localOffsets = this.#localOffsetsMap.get(key);
     if ( localOffsets ) return localOffsets;
-    localOffsets = this.#localGridOffsets(key === "terrain" ? canvas.elevation.elevationPixelCache : key);
+    const cache = key === "terrain" ? canvas.elevation.elevationPixelCache : key.evPixelCache;
+    localOffsets = this.#localGridOffsets(cache);
     this.#localOffsetsMap.set(key, localOffsets);
     return localOffsets;
+  }
+
+  /**
+   * For a given pixel cache, convert this token's offset grid to local.
+   * @param {PixelCache} cache
+   * @returns {number[]} Local offsets
+   */
+  #localGridOffsets(cache) {
+    const canvasOffsets = this.canvasOffsetGrid;
+    if ( canvasOffsets.equals([0, 0]) ) return [0, 0];
+    return cache.convertCanvasOffsetGridToLocal(this.canvasOffsetGrid);
   }
 
   /**
@@ -109,7 +121,8 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
   #pixelsForGridOffset(key) {
     const localOffsets = this._getLocalOffsets(key);
     const { x, y } = this.location;
-    return this.pixelsForRelativePointsFromCanvas(x, y, undefined, localOffsets);
+    const cache = key === "terrain" ? canvas.elevation.elevationPixelCache : key.evPixelCache;
+    return cache.pixelsForRelativePointsFromCanvas(x, y, undefined, localOffsets);
   }
 
   /**
@@ -179,17 +192,6 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
   }
 
   /**
-   * For a given pixel cache, convert this token's offset grid to local.
-   * @param {PixelCache} cache
-   * @returns {number[]} Local offsets
-   */
-  #localGridOffsets(cache) {
-    const canvasOffsets = this.canvasOffsetGrid;
-    if ( canvasOffsets.equals([0, 0]) ) return [0, 0];
-    return cache.convertCanvasOffsetGridToLocal(this.canvasOffsetGrid);
-  }
-
-  /**
    * Get token shape for the token
    * @param {Point} [tokenCenter]   Optional location of the token
    * @returns {PIXI.Polygon|PIXI.Rectangle}
@@ -232,7 +234,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
     switch ( getSetting(ALGORITHM) ) {
       case TYPES.POINT: return PixelCache.pixelAggregator("first");
       case TYPES.POINTS_CLOSE:
-      case TYPES.POINTS_FAR: return PixelCache.pixelAggregator("median");
+      case TYPES.POINTS_FAR: return PixelCache.pixelAggregator("median_no_null");
       case TYPES.AVERAGE: {
         const aggFn = PixelCache.pixelAggregator("sum");
         aggFn.finalize = acc => acc.numPixels / acc.total; // Treats undefined as 0.
@@ -251,7 +253,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    */
   #calculateTilePixelAggregationFn() {
     const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
-    switch ( this.options.setting.elevationMeasurement ) {
+    switch ( this.options.elevationMeasurement ) {
       case TYPES.POINT: return PixelCache.pixelAggregator("first");
       case TYPES.POINTS_CLOSE:
       case TYPES.POINTS_FAR: return PixelCache.pixelAggregator("median_zero_null");

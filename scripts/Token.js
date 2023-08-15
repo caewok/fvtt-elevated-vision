@@ -126,22 +126,26 @@ PATCHES_ActiveEffect.BASIC = {};
  * Hook drawToken to add an elevation calculator.
  */
 function drawTokenHook(token) {
-  console.debug("drawTokenHook", args);
+  console.debug("drawTokenHook", arguments);
   const ev = token[MODULE_ID] ??= {};
-  ev.tokenCalculator = new TokenElevationCalculator(token);
+  ev.tokenElevationCalculator = new TokenElevationCalculator(token);
 }
 
 /**
  * Hook updateToken to wipe the token calculator if the token shape is modified.
  */
 function updateTokenHook(tokenD, changes, _options, _userId) {
+  console.debug("updateTokenHook", arguments);
   const flatData = flattenObject(changes);
   const changed = new Set(Object.keys(flatData));
-  if ( changed.has(elevChangeFlag) ) {
-    doc.object.renderFlags.set({
-      refreshElevation: true
-    });
-  }
+  if ( !(changed.has("width") || changed.has("height")) ) return;
+  const ev = token[MODULE_ID];
+  if ( !(ev && ev.tokenCalculator) ) return;
+  ev.tokenElevationCalculator.refreshTokenShape();
+}
+
+function renderTokenConfigHook(app, html, data) {
+  console.debug("renderTokenConfigHook", arguments);
 }
 
 // Reset the token elevation when moving the token after a cloned drag operation.
@@ -226,7 +230,10 @@ function refreshTokenHook(token, flags) {
 
 PATCHES_Token.BASIC.HOOKS = {
   preUpdateToken: preUpdateTokenHook,
-  refreshToken: refreshTokenHook
+  refreshToken: refreshTokenHook,
+  drawToken: drawTokenHook,
+  updateToken: updateTokenHook,
+  renderTokenConfig: renderTokenConfigHook
 };
 
 

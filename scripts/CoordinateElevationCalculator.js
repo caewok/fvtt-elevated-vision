@@ -49,7 +49,6 @@ export class CoordinateElevationCalculator {
 
   constructor(point, opts = {}) {
     this.#point.copyFrom(point);
-    if ( opts.elevation ) this.elevation = opts.elevation;
     this._configureOptions(opts);
   }
 
@@ -61,6 +60,7 @@ export class CoordinateElevationCalculator {
     opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
     opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep ?? 1;
     opts.terrainStep ??= CONFIG[MODULE_ID]?.terrainStep ?? canvas.elevation.elevationStep;
+    opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
     this.options = opts;
   }
 
@@ -93,10 +93,6 @@ export class CoordinateElevationCalculator {
 
   /** @type {Tile[]} */
   get tiles() { return this.constructor.locateTiles(this.bounds); }
-
-  static options(opts = {}) {
-    opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
-  }
 
   /**
    * Locate tiles within a given set of bounds.
