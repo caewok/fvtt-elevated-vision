@@ -206,7 +206,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
     const { TYPES, ALGORITHM } = SETTINGS.ELEVATION_MEASUREMENT;
     const algorithm = getSetting(ALGORITHM);
     const { w, h } = this.token;
-    const skipPercent = CONFIG[MODULE_ID].skipPercentage[ALGORITHM];
+    const skipPercent = CONFIG[MODULE_ID].skipPercentage[algorithm];
     switch ( algorithm ) {
       case TYPES.POINT: return [0, 0];
       case TYPES.AVERAGE: {
