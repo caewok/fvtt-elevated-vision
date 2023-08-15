@@ -1456,7 +1456,7 @@ export class PixelCache extends PIXI.Rectangle {
   }
 
   count2(shape, threshold, { skip, localOffsets } = {}) {
-    const reducerFn = this.constructor.pixelAggregator("countThreshold", threshold);
+    const reducerFn = this.constructor.pixelAggregator("count_threshold", threshold);
     return this._aggregation(shape, reducerFn, skip, localOffsets);
   }
 
