@@ -12,7 +12,7 @@ import { PixelCache } from "./PixelCache.js";
 
 export class TokenElevationCalculator extends CoordinateElevationCalculator {
   /** @type {number} */
-  #MAXIMUM_TILE_PIXEL_VALUE = 255;
+  static #MAXIMUM_TILE_PIXEL_VALUE = 255;
 
   /** @type {Token} */
   #token;
@@ -35,7 +35,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    */
   constructor(token, opts = {}) {
     const location = opts.tokenCenter ?? token.center;
-    opts.elevation ??= opts.tokenElevation ?? token.bottomE;
+    location.z = opts.tokenElevation ?? token.bottomE;
 
     // Set tileStep and terrainStep to token height if not otherwise defined.
     // (Do this here b/c _configure method does not yet have the token set.)
@@ -65,6 +65,12 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    */
   get tokenShape() {
     return this.#tokenShape || (this.#tokenShape = this.#calculateTokenShape(this.location));
+  }
+
+  refreshTokenShape() {
+    this.#tokenShape = undefined;
+    this.#localOffsetsMap.clear();
+    this.#canvasOffsetGrid = undefined;
   }
 
   /**
@@ -151,7 +157,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
     const numPixels = terrainPixels.length;
     let numOpaque = 0;
     const terrainETarget = canvas.elevation._normalizeElevation(tileE);
-    const tileOpacityTarget = this.options.alphaThreshold * 255;
+    const tileOpacityTarget = this.options.alphaThreshold * this.constructor.#MAXIMUM_TILE_PIXEL_VALUE;
     const numOpaqueTarget = numPixels * 0.5;
 
     for ( let i = 0; i < numPixels; i += 1 ) {
@@ -250,7 +256,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
       case TYPES.POINTS_CLOSE:
       case TYPES.POINTS_FAR: return PixelCache.pixelAggregator("median_zero_null");
       case TYPES.POINTS_AVERAGE: {
-        const threshold = this.alphaThreshold * 255;
+        const threshold = this.alphaThreshold * this.constructor.#MAXIMUM_TILE_PIXEL_VALUE;
         const aggFn = PixelCache.pixelAggregator("count_gt_threshold", threshold);
         aggFn.finalize = acc => acc.numPixels / acc.total; // Treats undefined as 0.
       }

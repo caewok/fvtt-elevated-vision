@@ -19,8 +19,7 @@ import { FILOQueue } from "./FILOQueue.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { PixelCache, TilePixelCache } from "./PixelCache.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
-import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
-import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
+import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
 import { TravelElevationRay } from "./TravelElevationRay.js";
 
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
@@ -127,9 +126,9 @@ Hooks.once("init", function() {
      * Point close and spread: 8 points spaced from a center point.
      */
     skipPercentage: {
-      [SETTINGS.TYPES.AVERAGE]: 0.1,
-      [SETTINGS.TYPES.POINTS_CLOSE]: 0.1,
-      [SETTINGS.TYPES.POINTS_SPREAD]: 0.25
+      [SETTINGS.ELEVATION_MEASUREMENT.TYPES.AVERAGE]: 0.1,
+      [SETTINGS.ELEVATION_MEASUREMENT.TYPES.POINTS_CLOSE]: 0.1,
+      [SETTINGS.ELEVATION_MEASUREMENT.TYPES.POINTS_SPREAD]: 0.25
     }
   };
 
@@ -145,8 +144,7 @@ Hooks.once("init", function() {
     PixelCache,
     TilePixelCache,
     CoordinateElevationCalculator,
-    TokenPointElevationCalculator,
-    TokenAverageElevationCalculator,
+    TokenElevationCalculator,
     DirectionalLightSource,
     TravelElevationRay,
 

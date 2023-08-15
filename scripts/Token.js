@@ -6,8 +6,10 @@ Ray
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { log } from "./util.js";
+import { MODULE_ID } from "./const.js";
 import { getSceneSetting, SETTINGS } from "./settings.js";
 import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
+import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
 
 /* Token movement flow:
 
@@ -119,6 +121,28 @@ PATCHES_ActiveEffect.BASIC = {};
 
 
 // NOTE: Token hooks
+
+/**
+ * Hook drawToken to add an elevation calculator.
+ */
+function drawTokenHook(token) {
+  console.debug("drawTokenHook", args);
+  const ev = token[MODULE_ID] ??= {};
+  ev.tokenCalculator = new TokenElevationCalculator(token);
+}
+
+/**
+ * Hook updateToken to wipe the token calculator if the token shape is modified.
+ */
+function updateTokenHook(tokenD, changes, _options, _userId) {
+  const flatData = flattenObject(changes);
+  const changed = new Set(Object.keys(flatData));
+  if ( changed.has(elevChangeFlag) ) {
+    doc.object.renderFlags.set({
+      refreshElevation: true
+    });
+  }
+}
 
 // Reset the token elevation when moving the token after a cloned drag operation.
 // Token refresh is then used to update the elevation as the token is moved.

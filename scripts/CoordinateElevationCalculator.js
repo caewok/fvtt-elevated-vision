@@ -47,84 +47,52 @@ export class CoordinateElevationCalculator {
   /** @type {Point3d} */
   #point = new Point3d();
 
-  /** @type {Tile[]} */
-  #tiles;
-
   constructor(point, opts = {}) {
     this.#point.copyFrom(point);
     if ( opts.elevation ) this.elevation = opts.elevation;
-    this._configure(opts);
+    this._configureOptions(opts);
   }
 
   /**
    * Options that affect elevation calculations.
    * @param {object} [opts]   Optional object of option overrides.
    */
-  _configure(opts = {}) {
+  _configureOptions(opts = {}) {
     opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
     opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep ?? 1;
     opts.terrainStep ??= CONFIG[MODULE_ID]?.terrainStep ?? canvas.elevation.elevationStep;
     this.options = opts;
   }
 
-  get bounds() {
-    return new PIXI.Rectangle(this.#point.x - 1, this.#point.y - 1, 2, 2);
-  }
+  /** @type {PIXI.Rectangle} */
+  get bounds() { return new PIXI.Rectangle(this.#point.x - 1, this.#point.y - 1, 2, 2); }
 
-  get coordinate() {
-    return this.#point.clone();
-  }
+  /** @type {Point3d} */
+  get coordinate() { return this.#point.clone(); }
 
-  set coordinate(point) {
-    this.#point.copyFrom(point);
-    this._refreshLocation();
-    this._refreshElevation();
-  }
+  set coordinate(point) { this.#point.copyFrom(point); }
 
-  get location() {
-    return new PIXI.Point(this.#point.x, this.#point.y);
-  }
+  /** @type {PIXI.Point} */
+  get location() { return new PIXI.Point(this.#point.x, this.#point.y); }
 
   set location(value) {
     // Don't use copyFrom in case value has a z property.
     this.#point.x = value.x;
     this.#point.y = value.y;
-    this._refreshLocation();
   }
 
-  get elevation() {
-    return CONFIG.GeometryLib.utils.pixelsToGridUnits(this.#point.z);
-  }
+  /** @type {number}  Grid units */
+  get elevation() { return CONFIG.GeometryLib.utils.pixelsToGridUnits(this.#point.z); }
 
-  set elevation(e) {
-    this.#point.z = CONFIG.GeometryLib.utils.gridUnitsToPixels(e);
-    this._refreshElevation();
-  }
+  set elevation(e) { this.#point.z = CONFIG.GeometryLib.utils.gridUnitsToPixels(e); }
 
-  get elevationZ() {
-    return this.#point.z;
-  }
+  /** @type {number} Pixel units */
+  get elevationZ() { return this.#point.z; }
 
-  set elevationZ(value) {
-    this.#point.z = value;
-    this.refreshElevation();
-  }
+  set elevationZ(value) { this.#point.z = value; }
 
-  _refreshLocation() {
-    this.#tiles = undefined;
-  }
-
-  _refreshElevation() {
-    // Empty
-  }
-
-  get tiles() {
-    return this.options.tiles ?? this.#tiles ?? (this.#tiles = CoordinateElevationCalculator.locateTiles(this.bounds));
-  }
-
-  set tiles(value) {
-    this.#tiles = value;
-  }
+  /** @type {Tile[]} */
+  get tiles() { return this.constructor.locateTiles(this.bounds); }
 
   static options(opts = {}) {
     opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
@@ -199,7 +167,7 @@ export class CoordinateElevationCalculator {
     if ( !tile ) return Boolean(this.findSupportingTileAtElevation());
     const tileE = tile.elevationE;
     if ( !this.elevation.almostEqual(tileE) ) return false;
-    return tileOpaqueAt(tile, this.#point, this.options.alphaThreshold);
+    return this.tileCouldSupport(tile);
   }
 
   /**
@@ -227,9 +195,7 @@ export class CoordinateElevationCalculator {
    * @param {Tile} tile
    * @returns {boolean}
    */
-  tileCouldSupport(tile) {
-    return tileOpaqueAt(tile, this.#point, this.options.alphaThreshold);
-  }
+  tileCouldSupport(tile) { return this.tileIsOpaque(tile); }
 
   /**
    * Opacity of tile at this point.
@@ -240,7 +206,7 @@ export class CoordinateElevationCalculator {
     const cache = tile.evPixelCache;
     if ( !cache ) return null;
     const location = this.location;
-    cache.pixelAtCanvas(location.x, location.y) / cache.maximumPixelValue;
+    return cache.pixelAtCanvas(location.x, location.y) / cache.maximumPixelValue;
   }
 
   /**
@@ -307,15 +273,7 @@ export class CoordinateElevationCalculator {
     return null;
   }
 
-  static locateTiles(bounds) {
-    // Filter tiles that potentially serve as ground from canvas tiles.
-    const tiles = [...canvas.tiles.quadtree.getObjects(bounds)].filter(tile => {
-      if ( !tile.document.overhead ) return false;
-      return isFinite(tile.elevationE);
-    });
-    tiles.sort((a, b) => b.elevationZ - a.elevationZ);
-    return tiles;
-  }
+
 
   /**
    * Find tile directly under the token (tile and token share elevation)
@@ -396,25 +354,6 @@ export class CoordinateElevationCalculator {
     return null;
   }
 
-}
-
-/**
- * Determine the percentage of which the tile + terrain covers a token shape.
- * Tile opaqueness depends on the alphaThreshold and whether measuring the point or the average.
- * Token would fall through if tile is transparent unless terrain would fill the gap(s).
- * @param {Tile} tile                                 Tile to test
- * @param {Point} tokenCenter                         Center point
- * @param {number} averageTiles                       Positive integer to skip pixels when averaging.
- *                                                    0 if point-based.
- * @param {number} alphaThreshold                     Threshold to determine transparency
- * @param {PIXI.Rectangle|PIXI.Polygon} [tokenShape]  Shape representing a token boundary
- *                                                    Required if not averaging
- * @returns {boolean}
- */
-export function tileOpaqueAt(tile, tokenCenter, alphaThreshold) {
-  const cache = tile.evPixelCache;
-  if ( !cache ) return false;
-  return cache.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold);
 }
 
 /**

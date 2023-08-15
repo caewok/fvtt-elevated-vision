@@ -8,8 +8,7 @@ game
 
 import { log } from "./util.js";
 import { MODULE_ID } from "./const.js";
-import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
-import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
+import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
 
 export const SETTINGS = {
   SHADING: {
@@ -171,8 +170,7 @@ export function registerSettings() {
     config: true,
     default: false,
     type: Boolean,
-    requiresReload: false,
-    onChange: setTokenCalculator
+    requiresReload: false
   });
 
   if ( game.modules.get("color-picker")?.active ) {
@@ -251,11 +249,6 @@ export function registerSettings() {
     requiresReload: true,
     type: Boolean
   });
-}
-
-function setTokenCalculator() {
-  canvas.elevation.TokenElevationCalculator = getSetting(SETTINGS.AUTO_AVERAGING)
-    ? TokenAverageElevationCalculator : TokenPointElevationCalculator;
 }
 
 /**
