@@ -31,19 +31,14 @@ async function renderTokenConfigHook(app, html, data) {
 }
 
 function addTokenConfigData(app, data) {
-  // If default token config, make sure the default flags are set if not already.
-  // Setting flags directly fails, so do manually.
-  const isDefaultConfig = app.isPrototype || app instanceof DefaultTokenConfig; // PrototypeToken or DefaultToken
-  if ( isDefaultConfig ) {
-    const { ALGORITHM, TYPES } = FLAGS.ELEVATION_MEASUREMENT;
-    data.object.flags ??= {};
-    data.object.flags[MODULE_ID] ??= {};
-    data.object.flags[MODULE_ID][ALGORITHM] = TYPES.POINTS_CLOSE;
-  }
+  const { ALGORITHM, TYPES, LABELS } = FLAGS.ELEVATION_MEASUREMENT;
+  data.object.flags ??= {};
+  data.object.flags[MODULE_ID] ??= {};
+  data.object.flags[MODULE_ID][ALGORITHM] ??= TYPES.POINTS_CLOSE;
 
   const renderData = {};
   renderData[MODULE_ID] = {
-    elevationAlgorithms: FLAGS.ELEVATION_MEASUREMENT.LABELS
+    elevationAlgorithms: LABELS
   };
   foundry.utils.mergeObject(data, renderData, {inplace: true});
 }
