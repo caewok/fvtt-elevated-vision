@@ -8,6 +8,7 @@ PIXI
 
 import { Draw } from "./geometry/Draw.js";
 import { PixelCache } from "./PixelCache.js";
+import { SETTINGS } from "./settings.js";
 
 /* Averaging pixel values
 
@@ -34,8 +35,6 @@ import { PixelCache } from "./PixelCache.js";
 - Tile opacity can be tested for 50+% opaque: opaque and defined.
 
 */
-
-
 
 export class TravelElevationRay {
   /** @type {TokenElevationCalculator} */
@@ -287,7 +286,7 @@ export class TravelElevationRay {
       && nextTerrainMarker.elevation > currTile.elevationE ) return nextTerrainMarker;
 
     // If only terrain markers or other tile markers, continue moving along this tile.
-    const tileEndMarker = nextMarkers.find(m => m.tile === currTile)
+    const tileEndMarker = nextMarkers.find(m => m.tile === currTile);
     if ( !tileEndMarker ) return null;
 
     // If one of the markers is this tile, it signifies either a hole or the end of the tile.
@@ -548,7 +547,6 @@ class MarkerTracker {
   initialize() {
     this.reverseQueue = [...this.terrainMarkers];
     this.reverseQueue.reverse();
-    this.#markTransparentTileFn = this.#initializeMarkTransparentTileFn();
   }
 
   get nextMarker() { return this.reverseQueue.pop(); }

@@ -1042,7 +1042,7 @@ export class PixelCache extends PIXI.Rectangle {
           pixels.sort((a, b) => a - b);
           if ( nPixels % 2 ) return pixels[half];
           else return Math.round((pixels[half - 1] + pixels[half]) / 2);
-        }
+        };
       }
 
       case "median_zero_null": {
@@ -1053,7 +1053,7 @@ export class PixelCache extends PIXI.Rectangle {
           pixels.sort((a, b) => a - b);
           if ( nPixels % 2 ) return pixels[half];
           else return Math.round((pixels[half - 1] + pixels[half]) / 2);
-        }
+        };
       }
     }
 
@@ -1153,22 +1153,21 @@ export class PixelCache extends PIXI.Rectangle {
     let j = 2;
     for ( let xi = xiMax - 1; xi > 0; xi -= incr ) {
       for ( let yi = yiMax - 1; yi > 0; yi -= incr ) {
+        // BL quadrant
         offsets[j++] = xi;
         offsets[j++] = yi;
+
+        // BR quadrant
         offsets[j++] = -xi;
         offsets[j++] = yi;
+
+        // TL quadrant
         offsets[j++] = -xi;
         offsets[j++] = -yi;
+
+        // TR quadrant
         offsets[j++] = xi;
         offsets[j++] = -yi;
-
-
-//         offsets.push(
-//           xi, yi,     // BL quadrant
-//           -xi, yi,    // BR quadrant
-//           -xi, -yi,   // TL quadrant
-//           xi, -yi     // TR quadrant
-//         );
       }
     }
 
@@ -1179,7 +1178,6 @@ export class PixelCache extends PIXI.Rectangle {
         offsets[j++] = yi;
         offsets[j++] = 0;
         offsets[j++] = -yi;
-        //offsets.push(0, yi, 0, -yi);
       }
     }
 
@@ -1189,11 +1187,8 @@ export class PixelCache extends PIXI.Rectangle {
         offsets[j++] = 0;
         offsets[j++] = -xi;
         offsets[j++] = 0;
-        // offsets.push(xi, 0, -xi, 0);
       }
     }
-
-    // if ( offsets.length !== total ) console.error(`rectanglePixelOffsets failed for ${xiMax}, ${yiMax}, ${incr}`);
 
     return offsets;
   }
@@ -1290,13 +1285,11 @@ export class PixelCache extends PIXI.Rectangle {
       for ( let i = 0, j = 0; i < nPoints; i += 2, j += 1 ) {
         const x = testPoints[i];
         const y = testPoints[i + 1];
-        h > y != c > y && x < (l - a) * ((y - h) / (c - h)) + a && (res[j] = !res[j])
+        ((h > y) != (c > y)) && (x < (((l - a) * ((y - h)) / (c - h)) + a)) && (res[j] = !res[j]); // eslint-disable-line no-unused-expressions, eqeqeq
       }
     }
     return res;
   }
-
-
 
   /**
    * Extract pixel values for a line by transforming to a Bresenham line.
@@ -1365,7 +1358,7 @@ export class PixelCache extends PIXI.Rectangle {
     const iIncr = jIncr * 2;
     const pixels = new this.pixels.constructor(nCoords * 0.5 * (1 / jIncr));
     for ( let i = 0, j = 0; i < nCoords; i += iIncr, j += jIncr ) {
-      pixels[j] = this.pixelsAtLocal(coords[i], coords[i + 1])
+      pixels[j] = this.pixelsAtLocal(coords[i], coords[i + 1]);
     }
     return { coords, pixels };
   }
@@ -1522,14 +1515,14 @@ export class PixelCache extends PIXI.Rectangle {
     for ( let ptX = midX; ptX < right; ptX += skip ) {
       for ( let ptY = midY; ptY < bottom; ptY += skip ) {
         const px = this._indexAtLocal(ptX, ptY);
-        const value = this._pixelAtLocal[ptX, ptY];
+        const value = this._pixelAtLocal(ptX, ptY);
         fn(value, px, ptX, ptY);
         denom += 1;
       }
 
       for ( let ptY = yDec; ptY > top; ptY -= skip ) {
         const px = this._indexAtLocal(ptX, ptY);
-        const value = this._pixelAtLocal[ptX, ptY];
+        const value = this._pixelAtLocal(ptX, ptY);
         fn(value, px, ptX, ptY);
         denom += 1;
       }
@@ -1538,14 +1531,14 @@ export class PixelCache extends PIXI.Rectangle {
     for ( let ptX = xDec; ptX > left; ptX -= skip ) {
       for ( let ptY = midY; ptY < bottom; ptY += skip ) {
         const px = this._indexAtLocal(ptX, ptY);
-        const value = this._pixelAtLocal[ptX, ptY];
+        const value = this._pixelAtLocal(ptX, ptY);
         fn(value, px, ptX, ptY);
         denom += 1;
       }
 
       for ( let ptY = yDec; ptY > top; ptY -= skip ) {
         const px = this._indexAtLocal(ptX, ptY);
-        const value = this._pixelAtLocal[ptX, ptY];
+        const value = this._pixelAtLocal(ptX, ptY);
         fn(value, px, ptX, ptY);
         denom += 1;
       }
