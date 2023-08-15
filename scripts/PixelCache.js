@@ -1018,7 +1018,7 @@ export class PixelCache extends PIXI.Rectangle {
 
         break;
       }
-      case "count_threshold": {
+      case "count_gt_threshold": {
         startValue = { numNull: 0, numPixels: 0, threshold, count: 0 };
         reducerFn = (acc, curr) => {
           acc.numPixels += 1;

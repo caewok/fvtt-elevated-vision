@@ -18,10 +18,10 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
   #tokenShape;
 
   /** @type {number[]} */
-  #tokenTerrainOffsets;
+  #canvasOffsetGrid;
 
   /** @type {Map<tile, number[]} */
-  #tileOffsetsMap = new Map();
+  #localOffsetsMap = new Map();
 
   /**
    * Uses a token instead of a point. Options permit the token location and elevation to be changed.
@@ -43,15 +43,17 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
 
     super(location, opts);
     this.#token = token;
+
+    this.terrainPixelAggregationFn = this.#calculateTerrainPixelAggregationFn();
+    this.tilePixelAggregationFn = this.#calculateTilePixelAggregationFn();
   }
 
   /** @type {Token} */
   get token() { return this.#token; }
 
   /** @type {number[]} */
-  get tokenTerrainOffsets() {
-    return this.#tokenTerrainOffsets
-      || (this.#tokenTerrainOffsets = this.#calculateTokenOffsets(canvas.elevation.elevationPixelCache));
+  get canvasOffsetGrid() {
+    return this.#canvasOffsetGrid || (this.#canvasOffsetGrid = this.#calculateTokenOffsets);
   }
 
   /**
@@ -59,9 +61,31 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
    * @type {PIXI.Polygon|PIXI.Rectangle}
    */
   get tokenShape() {
-    return this.#tokenShape
-      || (this.#tokenShape = this.#calculateTokenShape(this.location));
+    return this.#tokenShape || (this.#tokenShape = this.#calculateTokenShape(this.location));
   }
+
+  _evTerrainElevation() {
+    const localOffsets = this.#localOffsetsMap("terrain")
+      || (this.#localOffsetsMap.set("terrain", this.#localGridOffsets(canvas.elevation.elevationPixelCache)).get("terrain"));
+    const pixels = this.pixelsForRelativePointsFromCanvas();
+    return this.terrainPixelAggregationFn(pixels);
+  }
+
+  terrainElevation() {
+    return Math.max(this._evTerrainElevation, this.findHighestETL());
+  }
+
+  /**
+   * For a given pixel cache, convert this token's offset grid to local.
+   * @param {PixelCache} cache
+   * @returns {number[]} Local offsets
+   */
+  #localGridOffsets(cache) {
+    const canvasOffsets = this.canvasOffsetGrid;
+    if ( canvasOffsets.equals([0, 0]) ) return [0, 0];
+    return cache.convertCanvasOffsetGridToLocal(this.canvasOffsetGrid);
+  }
+
 
   /**
    * Get token shape for the token
@@ -76,19 +100,64 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
 
   #calculateTokenOffsets(cache) {
     const { TYPES, ALGORITHM } = SETTINGS.ELEVATION_MEASUREMENT;
-    let t;
+    const algorithm = getSetting(ALGORITHM);
     const { w, h } = this.token;
-    switch ( ALGORITHM ) {
+    const skipPercent = CONFIG[MODULE_ID].skipPercentage[ALGORITHM];
+    switch ( algorithm ) {
       case TYPES.POINT: return [0, 0];
       case TYPES.AVERAGE: {
-        const localShape = cache._shapeToLocalCoordinates(this.tokenShape);
-        const skip = Math.min(this.token.w, this.token.h) / 10;
-        return PixelCache.pixelOffsets(localShape, skip);
+        const skip = Math.min(this.token.w, this.token.h) * skipPercent;
+        return PixelCache.pixelOffsetGrid(this.tokenShape, skip);
       }
-      case TYPES.POINTS_CLOSE: t = Math.min(w, h) / 10; break;
-      case TYPES.POINTS_SPREAD: t = Math.min(w, h) / 4; break;
+      case TYPES.POINTS_CLOSE:
+      case TYPES.POINTS_SPREAD: {
+        const t = Math.min(w, h) * skipPercent;
+        return [0, 0, -t, -t, -t, t, t, t, t, -t, -t, 0, t, 0, 0, -t, 0, t];
+      }
     }
-    return [0, 0, -t, -t, -t, t, t, t, t, -t, -t, 0, t, 0, 0, -t, 0, t];
+  }
+
+  /**
+   * Function used to calculate a terrain pixel value from an array of terrain pixels.
+   * Terrain pixels represent an elevation, and so some sort of averaging is appropriate.
+   * For the single-pixel option, use the first pixel.
+   * For points, use median.
+   * For average, use sum (from which an average will be derived).
+   * @returns {function}
+   */
+  #calculateTerrainPixelAggregationFn() {
+    const { TYPES, ALGORITHM } = SETTINGS.ELEVATION_MEASUREMENT;
+    switch ( getSetting(ALGORITHM) ) {
+      case TYPES.POINT: return PixelCache.pixelAggregator("first");
+      case TYPES.POINTS_CLOSE:
+      case TYPES.POINTS_FAR: return PixelCache.pixelAggregator("median");
+      case TYPES.AVERAGE: {
+        const aggFn = PixelCache.pixelAggregator("sum");
+        aggFn.finalize = acc => acc.numPixels / acc.total; // Treats undefined as 0.
+        return aggFn;
+      }
+    }
+  }
+
+  /**
+   * Function used to calculate a tile pixel value from an array of tile pixels.
+   * Tile pixels are checked for opacity, so the percentage of pixels that are opaque
+   * is the relevant question.
+   * For the single pixel option, use the first pixel.
+   * Otherwise, use count (from which percentage can be derived).
+   * @returns {function}
+   */
+  #calculateTilePixelAggregationFn() {
+    const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
+    switch ( this.options.setting.elevationMeasurement ) {
+      case TYPES.POINT: return PixelCache.pixelAggregator("first");
+      case TYPES.POINTS_CLOSE:
+      case TYPES.POINTS_FAR: return PixelCache.pixelAggregator("median_zero_null");
+      case TYPES.POINTS_AVERAGE: {
+        const threshold = this.alphaThreshold;
+        return PixelCache.pixelAggregator("count_gt_threshold", threshold);
+      }
+    }
   }
 }
 
