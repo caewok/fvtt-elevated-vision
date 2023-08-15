@@ -954,15 +954,17 @@ export class PixelCache extends PIXI.Rectangle {
 
   /**
    * For a given canvas location, retrieve a set of pixel values based on x/y differences
-   * @param {number} x          The center x coordinate, in local coordinates
-   * @param {number} y          The center y coordinate, in local coordinates
-   * @param {number[]} offsets  Array of offsets: [x0, y0, x1, y1]. Offsets are pixel values, in local
+   * @param {number} x                The center x coordinate, in local coordinates
+   * @param {number} y                The center y coordinate, in local coordinates
+   * @param {number[]} canvasOffsets  Offset grid to use, in canvas coordinate system. [x0, y0, x1, y1, ...]
+   * @param {number[]} [localOffsets] Offset grid to use, in local coordinate system. Calculated if not provided.
    * @returns {number|undefined[]} Array of pixels
    *   Each pixel is the value at x + x0, y + y0, ...
    */
-  pixelsForRelativePointsFromCanvas(x, y, offsets) {
+  pixelsForRelativePointsFromCanvas(x, y, canvasOffsets, localOffsets) {
+    localOffsets ??= this.convertCanvasOffsetGridToLocal(canvasOffsets);
     const pt = this._fromCanvasCoordinates(x, y);
-    return this._pixelsForRelativePointsFromLocal(pt.x, pt.y, offsets);
+    return this._pixelsForRelativePointsFromLocal(pt.x, pt.y, localOffsets);
   }
 
   // Function to aggregate pixels. Must handle undefined pixels.
@@ -1089,12 +1091,12 @@ export class PixelCache extends PIXI.Rectangle {
     return acc;
   }
 
-  static pixelOffsets(shape, skip = 0) {
-    if ( shape instanceof PIXI.Rectangle ) return this.rectanglePixelOffsets(shape, skip);
-    if ( shape instanceof PIXI.Polygon ) return this.polygonPixelOffsets(shape, skip);
-    if ( shape instanceof PIXI.Circle ) return this.shapePixelOffsets(shape, skip);
-    console.warn("PixelCache|pixelOffsets|shape not recognized.", shape);
-    return this.polygonPixelOffsets(shape.toPolygon(), skip);
+  static pixelOffsetGrid(shape, skip = 0) {
+    if ( shape instanceof PIXI.Rectangle ) return this.rectanglePixelOffsetGrid(shape, skip);
+    if ( shape instanceof PIXI.Polygon ) return this.polygonPixelOffsetGrid(shape, skip);
+    if ( shape instanceof PIXI.Circle ) return this.shapePixelOffsetGrid(shape, skip);
+    console.warn("PixelCache|pixelOffsetGrid|shape not recognized.", shape);
+    return this.polygonPixelOffsetGrid(shape.toPolygon(), skip);
   }
 
   /**
@@ -1102,14 +1104,14 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {PIXI.Rectangle} rect
    * @returns {number[]}
    */
-  static rectanglePixelOffsets(rect, skip = 0) {
+  static rectanglePixelOffsetGrid(rect, skip = 0) {
     /* Example
     Draw = CONFIG.GeometryLib.Draw
     api = game.modules.get("elevatedvision").api
     PixelCache = api.PixelCache
 
     rect = new PIXI.Rectangle(100, 200, 275, 300)
-    offsets = PixelCache.rectanglePixelOffsets(rect, skip = 10)
+    offsets = PixelCache.rectanglePixelOffsetGrid(rect, skip = 10)
 
     tmpPt = new PIXI.Point;
     center = rect.center;
@@ -1209,10 +1211,10 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} skip
    * @returns {number[]}
    */
-  static polygonPixelOffsets(poly, skip = 0) {
+  static polygonPixelOffsetGrid(poly, skip = 0) {
     /* Example
     poly = new PIXI.Polygon({x: 100, y: 100}, {x: 200, y: 100}, {x: 150, y: 300});
-    offsets = PixelCache.polygonPixelOffsets(poly, skip = 10)
+    offsets = PixelCache.polygonPixelOffsetGrid(poly, skip = 10)
     tmpPt = new PIXI.Point;
     center = poly.getBounds().center;
     for ( let i = 0; i < offsets.length; i += 2 ) {
@@ -1226,7 +1228,7 @@ export class PixelCache extends PIXI.Rectangle {
     */
     const bounds = poly.getBounds();
     const { x, y } = bounds.center;
-    const offsets = this.rectanglePixelOffsets(bounds, skip);
+    const offsets = this.rectanglePixelOffsetGrid(bounds, skip);
     const nOffsets = offsets.length;
     const testPoints = new Array(offsets.length);
     for ( let i = 0; i < nOffsets; i += 2 ) {
@@ -1249,10 +1251,10 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} [skip=0]   How many pixels to skip when constructing the grid
    * @returns {number[]}
    */
-  static shapePixelOffsets(shape, skip = 0) {
+  static shapePixelOffsetGrid(shape, skip = 0) {
     const bounds = shape.getBounds();
     const { x, y } = bounds.center;
-    const offsets = this.rectanglePixelOffsets(bounds, skip);
+    const offsets = this.rectanglePixelOffsetGrid(bounds, skip);
     const nOffsets = offsets.length;
     const shapeOffsets = []; // Unclear how many pixels until we test containment.
     shapeOffsets._centerPoint = offsets._centerPoint;
@@ -1289,6 +1291,31 @@ export class PixelCache extends PIXI.Rectangle {
       }
     }
     return res;
+  }
+
+  /**
+   * Convert a canvas offset grid to a local one.
+   * @param {number[]} canvasOffsets
+   * @returns {number[]} localOffsets. May return canvasOffsets if no scaling required.
+   */
+  convertCanvasOffsetGridToLocal(canvasOffsets) {
+    // Determine what one pixel move in the x direction equates to for a local move.
+    const canvasOrigin = this._toCanvasCoordinates(0, 0);
+    const xShift = this._fromCanvasCoordinates(canvasOrigin.x + 1, canvasOrigin.y);
+    const yShift = this._fromCanvasCoordinates(canvasOrigin.x, canvasOrigin.y + 1);
+    if ( xShift.equals(new PIXI.Point(1, 0)) && yShift.equals(new PIXI.Point(0, 1)) ) return canvasOffsets;
+
+    const nOffsets = canvasOffsets.length;
+    const localOffsets = Array(nOffsets);
+    for ( let i = 0; i < nOffsets; i += 2 ) {
+      const xOffset = canvasOffsets[i];
+      const yOffset = canvasOffsets[i + 1];
+
+      // A shift of 1 pixel in a canvas direction could shift both x and y locally, if rotated.
+      localOffsets[i] = (xOffset * xShift.x) + (xOffset * yShift.x);
+      localOffsets[i + 1] = (yOffset * xShift.y) + (yOffset * yShift.y);
+    }
+    return localOffsets;
   }
 
   /**
@@ -1408,30 +1435,29 @@ export class PixelCache extends PIXI.Rectangle {
   }
 
   // Use the new pixel offsets to calculate average, percent, total.
-  _aggregation(shape, skip, reducerFn) {
-    const localShape = this._shapeToLocalCoordinates(shape);
-    const offsets = this.constructor.pixelOffsets(localShape, skip);
-    const localBounds = localShape instanceof PIXI.Rectangle ? localShape : localShape.getBounds();
-    const { x, y } = localBounds.center;
-    const pixels = this._pixelsForRelativePointsFromLocal(x, y, offsets);
+  _aggregation(shape, reducerFn, skip, localOffsets) {
+    let canvasOffsets;
+    if ( !localOffsets ) canvasOffsets = this.constructor.pixelOffsetGrid(shape, skip);
+    const { x, y } = shape.getBounds().center;
+    const pixels = this.pixelsForRelativePointsFromCanvas(x, y, canvasOffsets, localOffsets);
     return reducerFn(pixels);
   }
 
-  total2(shape, skip) {
+  total2(shape, { skip, localOffsets } = {}) {
     const reducerFn = this.constructor.pixelAggregator("sum");
-    const aggregation = this._aggregation(shape, skip, reducerFn);
+    const aggregation = this._aggregation(shape, reducerFn, skip, localOffsets);
     return aggregation.total;
   }
 
-  average2(shape, skip) {
+  average2(shape, { skip, localOffsets } = {}) {
     const reducerFn = this.constructor.pixelAggregator("sum");
-    const aggregation = this._aggregation(shape, skip, reducerFn);
+    const aggregation = this._aggregation(shape, reducerFn, skip, localOffsets);
     return aggregation.total / (aggregation.numPixels - aggregation.numUndefined);
   }
 
-  count2(shape, threshold, skip) {
+  count2(shape, threshold, { skip, localOffsets } = {}) {
     const reducerFn = this.constructor.pixelAggregator("countThreshold", threshold);
-    return this._aggregation(shape, skip, reducerFn);
+    return this._aggregation(shape, reducerFn, skip, localOffsets);
   }
 
   /**
