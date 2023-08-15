@@ -117,7 +117,20 @@ Hooks.once("init", function() {
      * Maximum texture size used to represent shadows.
      * @type {number}
      */
-    shadowTextureSize: 4096
+    shadowTextureSize: 4096,
+
+    /**
+     * TokenElevationCalculator.
+     * Percentage of the token shape between points when measuring elevation.
+     * For example, 10% will space out grid points every 1/10th of the token width/height.
+     * Average: Points spaced from outside --> in.
+     * Point close and spread: 8 points spaced from a center point.
+     */
+    skipPercentage: {
+      [SETTINGS.TYPES.AVERAGE]: 0.1,
+      [SETTINGS.TYPES.POINTS_CLOSE]: 0.1,
+      [SETTINGS.TYPES.POINTS_SPREAD]: 0.25
+    }
   };
 
   game.modules.get(MODULE_ID).api = {

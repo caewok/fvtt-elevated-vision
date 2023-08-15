@@ -40,10 +40,10 @@ export const SETTINGS = {
   ELEVATION_MEASUREMENT: {
     ALGORITHM: "elevation-measurement",
     TYPES: {
-      POINT: "elevation-point",
-      POINTS_CLOSE: "elevation-points-close",
-      POINTS_SPREAD: "elevation-points-spread",
-      AVERAGE: "elevation-average"
+      POINT: "elevation_point",
+      POINTS_CLOSE: "elevation_points_close",
+      POINTS_SPREAD: "elevation_points_spread",
+      AVERAGE: "elevation_average"
     }
   },
 
