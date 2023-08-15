@@ -64,15 +64,11 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
     return this.#tokenShape || (this.#tokenShape = this.#calculateTokenShape(this.location));
   }
 
-  _evTerrainElevation() {
+  terrainElevation() {
     const localOffsets = this.#localOffsetsMap("terrain")
       || (this.#localOffsetsMap.set("terrain", this.#localGridOffsets(canvas.elevation.elevationPixelCache)).get("terrain"));
     const pixels = this.pixelsForRelativePointsFromCanvas();
     return this.terrainPixelAggregationFn(pixels);
-  }
-
-  terrainElevation() {
-    return Math.max(this._evTerrainElevation, this.findHighestETL());
   }
 
   /**

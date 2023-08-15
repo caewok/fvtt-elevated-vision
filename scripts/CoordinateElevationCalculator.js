@@ -152,7 +152,7 @@ export class CoordinateElevationCalculator {
    * @returns {number}
    */
   static terrainElevationAt(point) {
-    return Math.max(canvas.elevation.elevationAt(point));
+    return canvas.elevation.elevationAt(point);
   }
 
   /**
@@ -160,7 +160,7 @@ export class CoordinateElevationCalculator {
    * @returns {number}
    */
   terrainElevation() {
-    return Math.max(CoordinateElevationCalculator.terrainElevationAt(this.#point), this.findHighestETL());
+    return CoordinateElevationCalculator.terrainElevationAt(this.#point);
   }
 
   /**
@@ -210,14 +210,6 @@ export class CoordinateElevationCalculator {
     return this.groundElevation().almostEqual(this.elevation);
   }
 
-  /**
-   * Determine if the coordinate is on an enhanced terrain layer
-   * @returns {boolean}
-   */
-  isOnETL() {
-    const etlE = this.findHighestETL();
-    return this.elevation.almostEqual(etlE);
-  }
 
   /**
    * Is the coordinate sufficiently near a tile to be considered supported?
@@ -289,22 +281,6 @@ export class CoordinateElevationCalculator {
       if ( this.tileCouldSupport(tile) ) return tile;
     }
     return null;
-  }
-
-  /**
-   * Find highest enhanced terrain elevation
-   * @returns {number} NEGATIVE_INFINITY if none found
-   */
-  findHighestETL() {
-    if ( !canvas.terrain ) return Number.NEGATIVE_INFINITY;
-
-    // Retrieve all terrains at this location and return the highest elevation.
-    const terrains = canvas.terrain.terrainFromPixels(this.location.x, this.location.y);
-    return terrains.reduce((total, t) => {
-      const elevation = t.document?.elevation;
-      if ( !isFinite(elevation) ) return total;
-      return Math.max(total, elevation);
-    }, Number.NEGATIVE_INFINITY);
   }
 
   /**
