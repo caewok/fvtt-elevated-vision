@@ -986,57 +986,57 @@ export class PixelCache extends PIXI.Rectangle {
       case "first": return pixels => pixels[0];
       case "min": {
         reducerFn = (acc, curr) => {
-          if ( typeof curr === "undefined" ) return acc;
+          if ( curr == null ) return acc; // Undefined or null.
           return Math.min(acc, curr);
         };
         break;
       }
       case "max": {
         reducerFn = (acc, curr) => {
-          if ( typeof curr === "undefined" ) return acc;
+          if ( curr == null ) return acc;
           return Math.min(acc, curr);
         };
         break;
       }
       case "sum": {
-        startValue = { numUndefined: 0, numPixels: 0, total: 0 };
+        startValue = { numNull: 0, numPixels: 0, total: 0 };
         reducerFn = (acc, curr) => {
           acc.numPixels += 1;
-          if ( typeof curr === "undefined" ) acc.numUndefined += 1;
+          if ( curr == null ) acc.numNull += 1; // Undefined or null.
           else acc.total += curr;
           return acc;
         };
 
         // Re-zero values in case of rerunning with the same reducer function.
         reducerFn.initializer = () => {
-          startValue.numUndefined = 0;
+          startValue.numNull = 0;
           startValue.numPixels = 0;
           startValue.count = 0;
         };
 
         break;
       }
-      case "countThreshold": {
-        startValue = { numUndefined: 0, numPixels: 0, threshold, count: 0 };
+      case "count_threshold": {
+        startValue = { numNull: 0, numPixels: 0, threshold, count: 0 };
         reducerFn = (acc, curr) => {
           acc.numPixels += 1;
-          if ( typeof curr === "undefined" ) acc.numUndefined += 1;
+          if ( curr == null ) acc.numNull += 1; // Undefined or null.
           else if ( curr > acc.threshold ) acc.count += 1;
           return acc;
         };
 
         // Re-zero values in case of rerunning with the same reducer function.
         reducerFn.initializer = () => {
-          startValue.numUndefined = 0;
+          startValue.numNull = 0;
           startValue.numPixels = 0;
           startValue.count = 0;
         };
 
         break;
       }
-      case "median_no_undefined": {
+      case "median_no_null": {
         return pixels => {
-          pixels = pixels.filter(x => x != null); // Strip null or undefined.
+          pixels = pixels.filter(x => x != null); // Strip null or undefined (undefined should not occur).
           const nPixels = pixels.length;
           const half = Math.floor(nPixels / 2);
           pixels.sort((a, b) => a - b);
@@ -1045,9 +1045,9 @@ export class PixelCache extends PIXI.Rectangle {
         }
       }
 
-      case "median_zero_undefined": {
+      case "median_zero_null": {
         return pixels => {
-          pixels = pixels.map(x => x ?? 0); // Zero null or undefined. Sorting puts undefined at end, null in front.
+          // Sorting puts undefined at end, null in front. Pixels should never be null.
           const nPixels = pixels.length;
           const half = Math.floor(nPixels / 2);
           pixels.sort((a, b) => a - b);
