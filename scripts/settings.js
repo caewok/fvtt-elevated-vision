@@ -42,7 +42,7 @@ export const SETTINGS = {
     TYPES: {
       POINT: "elevation-point",
       POINTS_CLOSE: "elevation-points-far",
-      POINTS_FAR: "elevation-points-close"
+      POINTS_FAR: "elevation-points-close",
       AVERAGE: "elevation-average"
     }
   },
