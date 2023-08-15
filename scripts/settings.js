@@ -1,14 +1,12 @@
 /* globals
 canvas,
 ColorPicker,
-CONFIG,
 game
 */
 "use strict";
 
 import { log } from "./util.js";
 import { MODULE_ID } from "./const.js";
-import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
 
 export const SETTINGS = {
   SHADING: {
@@ -48,9 +46,9 @@ export const SETTINGS = {
 
   TEST_VISIBILITY: "test-visibility",
   LIGHTS_FULL_PENUMBRA: "lights-full-penumbra",
-  VISION_USE_SHADER: "vision-use-shader",  // Deprecated
+  // VISION_USE_SHADER: "vision-use-shader",  // Deprecated
   AUTO_ELEVATION: "auto-change-elevation",
-  AUTO_AVERAGING: "auto-change-elevation.averaging",
+  // AUTO_AVERAGING: "auto-change-elevation.averaging", // Deprecated
   CLOCKWISE_SWEEP: "enhance-cw-sweep",
   FLY_BUTTON: "add-fly-button",
   ELEVATION_MINIMUM: "elevationmin",
@@ -163,14 +161,21 @@ export function registerSettings() {
     onChange: reloadTokenControls
   });
 
-  game.settings.register(MODULE_ID, SETTINGS.AUTO_AVERAGING, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.AUTO_AVERAGING}.name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.AUTO_AVERAGING}.hint`),
+  const ELEV_TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
+  game.settings.register(MODULE_ID, SETTINGS.ELEVATION_MEASUREMENT.ALGORITHM, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.ELEVATION_MEASUREMENT.ALGORITHM}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.ELEVATION_MEASUREMENT.ALGORITHM}.hint`),
     scope: "world",
     config: true,
-    default: false,
-    type: Boolean,
-    requiresReload: false
+    default: ELEV_TYPES.POINTS_CLOSE,
+    type: String,
+    requiresReload: false,
+    choices: {
+      [ELEV_TYPES.POINT]: game.i18n.localize(`${MODULE_ID}.settings.${ELEV_TYPES.POINT}`),
+      [ELEV_TYPES.POINTS_CLOSE]: game.i18n.localize(`${MODULE_ID}.settings.${ELEV_TYPES.POINTS_CLOSE}`),
+      [ELEV_TYPES.POINTS_SPREAD]: game.i18n.localize(`${MODULE_ID}.settings.${ELEV_TYPES.POINTS_SPREAD}`),
+      [ELEV_TYPES.AVERAGE]: game.i18n.localize(`${MODULE_ID}.settings.${ELEV_TYPES.AVERAGE}`)
+    }
   });
 
   if ( game.modules.get("color-picker")?.active ) {
@@ -259,20 +264,4 @@ export function reloadTokenControls() {
   if ( !canvas.tokens.active ) return;
   canvas.tokens.deactivate();
   canvas.tokens.activate();
-}
-
-/**
- * Get setting to average tiles
- * @returns {number} 0 if not averaging; 1+ for testing every N pixels for average.
- */
-export function averageTilesSetting() {
-  return getSetting(SETTINGS.AUTO_AVERAGING) ? (CONFIG[MODULE_ID]?.averageTiles ?? 1) : 0;
-}
-
-/**
- * Get setting to average terrain
- * @returns {number} 0 if not averaging; 1+ for testing every N pixels for average.
- */
-export function averageTerrainSetting() {
-  return getSetting(SETTINGS.AUTO_AVERAGING) ? (CONFIG[MODULE_ID]?.averageTerrain ?? 1) : 0;
 }
