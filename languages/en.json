@@ -94,8 +94,15 @@
   "elevatedvision.ambientconfig.solarAngle.name": "Solar Angle",
   "elevatedvision.ambientconfig.solarAngle.hint": "Controls the amount of the penumbra (the fuzzy area) in the wall shadow. Approximates the angle of the directional light as seen at the canvas level. A smaller angle results in a smaller penumbra.",
 
-
   "elevatedvision.tileconfig.legendtitle": "Elevated Vision",
   "elevatedvision.tileconfig.elevation.name": "Elevation",
-  "elevatedvision.tileconfig.elevation.hint": "Elevation of this tile. If Levels module is active, this will be linked to the bottom tile elevation for Levels. If elevation is finite, it will override terrain elevation at that point if the token is on or above the tile."
+  "elevatedvision.tileconfig.elevation.hint": "Elevation of this tile. If Levels module is active, this will be linked to the bottom tile elevation for Levels. If elevation is finite, it will override terrain elevation at that point if the token is on or above the tile.",
+
+  "elevatedvision.tokenconfig.legendtitle": "Elevated Vision",
+  "elevatedvision.tokenconfig.elevation-algorithm.name": "Elevation Measurement",
+  "elevatedvision.tokenconfig.elevation-algorithm.hint": "How many points within the token shape to use when automatically adjusting token elevation?",
+  "elevatedvision.tokenconfig.elevation-algorithm.elevation_point": "Single Center Point",
+  "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_close": "Clustered Center Points (9)",
+  "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_spread": "Spread Points (9)",
+  "elevatedvision.tokenconfig.elevation-algorithm.elevation_average": "Average Across Token Shape"
 }

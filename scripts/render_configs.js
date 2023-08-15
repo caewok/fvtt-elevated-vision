@@ -1,5 +1,6 @@
 /* globals
 canvas,
+DefaultTokenConfig,
 FormDataExtended,
 foundry,
 game,
@@ -8,23 +9,54 @@ renderTemplate
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, TEMPLATES, FLAGS } from "./const.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 import { SETTINGS, getSetting, getSceneSetting } from "./settings.js";
 
 export const PATCHES_AmbientLightConfig = {};
 export const PATCHES_AmbientSoundConfig = {};
 export const PATCHES_TileConfig = {};
+export const PATCHES_TokenConfig = {};
 
 PATCHES_AmbientLightConfig.BASIC = {};
 PATCHES_AmbientSoundConfig.BASIC = {};
 PATCHES_TileConfig.BASIC = {};
+PATCHES_TokenConfig.BASIC = {};
+
+async function renderTokenConfigHook(app, html, data) {
+  const template = TEMPLATES.TOKEN;
+  const findString = "div[data-tab='character']:last";
+  addTokenConfigData(app, data);
+  await injectConfiguration(app, html, data, template, findString);
+}
+
+function addTokenConfigData(app, data) {
+  // If default token config, make sure the default flags are set if not already.
+  // Setting flags directly fails, so do manually.
+  const isDefaultConfig = app.isPrototype || app instanceof DefaultTokenConfig; // PrototypeToken or DefaultToken
+  if ( isDefaultConfig ) {
+    const { ALGORITHM, TYPES } = FLAGS.ELEVATION_MEASUREMENT;
+    data.object.flags ??= {};
+    data.object.flags[MODULE_ID] ??= {};
+    data.object.flags[MODULE_ID][ALGORITHM] = TYPES.POINTS_CLOSE;
+  }
+
+  const renderData = {};
+  renderData[MODULE_ID] = {
+    elevationAlgorithms: FLAGS.ELEVATION_MEASUREMENT.LABELS
+  };
+  foundry.utils.mergeObject(data, renderData, {inplace: true});
+}
+
+PATCHES_TokenConfig.BASIC.HOOKS = {
+  renderTokenConfig: renderTokenConfigHook
+};
 
 /**
  * Inject html to add controls to the ambient light configuration to allow user to set elevation.
  */
 async function renderAmbientLightConfigHook(app, html, data) {
-  const template = `modules/${MODULE_ID}/templates/elevatedvision-ambient-source-config.html`;
+  const template = TEMPLATES.AMBIENT_SOURCE;
   const findString = "div[data-tab='basic']:last";
   calculateDirectionalData(app, data);
   await injectConfiguration(app, html, data, template, findString);
@@ -59,7 +91,7 @@ function calculateDirectionalData(app, data) {
  * Inject html to add controls to the ambient sound configuration to allow user to set elevation.
  */
 async function renderAmbientSoundConfigHook(app, html, data) {
-  const template = `modules/${MODULE_ID}/templates/elevatedvision-ambient-source-config.html`;
+  const template = TEMPLATES.AMBIENT_SOURCE;
   const findString = ".form-group:last";
   await injectConfiguration(app, html, data, template, findString);
 }
@@ -72,7 +104,7 @@ PATCHES_AmbientSoundConfig.BASIC.HOOKS = {
  * Inject html to add controls to the tile configuration to allow user to set elevation.
  */
 async function renderTileConfigHook(app, html, data) {
-  const template = `modules/${MODULE_ID}/templates/elevatedvision-tile-config.html`;
+  const template = TEMPLATES.TILE;
   const findString = "div[data-tab='basic']:last";
   await injectConfiguration(app, html, data, template, findString);
 }

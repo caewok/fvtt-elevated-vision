@@ -1,5 +1,7 @@
 /* globals
 CONFIG,
+flattenObject,
+PIXI,
 Ray
 */
 "use strict";
@@ -139,13 +141,9 @@ function updateTokenHook(tokenD, changes, _options, _userId) {
   const flatData = flattenObject(changes);
   const changed = new Set(Object.keys(flatData));
   if ( !(changed.has("width") || changed.has("height")) ) return;
-  const ev = token[MODULE_ID];
+  const ev = tokenD.object[MODULE_ID];
   if ( !(ev && ev.tokenCalculator) ) return;
   ev.tokenElevationCalculator.refreshTokenShape();
-}
-
-function renderTokenConfigHook(app, html, data) {
-  console.debug("renderTokenConfigHook", arguments);
 }
 
 // Reset the token elevation when moving the token after a cloned drag operation.
@@ -232,8 +230,7 @@ PATCHES_Token.BASIC.HOOKS = {
   preUpdateToken: preUpdateTokenHook,
   refreshToken: refreshTokenHook,
   drawToken: drawTokenHook,
-  updateToken: updateTokenHook,
-  renderTokenConfig: renderTokenConfigHook
+  updateToken: updateTokenHook
 };
 
 
