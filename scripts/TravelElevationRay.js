@@ -115,7 +115,7 @@ export class TravelElevationRay {
     const tokenShape = canvas.elevation._tokenShape(this.token, this.token.w, this.token.h);
     const localShape = canvas.elevation.elevationPixelCache._shapeToLocalCoordinates(tokenShape);
     const skip = Math.round(Math.min(this.token.w, this.token.h) * 0.1);
-    return PixelCache.pixelOffsets(localShape, skip);
+    return PixelCache.pixelOffsetGrid(localShape, skip);
   }
 
   /**

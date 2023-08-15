@@ -7,10 +7,21 @@ canvas
 
 import { MODULE_ID } from "./const.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
+import { SETTINGS, getSetting } from "./settings.js";
+import { PixelCache } from "./PixelCache.js";
 
 export class TokenPointElevationCalculator extends CoordinateElevationCalculator {
   /** @type {Token} */
   #token;
+
+  /** @type {PIXI.Rectangle|Square|PIXI.Polygon} */
+  #tokenShape;
+
+  /** @type {number[]} */
+  #tokenTerrainOffsets;
+
+  /** @type {Map<tile, number[]} */
+  #tileOffsetsMap = new Map();
 
   /**
    * Uses a token instead of a point. Options permit the token location and elevation to be changed.
@@ -28,6 +39,7 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
     const tokenHeight = token.topE - token.bottomE;
     opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep ?? (tokenHeight || 1);
     opts.terrainStep ??= CONFIG[MODULE_ID]?.terrainStep ?? (tokenHeight || canvas.elevation.elevationStep);
+    opts.elevationMeasurement ??= getSetting(SETTINGS.ELEVATION_MEASUREMENT.ALGORITHM);
 
     super(location, opts);
     this.#token = token;
@@ -35,6 +47,49 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
 
   /** @type {Token} */
   get token() { return this.#token; }
+
+  /** @type {number[]} */
+  get tokenTerrainOffsets() {
+    return this.#tokenTerrainOffsets
+      || (this.#tokenTerrainOffsets = this.#calculateTokenOffsets(canvas.elevation.elevationPixelCache));
+  }
+
+  /**
+   * Token shape is expensive, so avoid until necessary.
+   * @type {PIXI.Polygon|PIXI.Rectangle}
+   */
+  get tokenShape() {
+    return this.#tokenShape
+      || (this.#tokenShape = this.#calculateTokenShape(this.location));
+  }
+
+  /**
+   * Get token shape for the token
+   * @param {Point} [tokenCenter]   Optional location of the token
+   * @returns {PIXI.Polygon|PIXI.Rectangle}
+   */
+  #calculateTokenShape(tokenCenter) {
+    tokenCenter ??= this.location;
+    const tokenTL = this.token.getTopLeft(tokenCenter.x, tokenCenter.y);
+    return canvas.elevation._tokenShape(tokenTL, this.token.w, this.token.h);
+  }
+
+  #calculateTokenOffsets(cache) {
+    const { TYPES, ALGORITHM } = SETTINGS.ELEVATION_MEASUREMENT;
+    let t;
+    const { w, h } = this.token;
+    switch ( ALGORITHM ) {
+      case TYPES.POINT: return [0, 0];
+      case TYPES.AVERAGE: {
+        const localShape = cache._shapeToLocalCoordinates(this.tokenShape);
+        const skip = Math.min(this.token.w, this.token.h) / 10;
+        return PixelCache.pixelOffsets(localShape, skip);
+      }
+      case TYPES.POINTS_CLOSE: t = Math.min(w, h) / 10; break;
+      case TYPES.POINTS_SPREAD: t = Math.min(w, h) / 4; break;
+    }
+    return [0, 0, -t, -t, -t, t, t, t, t, -t, -t, 0, t, 0, 0, -t, 0, t];
+  }
 }
 
 /**
