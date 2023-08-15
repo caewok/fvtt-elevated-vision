@@ -34,19 +34,11 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    * @param {number} [opts.tokenElevation]
    */
   constructor(token, opts = {}) {
-    const location = opts.tokenCenter ?? token.center;
-    location.z = opts.tokenElevation ?? token.bottomE;
-
-    // Set tileStep and terrainStep to token height if not otherwise defined.
-    // (Do this here b/c _configure method does not yet have the token set.)
-    const tokenHeight = token.topE - token.bottomE;
-    opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep ?? (tokenHeight || 1);
-    opts.terrainStep ??= CONFIG[MODULE_ID]?.terrainStep ?? (tokenHeight || canvas.elevation.elevationStep);
+    const coordinate = Point3d.fromTokenCenter(token);
     opts.elevationMeasurement ??= getSetting(SETTINGS.ELEVATION_MEASUREMENT.ALGORITHM);
+    super(coordinate, opts);
 
-    super(location, opts);
     this.#token = token;
-
     this.terrainPixelAggregationFn = this.#calculateTerrainPixelAggregationFn();
     this.tilePixelAggregationFn = this.#calculateTilePixelAggregationFn();
   }
@@ -66,6 +58,14 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
   get tokenShape() {
     return this.#tokenShape || (this.#tokenShape = this.#calculateTokenShape(this.location));
   }
+
+  /** @type {number} */
+  get tileStep() { return this.options.tileStep ?? this.#token.tokenVisionHeight ?? 0; }
+
+  /** @type {number} */
+  get terrainStep() { return this.options.terrainStep ?? this.#token.tokenVisionHeight ?? canvas.elevation.elevationStep; }
+
+  resetToTokenPosition() { this.coordinate = Point3d.fromTokenCenter(this.#token); }
 
   refreshTokenShape() {
     this.#tokenShape = undefined;

@@ -58,9 +58,8 @@ export class CoordinateElevationCalculator {
    */
   _configureOptions(opts = {}) {
     opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
-    opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep ?? 1;
-    opts.terrainStep ??= CONFIG[MODULE_ID]?.terrainStep ?? canvas.elevation.elevationStep;
-    opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
+    opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep;
+    opts.terrainStep ??= CONFIG[MODULE_ID]?.terrainStep;
     this.options = opts;
   }
 
@@ -93,6 +92,14 @@ export class CoordinateElevationCalculator {
 
   /** @type {Tile[]} */
   get tiles() { return this.constructor.locateTiles(this.bounds); }
+
+  /** @type {number} */
+  get tileStep() { return this.options.tileStep ?? 0; }
+
+  /** @type {number} */
+  get terrainStep() { return this.options.terrainStep ?? canvas.elevation.elevationStep; }
+
+  /** @type {number}
 
   /**
    * Locate tiles within a given set of bounds.
@@ -233,7 +240,7 @@ export class CoordinateElevationCalculator {
    */
   tileWithinStep(tile) {
     const tileE = tile.elevationE;
-    return almostBetween(this.elevation, tileE, tileE + this.options.tileStep);
+    return almostBetween(this.elevation, tileE, tileE + this.tileStep);
   }
 
   /**
@@ -244,7 +251,7 @@ export class CoordinateElevationCalculator {
    */
   tileWithinReach(tile) {
     const tileE = tile.elevationE;
-    if ( !almostBetween(this.elevation, tileE, tileE + this.options.tileStep) ) return false;
+    if ( !almostBetween(this.elevation, tileE, tileE + this.tileStep) ) return false;
     return this.tileCouldSupport(tile);
   }
 
@@ -254,7 +261,7 @@ export class CoordinateElevationCalculator {
    */
   terrainWithinStep() {
     const terrainE = this.terrainElevation();
-    return almostBetween(this.elevation, terrainE - this.options.terrainStep, terrainE);
+    return almostBetween(this.elevation, terrainE - this.terrainStep, terrainE);
   }
 
   /**

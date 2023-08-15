@@ -8,7 +8,7 @@ Ray
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { log } from "./util.js";
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, FLAGS } from "./const.js";
 import { getSceneSetting, SETTINGS } from "./settings.js";
 import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
 import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
@@ -140,10 +140,18 @@ function updateTokenHook(tokenD, changes, _options, _userId) {
   console.debug("updateTokenHook", arguments);
   const flatData = flattenObject(changes);
   const changed = new Set(Object.keys(flatData));
-  if ( !(changed.has("width") || changed.has("height")) ) return;
-  const ev = tokenD.object[MODULE_ID];
-  if ( !(ev && ev.tokenCalculator) ) return;
-  ev.tokenElevationCalculator.refreshTokenShape();
+
+  // Width and Height affect token shape; the elevation measurement flag affects the offset grid.
+  const elevationMeasurementFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION_MEASUREMENT.ALGORITHM}`;
+  if ( !(changed.has("width") || changed.has("height")) || changes.has(elevationMeasurementFlag) ) return;
+
+  // Prototype tokens, maybe others, will not have a tec.
+  const tec = tokenD.object?.[MODULE_ID]?.tokenElevationCalculator;
+  if ( !tec ) return;
+
+  // Token shape or algorithm has changed; update the tec accordingly.
+  if ( changed.has(elevationMeasurementFlag) ) tec.options.elevationMeasurement = changes[elevationMeasurementFlag];
+  tec.refreshTokenShape();
 }
 
 // Reset the token elevation when moving the token after a cloned drag operation.
