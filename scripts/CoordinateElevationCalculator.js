@@ -232,6 +232,30 @@ export class CoordinateElevationCalculator {
   }
 
   /**
+   * Opacity of tile at this point.
+   * @param {Tile} tile
+   * @returns {number|null}  Null if tile is not an overhead tile (has a pixel cache).
+   */
+  tileOpacity(tile) {
+    const cache = tile.evPixelCache;
+    if ( !cache ) return null;
+    const location = this.location;
+    cache.pixelAtCanvas(location.x, location.y) / cache.maximumPixelValue;
+  }
+
+  /**
+   * Is this tile opaque at the given point?
+   * @param {Tile} tile
+   * @returns {boolean}
+   */
+  tileIsOpaque(tile) {
+    const cache = tile.evPixelCache;
+    if ( !cache ) return false;
+    const location = this.location;
+    return cache.containsPixel(location.x, location.y, this.options.alphaThreshold);
+  }
+
+  /**
    * Object is within a permitted step from provided elevation.
    * @param {number} tokenE       Token elevation to test against
    * @param {number} objE         Object elevation
@@ -281,6 +305,16 @@ export class CoordinateElevationCalculator {
       if ( this.tileCouldSupport(tile) ) return tile;
     }
     return null;
+  }
+
+  static locateTiles(bounds) {
+    // Filter tiles that potentially serve as ground from canvas tiles.
+    const tiles = [...canvas.tiles.quadtree.getObjects(bounds)].filter(tile => {
+      if ( !tile.document.overhead ) return false;
+      return isFinite(tile.elevationE);
+    });
+    tiles.sort((a, b) => b.elevationZ - a.elevationZ);
+    return tiles;
   }
 
   /**

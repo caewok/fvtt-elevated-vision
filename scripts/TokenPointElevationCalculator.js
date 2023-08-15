@@ -11,6 +11,9 @@ import { SETTINGS, getSetting } from "./settings.js";
 import { PixelCache } from "./PixelCache.js";
 
 export class TokenPointElevationCalculator extends CoordinateElevationCalculator {
+  /** @type {number} */
+  #MAXIMUM_TILE_PIXEL_VALUE = 255;
+
   /** @type {Token} */
   #token;
 
@@ -64,11 +67,110 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
     return this.#tokenShape || (this.#tokenShape = this.#calculateTokenShape(this.location));
   }
 
+  /**
+   * Retrieve or calculate local offsets for the terrain or a given tile.
+   * @param {Tile|"terrain"} key   Tile or "terrain" string for which local offsets are needed.
+   * @returns {number[]}
+   */
+  _getLocalOffsets(key) {
+    let localOffsets = this.#localOffsetsMap(key);
+    if ( localOffsets ) return localOffsets;
+    localOffsets = this.#localGridOffsets(key === "terrain" ? canvas.elevation.elevationPixelCache : key);
+    this.#localOffsetsMap.set(key, localOffsets);
+    return localOffsets;
+  }
+
+  /**
+   * Measure terrain elevation based on the token shape and elevation measurement settings.
+   * @returns {number}
+   */
   terrainElevation() {
-    const localOffsets = this.#localOffsetsMap("terrain")
-      || (this.#localOffsetsMap.set("terrain", this.#localGridOffsets(canvas.elevation.elevationPixelCache)).get("terrain"));
-    const pixels = this.pixelsForRelativePointsFromCanvas();
-    return this.terrainPixelAggregationFn(pixels);
+    const pixels = this.#pixelsForGridOffset("terrain");
+    const pixelValue = this.terrainPixelAggregationFn(pixels);
+    return canvas.elevation._scaleNormalizedElevation(pixelValue);
+  }
+
+  /**
+   * Measure tile opacity based on token shape and elevation measurement settings.
+   * @param {Tile} tile
+   * @returns {number}
+   */
+  tileOpacity(tile) {
+    const pixels = this.#pixelsForGridOffset(tile);
+    return this.tilePixelAggregationFn(pixels) / cache.maximumPixelValue;
+  }
+
+  #pixelsForGridOffset(key) {
+    const localOffsets = this._getLocalOffsets(key);
+    const { x, y } = this.location;
+    const cache = key === "terrain" ? canvas.elevation.elevationPixelCache : key.evPixelCache;
+    return this.pixelsForRelativePointsFromCanvas(x, y, undefined, localOffsets);
+  }
+
+  /**
+   * Is this tile opaque at the given point?
+   * @param {Tile} tile
+   * @returns {boolean}
+   */
+  tileIsOpaque(tile) { return this.tileOpacity(tile) > this.options.alphaThreshold; }
+
+  /**
+   * Could the tile support the token?
+   * Either the tile is sufficiently opaque, the terrain is sufficiently high,
+   * or a combination of the two.
+   * Terrain above the tile is presumed not to support at the tile (allows underground tiles to work).
+   */
+  tileCouldSupport(tile) {
+    // This is tricky, b/c we want terrain to count if it is the same height as the tile.
+    // So if a token is 40% on a tile at elevation 30, 40% on terrain elevation 30 and
+    // 20% on transparent tile with elevation 0, the token elevation should be 30.
+    // In the easy cases, there is 50% coverage for either tile or terrain alone.
+    // But the hard case makes us iterate over both tile and terrain at once,
+    // b/c otherwise we cannot tell where the overlaps occur. E.g., 30% tile, 20% terrain?
+
+    // If tile is opaque for the token at this position, it can support it.
+    const tilePixels =  this.#pixelsForGridOffset(tile)
+    const tileOpacity = this.tilePixelAggregationFn(pixels) / tile.evPixelCache.maximumPixelValue;
+    if ( tileOpacity > this.options.alphaThreshold ) return true;
+
+    // If the terrain equals the tile elevation at this position, simply ignore the tile.
+    const tileE = tile.elevationE;
+    const terrainPixels = this.#pixelsForGridOffset("terrain");
+    const terrainValue = this.terrainPixelAggregationFn(pixels);
+    const terrainE = canvas.elevation._scaleNormalizedElevation(terrainValue);
+    if ( tileE === terrainE ) return true;
+
+    // Check for overlapping other tiles and terrain sufficient to support.
+    const otherTiles = this.tiles.filter(tile => tile !== tile && tile.elevationE === tileE);
+    const tilePixelsArr = [tilePixels];
+    for ( const otherTile of otherTiles ) { tilePixelsArr.push(this.#pixelsForGridOffset(otherTile)); }
+
+    // In theory, each pixel array should be the same length and each pixel represents the same
+    // canvas location.
+    // Wall over each in parallel, checking for terrain elevation or tile opacity at each.
+    // Once we hit 50%, we are done.
+    const numPixels = terrainPixels.length;
+    let numOpaque = 0;
+    const terrainETarget = canvas.elevation._normalizeElevation(tileE);
+    const tileOpacityTarget = this.options.alphaThreshold * 255;
+    const numOpaqueTarget = numPixels * 0.5;
+
+    for ( let i = 0; i < numPixels; i += 1 ) {
+      if ( numOpaque > numOpaqueTarget ) return true;
+      if ( terrainPixels[i] === terrainETarget ) {
+        numOpaque += 1;
+        continue;
+      }
+
+      // Cycle over each tile, looking for an opaque value.
+      for ( const tilePixels of tilePixelsArr ) {
+        if ( tilePixels[i] > tileOpacityTarget ) {
+          numOpaque += 1;
+          break;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -81,7 +183,6 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
     if ( canvasOffsets.equals([0, 0]) ) return [0, 0];
     return cache.convertCanvasOffsetGridToLocal(this.canvasOffsetGrid);
   }
-
 
   /**
    * Get token shape for the token
@@ -150,72 +251,10 @@ export class TokenPointElevationCalculator extends CoordinateElevationCalculator
       case TYPES.POINTS_CLOSE:
       case TYPES.POINTS_FAR: return PixelCache.pixelAggregator("median_zero_null");
       case TYPES.POINTS_AVERAGE: {
-        const threshold = this.alphaThreshold;
-        return PixelCache.pixelAggregator("count_gt_threshold", threshold);
+        const threshold = this.alphaThreshold * 255;
+        const aggFn =  PixelCache.pixelAggregator("count_gt_threshold", threshold);
+        aggFn.finalize = acc => acc.numPixels / acc.total; // Treats undefined as 0.
       }
     }
   }
 }
-
-/**
- * Determine the percentage of which the tile + terrain covers a token shape.
- * Tile opaqueness depends on the alphaThreshold and whether measuring the point or the average.
- * Token would fall through if tile is transparent unless terrain would fill the gap(s).
- * @param {Tile} tile                                 Tile to test
- * @param {Point} tokenCenter                         Center point
- * @param {number} averageTiles                       Positive integer to skip pixels when averaging.
- *                                                    0 if point-based.
- * @param {number} alphaThreshold                     Threshold to determine transparency
- * @param {PIXI.Rectangle|PIXI.Polygon} [tokenShape]  Shape representing a token boundary
- *                                                    Required if not averaging
- * @returns {boolean}
- */
-export function tileTerrainOpaqueAverageAt(tile, tokenShape, alphaThreshold, averageTiles) {
-  const cache = tile.evPixelCache;
-  if ( !cache ) return false;
-
-  // This is tricky, b/c we want terrain to count if it is the same height as the tile.
-  // So if a token is 40% on a tile at elevation 30, 40% on terrain elevation 30 and
-  // 20% on transparent tile with elevation 0, the token elevation should be 30.
-  // In the easy cases, there is 50% coverage for either tile or terrain alone.
-  // But the hard case makes us iterate over both tile and terrain at once,
-  // b/c otherwise we cannot tell where the overlaps occur. E.g., 30% tile, 20% terrain?
-  const countFn = tileTerrainOpacityCountFunction(tile, alphaThreshold);
-  const denom = cache.applyFunctionToShape(countFn, tokenShape, averageTiles);
-  const percentCoverage = countFn.sum / denom;
-  return percentCoverage > 0.5;
-}
-
-const MAXIMUM_TILE_PIXEL_VALUE = 255;
-
-function tileTerrainOpacityCountFunction(tile, alphaThreshold) {
-  // This is tricky, b/c we want terrain to count if it is the same height as the tile.
-  // So if a token is 40% on a tile at elevation 30, 40% on terrain elevation 30 and
-  // 20% on transparent tile with elevation 0, the token elevation should be 30.
-  // In the easy cases, there is 50% coverage for either tile or terrain alone.
-  // But the hard case makes us iterate over both tile and terrain at once,
-  // b/c otherwise we cannot tell where the overlaps occur. E.g., 30% tile, 20% terrain?
-  const cache = tile.evPixelCache;
-  const tileE = tile.elevationE;
-  const evCache = canvas.elevation.elevationPixelCache;
-  const pixelE = canvas.elevation._normalizeElevation(tileE);
-  const pixelThreshold = MAXIMUM_TILE_PIXEL_VALUE * alphaThreshold;
-  const countFn = (value, _i, localX, localY) => {
-    if ( value > pixelThreshold ) countFn.sum += 1;
-    else {
-      const canvas = cache._toCanvasCoordinates(localX, localY);
-      const terrainValue = evCache.pixelAtCanvas(canvas.x, canvas.y);
-      if ( terrainValue.almostEqual(pixelE) ) countFn.sum += 1;
-    }
-  };
-  countFn.sum = 0;
-  return countFn;
-}
-
-export function tileOpaqueAverageAt(tile, tokenShape, alphaThreshold, averageTiles) {
-  const cache = tile.evPixelCache;
-  if ( !cache ) return false;
-  const pixelThreshold = MAXIMUM_TILE_PIXEL_VALUE * alphaThreshold;
-  return cache.percent(tokenShape, pixelThreshold, averageTiles) > 0.5;
-}
-
