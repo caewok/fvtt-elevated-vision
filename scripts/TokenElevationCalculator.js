@@ -9,6 +9,7 @@ import { MODULE_ID } from "./const.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { SETTINGS, getSetting } from "./settings.js";
 import { PixelCache } from "./PixelCache.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 
 export class TokenElevationCalculator extends CoordinateElevationCalculator {
   /** @type {number} */
@@ -63,7 +64,9 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
   get tileStep() { return this.options.tileStep ?? this.#token.tokenVisionHeight ?? 0; }
 
   /** @type {number} */
-  get terrainStep() { return this.options.terrainStep ?? this.#token.tokenVisionHeight ?? canvas.elevation.elevationStep; }
+  get terrainStep() {
+    return this.options.terrainStep ?? this.#token.tokenVisionHeight ?? canvas.elevation.elevationStep;
+  }
 
   resetToTokenPosition() { this.coordinate = Point3d.fromTokenCenter(this.#token); }
 

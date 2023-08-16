@@ -6,9 +6,8 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { MODULE_ID } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
-import { PixelCache } from "./PixelCache.js";
-import { SETTINGS } from "./settings.js";
 
 /* Averaging pixel values
 
@@ -37,8 +36,9 @@ import { SETTINGS } from "./settings.js";
 */
 
 export class TravelElevationRay {
-  /** @type {TokenElevationCalculator} */
-  TEC;
+
+  /** @type {Token} */
+  #token;
 
   /** @type {PIXI.Point} */
   #destination = new PIXI.Point();
@@ -47,7 +47,7 @@ export class TravelElevationRay {
   #origin = new PIXI.Point();
 
   /** @type {number} */
-  startElevation = 0;
+  #originElevation = 0;
 
   /** @type {Set<Tile>} */
   reachableTiles = new Set();
@@ -59,7 +59,7 @@ export class TravelElevationRay {
   tileWalks = new Map();
 
   /** @type {object[]} */
-  path = [];
+  #path = [];
 
   /** @type {MarkerTracker} */
   markerTracker;
@@ -67,23 +67,26 @@ export class TravelElevationRay {
   /** @type {object[]} */
   terrainMarkers = [];
 
+  /** @type {TokenElevationCalculator} */
+  TEC;
+
   /**
    * @param {Token} token               Token that is undertaking the movement
    * @param {PIXI.Point} destination    {x,y} destination for the movement
-   * @param {object} [opts]                 Options passed to canvas.elevation.TokenElevationCalculator
    * @param {Point} [opts.tokenCenter]      Assumed token center at start
    * @param {number} [opts.tokenElevation]  Assumed token elevation at start
    */
-  constructor(token, destination, opts) {
-    this.#destination.copyFrom(destination);
-    this.TEC = new canvas.elevation.TokenElevationCalculator(token, opts);
-    this.#origin.copyFrom(this.TEC.location);
-    this.startElevation = this.TEC.options.elevation;
-    this.markerTracker = new MarkerTracker(this);
-    this._terrainOffsets = this.#initializeTerrainOffsets();
+  constructor(token, { origin, destination } = {}) {
+    this.#token = token;
+    this.TEC = token[MODULE_ID].TEC;
 
-    // TODO: How to give the token calculator a limited set of tiles or use an intersection test on the tiles?
-    // Could make our own quadtree, but updating could be problematic if the tile moves.
+    if ( origin ) this.origin = origin;
+    else this.origin = token.center;
+
+    if ( origin && Object.hasOwn(origin, "z") ) this.originElevation = origin.z;
+    else this.originElevation = token.elevationZ;
+
+    if ( destination ) this.destination = destination;
   }
 
   /** @type {number} */
@@ -100,7 +103,7 @@ export class TravelElevationRay {
 
   set origin(value) {
     this.#origin.copyFrom(value);
-    this.path.length = 0;
+    this.#path.length = 0;
   }
 
   /** @type {PIXI.Point} */
@@ -108,93 +111,24 @@ export class TravelElevationRay {
 
   set destination(value) {
     this.#destination.copyFrom(value);
-    this.path.length = 0;
+    this.#path.length = 0;
   }
 
-  #initializeTerrainOffsets() {
-    const tokenShape = canvas.elevation._tokenShape(this.token, this.token.w, this.token.h);
-    const localShape = canvas.elevation.elevationPixelCache._shapeToLocalCoordinates(tokenShape);
-    const skip = Math.round(Math.min(this.token.w, this.token.h) * 0.1);
-    return PixelCache.pixelOffsetGrid(localShape, skip);
+  get originElevation() { return this.#originElevation; }
+
+  set originElevation(value) {
+    this.#originElevation = value;
+    this.#path.length = 0;
   }
 
-  /**
-   * Function used to calculate a terrain pixel value from an array of terrain pixels.
-   * Terrain pixels represent an elevation, and so some sort of averaging is appropriate.
-   * For the single-pixel option, use the first pixel.
-   * For points, use median.
-   * For average, use sum (from which an average will be derived).
-   * @returns {function}
-   */
-  _terrainPixelReducerFn() {
-    const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
-    switch ( this.options.setting.elevationMeasurement ) {
-      case TYPES.POINT: return PixelCache.pixelAggregator("first");
-      case TYPES.POINTS_CLOSE:
-      case TYPES.POINTS_FAR: return PixelCache.pixelAggregator("median");
-      case TYPES.AVERAGE: {
-        const aggFn = PixelCache.pixelAggregator("sum");
-        aggFn.finalize = acc => acc.numPixels / acc.total; // Treats undefined as 0.
-        return aggFn;
-      }
-    }
+  get path() {
+    if ( !this.#path.length ) this._walkPath();
+    return this.#path;
   }
 
-//  t = Math.min(_token.w, _token.h) / 4;  <-- / 10 for close is pretty good
-//  offsets = t > 0 ? [[0, 0], [-t, -t], [-t, t], [t, t], [t, -t], [-t, 0], [t, 0], [0, -t], [0, t]] : [[0, 0]];
-//  offsets.forEach(o => Draw.point({x: _token.center.x + o[0], y: _token.center.y + o[1]}, { radius: 1}))
-
-  /**
-   * Function used to calculate a tile pixel value from an array of tile pixels.
-   * Tile pixels are checked for opacity, so the percentage of pixels that are opaque
-   * is the relevant question.
-   * For the single pixel option, use the first pixel.
-   * Otherwise, use count (from which percentage can be derived).
-   * @returns {function}
-   */
-  _tilePixelReducerFn() {
-    const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
-    switch ( this.options.setting.elevationMeasurement ) {
-      case TYPES.POINT: return PixelCache.pixelAggregator("first");
-      case TYPES.POINTS_CLOSE:
-      case TYPES.POINTS_FAR: return PixelCache.pixelAggregator("median_zero_null");
-      case TYPES.POINTS_AVERAGE: {
-        const threshold = this.alphaThreshold;
-        return PixelCache.pixelAggregator("count_threshold", threshold);
-      }
-    }
-  }
-
-  /**
-   * Function used to mark a terrain pixel change.
-   * For single, this marks every pixel change.
-   * For points, this marks every pixel change (already calculated as median).
-   * For average, this determines the average terrain value, treating undefined as 0.
-   * @returns {function}
-   */
-  _terrainMarkerFn() { return (curr, prev) => prev !== curr; }
-
-  /**
-   * Function used to mark a tile pixel change.
-   * This marks every time the tile goes transparent along the ray (< alpha)
-   *
-   * For average, a count is examined for the total null and total below the threshold.
-   * @returns {function}
-   */
-  _tileMarkerFn() {
-    const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
-    // TODO: Is it better to use threshold here or do a count, using threshold in the aggregator?
-    switch ( this.options.setting.elevationMeasurement ) {
-      case TYPES.POINT:
-      case TYPES.POINTS_CLOSE:
-      case TYPES.POINTS_FAR: {
-        const threshold = this.alphaThreshold;
-        return curr => curr < threshold;
-      }
-      case TYPES.POINTS_AVERAGE: {
-        return curr => (curr.count / curr.numPixels) > 0.5;
-      }
-    }
+  resetOriginToToken() {
+    this.origin = this.token.center;
+    this.originElevation = this.token.elevationZ;
   }
 
   /**
@@ -202,10 +136,11 @@ export class TravelElevationRay {
    * @returns {number} Elevation value at that location
    */
   elevationAtT(t) {
-    if ( !this.path.length ) this._walkPath();
-    if ( t >= 1 ) return this.path.at(-1).elevation;
-    if ( t <= 0 ) return this.path.at(0).elevation;
-    const mark = this.path.findLast(mark => mark.t <= t);
+    const path = this.path;
+    if ( !path.length ) this._walkPath();
+    if ( t >= 1 ) return path.at(-1).elevation;
+    if ( t <= 0 ) return path.at(0).elevation;
+    const mark = path.findLast(mark => mark.t <= t);
     if ( !~mark ) return undefined;
     return mark.elevation;
   }
@@ -248,14 +183,14 @@ export class TravelElevationRay {
    * @returns {object[]}
    */
   _walkPath() {
-    const { startElevation, path, markerTracker } = this;
+    const path = this.#path;
     path.length = 0;
-    markerTracker.initialize();
+    const markerTracker = this.markerTracker = new MarkerTracker(this);
 
     // At the starting point, are we dropping to terrain or a tile?
     // (No tiles at this point, so the first marker is the terrain.)
     let currMarker = this.#checkForSupportingTile(
-      markerTracker.nextMarker, startElevation, undefined, undefined, true);
+      markerTracker.nextMarker, this.startElevation, undefined, undefined, true);
     path.push(currMarker);
 
     // Iterate over each marker in turn.
@@ -274,7 +209,7 @@ export class TravelElevationRay {
       nextMarkers = markerTracker.pullNextMarkers();
     }
 
-    return this.path;
+    return path;
   }
 
   #identifyNextMarkerFromTileLocation(nextMarkers, currMarker, nextTerrainMarker) {
@@ -427,56 +362,6 @@ export class TravelElevationRay {
 
 }
 
-
-class TravelElevationRayTokenAveraging extends TravelElevationRay {
-
-
-  /**
-   * Find overhead elevation tiles along a line segment (ray).
-   * Account for token size and capture all tiles under the token.
-   * @param {Point} a                   Starting point
-   * @param {Point} b                   Ending point
-   * @param {number} [alphaThreshold]   Tile portions lower than this alpha do not count for bounds.
-   * @returns {Tile[]}
-   */
-  static elevationTilesOnLineSegment(a, b, alphaThreshold, tokenBounds) {
-    const aElevation = a.z;
-    const bElevation = b.z;
-    const minWidth = tokenBounds.width;
-    const minHeight = tokenBounds.height;
-    const dist2Rev = -Math.pow(minWidth, 2) + Math.pow(minHeight, 2); // Diagonal along the bounds
-    a = PIXI.Point.fromObject(a);
-    b = PIXI.Point.fromObject(b);
-    a = a.towardsPointSquared(b, dist2Rev);
-    b = b.towardsPointSquared(a, dist2Rev);
-
-
-    // First, get all tiles within bounds of a --> b
-    const xMinMax = Math.minMax(a.x, b.x);
-    const yMinMax = Math.minMax(a.y, b.y);
-    const bounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
-    bounds.width ||= minWidth; // If a --> b is vertical, add width to bounds
-    bounds.height ||= minHeight; // If a --> b is horizontal, add height to bounds
-    const collisionTest = (o, _rect) => o.t.document.overhead && isFinite(o.t.elevationZ);
-    let tiles = [...canvas.tiles.quadtree.getObjects(bounds, { collisionTest })];
-
-    // If a and b have elevations, only keep tiles within that elevation range.
-    if ( typeof aElevation !== "undefined" && typeof bElevation !== "undefined" ) {
-      const zMinMax = Math.minMax(aElevation, bElevation);
-      tiles = tiles.filter(t => {
-        const elevationZ = t.elevationZ;
-        return (elevationZ >= zMinMax.min) && (elevationZ <= zMinMax.max);
-      });
-    }
-
-    // Sort tiles by elevation, highest to lowest.
-    // This will help with finding relevant tiles later.
-    tiles.sort((a, b) => b.elevationZ - a.elevationZ);
-    return tiles;
-  }
-
-}
-
 // Utility class to keep track of elevation and tile markers and provide the next one.
 class MarkerTracker {
   /**
@@ -492,38 +377,42 @@ class MarkerTracker {
   /** @type {PIXI.Point} */
   #tmpPoint = new PIXI.Point();
 
-  /** @type {function} */
-  #terrainPixelReducerFn;
-
-  /** @type {function} */
-  #tilePixelReducerFn;
-
-  /** @type {function} */
-  #markTerrainFn;
-
-  /** @type {function} */
-  #markTransparentTileFn;
-
-  /** @type {number[]} */
-  #terrainOffsets = [0, 0];
 
   /** @type {number} */
   #deltaMag2 = 0;
+
+  /** @type{function} */
+  #markTerrainFn = (curr, prev) => prev !== curr;
+
+  /** @type{function} */
+  #markTransparentTileFn;
 
   constructor(travelRay) {
     this.travelRay = travelRay;
     this.#deltaMag2 = this.#calculateRayDeltaMag2();
 
-    this.#terrainPixelReducerFn = this.travelRay._terrainPixelReducerFn();
-    this.#tilePixelReducerFn = this.travelRay._tilePixelReducerFn();
-    this.#markTerrainFn = this.travelRay._terrainMarkerFn();
-    this.#markTransparentTileFn = this.travelRay._tileMarkerFn();
-    this.#terrainOffsets = this.travelRay._terrainOffsets;
+    this.#markTransparentTileFn = this.getMarkTransparentTileFn();
 
     // Mark any terrain location that changes elevation along the a --> b ray.
+    this._markTerrain();
+    this.reverseQueue = [...this.terrainMarkers];
+    this.reverseQueue.reverse();
+  }
+
+  getMarkTransparentTileFn() {
+    const threshold = this.travelRay.alphaThreshold * 255;
+    return curr => curr < threshold;
+  }
+
+  _markTerrain() {
     const ev = canvas.elevation;
+    const { origin, destination, TEC } = this.travelRay;
+
+    const localOffsets = TEC._getLocalOffsets("terrain");
+    const reducerFn = TEC.terrainPixelAggregationFn;
     this.terrainMarkers = ev.elevationPixelCache
-      ._extractAllMarkedPixelValuesAlongCanvasRay(travelRay.origin, travelRay.destination, this.#markTerrainFn);
+      ._extractAllMarkedPixelValuesAlongCanvasRay(origin, destination, this.#markTerrainFn,
+        { forceLast: true, localOffsets, reducerFn });
 
     this.terrainMarkers.forEach(mark => {
       mark.t = this.tForCanvasPoint(mark);
@@ -544,11 +433,6 @@ class MarkerTracker {
     return Math.sqrt(dist2 / this.#deltaMag2);
   }
 
-  initialize() {
-    this.reverseQueue = [...this.terrainMarkers];
-    this.reverseQueue.reverse();
-  }
-
   get nextMarker() { return this.reverseQueue.pop(); }
 
   get peek() { return this.reverseQueue.at(-1); }
@@ -565,11 +449,13 @@ class MarkerTracker {
     return markers;
   }
 
-
   addNextTileMarkerAfter(marker, tile) {
+    const { alphaThreshold, destination, TEC } = this.travelRay;
+    const localOffsets = TEC._getLocalOffsets(tile);
+    const reducerFn = TEC.tilePixelAggregationFn;
     const nextMarker = tile.evPixelCache._extractNextMarkedPixelValueAlongCanvasRay(
-      marker, this.travelRay.destination, this.#markTransparentTileFn,
-      { alphaThreshold: this.travelRay.alphaThreshold, skipFirst: true, forceLast: true });
+      marker, destination, this.#markTransparentTileFn,
+      { alphaThreshold, skipFirst: true, forceLast: true, localOffsets, reducerFn });
 
     nextMarker.tile = tile;
     nextMarker.t = this.tForCanvasPoint(nextMarker);

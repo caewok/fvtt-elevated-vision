@@ -130,14 +130,13 @@ PATCHES_ActiveEffect.BASIC = {};
 function drawTokenHook(token) {
   console.debug("drawTokenHook", arguments);
   const ev = token[MODULE_ID] ??= {};
-  ev.tokenElevationCalculator = new TokenElevationCalculator(token);
+  ev.TEC = new TokenElevationCalculator(token);
 }
 
 /**
  * Hook updateToken to wipe the token calculator if the token shape is modified.
  */
 function updateTokenHook(tokenD, changes, _options, _userId) {
-  console.debug("updateTokenHook", arguments);
   const flatData = flattenObject(changes);
   const changed = new Set(Object.keys(flatData));
 
@@ -146,7 +145,7 @@ function updateTokenHook(tokenD, changes, _options, _userId) {
   if ( !(changed.has("width") || changed.has("height")) || changes.has(elevationMeasurementFlag) ) return;
 
   // Prototype tokens, maybe others, will not have a tec.
-  const tec = tokenD.object?.[MODULE_ID]?.tokenElevationCalculator;
+  const tec = tokenD.object?.[MODULE_ID]?.TEC;
   if ( !tec ) return;
 
   // Token shape or algorithm has changed; update the tec accordingly.
