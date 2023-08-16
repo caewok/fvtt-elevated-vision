@@ -276,6 +276,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
         const threshold = this.options.alphaThreshold * this.constructor.#MAXIMUM_TILE_PIXEL_VALUE;
         const aggFn = PixelCache.pixelAggregator("count_gt_threshold", threshold);
         aggFn.finalize = acc => acc.numPixels / acc.total; // Treats undefined as 0.
+        return aggFn;
       }
     }
   }
