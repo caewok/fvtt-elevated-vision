@@ -996,7 +996,7 @@ export class PixelCache extends PIXI.Rectangle {
       case "max": {
         reducerFn = (acc, curr) => {
           if ( curr == null ) return acc;
-          return Math.min(acc, curr);
+          return Math.max(acc, curr);
         };
         break;
       }
