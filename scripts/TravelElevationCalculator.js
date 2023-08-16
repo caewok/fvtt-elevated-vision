@@ -458,7 +458,7 @@ export class TravelElevationCalculator {
     // If flying not enabled and no tiles present, can simply rely on terrain elevations throughout.
     if ( !fly ) {
       tec.location = travelRay.B;
-      if ( !tec.tiles.length || !tec.findHighestTile() ) return tec.terrainElevation();
+      if ( !tec.tiles.length || !tec.findHighestSupportingTile() ) return tec.terrainElevation();
     }
 
     // Tiles are present and/or flying is enabled.
