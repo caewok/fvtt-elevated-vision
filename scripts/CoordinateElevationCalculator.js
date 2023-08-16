@@ -144,7 +144,7 @@ export class CoordinateElevationCalculator {
   }
 
   groundElevation() {
-    const matchingTile = this.findHighestTile();
+    const matchingTile = this.findHighestSupportingTile();
     const terrainE = this.terrainElevation();
 
     // If the terrain is above the tile, use the terrain elevation. (Math.max(null, 5) returns 5.)
@@ -265,18 +265,15 @@ export class CoordinateElevationCalculator {
   }
 
   /**
-   * Find highest tile at this location.
-   * Only counts if the point is directly above the opaque portions of the tile.
+   * Find highest tile at this location that could support the token.
    * @returns {Tile|null}
    */
-  findHighestTile() {
+  findHighestSupportingTile() {
     for ( const tile of this.tiles ) {
       if ( this.tileCouldSupport(tile) ) return tile;
     }
     return null;
   }
-
-
 
   /**
    * Find tile directly under the token (tile and token share elevation)
