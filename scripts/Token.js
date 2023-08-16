@@ -1,6 +1,8 @@
 /* globals
 CONFIG,
+DefaultTokenConfig,
 flattenObject,
+game,
 PIXI,
 Ray
 */
@@ -131,6 +133,14 @@ function drawTokenHook(token) {
   console.debug("drawTokenHook", arguments);
   const ev = token[MODULE_ID] ??= {};
   ev.TEC = new TokenElevationCalculator(token);
+
+  // It is possible for existing tokens to not have the flag at all.
+  const { ALGORITHM, TYPES } = FLAGS.ELEVATION_MEASUREMENT;
+  if ( !token.document.getFlag(MODULE_ID, ALGORITHM) ) {
+    const defaults = game.settings.get("core", DefaultTokenConfig.SETTING);
+    const type = defaults.flags?.[MODULE_ID]?.[ALGORITHM] ?? TYPES.POINTS_CLOSE;
+    token.document.setFlag(MODULE_ID, ALGORITHM, type);
+  }
 }
 
 /**
@@ -149,8 +159,8 @@ function updateTokenHook(tokenD, changes, _options, _userId) {
   if ( !tec ) return;
 
   // Token shape or algorithm has changed; update the tec accordingly.
-  if ( changed.has(elevationMeasurementFlag) ) tec.options.elevationMeasurement = changes[elevationMeasurementFlag];
-  tec.refreshTokenShape();
+  if ( changed.has(elevationMeasurementFlag) ) tec.refreshTokenElevationMeasurementAlgorithm();
+  else tec.refreshTokenShape();
 }
 
 // Reset the token elevation when moving the token after a cloned drag operation.

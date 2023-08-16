@@ -5,7 +5,7 @@ canvas
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, FLAGS } from "./const.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { SETTINGS, getSetting } from "./settings.js";
 import { PixelCache } from "./PixelCache.js";
@@ -68,12 +68,23 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
     return this.options.terrainStep ?? this.#token.tokenVisionHeight ?? canvas.elevation.elevationStep;
   }
 
+  /** @type {string} */
+  get elevationMeasurementAlgorithm() {
+    return this.#token.document.getFlag(MODULE_ID, FLAGS.ELEVATION_MEASUREMENT.ALGORITHM);
+  }
+
   resetToTokenPosition() { this.coordinate = Point3d.fromTokenCenter(this.#token); }
 
   refreshTokenShape() {
     this.#tokenShape = undefined;
     this.#localOffsetsMap.clear();
     this.#canvasOffsetGrid = undefined;
+  }
+
+  refreshTokenElevationMeasurementAlgorithm() {
+    this.terrainPixelAggregationFn = this.#calculateTerrainPixelAggregationFn();
+    this.tilePixelAggregationFn = this.#calculateTilePixelAggregationFn();
+    this.refreshTokenShape();
   }
 
   /**
@@ -206,8 +217,8 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
   }
 
   #calculateTokenOffsets() {
-    const { TYPES, ALGORITHM } = SETTINGS.ELEVATION_MEASUREMENT;
-    const algorithm = getSetting(ALGORITHM);
+    const TYPES = FLAGS.ELEVATION_MEASUREMENT.TYPES;
+    const algorithm = this.elevationMeasurementAlgorithm;
     const { w, h } = this.token;
     const skipPercent = CONFIG[MODULE_ID].skipPercentage[algorithm];
     switch ( algorithm ) {
@@ -233,8 +244,8 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    * @returns {function}
    */
   #calculateTerrainPixelAggregationFn() {
-    const { TYPES, ALGORITHM } = SETTINGS.ELEVATION_MEASUREMENT;
-    switch ( getSetting(ALGORITHM) ) {
+    const TYPES = FLAGS.ELEVATION_MEASUREMENT.TYPES;
+    switch ( this.elevationMeasurementAlgorithm ) {
       case TYPES.POINT: return PixelCache.pixelAggregator("first");
       case TYPES.POINTS_CLOSE:
       case TYPES.POINTS_FAR: return PixelCache.pixelAggregator("median_no_null");
