@@ -268,11 +268,11 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    */
   #calculateTilePixelAggregationFn() {
     const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
-    switch ( this.options.elevationMeasurement ) {
+    switch ( this.elevationMeasurementAlgorithm ) {
       case TYPES.POINT: return PixelCache.pixelAggregator("first");
       case TYPES.POINTS_CLOSE: return PixelCache.pixelAggregator("max");
       case TYPES.POINTS_SPREAD: return PixelCache.pixelAggregator("median_zero_null");
-      case TYPES.POINTS_AVERAGE: {
+      case TYPES.AVERAGE: {
         const threshold = this.options.alphaThreshold * this.constructor.#MAXIMUM_TILE_PIXEL_VALUE;
         const aggFn = PixelCache.pixelAggregator("count_gt_threshold", threshold);
         aggFn.finalize = acc => acc.numPixels / acc.total; // Treats undefined as 0.
