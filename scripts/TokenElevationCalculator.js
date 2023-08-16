@@ -283,16 +283,22 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
   /**
    * Draw the pixel offset grid.
    */
-  drawOffsetGrid() {
+  drawOffsetGrid(tile) {
     const offsets = this.canvasOffsetGrid;
     const nOffsets = offsets.length;
     const draw = new Draw();
     const center = this.#token.center;
+    const threshold = this.options.alphaThreshold * this.constructor.#MAXIMUM_TILE_PIXEL_VALUE;
 
-    for ( let i = 0; i < nOffsets; i += 2 ) {
+    let pixels;
+    let color = Draw.COLORS.blue;
+    if ( tile ) pixels = this.#pixelsForGridOffset(tile);
+    for ( let i = 0, j = 0; i < nOffsets; i += 2 ) {
       const x = offsets[i] + center.x;
       const y = offsets[i + 1] + center.y;
-      draw.point({x, y}, { radius: 1});
+      if ( tile ) color = pixels[j++] > threshold ? Draw.COLORS.green : Draw.COLORS.red;
+      draw.point({x, y}, { radius: 1, color });
     }
+    return pixels;
   }
 }
