@@ -146,20 +146,21 @@ function drawTokenHook(token) {
 /**
  * Hook updateToken to wipe the token calculator if the token shape is modified.
  */
-function updateTokenHook(tokenD, changes, _options, _userId) {
-  const flatData = flattenObject(changes);
-  const changed = new Set(Object.keys(flatData));
+function updateTokenHook(tokenD, changed, _options, _userId) {
+  const changeKeys = new Set(Object.keys(flattenObject(changed)));
 
   // Width and Height affect token shape; the elevation measurement flag affects the offset grid.
   const elevationMeasurementFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION_MEASUREMENT.ALGORITHM}`;
-  if ( !(changed.has("width") || changed.has("height")) || changes.has(elevationMeasurementFlag) ) return;
+  if ( !(changeKeys.has("width")
+      || changeKeys.has("height")
+      || changeKeys.has(elevationMeasurementFlag)) ) return;
 
   // Prototype tokens, maybe others, will not have a tec.
   const tec = tokenD.object?.[MODULE_ID]?.TEC;
   if ( !tec ) return;
 
   // Token shape or algorithm has changed; update the tec accordingly.
-  if ( changed.has(elevationMeasurementFlag) ) tec.refreshTokenElevationMeasurementAlgorithm();
+  if ( changeKeys.has(elevationMeasurementFlag) ) tec.refreshTokenElevationMeasurementAlgorithm();
   else tec.refreshTokenShape();
 }
 
