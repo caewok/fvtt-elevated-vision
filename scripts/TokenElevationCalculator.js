@@ -237,7 +237,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
   }
 
   /**
-   * Function used to calculate a terrain pixel value from an array of terrain pixels.
+   * Create function used to calculate a terrain pixel value from an array of terrain pixels.
    * Terrain pixels represent an elevation, and so some sort of averaging is appropriate.
    * For the single-pixel option, use the first pixel.
    * For points, use median.
@@ -259,7 +259,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
   }
 
   /**
-   * Function used to calculate a tile pixel value from an array of tile pixels.
+   * Create function used to calculate a tile pixel value from an array of tile pixels.
    * Tile pixels are checked for opacity, so the percentage of pixels that are opaque
    * is the relevant question.
    * For the single pixel option, use the first pixel.
@@ -270,7 +270,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
     const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
     switch ( this.options.elevationMeasurement ) {
       case TYPES.POINT: return PixelCache.pixelAggregator("first");
-      case TYPES.POINTS_CLOSE:
+      case TYPES.POINTS_CLOSE: return PixelCache.pixelAggregator("max");
       case TYPES.POINTS_SPREAD: return PixelCache.pixelAggregator("median_zero_null");
       case TYPES.POINTS_AVERAGE: {
         const threshold = this.alphaThreshold * this.constructor.#MAXIMUM_TILE_PIXEL_VALUE;
