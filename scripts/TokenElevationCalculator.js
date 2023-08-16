@@ -10,6 +10,7 @@ import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.j
 import { SETTINGS, getSetting } from "./settings.js";
 import { PixelCache } from "./PixelCache.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
+import { Draw } from "./geometry/Draw.js";
 
 export class TokenElevationCalculator extends CoordinateElevationCalculator {
   /** @type {number} */
@@ -276,6 +277,22 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
         const aggFn = PixelCache.pixelAggregator("count_gt_threshold", threshold);
         aggFn.finalize = acc => acc.numPixels / acc.total; // Treats undefined as 0.
       }
+    }
+  }
+
+  /**
+   * Draw the pixel offset grid.
+   */
+  drawOffsetGrid() {
+    const offsets = this.canvasOffsetGrid;
+    const nOffsets = offsets.length;
+    const draw = new Draw();
+    const center = this.#token.center;
+
+    for ( let i = 0; i < nOffsets; i += 2 ) {
+      const x = offsets[i] + center.x;
+      const y = offsets[i + 1] + center.y;
+      draw.point({x, y}, { radius: 1});
     }
   }
 }
