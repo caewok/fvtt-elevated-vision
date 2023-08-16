@@ -91,10 +91,11 @@ export class TravelElevationRay {
 
   /** @type {number} */
   get startingElevation() {
+    const TEC = this.TEC;
     TEC.overrideTokenPosition = true;
     TEC.location = this.origin;
     TEC.elevationZ = this.originElevation;
-    const e = this.TEC.groundElevation();
+    const e = TEC.groundElevation();
     TEC.overrideTokenPosition = false;
     return e;
   }
@@ -190,7 +191,7 @@ export class TravelElevationRay {
     const path = this.#path;
     path.length = 0;
     const markerTracker = this.markerTracker = new MarkerTracker(this);
-    TEC.overrideTokenPosition = true;
+    this.TEC.overrideTokenPosition = true;
 
     // At the starting point, are we dropping to terrain or a tile?
     // (No tiles at this point, so the first marker is the terrain.)
@@ -213,7 +214,7 @@ export class TravelElevationRay {
       }
       nextMarkers = markerTracker.pullNextMarkers();
     }
-    TEC.overrideTokenPosition = false;
+    this.TEC.overrideTokenPosition = false;
     return path;
   }
 
@@ -251,6 +252,7 @@ export class TravelElevationRay {
   }
 
   drawPath(path) {
+    this.TEC.overrideTokenPosition = true;
     path ??= this.path;
     for ( const marker of path ) {
       const { tile, t, elevation } = marker;
@@ -258,7 +260,12 @@ export class TravelElevationRay {
       const pt = this.pointAtT(t);
       Draw.point(pt, { color, radius: 2 });
       Draw.labelPoint(pt, elevation);
+
+      this.TEC.location = pt;
+      const lowestTile = tile ?? this.TEC.tiles.at(-1);
+      this.TEC.drawOffsetGrid(lowestTile);
     }
+    this.TEC.overrideTokenPosition = false;
   }
 
   _findTilesWithinReach(currElevation, tileSet = new Set()) {

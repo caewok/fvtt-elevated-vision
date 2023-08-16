@@ -81,7 +81,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
   get bounds() {
     const bounds = this.#token.bounds;
     if ( this.overrideTokenPosition ) {
-      const delta = this.#point.to2d().subtract(this.#token.center);
+      const delta = this.location.subtract(this.#token.center);
       bounds.translate(delta.x, delta.y);
     }
     return bounds;
@@ -92,9 +92,18 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
     return Point3d.fromTokenCenter(this.#token);
   }
 
+  // Need a setter if a getter is defined; will not fall through to super without it.
+  set coordinate(value) {
+    if ( this.overrideTokenPosition ) super.coordinate = value;
+  }
+
   get location() {
     if ( this.overrideTokenPosition ) return super.location;
     return this.#token.center;
+  }
+
+  set location(value) {
+    if ( this.overrideTokenPosition ) super.location = value;
   }
 
   get elevationZ() {
@@ -102,9 +111,14 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
     return this.#token.elevationZ;
   }
 
+  set elevationZ(value) {
+    if ( this.overrideTokenPosition ) super.location = value;
+  }
+
   resetToTokenPosition() {
     this.overrideTokenPosition = false;
-    this.#point.copyFrom(Point3d.fromTokenCenter(this.#token));
+    this.coordinate = Point3d.fromTokenCenter(this.#token);
+    this.overrideTokenPosition = true;
   }
 
   refreshTokenShape() {
@@ -319,7 +333,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
     const offsets = this.canvasOffsetGrid;
     const nOffsets = offsets.length;
     const draw = new Draw();
-    const center = this.#token.center;
+    const center = this.location;
     const threshold = this.options.alphaThreshold * this.constructor.#MAXIMUM_TILE_PIXEL_VALUE;
 
     let pixels;
