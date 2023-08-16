@@ -49,9 +49,6 @@ export class TravelElevationRay {
   /** @type {number} */
   #originElevation = 0;
 
-  /** @type {Set<Tile>} */
-  reachableTiles = new Set();
-
   /** @type {object} */
   terrainWalk;
 
@@ -93,7 +90,14 @@ export class TravelElevationRay {
   get alphaThreshold() { return this.TEC.options.alphaThreshold; }
 
   /** @type {number} */
-  get startingElevation() { return this.TEC.groundElevation(); }
+  get startingElevation() {
+    TEC.overrideTokenPosition = true;
+    TEC.location = this.origin;
+    TEC.elevationZ = this.originElevation;
+    const e = this.TEC.groundElevation();
+    TEC.overrideTokenPosition = false;
+    return e;
+  }
 
   /** @type {number} */
   get endingElevation() { return this.elevationAtT(1); }
@@ -186,11 +190,12 @@ export class TravelElevationRay {
     const path = this.#path;
     path.length = 0;
     const markerTracker = this.markerTracker = new MarkerTracker(this);
+    TEC.overrideTokenPosition = true;
 
     // At the starting point, are we dropping to terrain or a tile?
     // (No tiles at this point, so the first marker is the terrain.)
     let currMarker = this.#checkForSupportingTile(
-      markerTracker.nextMarker, this.startElevation, undefined, undefined, true);
+      markerTracker.nextMarker, this.originElevation, undefined, undefined, true);
     path.push(currMarker);
 
     // Iterate over each marker in turn.
@@ -208,7 +213,7 @@ export class TravelElevationRay {
       }
       nextMarkers = markerTracker.pullNextMarkers();
     }
-
+    TEC.overrideTokenPosition = false;
     return path;
   }
 
@@ -253,14 +258,6 @@ export class TravelElevationRay {
       const pt = this.pointAtT(t);
       Draw.point(pt, { color, radius: 2 });
       Draw.labelPoint(pt, elevation);
-    }
-  }
-
-  drawReachableTiles() {
-    for ( const tile of this.reachableTiles ) {
-      const cache = tile.evPixelCache;
-      Draw.shape(cache.getThresholdCanvasBoundingBox(), { color: Draw.COLORS.orange });
-      Draw.labelPoint(tile, tile.elevationE);
     }
   }
 
