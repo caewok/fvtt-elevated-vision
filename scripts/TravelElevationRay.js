@@ -423,7 +423,7 @@ class MarkerTracker {
     firstMarker.y = origin.y;
     lastMarker.x = destination.x;
     lastMarker.y = destination.y;
-    lastMarker.prevPixel = lastMarker.currPixel;
+    lastMarker.prevPixel ??= lastMarker.currPixel;
 
     this.terrainMarkers.forEach(mark => {
       mark.t = this.tForCanvasPoint(mark);
