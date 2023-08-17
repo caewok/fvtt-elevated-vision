@@ -1,13 +1,19 @@
 /* globals
 CONFIG,
+DefaultTokenConfig,
+flattenObject,
+game,
+PIXI,
 Ray
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { log } from "./util.js";
+import { MODULE_ID, FLAGS } from "./const.js";
 import { getSceneSetting, SETTINGS } from "./settings.js";
 import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
+import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
 
 /* Token movement flow:
 
@@ -120,6 +126,44 @@ PATCHES_ActiveEffect.BASIC = {};
 
 // NOTE: Token hooks
 
+/**
+ * Hook drawToken to add an elevation calculator.
+ */
+function drawTokenHook(token) {
+  console.debug("drawTokenHook", arguments);
+  const ev = token[MODULE_ID] ??= {};
+  ev.TEC = new TokenElevationCalculator(token);
+
+  // It is possible for existing tokens to not have the flag at all.
+  const { ALGORITHM, TYPES } = FLAGS.ELEVATION_MEASUREMENT;
+  if ( !token.document.getFlag(MODULE_ID, ALGORITHM) ) {
+    const defaults = game.settings.get("core", DefaultTokenConfig.SETTING);
+    const type = defaults.flags?.[MODULE_ID]?.[ALGORITHM] ?? TYPES.POINTS_CLOSE;
+    token.document.setFlag(MODULE_ID, ALGORITHM, type);
+  }
+}
+
+/**
+ * Hook updateToken to wipe the token calculator if the token shape is modified.
+ */
+function updateTokenHook(tokenD, changed, _options, _userId) {
+  const changeKeys = new Set(Object.keys(flattenObject(changed)));
+
+  // Width and Height affect token shape; the elevation measurement flag affects the offset grid.
+  const elevationMeasurementFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION_MEASUREMENT.ALGORITHM}`;
+  if ( !(changeKeys.has("width")
+      || changeKeys.has("height")
+      || changeKeys.has(elevationMeasurementFlag)) ) return;
+
+  // Prototype tokens, maybe others, will not have a tec.
+  const tec = tokenD.object?.[MODULE_ID]?.TEC;
+  if ( !tec ) return;
+
+  // Token shape or algorithm has changed; update the tec accordingly.
+  if ( changeKeys.has(elevationMeasurementFlag) ) tec.refreshTokenElevationMeasurementAlgorithm();
+  else tec.refreshTokenShape();
+}
+
 // Reset the token elevation when moving the token after a cloned drag operation.
 // Token refresh is then used to update the elevation as the token is moved.
 function preUpdateTokenHook(tokenD, changes, _options, _userId) {
@@ -202,7 +246,9 @@ function refreshTokenHook(token, flags) {
 
 PATCHES_Token.BASIC.HOOKS = {
   preUpdateToken: preUpdateTokenHook,
-  refreshToken: refreshTokenHook
+  refreshToken: refreshTokenHook,
+  drawToken: drawTokenHook,
+  updateToken: updateTokenHook
 };
 
 

@@ -37,6 +37,8 @@ export class CoordinateElevationCalculator {
   /**
    * @typedef {object} PointElevationOptions
    * @property {number} alphaThreshold    Threshold under which a tile pixel is considered a (transparent) hole.
+   * @property {number} tileStep          Tile at elevation or within tileStep above considered within reach.
+   * @property {number} terrainStep       Terrain at elevation or below considered contiguous and is not a cliff
    */
 
   /** @type {PointElevationOptions} */
@@ -45,88 +47,59 @@ export class CoordinateElevationCalculator {
   /** @type {Point3d} */
   #point = new Point3d();
 
-  /** @type {Tile[]} */
-  #tiles;
-
   constructor(point, opts = {}) {
     this.#point.copyFrom(point);
-    if ( opts.elevation ) this.elevation = opts.elevation;
-    this._configure(opts);
+    this._configureOptions(opts);
   }
 
   /**
    * Options that affect elevation calculations.
    * @param {object} [opts]   Optional object of option overrides.
    */
-  _configure(opts = {}) {
+  _configureOptions(opts = {}) {
     opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
-    opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep ?? 1;
-    opts.terrainStep ??= CONFIG[MODULE_ID]?.terrainStep ?? canvas.elevation.elevationStep;
+    opts.tileStep ??= CONFIG[MODULE_ID]?.tileStep;
+    opts.terrainStep ??= CONFIG[MODULE_ID]?.terrainStep;
     this.options = opts;
   }
 
-  get bounds() {
-    return new PIXI.Rectangle(this.#point.x - 1, this.#point.y - 1, 2, 2);
-  }
+  /** @type {PIXI.Rectangle} */
+  get bounds() { return new PIXI.Rectangle(this.#point.x - 1, this.#point.y - 1, 2, 2); }
 
-  get coordinate() {
-    return this.#point.clone();
-  }
+  /** @type {Point3d} */
+  get coordinate() { return this.#point.clone(); }
 
-  set coordinate(point) {
-    this.#point.copyFrom(point);
-    this._refreshLocation();
-    this._refreshElevation();
-  }
+  set coordinate(point) { this.#point.copyFrom(point); }
 
-  get location() {
-    return new PIXI.Point(this.#point.x, this.#point.y);
-  }
+  /** @type {PIXI.Point} */
+  get location() { return new PIXI.Point(this.#point.x, this.#point.y); }
 
   set location(value) {
     // Don't use copyFrom in case value has a z property.
     this.#point.x = value.x;
     this.#point.y = value.y;
-    this._refreshLocation();
   }
 
-  get elevation() {
-    return CONFIG.GeometryLib.utils.pixelsToGridUnits(this.#point.z);
-  }
+  /** @type {number}  Grid units */
+  get elevation() { return CONFIG.GeometryLib.utils.pixelsToGridUnits(this.#point.z); }
 
-  set elevation(e) {
-    this.#point.z = CONFIG.GeometryLib.utils.gridUnitsToPixels(e);
-    this._refreshElevation();
-  }
+  set elevation(e) { this.#point.z = CONFIG.GeometryLib.utils.gridUnitsToPixels(e); }
 
-  get elevationZ() {
-    return this.#point.z;
-  }
+  /** @type {number} Pixel units */
+  get elevationZ() { return this.#point.z; }
 
-  set elevationZ(value) {
-    this.#point.z = value;
-    this.refreshElevation();
-  }
+  set elevationZ(value) { this.#point.z = value; }
 
-  _refreshLocation() {
-    this.#tiles = undefined;
-  }
+  /** @type {Tile[]} */
+  get tiles() { return this.constructor.locateTiles(this.bounds); }
 
-  _refreshElevation() {
-    // Empty
-  }
+  /** @type {number} */
+  get tileStep() { return this.options.tileStep ?? 0; }
 
-  get tiles() {
-    return this.#tiles ?? (this.#tiles = CoordinateElevationCalculator.locateTiles(this.bounds));
-  }
+  /** @type {number} */
+  get terrainStep() { return this.options.terrainStep ?? canvas.elevation.elevationStep; }
 
-  set tiles(value) {
-    this.#tiles = value;
-  }
-
-  static options(opts = {}) {
-    opts.alphaThreshold ??= CONFIG[MODULE_ID]?.alphaThreshold ?? 0.75;
-  }
+  /** @type {number}
 
   /**
    * Locate tiles within a given set of bounds.
@@ -150,7 +123,7 @@ export class CoordinateElevationCalculator {
    * @returns {number}
    */
   static terrainElevationAt(point) {
-    return Math.max(canvas.elevation.elevationAt(point));
+    return canvas.elevation.elevationAt(point);
   }
 
   /**
@@ -158,7 +131,7 @@ export class CoordinateElevationCalculator {
    * @returns {number}
    */
   terrainElevation() {
-    return Math.max(CoordinateElevationCalculator.terrainElevationAt(this.#point), this.findHighestETL());
+    return CoordinateElevationCalculator.terrainElevationAt(this.#point);
   }
 
   /**
@@ -171,7 +144,7 @@ export class CoordinateElevationCalculator {
   }
 
   groundElevation() {
-    const matchingTile = this.findHighestTile();
+    const matchingTile = this.findHighestSupportingTile();
     const terrainE = this.terrainElevation();
 
     // If the terrain is above the tile, use the terrain elevation. (Math.max(null, 5) returns 5.)
@@ -194,10 +167,10 @@ export class CoordinateElevationCalculator {
    * @returns {boolean}
    */
   isOnTile(tile) {
-    if ( !tile ) return Boolean(this.findTileAtElevation());
+    if ( !tile ) return Boolean(this.findSupportingTileAtElevation());
     const tileE = tile.elevationE;
     if ( !this.elevation.almostEqual(tileE) ) return false;
-    return tileOpaqueAt(tile, this.#point, this.options.alphaThreshold);
+    return this.tileCouldSupport(tile);
   }
 
   /**
@@ -208,14 +181,6 @@ export class CoordinateElevationCalculator {
     return this.groundElevation().almostEqual(this.elevation);
   }
 
-  /**
-   * Determine if the coordinate is on an enhanced terrain layer
-   * @returns {boolean}
-   */
-  isOnETL() {
-    const etlE = this.findHighestETL();
-    return this.elevation.almostEqual(etlE);
-  }
 
   /**
    * Is the coordinate sufficiently near a tile to be considered supported?
@@ -233,8 +198,30 @@ export class CoordinateElevationCalculator {
    * @param {Tile} tile
    * @returns {boolean}
    */
-  tileCouldSupport(tile) {
-    return tileOpaqueAt(tile, this.#point, this.options.alphaThreshold);
+  tileCouldSupport(tile) { return this.tileIsOpaque(tile); }
+
+  /**
+   * Opacity of tile at this point.
+   * @param {Tile} tile
+   * @returns {number|null}  Null if tile is not an overhead tile (has a pixel cache).
+   */
+  tileOpacity(tile) {
+    const cache = tile.evPixelCache;
+    if ( !cache ) return null;
+    const location = this.location;
+    return cache.pixelAtCanvas(location.x, location.y) / cache.maximumPixelValue;
+  }
+
+  /**
+   * Is this tile opaque at the given point?
+   * @param {Tile} tile
+   * @returns {boolean}
+   */
+  tileIsOpaque(tile) {
+    const cache = tile.evPixelCache;
+    if ( !cache ) return false;
+    const location = this.location;
+    return cache.containsPixel(location.x, location.y, this.options.alphaThreshold);
   }
 
   /**
@@ -253,44 +240,39 @@ export class CoordinateElevationCalculator {
    */
   tileWithinStep(tile) {
     const tileE = tile.elevationE;
-    return almostBetween(this.elevation, tileE, tileE + this.options.tileStep);
-  }
-
-  /*
-   * Terrain is within a permitted step from provided elevation.
-   * @param {number} terrainE     Tile to test
-   * @returns {boolean}
-   */
-  terrainWithinStep(terrainE) {
-    return almostBetween(this.elevation, terrainE, terrainE + this.options.terrainStep);
+    return almostBetween(this.elevation, tileE, tileE + this.tileStep);
   }
 
   /**
-   * Find highest tile at this location.
-   * Only counts if the point is directly above the opaque portions of the tile.
+   * Tile is equal or above the current elevation but within tile step of that elevation.
+   * In addition, the tile could support this point.
+   * @param {Tile}
+   * @returns {boolean}
+   */
+  tileWithinReach(tile) {
+    const tileE = tile.elevationE;
+    if ( !almostBetween(this.elevation, tileE, tileE + this.tileStep) ) return false;
+    return this.tileCouldSupport(tile);
+  }
+
+  /**
+   * Terrain equal or below the current elevation but within terrain step of that elevation.
+   * @returns {boolean}
+   */
+  terrainWithinStep() {
+    const terrainE = this.terrainElevation();
+    return almostBetween(this.elevation, terrainE - this.terrainStep, terrainE);
+  }
+
+  /**
+   * Find highest tile at this location that could support the token.
    * @returns {Tile|null}
    */
-  findHighestTile() {
+  findHighestSupportingTile() {
     for ( const tile of this.tiles ) {
       if ( this.tileCouldSupport(tile) ) return tile;
     }
     return null;
-  }
-
-  /**
-   * Find highest enhanced terrain elevation
-   * @returns {number} NEGATIVE_INFINITY if none found
-   */
-  findHighestETL() {
-    if ( !canvas.terrain ) return Number.NEGATIVE_INFINITY;
-
-    // Retrieve all terrains at this location and return the highest elevation.
-    const terrains = canvas.terrain.terrainFromPixels(this.location.x, this.location.y);
-    return terrains.reduce((total, t) => {
-      const elevation = t.document?.elevation;
-      if ( !isFinite(elevation) ) return total;
-      return Math.max(total, elevation);
-    }, Number.NEGATIVE_INFINITY);
   }
 
   /**
@@ -310,38 +292,68 @@ export class CoordinateElevationCalculator {
   }
 
   /**
-   * Find the supporting tile for the coordinate, if any.
-   * Tile is below the coordinate and would support the coordinate (w/in tile step)
+   * Find supporting tile equal or above the current elevation but within tile step of that elevation.
+   * @param {Tile} [excludeTile]    Optional tile to exclude from search
    * @returns {Tile|null}
    */
-  findSupportingTile() {
-    const excludeFn = excludeUndergroundTilesFn(this.#point, this.elevation);
+  findSupportingTileWithinReach(excludeTile) {
     for ( const tile of this.tiles ) {
-      const tileE = tile.elevationE;
-      if ( excludeFn(tileE) ) continue;
-      if ( this.tileSupports(tile) ) return tile;
+      if ( tile === excludeTile ) continue;
+      if ( this.tileWithinReach(tile) ) return tile;
     }
     return null;
   }
-}
 
-/**
- * Determine the percentage of which the tile + terrain covers a token shape.
- * Tile opaqueness depends on the alphaThreshold and whether measuring the point or the average.
- * Token would fall through if tile is transparent unless terrain would fill the gap(s).
- * @param {Tile} tile                                 Tile to test
- * @param {Point} tokenCenter                         Center point
- * @param {number} averageTiles                       Positive integer to skip pixels when averaging.
- *                                                    0 if point-based.
- * @param {number} alphaThreshold                     Threshold to determine transparency
- * @param {PIXI.Rectangle|PIXI.Polygon} [tokenShape]  Shape representing a token boundary
- *                                                    Required if not averaging
- * @returns {boolean}
- */
-export function tileOpaqueAt(tile, tokenCenter, alphaThreshold) {
-  const cache = tile.evPixelCache;
-  if ( !cache ) return false;
-  return cache.containsPixel(tokenCenter.x, tokenCenter.y, alphaThreshold);
+  /**
+   * Find supporting tile below the current elevation.
+   * @param {Tile} [excludeTile]    Optional tile to exclude from search
+   * @returns {Tile|null}
+   */
+  findSupportingTile() {
+    const terrainE = this.terrainElevation();
+    const excludeFn = excludeUndergroundTilesFn(this.#point, this.elevation);
+    for ( const tile of this.tiles ) { // Tiles are sorted highest --> lowest.
+      const tileE = tile.elevationE;
+      if ( tileE <= terrainE ) break;
+      if ( excludeFn(tileE) ) continue;
+
+      if ( this.tileCouldSupport(tile) ) return tile;
+    }
+    return null;
+  }
+
+  /**
+   * Find supporting tile below the current elevation.
+   * @param {Tile} [excludeTile]    Optional tile to exclude from search
+   * @param {number} [floor]        Don't search below this value
+   * @returns {Tile|null}
+   */
+  findSupportingTileBelow(excludeTile, floor) {
+    floor ??= this.terrainElevation();
+    const e = this.elevation;
+    for ( const tile of this.tiles ) {
+      if ( tile === excludeTile ) continue;
+      if ( tile.elevationE >= e ) continue;
+      if ( tile.elevationE < floor ) break;
+      if ( this.tileCouldSupport(tile) ) return tile;
+    }
+    return null;
+  }
+
+  /**
+   * Find supporting tile at elevation.
+   * @returns {Tile|null}
+   */
+  findSupportingTileAtElevation(excludeTile) {
+    const e = this.elevation;
+    for ( const tile of this.tiles ) {
+      if ( tile === excludeTile ) continue;
+      if ( !this.tileCouldSupport(tile) ) continue;
+      if ( e.almostEqual(tile.elevationE) ) return tile;
+    }
+    return null;
+  }
+
 }
 
 /**

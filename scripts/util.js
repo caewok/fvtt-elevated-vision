@@ -496,10 +496,10 @@ for ( let i = 0; i < pixels.length; i += 2 ) {
 }
  */
 export function bresenhamLine(x0, y0, x1, y1) {
-  x0 = roundFastPositive(x0); // Could accept negative pixels if Math.round used here instead.
-  y0 = roundFastPositive(y0);
-  x1 = roundFastPositive(x1);
-  y1 = roundFastPositive(y1);
+  x0 = Math.round(x0);
+  y0 = Math.round(y0);
+  x1 = Math.round(x1);
+  y1 = Math.round(y1);
 
   const dx = Math.abs(x1 - x0);
   const dy = Math.abs(y1 - y0);
@@ -508,8 +508,8 @@ export function bresenhamLine(x0, y0, x1, y1) {
   let err = dx - dy;
 
   const pixels = [x0, y0];
-  while ( !((x0 === x1) && (y0 === y1)) ) {
-    const e2 = err << 1; // 2 * err.
+  while ( x0 !== x1 || y0 !== y1 ) {
+    const e2 = err * 2;
     if ( e2 > -dy ) {
       err -= dy;
       x0 += sx;
@@ -524,15 +524,45 @@ export function bresenhamLine(x0, y0, x1, y1) {
   return pixels;
 }
 
+export function* bresenhamLineIterator(x0, y0, x1, y1) {
+  x0 = Math.round(x0);
+  y0 = Math.round(y0);
+  x1 = Math.round(x1);
+  y1 = Math.round(y1);
+
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const sx = (x0 < x1) ? 1 : -1;
+  const sy = (y0 < y1) ? 1 : -1;
+  let err = dx - dy;
+  yield { x: x0, y: y0 };
+  while ( x0 !== x1 || y0 !== y1 ) {
+    const e2 = err * 2;
+    if ( e2 > -dy ) {
+      err -= dy;
+      x0 += sx;
+    }
+    if ( e2 < dx ) {
+      err += dx;
+      y0 += sy;
+    }
+
+    yield { x: x0, y: y0 };
+  }
+}
+
 /**
  * Trim line segment to its intersection points with a rectangle.
  * If the endpoint is inside the rectangle, keep it.
+ * Note: points on the right or bottom border of the rectangle do not count b/c we want the pixel positions.
  * @param {PIXI.Rectangle} rect
  * @param {Point} a
  * @param {Point} b
  * @returns { Point[2]|null } Null if both are outside.
  */
-export function trimLineSegmentToRectangle(rect, a, b) {
+export function trimLineSegmentToPixelRectangle(rect, a, b) {
+  rect = new PIXI.Rectangle(rect.x, rect.y, rect.width - 1, rect.height - 1);
+
   if ( !rect.lineSegmentIntersects(a, b, { inside: true }) ) return null;
 
   const ixs = rect.segmentIntersections(a, b);

@@ -21,7 +21,30 @@ export const FLAGS = {
   DIRECTIONAL_LIGHT: {
     ENABLED: "directionalLight",
     SOLAR_ANGLE: "solarAngle"
+  },
+  ELEVATION_MEASUREMENT: {
+    ALGORITHM: "elevationMeasurement",
+    TYPES: {
+      POINT: "elevation_point",
+      POINTS_CLOSE: "elevation_points_close",
+      POINTS_SPREAD: "elevation_points_spread",
+      AVERAGE: "elevation_average"
+    },
+    LABELS: {
+      "elevation_point": "elevatedvision.tokenconfig.elevation-algorithm.elevation_point",
+      "elevation_points_close": "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_close",
+      "elevation_points_spread": "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_spread",
+      "elevation_average": "elevatedvision.tokenconfig.elevation-algorithm.elevation_average"
+    }
   }
+};
+
+export const TEMPLATES = {
+  TOKEN: `modules/${MODULE_ID}/templates/${MODULE_ID}-token-config.html`,
+  AMBIENT_SOURCE: `modules/${MODULE_ID}/templates/${MODULE_ID}-ambient-source-config.html`,
+  TILE: `modules/${MODULE_ID}/templates/${MODULE_ID}-tile-config.html`,
+  ELEVATION_STEP: `modules/${MODULE_ID}/templates/elevation-step-controls.html`,
+  SCENE: `modules/${MODULE_ID}/templates/scene-elevation-config.html`
 }
 
 // Hook init b/c game.modules is not initialized at start.
