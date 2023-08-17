@@ -14,6 +14,8 @@ import { MODULE_ID, FLAGS } from "./const.js";
 import { getSceneSetting, SETTINGS } from "./settings.js";
 import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
 import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
+import { TravelElevationRay } from "./TravelElevationRay.js";
 
 /* Token movement flow:
 
@@ -196,22 +198,21 @@ function preUpdateTokenHook(tokenD, changes, _options, _userId) {
 function refreshTokenHook(token, flags) {
   if ( !flags.refreshPosition ) return;
   if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
-  log(`EV refreshToken for ${token.name} at ${token.position.x},${token.position.y}. Token is ${token._original ? "Clone" : "Original"}. Token is ${token._animation ? "" : "not "}animating.`);
+  console.debug(`EV refreshToken for ${token.name} at ${token.position.x},${token.position.y}. Token is ${token._original ? "Clone" : "Original"}. Token is ${token._animation ? "" : "not "}animating.`);
   const ev = token._elevatedVision;
   if ( !ev || !ev.tokenAdjustElevation ) return;
-  log("EV refreshToken ev data present.");
+  console.debug("EV refreshToken ev data present.");
 
   if ( token._original ) {
     // This token is a clone in a drag operation.
     // Adjust elevation of the clone by calculating the elevation from origin to line.
-    const { startPosition, startElevation, te } = ev;
+    const origin = Point3d.fromTokenCenter(token._original);
+    const destination = token.center;
+    const ter = new TravelElevationRay(token, { origin, destination });
+    token.document.elevation = ter.endingElevation;
 
-    // Update the previous travel ray
-    te.travelRay = new Ray(startPosition, token.center);
-    // Determine the new final elevation.
-    const finalElevation = te.calculateFinalElevation(startElevation);
-    log(`Token clone: {x: ${te.travelRay.A.x}, y: ${te.travelRay.A.y}, e: ${startElevation} } --> {x: ${te.travelRay.B.x}, y: ${te.travelRay.B.y}, e: ${finalElevation} }`, te);
-    token.document.elevation = finalElevation;
+    console.debug(`Token original: ${token._original.center.x},${token._original.center.y}; clone: ${token.center.x},${token.center.y}`);
+    console.debug(`Token clone: {x: ${origin.x}, y: ${origin.h}, e: ${origin.z} } --> {x: ${destination.x}, y: ${destination.y}, e: ${token.document.elevation} }`);
     return;
   }
 
@@ -240,7 +241,7 @@ function refreshTokenHook(token, flags) {
       token.document.updateSource({ elevation: change.currE });
       token.renderFlags.set({refreshElevation: true});
     }
-    log(`Token Original: {x: ${tokenCenter.x}, y: ${tokenCenter.y}, e: ${change.currE} }`, ev.travel);
+    console.debug(`Token Original: {x: ${tokenCenter.x}, y: ${tokenCenter.y}, e: ${change.currE} }`, ev.travel);
   }
 }
 
@@ -250,6 +251,53 @@ PATCHES_Token.BASIC.HOOKS = {
   drawToken: drawTokenHook,
   updateToken: updateTokenHook
 };
+
+
+// ----- NOTE: Wraps ----- //
+
+// See WalledTemplates for similar animation approach.
+
+/**
+ * Wrap Token.prototype.animate
+ * Modify the token elevation in real-time during the animation.
+ */
+// async function animate(wrapped, updateData, opts) {
+//   if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
+//
+//   const props = (new Set(["x", "y"])).intersection(new Set(Object.keys(updateData)));
+//   if ( !props.size ) return wrapped(updateData, opts);
+//
+//
+//
+//   if ( opts.ontick ) {
+//     const ontickOriginal = opts.ontick;
+//     opts.ontick = (dt, anim, documentData, config) => {
+//       attachedTemplates.forEach(t => doTemplateAnimation(t, dt, anim, documentData, config));
+//
+//       ontickOriginal(dt, anim, documentData, config);
+//     };
+//   } else {
+//     opts.ontick = (dt, anim, documentData, config) => {
+//       attachedTemplates.forEach(t => doTemplateAnimation(t, dt, anim, documentData, config));
+//     };
+//   }
+//
+//   return wrapped(updateData, opts);
+// }
+//
+// function adjustTokenElevation(template, _dt, _anim, documentData, _config) {
+//   const templateData = template._calculateAttachedTemplateOffset(documentData);
+//
+//   // Update the document
+//   foundry.utils.mergeObject(template.document, templateData, { insertKeys: false });
+//
+//   // Refresh the Template
+//   template.renderFlags.set({
+//     refreshPosition: Object.hasOwn(templateData, "x") || Object.hasOwn(templateData, "y"),
+//     refreshElevation: Object.hasOwn(templateData, "elevation"),
+//     refreshShape: Object.hasOwn(templateData, "direction")
+//   });
+// }
 
 
 /**
