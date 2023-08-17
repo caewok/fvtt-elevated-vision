@@ -471,7 +471,7 @@ class MarkerTracker {
     // Also, a naive binary implementation proves to be slower than find.
     const findFn = element => element.t > nextMarker.t;
     const idx = this.terrainMarkers.findLastIndex(findFn);
-    this.terrainMarkers.splice(idx, 0, nextMarker);
+    this.terrainMarkers.splice(idx + 1, 0, nextMarker);
   }
 
   /**
