@@ -212,9 +212,28 @@ function refreshTokenHook(token, flags) {
     }
 
     return;
-  } else {
-      console.debug(`EV refreshToken for ${token.name} at ${token.position.x},${token.position.y}; e: ${token.document.elevation}. Token is ${token._original ? "Clone" : "Original"}. Token is ${token._animation ? "" : "not "}animating.`);
+  } else if ( token._animation ) {
+    console.debug(`EV refreshToken for ${token.name} at ${token.position.x},${token.position.y}; e: ${token.document.elevation}. Token is ${token._original ? "Clone" : "Original"}. Token is ${token._animation ? "" : "not "}animating.`);
 
+    const ter = token[MODULE_ID].ter;
+    if ( !ter ) return;
+
+    const center = token.getCenter(token.position.x, token.position.y);
+    const elevation = ter.elevationAtClosestPoint(center);
+
+    if ( elevation === 2 ) {
+      console.debug("elevation at 2")
+    }
+
+    if ( elevation === 0 ) {
+      console.debug("elevation at 0")
+    }
+
+    console.debug(`refresh path: elevation ${elevation}. ${ter.origin.x},${ter.origin.y},${ter.originElevation} --> ${ter.destination.x},${ter.destination.y},${ter.endingElevation}`)
+    if ( token.document.elevation !== elevation ) {
+      token.document.updateSource({ elevation });
+      token.renderFlags.set({refreshElevation: true});
+    }
   }
 
 //   if ( token._animation ) {
@@ -270,30 +289,30 @@ async function animate(wrapped, updateData, opts) {
 
   console.debug(`Starting animation. Token at ${this.center.x},${this.center.y} with elevation ${this.document.elevation}`)
 
-  let travelRay = this[MODULE_ID]?.ter;
-  const destination = PIXI.Point.fromObject(this.center);
-  if ( !travelRay || !travelRay.destination.equals(this.center) ) {
-    // Elevation may be a problem if it was changed elsewhere...
-    if ( updateKeys.has("elevation") ) return wrapped(updateData, opts);
-    const origin = this.getCenter(this.x, this.y)
-    travelRay = new TravelElevationRay(this, { origin, destination });
-    travelRay._walkPath(); // Run before animation starts b/c it is resource-intensive.
-  } else delete this[MODULE_ID].ter;
-
-  console.debug(`Animation path: ${travelRay.origin.x},${travelRay.origin.y},${travelRay.originElevation} --> ${travelRay.destination.x},${travelRay.destination.y},${travelRay.endingElevation}`)
-
-  // TODO: Test that destination elevation matches updateData elevation? Return if not matched?
-  if ( opts.ontick ) {
-    const ontickOriginal = opts.ontick;
-    opts.ontick = (dt, anim, documentData, config) => {
-      adjustTokenElevation(travelRay, anim, documentData, config)
-      ontickOriginal(dt, anim, documentData, config);
-    };
-  } else {
-    opts.ontick = (dt, anim, documentData, config) => {
-      adjustTokenElevation(travelRay, anim, documentData, config);
-    };
-  }
+//   let travelRay = this[MODULE_ID]?.ter;
+//   const destination = PIXI.Point.fromObject(this.center);
+//   if ( !travelRay || !travelRay.destination.equals(this.center) ) {
+//     // Elevation may be a problem if it was changed elsewhere...
+//     if ( updateKeys.has("elevation") ) return wrapped(updateData, opts);
+//     const origin = this.getCenter(this.x, this.y)
+//     travelRay = new TravelElevationRay(this, { origin, destination });
+//     travelRay._walkPath(); // Run before animation starts b/c it is resource-intensive.
+//   } else delete this[MODULE_ID].ter;
+//
+//   console.debug(`Animation path: ${travelRay.origin.x},${travelRay.origin.y},${travelRay.originElevation} --> ${travelRay.destination.x},${travelRay.destination.y},${travelRay.endingElevation}`)
+//
+//   // TODO: Test that destination elevation matches updateData elevation? Return if not matched?
+//   if ( opts.ontick ) {
+//     const ontickOriginal = opts.ontick;
+//     opts.ontick = (dt, anim, documentData, config) => {
+//       adjustTokenElevation(travelRay, anim, documentData, config)
+//       ontickOriginal(dt, anim, documentData, config);
+//     };
+//   } else {
+//     opts.ontick = (dt, anim, documentData, config) => {
+//       adjustTokenElevation(travelRay, anim, documentData, config);
+//     };
+//   }
 
   await wrapped(updateData, opts);
   console.debug(`Finished animation. Token at ${this.center.x},${this.center.y} with elevation ${this.document.elevation}`)
@@ -314,24 +333,23 @@ function adjustTokenElevation(travelRay, anim, documentData, config) {
   const token = anim.context;
   const tokenD = token.document;
   if ( tokenD.elevation === elevation ) return;
-  foundry.utils.mergeObject(tokenD, { elevation }, {insertKeys: false});
+  // foundry.utils.mergeObject(tokenD, { elevation }, {insertKeys: false});
 
-  // Refresh the Token elevation display
-  token.renderFlags.set({
-    refreshElevation: "elevation" in documentData
-  });
+  tokenD.updateSource({ elevation }, { defer: true });
+  token.renderFlags.set({ refreshElevation: true });
 
-  // Animate perception changes if necessary
-  if ( !config.animatePerception && !config.sound ) return;
-
-  console.debug(`Animation: adjusting token elevation to ${elevation}. animatePerception: ${config.animatePerception}`);
-
-  const refreshOptions = { refreshSounds: config.sound }
-  if ( config.animatePerception ) {
-    token.updateSource({defer: true});
-    refreshOptions.refreshLighting = refreshOptions.refreshVision = refreshOptions.refreshTiles = true;
-  }
-  canvas.perception.update(refreshOptions);
+//   // Animate perception changes if necessary
+//   if ( !config.animatePerception && !config.sound ) return;
+//
+//   console.debug(`Animation: adjusting token elevation to ${elevation}. animatePerception: ${config.animatePerception}`);
+//
+//
+//   const refreshOptions = { refreshSounds: config.sound }
+//   if ( config.animatePerception ) {
+//     token.updateSource({defer: true});
+//     refreshOptions.refreshLighting = refreshOptions.refreshVision = refreshOptions.refreshTiles = true;
+//   }
+//   canvas.perception.update(refreshOptions);
 }
 
 
