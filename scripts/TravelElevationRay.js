@@ -195,7 +195,7 @@ export class TravelElevationRay {
 
     // At the starting point, are we dropping to terrain or a tile?
     // (No tiles at this point, so the first marker is the terrain.)
-    let currMarker = this.#checkForSupportingTile(
+    let currMarker = this._checkForSupportingTile(
       markerTracker.nextMarker, this.originElevation, undefined, undefined, true);
     path.push(currMarker);
 
@@ -205,8 +205,8 @@ export class TravelElevationRay {
       // Multiple markers at a given t are possible, if unlikely.
       const nextTerrainMarker = nextMarkers.find(m => !m.tile);
       const nextMarker = currMarker.tile
-        ? this.#identifyNextMarkerFromTileLocation(nextMarkers, currMarker, nextTerrainMarker)
-        : this.#identifyNextMarkerFromTerrainLocation(nextTerrainMarker);
+        ? this._identifyNextMarkerFromTileLocation(nextMarkers, currMarker, nextTerrainMarker)
+        : this._identifyNextMarkerFromTerrainLocation(nextTerrainMarker);
       if ( nextMarker ) {
         // An elevation event occurred: moving up/down terrain or moving on/off tile.
         path.push(nextMarker);
@@ -218,7 +218,7 @@ export class TravelElevationRay {
     return path;
   }
 
-  #identifyNextMarkerFromTileLocation(nextMarkers, currMarker, nextTerrainMarker) {
+  _identifyNextMarkerFromTileLocation(nextMarkers, currMarker, nextTerrainMarker) {
     const currTile = currMarker.tile;
 
     // If the elevation is exceeding the tile at this point, switch to the elevation.
@@ -236,10 +236,10 @@ export class TravelElevationRay {
       this.TEC.location = currMarker;
       nextTerrainMarker = this.markerTracker.constructElevationMarkerAt(tileEndMarker, this.TEC.terrainElevation());
     }
-    return this.#checkForSupportingTile(nextTerrainMarker, currMarker.elevation, currTile, undefined, true);
+    return this._checkForSupportingTile(nextTerrainMarker, currMarker.elevation, currTile, undefined, true);
   }
 
-  #identifyNextMarkerFromTerrainLocation(nextTerrainMarker) {
+  _identifyNextMarkerFromTerrainLocation(nextTerrainMarker) {
     if ( !nextTerrainMarker ) return null; // Only tile markers at this location.
 
     // Moving up in terrain: stay on the terrain.
@@ -247,7 +247,7 @@ export class TravelElevationRay {
 
     // Moving down in terrain. Look for tile to switch to between the previous and this elevation.
     const reach = (nextTerrainMarker.elevation - nextTerrainMarker.prevE) < this.TEC.options.tileStep;
-    return this.#checkForSupportingTile(
+    return this._checkForSupportingTile(
       nextTerrainMarker, nextTerrainMarker.prevE, undefined, nextTerrainMarker.elevation, reach);
   }
 
@@ -302,7 +302,7 @@ export class TravelElevationRay {
    * @param {number} floor
    * @param {boolean} reach
    */
-  #checkForSupportingTile(marker, elevation, excludeTile, floor, reach) {
+  _checkForSupportingTile(marker, elevation, excludeTile, floor, reach) {
     const tile = this._findSupportingTileAtT(marker.t, elevation, excludeTile, floor, reach);
     if ( !tile ) return marker;
     return this.markerTracker.constructTileMarkerAt(marker, tile);
@@ -373,9 +373,6 @@ class MarkerTracker {
    * Reverse sorted so we can just pop elements.
    * @type {object[]}
    */
-  reverseQueue = [];
-
-  /** @type {object[]} */
   terrainMarkers = [];
 
   /** @type {PIXI.Point} */
@@ -399,8 +396,7 @@ class MarkerTracker {
 
     // Mark any terrain location that changes elevation along the a --> b ray.
     this._markTerrain();
-    this.reverseQueue = [...this.terrainMarkers];
-    this.reverseQueue.reverse();
+    this.terrainMarkers.reverse();
   }
 
   getMarkTransparentTileFn() {
@@ -417,6 +413,13 @@ class MarkerTracker {
     this.terrainMarkers = ev.elevationPixelCache
       ._extractAllMarkedPixelValuesAlongCanvasRay(origin, destination, this.#markTerrainFn,
         { forceLast: true, localOffsets, reducerFn });
+
+    // Force the first and last terrain marker to be exactly at the origin / destination.
+    // Rounding to/from local coordinates may shift these.
+    this.terrainMarkers[0].x = origin.x;
+    this.terrainMarkers[0].y = origin.y;
+    this.terrainMarkers.at(-1).x = destination.x;
+    this.terrainMarkers.at(-1).y = destination.y;
 
     this.terrainMarkers.forEach(mark => {
       mark.t = this.tForCanvasPoint(mark);
@@ -437,9 +440,9 @@ class MarkerTracker {
     return Math.sqrt(dist2 / this.#deltaMag2);
   }
 
-  get nextMarker() { return this.reverseQueue.pop(); }
+  get nextMarker() { return this.terrainMarkers.pop(); }
 
-  get peek() { return this.reverseQueue.at(-1); }
+  get peek() { return this.terrainMarkers.at(-1); }
 
   /**
    * Pull next markers that have the same t value.
@@ -449,7 +452,7 @@ class MarkerTracker {
     if ( !firstMarker ) return [];
     const targetT = firstMarker.t;
     const markers = [firstMarker];
-    while ( this.reverseQueue.length && this.peek.t === targetT ) markers.push(this.nextMarker);
+    while ( this.terrainMarkers.length && this.peek.t === targetT ) markers.push(this.nextMarker);
     return markers;
   }
 
@@ -467,8 +470,8 @@ class MarkerTracker {
     // Probably not worth binary or radix search b/c we don't have that many markers in the queue.
     // Also, a naive binary implementation proves to be slower than find.
     const findFn = element => element.t > nextMarker.t;
-    const idx = this.reverseQueue.findLastIndex(findFn);
-    this.reverseQueue.splice(idx, 0, nextMarker);
+    const idx = this.terrainMarkers.findLastIndex(findFn);
+    this.terrainMarkers.splice(idx, 0, nextMarker);
   }
 
   /**

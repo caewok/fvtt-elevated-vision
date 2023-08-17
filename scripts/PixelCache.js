@@ -462,6 +462,12 @@ export class PixelCache extends PIXI.Rectangle {
       if ( ~maxBottom ) break;
     }
 
+    // Pad right/bottom by 1 b/c otherwise they would be inset.
+    // Pad all by 1 to ensure that any pixel on the thresholdBounds is under the threshold.
+    minLeft -= 1;
+    minTop -= 1;
+    maxRight += 2;
+    maxBottom += 2;
     return (new PIXI.Rectangle(minLeft, minTop, maxRight - minLeft, maxBottom - minTop));
   }
 
@@ -929,8 +935,9 @@ export class PixelCache extends PIXI.Rectangle {
       prevPixel = currPixel;
     }
 
-    if ( forceLast ) return { currPixel: prevPixel, x: pt.x, y: pt.y, forceLast }; // Might be repeat but this is faster than checking.
-
+    // Might be a repeat but more consistent to always pass a forceLast object when requested.
+    // Faster than checking for last in the for loop.
+    if ( forceLast ) return { currPixel: prevPixel, x: b.x, y: b.y, forceLast };
     return null;
   }
 
