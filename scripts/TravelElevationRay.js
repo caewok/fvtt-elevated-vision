@@ -464,6 +464,11 @@ class MarkerTracker {
       marker, destination, this.#markTransparentTileFn,
       { alphaThreshold, skipFirst: true, forceLast: true, localOffsets, reducerFn });
 
+    if ( nextMarker.forceLast && nextMarker.currPixel > (alphaThreshold * 255) ) {
+      // Reached the destination without finding a hole in the tile. Do not add the marker.
+      return;
+    }
+
     nextMarker.tile = tile;
     nextMarker.t = this.tForCanvasPoint(nextMarker);
 
