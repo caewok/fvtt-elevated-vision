@@ -416,10 +416,14 @@ class MarkerTracker {
 
     // Force the first and last terrain marker to be exactly at the origin / destination.
     // Rounding to/from local coordinates may shift these.
-    this.terrainMarkers[0].x = origin.x;
-    this.terrainMarkers[0].y = origin.y;
-    this.terrainMarkers.at(-1).x = destination.x;
-    this.terrainMarkers.at(-1).y = destination.y;
+    const firstMarker = this.terrainMarkers[0];
+    const lastMarker = this.terrainMarkers.at(-1);
+
+    firstMarker.x = origin.x;
+    firstMarker.y = origin.y;
+    lastMarker.x = destination.x;
+    lastMarker.y = destination.y;
+    lastMarker.prevPixel = lastMarker.currPixel;
 
     this.terrainMarkers.forEach(mark => {
       mark.t = this.tForCanvasPoint(mark);
