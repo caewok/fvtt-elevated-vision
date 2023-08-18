@@ -86,7 +86,7 @@ export class TravelElevationRay {
     if ( origin ) this.origin = origin;
     else this.origin = token.center;
 
-    if ( origin && Object.hasOwn(origin, "z") ) this.originElevation = origin.z;
+    if ( origin && Object.hasOwn(origin, "z") ) this.originElevationZ = origin.z;
     else this.#originElevationZ = token.elevationZ;
 
     if ( destination ) this.destination = destination;
