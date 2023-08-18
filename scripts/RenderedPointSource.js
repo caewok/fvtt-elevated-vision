@@ -96,8 +96,8 @@ _createPolygon
 */
 
 export const PATCHES = {};
+PATCHES.BASIC = {};
 PATCHES.POLYGONS = {};
-PATCHES.VISIBILITY = {};
 PATCHES.WEBGL = {};
 
 // ----- NOTE: Polygon Shadows ----- //
@@ -552,10 +552,11 @@ function thresholdApplies(wall) {
  * @param {PIXI.Point} testPt           Point to test against source origin
 * @returns {boolean}
  */
-function hasWallCollision(testPt) {
-  const origin = Point3d.fromPointSource(this);
+function hasWallCollision(origin, testPt) {
+  origin = Point3d.fromObject(origin);
   testPt = Point3d.fromObject(testPt);
 
+  // Get walls within the bounding box that frames origin --> testPt.
   const xMinMax = Math.minMax(origin.x, testPt.x);
   const yMinMax = Math.minMax(origin.y, testPt.y);
   const lineBounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
@@ -565,19 +566,19 @@ function hasWallCollision(testPt) {
   // Test the intersection of the ray with each wall.
   const dir = testPt.subtract(origin);
   return walls.some(w => {
-    if ( !isFinite(w.topE) && !isFinite(w.bottomE) ) return true;
-
     // Check if the test point falls within an attenuation area.
-    const wallPts = Point3d.fromWall(w);
+    const wallPts = Point3d.fromWall(w, { finite: true });
     const v0 = wallPts.A.top;
     const v1 = wallPts.A.bottom;
     const v2 = wallPts.B.bottom;
     const v3 = wallPts.B.top;
-    return Plane.rayIntersectionQuad3dLD(origin, dir, v0, v1, v2, v3); // Null or t value
+    const t = Plane.rayIntersectionQuad3dLD(origin, dir, v0, v1, v2, v3); // Null or t value
+    if (!t || t < 0 || t > 1 ) return false;
+    return true;
   });
 }
 
-PATCHES.VISIBILITY.METHODS = {
+PATCHES.BASIC.METHODS = {
   hasWallCollision,
   _getWalls,
   _testWallInclusion,
