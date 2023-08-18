@@ -132,7 +132,7 @@ PATCHES_ActiveEffect.BASIC = {};
  * Hook drawToken to add an elevation calculator.
  */
 function drawTokenHook(token) {
-  console.debug("drawTokenHook", arguments);
+  // log("drawTokenHook", arguments);
   const ev = token[MODULE_ID] ??= {};
   ev.TEC = new TokenElevationCalculator(token);
 
@@ -151,7 +151,7 @@ function drawTokenHook(token) {
 function updateTokenHook(tokenD, changed, _options, _userId) {
   const changeKeys = new Set(Object.keys(flattenObject(changed)));
 
-  console.debug(`updateTokenHook hook ${changed.x}, ${changed.y}, ${changed.elevation} at ${tokenD.object.center.x},${tokenD.object.center.y} and elevation ${tokenD.elevation}`);
+  // log(`updateTokenHook hook ${changed.x}, ${changed.y}, ${changed.elevation} at ${tokenD.object.center.x},${tokenD.object.center.y} and elevation ${tokenD.elevation}`);
 
 
   // Width and Height affect token shape; the elevation measurement flag affects the offset grid.
@@ -178,15 +178,15 @@ function preUpdateTokenHook(tokenD, changes, _options, _userId) {
   if ( changeKeys.has("elevation") ) return; // Do not override existing elevation changes.
 
   const token = tokenD.object;
-  console.debug(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
-  console.debug(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
+  // log(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation} at elevation ${token.document?.elevation} with elevationD ${tokenD.elevation}`, changes);
+  // log(`preUpdateToken hook moving ${tokenD.x},${tokenD.y} --> ${changes.x ? changes.x : tokenD.x},${changes.y ? changes.y : tokenD.y}`);
 
   const destination = token.getCenter(changes.x ?? token.x, changes.y ?? token.y);
   const ter = new TravelElevationRay(token, { destination });
   changes.elevation = ter.endingElevation;
   token[MODULE_ID].ter = ter; // TODO: can we use this in the animation?
 
-  console.debug(`preUpdate path: ${ter.origin.x},${ter.origin.y},${ter.originElevation} --> ${ter.destination.x},${ter.destination.y},${ter.endingElevation}`)
+  // log(`preUpdate path: ${ter.origin.x},${ter.origin.y},${ter.originElevation} --> ${ter.destination.x},${ter.destination.y},${ter.endingElevation}`)
 
 }
 
@@ -208,12 +208,12 @@ function refreshTokenHook(token, flags) {
     token.document.elevation = ter.endingElevation;
 
     if ( ter.endingElevation !== token._original.bottomE ) {
-      console.debug(`Token clone: {x: ${origin.x}, y: ${origin.y}, e: ${token._original.bottomE} } --> {x: ${destination.x}, y: ${destination.y}, e: ${token.document.elevation} }`);
+      // log(`Token clone: {x: ${origin.x}, y: ${origin.y}, e: ${token._original.bottomE} } --> {x: ${destination.x}, y: ${destination.y}, e: ${token.document.elevation} }`);
     }
 
     return;
   } else if ( token._animation ) {
-    console.debug(`EV refreshToken for ${token.name} at ${token.position.x},${token.position.y}; e: ${token.document.elevation}. Token is ${token._original ? "Clone" : "Original"}. Token is ${token._animation ? "" : "not "}animating.`);
+    // log(`EV refreshToken for ${token.name} at ${token.position.x},${token.position.y}; e: ${token.document.elevation}. Token is ${token._original ? "Clone" : "Original"}. Token is ${token._animation ? "" : "not "}animating.`);
 
     const ter = token[MODULE_ID].ter;
     if ( !ter ) return;
@@ -221,16 +221,7 @@ function refreshTokenHook(token, flags) {
     const center = token.getCenter(token.position.x, token.position.y);
     const elevation = ter.elevationAtClosestPoint(center);
 
-    if ( isNaN(elevation) ) {
-      console.debug("elevation is NaN")
-    }
-
-    if ( typeof elevation === "undefined" ) {
-      console.debug("elevation is undefined")
-    }
-
-
-    console.debug(`refresh path: elevation ${elevation}. ${ter.origin.x},${ter.origin.y},${ter.originElevation} --> ${ter.destination.x},${ter.destination.y},${ter.endingElevation}`)
+    // log(`refresh path: elevation ${elevation}. ${ter.origin.x},${ter.origin.y},${ter.originElevation} --> ${ter.destination.x},${ter.destination.y},${ter.endingElevation}`)
     if ( token.document.elevation !== elevation ) {
       token.document.updateSource({ elevation });
       token.renderFlags.set({refreshElevation: true});
@@ -262,7 +253,7 @@ function refreshTokenHook(token, flags) {
 //       token.document.updateSource({ elevation: change.currE });
 //       token.renderFlags.set({refreshElevation: true});
 //     }
-//     console.debug(`Token Original: {x: ${tokenCenter.x}, y: ${tokenCenter.y}, e: ${change.currE} }`, ev.travel);
+//     // log(`Token Original: {x: ${tokenCenter.x}, y: ${tokenCenter.y}, e: ${change.currE} }`, ev.travel);
 //   }
 }
 
@@ -288,7 +279,7 @@ async function animate(wrapped, updateData, opts) {
   const updateKeys = new Set(Object.keys(updateData));
   if ( !(updateKeys.has("x") || updateKeys.has("y")) ) return wrapped(updateData, opts);
 
-  console.debug(`Starting animation. Token at ${this.center.x},${this.center.y} with elevation ${this.document.elevation}`)
+  // log(`Starting animation. Token at ${this.center.x},${this.center.y} with elevation ${this.document.elevation}`)
 
 //   let travelRay = this[MODULE_ID]?.ter;
 //   const destination = PIXI.Point.fromObject(this.center);
@@ -300,7 +291,7 @@ async function animate(wrapped, updateData, opts) {
 //     travelRay._walkPath(); // Run before animation starts b/c it is resource-intensive.
 //   } else delete this[MODULE_ID].ter;
 //
-//   console.debug(`Animation path: ${travelRay.origin.x},${travelRay.origin.y},${travelRay.originElevation} --> ${travelRay.destination.x},${travelRay.destination.y},${travelRay.endingElevation}`)
+//   // log(`Animation path: ${travelRay.origin.x},${travelRay.origin.y},${travelRay.originElevation} --> ${travelRay.destination.x},${travelRay.destination.y},${travelRay.endingElevation}`)
 //
 //   // TODO: Test that destination elevation matches updateData elevation? Return if not matched?
 //   if ( opts.ontick ) {
@@ -316,7 +307,7 @@ async function animate(wrapped, updateData, opts) {
 //   }
 
   await wrapped(updateData, opts);
-  console.debug(`Finished animation. Token at ${this.center.x},${this.center.y} with elevation ${this.document.elevation}`)
+  // log(`Finished animation. Token at ${this.center.x},${this.center.y} with elevation ${this.document.elevation}`)
 }
 
 
@@ -342,7 +333,7 @@ function adjustTokenElevation(travelRay, anim, documentData, config) {
 //   // Animate perception changes if necessary
 //   if ( !config.animatePerception && !config.sound ) return;
 //
-//   console.debug(`Animation: adjusting token elevation to ${elevation}. animatePerception: ${config.animatePerception}`);
+//   // log(`Animation: adjusting token elevation to ${elevation}. animatePerception: ${config.animatePerception}`);
 //
 //
 //   const refreshOptions = { refreshSounds: config.sound }
@@ -360,7 +351,7 @@ function adjustTokenElevation(travelRay, anim, documentData, config) {
  * Determine if the clone should adjust elevation
  */
 function clone(wrapper) {
-  log(`cloneToken ${this.name} at elevation ${this.document.elevation}`);
+  // log(`cloneToken ${this.name} at elevation ${this.document.elevation}`);
   const clone = wrapper();
 
   clone._elevatedVision ??= {};
@@ -378,7 +369,7 @@ function clone(wrapper) {
     if ( currState === FLY ) return clone;
   }
 
-  log(`cloneToken ${this.name} at elevation ${this.document.elevation}: setting adjust elevation to true`);
+  // log(`cloneToken ${this.name} at elevation ${this.document.elevation}: setting adjust elevation to true`);
 
   clone._elevatedVision.tokenAdjustElevation = true;
   clone._elevatedVision.startPosition = {x, y};
