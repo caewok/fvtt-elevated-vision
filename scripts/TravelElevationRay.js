@@ -323,47 +323,6 @@ export class TravelElevationRay {
     tile ??= TEC.findSupportingTileBelow(excludeTile, floor);
     return tile;
   }
-
-  /**
-   * Find overhead elevation tiles along a line segment (ray).
-   * @param {Point} a                   Starting point
-   * @param {Point} b                   Ending point
-   * @param {number} [alphaThreshold]   Tile portions lower than this alpha do not count for bounds.
-   * @returns {Tile[]}
-   */
-  static elevationTilesOnLineSegment(a, b, alphaThreshold) {
-    // First, get all tiles within bounds of a --> b
-    const xMinMax = Math.minMax(a.x, b.x);
-    const yMinMax = Math.minMax(a.y, b.y);
-    const bounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
-    bounds.width ||= 1; // If a --> b is vertical, add width to bounds
-    bounds.height ||= 1; // If a --> b is horizontal, add height to bounds
-    const collisionTest = (o, _rect) => o.t.document.overhead && isFinite(o.t.elevationZ);
-    let tiles = [...canvas.tiles.quadtree.getObjects(bounds, { collisionTest })];
-
-    // Only keep tiles that actually intersect the ray.
-    tiles = tiles.filter(t => {
-      const cache = t.evPixelCache;
-      const bounds = alphaThreshold ? cache.getThresholdCanvasBoundingBox() : cache;
-      return bounds.lineSegmentIntersects(a, b, { inside: true });
-    });
-
-    // If a and b have elevations, only keep tiles within that elevation range.
-    if ( Object.hasOwn(a, "z") && Object.hasOwn(b, "z") ) {
-      const zMinMax = Math.minMax(a.z, b.z);
-      tiles = tiles.filter(t => {
-        const elevationZ = t.elevationZ;
-        return (elevationZ >= zMinMax.min) && (elevationZ <= zMinMax.max);
-      });
-    }
-
-    // Sort tiles by elevation, highest to lowest.
-    // This will help with finding relevant tiles later.
-    tiles.sort((a, b) => b.elevationZ - a.elevationZ);
-    return tiles;
-  }
-
-
 }
 
 // Utility class to keep track of elevation and tile markers and provide the next one.
