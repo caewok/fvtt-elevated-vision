@@ -313,11 +313,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
       case TYPES.POINT: return PixelCache.pixelAggregator("first");
       case TYPES.POINTS_CLOSE:
       case TYPES.POINTS_SPREAD: return PixelCache.pixelAggregator("max");
-      case TYPES.AVERAGE: {
-        const threshold = this.options.alphaThreshold * this.constructor.#MAXIMUM_TILE_PIXEL_VALUE;
-        const aggFn = PixelCache.pixelAggregator("average_gt_threshold", threshold);
-        return aggFn;
-      }
+      case TYPES.AVERAGE: return PixelCache.pixelAggregator("average");
     }
   }
 

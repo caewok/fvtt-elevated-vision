@@ -251,7 +251,7 @@ export class TravelElevationRay {
     if ( nextTerrainMarker.elevation >= nextTerrainMarker.prevE ) return nextTerrainMarker;
 
     // Moving down in terrain. Look for tile to switch to between the previous and this elevation.
-    const reach = (nextTerrainMarker.elevation - nextTerrainMarker.prevE) < this.TEC.options.tileStep;
+    const reach = (nextTerrainMarker.prevE - nextTerrainMarker.elevation) < this.TEC.options.tileStep;
     return this._checkForSupportingTile(
       nextTerrainMarker, nextTerrainMarker.prevE, undefined, nextTerrainMarker.elevation, reach);
   }
