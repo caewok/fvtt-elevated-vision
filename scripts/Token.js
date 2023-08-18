@@ -199,6 +199,11 @@ function refreshTokenHook(token, flags) {
   if ( !flags.refreshPosition ) return;
   if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
 
+  // Debug
+//   console.debug(`EV refreshToken for ${token.name} at ${token.position.x},${token.position.y};
+//   e: ${token.document.elevation}. Token is ${token._original ? "Clone" : "Original"}.
+//   Token is ${token._animation ? "" : "not "}animating.`);
+
   if ( token._original ) {
     // This token is a clone in a drag operation.
     // Adjust elevation of the clone by calculating the elevation from origin to line.
@@ -208,19 +213,20 @@ function refreshTokenHook(token, flags) {
     const ter = new TravelElevationRay(token, { origin, destination });
     token.document.elevation = ter.endingElevation;
 
-  } else if ( token._animation ) {
-    // Debug: log(`EV refreshToken for ${token.name} at ${token.position.x},${token.position.y};
-    // e: ${token.document.elevation}. Token is ${token._original ? "Clone" : "Original"}.
-    // Token is ${token._animation ? "" : "not "}animating.`);
+    // Debug
+//     console.debug(`refresh path: ${ter.origin.x},${ter.origin.y},${ter.originElevation}
+//        --> ${ter.destination.x},${ter.destination.y},${ter.endingElevation}`);
 
+  } else if ( token._animation ) {
     const ter = token[MODULE_ID].ter;
     if ( !ter ) return;
 
     const center = token.getCenter(token.position.x, token.position.y);
     const elevation = ter.elevationAtClosestPoint(center);
 
-    // Debug: log(`refresh path: elevation ${elevation}. ${ter.origin.x},${ter.origin.y},${ter.originElevation}
-    // --> ${ter.destination.x},${ter.destination.y},${ter.endingElevation}`)
+    // Debug
+//     console.debug(`refresh path: elevation ${elevation}. ${ter.origin.x},${ter.origin.y},${ter.originElevation}
+//     --> ${ter.destination.x},${ter.destination.y},${ter.endingElevation}`);
     if ( token.document.elevation !== elevation ) {
       token.document.updateSource({ elevation });
       token.renderFlags.set({refreshElevation: true});

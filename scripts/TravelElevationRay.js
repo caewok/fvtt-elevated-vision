@@ -9,6 +9,8 @@ PIXI
 
 import { MODULE_ID } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
+import { SETTINGS, getSetting } from "./settings.js";
+import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 
 /* Averaging pixel values
 
@@ -68,23 +70,36 @@ export class TravelElevationRay {
   /** @type {TokenElevationCalculator} */
   TEC;
 
+  /** @type {boolean} */
+  #fly = false;
+
   /**
    * @param {Token} token               Token that is undertaking the movement
    * @param {PIXI.Point} destination    {x,y} destination for the movement
    * @param {Point} [opts.tokenCenter]      Assumed token center at start
    * @param {number} [opts.tokenElevation]  Assumed token elevation at start
    */
-  constructor(token, { origin, destination } = {}) {
+  constructor(token, { origin, destination, fly } = {}) {
     this.#token = token;
     this.TEC = token[MODULE_ID].TEC;
 
     if ( origin ) this.origin = origin;
     else this.origin = token.center;
 
-    if ( origin && Object.hasOwn(origin, "z") ) this.originElevation = origin.z;
+    if ( origin && Object.hasOwn(origin, "z") ) this.originElevationZ = origin.z;
     else this.#originElevationZ = token.elevationZ;
 
     if ( destination ) this.destination = destination;
+
+    this.#fly = fly ?? this.#flyButtonEnabled();
+  }
+
+  /** @type {boolean} */
+  get fly() { return this.#fly; }
+
+  set fly(value) {
+    this.#path.length = 0;
+    this.#fly = Boolean(value);
   }
 
   /** @type {number} */
@@ -134,6 +149,13 @@ export class TravelElevationRay {
   get path() {
     if ( !this.#path.length ) this._walkPath();
     return this.#path;
+  }
+
+  #flyButtonEnabled() {
+    if ( !getSetting(SETTINGS.FLY_BUTTON) ) return false;
+    const token_controls = ui.controls.controls.find(elem => elem.name === "token");
+    const fly = token_controls.tools.find(elem => elem.name === SETTINGS.FLY_BUTTON);
+    return fly?.active;
   }
 
   resetOriginToToken() {
@@ -196,12 +218,14 @@ export class TravelElevationRay {
     const path = this.#path;
     path.length = 0;
     const markerTracker = this.markerTracker = new MarkerTracker(this);
-    this.TEC.overrideTokenPosition = true;
+    const { TEC, fly, originElevation } = this;
+    TEC.overrideTokenPosition = true;
 
     // At the starting point, are we dropping to terrain or a tile?
     // (No tiles at this point, so the first marker is the terrain.)
     let currMarker = this._checkForSupportingTile(
-      markerTracker.nextMarker, this.originElevation, undefined, undefined, true);
+      markerTracker.nextMarker, originElevation, undefined, undefined, true);
+    if ( fly ) currMarker = this._flightTest(currMarker, originElevation);
     path.push(currMarker);
 
     // Iterate over each marker in turn.
@@ -209,18 +233,33 @@ export class TravelElevationRay {
     while ( nextMarkers.length ) {
       // Multiple markers at a given t are possible, if unlikely.
       const nextTerrainMarker = nextMarkers.find(m => !m.tile);
-      const nextMarker = currMarker.tile
+      let nextMarker = currMarker.tile
         ? this._identifyNextMarkerFromTileLocation(nextMarkers, currMarker, nextTerrainMarker)
         : this._identifyNextMarkerFromTerrainLocation(nextTerrainMarker);
+
       if ( nextMarker ) {
         // An elevation event occurred: moving up/down terrain or moving on/off tile.
+        if ( fly ) nextMarker = this._flightTest(nextMarker, currMarker.elevation);
         path.push(nextMarker);
         currMarker = nextMarker;
       }
       nextMarkers = markerTracker.pullNextMarkers();
     }
-    this.TEC.overrideTokenPosition = false;
+    TEC.overrideTokenPosition = false;
     return path;
+  }
+
+  _flightTest(nextMarker, currE) {
+    const nextE = nextMarker.elevation;
+    if ( nextE >= currE ) return nextMarker;
+    const withinStep = CoordinateElevationCalculator.withinStep;
+    const { tileStep, terrainStep } = this.TEC;
+    if ( (nextMarker.tile && withinStep(currE, nextE, tileStep))
+      || (!nextMarker.tile && withinStep(currE, nextE, terrainStep)) ) return nextMarker;
+
+    nextMarker = this.markerTracker.constructElevationMarkerAt(nextMarker, currE, nextMarker.t);
+    nextMarker.fly = true;
+    return nextMarker;
   }
 
   _identifyNextMarkerFromTileLocation(nextMarkers, currMarker, nextTerrainMarker) {
