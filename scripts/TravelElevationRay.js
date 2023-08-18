@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 foundry,
 PIXI
 */
@@ -47,7 +48,7 @@ export class TravelElevationRay {
   #origin = new PIXI.Point();
 
   /** @type {number} */
-  #originElevation = 0;
+  #originElevationZ = 0;
 
   /** @type {object} */
   terrainWalk;
@@ -81,7 +82,7 @@ export class TravelElevationRay {
     else this.origin = token.center;
 
     if ( origin && Object.hasOwn(origin, "z") ) this.originElevation = origin.z;
-    else this.originElevation = token.elevationZ;
+    else this.#originElevationZ = token.elevationZ;
 
     if ( destination ) this.destination = destination;
   }
@@ -119,12 +120,16 @@ export class TravelElevationRay {
     this.#path.length = 0;
   }
 
-  get originElevation() { return this.#originElevation; }
+  get originElevationZ() { return this.#originElevationZ; }
 
-  set originElevation(value) {
-    this.#originElevation = value;
+  set originElevationZ(value) {
+    this.#originElevationZ = value;
     this.#path.length = 0;
   }
+
+  get originElevation() { return CONFIG.GeometryLib.utils.pixelsToGridUnits(this.#originElevationZ); }
+
+  set originElevation(e) { this.#originElevationZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(e); }
 
   get path() {
     if ( !this.#path.length ) this._walkPath();
@@ -133,7 +138,7 @@ export class TravelElevationRay {
 
   resetOriginToToken() {
     this.origin = this.token.center;
-    this.originElevation = this.token.elevationZ;
+    this.originElevationZ = this.token.elevationZ;
   }
 
   /**
@@ -273,9 +278,9 @@ export class TravelElevationRay {
     let newWithinReach = false;
     this.TEC.tiles.forEach(t => {
       if ( !tileSet.has(t)
-        && t.elevationZ > currElevation
-        && t.elevationZ <= (currElevation + this.TEC.options.tileStep) ) {
-        newElevation = Math.max(newElevation, t.elevationZ);
+        && t.elevationE > currElevation
+        && t.elevationE <= (currElevation + this.TEC.options.tileStep) ) {
+        newElevation = Math.max(newElevation, t.elevationE);
         tileSet.add(t);
         newWithinReach ||= true;
       }
