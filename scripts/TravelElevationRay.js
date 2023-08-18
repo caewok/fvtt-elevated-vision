@@ -197,6 +197,10 @@ export class TravelElevationRay {
    */
   tForPoint(pt) {
     const { origin, destination } = this;
+    if ( origin.almostEqual(pt) ) return 0;
+    if ( destination.almostEqual(pt) ) return 1;
+    if ( origin.almostEqual(destination) ) return 0;
+
     const rayPt = foundry.utils.closestPointToSegment(pt, origin, destination);
     const dist2 = PIXI.Point.distanceSquaredBetween(origin, rayPt);
     const delta = destination.subtract(origin);
