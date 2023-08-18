@@ -251,7 +251,7 @@ export class TravelElevationRay {
     if ( nextTerrainMarker.elevation >= nextTerrainMarker.prevE ) return nextTerrainMarker;
 
     // Moving down in terrain. Look for tile to switch to between the previous and this elevation.
-    const reach = (nextTerrainMarker.elevation - nextTerrainMarker.prevE) < this.TEC.options.tileStep;
+    const reach = (nextTerrainMarker.prevE - nextTerrainMarker.elevation) < this.TEC.options.tileStep;
     return this._checkForSupportingTile(
       nextTerrainMarker, nextTerrainMarker.prevE, undefined, nextTerrainMarker.elevation, reach);
   }
@@ -331,7 +331,8 @@ export class TravelElevationRay {
 }
 
 // Utility class to keep track of elevation and tile markers and provide the next one.
-class MarkerTracker {
+const INV_10 = 1 / 10; // Used to round pixels to nearest 1/10.
+export class MarkerTracker {
   /**
    * Sorted queue to track markers by their canvas location, using t value against the travel ray.
    * Reverse sorted so we can just pop elements.
@@ -347,7 +348,7 @@ class MarkerTracker {
   #deltaMag2 = 0;
 
   /** @type{function} */
-  #markTerrainFn = (curr, prev) => prev !== curr;
+  #markTerrainFn = (curr, prev) => (Math.round(prev * 10) * INV_10)!== (Math.round(curr * 10) * INV_10);
 
   /** @type{function} */
   #markTransparentTileFn;

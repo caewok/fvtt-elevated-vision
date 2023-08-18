@@ -1170,8 +1170,10 @@ export class PixelCache extends PIXI.Rectangle {
     offsets[1] = 0;
     offsets._centerPoint = rect.center; // Helpful when processing pixel values later.
     let j = 2;
-    for ( let xi = xiMax - 1; xi > 0; xi -= incr ) {
-      for ( let yi = yiMax - 1; yi > 0; yi -= incr ) {
+
+    // -3 to skip outermost edge and next closest pixel. Avoids issues with borders.
+    for ( let xi = xiMax - 3; xi > 0; xi -= incr ) {
+      for ( let yi = yiMax - 3; yi > 0; yi -= incr ) {
         // BL quadrant
         offsets[j++] = xi;
         offsets[j++] = yi;
@@ -1192,7 +1194,7 @@ export class PixelCache extends PIXI.Rectangle {
 
     // Handle 0 row and 0 column. Add only if it would have been added by the increment or half increment.
     if ( addZeroX ) {
-      for ( let yi = yiMax - 1; yi > 0; yi -= incr ) {
+      for ( let yi = yiMax - 3; yi > 0; yi -= incr ) {
         offsets[j++] = 0;
         offsets[j++] = yi;
         offsets[j++] = 0;
@@ -1201,7 +1203,7 @@ export class PixelCache extends PIXI.Rectangle {
     }
 
     if ( addZeroY ) {
-      for ( let xi = xiMax - 1; xi > 0; xi -= incr ) {
+      for ( let xi = xiMax - 3; xi > 0; xi -= incr ) {
         offsets[j++] = xi;
         offsets[j++] = 0;
         offsets[j++] = -xi;

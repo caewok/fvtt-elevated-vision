@@ -163,7 +163,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    * @returns {number}
    */
   terrainElevation() {
-    const pixels = this.#pixelsForGridOffset("terrain");
+    const pixels = this._pixelsForGridOffset("terrain");
     const pixelValue = this.terrainPixelAggregationFn(pixels);
     return canvas.elevation._scaleNormalizedElevation(pixelValue);
   }
@@ -174,11 +174,11 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    * @returns {number}
    */
   tileOpacity(tile) {
-    const pixels = this.#pixelsForGridOffset(tile);
+    const pixels = this._pixelsForGridOffset(tile);
     return this.tilePixelAggregationFn(pixels) / tile.evPixelCache.maximumPixelValue;
   }
 
-  #pixelsForGridOffset(key) {
+  _pixelsForGridOffset(key) {
     const localOffsets = this._getLocalOffsets(key);
     const { x, y } = this.location;
     const cache = key === "terrain" ? canvas.elevation.elevationPixelCache : key.evPixelCache;
@@ -207,13 +207,13 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
     // b/c otherwise we cannot tell where the overlaps occur. E.g., 30% tile, 20% terrain?
 
     // If tile is opaque for the token at this position, it can support it.
-    const tilePixels = this.#pixelsForGridOffset(tile);
+    const tilePixels = this._pixelsForGridOffset(tile);
     const tileOpacity = this.tilePixelAggregationFn(tilePixels) / tile.evPixelCache.maximumPixelValue;
     if ( tileOpacity > this.options.alphaThreshold ) return true;
 
     // If the terrain equals the tile elevation at this position, simply ignore the tile.
     const tileE = tile.elevationE;
-    const terrainPixels = this.#pixelsForGridOffset("terrain");
+    const terrainPixels = this._pixelsForGridOffset("terrain");
     const terrainValue = this.terrainPixelAggregationFn(terrainPixels);
     const terrainE = canvas.elevation._scaleNormalizedElevation(terrainValue);
     if ( tileE === terrainE ) return true;
@@ -221,7 +221,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
     // Check for overlapping other tiles and terrain sufficient to support.
     const otherTiles = this.tiles.filter(t => t !== tile && t.elevationE === tileE);
     const tilePixelsArr = [tilePixels];
-    for ( const otherTile of otherTiles ) { tilePixelsArr.push(this.#pixelsForGridOffset(otherTile)); }
+    for ( const otherTile of otherTiles ) { tilePixelsArr.push(this._pixelsForGridOffset(otherTile)); }
 
     // In theory, each pixel array should be the same length and each pixel represents the same
     // canvas location.
@@ -313,11 +313,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
       case TYPES.POINT: return PixelCache.pixelAggregator("first");
       case TYPES.POINTS_CLOSE:
       case TYPES.POINTS_SPREAD: return PixelCache.pixelAggregator("max");
-      case TYPES.AVERAGE: {
-        const threshold = this.options.alphaThreshold * this.constructor.#MAXIMUM_TILE_PIXEL_VALUE;
-        const aggFn = PixelCache.pixelAggregator("average_gt_threshold", threshold);
-        return aggFn;
-      }
+      case TYPES.AVERAGE: return PixelCache.pixelAggregator("average");
     }
   }
 
@@ -333,11 +329,12 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
 
     let pixels;
     let color = Draw.COLORS.blue;
-    if ( tile ) pixels = this.#pixelsForGridOffset(tile);
+    pixels = this._pixelsForGridOffset(tile ?? "terrain");
     for ( let i = 0, j = 0; i < nOffsets; i += 2 ) {
       const x = offsets[i] + center.x;
       const y = offsets[i + 1] + center.y;
       if ( tile ) color = pixels[j++] > threshold ? Draw.COLORS.green : Draw.COLORS.red;
+      else color = canvas.elevation.elevationColor(canvas.elevation._scaleNormalizedElevation(pixels[j++]));
       draw.point({x, y}, { radius: 1, color });
     }
     return pixels;
