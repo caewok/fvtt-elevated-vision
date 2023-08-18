@@ -331,6 +331,7 @@ export class TravelElevationRay {
 }
 
 // Utility class to keep track of elevation and tile markers and provide the next one.
+const INV_10 = 1 / 10; // Used to round pixels to nearest 1/10.
 export class MarkerTracker {
   /**
    * Sorted queue to track markers by their canvas location, using t value against the travel ray.
@@ -347,7 +348,7 @@ export class MarkerTracker {
   #deltaMag2 = 0;
 
   /** @type{function} */
-  #markTerrainFn = (curr, prev) => prev !== curr;
+  #markTerrainFn = (curr, prev) => (Math.round(prev * 10) * INV_10)!== (Math.round(curr * 10) * INV_10);
 
   /** @type{function} */
   #markTransparentTileFn;
