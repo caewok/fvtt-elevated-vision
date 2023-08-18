@@ -221,13 +221,14 @@ function refreshTokenHook(token, flags) {
     const center = token.getCenter(token.position.x, token.position.y);
     const elevation = ter.elevationAtClosestPoint(center);
 
-    if ( elevation === 2 ) {
-      console.debug("elevation at 2")
+    if ( isNaN(elevation) ) {
+      console.debug("elevation is NaN")
     }
 
-    if ( elevation === 0 ) {
-      console.debug("elevation at 0")
+    if ( typeof elevation === "undefined" ) {
+      console.debug("elevation is undefined")
     }
+
 
     console.debug(`refresh path: elevation ${elevation}. ${ter.origin.x},${ter.origin.y},${ter.originElevation} --> ${ter.destination.x},${ter.destination.y},${ter.endingElevation}`)
     if ( token.document.elevation !== elevation ) {

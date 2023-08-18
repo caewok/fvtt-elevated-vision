@@ -988,7 +988,7 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {number} [threshold]    Optional pixel value used by "count" methods
    * @returns {function}
    */
-  static pixelAggregator(type, threshold = -1) {
+  static pixelAggregator(type, threshold = -1, finalize) {
     let reducerFn;
     let startValue;
     switch ( type ) {
@@ -1007,6 +1007,7 @@ export class PixelCache extends PIXI.Rectangle {
         };
         break;
       }
+      case "average":
       case "sum": {
         startValue = { numNull: 0, numPixels: 0, total: 0 };
         reducerFn = (acc, curr) => {
@@ -1017,14 +1018,15 @@ export class PixelCache extends PIXI.Rectangle {
         };
 
         // Re-zero values in case of rerunning with the same reducer function.
-        reducerFn.initializer = () => {
+        reducerFn.initialize = () => {
           startValue.numNull = 0;
           startValue.numPixels = 0;
-          startValue.count = 0;
+          startValue.total = 0;
         };
 
         break;
       }
+      case "average_gt_threshold":
       case "count_gt_threshold": {
         startValue = { numNull: 0, numPixels: 0, threshold, count: 0 };
         reducerFn = (acc, curr) => {
@@ -1035,7 +1037,7 @@ export class PixelCache extends PIXI.Rectangle {
         };
 
         // Re-zero values in case of rerunning with the same reducer function.
-        reducerFn.initializer = () => {
+        reducerFn.initialize = () => {
           startValue.numNull = 0;
           startValue.numPixels = 0;
           startValue.count = 0;
@@ -1066,8 +1068,16 @@ export class PixelCache extends PIXI.Rectangle {
       }
     }
 
+
+    switch ( type ) {
+      case "average": reducerFn.finalize = acc => acc.total / acc.numPixels; break; // Treats undefined as 0.
+      case "average_gt_threshold": reducerFn.finalize = acc => acc.count / acc.numPixels; break; // Treats undefined as 0.
+    }
+
     const reducePixels = this.reducePixels;
-    return pixels => reducePixels(pixels, reducerFn, startValue);
+    const out = pixels => reducePixels(pixels, reducerFn, startValue);
+    out.type = type; // For debugging.
+    return out;
   }
 
   /**
