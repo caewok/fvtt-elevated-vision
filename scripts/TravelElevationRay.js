@@ -331,7 +331,7 @@ export class TravelElevationRay {
 }
 
 // Utility class to keep track of elevation and tile markers and provide the next one.
-class MarkerTracker {
+export class MarkerTracker {
   /**
    * Sorted queue to track markers by their canvas location, using t value against the travel ray.
    * Reverse sorted so we can just pop elements.
