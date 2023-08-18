@@ -295,11 +295,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
       case TYPES.POINT: return PixelCache.pixelAggregator("first");
       case TYPES.POINTS_CLOSE:
       case TYPES.POINTS_SPREAD: return PixelCache.pixelAggregator("median_no_null");
-      case TYPES.AVERAGE: {
-        const aggFn = PixelCache.pixelAggregator("sum");
-        aggFn.finalize = acc => acc.numPixels / acc.total; // Treats undefined as 0.
-        return aggFn;
-      }
+      case TYPES.AVERAGE: return PixelCache.pixelAggregator("average");
     }
   }
 
@@ -312,15 +308,14 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    * @returns {function}
    */
   #calculateTilePixelAggregationFn() {
-    const TYPES = SETTINGS.ELEVATION_MEASUREMENT.TYPES;
+    const TYPES = FLAGS.ELEVATION_MEASUREMENT.TYPES;
     switch ( this.elevationMeasurementAlgorithm ) {
       case TYPES.POINT: return PixelCache.pixelAggregator("first");
       case TYPES.POINTS_CLOSE: return PixelCache.pixelAggregator("max");
       case TYPES.POINTS_SPREAD: return PixelCache.pixelAggregator("median_zero_null");
       case TYPES.AVERAGE: {
         const threshold = this.options.alphaThreshold * this.constructor.#MAXIMUM_TILE_PIXEL_VALUE;
-        const aggFn = PixelCache.pixelAggregator("count_gt_threshold", threshold);
-        aggFn.finalize = acc => acc.numPixels / acc.total; // Treats undefined as 0.
+        const aggFn = PixelCache.pixelAggregator("average_gt_threshold", threshold);
         return aggFn;
       }
     }

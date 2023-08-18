@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 foundry,
 PIXI
 */
@@ -47,7 +48,7 @@ export class TravelElevationRay {
   #origin = new PIXI.Point();
 
   /** @type {number} */
-  #originElevation = 0;
+  #originElevationZ = 0;
 
   /** @type {object} */
   terrainWalk;
@@ -81,7 +82,7 @@ export class TravelElevationRay {
     else this.origin = token.center;
 
     if ( origin && Object.hasOwn(origin, "z") ) this.originElevation = origin.z;
-    else this.originElevation = token.elevationZ;
+    else this.#originElevationZ = token.elevationZ;
 
     if ( destination ) this.destination = destination;
   }
@@ -119,12 +120,16 @@ export class TravelElevationRay {
     this.#path.length = 0;
   }
 
-  get originElevation() { return this.#originElevation; }
+  get originElevationZ() { return this.#originElevationZ; }
 
-  set originElevation(value) {
-    this.#originElevation = value;
+  set originElevationZ(value) {
+    this.#originElevationZ = value;
     this.#path.length = 0;
   }
+
+  get originElevation() { return CONFIG.GeometryLib.utils.pixelsToGridUnits(this.#originElevationZ); }
+
+  set originElevation(e) { this.#originElevationZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(e); }
 
   get path() {
     if ( !this.#path.length ) this._walkPath();
@@ -133,7 +138,7 @@ export class TravelElevationRay {
 
   resetOriginToToken() {
     this.origin = this.token.center;
-    this.originElevation = this.token.elevationZ;
+    this.originElevationZ = this.token.elevationZ;
   }
 
   /**
@@ -273,9 +278,9 @@ export class TravelElevationRay {
     let newWithinReach = false;
     this.TEC.tiles.forEach(t => {
       if ( !tileSet.has(t)
-        && t.elevationZ > currElevation
-        && t.elevationZ <= (currElevation + this.TEC.options.tileStep) ) {
-        newElevation = Math.max(newElevation, t.elevationZ);
+        && t.elevationE > currElevation
+        && t.elevationE <= (currElevation + this.TEC.options.tileStep) ) {
+        newElevation = Math.max(newElevation, t.elevationE);
         tileSet.add(t);
         newWithinReach ||= true;
       }
@@ -323,47 +328,6 @@ export class TravelElevationRay {
     tile ??= TEC.findSupportingTileBelow(excludeTile, floor);
     return tile;
   }
-
-  /**
-   * Find overhead elevation tiles along a line segment (ray).
-   * @param {Point} a                   Starting point
-   * @param {Point} b                   Ending point
-   * @param {number} [alphaThreshold]   Tile portions lower than this alpha do not count for bounds.
-   * @returns {Tile[]}
-   */
-  static elevationTilesOnLineSegment(a, b, alphaThreshold) {
-    // First, get all tiles within bounds of a --> b
-    const xMinMax = Math.minMax(a.x, b.x);
-    const yMinMax = Math.minMax(a.y, b.y);
-    const bounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
-    bounds.width ||= 1; // If a --> b is vertical, add width to bounds
-    bounds.height ||= 1; // If a --> b is horizontal, add height to bounds
-    const collisionTest = (o, _rect) => o.t.document.overhead && isFinite(o.t.elevationZ);
-    let tiles = [...canvas.tiles.quadtree.getObjects(bounds, { collisionTest })];
-
-    // Only keep tiles that actually intersect the ray.
-    tiles = tiles.filter(t => {
-      const cache = t.evPixelCache;
-      const bounds = alphaThreshold ? cache.getThresholdCanvasBoundingBox() : cache;
-      return bounds.lineSegmentIntersects(a, b, { inside: true });
-    });
-
-    // If a and b have elevations, only keep tiles within that elevation range.
-    if ( Object.hasOwn(a, "z") && Object.hasOwn(b, "z") ) {
-      const zMinMax = Math.minMax(a.z, b.z);
-      tiles = tiles.filter(t => {
-        const elevationZ = t.elevationZ;
-        return (elevationZ >= zMinMax.min) && (elevationZ <= zMinMax.max);
-      });
-    }
-
-    // Sort tiles by elevation, highest to lowest.
-    // This will help with finding relevant tiles later.
-    tiles.sort((a, b) => b.elevationZ - a.elevationZ);
-    return tiles;
-  }
-
-
 }
 
 // Utility class to keep track of elevation and tile markers and provide the next one.
@@ -416,10 +380,14 @@ class MarkerTracker {
 
     // Force the first and last terrain marker to be exactly at the origin / destination.
     // Rounding to/from local coordinates may shift these.
-    this.terrainMarkers[0].x = origin.x;
-    this.terrainMarkers[0].y = origin.y;
-    this.terrainMarkers.at(-1).x = destination.x;
-    this.terrainMarkers.at(-1).y = destination.y;
+    const firstMarker = this.terrainMarkers[0];
+    const lastMarker = this.terrainMarkers.at(-1);
+
+    firstMarker.x = origin.x;
+    firstMarker.y = origin.y;
+    lastMarker.x = destination.x;
+    lastMarker.y = destination.y;
+    lastMarker.prevPixel ??= lastMarker.currPixel;
 
     this.terrainMarkers.forEach(mark => {
       mark.t = this.tForCanvasPoint(mark);
@@ -464,6 +432,11 @@ class MarkerTracker {
       marker, destination, this.#markTransparentTileFn,
       { alphaThreshold, skipFirst: true, forceLast: true, localOffsets, reducerFn });
 
+    if ( nextMarker.forceLast && nextMarker.currPixel > (alphaThreshold * 255) ) {
+      // Reached the destination without finding a hole in the tile. Do not add the marker.
+      return;
+    }
+
     nextMarker.tile = tile;
     nextMarker.t = this.tForCanvasPoint(nextMarker);
 
@@ -471,7 +444,7 @@ class MarkerTracker {
     // Also, a naive binary implementation proves to be slower than find.
     const findFn = element => element.t > nextMarker.t;
     const idx = this.terrainMarkers.findLastIndex(findFn);
-    this.terrainMarkers.splice(idx, 0, nextMarker);
+    this.terrainMarkers.splice(idx + 1, 0, nextMarker);
   }
 
   /**
