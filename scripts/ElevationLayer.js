@@ -32,7 +32,7 @@ import { FILOQueue } from "./FILOQueue.js";
 import { setSceneSetting, getSceneSetting, getSetting, SETTINGS } from "./settings.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
-import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
+import { TravelElevationRay } from "./TravelElevationRay.js";
 import { ElevationTextureManager } from "./ElevationTextureManager.js";
 
 import { Draw } from "./geometry/Draw.js";
@@ -85,9 +85,9 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   // Imported methods
-  TravelElevationCalculator = TravelElevationCalculator;
-
+  TravelElevationRay = TravelElevationRay;
   CoordinateElevationCalculator = CoordinateElevationCalculator;
+  TokenElevationCalculator = TokenElevationCalculator;
 
   /**
    * Activate a listener to display elevation values when the mouse hovers over an area
@@ -544,8 +544,6 @@ export class ElevationLayer extends InteractionLayer {
    */
   async initialize() {
     log("Initializing elevation layer");
-
-    this.TokenElevationCalculator = TokenElevationCalculator;
 
     this._initialized = false;
     this._clearElevationPixelCache();

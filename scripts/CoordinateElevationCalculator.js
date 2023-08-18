@@ -10,28 +10,6 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 import { MODULE_ID } from "./const.js";
 import { almostBetween, almostLessThan, almostGreaterThan } from "./util.js";
 
-/* Point elevation tests
-
-1. 3d point on terrain
-2. 3d point on terrain tile
-3. terrain elevation under point
-4. tile elevation under point
-  - highest tile under the point
-5. ground elevation under point (combine 3 and 4)
-*/
-
-// Used by TravelElevationCalculator:
-// √ terrainElevationAtToken
-// √ findHighestTileAtToken --> √ tokenOnTile (isOnTile)
-// groundElevationAtToken --> √ findSupportingTileUnderToken, √ terrainElevationAtToken
-// √ findTileUnderToken (findTileAtElevation) --> √ excludeUndergroundTilesFn, √ tokenOnTile
-// √ tileSupportsToken --> √ tileCouldSupportToken, √ withinStep
-
-// Otherwise likely useful:
-// √ isTokenOnTerrain
-// √ isTokenOnATile
-// isTokenOnGround --> isTokenOnATile
-
 export class CoordinateElevationCalculator {
 
   /**
