@@ -1,7 +1,18 @@
+# 0.5.8
+Rewrite of the code used to automatically estimate token elevation as a token moves around a scene. Added options in the token configuration (and default token configuration) to set the algorithm used for estimating terrain elevation and whether the token is on a tile:
+1. Center point. Use only the token center point. This is the least resource-intensive.
+2. Clustered center points. (Default option.) Use 9 points (including center) at 10% of the token minimum width/height from center. For elevation, take the median value. For tile opacity, take the maximum value (if any one point is on an opaque tile pixel, the token is on that tile).
+3. 9 points. Use default Foundry spacing for the 9 points. Otherwise same as (2).
+4. Average. Use a grid of closely spaced points on the token shape. For both elevation and tile opacity, use the average. This is the most resource-intensive.
+
+Fix for issue #78 (object vision bug). Thanks, @Boomer-Kuwanger, for the PR!
+Fix for issue #76 (diagonal walls and vision).
+Fix for issue #77 (incompatibility with Limits)
+Fix for issue #75 (ducking)
+Fix for issue #70 (tiles with low opacity dropping tokens).
+Fix for issue #69 (tiles near terrain not working for bridge).
+
 # 0.5.7
-- Add back WebGL as choice of default algorithm for new scenes. Closes issue #66.
-- Fix error when moving tokens with Levels module enabled. Closes issues #64 and #61.
-- Set the elevation in the toolbar to the nearest elevation step.
 - Improve directional light shadow resolution by rendering only the shadow texture for the scene instead of the entire light radius.
 - Keep the directional light position at the original x,y coordinates to allow more flexibility in displaying directional lighting that is meant to be overhead on a map. This also gives more options for animating directional lights. Note that directional lights can be set to 0 bright radius if you don't want the bright circle on the canvas.
 - Set elevation angle of the directional light based on only the scene rectangle, which should fix issues with changing to the padding %. Closes issue #68.

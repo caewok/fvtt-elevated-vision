@@ -31,9 +31,8 @@ import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { setSceneSetting, getSceneSetting, getSetting, SETTINGS } from "./settings.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
-import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
-import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
-import { TravelElevationCalculator } from "./TravelElevationCalculator.js";
+import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
+import { TravelElevationRay } from "./TravelElevationRay.js";
 import { ElevationTextureManager } from "./ElevationTextureManager.js";
 
 import { Draw } from "./geometry/Draw.js";
@@ -86,9 +85,9 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   // Imported methods
-  TravelElevationCalculator = TravelElevationCalculator;
-
+  TravelElevationRay = TravelElevationRay;
   CoordinateElevationCalculator = CoordinateElevationCalculator;
+  TokenElevationCalculator = TokenElevationCalculator;
 
   /**
    * Activate a listener to display elevation values when the mouse hovers over an area
@@ -545,9 +544,6 @@ export class ElevationLayer extends InteractionLayer {
    */
   async initialize() {
     log("Initializing elevation layer");
-
-    this.TokenElevationCalculator = getSetting(SETTINGS.AUTO_AVERAGING)
-      ? TokenAverageElevationCalculator : TokenPointElevationCalculator;
 
     this._initialized = false;
     this._clearElevationPixelCache();

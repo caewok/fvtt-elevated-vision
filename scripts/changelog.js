@@ -130,6 +130,22 @@ Hooks.once("ready", () => {
                 with directional shadows. Please submit bug reports to the [Git issue tracker](https://github.com/caewok/fvtt-elevated-vision/issues).`
         })
 
+        .addEntry({
+            version: "0.5.8",
+            title: "Automated elevation improvements",
+            body: `\
+                - **Automated Elevation:**  Added options in the token configuration (and default token configuration)
+                  to set the algorithm used for estimating terrain elevation and whether the token is on a tile:
+                  1. Center point. Use only the token center point. This is the least resource-intensive.
+                  2. Clustered center points. (Default option.) Use 9 points (including center) at 10%
+                     of the token minimum width/height from center. For elevation, take the median value.
+                     For tile opacity, take the maximum value (if any one point is on an opaque tile pixel,
+                     the token is on that tile).
+                  3. 9 points. Use default Foundry spacing for the 9 points. Otherwise same as (2).
+                  4. Average. Use a grid of closely spaced points on the token shape.
+                     For both elevation and tile opacity, use the average. This is the most resource-intensive.`
+        })
+
         .build()
         ?.render(true);
 });

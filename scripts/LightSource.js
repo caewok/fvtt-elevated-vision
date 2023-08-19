@@ -62,19 +62,14 @@ function _initialize(wrapped, data) {
 }
 
 /**
- * Wrap method: LightSource.prototype._createPolygon()
+ * Wrap method: LightSource.prototype._getPolygonConfiguration.
+ * Force an unblocked circle to be used for the sweep.
+ * See issue #77.
  */
-function _createPolygon(wrapped) {
-  this.originalShape = wrapped();
-
-  if ( getSetting(SETTINGS.LIGHTS_FULL_PENUMBRA) ) {
-    // Instead of the actual polygon, pass an unblocked circle as the shape.
-    // TODO: Can we just pass a rectangle and shadow portions of the light outside the radius?
-    const cir = new PIXI.Circle(this.x, this.y, this.radius);
-    return cir.toPolygon();
-  }
-
-  return this.originalShape;
+function _getPolygonConfiguration(wrapped) {
+  const config = wrapped();
+  if ( getSetting(SETTINGS.LIGHTS_FULL_PENUMBRA) ) config.type = "universal";
+  return config;
 }
 
 /**
@@ -99,6 +94,6 @@ function _updateCommonUniforms(wrapped, shader) {
 
 PATCHES.WEBGL.WRAPS = {
   _initialize,
-  _createPolygon,
+  _getPolygonConfiguration,
   _updateCommonUniforms
 };

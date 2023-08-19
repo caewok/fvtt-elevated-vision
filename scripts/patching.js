@@ -33,7 +33,8 @@ import {
 import {
   PATCHES_AmbientLightConfig,
   PATCHES_AmbientSoundConfig,
-  PATCHES_TileConfig } from "./render_configs.js";
+  PATCHES_TileConfig,
+  PATCHES_TokenConfig } from "./render_configs.js";
 
 import { PATCHES_Token, PATCHES_ActiveEffect } from "./Token.js";
 
@@ -73,6 +74,7 @@ export const PATCHES = {
   Tile: PATCHES_Tile,
   TileConfig: PATCHES_TileConfig,
   Token: PATCHES_Token,
+  TokenConfig: PATCHES_TokenConfig,
   VisionSource: PATCHES_VisionSource,
   Wall: PATCHES_Wall
 };

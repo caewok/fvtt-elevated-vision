@@ -19,8 +19,8 @@ import { FILOQueue } from "./FILOQueue.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { PixelCache, TilePixelCache } from "./PixelCache.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
-import { TokenPointElevationCalculator } from "./TokenPointElevationCalculator.js";
-import { TokenAverageElevationCalculator } from "./TokenAverageElevationCalculator.js";
+import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
+import { TravelElevationRay, MarkerTracker } from "./TravelElevationRay.js";
 
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
@@ -116,7 +116,20 @@ Hooks.once("init", function() {
      * Maximum texture size used to represent shadows.
      * @type {number}
      */
-    shadowTextureSize: 4096
+    shadowTextureSize: 4096,
+
+    /**
+     * TokenElevationCalculator.
+     * Percentage of the token shape between points when measuring elevation.
+     * For example, 10% will space out grid points every 1/10th of the token width/height.
+     * Average: Points spaced from outside --> in.
+     * Point close and spread: 8 points spaced from a center point.
+     */
+    skipPercentage: {
+      [SETTINGS.ELEVATION_MEASUREMENT.TYPES.AVERAGE]: 0.1,
+      [SETTINGS.ELEVATION_MEASUREMENT.TYPES.POINTS_CLOSE]: 0.1,
+      [SETTINGS.ELEVATION_MEASUREMENT.TYPES.POINTS_SPREAD]: 0.25
+    }
   };
 
   game.modules.get(MODULE_ID).api = {
@@ -131,9 +144,10 @@ Hooks.once("init", function() {
     PixelCache,
     TilePixelCache,
     CoordinateElevationCalculator,
-    TokenPointElevationCalculator,
-    TokenAverageElevationCalculator,
+    TokenElevationCalculator,
     DirectionalLightSource,
+    TravelElevationRay,
+    MarkerTracker,
 
     PATCHER
   };
