@@ -5,12 +5,12 @@ Rewrite of the code used to automatically estimate token elevation as a token mo
 3. 9 points. Use default Foundry spacing for the 9 points. Otherwise same as (2).
 4. Average. Use a grid of closely spaced points on the token shape. For both elevation and tile opacity, use the average. This is the most resource-intensive.
 
-Fix for issue #69 (tiles near terrain not working for bridge).
-Fix for issue #70 (tiles with low opacity dropping tokens).
 Fix for issue #78 (object vision bug). Thanks, @Boomer-Kuwanger, for the PR!
 Fix for issue #76 (diagonal walls and vision).
-
-
+Fix for issue #77 (incompatibility with Limits)
+Fix for issue #75 (ducking)
+Fix for issue #70 (tiles with low opacity dropping tokens).
+Fix for issue #69 (tiles near terrain not working for bridge).
 
 # 0.5.7
 - Improve directional light shadow resolution by rendering only the shadow texture for the scene instead of the entire light radius.
