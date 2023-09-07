@@ -1,3 +1,7 @@
+# 0.5.9
+Fix for token update error. Closes issue #84.
+
+
 # 0.5.8
 Rewrite of the code used to automatically estimate token elevation as a token moves around a scene. Added options in the token configuration (and default token configuration) to set the algorithm used for estimating terrain elevation and whether the token is on a tile:
 1. Center point. Use only the token center point. This is the least resource-intensive.
