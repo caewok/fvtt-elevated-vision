@@ -169,8 +169,9 @@ function updateTokenHook(tokenD, changed, _options, _userId) {
 }
 
 // If the token moves, calculate its new elevation.
-function preUpdateTokenHook(tokenD, changes, _options, _userId) {
-  if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
+function preUpdateTokenHook(tokenD, changes, options, _userId) {
+  // options.ridingMovement: issue #83—compatibility with Rideables.
+  if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) || options.RidingMovement ) return;
 
   const changeKeys = new Set(Object.keys(flattenObject(changes)));
   if ( !(changeKeys.has("x") || changeKeys.has("y")) ) return;

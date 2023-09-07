@@ -1,5 +1,6 @@
 # 0.5.9
 Fix for token update error. Closes issue #84.
+Add check for Rideables module tokens and avoid autoelevating them. Closes issue #83.
 
 
 # 0.5.8
