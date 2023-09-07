@@ -134,8 +134,9 @@ function drawTokenHook(token) {
   ev.TEC = new TokenElevationCalculator(token);
 
   // It is possible for existing tokens to not have the flag at all.
+  // token.document.isOwner check to fix issue #84
   const { ALGORITHM, TYPES } = FLAGS.ELEVATION_MEASUREMENT;
-  if ( !token.document.getFlag(MODULE_ID, ALGORITHM) ) {
+  if ( !token.document.getFlag(MODULE_ID, ALGORITHM) && token.document.isOwner ) {
     const defaults = game.settings.get("core", DefaultTokenConfig.SETTING);
     const type = defaults.flags?.[MODULE_ID]?.[ALGORITHM] ?? TYPES.POINTS_CLOSE;
     token.document.setFlag(MODULE_ID, ALGORITHM, type);
