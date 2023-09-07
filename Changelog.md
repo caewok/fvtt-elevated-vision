@@ -1,7 +1,7 @@
 # 0.5.9
 Fix for token update error. Closes issue #84.
 Add check for Rideables module tokens and avoid autoelevating them. Closes issue #83.
-
+Store per-user setting for status of the token fly button so it keeps its state when the scene/foundry is reloaded. Closes issue #85.
 
 # 0.5.8
 Rewrite of the code used to automatically estimate token elevation as a token moves around a scene. Added options in the token configuration (and default token configuration) to set the algorithm used for estimating terrain elevation and whether the token is on a tile:
