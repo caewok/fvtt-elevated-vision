@@ -1,8 +1,9 @@
 /* globals
+canvas,
 Hooks,
 foundry,
 game,
-canvas,
+isEmpty,
 renderTemplate,
 ui
 */
@@ -11,15 +12,20 @@ ui
 
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
-import { SETTINGS, getSetting, getSceneSetting } from "./settings.js";
+import { SETTINGS, getSetting, setSetting, getSceneSetting } from "./settings.js";
 import { registerPatchesForSceneSettings } from "./patching.js";
 
 const FLY_CONTROL = {
   name: SETTINGS.FLY_BUTTON,
   title: `${MODULE_ID}.controls.${SETTINGS.FLY_BUTTON}.name`,
   icon: "fa-solid fa-plane-lock",
-  toggle: true
+  toggle: true,
+  onClick: flyControlClicked
 };
+
+async function flyControlClicked(toggle) {
+  await setSetting(SETTINGS.FLY_BUTTON_ENABLED, toggle);
+}
 
 Hooks.once("init", function() {
   // Cannot access localization until init.
@@ -78,7 +84,7 @@ async function preUpdateSceneHook(document, change, options, _userId) {
   options.EValgorithm = document.flags[MODULE_ID]?.[SETTINGS.SHADING.ALGORITHM];
 }
 
-async function updateSceneHook(document, change, options, _userId) {
+async function updateSceneHook(document, change, _options, _userId) {
   if ( canvas.scene.id !== document.id ) return;
   const modFlags = change.flags?.[MODULE_ID];
   if ( !modFlags || isEmpty(modFlags) ) return;
@@ -110,7 +116,10 @@ export function updateFlyTokenControl(enable) {
   enable ??= getSceneSetting(SETTINGS.AUTO_ELEVATION);
   const tokenTools = ui.controls.controls.find(c => c.name === "token");
   const flyIndex = tokenTools.tools.findIndex(b => b.name === SETTINGS.FLY_BUTTON);
-  if ( enable && !~flyIndex ) tokenTools.tools.push(FLY_CONTROL);
+  if ( enable && !~flyIndex ) {
+    FLY_CONTROL.active = getSetting(SETTINGS.FLY_BUTTON_ENABLED);
+    tokenTools.tools.push(FLY_CONTROL);
+  }
   else if ( ~flyIndex ) tokenTools.tools.splice(flyIndex, 1);
   ui.controls.render(true);
 }

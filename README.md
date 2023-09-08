@@ -1,8 +1,10 @@
-[![License](https://img.shields.io/github/license/caewok/fvtt-elevated-vision)](LICENSE)
 [![Version (latest)](https://img.shields.io/github/v/release/caewok/fvtt-elevated-vision)](https://github.com/caewok/fvtt-elevated-vision/releases/latest)
 [![Foundry Version](https://img.shields.io/badge/dynamic/json.svg?url=https://github.com/caewok/fvtt-elevated-vision/releases/latest/download/module.json&label=Foundry%20Version&query=$.minimumCoreVersion&colorB=blueviolet)](https://github.com/caewok/fvtt-elevated-vision/releases/latest)
+[![License](https://img.shields.io/github/license/caewok/fvtt-elevated-vision)](LICENSE)
+
+![Forge Installs](https://img.shields.io/badge/dynamic/json?label=Forge%20Installs&query=package.installs&suffix=%25&url=https://forge-vtt.com/api/bazaar/package/elevatedvision&colorB=4aa94a)
 ![Latest Release Download Count](https://img.shields.io/github/downloads/caewok/fvtt-elevated-vision/latest/module.zip)
-![Forge Installs](https://img.shields.io/badge/dynamic/json?label=Forge%20Installs&query=package.installs&suffix=%25&url=https%3A%2F%2Fforge-vtt.com%2Fapi%2Fbazaar%2Fpackage%2Felevatedvision&colorB=4aa94a)
+![All Downloads](https://img.shields.io/github/downloads/caewok/fvtt-elevated-vision/total)
 
 You can use this [Module JSON link](https://github.com/caewok/fvtt-elevated-vision/releases/latest/download/module.json) to install. Requires Foundry v10.
 

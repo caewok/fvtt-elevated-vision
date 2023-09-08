@@ -51,6 +51,7 @@ export const SETTINGS = {
   // AUTO_AVERAGING: "auto-change-elevation.averaging", // Deprecated
   CLOCKWISE_SWEEP: "enhance-cw-sweep",
   FLY_BUTTON: "add-fly-button",
+  FLY_BUTTON_ENABLED: "fly-button-enabled",
   ELEVATION_MINIMUM: "elevationmin",
   ELEVATION_INCREMENT: "elevationstep",
   CHANGELOG: "changelog"
@@ -252,6 +253,14 @@ export function registerSettings() {
     config: true,
     default: false,
     requiresReload: true,
+    type: Boolean
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.FLY_BUTTON_ENABLED, {
+    scope: "user",
+    config: false,
+    default: false,
+    requiresReload: false,
     type: Boolean
   });
 }

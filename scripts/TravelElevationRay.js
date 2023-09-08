@@ -144,7 +144,10 @@ export class TravelElevationRay {
 
   get originElevation() { return CONFIG.GeometryLib.utils.pixelsToGridUnits(this.#originElevationZ); }
 
-  set originElevation(e) { this.#originElevationZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(e); }
+  set originElevation(e) {
+    this.#originElevationZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(e);
+    this.#path.length = 0;
+  }
 
   get path() {
     if ( !this.#path.length ) this._walkPath();
