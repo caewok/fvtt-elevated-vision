@@ -83,13 +83,13 @@ export class TravelElevationRay {
     this.#token = token;
     this.TEC = token[MODULE_ID].TEC;
 
-    if ( origin ) this.origin = origin;
-    else this.origin = token.center;
+    if ( origin ) this.origin.copyFrom(origin);
+    else this.origin.copyFrom(token.center);
 
     if ( origin && Object.hasOwn(origin, "z") ) this.originElevationZ = origin.z;
     else this.#originElevationZ = token.elevationZ;
 
-    if ( destination ) this.destination = destination;
+    if ( destination ) this.destination.copyFrom(destination);
 
     this.#fly = fly ?? this.#flyButtonEnabled();
   }
