@@ -393,10 +393,10 @@ export class MarkerTracker {
   /** @type {number} */
   #deltaMag2 = 0;
 
-  /** @type{function} */
+  /** @type {function} */
   #markTerrainFn = (curr, prev) => (Math.round(prev * 10) * INV_10)!== (Math.round(curr * 10) * INV_10);
 
-  /** @type{function} */
+  /** @type {function} */
   #markTransparentTileFn;
 
   constructor(travelRay) {
