@@ -640,6 +640,7 @@ void main() {
   // Vertex 0 is the light; can end early.
   if ( vertexNum == 0 ) {
     vVertexPosition = uLightPosition.xy;
+    vTerrainTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
     gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
     return;
   }

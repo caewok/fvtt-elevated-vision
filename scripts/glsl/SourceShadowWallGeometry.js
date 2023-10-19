@@ -430,7 +430,8 @@ geom.wallCornerCoordinates(linkedWall)
     let linkUpdated = false;
     for ( const wallId of this._triWallMap.keys() ) {
       if ( wallId === updatedWallId ) continue;
-      const wall = canvas.walls.documentCollection.get(wallId).object;
+      const wall = canvas.walls.documentCollection.get(wallId)?.object;
+      if ( !wall ) continue;
       const res = this._updateWallLinkBuffer(wall, update);
       linkUpdated ||= res;
     }
