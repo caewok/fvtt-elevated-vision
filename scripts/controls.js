@@ -142,6 +142,7 @@ function addElevationLayerSubControls(controls) {
 }
 
 function renderElevationLayerSubControls() {
+  if ( !canvas.elevation.toolbar ) return;
   const tools = $(canvas.elevation.toolbar.form).parent();
   if ( !tools ) return;
   const controltools = $("li[data-tool='fill-by-pixel']").closest(".sub-controls");

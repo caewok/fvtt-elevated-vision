@@ -129,6 +129,8 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       triNumber += 1;
     }
 
+    // Debug: console.debug(`Added ${this._triWallMap.size} walls out of ${walls.length} to geometry for ${this.source.object?.name ?? this.source.object.id}`)
+
     // TODO: Should this or a subclass set interleave to true?
     this.addIndex(indices);
     this.addAttribute("aWallCorner0", aWallCorner0, 4);
@@ -430,7 +432,8 @@ geom.wallCornerCoordinates(linkedWall)
     let linkUpdated = false;
     for ( const wallId of this._triWallMap.keys() ) {
       if ( wallId === updatedWallId ) continue;
-      const wall = canvas.walls.documentCollection.get(wallId).object;
+      const wall = canvas.walls.documentCollection.get(wallId)?.object;
+      if ( !wall ) continue;
       const res = this._updateWallLinkBuffer(wall, update);
       linkUpdated ||= res;
     }
@@ -669,6 +672,7 @@ geom.wallCornerCoordinates(linkedWall)
       wallsChecked.add(wall);
       if ( !this._includeWall(wall) ) {
         const wasUpdated = this.removeWall(wall.id, { update: false });
+        // Debug: if ( wasUpdated ) console.debug(`Removed ${wall.id} from geometry for ${this.source.object?.name ?? this.source.object.id}`);
         updated ||= wasUpdated;
       } else {
         const resLink = this._updateWallLinkBuffer(wall, false);
@@ -678,8 +682,9 @@ geom.wallCornerCoordinates(linkedWall)
     }
 
     const wallsToAdd = this.source._getWalls().difference(wallsChecked);
-    wallsToAdd.forEach(w => {
-      const wasUpdated = this.addWall(w, { update: false });
+    wallsToAdd.forEach(wall => {
+      const wasUpdated = this.addWall(wall, { update: false });
+      // Debug: if ( wasUpdated ) console.debug(`Added ${wall.id} from geometry for ${this.source.object?.name ?? this.source.object.id}`);
       updated ||= wasUpdated;
     });
 
