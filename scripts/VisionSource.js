@@ -49,8 +49,8 @@ for ( let i = 0; i < buff1.length; i += 12 ) {
   segments.push(segment)
 
   Draw.segment(segment, { color: Draw.COLORS.blue, width: 5 })
-  Draw.point(segment.A, { radius: 7, color: !~segment.A.blocks ? Draw.COLORS.red : Draw.COLORS.green })
-  Draw.point(segment.B, { radius: 7, color: !~segment.B.blocks ? Draw.COLORS.red : Draw.COLORS.green })
+  Draw.point(segment.A, { radius: 7, color: ~segment.A.blocks ? Draw.COLORS.red : Draw.COLORS.green })
+  Draw.point(segment.B, { radius: 7, color: ~segment.B.blocks ? Draw.COLORS.red : Draw.COLORS.green })
 }
 
 
@@ -60,6 +60,7 @@ for ( let i = 0; i < buff1.length; i += 12 ) {
 // Methods related to VisionSource
 
 export const PATCHES = {};
+PATCHES.BASIC = {};
 PATCHES.WEBGL = {};
 PATCHES.VISIBILITY = {};
 
@@ -120,6 +121,24 @@ function _initializeEVShadowMask() {
 function targetInShadow(target, testPoint) {
   testPoint ??= target;
   return this.pointInShadow(testPoint);
+}
+
+/**
+ * New method: VisionSource.prototype._getWalls
+ * For vision, include all walls in the scene bounds, because
+ * unseen walls can block vision from light sources beyond this source range.
+ * @param {PIXI.Rectangle} bounds
+ * @returns {Set<Wall>}
+ */
+function _getWalls(bounds) {
+  const origin = PIXI.Point.fromObject(this);
+  bounds ??= canvas.dimensions.rect;
+  const collisionTest = o => this._testWallInclusion(o.t, origin);
+  return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+}
+
+PATCHES.BASIC.METHODS = {
+  _getWalls
 }
 
 PATCHES.WEBGL.METHODS = {

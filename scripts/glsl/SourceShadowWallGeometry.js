@@ -679,8 +679,8 @@ geom.wallCornerCoordinates(linkedWall)
     }
 
     const wallsToAdd = this.source._getWalls().difference(wallsChecked);
-    wallsToAdd.forEach(w => {
-      const wasUpdated = this.addWall(w, { update: false });
+    wallsToAdd.forEach(wall => {
+      const wasUpdated = this.addWall(wall, { update: false });
       updated ||= wasUpdated;
     });
 
