@@ -177,12 +177,13 @@ export class ElevationLayer extends InteractionLayer {
     if ( !['BracketLeft', 'BracketRight'].includes(event.code) ) return;
     if ( !this.brush.visible ) return;
 
-    const size = getSetting(SETTINGS.BRUSH.SIZE)
+    const size = getSetting(SETTINGS.BRUSH.SIZE);
+    const increment = (event.shiftKey) ? 5 : 1;
 
     if (event.code === 'BracketLeft') {
-      if (size > SETTINGS.BRUSH.MIN_SIZE) setSetting(SETTINGS.BRUSH.SIZE, size - 1)
+      if (size > SETTINGS.BRUSH.MIN_SIZE) setSetting(SETTINGS.BRUSH.SIZE, size - increment);
     } else {
-      if (size < SETTINGS.BRUSH.MAX_SIZE ) setSetting(SETTINGS.BRUSH.SIZE, size + 1)
+      if (size < SETTINGS.BRUSH.MAX_SIZE ) setSetting(SETTINGS.BRUSH.SIZE, size + increment);
     }
 
     this.drawBrush({ visible: true });
