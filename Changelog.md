@@ -1,3 +1,10 @@
+# 0.5.10
+Fix incorrect shading for terrain for token vision LOS when webGL shadows are enabled. Closes issue #90. Thanks @Demonkiller89.
+Handle error when deleting walls.
+Fix for token vision seeing through walls as tokens are moved around the scene. Closes issue #88.
+Treat infinite light sources as elevation near integer maximum instead of setting to 0. Closes issue #89.
+Update geometry lib to 0.2.11.
+
 # 0.5.9
 Fix for token update error. Closes issue #84.
 Add check for Rideables module tokens and avoid autoelevating them. Closes issue #83.

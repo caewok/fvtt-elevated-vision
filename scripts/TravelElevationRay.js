@@ -83,13 +83,13 @@ export class TravelElevationRay {
     this.#token = token;
     this.TEC = token[MODULE_ID].TEC;
 
-    if ( origin ) this.origin = origin;
-    else this.origin = token.center;
+    if ( origin ) this.origin.copyFrom(origin);
+    else this.origin.copyFrom(token.center);
 
     if ( origin && Object.hasOwn(origin, "z") ) this.originElevationZ = origin.z;
     else this.#originElevationZ = token.elevationZ;
 
-    if ( destination ) this.destination = destination;
+    if ( destination ) this.destination.copyFrom(destination);
 
     this.#fly = fly ?? this.#flyButtonEnabled();
   }
@@ -393,10 +393,10 @@ export class MarkerTracker {
   /** @type {number} */
   #deltaMag2 = 0;
 
-  /** @type{function} */
+  /** @type {function} */
   #markTerrainFn = (curr, prev) => (Math.round(prev * 10) * INV_10)!== (Math.round(curr * 10) * INV_10);
 
-  /** @type{function} */
+  /** @type {function} */
   #markTransparentTileFn;
 
   constructor(travelRay) {
@@ -479,11 +479,10 @@ export class MarkerTracker {
       marker, destination, this.#markTransparentTileFn,
       { alphaThreshold, skipFirst: true, forceLast: true, localOffsets, reducerFn });
 
-    if ( nextMarker.forceLast && nextMarker.currPixel > (alphaThreshold * 255) ) {
-      // Reached the destination without finding a hole in the tile. Do not add the marker.
-      return;
-    }
+    // Check if destination reached without finding a hole in the tile. If so, do not add the marker.
+    if ( !nextMarker || (nextMarker.forceLast && nextMarker.currPixel > (alphaThreshold * 255)) ) return;
 
+    // Add information for this next marker.
     nextMarker.tile = tile;
     nextMarker.t = this.tForCanvasPoint(nextMarker);
 

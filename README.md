@@ -6,7 +6,7 @@
 ![Latest Release Download Count](https://img.shields.io/github/downloads/caewok/fvtt-elevated-vision/latest/module.zip)
 ![All Downloads](https://img.shields.io/github/downloads/caewok/fvtt-elevated-vision/total)
 
-You can use this [Module JSON link](https://github.com/caewok/fvtt-elevated-vision/releases/latest/download/module.json) to install. Requires Foundry v10.
+You can use this [Module JSON link](https://github.com/caewok/fvtt-elevated-vision/releases/latest/download/module.json) to install. Requires Foundry v11.
 
 This Foundry VTT module provides an elevation canvas layer that lets the GM modify terrain elevation values for the scene. Elevation maps can be uploaded or downloaded for a scene. An optional auto-elevation setting adjusts token elevation when tokens are dragged or moved in the scene.
 
