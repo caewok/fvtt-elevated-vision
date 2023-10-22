@@ -1,5 +1,6 @@
 /* globals
 canvas,
+game,
 PIXI
 */
 "use strict";
@@ -14,7 +15,7 @@ import { SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 
 
-/*
+/* Testing
 source = _token.vision
 ev = source.elevatedvision
 
@@ -134,12 +135,18 @@ function _getWalls(bounds) {
   const origin = PIXI.Point.fromObject(this);
   bounds ??= canvas.dimensions.rect;
   const collisionTest = o => this._testWallInclusion(o.t, origin);
-  return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+  const walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+
+  // Issue #81: Perceptive compatibility.
+  const IgnoreWall = game.modules.get("perceptive")?.api?.IgnoreWall;
+  const token = this.object;
+  if ( IgnoreWall && token ) return walls.filter(w => !IgnoreWall(w.document, token.document));
+  return walls;
 }
 
 PATCHES.BASIC.METHODS = {
   _getWalls
-}
+};
 
 PATCHES.WEBGL.METHODS = {
   _initializeEVShadowGeometry,
