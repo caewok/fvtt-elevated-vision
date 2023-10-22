@@ -23,6 +23,13 @@ export const SETTINGS = {
     }
   },
 
+  BRUSH: {
+    SIZE: 'brush-size',
+    DEFAULT_SIZE: 100,
+    MAX_SIZE: 500,
+    MIN_SIZE: 1
+  },
+
   COLOR: {
     MIN: "color-min",
     MAX: "color-max",
@@ -86,7 +93,6 @@ export function defaultSceneSetting(value) {
   }
 }
 
-
 export function registerSettings() {
   log("Registering elevated vision settings");
 
@@ -136,6 +142,21 @@ export function registerSettings() {
       step: 1
     },
     default: 0,
+    requiresReload: false,
+    type: Number
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.BRUSH.SIZE, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BRUSH.SIZE}.name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BRUSH.SIZE}.hint`),
+    scope: "world",
+    config: true,
+    range: {
+      min: 1,
+      step: 1,
+      max: SETTINGS.BRUSH.MAX_SIZE
+    },
+    default: SETTINGS.BRUSH.DEFAULT_SIZE,
     requiresReload: false,
     type: Number
   });
