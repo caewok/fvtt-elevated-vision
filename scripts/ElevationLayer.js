@@ -29,7 +29,7 @@ import {
 import { testWallsForIntersections } from "./ClockwiseSweepPolygon.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
-import { setSceneSetting, getSceneSetting, getSetting, SETTINGS } from "./settings.js";
+import { setSceneSetting, getSceneSetting, setSetting, getSetting, SETTINGS } from "./settings.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
 import { TravelElevationRay } from "./TravelElevationRay.js";
@@ -95,16 +95,18 @@ export class ElevationLayer extends InteractionLayer {
    * See Ruler.prototype._onMouseMove
    */
   _onMouseMove(event) {
-    if ( !canvas.ready
-      || !canvas.elevation.active
-      || !this.elevationLabel ) return;
+    if ( !canvas.ready || !canvas.elevation.active ) return;
 
     // Get the canvas position of the mouse pointer.
     const pos = event.getLocalPosition(canvas.app.stage);
     if ( !canvas.dimensions.sceneRect.contains(pos.x, pos.y) ) {
+      this.brush.visible = false;
       this.elevationLabel.visible = false;
       return;
     }
+
+    // Update the brush preview.
+    this.drawBrush({ x: pos.x, y: pos.y, visible: true });
 
     // Update the numeric label with the elevation at this position.
     this.updateElevationLabel(pos);
@@ -124,6 +126,67 @@ export class ElevationLayer extends InteractionLayer {
     this.elevationLabel = new PreciseText(undefined, textStyle);
     this.elevationLabel.anchor = {x: 0, y: 1};
     canvas.stage.addChild(this.elevationLabel);
+  }
+
+  /**
+   * Initialize the brush.
+   */
+  initializeBrush() {
+    const brush = new PIXI.Graphics();
+    brush.visible =  false;
+    brush.x = 0;
+    brush.y = 0;
+    brush.zIndex = 10;
+
+    return brush;
+  }
+
+  /**
+   * Draw the brush.
+   */
+  drawBrush(data = {}) {
+    const canvasScale = game?.canvas?.stage?.scale?._x ?? 1.5
+    const size = getSetting(SETTINGS.BRUSH.SIZE) ?? 100
+    const lineWidth = Math.round(4 - canvasScale)
+
+    this.brush.clear();
+    this.brush.lineStyle(lineWidth)
+
+    switch (game.activeTool) {
+      case "fill-by-pixel":
+        const ellipseSize = Math.round(size / 2)
+        this.brush.drawEllipse(0, 0, ellipseSize, ellipseSize);
+        break;
+      default:
+        break;
+    }
+
+    this.brush.endFill();
+
+    this.brush.visible =  data?.visible ?? false;
+    this.brush.x = data?.x ?? canvas.mousePosition.x;
+    this.brush.y = data?.y ?? canvas.mousePosition.y;
+  }
+
+  /**
+   * Update the brush size when the [ or ] keys are pressed.
+   * Potentially replace with keybindings if/when it supports holding the key.
+   */
+  updateBrushSize(event) {
+    if ( game.activeTool !== 'fill-by-pixel' ) return;
+    if ( !['BracketLeft', 'BracketRight'].includes(event.code) ) return;
+    if ( !this.brush.visible ) return;
+
+    const size = getSetting(SETTINGS.BRUSH.SIZE);
+    const increment = (event.shiftKey) ? 5 : 1;
+
+    if (event.code === 'BracketLeft') {
+      if (size > SETTINGS.BRUSH.MIN_SIZE) setSetting(SETTINGS.BRUSH.SIZE, size - increment);
+    } else {
+      if (size < SETTINGS.BRUSH.MAX_SIZE ) setSetting(SETTINGS.BRUSH.SIZE, size + increment);
+    }
+
+    this.drawBrush({ visible: true });
   }
 
   /**
@@ -487,6 +550,7 @@ export class ElevationLayer extends InteractionLayer {
 
     this.drawElevation();
     this.container.visible = true;
+    canvas.stage.addChild(this.brush);
     canvas.stage.addChild(this.elevationLabel);
     canvas.stage.addChild(this._wallDataContainer);
   }
@@ -504,6 +568,7 @@ export class ElevationLayer extends InteractionLayer {
     const wallData = this._wallDataContainer.removeChildren();
     wallData.forEach(d => d.destroy(true));
 
+    canvas.stage.removeChild(this.brush);
     canvas.stage.removeChild(this.elevationLabel);
     if ( this._requiresSave ) this.saveSceneElevationData();
     Draw.clearDrawings();
@@ -547,6 +612,10 @@ export class ElevationLayer extends InteractionLayer {
 
     this._initialized = false;
     this._clearElevationPixelCache();
+
+    // Initialize the brush
+    this.brush = this.initializeBrush();
+    document.addEventListener("keypress", (event) => { this.updateBrushSize(event) });
 
     // Initialize the texture manager for the scene.
     const sceneEVData = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
@@ -945,6 +1014,24 @@ export class ElevationLayer extends InteractionLayer {
     return graphics;
   }
 
+  setElevationForPixel(p, elevation = 0, { temporary = false } = {}) {
+    const shape = this._circleShape(p);
+    const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
+    const color = this.elevationColor(elevation);
+    this._updateElevationCurrentMax(elevation);
+
+    // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
+    // and that causes a lighter-color border to appear outside the shape.
+    const draw = new Draw(graphics);
+    draw.shape(shape, { width: 0, fill: color});
+
+    this.renderElevation();
+
+    this._requiresSave = !temporary;
+    this.undoQueue.enqueue(graphics);
+    return graphics;
+  }
+
   /* -------------------------------------------- */
   /* NOTE: TOKEN SHAPES */
 
@@ -975,6 +1062,12 @@ export class ElevationLayer extends InteractionLayer {
     }
 
     return new PIXI.Polygon(pointsTranslated);
+  }
+
+  _circleShape(p) {
+    const brushSize = getSetting(SETTINGS.BRUSH.SIZE);
+    const r = (brushSize > 1) ? Math.round(getSetting(SETTINGS.BRUSH.SIZE) / 2) : 1;
+    return new PIXI.Circle(p.x, p.y, r);
   }
 
   /* -------------------------------------------- */
@@ -1313,7 +1406,7 @@ export class ElevationLayer extends InteractionLayer {
         this.fillLOS(o, currE);
         break;
       case "fill-by-pixel":
-        log("fill-by-pixel not yet implemented.");
+        this.setElevationForPixel(o, currE);
         break;
       case "fill-space":
         this.fill(o, currE);
@@ -1334,12 +1427,22 @@ export class ElevationLayer extends InteractionLayer {
     const currE = this.controls.currentElevation;
     log(`dragLeftStart at ${o.x}, ${o.y} with tool ${activeTool} and elevation ${currE}`, event);
 
-    if ( activeTool === "fill-by-grid" ) {
-      this.#temporaryGraphics.clear(); // Should be accomplished elsewhere already
-      const [tlx, tly] = canvas.grid.grid.getTopLeft(o.x, o.y);
-      const p = new PolygonVertex(tlx, tly);
-      const child = this.setElevationForGridSpace(o, currE, { temporary: true });
-      this.#temporaryGraphics.set(p.key, child);
+    switch ( activeTool ) {
+      case "fill-by-grid": {
+        this.#temporaryGraphics.clear(); // Should be accomplished elsewhere already
+        const [tlx, tly] = canvas.grid.grid.getTopLeft(o.x, o.y);
+        const p = new PolygonVertex(tlx, tly);
+        const child = this.setElevationForGridSpace(o, currE, { temporary: true });
+        this.#temporaryGraphics.set(p.key, child);
+      } 
+      break;
+      case "fill-by-pixel": {
+        this.#temporaryGraphics.clear(); // Should be accomplished elsewhere already
+        const p = new PolygonVertex(o.x, o.y);
+        const child = this.setElevationForPixel(p, currE, { temporary: true });
+        this.#temporaryGraphics.set(p.key, child);
+      }
+      break;
     }
   }
 
@@ -1355,14 +1458,26 @@ export class ElevationLayer extends InteractionLayer {
 
     // TO-DO: What if the user changes the elevation mid-drag? (if MouseWheel enabled)
 
-    if ( activeTool === "fill-by-grid" ) {
-      const [tlx, tly] = canvas.grid.grid.getTopLeft(d.x, d.y);
-      const p = new PolygonVertex(tlx, tly);
-      if ( !this.#temporaryGraphics.has(p.key) ) {
-        log(`dragLeftMove from ${o.x},${o.y} to ${d.x}, ${d.y} with tool ${activeTool} and elevation ${currE}`, event);
-        const child = this.setElevationForGridSpace(d, currE, { temporary: true });
-        this.#temporaryGraphics.set(p.key, child);
+    switch ( activeTool ) {
+      case "fill-by-grid": {
+        const [tlx, tly] = canvas.grid.grid.getTopLeft(d.x, d.y);
+        const p = new PolygonVertex(tlx, tly);
+        if ( !this.#temporaryGraphics.has(p.key) ) {
+          log(`dragLeftMove from ${o.x},${o.y} to ${d.x}, ${d.y} with tool ${activeTool} and elevation ${currE}`, event);
+          const child = this.setElevationForGridSpace(d, currE, { temporary: true });
+          this.#temporaryGraphics.set(p.key, child);
+        }
       }
+      break;
+      case "fill-by-pixel": {
+        const p = new PolygonVertex(d.x, d.y);
+        if ( !this.#temporaryGraphics.has(p.key) ) {
+          log(`dragLeftMove from ${o.x},${o.y} to ${d.x}, ${d.y} with tool ${activeTool} and elevation ${currE}`, event);
+          const child = this.setElevationForPixel(p, currE, { temporary: true });
+          this.#temporaryGraphics.set(p.key, child);
+        }
+      }
+      break;
     }
   }
 

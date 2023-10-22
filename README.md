@@ -65,9 +65,11 @@ Switch to the elevation layer in the controls to modify the elevation data in a 
 
 ## Setting elevation
 
-Currently three tools are provided to modify elevation in a scene.
+Currently four tools are provided to modify elevation in a scene.
 
  - Fill by grid. Click a spot on the scene to set the elevation for that grid space.
+
+ - Fill by pixel. Paint elevation using a resizable circular brush. Press and hold the **[** or **]** key to decrease or increase the brush size, respectively. Hold the shift key while pressing to resize the brush faster.
 
  - Fill by line-of-sight. Click a spot, and all portions of the map will be set to that elevation that have line of sight to that spot. This uses the same algorithm as token vision, so it is the equivalent of a token's 360º vision from that spot, assuming global illumination.
 

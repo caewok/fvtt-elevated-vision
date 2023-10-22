@@ -23,7 +23,10 @@ import { ElevationLayerToolBar } from "./ElevationLayerToolBar.js";
 import { MODULE_ID } from "./const.js";
 
 Hooks.on("getSceneControlButtons", addElevationLayerSceneControls);
-Hooks.on("renderSceneControls", addElevationLayerSubControls);
+Hooks.on("renderSceneControls", (controls) => {
+  addElevationLayerSubControls(controls)
+  drawBrush(controls);
+});
 Hooks.on("renderTerrainLayerToolBar", renderElevationLayerSubControls);
 Hooks.on("getSceneControlButtons", addDirectionalLightingControl);
 
@@ -63,14 +66,11 @@ function addElevationLayerSceneControls(controls) {
         title: game.i18n.localize(`${MODULE_ID}.controls.fill-by-los.name`),
         icon: "fas fa-eye"
       },
-
-      /* TO-DO: How feasible would be a "painting" option with circle or square brush?
       {
         name: "fill-by-pixel",
         title: "Fill by Pixel",
         icon: "fas fa-paintbrush-fine"
       },
-      */
       {
         name: "fill-space",
         title: game.i18n.localize(`${MODULE_ID}.controls.fill-space.name`),
@@ -138,6 +138,17 @@ function addElevationLayerSubControls(controls) {
   } else {
     if ( !canvas.elevation.toolbar ) return;
     canvas.elevation.toolbar.close();
+  }
+}
+
+function drawBrush(controls) {
+  if ( !canvas.elevation ) return;
+  switch (controls.tool) {
+    case 'fill-by-pixel': 
+      canvas.elevation.drawBrush();
+      break;
+    default:
+      break;
   }
 }
 
