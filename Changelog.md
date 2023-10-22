@@ -1,5 +1,6 @@
 ## 0.5.11
-
+Accepted PR from @Larkinabout that added a resizable circular pixel brush option. Also fixed an error when scene shading was set to none and you toggled the Prone status effect.  Thanks @Larkinabout!
+Possible compatibility fix for Perceptive module. Issue #81.
 
 ## 0.5.10
 Fix incorrect shading for terrain for token vision LOS when webGL shadows are enabled. Closes issue #90. Thanks @Demonkiller89.
