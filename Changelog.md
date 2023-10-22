@@ -1,6 +1,5 @@
 ## 0.5.11
 Accepted PR from @Larkinabout that added a resizable circular pixel brush option. Also fixed an error when scene shading was set to none and you toggled the Prone status effect.  Thanks @Larkinabout!
-
 Possible compatibility fix for Perceptive module. Issue #81.
 
 ## 0.5.10
