@@ -146,6 +146,14 @@ Hooks.once("ready", () => {
                      For both elevation and tile opacity, use the average. This is the most resource-intensive.`
         })
 
+        .addEntry({
+            version: "0.5.11",
+            title: "Circular brush",
+            body: `\
+                Thanks entirely to @Larkinabout, you can now select a resizable circular brush for painting
+                elevation in the scene. You can resize the brush in the module settings.`
+        })
+
         .build()
         ?.render(true);
 });
