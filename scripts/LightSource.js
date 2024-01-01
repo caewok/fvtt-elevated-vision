@@ -8,7 +8,7 @@ RenderedPointSource
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID, FLAGS } from "./const.js";
-import { SETTINGS, getSetting } from "./settings.js";
+import { Settings } from "./settings.js";
 import { SizedPointSourceShadowWallShader, ShadowMesh } from "./glsl/ShadowWallShader.js";
 
 // Methods related to LightSource
@@ -57,7 +57,7 @@ function _initialize(wrapped, data) {
   wrapped(data);
   if ( !this.object ) return;
   this.data.lightSize = this.object.document.getFlag(MODULE_ID, FLAGS.LIGHT_SIZE)
-    ?? getSetting(SETTINGS.LIGHTING.LIGHT_SIZE)
+    ?? Settings.get(Settings.KEYS.LIGHTING.LIGHT_SIZE)
     ?? 0;
 }
 
@@ -68,7 +68,7 @@ function _initialize(wrapped, data) {
  */
 function _getPolygonConfiguration(wrapped) {
   const config = wrapped();
-  if ( getSetting(SETTINGS.LIGHTS_FULL_PENUMBRA) ) config.type = "universal";
+  if ( Settings.get(Settings.KEYS.LIGHTS_FULL_PENUMBRA) ) config.type = "universal";
   return config;
 }
 

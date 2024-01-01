@@ -8,7 +8,7 @@ GlobalLightSource,
 // Patches
 
 import { Patcher } from "./Patcher.js";
-import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
+import { getSceneSetting, Settings } from "./settings.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
@@ -91,8 +91,8 @@ export function initializePatching() {
  * Register patches for the current settings
  */
 export function registerPatchesForSettings() {
-  const visibility = getSetting(SETTINGS.TEST_VISIBILITY);
-  const sweep = getSetting(SETTINGS.CLOCKWISE_SWEEP);
+  const visibility = Settings.get(Settings.KEYS.TEST_VISIBILITY);
+  const sweep = Settings.get(Settings.KEYS.CLOCKWISE_SWEEP);
   unregisterPatchesForSettings();
   if ( visibility ) PATCHER.registerGroup("VISIBILITY");
   if ( sweep ) PATCHER.registerGroup("SWEEP");
@@ -107,7 +107,7 @@ function unregisterPatchesForSettings() {
  * Register patches for the current scene settings
  */
 export function registerPatchesForSceneSettings() {
-  const { ALGORITHM, TYPES } = SETTINGS.SHADING;
+  const { ALGORITHM, TYPES } = Settings.KEYS.SHADING;
   const algorithm = getSceneSetting(ALGORITHM);
   unregisterPatchesForSceneSettings();
   switch ( algorithm ) {

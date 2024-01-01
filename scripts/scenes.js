@@ -12,19 +12,19 @@ ui
 
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
-import { SETTINGS, getSetting, setSetting, getSceneSetting } from "./settings.js";
+import { Settings, getSceneSetting } from "./settings.js";
 import { registerPatchesForSceneSettings } from "./patching.js";
 
 const FLY_CONTROL = {
-  name: SETTINGS.FLY_BUTTON,
-  title: `${MODULE_ID}.controls.${SETTINGS.FLY_BUTTON}.name`,
+  name: Settings.KEYS.FLY_BUTTON,
+  title: `${MODULE_ID}.controls.${Settings.KEYS.FLY_BUTTON}.name`,
   icon: "fa-solid fa-plane-lock",
   toggle: true,
   onClick: flyControlClicked
 };
 
 async function flyControlClicked(toggle) {
-  await setSetting(SETTINGS.FLY_BUTTON_ENABLED, toggle);
+  await Settings.set(Settings.KEYS.FLY_BUTTON_ENABLED, toggle);
 }
 
 Hooks.once("init", function() {
@@ -42,7 +42,7 @@ Hooks.on("preUpdateScene", preUpdateSceneHook);
  * Render the fly button if that setting is enabled and auto elevation is enabled.
  */
 function getSceneControlButtonsHook(controls) {
-  if ( !canvas.scene || !getSetting(SETTINGS.FLY_BUTTON) || !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
+  if ( !canvas.scene || !Settings.get(Settings.KEYS.FLY_BUTTON) || !getSceneSetting(Settings.KEYS.AUTO_ELEVATION) ) return;
   const tokenTools = controls.find(c => c.name === "token");
   tokenTools.tools.push(FLY_CONTROL);
 }
@@ -55,14 +55,14 @@ async function renderSceneConfigHook(app, html, data) {
 
   // Algorithm names for the pull down.
   const renderData = {};
-  renderData[MODULE_ID] = { algorithms: SETTINGS.SHADING.LABELS };
+  renderData[MODULE_ID] = { algorithms: Settings.KEYS.SHADING.LABELS };
 
   const scene = app.object;
   const sceneSettings = [
-    SETTINGS.ELEVATION_MINIMUM,
-    SETTINGS.ELEVATION_INCREMENT,
-    SETTINGS.AUTO_ELEVATION,
-    SETTINGS.SHADING.ALGORITHM
+    Settings.KEYS.ELEVATION_MINIMUM,
+    Settings.KEYS.ELEVATION_INCREMENT,
+    Settings.KEYS.AUTO_ELEVATION,
+    Settings.KEYS.SHADING.ALGORITHM
   ];
 
   for ( const setting of sceneSettings ) {
@@ -81,7 +81,7 @@ async function renderSceneConfigHook(app, html, data) {
  * Monitor whether EV has been enabled or disabled for a scene.
  */
 async function preUpdateSceneHook(document, change, options, _userId) {
-  options.EValgorithm = document.flags[MODULE_ID]?.[SETTINGS.SHADING.ALGORITHM];
+  options.EValgorithm = document.flags[MODULE_ID]?.[Settings.KEYS.SHADING.ALGORITHM];
 }
 
 async function updateSceneHook(document, change, _options, _userId) {
@@ -90,34 +90,34 @@ async function updateSceneHook(document, change, _options, _userId) {
   if ( !modFlags || isEmpty(modFlags) ) return;
 
   // If the scene elevation step size is changed, set the current elevation in the toolbar to the nearest step.
-  if ( Object.hasOwn(modFlags, SETTINGS.ELEVATION_INCREMENT) ) {
-    const newStep = modFlags[SETTINGS.ELEVATION_INCREMENT];
+  if ( Object.hasOwn(modFlags, Settings.KEYS.ELEVATION_INCREMENT) ) {
+    const newStep = modFlags[Settings.KEYS.ELEVATION_INCREMENT];
     const oldValue = canvas.elevation.controls.currentElevation ?? newStep;
     canvas.elevation.controls.currentElevation = oldValue.toNearest(newStep);
   }
 
   // If the updated scene is currently the active scene, then update patches and fly controls.
-  const autoelevate = modFlags[SETTINGS.AUTO_ELEVATION];
+  const autoelevate = modFlags[Settings.KEYS.AUTO_ELEVATION];
   if ( typeof autoelevate !== "undefined" ) {
     updateFlyTokenControl(autoelevate);
     if ( autoelevate === true ) ui.notifications.notify("Elevated Vision autoelevate enabled for scene.");
     else if ( autoelevate === false ) ui.notifications.notify("Elevated Vision autoelevate disabled for scene.");
   }
 
-  const algorithm = modFlags[SETTINGS.SHADING.ALGORITHM];
+  const algorithm = modFlags[Settings.KEYS.SHADING.ALGORITHM];
   if ( algorithm ) {
     registerPatchesForSceneSettings();
-    const label = game.i18n.localize(SETTINGS.SHADING.LABELS[algorithm]);
+    const label = game.i18n.localize(Settings.KEYS.SHADING.LABELS[algorithm]);
     ui.notifications.notify(`Elevated Vision scene shadows switched to ${label}.`);
   }
 }
 
 export function updateFlyTokenControl(enable) {
-  enable ??= getSceneSetting(SETTINGS.AUTO_ELEVATION);
+  enable ??= getSceneSetting(Settings.KEYS.AUTO_ELEVATION);
   const tokenTools = ui.controls.controls.find(c => c.name === "token");
-  const flyIndex = tokenTools.tools.findIndex(b => b.name === SETTINGS.FLY_BUTTON);
+  const flyIndex = tokenTools.tools.findIndex(b => b.name === Settings.KEYS.FLY_BUTTON);
   if ( enable && !~flyIndex ) {
-    FLY_CONTROL.active = getSetting(SETTINGS.FLY_BUTTON_ENABLED);
+    FLY_CONTROL.active = Settings.get(Settings.KEYS.FLY_BUTTON_ENABLED);
     tokenTools.tools.push(FLY_CONTROL);
   }
   else if ( ~flyIndex ) tokenTools.tools.splice(flyIndex, 1);
