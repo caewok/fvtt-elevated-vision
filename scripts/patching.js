@@ -13,7 +13,6 @@ import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
-import { PATCHES as PATCHES_AmbientSound } from "./AmbientSound.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
@@ -32,8 +31,6 @@ import {
 
 import {
   PATCHES_AmbientLightConfig,
-  PATCHES_AmbientSoundConfig,
-  PATCHES_TileConfig,
   PATCHES_TokenConfig } from "./render_configs.js";
 
 import { PATCHES_Token, PATCHES_ActiveEffect } from "./Token.js";
@@ -59,8 +56,6 @@ export const PATCHES = {
   AdaptiveLightingShader: PATCHES_AdaptiveLightingShader,
   AmbientLight: PATCHES_AmbientLight,
   AmbientLightConfig: PATCHES_AmbientLightConfig,
-  AmbientSound: PATCHES_AmbientSound,
-  AmbientSoundConfig: PATCHES_AmbientSoundConfig,
   Canvas: PATCHES_Canvas,
   CanvasVisibility: PATCHES_CanvasVisibility,
   ClockwiseSweepPolygon: PATCHES_ClockwiseSweepPolygon,
@@ -72,7 +67,6 @@ export const PATCHES = {
   "PIXI.LegacyGraphics": PATCHES_PIXI_LegacyGraphics,
   RenderedPointSource: PATCHES_RenderedPointSource,
   Tile: PATCHES_Tile,
-  TileConfig: PATCHES_TileConfig,
   Token: PATCHES_Token,
   TokenConfig: PATCHES_TokenConfig,
   VisionSource: PATCHES_VisionSource,
