@@ -2,7 +2,7 @@
 */
 "use strict";
 
-import { SETTINGS, getSceneSetting } from "../settings.js";
+import { Settings, getSceneSetting } from "../settings.js";
 import { ShaderPatcher, applyPatches } from "../perfect-vision/shader-patcher.js";
 
 export const PATCHES = {};
@@ -30,7 +30,7 @@ function create(wrapped, ...args) {
   );
 
   const shader = wrapped(...args);
-  const shaderAlgorithm = getSceneSetting(SETTINGS.SHADING.ALGORITHM);
+  const shaderAlgorithm = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM);
   shader.uniforms.uEVShadowSampler = PIXI.Texture.EMPTY;
   shader.uniforms.uEVShadows = false;
   return shader;

@@ -29,7 +29,7 @@ import {
 import { testWallsForIntersections } from "./ClockwiseSweepPolygon.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
-import { setSceneSetting, getSceneSetting, setSetting, getSetting, SETTINGS } from "./settings.js";
+import { setSceneSetting, getSceneSetting, Settings } from "./settings.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
 import { TravelElevationRay } from "./TravelElevationRay.js";
@@ -146,7 +146,7 @@ export class ElevationLayer extends InteractionLayer {
    */
   drawBrush(data = {}) {
     const canvasScale = game?.canvas?.stage?.scale?._x ?? 1.5
-    const size = getSetting(SETTINGS.BRUSH.SIZE) ?? 100
+    const size = Settings.get(Settings.KEYS.BRUSH.SIZE) ?? 100
     const lineWidth = Math.round(4 - canvasScale)
 
     this.brush.clear();
@@ -177,13 +177,13 @@ export class ElevationLayer extends InteractionLayer {
     if ( !['BracketLeft', 'BracketRight'].includes(event.code) ) return;
     if ( !this.brush.visible ) return;
 
-    const size = getSetting(SETTINGS.BRUSH.SIZE);
+    const size = Settings.get(Settings.KEYS.BRUSH.SIZE);
     const increment = (event.shiftKey) ? 5 : 1;
 
     if (event.code === 'BracketLeft') {
-      if (size > SETTINGS.BRUSH.MIN_SIZE) setSetting(SETTINGS.BRUSH.SIZE, size - increment);
+      if (size > Settings.KEYS.BRUSH.MIN_SIZE) Settings.set(Settings.KEYS.BRUSH.SIZE, size - increment);
     } else {
-      if (size < SETTINGS.BRUSH.MAX_SIZE ) setSetting(SETTINGS.BRUSH.SIZE, size + increment);
+      if (size < Settings.KEYS.BRUSH.MAX_SIZE ) Settings.set(Settings.KEYS.BRUSH.SIZE, size + increment);
     }
 
     this.drawBrush({ visible: true });
@@ -287,7 +287,7 @@ export class ElevationLayer extends InteractionLayer {
    * @type {number}
    */
   get elevationStep() {
-    const step = getSceneSetting(SETTINGS.ELEVATION_INCREMENT);
+    const step = getSceneSetting(Settings.KEYS.ELEVATION_INCREMENT);
     return step ?? canvas.scene.dimensions.distance;
   }
 
@@ -312,7 +312,7 @@ export class ElevationLayer extends InteractionLayer {
       return out || 0;
     };
 
-    setSceneSetting(SETTINGS.ELEVATION_INCREMENT, stepNew);
+    setSceneSetting(Settings.KEYS.ELEVATION_INCREMENT, stepNew);
     this.changePixelValuesUsingFunction(stepAdjust);
   }
 
@@ -323,7 +323,7 @@ export class ElevationLayer extends InteractionLayer {
    * @type {number}
    */
   get elevationMin() {
-    const min = getSceneSetting(SETTINGS.ELEVATION_MINIMUM);
+    const min = getSceneSetting(Settings.KEYS.ELEVATION_MINIMUM);
     return min ?? 0;
   }
 
@@ -349,7 +349,7 @@ export class ElevationLayer extends InteractionLayer {
       return out || 0; // In case of NaN, etc.
     };
 
-    setSceneSetting(SETTINGS.ELEVATION_MINIMUM, minNew);
+    setSceneSetting(Settings.KEYS.ELEVATION_MINIMUM, minNew);
     this.changePixelValuesUsingFunction(minAdjust);
   }
 
@@ -1065,8 +1065,8 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   _circleShape(p) {
-    const brushSize = getSetting(SETTINGS.BRUSH.SIZE);
-    const r = (brushSize > 1) ? Math.round(getSetting(SETTINGS.BRUSH.SIZE) / 2) : 1;
+    const brushSize = Settings.get(Settings.KEYS.BRUSH.SIZE);
+    const r = (brushSize > 1) ? Math.round(Settings.get(Settings.KEYS.BRUSH.SIZE) / 2) : 1;
     return new PIXI.Circle(p.x, p.y, r);
   }
 
@@ -1434,7 +1434,7 @@ export class ElevationLayer extends InteractionLayer {
         const p = new PolygonVertex(tlx, tly);
         const child = this.setElevationForGridSpace(o, currE, { temporary: true });
         this.#temporaryGraphics.set(p.key, child);
-      } 
+      }
       break;
       case "fill-by-pixel": {
         this.#temporaryGraphics.clear(); // Should be accomplished elsewhere already

@@ -9,7 +9,7 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID, FLAGS } from "./const.js";
-import { getSceneSetting, SETTINGS } from "./settings.js";
+import { getSceneSetting, Settings } from "./settings.js";
 import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { TravelElevationRay } from "./TravelElevationRay.js";
@@ -171,7 +171,7 @@ function updateTokenHook(tokenD, changed, _options, _userId) {
 // If the token moves, calculate its new elevation.
 function preUpdateTokenHook(tokenD, changes, options, _userId) {
   // options.ridingMovement: issue #83—compatibility with Rideables.
-  if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) || options.RidingMovement ) return;
+  if ( !getSceneSetting(Settings.KEYS.AUTO_ELEVATION) || options.RidingMovement ) return;
 
   // Debug
   // console.debug(`preUpdateToken hook ${changes.x}, ${changes.y}, ${changes.elevation}
@@ -215,7 +215,7 @@ function preUpdateTokenHook(tokenD, changes, options, _userId) {
  */
 function refreshTokenHook(token, flags) {
   if ( !flags.refreshPosition ) return;
-  if ( !getSceneSetting(SETTINGS.AUTO_ELEVATION) ) return;
+  if ( !getSceneSetting(Settings.KEYS.AUTO_ELEVATION) ) return;
 
   // Debug
 //   console.debug(`EV refreshToken for ${token.name} at ${token.position.x},${token.position.y};
@@ -286,7 +286,7 @@ PATCHES_Token.BASIC.METHODS = { getTopLeft };
  * This will cause shadows to change based on the changed token height.
  */
 function createOrRemoveActiveEffectHook(effect, _opts, _userId) {
-  if ( getSceneSetting(SETTINGS.SHADING.ALGORITHM) === SETTINGS.SHADING.TYPES.NONE ) return;
+  if ( getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) === Settings.KEYS.SHADING.TYPES.NONE ) return;
   if ( !effect.statuses.has(CONFIG.GeometryLib.proneStatusId) ) return;
 
   const tokens = effect.parent?.getActiveTokens();

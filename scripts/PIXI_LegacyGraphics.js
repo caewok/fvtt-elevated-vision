@@ -3,7 +3,7 @@ ClockwiseSweepPolygon
 */
 "use strict";
 
-import { getSceneSetting, SETTINGS } from "./settings.js";
+import { getSceneSetting, Settings } from "./settings.js";
 
 export const PATCHES = {};
 PATCHES.POLYGONS = {};
@@ -15,7 +15,7 @@ PATCHES.POLYGONS = {};
 function drawShape(wrapped, shape) {
   if ( !(shape instanceof ClockwiseSweepPolygon) ) return wrapped(shape);
 
-  const { ALGORITHM, TYPES } = SETTINGS.SHADING;
+  const { ALGORITHM, TYPES } = Settings.KEYS.SHADING;
   const shaderAlgorithm = getSceneSetting(ALGORITHM) ?? TYPES.NONE;
   if ( (shaderAlgorithm === TYPES.POLYGONS || shaderAlgorithm === TYPES.WEBGL) && Object.hasOwn(shape, "_evPolygons") ) {
     for ( const poly of shape._evPolygons ) {

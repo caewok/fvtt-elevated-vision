@@ -9,7 +9,7 @@ PIXI
 
 import { MODULE_ID } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
-import { SETTINGS, getSetting } from "./settings.js";
+import { Settings } from "./settings.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 
 /* Averaging pixel values
@@ -155,9 +155,9 @@ export class TravelElevationRay {
   }
 
   #flyButtonEnabled() {
-    if ( !getSetting(SETTINGS.FLY_BUTTON) ) return false;
+    if ( !Settings.get(Settings.KEYS.FLY_BUTTON) ) return false;
     const token_controls = ui.controls.controls.find(elem => elem.name === "token");
-    const fly = token_controls.tools.find(elem => elem.name === SETTINGS.FLY_BUTTON);
+    const fly = token_controls.tools.find(elem => elem.name === Settings.KEYS.FLY_BUTTON);
     return fly?.active;
   }
 
