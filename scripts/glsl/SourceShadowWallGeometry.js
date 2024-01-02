@@ -235,7 +235,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     let blockingWallA;
     let blockAngleA = 360;
     for ( const linkedWall of linkedA ) {
-      const blockAngle = this.endpointBlocks(wall, linkedWall, "A");
+      const blockAngle = this.endpointBlockAngle(wall, linkedWall, "A");
       if ( blockAngle === -1 || blockAngle > blockAngleA ) continue;
       blockingWallA = linkedWall;
       blockAngleA = blockAngle;
@@ -244,7 +244,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     let blockingWallB;
     let blockAngleB = 360;
     for ( const linkedWall of linkedB ) {
-      const blockAngle = this.endpointBlocks(wall, linkedWall, "B");
+      const blockAngle = this.endpointBlockAngle(wall, linkedWall, "B");
       if ( blockAngle === -1 || blockAngle > blockAngleB ) continue;
       blockingWallB = linkedWall;
       blockAngleB = blockAngle;
@@ -271,6 +271,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   }
 
   /**
+   * Should this endpoint be considered blocking with respect to the source?
    * Determine if a wall endpoint should be considered "blocking", meaning it blocks all light
    * because it is connected to 2+ walls.
    * Considers whether the wall is blocking for the light source, whether it is limited,
@@ -279,9 +280,10 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @param {Wall} wall                 Wall whose endpoint is shared with the linked wall
    * @param {Wall} linkedWall           Linked wall to test for this endpoint
    * @param {"A"|"B"} endpointName      Which endpoint to test
-   * @returns {boolean} Should this endpoint be considered blocking with respect to the source?
+   * @returns {number} Angle in degrees outside the "V" if point is outside; otherwise angle inside.
+   *   If not blocking, returns -1.
    */
-  endpointBlocks(wall, linkedWall, endpointName) {
+  endpointBlockAngle(wall, linkedWall, endpointName) {
     if ( !(this._triWallMap.has(linkedWall.id) || this._includeWall(linkedWall)) ) return -1; // Quicker to check the map first.
 
     const sharedPt = wall[endpointName];
@@ -312,8 +314,8 @@ Point3d = CONFIG.GeometryLib.threeD.Point3d
 api = game.modules.get("elevatedvision").api
 DirectionalLightSource = api.DirectionalLightSource
 
-geom.endpointBlocks(wall, linkedWall, "B")
-geom.endpointBlocks(linkedWall, wall, "A")
+geom.endpointBlockAngle(wall, linkedWall, "B")
+geom.endpointBlockAngle(linkedWall, wall, "A")
 geom.wallCornerCoordinates(wall)
 geom.wallCornerCoordinates(linkedWall)
 
