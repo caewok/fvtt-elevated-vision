@@ -27,6 +27,7 @@ import { DirectionalLightSource } from "./DirectionalLightSource.js";
 // Register methods, patches, settings
 import { PATCHER, initializePatching, registerPatchesForSceneSettings } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
+import { registerElevationConfig } from "./geometry/elevation_configs.js";
 
 // For elevation layer registration and API
 import { ElevationLayer } from "./ElevationLayer.js";
@@ -171,7 +172,8 @@ Hooks.once("init", function() {
 });
 
 Hooks.once("setup", function() {
-  // The game.scenes object is present here
+  registerElevationConfig("TileConfig", "Elevated Vision");
+  registerElevationConfig("AmbientLightConfig", "Elevated Vision");
 });
 
 Hooks.on("canvasInit", function(_canvas) {
