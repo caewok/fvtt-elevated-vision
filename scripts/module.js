@@ -171,7 +171,8 @@ Hooks.once("init", function() {
 });
 
 Hooks.once("setup", function() {
-  // The game.scenes object is present here
+  registerElevationConfig("TileConfig", "Elevated Vision");
+  registerElevationConfig("AmbientLightConfig", "Elevated Vision");
 });
 
 Hooks.on("canvasInit", function(_canvas) {
