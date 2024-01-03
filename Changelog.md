@@ -1,4 +1,6 @@
 ## 0.5.12
+Fix terrain wall shadow leakage when walls are in a "V." Closes issue #95, but unfortunately causes the terrain walls to lose their penumbra with sized light sources. See issue #103. This is preferable to shadow leakage because the penumbra is a subtle visual-only effect.
+
 Refactor Settings internal class.
 Update Patcher from ATV.
 Update geometry lib to 0.2.12.
