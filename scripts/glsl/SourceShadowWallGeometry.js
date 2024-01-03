@@ -10,7 +10,7 @@ Wall
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "../const.js";
-import { getLinkedWalls, pointVTest } from "../util.js";
+import { getLinkedWalls, pointVTest, tangentToV } from "../util.js";
 import { testWallsForIntersections } from "../ClockwiseSweepPolygon.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { DirectionalLightSource } from "../DirectionalLightSource.js";
@@ -129,8 +129,6 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       triNumber += 1;
     }
 
-    // Debug: console.debug(`Added ${this._triWallMap.size} walls out of ${walls.length} to geometry for ${this.source.object?.name ?? this.source.object.id}`)
-
     // TODO: Should this or a subclass set interleave to true?
     this.addIndex(indices);
     this.addAttribute("aWallCorner0", aWallCorner0, 4);
@@ -235,19 +233,21 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     let blockingWallA;
     let blockAngleA = 360;
     for ( const linkedWall of linkedA ) {
-      const blockAngle = this.endpointBlockAngle(wall, linkedWall, "A");
+      const blockAngle = this.sharedEndpointAngle(wall, linkedWall, "A");
       if ( blockAngle === -1 || blockAngle > blockAngleA ) continue;
       blockingWallA = linkedWall;
       blockAngleA = blockAngle;
+      if ( blockAngle === -2 ) break;
     }
 
     let blockingWallB;
     let blockAngleB = 360;
     for ( const linkedWall of linkedB ) {
-      const blockAngle = this.endpointBlockAngle(wall, linkedWall, "B");
+      const blockAngle = this.sharedEndpointAngle(wall, linkedWall, "B");
       if ( blockAngle === -1 || blockAngle > blockAngleB ) continue;
       blockingWallB = linkedWall;
       blockAngleB = blockAngle;
+      if ( blockAngle === -2 ) break;
     }
 
     // For a given wall, its "w" coordinate is:
@@ -255,14 +255,16 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // -1: No blocking
     // 0+: wall.key representing location of the opposite endpoint of the linked wall.
     const blockWallAKey = blockAngleA === 360 ? -1
-      : blockAngleA <= 180 ? -2
-        : blockingWallA.A.key === wall.A.key ? blockingWallA.B.key
-          : blockingWallA.A.key;
+      : blockAngleA === -2 ? -2
+        : blockAngleA <= 180 ? -2 // Should not happen.
+          : blockingWallA.A.key === wall.A.key ? blockingWallA.B.key
+            : blockingWallA.A.key;
 
     const blockWallBKey = blockAngleB === 360 ? -1
-      : blockAngleB <= 180 ? -2
-        : blockingWallB.A.key === wall.A.key ? blockingWallB.B.key
-          : blockingWallB.A.key;
+      : blockAngleB === -2 ? -2
+        : blockAngleB <= 180 ? -2 // Should not happen.
+          : blockingWallB.A.key === wall.A.key ? blockingWallB.B.key
+            : blockingWallB.A.key;
 
     return {
       corner0: [A.x, A.y, top, blockWallAKey],
@@ -271,36 +273,30 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   }
 
   /**
-   * Should this endpoint be considered blocking with respect to the source?
-   * Determine if a wall endpoint should be considered "blocking", meaning it blocks all light
-   * because it is connected to 2+ walls.
-   * Considers whether the wall is blocking for the light source, whether it is limited,
-   * and whether it is at an angle that requires blocking.
-   * Required to avoid light leakage due to penumbra in the shader.
+   * Is the line between the source origin and the point of the V tangential to the V?
+   * If the source is inside the V, this is false.
+   * If the source --> point of the V will end inside the V, it is also false.
+   * Source --> point of V must end outside the V.
+   * Tangential points do not block the light, but rather cause shadows.
    * @param {Wall} wall                 Wall whose endpoint is shared with the linked wall
    * @param {Wall} linkedWall           Linked wall to test for this endpoint
    * @param {"A"|"B"} endpointName      Which endpoint to test
-   * @returns {number} Angle in degrees outside the "V" if point is outside; otherwise angle inside.
-   *   If not blocking, returns -1.
+   * @returns {number}
+   *   -2 if not tangential to the V.
+   *   -1 if not blocking.
+   *   Angle in degrees outside the "V" if the point is tangential.
    */
-  endpointBlockAngle(wall, linkedWall, endpointName) {
+  sharedEndpointAngle(wall, linkedWall, sharedEndpointName) {
     if ( !(this._triWallMap.has(linkedWall.id) || this._includeWall(linkedWall)) ) return -1; // Quicker to check the map first.
 
-    const sharedPt = wall[endpointName];
-    if ( this.isLimited(linkedWall) ) {
-      let topZ = linkedWall.topZ;
-      if ( !isFinite(topZ) ) topZ = 1e06;
-      const dest = new Point3d(sharedPt.x, sharedPt.y, topZ);
-      if ( !this._wallBetween(dest, [wall, linkedWall]) ) return -1;
-    }
-
-    // Return the angle between the wall and the linked wall.
-    // Clockwise angle from wall other endpoint --> shared --> linked wall other endpoint
-    const otherWallPt = wall[endpointName === "A" ? "B" : "A"];
+    const sharedPt = wall[sharedEndpointName];
+    const otherWallPt = wall[sharedEndpointName === "A" ? "B" : "A"];
     const otherLinkedPt = linkedWall.A.key === sharedPt.key ? linkedWall.B : linkedWall.A;
     const sourceOrigin = this.sourceOrigin;
+    if ( !tangentToV(otherWallPt, sharedPt, otherLinkedPt, sourceOrigin) ) return -2;
     return pointVTest(otherWallPt, sharedPt, otherLinkedPt, sourceOrigin);
   }
+
 
   /** Testing endpoint blocks
 [wall] = canvas.walls.controlled
@@ -314,11 +310,16 @@ Point3d = CONFIG.GeometryLib.threeD.Point3d
 api = game.modules.get("elevatedvision").api
 DirectionalLightSource = api.DirectionalLightSource
 
-geom.endpointBlockAngle(wall, linkedWall, "B")
-geom.endpointBlockAngle(linkedWall, wall, "A")
 geom.wallCornerCoordinates(wall)
 geom.wallCornerCoordinates(linkedWall)
 
+geom.sharedEndpointAngle(wall, linkedWall, "B")
+geom.sharedEndpointAngle(wall, linkedWall, "A")
+
+sharedPt = wall[endpointName];
+otherWallPt = wall[endpointName === "A" ? "B" : "A"];
+otherLinkedPt = linkedWall.A.key === sharedPt.key ? linkedWall.B : linkedWall.A;
+sourceOrigin = geom.sourceOrigin;
 
   */
 
@@ -674,7 +675,6 @@ geom.wallCornerCoordinates(linkedWall)
       wallsChecked.add(wall);
       if ( !this._includeWall(wall) ) {
         const wasUpdated = this.removeWall(wall.id, { update: false });
-        // Debug: if ( wasUpdated ) console.debug(`Removed ${wall.id} from geometry for ${this.source.object?.name ?? this.source.object.id}`);
         updated ||= wasUpdated;
       } else {
         const resLink = this._updateWallLinkBuffer(wall, false);
@@ -686,7 +686,6 @@ geom.wallCornerCoordinates(linkedWall)
     const wallsToAdd = this.source._getWalls().difference(wallsChecked);
     wallsToAdd.forEach(wall => {
       const wasUpdated = this.addWall(wall, { update: false });
-      // Debug: if ( wasUpdated ) console.debug(`Added ${wall.id} from geometry for ${this.source.object?.name ?? this.source.object.id}`);
       updated ||= wasUpdated;
     });
 
