@@ -185,6 +185,7 @@ function preUpdateTokenHook(tokenD, changes, options, _userId) {
   if ( changeKeys.has("elevation") && origTER ) {
     // Something, like Levels Stairs, has changed the token elevation during an animation.
     // Redo the travel elevation ray from this point.
+    const ter = new TravelElevationRay(token, { destination });
     origTER.origin = destination;
     origTER.originElevation = changes.elevation;
     changes.elevation = ter.endingElevation;
