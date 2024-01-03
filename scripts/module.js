@@ -27,12 +27,13 @@ import { DirectionalLightSource } from "./DirectionalLightSource.js";
 // Register methods, patches, settings
 import { PATCHER, initializePatching, registerPatchesForSceneSettings } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
+import { registerElevationConfig } from "./geometry/elevation_configs.js";
 
 // For elevation layer registration and API
 import { ElevationLayer } from "./ElevationLayer.js";
 
 // Settings, to toggle whether to change elevation on token move
-import { SETTINGS, registerSettings, getSceneSetting, setSceneSetting } from "./settings.js";
+import { Settings, getSceneSetting, setSceneSetting } from "./settings.js";
 
 import { updateFlyTokenControl } from "./scenes.js";
 
@@ -126,9 +127,9 @@ Hooks.once("init", function() {
      * Point close and spread: 8 points spaced from a center point.
      */
     skipPercentage: {
-      [SETTINGS.ELEVATION_MEASUREMENT.TYPES.AVERAGE]: 0.1,
-      [SETTINGS.ELEVATION_MEASUREMENT.TYPES.POINTS_CLOSE]: 0.1,
-      [SETTINGS.ELEVATION_MEASUREMENT.TYPES.POINTS_SPREAD]: 0.25
+      [Settings.KEYS.ELEVATION_MEASUREMENT.TYPES.AVERAGE]: 0.1,
+      [Settings.KEYS.ELEVATION_MEASUREMENT.TYPES.POINTS_CLOSE]: 0.1,
+      [Settings.KEYS.ELEVATION_MEASUREMENT.TYPES.POINTS_SPREAD]: 0.25
     }
   };
 
@@ -154,7 +155,7 @@ Hooks.once("init", function() {
 
   // These methods need to be registered early
   registerGeometry();
-  registerSettings();
+  Settings.registerAll();
   initializePatching();
   registerLayer();
 
@@ -171,7 +172,8 @@ Hooks.once("init", function() {
 });
 
 Hooks.once("setup", function() {
-  // The game.scenes object is present here
+  registerElevationConfig("TileConfig", "Elevated Vision");
+  registerElevationConfig("AmbientLightConfig", "Elevated Vision");
 });
 
 Hooks.on("canvasInit", function(_canvas) {
@@ -208,15 +210,15 @@ Hooks.on("3DCanvasToggleMode", function(isOn) {
 });
 
 async function disableScene() {
-  const autoelevateDisabled = getSceneSetting(SETTINGS.AUTO_ELEVATION);
-  const shadowsDisabled = getSceneSetting(SETTINGS.SHADING.ALGORITHM) !== SETTINGS.SHADING.TYPES.NONE;
+  const autoelevateDisabled = getSceneSetting(Settings.KEYS.AUTO_ELEVATION);
+  const shadowsDisabled = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) !== Settings.KEYS.SHADING.TYPES.NONE;
 
   if ( autoelevateDisabled ) {
-    await setSceneSetting(SETTINGS.AUTO_ELEVATION, false);
+    await setSceneSetting(Settings.KEYS.AUTO_ELEVATION, false);
     updateFlyTokenControl(false);
   }
   if ( shadowsDisabled ) {
-    await setSceneSetting(SETTINGS.SHADING.ALGORITHM, SETTINGS.SHADING.TYPES.NONE);
+    await setSceneSetting(Settings.KEYS.SHADING.ALGORITHM, Settings.KEYS.SHADING.TYPES.NONE);
 
     // Looks like we don't need to redraw the scene?
     // await canvas.draw(canvas.scene);

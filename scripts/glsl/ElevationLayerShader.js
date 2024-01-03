@@ -5,7 +5,7 @@ PIXI
 */
 "use strict";
 
-import { getSetting, SETTINGS } from "../settings.js";
+import { Settings } from "../settings.js";
 
 import { defineFunction } from "./GLSLFunctions.js";
 import { AbstractEVShader } from "./AbstractEVShader.js";
@@ -141,7 +141,7 @@ void main() {
    * @returns {number[4]}
    */
   static getDefaultColorArray(type = "MIN") {
-    const hex = getSetting(SETTINGS.COLOR[type]);
+    const hex = Settings.get(Settings.KEYS.COLOR[type]);
     return this.getColorArray(hex);
   }
 

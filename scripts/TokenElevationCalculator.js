@@ -7,7 +7,7 @@ canvas
 
 import { MODULE_ID, FLAGS } from "./const.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
-import { SETTINGS, getSetting } from "./settings.js";
+import { Settings } from "./settings.js";
 import { PixelCache } from "./PixelCache.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Draw } from "./geometry/Draw.js";
@@ -40,7 +40,7 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    */
   constructor(token, opts = {}) {
     const coordinate = Point3d.fromTokenCenter(token);
-    opts.elevationMeasurement ??= getSetting(SETTINGS.ELEVATION_MEASUREMENT.ALGORITHM);
+    opts.elevationMeasurement ??= Settings.get(Settings.KEYS.ELEVATION_MEASUREMENT.ALGORITHM);
     super(coordinate, opts);
 
     this.#token = token;

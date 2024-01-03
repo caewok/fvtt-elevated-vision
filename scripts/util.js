@@ -459,6 +459,24 @@ export function pointVTest(a, b, c, pt) {
   return ptBetween ? angle : 360 - angle;
 }
 
+
+/**
+ * Test if 2d line from origin to the point of a V is tangent to the V.
+ * In other words, does the line go to the inside of the V?
+ * "V" formed by two walls: a --> b --> c
+ * @param {Point} a
+ * @param {Point} b
+ * @param {Point} c
+ * @param {Point} pt
+ */
+export function tangentToV(a, b, c, pt) {
+  const orient2d = foundry.utils.orient2dFast;
+  const oA = orient2d(b, a, pt);
+  const oC = orient2d(b, c, pt);
+  if ( oA.almostEqual(0) || oC.almostEqual(0) ) return false; // In line with origin.
+  return (oA * oC) > 0; // True if both are CW or CCW
+}
+
 /**
  * Test if two points both lie within or outside a "V" formed by two walls.
  * @param {Point} sharedEndpoint    Shared endpoint for the two walls

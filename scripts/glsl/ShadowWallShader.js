@@ -1296,6 +1296,18 @@ void main() {
   vec2 dirOuterSidePenumbra[2] = vec2[2](wall2d[0] - lightLR0, wall2d[1] - lightLR1);
   vec2 dirInnerSidePenumbra[2] = vec2[2](wall2d[0] - lightLR1, wall2d[1] - lightLR0);
 
+  // If the endpoint is blocked, don't use the light size. See issue #95.
+  if ( aWallCorner0.w == EV_ENDPOINT_LINKED_CONCAVE ) {
+    dirOuterSidePenumbra[0] = wall2d[0] - uLightPosition.xy;
+    dirInnerSidePenumbra[0] = wall2d[0] - uLightPosition.xy;
+  }
+
+  if ( aWallCorner1.w == EV_ENDPOINT_LINKED_CONCAVE ) {
+    dirOuterSidePenumbra[1] = wall2d[1] - uLightPosition.xy;
+    dirInnerSidePenumbra[1] = wall2d[1] - uLightPosition.xy;
+  }
+
+
   ${PENUMBRA_VERTEX_CALCULATIONS}
 }`;
 

@@ -1,14 +1,13 @@
 {
   "name": "elevatedvision",
-  "minimumCoreVersion": "10",
   "id": "elevatedvision",
   "title": "Elevated Vision",
-  "version": "This is auto replaced",
-  "library": false,
+  "version": "#{VERSION}#",
+  "library": "false",
   "manifestPlusVersion": "1.0.0",
   "compatibility": {
     "minimum": "11.299",
-    "verified": "11.311"
+    "verified": "11.315"
   },
   "authors": [
     {
@@ -59,9 +58,9 @@
     }
   },
 
-  "url": "This is auto replaced",
-  "manifest": "This is auto replaced",
-  "download": "This is auto replaced",
+  "url": "#{URL}#",
+  "manifest": "#{MANIFEST}#",
+  "download": "#{DOWNLOAD}#",
   "license": "LICENSE",
   "readme": "README.md"
 }

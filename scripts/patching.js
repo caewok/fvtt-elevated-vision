@@ -8,12 +8,11 @@ GlobalLightSource,
 // Patches
 
 import { Patcher } from "./Patcher.js";
-import { getSetting, getSceneSetting, SETTINGS } from "./settings.js";
+import { getSceneSetting, Settings } from "./settings.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
-import { PATCHES as PATCHES_AmbientSound } from "./AmbientSound.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
@@ -32,8 +31,6 @@ import {
 
 import {
   PATCHES_AmbientLightConfig,
-  PATCHES_AmbientSoundConfig,
-  PATCHES_TileConfig,
   PATCHES_TokenConfig } from "./render_configs.js";
 
 import { PATCHES_Token, PATCHES_ActiveEffect } from "./Token.js";
@@ -59,8 +56,6 @@ export const PATCHES = {
   AdaptiveLightingShader: PATCHES_AdaptiveLightingShader,
   AmbientLight: PATCHES_AmbientLight,
   AmbientLightConfig: PATCHES_AmbientLightConfig,
-  AmbientSound: PATCHES_AmbientSound,
-  AmbientSoundConfig: PATCHES_AmbientSoundConfig,
   Canvas: PATCHES_Canvas,
   CanvasVisibility: PATCHES_CanvasVisibility,
   ClockwiseSweepPolygon: PATCHES_ClockwiseSweepPolygon,
@@ -72,14 +67,14 @@ export const PATCHES = {
   "PIXI.LegacyGraphics": PATCHES_PIXI_LegacyGraphics,
   RenderedPointSource: PATCHES_RenderedPointSource,
   Tile: PATCHES_Tile,
-  TileConfig: PATCHES_TileConfig,
   Token: PATCHES_Token,
   TokenConfig: PATCHES_TokenConfig,
   VisionSource: PATCHES_VisionSource,
   Wall: PATCHES_Wall
 };
 
-export const PATCHER = new Patcher(PATCHES);
+export const PATCHER = new Patcher();
+PATCHER.addPatchesFromRegistrationObject(PATCHES);
 
 export function initializePatching() {
   PATCHER.registerGroup("BASIC");
@@ -90,8 +85,8 @@ export function initializePatching() {
  * Register patches for the current settings
  */
 export function registerPatchesForSettings() {
-  const visibility = getSetting(SETTINGS.TEST_VISIBILITY);
-  const sweep = getSetting(SETTINGS.CLOCKWISE_SWEEP);
+  const visibility = Settings.get(Settings.KEYS.TEST_VISIBILITY);
+  const sweep = Settings.get(Settings.KEYS.CLOCKWISE_SWEEP);
   unregisterPatchesForSettings();
   if ( visibility ) PATCHER.registerGroup("VISIBILITY");
   if ( sweep ) PATCHER.registerGroup("SWEEP");
@@ -106,7 +101,7 @@ function unregisterPatchesForSettings() {
  * Register patches for the current scene settings
  */
 export function registerPatchesForSceneSettings() {
-  const { ALGORITHM, TYPES } = SETTINGS.SHADING;
+  const { ALGORITHM, TYPES } = Settings.KEYS.SHADING;
   const algorithm = getSceneSetting(ALGORITHM);
   unregisterPatchesForSceneSettings();
   switch ( algorithm ) {

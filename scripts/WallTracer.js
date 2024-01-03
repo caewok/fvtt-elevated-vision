@@ -20,7 +20,7 @@ import { groupBy, log } from "./util.js";
 import { ClipperPaths } from "./geometry/ClipperPaths.js";
 import { Draw } from "./geometry/Draw.js";
 import { MODULE_ID } from "./const.js";
-import { getSetting, SETTINGS } from "./settings.js";
+import { Settings } from "./settings.js";
 import { Graph, GraphVertex, GraphEdge } from "./geometry/Graph.js";
 
 /* WallTracerVertex
