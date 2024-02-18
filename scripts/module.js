@@ -17,7 +17,6 @@ import * as extract from "./perfect-vision/extract-pixels.js";
 
 import { FILOQueue } from "./FILOQueue.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
-import { PixelCache, TilePixelCache } from "./PixelCache.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
 import { TravelElevationRay, MarkerTracker } from "./TravelElevationRay.js";
@@ -142,8 +141,6 @@ Hooks.once("init", function() {
     WallTracerVertex,
     WallTracer,
     SCENE_GRAPH,
-    PixelCache,
-    TilePixelCache,
     CoordinateElevationCalculator,
     TokenElevationCalculator,
     DirectionalLightSource,
