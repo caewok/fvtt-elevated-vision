@@ -76,8 +76,6 @@ export class TravelElevationRay {
   /**
    * @param {Token} token               Token that is undertaking the movement
    * @param {PIXI.Point} destination    {x,y} destination for the movement
-   * @param {Point} [opts.tokenCenter]      Assumed token center at start
-   * @param {number} [opts.tokenElevation]  Assumed token elevation at start
    */
   constructor(token, { origin, destination, fly } = {}) {
     this.#token = token;
