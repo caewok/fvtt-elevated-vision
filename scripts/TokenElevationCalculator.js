@@ -8,7 +8,7 @@ canvas
 import { MODULE_ID, FLAGS } from "./const.js";
 import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
 import { Settings } from "./settings.js";
-import { PixelCache } from "./PixelCache.js";
+import { PixelCache } from "./geometry/PixelCache.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Draw } from "./geometry/Draw.js";
 
@@ -35,14 +35,21 @@ export class TokenElevationCalculator extends CoordinateElevationCalculator {
    * Uses a token instead of a point. Options permit the token location and elevation to be changed.
    * @param {Token} token
    * @param {object} [opts]
-   * @param {Point} [opts.tokenCenter]
-   * @param {number} [opts.tokenElevation]
+   * @param {Point}  [opts.location]                Location when overrideTokenPosition is true
+   * @param {number} [opts.elevation]               Elevation when overrideTokenPosition is true, in grid units
+   * @param {number} [opts.elevationZ]              Elevation when overrideTokenPosition is true, in pixel units
+   * @param {boolean} [opts.overrideTokenPosition]  Convenience switch to start calculator with overriding token position.
    */
   constructor(token, opts = {}) {
-    const coordinate = Point3d.fromTokenCenter(token);
-    opts.elevationMeasurement ??= Settings.get(Settings.KEYS.ELEVATION_MEASUREMENT.ALGORITHM);
+    const coordinate = Point3d.fromToken(token).bottom;
     super(coordinate, opts);
 
+    // Temporarily override to set positions.
+    this.overrideTokenPosition = true;
+    if ( Object.hasOwn(opts, "elevationZ") ) this.elevationZ = opts.elevationZ;
+    if ( Object.hasOwn(opts, "elevation") ) this.elevation = opts.elevation;
+    if ( Object.hasOwn(opts, "location") ) this.location = opts.location;
+    this.overrideTokenPosition = opts.overrideTokenPosition ?? false;
     this.#token = token;
     this.terrainPixelAggregationFn = this.#calculateTerrainPixelAggregationFn();
     this.tilePixelAggregationFn = this.#calculateTilePixelAggregationFn();

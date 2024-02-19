@@ -182,7 +182,9 @@ function preUpdateTokenHook(tokenD, changes, options, _userId) {
   const destination = token.getCenter(changes.x ?? token.x, changes.y ?? token.y);
 
   const changeKeys = new Set(Object.keys(flattenObject(changes)));
-  if ( changeKeys.has("elevation") && origTER ) {
+  if ( changeKeys.has("elevation")
+    && CanvasAnimation.getAnimation(tokenD.object.animationName)
+    && origTER ) {
     // Something, like Levels Stairs, has changed the token elevation during an animation.
     // Redo the travel elevation ray from this point.
     const ter = new TravelElevationRay(token, { destination });

@@ -7,7 +7,7 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "../const.js";
-import { PixelCache } from "../PixelCache.js";
+import { PixelCache } from "../geometry/PixelCache.js";
 
 const PIXEL_INV = 1 / 255;
 

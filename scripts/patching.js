@@ -20,7 +20,6 @@ import { PATCHES as PATCHES_PIXI_LegacyGraphics } from "./PIXI_LegacyGraphics.js
 import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
 import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
 import { PATCHES as PATCHES_RenderedPointSource } from "./RenderedPointSource.js";
-import { PATCHES as PATCHES_Tile } from "./Tile.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
 
@@ -66,7 +65,6 @@ export const PATCHES = {
   LightSource: PATCHES_LightSource,
   "PIXI.LegacyGraphics": PATCHES_PIXI_LegacyGraphics,
   RenderedPointSource: PATCHES_RenderedPointSource,
-  Tile: PATCHES_Tile,
   Token: PATCHES_Token,
   TokenConfig: PATCHES_TokenConfig,
   VisionSource: PATCHES_VisionSource,

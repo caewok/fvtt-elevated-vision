@@ -208,7 +208,7 @@ export class Settings extends ModuleSettingsAbstract {
     });
 
     if ( game.modules.get("color-picker")?.active ) {
-      ColorPicker.register(KEYS.COLOR.MIN, {
+      ColorPicker.register(MODULE_ID, KEYS.COLOR.MIN, {
         name: localize(`${KEYS.COLOR.MIN}.name`),
         hint: localize(`${KEYS.COLOR.MIN}.hint`),
         scope: "world",
@@ -219,7 +219,7 @@ export class Settings extends ModuleSettingsAbstract {
         onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMinColor(value)
       });
 
-      ColorPicker.register(KEYS.COLOR.MAX, {
+      ColorPicker.register(MODULE_ID, KEYS.COLOR.MAX, {
         name: localize(`${KEYS.COLOR.MAX}.name`),
         hint: localize(`${KEYS.COLOR.MAX}.hint`),
         scope: "world",

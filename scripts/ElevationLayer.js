@@ -18,7 +18,7 @@ ui,
 "use strict";
 
 import { MODULE_ID, FLAGS } from "./const.js";
-import { PixelCache } from "./PixelCache.js";
+import { PixelCache } from "./geometry/PixelCache.js";
 import {
   log,
   readDataURLFromFile,
