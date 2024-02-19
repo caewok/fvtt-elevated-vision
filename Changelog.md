@@ -1,5 +1,8 @@
 ## 0.5.13
 Tweaks so elevation measurement works with Elevation Ruler.
+Fix for manual elevation change failing when autoelevate tokens is enabled. Closes issue #105.
+Fix for #104 (cannot see over walls). Fixes shadows incorrectly sized because point source elevations were getting set to 0 incorrectly.
+Fix for Color Picker registration failing, causing setting elevation to fail. Closes issue #107.
 Update geometry lib to 0.2.17.
 
 ## 0.5.12
