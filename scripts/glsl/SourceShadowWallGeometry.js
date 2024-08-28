@@ -217,7 +217,9 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns { corner0: {PIXI.Point}, corner1: {PIXI.Point}, topZ: {number}, bottomZ: {number} }
    */
   wallCornerCoordinates(wall) {
-    const { A, B, topZ, bottomZ } = wall;
+    const { topZ, bottomZ } = wall;
+    const A = wall.edge.a;
+    const B = wall.edge.b;
     const top = Math.min(topZ, 1e6);
     const bottom = Math.max(bottomZ, -1e6);
 
