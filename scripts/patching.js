@@ -13,9 +13,9 @@ import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
-import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
+import { PATCHES as PATCHES_ControlsLayer } from "./ControlsLayer.js";
 import { PATCHES as PATCHES_PIXI_LegacyGraphics } from "./PIXI_LegacyGraphics.js";
 import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
 import { PATCHES as PATCHES_PointLightSource } from "./PointLightSource.js";
@@ -55,9 +55,9 @@ export const PATCHES = {
   AdaptiveLightingShader: PATCHES_AdaptiveLightingShader,
   AmbientLight: PATCHES_AmbientLight,
   AmbientLightConfig: PATCHES_AmbientLightConfig,
-  Canvas: PATCHES_Canvas,
   CanvasVisibility: PATCHES_CanvasVisibility,
   ClockwiseSweepPolygon: PATCHES_ClockwiseSweepPolygon,
+  ControlsLayer: PATCHES_ControlsLayer,
   DetectionMode: PATCHES_DetectionMode,
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
   DetectionModeTremor: PATCHES_DetectionModeTremor,
