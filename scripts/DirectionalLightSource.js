@@ -258,7 +258,7 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
    * Draw the text used when displaying the elevation angle guide
    */
   static _drawGuideText(text) {
-    const style = AmbientLight._getTextStyle();
+    const style = CONFIG.canvasTextStyle;
     const tip = new PreciseText(text, style);
     tip.anchor.set(0.5, 0.5);
 

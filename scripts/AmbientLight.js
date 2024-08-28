@@ -25,18 +25,11 @@ PATCHES.BASIC = {};
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
 function updateAmbientLightHook(doc, data, _options, _userId) {
-  const elevChangeFlag = `flags.${MODULE_ID}.${FLAGS.ELEVATION}`;
   const dimRadiusChangeFlag = "config.dim";
   const brightRadiusChangeflag = "config.bright";
 
   const flatData = foundry.utils.flattenObject(data);
   const changed = new Set(Object.keys(flatData));
-  if ( changed.has(elevChangeFlag) ) {
-    doc.object.renderFlags.set({
-      refreshElevation: true
-    });
-  }
-
   if ( changed.has(dimRadiusChangeFlag) || changed.has(brightRadiusChangeflag) ) {
     doc.object.renderFlags.set({
       refreshRadius: true
@@ -59,29 +52,9 @@ function hoverAmbientLightHook(light, hover) {
   else canvas.lighting.removeChild(DirectionalLightSource._elevationAngleGrid);
 }
 
-/**
- * Hook ambient light refresh to address the refreshElevation renderFlag.
- * Update the source elevation.
- * See AmbientLight.prototype._applyRenderFlags.
- * @param {PlaceableObject} object    The object instance being refreshed
- * @param {RenderFlags} flags
- */
-export function refreshAmbientLightHook(light, flags) {
-  if ( flags.refreshElevation ) {
-    // See Token.prototype.#refreshElevation
-    canvas.primary.sortDirty = true;
-
-    // Elevation tooltip text
-    const tt = light._getTooltipText();
-    if ( tt !== light.tooltip.text ) light.tooltip.text = tt;
-  }
-}
-
-
 PATCHES.BASIC.HOOKS = {
   updateAmbientLight: updateAmbientLightHook,
-  hoverAmbientLight: hoverAmbientLightHook,
-  refreshAmbientLight: refreshAmbientLightHook
+  hoverAmbientLight: hoverAmbientLightHook
 };
 
 // Note: Ambient Light Wraps
@@ -117,25 +90,45 @@ function _onUpdate(wrap, data, options, userId) {
 
 function _draw(wrapped) {
   wrapped();
-  this.tooltip ||= this.addChild(this._drawTooltip());
   if ( this.lightSource && this.lightSource.isDirectional ) this.refreshControl();
-}
-
-function refreshControl(wrapped) {
-  wrapped();
-  if ( this.lightSource && this.lightSource.isDirectional ) {
-    this.controlIcon.texture = getTexture(this.isVisible
-      ? CONFIG.controlIcons.directionalLight : CONFIG.controlIcons.directionalLightOff);
-    this.controlIcon.draw();
-  }
 }
 
 PATCHES.BASIC.WRAPS = {
   clone,
   _onUpdate,
-  _draw,
-  refreshControl
+  _draw
 };
+
+// NOTE: Mixed Wraps
+
+/**
+ * Mixed wrap AmbientLight#refreshControl
+ * If directional light, take control of the icon drawing.
+ */
+function refreshControl(wrapped) {
+  if ( !(this.lightSource && this.lightSource.isDirectional) ) return wrapped();
+
+  // From refreshControl
+  const isHidden = this.id && this.document.hidden;
+  this.controlIcon.texture = getTexture(this.isVisible
+    ? CONFIG.controlIcons.directionalLight : CONFIG.controlIcons.directionalLightOff);
+  this.controlIcon.tintColor = isHidden ? 0xFF3300 : 0xFFFFFF;
+  this.controlIcon.borderColor = isHidden ? 0xFF3300 : 0xFF5500;
+
+  // Instead of elevation display azimuth and angle.
+  const azimuth = Math.normalizeDegrees(Math.toDegrees(this.lightSource.azimuth)).toFixed(1);
+  const elevationAngle = Math.normalizeDegrees(Math.toDegrees(this.lightSource.elevationAngle)).toFixed(1);
+  const text = `${azimuth}º⥁\n${elevationAngle}º⦞`;
+  this.controlIcon.tooltip.text = text;
+  this.controlIcon.tooltip.visible = true;
+
+  // From refreshControl
+  this.controlIcon.refresh({visible: this.layer.active, borderVisible: this.hover || this.layer.highlightObjects});
+  this.controlIcon.draw();
+}
+
+PATCHES.BASIC.MIXES = { refreshControl };
+
 
 // NOTE: Ambient Light Methods
 
@@ -163,63 +156,7 @@ function convertFromDirectionalLight() {
   this.updateSource();
 }
 
-/**
- * New method: AmbientLight.prototype._drawTooltip
- */
-function _drawTooltip() {
-  let text = this._getTooltipText();
-  const style = this.constructor._getTextStyle();
-  const tip = new PreciseText(text, style);
-  tip.anchor.set(0.5, 1);
-
-  // From #drawControlIcon
-  const size = Math.max(Math.round((canvas.dimensions.size * 0.5) / 20) * 20, 40);
-  tip.position.set(0, -size / 2);
-  return tip;
-}
-
-/**
- * New method: AmbientLight.prototype._getTooltipText
- */
-function _getTooltipText() {
-  if ( this.lightSource && this.lightSource.isDirectional ) {
-    const azimuth = Math.normalizeDegrees(Math.toDegrees(this.lightSource.azimuth)).toFixed(1);
-    const elevationAngle = Math.normalizeDegrees(Math.toDegrees(this.lightSource.elevationAngle)).toFixed(1);
-    const text = `${azimuth}º⥁\n${elevationAngle}º⦞`;
-    return text;
-  }
-
-  const el = this.elevationE;
-  if ( !Number.isFinite(el) || el === 0 ) return "";
-  let units = canvas.scene.grid.units;
-  return el > 0 ? `+${el} ${units}` : `${el} ${units}`;
-}
-
 PATCHES.BASIC.METHODS = {
   convertToDirectionalLight,
-  convertFromDirectionalLight,
-  _drawTooltip,
-  _getTooltipText
-};
-
-/**
- * New method: AmbientLight._getTextStyle
- * Get the text style that should be used for this Light's tooltip.
- * See Token.prototype._getTextStyle.
- * @returns {string}
- */
-function _getTextStyle() {
-  const style = CONFIG.canvasTextStyle.clone();
-  style.fontSize = 24;
-  if (canvas.dimensions.size >= 200) style.fontSize = 28;
-  else if (canvas.dimensions.size < 50) style.fontSize = 20;
-
-  // From #drawControlIcon
-  const size = Math.max(Math.round((canvas.dimensions.size * 0.5) / 20) * 20, 40);
-  style.wordWrapWidth = size * 2.5;
-  return style;
-}
-
-PATCHES.BASIC.STATIC_METHODS = {
-  _getTextStyle
+  convertFromDirectionalLight
 };
