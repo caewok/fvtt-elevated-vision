@@ -881,7 +881,7 @@ export class ElevationLayer extends InteractionLayer {
    * @returns {number} Elevation value.
    */
   averageElevationForGridSpace(row, col, { useHex = canvas.grid.isHexagonal } = {}) {
-    const [x, y] = canvas.grid.grid.getPixelsFromGridPosition(row, col);
+    const {x, y} = canvas.grid.getTopLeftPoint(col * canvas.grid.size, row * canvas.grid.size);
     return this.averageElevationAtGridPoint(x, y, { useHex });
   }
 
@@ -1043,9 +1043,9 @@ export class ElevationLayer extends InteractionLayer {
 
   _squareGridShape(p) {
     // Get the top left corner
-    const [tlx, tly] = canvas.grid.grid.getTopLeft(p.x, p.y);
-    const { w, h } = canvas.grid;
-    return new PIXI.Rectangle(tlx, tly, w, h);
+    const tl = canvas.grid.getTopLeftPoint(p);
+    const { sizeX, sizeY } = canvas.grid;
+    return new PIXI.Rectangle(tl.x, tl.y, sizeX, sizeY);
   }
 
   _hexGridShape(p, { width = 1, height = 1 } = {}) {
@@ -1053,12 +1053,12 @@ export class ElevationLayer extends InteractionLayer {
     if ( width !== height ) return null;
 
     // Get the top left corner
-    const [tlx, tly] = canvas.grid.grid.getTopLeft(p.x, p.y);
+    const tl = canvas.grid.getTopLeftPoint(p);
     const points = canvas.grid.grid.getBorderPolygon(width, height, 0); // TO-DO: Should a border be included to improve calc?
     const pointsTranslated = [];
     const ln = points.length;
     for ( let i = 0; i < ln; i += 2) {
-      pointsTranslated.push(points[i] + tlx, points[i+1] + tly);
+      pointsTranslated.push(points[i] + tl.x, points[i+1] + tl.y);
     }
 
     return new PIXI.Polygon(pointsTranslated);
@@ -1430,8 +1430,8 @@ export class ElevationLayer extends InteractionLayer {
     switch ( activeTool ) {
       case "fill-by-grid": {
         this.#temporaryGraphics.clear(); // Should be accomplished elsewhere already
-        const [tlx, tly] = canvas.grid.grid.getTopLeft(o.x, o.y);
-        const p = new PolygonVertex(tlx, tly);
+        const tl = canvas.grid.getTopLeftPoint(o);
+        const p = new PolygonVertex(tl.x, tl.y);
         const child = this.setElevationForGridSpace(o, currE, { temporary: true });
         this.#temporaryGraphics.set(p.key, child);
       }
@@ -1460,8 +1460,8 @@ export class ElevationLayer extends InteractionLayer {
 
     switch ( activeTool ) {
       case "fill-by-grid": {
-        const [tlx, tly] = canvas.grid.grid.getTopLeft(d.x, d.y);
-        const p = new PolygonVertex(tlx, tly);
+        const tl = canvas.grid.getTopLeftPoint(d);
+        const p = new PolygonVertex(tl.x, tl.y);
         if ( !this.#temporaryGraphics.has(p.key) ) {
           log(`dragLeftMove from ${o.x},${o.y} to ${d.x}, ${d.y} with tool ${activeTool} and elevation ${currE}`, event);
           const child = this.setElevationForGridSpace(d, currE, { temporary: true });
@@ -1492,8 +1492,8 @@ export class ElevationLayer extends InteractionLayer {
     log(`dragLeftDrop at ${o.x}, ${o.y} to ${d.x},${d.y} with tool ${activeTool} and elevation ${currE}`, event);
 
     if ( activeTool === "fill-by-grid" ) {
-      const [tlx, tly] = canvas.grid.grid.getTopLeft(d.x, d.y);
-      const p = new PolygonVertex(tlx, tly);
+      const tl = canvas.grid.grid.getTopLeftPoint(d);
+      const p = new PolygonVertex(tl.x, tl.y);
       if ( !this.#temporaryGraphics.has(p.key) ) {
         const child = this.setElevationForGridSpace(d, currE, { temporary: true });
         this.#temporaryGraphics.set(p.key, child);
