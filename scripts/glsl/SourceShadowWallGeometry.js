@@ -86,7 +86,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns {number}  See foundry.utils.orient2dFast.
    */
   sourceWallOrientation(wall) {
-    return foundry.utils.orient2dFast(wall.A, wall.B, this.sourceOrigin);
+    return foundry.utils.orient2dFast(wall.edge.a, wall.edge.b, this.sourceOrigin);
   }
 
   constructWallGeometry(walls) {
@@ -180,7 +180,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
     // Find the closest point on the threshold wall to the source.
     // Calculate the proportion of the source radius that is "inside" and "outside" the threshold wall.
-    const pt = foundry.utils.closestPointToSegment(origin, wall.A, wall.B);
+    const pt = foundry.utils.closestPointToSegment(origin, wall.edge.a, wall.edge.b);
     const inside = Math.hypot(pt.x - origin.x, pt.y - origin.y);
     const outside = radius - inside;
     if ( (outside < 0) || outside.almostEqual(0) ) return { inside, outside: 0 };
@@ -257,14 +257,14 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const blockWallAKey = blockAngleA === 360 ? -1
       : blockAngleA === -2 ? -2
         : blockAngleA <= 180 ? -2 // Should not happen.
-          : blockingWallA.A.key === wall.A.key ? blockingWallA.B.key
-            : blockingWallA.A.key;
+          : blockingWallA.edge.a.key === wall.edge.a.key ? blockingWallA.edge.b.key
+            : blockingWallA.edge.a.key;
 
     const blockWallBKey = blockAngleB === 360 ? -1
       : blockAngleB === -2 ? -2
         : blockAngleB <= 180 ? -2 // Should not happen.
-          : blockingWallB.A.key === wall.A.key ? blockingWallB.B.key
-            : blockingWallB.A.key;
+          : blockingWallB.edge.a.key === wall.edge.a.key ? blockingWallB.edge.b.key
+            : blockingWallB.edge.a.key;
 
     return {
       corner0: [A.x, A.y, top, blockWallAKey],
@@ -701,7 +701,7 @@ export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
     if ( !super._includeWall(wall) ) return false;
 
     // Wall must be within the light radius.
-    if ( !this.source.bounds.lineSegmentIntersects(wall.A, wall.B, { inside: true }) ) return false;
+    if ( !this.source.bounds.lineSegmentIntersects(wall.edge.a, wall.edge.b, { inside: true }) ) return false;
 
     return true;
   }
@@ -726,8 +726,8 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
   sourceWallOrientation(wall) {
     // Wall must not be the same (2d) direction as the source
     // TODO: Do we need to add a scalar to the normalized source direction?
-    const A = PIXI.Point.fromObject(wall.A);
-    return !foundry.utils.orient2dFast(A, wall.B, A.add(this.source.lightDirection)).almostEqual(0, 1);
+    const A = PIXI.Point.fromObject(wall.edge.a);
+    return !foundry.utils.orient2dFast(A, wall.edge.b, A.add(this.source.lightDirection)).almostEqual(0, 1);
   }
 
   /**
@@ -840,7 +840,7 @@ function calculateThresholdAttenuation(wall, origin, radius, externalRadius, typ
 
     // Find the closest point on the threshold wall to the source.
     // Calculate the proportion of the source radius that is "inside" and "outside" the threshold wall.
-    const pt = foundry.utils.closestPointToSegment(origin, wall.A, wall.B);
+    const pt = foundry.utils.closestPointToSegment(origin, wall.edge.a, wall.edge.b);
     const inside = Math.hypot(pt.x - origin.x, pt.y - origin.y);
     const outside = radius - inside;
     if ( (outside < 0) || outside.almostEqual(0) ) return { inside, outside: 0 };
@@ -862,7 +862,7 @@ function calculateThresholdAttenuation2(wall, origin, radius, externalRadius, ty
 
     // Find the closest point on the threshold wall to the source.
     // Calculate the proportion of the source radius that is "inside" and "outside" the threshold wall.
-    const pt = foundry.utils.closestPointToSegment(origin, wall.A, wall.B);
+    const pt = foundry.utils.closestPointToSegment(origin, wall.edge.a, wall.edge.b);
     const inside = Math.hypot(pt.x - origin.x, pt.y - origin.y);
     const outside = radius - inside;
     if ( (outside < 0) || outside.almostEqual(0) ) return { inside, outside: 0 };

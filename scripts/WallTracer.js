@@ -246,10 +246,10 @@ export class WallTracerEdge extends GraphEdge {
    * @returns {PIXI.Point} The point along the wall line. Ratio 0: endpoint A; 1: endpoint B.
    */
   static pointAtWallRatio(wall, wallT) {
-    const A = new PIXI.Point(wall.A.x, wall.A.y);
+    const A = new PIXI.Point(wall.edge.a.x, wall.edge.a.y);
     if ( wallT.almostEqual(0) ) return A;
 
-    const B = new PIXI.Point(wall.B.x, wall.B.y);
+    const B = new PIXI.Point(wall.edge.b.x, wall.edge.b.y);
     if ( wallT.almostEqual(1) ) return B;
 
     wallT = Math.roundDecimals(wallT, WallTracerEdge.PLACES);

@@ -1346,8 +1346,8 @@ export class ElevationLayer extends InteractionLayer {
     const alpha = wall.isOpen ? 0.5 : 1;
 
     draw.segment(wall, { color, alpha });
-    draw.point(wall.A, { color: Draw.COLORS.red });
-    draw.point(wall.B, { color: Draw.COLORS.red });
+    draw.point(wall.edge.a, { color: Draw.COLORS.red });
+    draw.point(wall.edge.b, { color: Draw.COLORS.red });
     this._wallDataContainer.addChild(g);
   }
 

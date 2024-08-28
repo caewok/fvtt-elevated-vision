@@ -312,14 +312,14 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
   if ( !isFinite(topZ) ) topZ = Number.MAX_SAFE_INTEGER;
 
   // Four corners of the wall: c, d, e, f
-  const c = new Point3d(wall.A.x, wall.A.y, bottomZ);
-  const d = new Point3d(wall.B.x, wall.B.y, bottomZ);
+  const c = new Point3d(wall.edge.a.x, wall.edge.a.y, bottomZ);
+  const d = new Point3d(wall.edge.b.x, wall.edge.b.y, bottomZ);
 
   // First test if wall and segment intersect from 2d overhead.
   if ( !foundry.utils.lineSegmentIntersects(a, b, c, d) ) { return null; }
 
   // Second test if segment intersects the wall as a plane
-  const e = new Point3d(wall.A.x, wall.A.y, topZ);
+  const e = new Point3d(wall.edge.a.x, wall.edge.a.y, topZ);
 
   if ( !CONFIG.GeometryLib.utils.lineSegment3dPlaneIntersects(a, b, c, d, e) ) { return null; }
 
@@ -342,12 +342,12 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
  * @param {Wall} wall   Wall to intersect
  */
 export function lineWall3dIntersection(a, b, wall, epsilon = 1e-8) {
-  const x = wall.A.x;
-  const y = wall.A.y;
+  const x = wall.edge.a.x;
+  const y = wall.edge.a.y;
   const c = new Point3d(x, y, 0);
 
   // Perpendicular vectors are (-dy, dx) and (dy, -dx)
-  const d = new Point3d(-(wall.B.y - y), (wall.B.x - x), 0);
+  const d = new Point3d(-(wall.edge.b.y - y), (wall.edge.b.x - x), 0);
 
   return linePlane3dIntersection(a, b, c, d, epsilon);
 }
