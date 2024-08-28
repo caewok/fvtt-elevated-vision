@@ -18,7 +18,7 @@ import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygo
 import { PATCHES as PATCHES_PIXI_LegacyGraphics } from "./PIXI_LegacyGraphics.js";
 import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
 import { PATCHES as PATCHES_PointLightSource } from "./PointLightSource.js";
-import { PATCHES as PATCHES_BaseLightSource } from "./BaseLightSource.js";
+import { PATCHES as PATCHES_RenderedEffectSource } from "./RenderedEffectSource.js";
 import { PATCHES as PATCHES_PointVisionSource } from "./PointVisionSource.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
 
@@ -62,7 +62,7 @@ export const PATCHES = {
   "foundry.canvas.sources.GlobalLightSource": PATCHES_GlobalLightSource,
   "foundry.canvas.sources.PointLightSource": PATCHES_PointLightSource,
   "PIXI.LegacyGraphics": PATCHES_PIXI_LegacyGraphics,
-  "foundry.canvas.sources.BaseLightSource": PATCHES_BaseLightSource,
+  "foundry.canvas.sources.RenderedEffectSource": PATCHES_RenderedEffectSource,
   Token: PATCHES_Token,
   TokenConfig: PATCHES_TokenConfig,
   "foundry.canvas.sources.PointVisionSource": PATCHES_PointVisionSource,

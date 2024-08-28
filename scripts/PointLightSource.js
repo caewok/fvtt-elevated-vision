@@ -41,7 +41,7 @@ function _updateEVShadowData(changes, changeObj = {}) {
   }
 
   // Instead of super._updateEVShadowData()
-  foundry.canvas.sources.BaseLightSource.prototype._updateEVShadowData.call(this, changes, changeObj);
+  foundry.canvas.sources.RenderedEffectSource.prototype._updateEVShadowData.call(this, changes, changeObj);
 }
 
 PATCHES.WEBGL.METHODS = {
