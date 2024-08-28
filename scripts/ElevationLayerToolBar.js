@@ -58,7 +58,7 @@ export class ElevationLayerToolBar extends Application {
     };
 
     options.editable = game.user.isGM;
-    return mergeObject(super.defaultOptions, options);
+    return foundry.utils.mergeObject(super.defaultOptions, options);
   }
 
   activateListeners(html) {

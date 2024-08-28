@@ -533,7 +533,7 @@ export class ElevationLayer extends InteractionLayer {
 
   /** @override */
   static get layerOptions() {
-    return mergeObject(super.layerOptions, {
+    return foundry.utils.mergeObject(super.layerOptions, {
       name: "Elevation"
     });
   }
