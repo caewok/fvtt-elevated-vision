@@ -660,7 +660,7 @@ export class WallTracer extends Graph {
       // Confirm that each wall is blocking from the origin
       for ( const wall of wallData.wallSet ) {
         if ( !wallData.dir ) continue;
-        const side = wall.orientPoint(this.origin);
+        const side = wall.edge.orientPoint(this.origin);
         if ( side === wall.document.dir ) return false;
 
       }

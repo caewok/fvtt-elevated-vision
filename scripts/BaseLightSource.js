@@ -525,7 +525,7 @@ function _testWallInclusion(wall, origin) {
   if ( wall.topZ <= minCanvasE && this.elevationZ > minCanvasE ) return false;
 
   // Ignore collinear walls
-  const side = wall.orientPoint(origin);
+  const side = wall.edge.orientPoint(origin);
   if ( !side ) return false;
 
   // Ignore one-directional walls facing away from the origin.
@@ -543,7 +543,7 @@ function _testWallInclusion(wall, origin) {
  * @returns {boolean} True if the threshold applies.
  */
 function thresholdApplies(wall) {
-  return wall.applyThreshold(this.constructor.sourceType, this, this.data.externalRadius);
+  return wall.edge.applyThreshold(this.constructor.sourceType, this, this.data.externalRadius);
 }
 
 /**

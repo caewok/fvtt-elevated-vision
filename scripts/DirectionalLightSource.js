@@ -538,7 +538,7 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
     elevationAngle ??= this.elevationAngle;
     const dir = DirectionalLightSource.lightDirection(azimuth, elevationAngle);
     const origin = PIXI.Point.fromObject(wall.B).add(dir.multiplyScalar(canvas.dimensions.maxR));
-    const side = wall.orientPoint(origin);
+    const side = wall.edge.orientPoint(origin);
     if ( !side ) return false;
 
     // Ignore one-directional walls facing away from the origin.

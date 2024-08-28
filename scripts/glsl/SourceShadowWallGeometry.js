@@ -199,7 +199,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @param {Wall} wall
    * @returns {boolean} True if the threshold applies.
    */
-  thresholdApplies(wall) { return wall.applyThreshold(this.sourceType, this.source, this.source.data.externalRadius); }
+  thresholdApplies(wall) { return wall.edge.applyThreshold(this.sourceType, this.source, this.source.data.externalRadius); }
 
   /**
    * Should this wall be included in the geometry for this source shadow?

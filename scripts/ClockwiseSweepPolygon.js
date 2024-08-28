@@ -188,7 +188,7 @@ function originalTestWallInclusion(wall, bounds) {
   }
 
   // Ignore walls which are nearly collinear with the origin, except for movement
-  const side = wall.orientPoint(this.origin);
+  const side = wall.edge.orientPoint(this.origin);
   if ( (type !== "move") && !side ) return false;
 
   // Always include interior walls underneath active roof tiles

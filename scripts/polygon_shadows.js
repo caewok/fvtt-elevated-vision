@@ -133,7 +133,7 @@ function originalTestWallInclusion(wall, bounds) {
   }
 
   // Ignore walls which are nearly collinear with the origin, except for movement
-  const side = wall.orientPoint(this.origin);
+  const side = wall.edge.orientPoint(this.origin);
   if ( !side ) return false;
 
   // Always include interior walls underneath active roof tiles
@@ -149,7 +149,7 @@ function originalTestWallInclusion(wall, bounds) {
   }
 
   // Condition walls on whether their threshold proximity is met
-  if ( useThreshold ) return !wall.applyThreshold(type, this.origin, externalRadius);
+  if ( useThreshold ) return !wall.edge.applyThreshold(type, this.origin, externalRadius);
   return true;
 }
 
