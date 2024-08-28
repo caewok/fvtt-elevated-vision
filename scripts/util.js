@@ -429,8 +429,8 @@ export function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-v
 export function getLinkedWalls(wall) {
   const linkedA = new Set();
   const linkedB = new Set();
-  const keyA = wall.A.key;
-  const keyB = wall.B.key;
+  const keyA = wall.edge.a.key;
+  const keyB = wall.edge.b.key;
   canvas.walls.placeables.forEach(w => {
     if ( w === wall ) return;
     if ( w.wallKeys.has(keyA) ) linkedA.add(w);
