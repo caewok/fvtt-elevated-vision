@@ -87,7 +87,7 @@ async function preUpdateSceneHook(document, change, options, _userId) {
 async function updateSceneHook(document, change, _options, _userId) {
   if ( canvas.scene.id !== document.id ) return;
   const modFlags = change.flags?.[MODULE_ID];
-  if ( !modFlags || isEmpty(modFlags) ) return;
+  if ( !modFlags || foundry.utils.isEmpty(modFlags) ) return;
 
   // If the scene elevation step size is changed, set the current elevation in the toolbar to the nearest step.
   if ( Object.hasOwn(modFlags, Settings.KEYS.ELEVATION_INCREMENT) ) {

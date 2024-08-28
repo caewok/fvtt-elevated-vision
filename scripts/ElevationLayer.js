@@ -694,7 +694,7 @@ export class ElevationLayer extends InteractionLayer {
     const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
     if ( !elevationImage ) return;
 
-    if ( isEmpty(elevationImage) || isEmpty(elevationImage.imageURL) ) {
+    if ( foundry.utils.isEmpty(elevationImage) || foundry.utils.isEmpty(elevationImage.imageURL) ) {
       canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
       return;
     }
