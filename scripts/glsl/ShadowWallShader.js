@@ -1501,7 +1501,7 @@ function barycentric(p, a, b, c) {
 }
 
 function zChangeForElevationAngle(elevationAngle) {
-  // elevationAngle = Math.clamped(elevationAngle, 0, Math.PI_1_2);
+  // elevationAngle = Math.clamp(elevationAngle, 0, Math.PI_1_2);
   const pt = PIXI.Point.fromAngle(new PIXI.Point(0, 0), elevationAngle, 1.0);
 
   // How much z (y) change for every change in x?

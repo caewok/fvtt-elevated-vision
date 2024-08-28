@@ -313,7 +313,7 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
     // Use grid-based measurements so the elevationAngle stays the same for similar grid locations.
     const maxDist = Math.min(rect.width, rect.height) * 0.5;
     const positionDist = Math.max(Math.abs(delta.x), Math.abs(delta.y));
-    const proportion = Math.clamped(1 - (positionDist / maxDist), 0, 1);
+    const proportion = Math.clamp(1 - (positionDist / maxDist), 0, 1);
     const elevationAngle = mix(0, Math.PI_1_2, proportion);
 
     return { azimuth, elevationAngle };
@@ -328,12 +328,12 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
   static positionFromDirectionalParameters(azimuth, elevationAngle) {
     azimuth = Math.normalizeRadians(azimuth);
     elevationAngle = Math.normalizeRadians(elevationAngle);
-    elevationAngle = Math.clamped(elevationAngle, 0, Math.PI_1_2);
+    elevationAngle = Math.clamp(elevationAngle, 0, Math.PI_1_2);
 
     // Calculate distance from the center based on elevationAngle.
     const rect = canvas.dimensions.sceneRect;
     const maxDist = Math.min(rect.width, rect.height) * 0.5;
-    const proportion = Math.clamped(1 - (elevationAngle / Math.PI_1_2), 0, 1);
+    const proportion = Math.clamp(1 - (elevationAngle / Math.PI_1_2), 0, 1);
     const dist = proportion * maxDist;
     const center = rect.center;
     if ( dist === 0 ) return PIXI.Point.fromObject(center);

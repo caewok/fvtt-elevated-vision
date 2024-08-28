@@ -308,7 +308,7 @@ export class ElevationLayer extends InteractionLayer {
     const mult = step / stepNew;
     const max = this.#maximumNormalizedElevation;
     const stepAdjust = function(normE) {
-      const out = Math.clamped(Math.round(mult * normE), 0, max);
+      const out = Math.clamp(Math.round(mult * normE), 0, max);
       return out || 0;
     };
 
@@ -345,7 +345,7 @@ export class ElevationLayer extends InteractionLayer {
     const adder = (min * stepInv) - (minNew * stepInv);
 
     const minAdjust = function(pixel) {
-      const out = Math.clamped(Math.round(adder + pixel), 0, 255);
+      const out = Math.clamp(Math.round(adder + pixel), 0, 255);
       return out || 0; // In case of NaN, etc.
     };
 
@@ -528,7 +528,7 @@ export class ElevationLayer extends InteractionLayer {
   clampElevation(e) {
     e = isNaN(e) ? 0 : e;
     e = Math.round(e / this.elevationStep) * this.elevationStep;
-    return Math.clamped(e, this.elevationMin, this.elevationMax);
+    return Math.clamp(e, this.elevationMin, this.elevationMax);
   }
 
   /** @override */
