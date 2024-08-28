@@ -1431,14 +1431,14 @@ export class ElevationLayer extends InteractionLayer {
       case "fill-by-grid": {
         this.#temporaryGraphics.clear(); // Should be accomplished elsewhere already
         const tl = canvas.grid.getTopLeftPoint(o);
-        const p = new PolygonVertex(tl.x, tl.y);
+        const p = new foundry.canvas.edges.PolygonVertex(tl.x, tl.y);
         const child = this.setElevationForGridSpace(o, currE, { temporary: true });
         this.#temporaryGraphics.set(p.key, child);
       }
       break;
       case "fill-by-pixel": {
         this.#temporaryGraphics.clear(); // Should be accomplished elsewhere already
-        const p = new PolygonVertex(o.x, o.y);
+        const p = new foundry.canvas.edges.PolygonVertex(o.x, o.y);
         const child = this.setElevationForPixel(p, currE, { temporary: true });
         this.#temporaryGraphics.set(p.key, child);
       }
@@ -1461,7 +1461,7 @@ export class ElevationLayer extends InteractionLayer {
     switch ( activeTool ) {
       case "fill-by-grid": {
         const tl = canvas.grid.getTopLeftPoint(d);
-        const p = new PolygonVertex(tl.x, tl.y);
+        const p = new foundry.canvas.edges.PolygonVertex(tl.x, tl.y);
         if ( !this.#temporaryGraphics.has(p.key) ) {
           log(`dragLeftMove from ${o.x},${o.y} to ${d.x}, ${d.y} with tool ${activeTool} and elevation ${currE}`, event);
           const child = this.setElevationForGridSpace(d, currE, { temporary: true });
@@ -1470,7 +1470,7 @@ export class ElevationLayer extends InteractionLayer {
       }
       break;
       case "fill-by-pixel": {
-        const p = new PolygonVertex(d.x, d.y);
+        const p = new foundry.canvas.edges.PolygonVertex(d.x, d.y);
         if ( !this.#temporaryGraphics.has(p.key) ) {
           log(`dragLeftMove from ${o.x},${o.y} to ${d.x}, ${d.y} with tool ${activeTool} and elevation ${currE}`, event);
           const child = this.setElevationForPixel(p, currE, { temporary: true });
@@ -1493,7 +1493,7 @@ export class ElevationLayer extends InteractionLayer {
 
     if ( activeTool === "fill-by-grid" ) {
       const tl = canvas.grid.grid.getTopLeftPoint(d);
-      const p = new PolygonVertex(tl.x, tl.y);
+      const p = new foundry.canvas.edges.PolygonVertex(tl.x, tl.y);
       if ( !this.#temporaryGraphics.has(p.key) ) {
         const child = this.setElevationForGridSpace(d, currE, { temporary: true });
         this.#temporaryGraphics.set(p.key, child);
