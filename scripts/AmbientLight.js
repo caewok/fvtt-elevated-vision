@@ -29,7 +29,7 @@ function updateAmbientLightHook(doc, data, _options, _userId) {
   const dimRadiusChangeFlag = "config.dim";
   const brightRadiusChangeflag = "config.bright";
 
-  const flatData = flattenObject(data);
+  const flatData = foundry.utils.flattenObject(data);
   const changed = new Set(Object.keys(flatData));
   if ( changed.has(elevChangeFlag) ) {
     doc.object.renderFlags.set({
@@ -103,7 +103,7 @@ function clone(wrapped) {
  * If changing to/from directional source, update the source accordingly.
  */
 function _onUpdate(wrap, data, options, userId) {
-  const changes = flattenObject(data);
+  const changes = foundry.utils.flattenObject(data);
   const keys = new Set(Object.keys(changes));
 
   const isDirectionalFlag = `flags.${MODULE_ID}.directionalLight`;

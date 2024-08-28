@@ -147,7 +147,7 @@ function drawTokenHook(token) {
  * Hook updateToken to wipe the token calculator if the token shape is modified.
  */
 function updateTokenHook(tokenD, changed, _options, _userId) {
-  const changeKeys = new Set(Object.keys(flattenObject(changed)));
+  const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
 
   // Debug
   // console.debug(`updateTokenHook hook ${changed.x}, ${changed.y}, ${changed.elevation}
@@ -181,7 +181,7 @@ function preUpdateTokenHook(tokenD, changes, options, _userId) {
   const origTER = token[MODULE_ID].ter;
   const destination = token.getCenter(changes.x ?? token.x, changes.y ?? token.y);
 
-  const changeKeys = new Set(Object.keys(flattenObject(changes)));
+  const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changes)));
   if ( changeKeys.has("elevation")
     && CanvasAnimation.getAnimation(tokenD.object.animationName)
     && origTER ) {

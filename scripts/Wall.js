@@ -47,7 +47,7 @@ function createWall(wallD, _options, _userId) {
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
 function updateWall(wallD, data, _options, _userId) {
-  const changes = new Set(Object.keys(flattenObject(data)));
+  const changes = new Set(Object.keys(foundry.utils.flattenObject(data)));
   // TODO: Will eventually need to monitor changes for sounds and sight, possibly move.
   // TODO: Need to deal with threshold as well
   if ( !(SourceShadowWallGeometry.CHANGE_FLAGS.some(f => changes.has(f))) ) return;
