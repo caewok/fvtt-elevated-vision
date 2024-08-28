@@ -94,7 +94,7 @@ PATCHES.BASIC.HOOKS = {
  */
 function clone(wrapped) {
   const clone = wrapped();
-  if ( this.source instanceof DirectionalLightSource ) clone.convertToDirectionalLight();
+  if ( this.lightSource instanceof DirectionalLightSource ) clone.convertToDirectionalLight();
   return clone;
 }
 
@@ -118,12 +118,12 @@ function _onUpdate(wrap, data, options, userId) {
 function _draw(wrapped) {
   wrapped();
   this.tooltip ||= this.addChild(this._drawTooltip());
-  if ( this.source.isDirectional ) this.refreshControl();
+  if ( this.lightSource.isDirectional ) this.refreshControl();
 }
 
 function refreshControl(wrapped) {
   wrapped();
-  if ( this.source.isDirectional ) {
+  if ( this.lightSource.isDirectional ) {
     this.controlIcon.texture = getTexture(this.isVisible
       ? CONFIG.controlIcons.directionalLight : CONFIG.controlIcons.directionalLightOff);
     this.controlIcon.draw();
@@ -143,11 +143,11 @@ PATCHES.BASIC.WRAPS = {
  * New method: AmbientLight.prototype.convertToDirectionalLight
  */
 function convertToDirectionalLight() {
-  if ( this.source.isDirectional ) return;
+  if ( this.lightSource.isDirectional ) return;
 
   this.updateSource({ deleted: true });
   this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED, true);
-  this.source = new DirectionalLightSource({object: this});
+  this.lightSource = new DirectionalLightSource({object: this});
   this.updateSource();
 }
 
@@ -155,11 +155,11 @@ function convertToDirectionalLight() {
  * New method: AmbientLight.prototype.convertFromDirectionalLight
  */
 function convertFromDirectionalLight() {
-  if ( !this.source.isDirectional ) return;
+  if ( !this.lightSource.isDirectional ) return;
 
   this.updateSource({ deleted: true });
   this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED, false);
-  this.source = new foundry.canvas.sources.PointLightSource({object: this});
+  this.lightSource = new foundry.canvas.sources.PointLightSource({object: this});
   this.updateSource();
 }
 
@@ -182,9 +182,9 @@ function _drawTooltip() {
  * New method: AmbientLight.prototype._getTooltipText
  */
 function _getTooltipText() {
-  if ( this.source.isDirectional ) {
-    const azimuth = Math.normalizeDegrees(Math.toDegrees(this.source.azimuth)).toFixed(1);
-    const elevationAngle = Math.normalizeDegrees(Math.toDegrees(this.source.elevationAngle)).toFixed(1);
+  if ( this.lightSource.isDirectional ) {
+    const azimuth = Math.normalizeDegrees(Math.toDegrees(this.lightSource.azimuth)).toFixed(1);
+    const elevationAngle = Math.normalizeDegrees(Math.toDegrees(this.lightSource.elevationAngle)).toFixed(1);
     const text = `${azimuth}º⥁\n${elevationAngle}º⦞`;
     return text;
   }
