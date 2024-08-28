@@ -27,7 +27,7 @@ export class ShadowTextureRenderer {
   /** @type PIXI.RenderTexture */
   renderTexture;
 
-  /** @type {RenderedPointSource} */
+  /** @type {BaseLightSource} */
   source;
 
   /** @type {PIXI.Container} */

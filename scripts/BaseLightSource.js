@@ -18,9 +18,9 @@ import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { ShadowVisionMaskShader } from "./glsl/ShadowVisionMaskShader.js";
 import { EVUpdatingQuadMesh } from "./glsl/EVQuadMesh.js";
 
-// Methods related to RenderedPointSource
+// Methods related to BaseLightSource
 
-/* Foundry RenderedPointSource workflow
+/* Foundry BaseLightSource workflow
 
 _configure
 --> #initializeMeshes
@@ -140,7 +140,7 @@ PATCHES.POLYGONS.WRAPS = { _createPolygon };
 // NOTE: WebGL Wraps
 
 /**
- * Wrap RenderedPointSource.prototype._configure
+ * Wrap BaseLightSource.prototype._configure
  * Update shadow data when relevant changes are indicated.
  * @param {object} changes    Object of updates to point source data.
  *   Note: will only contain source.data properties.
@@ -155,7 +155,7 @@ function _configure(wrapped, changes) {
 }
 
 /**
- * Wrap RenderedPointSource.prototype.destroy
+ * Wrap BaseLightSource.prototype.destroy
  * Destroy shadow meshes, geometry, textures.
  */
 function destroy(wrapped) {
@@ -191,7 +191,7 @@ PATCHES.WEBGL.WRAPS = {
 // NOTE: WebGL Methods
 
 /**
- * New method: RenderedPointSource.prototype._initializeEVShadows
+ * New method: BaseLightSource.prototype._initializeEVShadows
  * Build all the shadow properties: mesh, geometry, renderer.
  */
 function _initializeEVShadows(initializeMask = true) {
@@ -214,7 +214,7 @@ function _initializeEVShadows(initializeMask = true) {
 }
 
 /**
- * New method: RenderedPointSource.prototype._initializeEVShadowGeometry
+ * New method: BaseLightSource.prototype._initializeEVShadowGeometry
  * Build the wall geometry for this source shadows.
  */
 function _initializeEVShadowGeometry() {
@@ -224,7 +224,7 @@ function _initializeEVShadowGeometry() {
 }
 
 /**
- * New method: RenderedPointSource.prototype._initializeEVShadowMesh
+ * New method: BaseLightSource.prototype._initializeEVShadowMesh
  * Mesh that describes shadows for the given geometry and source origin.
  */
 function _initializeEVShadowMesh() {
@@ -235,7 +235,7 @@ function _initializeEVShadowMesh() {
 }
 
 /**
- * New method: RenderedPointSource.prototype._initializeEVTerrainShadowMesh
+ * New method: BaseLightSource.prototype._initializeEVTerrainShadowMesh
  * Build terrain shadow + limited angle
  * Uses a quad sized to the source.
  */
@@ -248,7 +248,7 @@ function _initializeEVTerrainShadowMesh() {
 
 /**
  * Render texture to store the shadow mesh for use by other shaders.
- * New method: RenderedPointSource.prototype._initializeEVShadowRenderer
+ * New method: BaseLightSource.prototype._initializeEVShadowRenderer
  * Render the shadow mesh to a texture.
  */
 function _initializeEVShadowRenderer() {
@@ -258,7 +258,7 @@ function _initializeEVShadowRenderer() {
 }
 
 /**
- * New method: RenderedPointSource.prototype._initializeEVShadowMask
+ * New method: BaseLightSource.prototype._initializeEVShadowMask
  * Initialize the mask used by CanvasVisibility and EVVisionMask.
  * Mask that colors red areas that are lit / are viewable.
  */
@@ -270,7 +270,7 @@ function _initializeEVShadowMask() {
 }
 
 /**
- * New method: RenderedPointSource.prototype._updateEVShadowData
+ * New method: BaseLightSource.prototype._updateEVShadowData
  * @param {object} changes    Object of change data corresponding to source.data properties.
  */
 function _updateEVShadowData(changes, changeObj = {}) {
@@ -304,7 +304,7 @@ function _updateEVShadowData(changes, changeObj = {}) {
 }
 
 /**
- * New method: RenderedPointSource.prototype.pointInShadow
+ * New method: BaseLightSource.prototype.pointInShadow
  * Detect whether a point is in partial or full shadow based on testing wall collisions.
  * @param {Point3d|object} {x, y, z}    Object with x, y, and z properties. Z optional.
  * @returns {number} Approximate shadow value between 0 (no shadow) and 1 (full shadow).
@@ -452,14 +452,14 @@ function targetInShadow(target, testPoint) {
 }
 
 /**
- * New method: RenderedPointSource.prototype.wallAdded
+ * New method: BaseLightSource.prototype.wallAdded
  * Update shadow data based on the added wall, as necessary.
  * @param {Wall} wall     Wall that was added to the scene.
  */
 function wallAdded(wall) { handleWallChange(this, wall, "addWall"); }
 
 /**
- * New method: RenderedPointSource.prototype.wallUpdated
+ * New method: BaseLightSource.prototype.wallUpdated
  * Update shadow data based on the updated wall, as necessary.
  * @param {Wall} wall     Wall that was updated in the scene.
  */
@@ -468,7 +468,7 @@ function wallUpdated(wall, changes) {
 }
 
 /**
- * New method: RenderedPointSource.prototype.wallRemoved
+ * New method: BaseLightSource.prototype.wallRemoved
  * Update shadow data based on the removed wall, as necessary.
  * @param {Wall} wallId     Wall id that was removed from the scene.
  */
@@ -490,7 +490,7 @@ PATCHES.WEBGL.METHODS = {
 
 
 /**
- * New method: RenderedPointSource.prototype._getWalls
+ * New method: BaseLightSource.prototype._getWalls
  * Find the set of of walls that could potentially interact with this source.
  * Does not consider 3d collisions, just whether the wall potentially blocks.
  * @param {PIXI.Rectangle} bounds
@@ -504,7 +504,7 @@ function _getWalls(bounds) {
 }
 
 /**
- * New method: RenderedPointSource.prototype._testWallInclusion
+ * New method: BaseLightSource.prototype._testWallInclusion
  * Comparable to PointSourcePolygon.prototype._testWallInclusion
  * Test for whether a given wall interacts with this source.
  * Used to filter walls in the quadtree in _getWalls
@@ -590,7 +590,7 @@ PATCHES.BASIC.METHODS = {
 // NOTE: WebGL Getters
 
 /**
- * New getter: RenderedPointSource.prototype.EVShadowTexture
+ * New getter: BaseLightSource.prototype.EVShadowTexture
  */
 function EVShadowTexture() {
   const ev = this[MODULE_ID];
@@ -600,7 +600,7 @@ function EVShadowTexture() {
 }
 
 /**
- * New getter: RenderedPointSource.prototype.EVVisionMask
+ * New getter: BaseLightSource.prototype.EVVisionMask
  */
 function EVVisionMask() {
   const ev = this[MODULE_ID];
@@ -609,7 +609,7 @@ function EVVisionMask() {
 }
 
 /**
- * New getter: RenderedPointSource.prototype.bounds
+ * New getter: BaseLightSource.prototype.bounds
  */
 export function bounds() {
   const r = this.radius ?? this.data.externalRadius;
@@ -633,7 +633,7 @@ PATCHES.WEBGL.GETTERS = {
  * 1. Store wall geometry.
  * 2. Store a mesh with encoded shadow data.
  * 3. Render the shadow data to a texture.
- * @param {RenderedPointSource} source
+ * @param {BaseLightSource} source
  */
 function initializeSourceShadersHook(source) {
   source._initializeEVShadows();
@@ -655,7 +655,7 @@ function shadowPercentageFromCache(pixelCache, x, y) {
 
 /**
  * Utility function to handle variety of wall changes to a source.
- * @param {RenderedPointSource} source
+ * @param {BaseLightSource} source
  * @param {Wall} wall
  * @param {string} updateFn   Name of the update method for the wall geometry.
  * @param {object} opts       Options passed to updateFn

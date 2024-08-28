@@ -2,7 +2,7 @@
 canvas,
 GlobalLightSource
 PIXI,
-RenderedPointSource
+BaseLightSource
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -41,7 +41,7 @@ function _updateEVShadowData(changes, changeObj = {}) {
   }
 
   // Instead of super._updateEVShadowData()
-  RenderedPointSource.prototype._updateEVShadowData.call(this, changes, changeObj);
+  foundry.canvas.sources.BaseLightSource.prototype._updateEVShadowData.call(this, changes, changeObj);
 }
 
 PATCHES.WEBGL.METHODS = {

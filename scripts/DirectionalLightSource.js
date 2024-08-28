@@ -20,7 +20,7 @@ import { Draw } from "./geometry/Draw.js";
 import { pointCircleCoord } from "./util.js";
 
 
-/* RenderedPointSource mesh geometry workflow
+/* BaseLightSource mesh geometry workflow
 
 drawMeshes
  --> For each layer, #drawMesh
@@ -402,7 +402,7 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
 
   /**
    * Render texture to store the shadow mesh for use by other shaders.
-   * New method: RenderedPointSource.prototype._initializeEVShadowRenderer
+   * New method: BaseLightSource.prototype._initializeEVShadowRenderer
    * Render the shadow mesh to a texture.
    */
   _initializeEVShadowRenderer() {
@@ -424,7 +424,7 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
   }
 
   /**
-   * Use the RenderedPointSource.prototype._initializeEVShadowMask
+   * Use the BaseLightSource.prototype._initializeEVShadowMask
    */
 
   /**

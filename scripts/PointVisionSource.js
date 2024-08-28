@@ -78,7 +78,7 @@ function _initializeEVShadowGeometry() {
 }
 
 /**
- * New method: RenderedPointSource.prototype._initializeEVTerrainShadowMesh
+ * New method: BaseLightSource.prototype._initializeEVTerrainShadowMesh
  * Build terrain shadow + limited angle
  * Uses a quad sized to the canvas.
  */
