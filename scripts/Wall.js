@@ -28,7 +28,7 @@ PATCHES.WEBGL = {};
 function createWall(wallD, _options, _userId) {
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.tokens.placeables.map(t => t.vision)
+    ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
   ];
 
   for ( const src of sources ) src.wallAdded(wallD.object);
@@ -54,7 +54,7 @@ function updateWall(wallD, data, _options, _userId) {
 
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.tokens.placeables.map(t => t.vision)
+    ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
   ];
 
   for ( const src of sources ) src.wallUpdated(wallD.object, changes);
@@ -74,7 +74,7 @@ function updateWall(wallD, data, _options, _userId) {
 function deleteWall(wallD, _options, _userId) {
   const sources = [
     ...canvas.effects.lightSources,
-    ...canvas.tokens.placeables.map(t => t.vision)
+    ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
   ];
 
   for ( const src of sources ) src.wallRemoved(wallD.id);
