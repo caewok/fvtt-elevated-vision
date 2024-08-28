@@ -4,7 +4,6 @@
   "title": "Elevated Vision",
   "version": "#{VERSION}#",
   "library": "false",
-  "manifestPlusVersion": "1.0.0",
   "compatibility": {
     "minimum": "11.299",
     "verified": "11.315"
