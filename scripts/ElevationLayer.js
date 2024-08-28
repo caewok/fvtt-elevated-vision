@@ -652,7 +652,7 @@ export class ElevationLayer extends InteractionLayer {
     // Update the source shadow meshes with the elevation texture.
     const sources = [
       ...canvas.effects.lightSources,
-      ...canvas.tokens.placeables.map(t => t.vision)
+      ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
     ];
 
     for ( const src of sources ) {
