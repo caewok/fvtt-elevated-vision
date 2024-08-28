@@ -43,7 +43,7 @@ function _testPoint(visionSource, mode, target, test) {
 
   for ( const lightSource of canvas.effects.lightSources.values() ) {
     if ( !lightSource.active ) continue;
-    if ( lightSource instanceof GlobalLightSource ) return true;
+    if ( lightSource instanceof foundry.canvas.sources.GlobalLightSource ) return true;
     if ( !testWithinRadius(lightSource, test) ) continue;
     if ( !testSourceAngle(lightSource, test) ) continue;
     if ( lightSource.targetInShadow(target, test.point) < 0.5 ) return true;
@@ -62,7 +62,7 @@ Draw = CONFIG.GeometryLib.Draw
 
 // see DetectionMode.prototype._testRange.
 function testWithinRadius(source, test) {
-  if ( source instanceof DirectionalLightSource || source instanceof GlobalLightSource ) return true;
+  if ( source instanceof DirectionalLightSource || source instanceof foundry.canvas.sources.GlobalLightSource ) return true;
   const radius = source.radius || source.data.externalRadius;
   const dx = test.point.x - source.x;
   const dy = test.point.y - source.y;

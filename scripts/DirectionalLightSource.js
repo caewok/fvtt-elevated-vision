@@ -52,7 +52,7 @@ _configure
 // Directional Light
 // Assumed to be infinitely far, like a sun, and so causes directional shadows only.
 // Similar to GlobalLightSource in that it overrides the polygon shape.
-export class DirectionalLightSource extends LightSource {
+export class DirectionalLightSource extends foundry.canvas.sources.PointLightSource {
 
   /** @type {boolean} */
   isDirectional = true;

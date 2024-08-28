@@ -159,7 +159,7 @@ function convertFromDirectionalLight() {
 
   this.updateSource({ deleted: true });
   this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED, false);
-  this.source = new LightSource({object: this});
+  this.source = new foundry.canvas.sources.PointLightSource({object: this});
   this.updateSource();
 }
 

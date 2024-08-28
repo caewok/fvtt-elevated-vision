@@ -1,15 +1,8 @@
-{
-  "env": {
-    "browser": true,
-    "es2021": true,
-    "node": true,
-    "jquery": true
-  },
-  "rules": {
+export default [{
+  rules: {
     "array-bracket-spacing": ["warn", "never"],
     "array-callback-return": "warn",
     "arrow-spacing": "warn",
-    "comma-dangle": ["warn", "never"],
     "comma-style": "warn",
     "computed-property-spacing": "warn",
     "constructor-super": "error",
@@ -48,7 +41,7 @@
     "no-irregular-whitespace": "warn",
     "no-iterator": "warn",
     "no-lone-blocks": "warn",
-    "no-lonely-if": "warn",
+    "no-lonely-if": "off",
     "no-loop-func": "warn",
     "no-misleading-character-class": "warn",
     "no-mixed-operators": "warn",
@@ -106,7 +99,6 @@
     "use-isnan": ["warn", {"enforceForSwitchCase": true, "enforceForIndexOf": true}],
     "valid-typeof": ["warn", {"requireStringLiterals": true}],
     "wrap-iife": ["warn", "inside"],
-
     "arrow-parens": ["warn", "as-needed", {"requireForBlockBody": false}],
     "capitalized-comments": ["warn", "always", {
       "ignoreConsecutiveComments": true,
@@ -148,4 +140,4 @@
     }],
     "spaced-comment": "warn"
   }
-}
+}];

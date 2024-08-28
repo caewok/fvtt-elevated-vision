@@ -61,8 +61,8 @@ export const PATCHES = {
   DetectionMode: PATCHES_DetectionMode,
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
   DetectionModeTremor: PATCHES_DetectionModeTremor,
-  GlobalLightSource: PATCHES_GlobalLightSource,
-  LightSource: PATCHES_LightSource,
+  "foundry.canvas.sources.GlobalLightSource": PATCHES_GlobalLightSource,
+  "foundry.canvas.sources.PointLightSource": PATCHES_LightSource,
   "PIXI.LegacyGraphics": PATCHES_PIXI_LegacyGraphics,
   RenderedPointSource: PATCHES_RenderedPointSource,
   Token: PATCHES_Token,
@@ -119,7 +119,7 @@ export function registerPatchesForSceneSettings() {
 
   // Trigger initialization of all lights when switching so that the visibility cache is updated.
   for ( const lightSource of canvas.effects.lightSources ) {
-    if ( lightSource instanceof GlobalLightSource ) continue;
+    if ( lightSource instanceof foundry.canvas.sources.GlobalLightSource ) continue;
     if ( lightSource instanceof DirectionalLightSource
       && algorithm !== TYPES.WEBGL ) lightSource.object.convertFromDirectionalLight();
 

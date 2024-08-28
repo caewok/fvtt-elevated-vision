@@ -80,7 +80,7 @@ function refreshVisibility() {
   // Iterating over each light source
   for ( const lightSource of canvas.effects.lightSources ) {
     const mask = lightSource.EVVisionMask;
-    if ( !mask && !(lightSource instanceof GlobalLightSource) ) {
+    if ( !mask && !(lightSource instanceof foundry.canvas.sources.GlobalLightSource) ) {
       console.error(`${MODULE_ID}|refreshVisibilityCanvasVisibility|LightSource ${lightSource.object.id} has no mask.`);
     }
 

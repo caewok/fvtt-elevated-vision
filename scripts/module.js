@@ -26,7 +26,6 @@ import { DirectionalLightSource } from "./DirectionalLightSource.js";
 // Register methods, patches, settings
 import { PATCHER, initializePatching, registerPatchesForSceneSettings } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
-import { registerElevationConfig } from "./geometry/elevation_configs.js";
 
 // For elevation layer registration and API
 import { ElevationLayer } from "./ElevationLayer.js";
@@ -43,6 +42,8 @@ import "./controls.js";
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
+  registerGeometry();
+
   // CONFIG.debug.hooks = true;
   console.debug(`${MODULE_ID}|init`);
 
@@ -151,7 +152,6 @@ Hooks.once("init", function() {
   };
 
   // These methods need to be registered early
-  registerGeometry();
   Settings.registerAll();
   initializePatching();
   registerLayer();
@@ -166,11 +166,6 @@ Hooks.once("init", function() {
   // Register new render flag for radius changes to lights
   CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshRadius = {};
   CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshField.propagate.push("refreshRadius");
-});
-
-Hooks.once("setup", function() {
-  registerElevationConfig("TileConfig", "Elevated Vision");
-  registerElevationConfig("AmbientLightConfig", "Elevated Vision");
 });
 
 Hooks.on("canvasInit", function(_canvas) {

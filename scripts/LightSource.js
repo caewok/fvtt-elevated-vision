@@ -77,7 +77,7 @@ function _getPolygonConfiguration(wrapped) {
  */
 function _updateCommonUniforms(wrapped, shader) {
   const u = shader.uniforms;
-  if ( this instanceof GlobalLightSource ) {
+  if ( this instanceof foundry.canvas.sources.GlobalLightSource ) {
     u.uEVShadows = false;
     u.uEVDirectional = false;
     return wrapped(shader);
