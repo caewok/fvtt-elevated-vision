@@ -65,8 +65,8 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
   };
 
   /** @override */
-  _createPolygon() {
-    return canvas.dimensions.rect.toPolygon();
+  _createShapes() {
+    this.shape = canvas.dimensions.rect.toPolygon();
   }
 
   /** @type {number}  Source elevation infinitely high. */

@@ -148,13 +148,12 @@ PATCHES.POLYGONS.METHODS = { EVVisionMask: EVVisionMaskPolygon };
 
 // NOTE: Polygon Methods
 
-function _createPolygon(wrapped) {
-  const sweep = wrapped();
-  // TODO: this.polygonShadows(sweep);
-  return sweep;
+function _createShapes(wrapped) {
+  wrapped();
+  // TODO: this.polygonShadows(this.shape);
 }
 
-PATCHES.POLYGONS.WRAPS = { _createPolygon };
+PATCHES.POLYGONS.WRAPS = { _createShapes };
 
 // ----- NOTE: WebGL Shadows ----- //
 
