@@ -880,7 +880,7 @@ export class ElevationLayer extends InteractionLayer {
    *   Defaults to true if the canvas grid is hex.
    * @returns {number} Elevation value.
    */
-  averageElevationForGridSpace(row, col, { useHex = canvas.grid.isHex } = {}) {
+  averageElevationForGridSpace(row, col, { useHex = canvas.grid.isHexagonal } = {}) {
     const [x, y] = canvas.grid.grid.getPixelsFromGridPosition(row, col);
     return this.averageElevationAtGridPoint(x, y, { useHex });
   }
@@ -891,7 +891,7 @@ export class ElevationLayer extends InteractionLayer {
    * @param {Point} pt
    * @returns {number} Elevation value.
    */
-  averageElevationAtGridPoint(pt, { useHex = canvas.grid.isHex } = {}) {
+  averageElevationAtGridPoint(pt, { useHex = canvas.grid.isHexagonal } = {}) {
     const shape = useHex ? this._hexGridShape(pt) : this._squareGridShape(pt);
     return this.averageElevationWithinShape(shape);
   }
@@ -992,11 +992,11 @@ export class ElevationLayer extends InteractionLayer {
    * @param {boolean} [options.temporary]   If true, don't immediately require a save.
    *   This setting does not prevent a save if the user further modifies the canvas.
    * @param {boolean} [options.useHex]      If true, use a hex grid; if false use square.
-   *   Defaults to canvas.grid.isHex.
+   *   Defaults to canvas.grid.isHexagonal.
    *
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
-  setElevationForGridSpace(p, elevation = 0, { temporary = false, useHex = canvas.grid.isHex } = {}) {
+  setElevationForGridSpace(p, elevation = 0, { temporary = false, useHex = canvas.grid.isHexagonal } = {}) {
     const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
     const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
     const color = this.elevationColor(elevation);
@@ -1037,7 +1037,7 @@ export class ElevationLayer extends InteractionLayer {
 
   _tokenShape(tokenTLCorner, width, height) {
     // For the moment, uneven width/height shapes must use rectangle border
-    if ( canvas.grid.isHex && width === height ) return this._hexGridShape(tokenTLCorner, { width, height });
+    if ( canvas.grid.isHexagonal && width === height ) return this._hexGridShape(tokenTLCorner, { width, height });
     return new PIXI.Rectangle(tokenTLCorner.x, tokenTLCorner.y, width, height);
   }
 
