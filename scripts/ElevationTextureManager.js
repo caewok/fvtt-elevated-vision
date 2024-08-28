@@ -3,7 +3,6 @@ canvas,
 CONFIG,
 FilePicker,
 game,
-isNewerVersion,
 PIXI,
 TextureLoader
 */
@@ -146,7 +145,7 @@ export class ElevationTextureManager {
    */
   async convertFromSceneFlag() {
     const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-    if ( !elevationImage || !elevationImage.imageData || isNewerVersion(elevationImage.version, "0.5.0") ) return true;
+    if ( !elevationImage || !elevationImage.imageData || foundry.utils.isNewerVersion(elevationImage.version, "0.5.0") ) return true;
 
     log(`Converting from scene flag to ${this.#filePath}/${this.#fileName}`);
     try {
