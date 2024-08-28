@@ -54,7 +54,7 @@ function updateAmbientLightHook(doc, data, _options, _userId) {
  * @param {boolean} hover       True if hover started.
  */
 function hoverAmbientLightHook(light, hover) {
-  if ( !light.source.isDirectional ) return;
+  if ( !light.lightSource.isDirectional ) return;
   if ( hover ) canvas.lighting.addChild(DirectionalLightSource._elevationAngleGrid);
   else canvas.lighting.removeChild(DirectionalLightSource._elevationAngleGrid);
 }
