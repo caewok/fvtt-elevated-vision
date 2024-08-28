@@ -33,6 +33,13 @@ PATCHES.WEBGL = {};
  * - vision.fov.tokens √
  * - vision.base √
  * - vision.fov.lights √
+ *
+ * v12
+ * vision.base is now vision.light.preview
+ * vision.fov is now vision.light
+ * vision.fov.lights has no replacement
+ * vision.tokens now vision.light
+ *
  */
 function refreshVisibility() {
   if ( !this.vision?.children.length ) return;
@@ -51,29 +58,29 @@ function refreshVisibility() {
   let lightsFullRedraw = true;
   if ( lightsFullRedraw ) {
     this.pointSourcesStates.clear();
-    vision.fov.lights.clear();
-    vision.fov.lights.removeChildren();
+    // vision.light.clear();
+    vision.light.removeChildren();
   }
 
-  vision.base.clear();
-  vision.base.removeChildren();
+  vision.light.preview.clear();
+  vision.light.preview.removeChildren();
   // vision.base.beginFill(fillColor, 1.0);
 
   // vision.fov.lights.beginFill(fillColor, 1.0);
   // Already cleared with lightsFullRedraw above.
 
-  vision.fov.tokens.clear();
-  vision.fov.tokens.removeChildren();
+  vision.light.clear();
+  vision.light.removeChildren();
   // Currently unused
   // vision.fov.tokens.beginFill(fillColor, 1.0);
 
-  vision.los.clear();
-  if ( vision.los.children.length > 1 ) vision.los.removeChildren(1); // Keep the vision.los.preview child.
+  vision.light.clear();
+  if ( vision.light.children.length > 1 ) vision.light.removeChildren(1); // Keep the vision.los.preview child.
   // Currently unused
   // vision.los.beginFill(fillColor, 1.0);
 
-  vision.los.preview.clear();
-  vision.los.preview.removeChildren();
+  vision.light.preview.clear();
+  vision.light.preview.removeChildren();
   // Currently unused
   // vision.los.preview.beginFill(fillColor, 1.0);
 
@@ -87,7 +94,7 @@ function refreshVisibility() {
     // The light source is providing vision and has an active layer?
     if ( lightSource.active && lightSource.data.vision ) {
       // Global light will have data.vision = false.
-      const los = lightSource.isPreview ? vision.los.preview : vision.los;
+      const los = lightSource.isPreview ? vision.light.preview : vision.light;
       los.addChild(mask);
     }
 
@@ -95,7 +102,7 @@ function refreshVisibility() {
     if ( lightSource.object instanceof Token ) {
       // Global light cannot emanate from a token.
       if ( !lightSource.active ) continue;
-      const los = lightSource.isPreview ? vision.base : vision.fov.tokens;
+      const los = lightSource.isPreview ? vision.light.preview : vision.light;
       const mask = lightSource[MODULE_ID].shadowVisionMask;
       los.addChild(mask);
       continue;
@@ -114,7 +121,7 @@ function refreshVisibility() {
 
     if ( !lightSource.active ) continue;
     refreshCache = true;
-    if ( draw ) vision.fov.lights.addChild(mask);
+    if ( draw ) vision.light.addChild(mask);
 
   }
 
@@ -159,7 +166,7 @@ function refreshVisibility() {
   if ( commitFog ) canvas.fog.commit();
 }
 
-PATCHES.WEBGL.OVERRIDES = { refreshVisibility };
+//PATCHES.WEBGL.OVERRIDES = { refreshVisibility };
 
 // TODO: Use refreshVisibility override for polygons as well? What about "none"?
 
@@ -174,28 +181,7 @@ async function _tearDown(wrapped, options) {
 
 PATCHES.WEBGL.WRAPS = { _tearDown };
 
-/**
- * Copy CanvasVisibility.prototype.#checkLights into public method.
- * Required to override CanvasVisibility.prototype.refreshVisibility.
- * Assumes this.#pointSourcesStates is made public
- * ---
- * Check if the lightsSprite render texture cache needs to be fully redrawn.
- * @returns {boolean}              return true if the lights need to be redrawn.
- */
-function checkLights() {
-  // Counter to detect deleted light source
-  let lightCount = 0;
-  // First checking states changes for the current effects lightsources
-  for ( const lightSource of canvas.effects.lightSources ) {
-    if ( lightSource.object instanceof Token ) continue;
-    const state = this.pointSourcesStates.get(lightSource);
-    if ( !state ) continue;
-    if ( (state.updateId !== lightSource.updateId) || (state.wasActive && !lightSource.active) ) return true;
-    lightCount++;
-  }
-  // Then checking if some lightsources were deleted
-  return this.pointSourcesStates.size > lightCount;
-}
+
 
 
 /**
@@ -208,24 +194,23 @@ function checkLights() {
  * Note: A full cache redraw needs the texture to be cleared.
  * @param {boolean} clearTexture       If the texture need to be cleared before rendering.
  */
-function cacheLights(clearTexture) {
-  this.vision.fov.lights.renderable = true;
-  const dims = canvas.dimensions;
-  this.renderTransform.tx = -dims.sceneX;
-  this.renderTransform.ty = -dims.sceneY;
-
-  // Render the currently revealed vision to the texture
-  canvas.app.renderer.render(this.vision.fov.lights, {
-    renderTexture: this.vision.fov.lightsSprite.texture,
-    clear: clearTexture,
-    transform: this.renderTransform
-  });
-  this.vision.fov.lights.renderable = false;
-}
+// function cacheLights(clearTexture) {
+//   this.vision.fov.lights.renderable = true;
+//   const dims = canvas.dimensions;
+//   this.renderTransform.tx = -dims.sceneX;
+//   this.renderTransform.ty = -dims.sceneY;
+//
+//   // Render the currently revealed vision to the texture
+//   canvas.app.renderer.render(this.vision.fov.lights, {
+//     renderTexture: this.vision.fov.lightsSprite.texture,
+//     clear: clearTexture,
+//     transform: this.renderTransform
+//   });
+//   this.vision.fov.lights.renderable = false;
+// }
 
 PATCHES.WEBGL.METHODS = {
-  checkLights,
-  cacheLights,
+  //cacheLights,
   renderTransform: new PIXI.Matrix(),
   pointSourcesStates: new Map()
 };

@@ -14,12 +14,12 @@ Wall
 
 // WallTracer3
 
-import { groupBy, segmentBounds } from "../util.js";
-import { Draw } from "../geometry/Draw.js";
-import { Graph, GraphVertex, GraphEdge } from "../geometry/Graph.js";
-import { Settings } from "../settings.js";
-import { doSegmentsOverlap, IX_TYPES, segmentCollision } from "../geometry/util.js";
-import { MODULE_ID } from "../const.js";
+import { groupBy, segmentBounds } from "./util.js";
+import { Draw } from "./geometry/Draw.js";
+import { Graph, GraphVertex, GraphEdge } from "./geometry/Graph.js";
+import { Settings } from "./settings.js";
+import { doSegmentsOverlap, IX_TYPES, segmentCollision } from "./geometry/util.js";
+import { MODULE_ID } from "./const.js";
 
 /* WallTracerVertex
 
@@ -405,7 +405,8 @@ export class WallTracerEdge extends GraphEdge {
     if ( token.actor?.statuses && token.actor.statuses.intersects(pathfindingIgnoreStatuses) ) return false;
 
     // Don't block tokens that share specific disposition with the moving token.
-    tokenBlockType ??= Settings._tokenBlockType();
+    // tokenBlockType ??= Settings._tokenBlockType();
+    tokenBlockType = D.NEUTRAL;
     const D = CONST.TOKEN_DISPOSITIONS;
     const moveTokenD = moveToken.document.disposition;
     const edgeTokenD = token.document.disposition;
@@ -902,7 +903,7 @@ export class WallTracer extends Graph {
         case "innerBounds": modelGraph.addCanvasEdge(edge); break;
       }
     }
-    if ( Settings.useTokensInPathfinding ) canvas.tokens.placeables.forEach(token => modelGraph.addToken(token));
+    // if ( Settings.useTokensInPathfinding ) canvas.tokens.placeables.forEach(token => modelGraph.addToken(token));
     return modelGraph;
   }
 

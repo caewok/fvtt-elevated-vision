@@ -239,6 +239,20 @@ export function groupBy(list, keyGetter) {
 }
 
 /**
+ * Helper to get a rectangular bounds between two points.
+ * @param {PIXI.Point} a
+ * @param {PIXI.Point} b
+ * @returns {PIXI.Rectangle}
+ */
+export function segmentBounds(a, b) {
+  if ( !b || (a.x === b.x && a.y === b.y) ) return new PIXI.Rectangle(a.x - 1, a.y - 1, 3, 3);
+  const xMinMax = Math.minMax(a.x, b.x);
+  const yMinMax = Math.minMax(a.y, b.y);
+  return new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
+}
+
+
+/**
  * Log message only when debug flag is enabled from DevMode module.
  * @param {Object[]} args  Arguments passed to console.log.
  */
