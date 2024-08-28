@@ -179,7 +179,7 @@ function preUpdateTokenHook(tokenD, changes, options, _userId) {
 
   const token = tokenD.object;
   const origTER = token[MODULE_ID].ter;
-  const destination = token.getCenter(changes.x ?? token.x, changes.y ?? token.y);
+  const destination = token.getCenterPoint({ x: changes.x ?? token.x, y: changes.y ?? token.y });
 
   const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changes)));
   if ( changeKeys.has("elevation")
@@ -246,7 +246,7 @@ function refreshTokenHook(token, flags) {
     const ter = token[MODULE_ID].ter;
     if ( !ter ) return;
 
-    const center = token.getCenter(token.position.x, token.position.y);
+    const center = token.getCenterPoint(token.position);
     const elevation = ter.elevationAtClosestPoint(center);
 
     // Debug
