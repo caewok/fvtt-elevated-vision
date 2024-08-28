@@ -433,8 +433,9 @@ export function getLinkedWalls(wall) {
   const keyB = wall.edge.b.key;
   canvas.walls.placeables.forEach(w => {
     if ( w === wall ) return;
-    if ( w.wallKeys.has(keyA) ) linkedA.add(w);
-    else if ( w.wallKeys.has(keyB) ) linkedB.add(w);
+    const wallKeys = new Set([w.edge.a.key, w.edge.b.key]);
+    if ( wallKeys.has(keyA) ) linkedA.add(w);
+    else if ( wallKeys.has(keyB) ) linkedB.add(w);
   });
   return { linkedA, linkedB };
 }
