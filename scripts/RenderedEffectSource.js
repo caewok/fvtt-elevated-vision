@@ -617,7 +617,7 @@ PATCHES.BASIC.METHODS = {
 function EVShadowTexture() {
   const ev = this[MODULE_ID];
   // Don't init the shadow mask in case the mask called this getter; avoid circularity.
-  if ( !ev || !ev.shadowRenderer ) this._initializeEVShadows(false);
+  if ( !ev || !ev.shadowRenderer ) this._initializeEVShadows(true);
   return this[MODULE_ID].shadowRenderer.renderTexture;
 }
 
@@ -662,9 +662,7 @@ function initializeSourceShadersHook(source) {
 }
 
 PATCHES.WEBGL.HOOKS = {
-  initializeLightSourceShaders: initializeSourceShadersHook,
-  initializeVisionSourceShaders: initializeSourceShadersHook,
-  initializeDirectionalLightSourceShaders: initializeSourceShadersHook
+  initializeRenderedEffectSourceShaders: initializeSourceShadersHook
 };
 
 // ----- Note: Helper functions -----
