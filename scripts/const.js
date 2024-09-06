@@ -40,12 +40,17 @@ export const FLAGS = {
 };
 
 export const TEMPLATES = {
-  TOKEN: `modules/${MODULE_ID}/templates/${MODULE_ID}-token-config.html`,
-  AMBIENT_SOURCE: `modules/${MODULE_ID}/templates/${MODULE_ID}-ambient-source-config.html`,
-  TILE: `modules/${MODULE_ID}/templates/${MODULE_ID}-tile-config.html`,
+  TOKEN: `modules/${MODULE_ID}/templates/token-config.html`,
+  AMBIENT_SOURCE: `modules/${MODULE_ID}/templates/ambient-source-config.html`,
+  AMBIENT_SOURCE_PARTIAL: `modules/${MODULE_ID}/templates/ambient-source-config-partial.html`,
   ELEVATION_STEP: `modules/${MODULE_ID}/templates/elevation-step-controls.html`,
   SCENE: `modules/${MODULE_ID}/templates/scene-elevation-config.html`
-}
+};
+
+// Icons displayed in config tabs.
+export const ICONS = {
+  MODULE: "fa-solid fa-hurricane"
+};
 
 // Hook init b/c game.modules is not initialized at start.
 Hooks.once("init", function() {
