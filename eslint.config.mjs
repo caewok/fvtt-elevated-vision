@@ -1,4 +1,12 @@
+import globals from "globals";
+
 export default [{
+  languageOptions: {
+    globals: {
+      ...globals.node,
+    }
+  },
+
   rules: {
     "array-bracket-spacing": ["warn", "never"],
     "array-callback-return": "warn",
@@ -65,6 +73,7 @@ export default [{
     "no-sequences": "warn",
     "no-template-curly-in-string": "warn",
     "no-this-before-super": "error",
+    "no-undef": "error",
     "no-unexpected-multiline": "warn",
     "no-unmodified-loop-condition": "warn",
     "no-unneeded-ternary": "warn",

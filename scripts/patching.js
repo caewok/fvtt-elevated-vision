@@ -13,6 +13,7 @@ import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
+import { PATCHES as PATCHES_AmbientLightConfig } from "./AmbientLightConfig.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
 import { PATCHES as PATCHES_PIXI_LegacyGraphics } from "./PIXI_LegacyGraphics.js";
@@ -26,10 +27,6 @@ import {
   PATCHES_DetectionMode,
   PATCHES_DetectionModeBasicSight,
   PATCHES_DetectionModeTremor } from "./detection_modes.js";
-
-import {
-  PATCHES_AmbientLightConfig,
-  PATCHES_TokenConfig } from "./render_configs.js";
 
 import { PATCHES_Token, PATCHES_ActiveEffect } from "./Token.js";
 
@@ -64,7 +61,6 @@ export const PATCHES = {
   "PIXI.LegacyGraphics": PATCHES_PIXI_LegacyGraphics,
   "foundry.canvas.sources.RenderedEffectSource": PATCHES_RenderedEffectSource,
   Token: PATCHES_Token,
-  TokenConfig: PATCHES_TokenConfig,
   "foundry.canvas.sources.PointVisionSource": PATCHES_PointVisionSource,
   Wall: PATCHES_Wall
 };

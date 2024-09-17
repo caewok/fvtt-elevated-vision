@@ -8,7 +8,7 @@ ui
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, FLAGS } from "./const.js";
+import { MODULE_ID, FLAGS, TEMPLATES } from "./const.js";
 import { log } from "./util.js";
 
 // API imports
@@ -166,6 +166,11 @@ Hooks.once("init", function() {
   // Register new render flag for radius changes to lights
   CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshRadius = {};
   CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshField.propagate.push("refreshRadius");
+});
+
+Hooks.once("setup", async function() {
+  log("Setup...");
+  loadTemplates(Object.values(TEMPLATES));
 });
 
 Hooks.on("canvasInit", function(_canvas) {

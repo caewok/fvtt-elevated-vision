@@ -15,6 +15,11 @@ import { testWallsForIntersections } from "../ClockwiseSweepPolygon.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { DirectionalLightSource } from "../DirectionalLightSource.js";
 
+const flipEdgeLabel = {
+  a: "b",
+  b: "a"
+};
+
 export class SourceShadowWallGeometry extends PIXI.Geometry {
 
   /**
@@ -235,7 +240,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     let blockingWallA;
     let blockAngleA = 360;
     for ( const linkedWall of linkedA ) {
-      const blockAngle = this.sharedEndpointAngle(wall, linkedWall, "A");
+      const blockAngle = this.sharedEndpointAngle(wall, linkedWall, "a");
       if ( blockAngle === -1 || blockAngle > blockAngleA ) continue;
       blockingWallA = linkedWall;
       blockAngleA = blockAngle;
@@ -245,7 +250,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     let blockingWallB;
     let blockAngleB = 360;
     for ( const linkedWall of linkedB ) {
-      const blockAngle = this.sharedEndpointAngle(wall, linkedWall, "B");
+      const blockAngle = this.sharedEndpointAngle(wall, linkedWall, "b");
       if ( blockAngle === -1 || blockAngle > blockAngleB ) continue;
       blockingWallB = linkedWall;
       blockAngleB = blockAngle;
@@ -291,9 +296,9 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   sharedEndpointAngle(wall, linkedWall, sharedEndpointName) {
     if ( !(this._triWallMap.has(linkedWall.id) || this._includeWall(linkedWall)) ) return -1; // Quicker to check the map first.
 
-    const sharedPt = wall[sharedEndpointName];
-    const otherWallPt = wall[sharedEndpointName === "A" ? "B" : "A"];
-    const otherLinkedPt = linkedWall.A.key === sharedPt.key ? linkedWall.B : linkedWall.A;
+    const sharedPt = wall.edge[sharedEndpointName];
+    const otherWallPt = wall.edge[flipEdgeLabel[sharedEndpointName]]; // a --> b, b --> a.
+    const otherLinkedPt = linkedWall.edge.a.key === sharedPt.key ? linkedWall.edge.b : linkedWall.edge.a;
     const sourceOrigin = this.sourceOrigin;
     if ( !tangentToV(otherWallPt, sharedPt, otherLinkedPt, sourceOrigin) ) return -2;
     return pointVTest(otherWallPt, sharedPt, otherLinkedPt, sourceOrigin);

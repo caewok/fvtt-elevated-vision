@@ -138,10 +138,10 @@ PATCHES.BASIC.MIXES = { refreshControl };
 function convertToDirectionalLight() {
   if ( this.lightSource && this.lightSource.isDirectional ) return;
 
-  this.updateSource({ deleted: true });
+  this.initializeLightSource({ deleted: true });
   this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED, true);
-  this.lightSource = new DirectionalLightSource({object: this});
-  this.updateSource();
+  this.lightSource = new DirectionalLightSource({sourceId: this.sourceId, object: this});
+  this.initializeLightSource();
 }
 
 /**
@@ -150,10 +150,10 @@ function convertToDirectionalLight() {
 function convertFromDirectionalLight() {
   if ( !this.lightSource || !this.lightSource.isDirectional ) return;
 
-  this.updateSource({ deleted: true });
+  this.initializeLightSource({ deleted: true });
   this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED, false);
-  this.lightSource = new foundry.canvas.sources.PointLightSource({object: this});
-  this.updateSource();
+  this.lightSource = new foundry.canvas.sources.PointLightSource({sourceId: this.sourceId, object: this});
+  this.initializeLightSource();
 }
 
 PATCHES.BASIC.METHODS = {
