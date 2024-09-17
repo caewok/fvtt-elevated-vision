@@ -60,6 +60,23 @@ PATCHES.BASIC.HOOKS = {
 // Note: Ambient Light Wraps
 
 /**
+ * Wrap AmbientLight.prototype.initializeLightSource
+ * Construct a new directional light source before an erroneous point source can be created.
+ * @param {object} [options={}]               Options which modify how the source is updated
+ * @param {boolean} [options.deleted=false]   Indicate that this light source has been deleted
+ */
+function initializeLightSource(wrapped, opts = {}) {
+  const isDirectional = this.document.getFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED);
+  if ( isDirectional && !opts.deleted && !this.lightSource ) {
+    this.lightSource = new DirectionalLightSource({sourceId: this.sourceId, object: this});
+  }
+
+  // TODO: Will still convert to point source if it switches darkness state.
+  return wrapped(opts);
+}
+
+
+/**
  * Wrap AmbientLight.prototype.clone
  * Change the light source if cloning a directional light.
  * Needed to switch out the light source to directional for the clone, when dragging.
@@ -96,7 +113,8 @@ function _draw(wrapped) {
 PATCHES.BASIC.WRAPS = {
   clone,
   _onUpdate,
-  _draw
+  _draw,
+  initializeLightSource
 };
 
 // NOTE: Mixed Wraps
@@ -140,7 +158,6 @@ function convertToDirectionalLight() {
 
   this.initializeLightSource({ deleted: true });
   this.document.setFlag(MODULE_ID, FLAGS.DIRECTIONAL_LIGHT.ENABLED, true);
-  this.lightSource = new DirectionalLightSource({sourceId: this.sourceId, object: this});
   this.initializeLightSource();
 }
 
