@@ -9,6 +9,7 @@ Token
 
 import { MODULE_ID } from "./const.js";
 import { log } from "./util.js";
+import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 
 // NOTE: Polygon and Shader methods for CanvasVisibility
 
@@ -182,6 +183,24 @@ function refreshVisibility(wrapped) {
   if ( !this.vision ) return wrapped();
   const vision = this.vision;
 
+  const sources = [
+    vision.light.sources,
+    vision.light.preview,
+    vision.light.global.source,
+    vision.light.mask,
+    vision.light.mask.preview,
+    vision.sight,
+    vision.sight.preview,
+    vision.darkness
+  ];
+
+  for ( const s of sources ) {
+    s.children.forEach(c => {
+      if ( c instanceof EVQuadMesh ) vision.light.sources.removeChild(c);
+    });
+  }
+
+
   // Temporarily destroy the ability of each source to draw shapes, so we can instead use the premade graphics.
 //   const drawShape = vision.light.sources.drawShape;
 //   const fakeDrawShape = () => {};
@@ -196,6 +215,7 @@ function refreshVisibility(wrapped) {
 
   // Temporarily obliterate each source shape so nothing gets drawn.
   // Better than messing with drawShape b/c the cache's drawShape cannot be accessed
+  // No can it easily be wiped after.
   const shapeMap = new Map();
   const lightMap = new Map();
   const fakeShape = new PIXI.Rectangle();
@@ -273,6 +293,48 @@ function refreshVisibility(wrapped) {
 
 }
 
+function refreshVisibility2(wrapped) {
+  if ( !this.vision ) return wrapped();
+  const vision = this.vision;
+
+  // Remove all EV children so the drawings do not coexist with the children and children not repeated.
+  const sources = [
+    vision.light.sources,
+    vision.light.preview,
+    vision.light.global.source,
+    vision.light.mask,
+    vision.light.mask.preview,
+    vision.sight,
+    vision.sight.preview,
+    vision.darkness
+  ];
+  sources.forEach(s => s.children
+    .forEach(c => {
+      if ( c instanceof EVQuadMesh ) vision.light.sources.removeChild(c);
+    })
+  );
+
+  // Prevent light caching by temporarily making the light source objects point to a token.
+  // See CanvasVisibility.prototype.#shouldCacheLight.
+  const fakeT = canvas.tokens.placeables[0];
+  const sourceMap = new Map();
+  if ( fakeT ) {
+    for ( const lightSource of canvas.effects.lightSources ) {
+      if ( lightSource.object instanceof Token ) continue;
+      sourceMap.set(lightSource, lightSource.object);
+      lightSource.object = fakeT;
+    }
+  }
+
+  wrapped();
+
+  // See visibilityRefresh hook for the los/fov mods.
+  // Done in hook so fog commit will function.
+
+  // Replace the source objects changed above.
+  sourceMap.entries().forEach(([source, obj]) => source.object = obj);
+}
+
 
 /**
  * Wrap CanvasVisibility.prototype._tearDown
@@ -283,9 +345,84 @@ async function _tearDown(wrapped, options) {
   return wrapped(options);
 }
 
-PATCHES.WEBGL.WRAPS = { _tearDown, refreshVisibility };
+PATCHES.WEBGL.WRAPS = { _tearDown, refreshVisibility: refreshVisibility2 };
 
 
+/**
+ * Hook visibilityRefresh.
+ * See CanvasVisibility#refreshVisibility.
+ * Replace the vision drawings with the los/fov EV containers.
+ * @param {CanvasVisibility} cv
+ */
+function visibilityRefresh(cv) {
+  const vision = cv.vision;
+  if ( !vision ) return;
+
+  // End fills
+  vision.light.sources.endFill();
+  vision.light.preview.endFill();
+  vision.light.global.source.endFill();
+  vision.light.mask.endFill();
+  vision.light.mask.preview.endFill();
+  vision.sight.endFill();
+  vision.sight.preview.endFill();
+  vision.darkness.endFill();
+
+  // Clear drawn sources.
+  vision.light.preview.clear();
+  vision.light.sources.clear();
+  vision.light.mask.preview.clear();
+  vision.light.mask.clear();
+
+  for ( const lightSource of canvas.effects.lightSources ) {
+    if ( !lightSource.hasActiveLayer || (lightSource instanceof foundry.canvas.sources.GlobalLightSource) ) continue;
+
+    // Use the EV mask if available.
+    const mask = lightSource.EVVisionMask;
+    if ( !mask ) {
+      log(`refreshVisibility|lightSource.EVVisionMask not found for ${lightSource.object.id}`);
+      continue;
+    }
+
+    // Is the light source providing vision?
+    if ( lightSource.data.vision ) {
+      const losMask = lightSource.isPreview ? vision.light.mask.preview : vision.light.mask;
+      losMask.addChild(mask);
+    }
+
+    // Draw the light source.
+    const los = lightSource.isPreview ? vision.light.preview : vision.light.sources;
+    los.addChild(mask);
+  }
+
+
+  for ( const visionSource of canvas.effects.visionSources ) {
+    if ( !visionSource.hasActiveLayer ) continue;
+
+    const fovMask = visionSource.EVVisionFOVMask;
+    const losMask = visionSource.EVVisionMask;
+    if ( !(fovMask && losMask) ) {
+      log(`refreshVisibility|visionSource.EVVisionMask or EVVisionFOVMask not found for ${visionSource.object.id}`);
+      continue;
+    }
+
+    // Draw vision FOV
+    // Not needed b/c that can be drawn using the defaults.
+    const blinded = visionSource.isBlinded;
+//     const fov = ((visionSource.radius > 0)
+//       && !blinded
+//       && !visionSource.isPreview) ? vision.sight : vision.sight.preview;
+//     fov.addChild(fovMask);
+
+    // Draw light perception
+    const los = ((visionSource.lightRadius > 0)
+      && !blinded
+      && !visionSource.isPreview) ? vision.light.mask : vision.light.mask.preview;
+    los.addChild(losMask);
+  }
+}
+
+PATCHES.WEBGL.HOOKS = { visibilityRefresh };
 
 
 /**
