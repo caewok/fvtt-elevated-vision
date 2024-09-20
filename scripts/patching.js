@@ -50,7 +50,7 @@ export const PATCHES = {
   ActiveEffect: PATCHES_ActiveEffect,
   AdaptiveLightingShader: PATCHES_AdaptiveLightingShader,
   AmbientLight: PATCHES_AmbientLight,
-  AmbientLightConfig: PATCHES_AmbientLightConfig,
+  "foundry.applications.sheets.AmbientLightConfig": PATCHES_AmbientLightConfig,
   CanvasVisibility: PATCHES_CanvasVisibility,
   ClockwiseSweepPolygon: PATCHES_ClockwiseSweepPolygon,
   DetectionMode: PATCHES_DetectionMode,

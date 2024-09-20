@@ -215,7 +215,7 @@ TestShadowShader = api.TestShadowShader
 
 
 let [l] = canvas.lighting.placeables;
-source = l.source;
+source = l.lightSource;
 
 source = _token.vision
 
@@ -238,7 +238,7 @@ canvas.stage.addChild(quadMesh);
 canvas.stage.removeChild(quadMesh);
 
 // Testing the already constructed mask
-Draw.shape(source.object.los, { color: Draw.COLORS.red, width: 5 });
+Draw.shape(source.los, { color: Draw.COLORS.red, width: 5 });
 
 shadowMesh = source.elevatedvision.shadowMesh
 canvas.stage.addChild(shadowMesh)
@@ -260,8 +260,8 @@ canvas.stage.addChild(mask)
 canvas.stage.removeChild(mask)
 
 // Test the vision LOS mask
-Draw.shape(source.object.fov, { color: Draw.COLORS.red, width: 5 });
-Draw.shape(source.object.los, { color: Draw.COLORS.blue, width: 5 });
+Draw.shape(source.fov, { color: Draw.COLORS.red, width: 5 });
+Draw.shape(source.los, { color: Draw.COLORS.blue, width: 5 });
 
 mesh = source.elevatedvision.shadowVisionLOSMesh
 canvas.stage.addChild(mesh)
