@@ -2,6 +2,8 @@
 canvas,
 CONFIG,
 Dialog,
+document,
+foundry,
 FullCanvasObjectMixin,
 game,
 InteractionLayer,
@@ -86,7 +88,9 @@ export class ElevationLayer extends InteractionLayer {
 
   // Imported methods
   TravelElevationRay = TravelElevationRay;
+
   CoordinateElevationCalculator = CoordinateElevationCalculator;
+
   TokenElevationCalculator = TokenElevationCalculator;
 
   /**
@@ -133,7 +137,7 @@ export class ElevationLayer extends InteractionLayer {
    */
   initializeBrush() {
     const brush = new PIXI.Graphics();
-    brush.visible =  false;
+    brush.visible = false;
     brush.x = 0;
     brush.y = 0;
     brush.zIndex = 10;
@@ -145,16 +149,16 @@ export class ElevationLayer extends InteractionLayer {
    * Draw the brush.
    */
   drawBrush(data = {}) {
-    const canvasScale = game?.canvas?.stage?.scale?._x ?? 1.5
-    const size = Settings.get(Settings.KEYS.BRUSH.SIZE) ?? 100
-    const lineWidth = Math.round(4 - canvasScale)
+    const canvasScale = game?.canvas?.stage?.scale?._x ?? 1.5;
+    const size = Settings.get(Settings.KEYS.BRUSH.SIZE) ?? 100;
+    const lineWidth = Math.round(4 - canvasScale);
 
     this.brush.clear();
-    this.brush.lineStyle(lineWidth)
+    this.brush.lineStyle(lineWidth);
 
     switch (game.activeTool) {
       case "fill-by-pixel":
-        const ellipseSize = Math.round(size / 2)
+        const ellipseSize = Math.round(size / 2);
         this.brush.drawEllipse(0, 0, ellipseSize, ellipseSize);
         break;
       default:
@@ -163,7 +167,7 @@ export class ElevationLayer extends InteractionLayer {
 
     this.brush.endFill();
 
-    this.brush.visible =  data?.visible ?? false;
+    this.brush.visible = data?.visible ?? false;
     this.brush.x = data?.x ?? canvas.mousePosition.x;
     this.brush.y = data?.y ?? canvas.mousePosition.y;
   }
@@ -173,14 +177,14 @@ export class ElevationLayer extends InteractionLayer {
    * Potentially replace with keybindings if/when it supports holding the key.
    */
   updateBrushSize(event) {
-    if ( game.activeTool !== 'fill-by-pixel' ) return;
-    if ( !['BracketLeft', 'BracketRight'].includes(event.code) ) return;
+    if ( game.activeTool !== "fill-by-pixel" ) return;
+    if ( !["BracketLeft", "BracketRight"].includes(event.code) ) return;
     if ( !this.brush.visible ) return;
 
     const size = Settings.get(Settings.KEYS.BRUSH.SIZE);
     const increment = (event.shiftKey) ? 5 : 1;
 
-    if (event.code === 'BracketLeft') {
+    if (event.code === "BracketLeft") {
       if (size > Settings.KEYS.BRUSH.MIN_SIZE) Settings.set(Settings.KEYS.BRUSH.SIZE, size - increment);
     } else {
       if (size < Settings.KEYS.BRUSH.MAX_SIZE ) Settings.set(Settings.KEYS.BRUSH.SIZE, size + increment);
@@ -576,7 +580,7 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /** @override */
-  async _draw(options) { // eslint-disable-line no-unused-vars
+  async _draw(options) {
   // Not needed?
   // if ( canvas.elevation.active ) this.drawElevation();
   }
@@ -615,7 +619,7 @@ export class ElevationLayer extends InteractionLayer {
 
     // Initialize the brush
     this.brush = this.initializeBrush();
-    document.addEventListener("keypress", (event) => { this.updateBrushSize(event) });
+    document.addEventListener("keypress", event => { this.updateBrushSize(event); });
 
     // Initialize the texture manager for the scene.
     const sceneEVData = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
@@ -987,46 +991,62 @@ export class ElevationLayer extends InteractionLayer {
    * Set the elevation for the grid space that contains the point.
    * If this is a hex grid, it will fill in the hex grid space.
    * @param {Point} p             Point within the grid square/hex.
-   * @param {number} elevation    Elevation to use to fill the grid space
-   * @param {object}  [options]   Options that affect setting this elevation
-   * @param {boolean} [options.temporary]   If true, don't immediately require a save.
-   *   This setting does not prevent a save if the user further modifies the canvas.
+   * @param {number} [elevation=0]          The elevation used to fill the space, in grid units.
+   * @param {object}  [opts]   Options passed to setElevationForShape
    * @param {boolean} [options.useHex]      If true, use a hex grid; if false use square.
    *   Defaults to canvas.grid.isHexagonal.
    *
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
-  setElevationForGridSpace(p, elevation = 0, { temporary = false, useHex = canvas.grid.isHexagonal } = {}) {
+  setElevationForGridSpace(p, elevation = 0, { useHex = canvas.grid.isHexagonal, ...opts } = {}) {
     const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
-    const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
-    const color = this.elevationColor(elevation);
-    this._updateElevationCurrentMax(elevation);
-
-    // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
-    // and that causes a lighter-color border to appear outside the shape.
-    const draw = new Draw(graphics);
-    draw.shape(shape, { width: 0, fill: color});
-
-    this.renderElevation();
-
-    this._requiresSave = !temporary;
-    this.undoQueue.enqueue(graphics);
-    return graphics;
+    return this.setElevationForShape(shape, elevation, opts);
   }
 
-  setElevationForPixel(p, elevation = 0, { temporary = false } = {}) {
+
+  /**
+   * Set elevation for a circle centered at the provided location.
+   * @param {PolygonVertex} p
+   * @param {number} [elevation]          The elevation, in grid units.
+   * @param {object}  [opts]   Options passed to setElevationForShape
+   */
+  setElevationForCircle(p, elevation, opts) {
     const shape = this._circleShape(p);
-    const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
+    return this.setElevationForShape(shape, elevation, opts);
+  }
+
+  /**
+   * Set elevation for a given PIXI shape.
+   * @param {PIXI.Rectangle|PIXI.Circle|PIXI.Ellipse|PIXI.Polygon} shape
+   * @param {number} [elevation=0]          The elevation use to fill the grid space, in grid units.
+   * @param {object}  [opts]   Options passed to #setElevationForGraphics.
+   */
+  setElevationForShape(shape, elevation, opts) {
+    const graphics = new PIXI.Graphics();
+
+    // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
+    // and that causes a lighter-color border to appear outside the shape.
+    const draw = new Draw(graphics);
+    draw.shape(shape, { width: 0, fill: this.elevationColor(elevation) });
+    return this.#setElevationForGraphics(graphics, elevation, opts);
+  }
+
+  /**
+   * Set elevation for a given PIXI graphics, in which shapes are already drawn.
+   * @param {PIXI.Graphics} graphics
+   * @param {number} [elevation=0]          The elevation use to fill the grid space, in grid units.
+   * @param {object}  [opts]
+   * @param {boolean} [opts.temporary]      If true, don't immediately require a save.
+   *   This does not prevent a save if the user further modifies the canvas.
+   */
+  #setElevationForGraphics(graphics, elevation = 0, { temporary = false } = {}) {
+    this._graphicsContainer.addChild(graphics);
     const color = this.elevationColor(elevation);
     this._updateElevationCurrentMax(elevation);
 
     // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
     // and that causes a lighter-color border to appear outside the shape.
-    const draw = new Draw(graphics);
-    draw.shape(shape, { width: 0, fill: color});
-
     this.renderElevation();
-
     this._requiresSave = !temporary;
     this.undoQueue.enqueue(graphics);
     return graphics;
@@ -1076,36 +1096,26 @@ export class ElevationLayer extends InteractionLayer {
   /**
    * Construct a LOS polygon from this point and fill with the provided elevation.
    * @param {Point} origin        Point where viewer is assumed to be.
-   * @param {number} elevation    Elevation to use for the fill.
-   * @param {object} [options]    Options that affect the fill.
-   * @param {string} [options.type]   Type of line-of-sight to use, which can affect
+   * @param {number} [elevation]  Elevation to use for the fill.
+   * @param {object} [opts]       Options passed to setElevationForShape
+   * @param {string} [opts.type]  Type of line-of-sight to use, which can affect
    *   which walls are included. Defaults to "light".
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
-  fillLOS(origin, elevation = 0, { type = "light"} = {}) {
-    this._updateElevationCurrentMax(elevation);
+  fillLOS(origin, elevation, { type = "light", ...opts } = {}) {
     const los = CONFIG.Canvas.polygonBackends[type].create(origin, { type });
-    const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
-    const draw = new Draw(graphics);
-    const color = this.elevationColor(elevation);
-    draw.shape(los, { color, width: 0, fill: color });
-
-    this.renderElevation();
-
-    this._requiresSave = true;
-    this.undoQueue.enqueue(graphics);
-
-    return graphics;
+    return this.setElevationForShape(los, elevation, opts);
   }
 
 
   /**
    * Fill spaces enclosed by walls from a given origin point.
    * @param {Point} origin    Start point for the fill.
-   * @param {number} elevation
+   * @param {number} [elevation]
+   * @param {object}  [opts]   Options passed to #setElevationForGraphics.
    * @returns {PIXI.Graphics}   The child graphics added to the _graphicsContainer
    */
-  fill(origin, elevation) {
+  fill(origin, elevation, opts) {
     /* Algorithm
       Prelim: Gather set of all walls, including boundary walls.
       1. Shoot a line to the west and identify colliding walls.
@@ -1141,18 +1151,10 @@ export class ElevationLayer extends InteractionLayer {
       return;
     }
 
-    this._updateElevationCurrentMax(elevation);
-
     // Create the graphics representing the fill!
-    const graphics = this._graphicsContainer.addChild(new PIXI.Graphics());
+    const graphics = new PIXI.Graphics();
     drawPolygonWithHoles(polys, { graphics, fillColor: this.elevationColor(elevation) });
-
-    this.renderElevation();
-
-    this._requiresSave = true;
-    this.undoQueue.enqueue(graphics);
-
-    return graphics;
+    this.#setElevationForGraphics(graphics, elevation, opts);
   }
 
   /**
@@ -1406,7 +1408,7 @@ export class ElevationLayer extends InteractionLayer {
         this.fillLOS(o, currE);
         break;
       case "fill-by-pixel":
-        this.setElevationForPixel(o, currE);
+        this.setElevationForCircle(o, currE);
         break;
       case "fill-space":
         this.fill(o, currE);
@@ -1435,14 +1437,14 @@ export class ElevationLayer extends InteractionLayer {
         const child = this.setElevationForGridSpace(o, currE, { temporary: true });
         this.#temporaryGraphics.set(p.key, child);
       }
-      break;
+        break;
       case "fill-by-pixel": {
         this.#temporaryGraphics.clear(); // Should be accomplished elsewhere already
         const p = new foundry.canvas.edges.PolygonVertex(o.x, o.y);
-        const child = this.setElevationForPixel(p, currE, { temporary: true });
+        const child = this.setElevationForCircle(p, currE, { temporary: true });
         this.#temporaryGraphics.set(p.key, child);
       }
-      break;
+        break;
     }
   }
 
@@ -1468,16 +1470,16 @@ export class ElevationLayer extends InteractionLayer {
           this.#temporaryGraphics.set(p.key, child);
         }
       }
-      break;
+        break;
       case "fill-by-pixel": {
         const p = new foundry.canvas.edges.PolygonVertex(d.x, d.y);
         if ( !this.#temporaryGraphics.has(p.key) ) {
           log(`dragLeftMove from ${o.x},${o.y} to ${d.x}, ${d.y} with tool ${activeTool} and elevation ${currE}`, event);
-          const child = this.setElevationForPixel(p, currE, { temporary: true });
+          const child = this.setElevationForCircle(p, currE, { temporary: true });
           this.#temporaryGraphics.set(p.key, child);
         }
       }
-      break;
+        break;
     }
   }
 
