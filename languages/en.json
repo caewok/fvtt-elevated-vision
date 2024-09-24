@@ -107,5 +107,8 @@
   "elevatedvision.tokenconfig.elevation-algorithm.elevation_point": "Single Center Point",
   "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_close": "Clustered Center Points (9)",
   "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_spread": "Spread Points (9)",
-  "elevatedvision.tokenconfig.elevation-algorithm.elevation_average": "Average Across Token Shape"
+  "elevatedvision.tokenconfig.elevation-algorithm.elevation_average": "Average Across Token Shape",
+
+  "elevatedvision.regionconfig.blocks-vision.name": "Blocks Vision?",
+  "elevatedvision.regionconfig.blocks-vision.hint": "When enabled, the region blocks vision and casts shadow as if it were a solid 3d shape. If Terrain Mapper is active, the height will be set to the plateau or ramp if those options are selected in the Terrain Mapper tab."
 }

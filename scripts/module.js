@@ -168,21 +168,21 @@ Hooks.once("init", function() {
   CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshField.propagate.push("refreshRadius");
 });
 
-Hooks.once("setup", async function() {
+Hooks.once("setup", function() {
   log("Setup...");
-  loadTemplates(Object.values(TEMPLATES));
+  loadTemplates(Object.values(TEMPLATES)).then(_value => log(`Templates loaded.`));
 });
 
 Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
+  if ( !canvas.elevation ) return;
+  canvas.elevation.initialize();
   registerPatchesForSceneSettings();
   updateFlyTokenControl();
 });
 
 Hooks.on("canvasReady", function() {
   // Set the elevation grid now that we know scene dimensions
-  if ( !canvas.elevation ) return;
-  canvas.elevation.initialize();
   setDirectionalLightSources(canvas.lighting.placeables);
   DirectionalLightSource._refreshElevationAngleGuidelines();
 });

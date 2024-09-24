@@ -1019,7 +1019,7 @@ export class ElevationLayer extends InteractionLayer {
    * Set elevation for a given PIXI shape.
    * @param {PIXI.Rectangle|PIXI.Circle|PIXI.Ellipse|PIXI.Polygon} shape
    * @param {number} [elevation=0]          The elevation use to fill the grid space, in grid units.
-   * @param {object}  [opts]   Options passed to #setElevationForGraphics.
+   * @param {object}  [opts]   Options passed to _setElevationForGraphics.
    */
   setElevationForShape(shape, elevation, opts) {
     const graphics = new PIXI.Graphics();
@@ -1028,7 +1028,7 @@ export class ElevationLayer extends InteractionLayer {
     // and that causes a lighter-color border to appear outside the shape.
     const draw = new Draw(graphics);
     draw.shape(shape, { width: 0, fill: this.elevationColor(elevation) });
-    return this.#setElevationForGraphics(graphics, elevation, opts);
+    return this._setElevationForGraphics(graphics, elevation, opts);
   }
 
   /**
@@ -1039,7 +1039,7 @@ export class ElevationLayer extends InteractionLayer {
    * @param {boolean} [opts.temporary]      If true, don't immediately require a save.
    *   This does not prevent a save if the user further modifies the canvas.
    */
-  #setElevationForGraphics(graphics, elevation = 0, { temporary = false } = {}) {
+  _setElevationForGraphics(graphics, elevation = 0, { temporary = false } = {}) {
     this._graphicsContainer.addChild(graphics);
     const color = this.elevationColor(elevation);
     this._updateElevationCurrentMax(elevation);
@@ -1112,7 +1112,7 @@ export class ElevationLayer extends InteractionLayer {
    * Fill spaces enclosed by walls from a given origin point.
    * @param {Point} origin    Start point for the fill.
    * @param {number} [elevation]
-   * @param {object}  [opts]   Options passed to #setElevationForGraphics.
+   * @param {object}  [opts]   Options passed to _setElevationForGraphics.
    * @returns {PIXI.Graphics}   The child graphics added to the _graphicsContainer
    */
   fill(origin, elevation, opts) {
@@ -1154,7 +1154,7 @@ export class ElevationLayer extends InteractionLayer {
     // Create the graphics representing the fill!
     const graphics = new PIXI.Graphics();
     drawPolygonWithHoles(polys, { graphics, fillColor: this.elevationColor(elevation) });
-    this.#setElevationForGraphics(graphics, elevation, opts);
+    this._setElevationForGraphics(graphics, elevation);
   }
 
   /**

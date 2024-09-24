@@ -15,6 +15,7 @@ export const MODULES_ACTIVE = {
 };
 
 export const FLAGS = {
+  BLOCKS_VISION: "blocksVision",
   ELEVATION_IMAGE: "elevationImage",
   ELEVATION: "elevation",
   LIGHT_SIZE: "lightSize",
@@ -44,7 +45,8 @@ export const TEMPLATES = {
   AMBIENT_SOURCE: `modules/${MODULE_ID}/templates/ambient-source-config.html`,
   AMBIENT_SOURCE_PARTIAL: `modules/${MODULE_ID}/templates/ambient-source-config-partial.html`,
   ELEVATION_STEP: `modules/${MODULE_ID}/templates/elevation-step-controls.html`,
-  SCENE: `modules/${MODULE_ID}/templates/scene-elevation-config.html`
+  SCENE: `modules/${MODULE_ID}/templates/scene-elevation-config.html`,
+  REGION: `modules/${MODULE_ID}/templates/region-config.html`
 };
 
 // Icons displayed in config tabs.
