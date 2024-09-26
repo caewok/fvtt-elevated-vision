@@ -10,10 +10,8 @@ Wall
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "../const.js";
-import { getLinkedWalls, pointVTest, tangentToV } from "../util.js";
-import { testWallsForIntersections } from "../ClockwiseSweepPolygon.js";
+import { getLinkedEdges, pointVTest, tangentToV } from "../util.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
-import { DirectionalLightSource } from "../DirectionalLightSource.js";
 
 const flipEdgeLabel = {
   a: "b",
@@ -23,13 +21,13 @@ const flipEdgeLabel = {
 export class SourceShadowWallGeometry extends PIXI.Geometry {
 
   /**
-   * Number of pixels to extend walls, to ensure overlapping shadows for connected walls.
+   * Number of pixels to extend edges, to ensure overlapping shadows for connected edges.
    * @type {number}
    */
   static WALL_OFFSET_PIXELS = 2;
 
   /**
-   * Changes to monitor in the wall data that indicate a relevant change.
+   * Changes to monitor in the edge data that indicate a relevant change.
    */
   static CHANGE_FLAGS = [
     // Wall location
@@ -57,7 +55,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * Track the triangle index for each wall used by this source.
    * @type {Map<string, number>} Wall id and the index
    */
-  _triWallMap = new Map();
+  _triEdgeMap = new Map();
 
   /** @type {PointSource} */
   source;
@@ -65,13 +63,13 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   /** @type {sourceType} */
   sourceType = "light";
 
-  constructor(source, walls) {
+  constructor(source, edges) {
     super();
     this.source = source;
     this.sourceType = source.constructor.sourceType;
 
-    walls ??= canvas.walls.placeables;
-    this.constructWallGeometry(walls);
+    edges ??= canvas.edges;
+    this.constructWallGeometry(edges);
   }
 
   // TODO: Should this be a stored value? Makes it more complicated, but...
@@ -86,16 +84,25 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   }
 
   /**
-   * Orientation of a wall to the source.
-   * @param {Wall} wall
+   * Orientation of a edge to the source.
+   * @param {Edge} edge
    * @returns {number}  See foundry.utils.orient2dFast.
    */
-  sourceWallOrientation(wall) {
-    return foundry.utils.orient2dFast(wall.edge.a, wall.edge.b, this.sourceOrigin);
+  sourceEdgeOrientation(edge) {
+    return foundry.utils.orient2dFast(edge.a, edge.b, this.sourceOrigin);
   }
 
-  constructWallGeometry(walls) {
-    this._triWallMap.clear();
+  /**
+   * Represent an array of edges as attributes in a webgl geometry.
+   * Attributes:
+   * - edge endpoint a (aWallCorner0)
+   * - edge endpoint b (aWallCorner1)
+   * - sense type (CONST.WALL_SENSE_TYPES)
+   * - threshold radius
+   * @param {Edge[]|Map<id,Edge>|Set<Edge} edges
+   */
+  constructWallGeometry(edges) {
+    this._triEdgeMap.clear();
 
     // Default is to draw light --> wallcorner0 --> wallcorner1.
     // Assumed that light is passed as uniform.
@@ -107,11 +114,9 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const aThresholdRadius2 = []; // If within this radius squared of the light, ignore the wall.
 
     let triNumber = 0;
-    const nWalls = walls.length;
-    for ( let i = 0; i < nWalls; i += 1 ) {
-      const wall = walls[i];
-      if ( !this._includeWall(wall) ) continue;
-      const {corner0, corner1 } = this.wallCornerCoordinates(wall);
+    for ( const edge of edges ) {
+      if ( !this._includeEdge(edge) ) continue;
+      const {corner0, corner1 } = this.edgeCornerCoordinates(edge);
 
       // TODO: Instanced attributes.
       // For now, must repeat the vertices three times.
@@ -120,17 +125,17 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       aWallCorner0.push(...corner0, ...corner0, ...corner0);
       aWallCorner1.push(...corner1, ...corner1, ...corner1);
 
-      const type = this.senseType(wall);
+      const type = this.senseType(edge);
       aWallSenseType.push(type, type, type);
 
-      const threshold = this.threshold2Attribute(wall);
+      const threshold = this.threshold2Attribute(edge);
       aThresholdRadius2.push(threshold, threshold, threshold);
 
       const idx = triNumber * 3;
       indices.push(idx, idx + 1, idx + 2);
 
-      // Track where this wall is in the attribute arrays for future updates.
-      this._triWallMap.set(wall.id, triNumber);
+      // Track where this edge is in the attribute arrays for future updates.
+      this._triEdgeMap.set(edge.id, triNumber);
       triNumber += 1;
     }
 
@@ -143,56 +148,55 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   }
 
   /**
-   * Sense type for this wall and source combination.
-   * @param {Wall} wall
+   * Sense type for this edge and source combination.
+   * @param {Edge} edge
    * @returns {CONST.WALL_SENSE_TYPES}
    */
-  senseType(wall) { return wall.document[this.sourceType]; }
+  senseType(edge) { return edge[this.sourceType]; }
 
   /**
    * Is the wall limited with respect to this light source?
-   * @param {Wall} wall
+   * @param {Edge} edge
    * @returns {boolean}
    */
-  isLimited(wall) { return this.senseType(wall) === CONST.WALL_SENSE_TYPES.LIMITED; }
+  isLimited(edge) { return this.senseType(edge) === CONST.WALL_SENSE_TYPES.LIMITED; }
 
   /**
-   * For threshold walls, get the threshold distance
-   * @param {Wall} wall
+   * For threshold edge, get the threshold distance
+   * @param {Edge} edge
    * @returns {number}  Distance of the threshold in pixel units, or 0 if none.
    */
-  threshold2Attribute(wall) {
-    if ( !this.thresholdApplies(wall) ) return 0;
-    const { inside, outside } = this.calculateThresholdAttenuation(wall);
+  threshold2Attribute(edge) {
+    if ( !this.thresholdApplies(edge) ) return 0;
+    const { inside, outside } = this.calculateThresholdAttenuation(edge);
     return Math.min(Number.MAX_SAFE_INTEGER, Math.pow(inside + outside, 2)); // Avoid infinity.
   }
 
   /**
-   * Calculate threshold attenuation for a wall.
-   * If the wall is not attenuated, inside + outside will be >= source radius.
+   * Calculate threshold attenuation for an edge.
+   * If the edge is not attenuated, inside + outside will be >= source radius.
    * See PointSourcePolygon.prototype.#calculateThresholdAttenuation
-   * @param {Wall} wall
+   * @param {Edge} edge
    * @returns {{inside: number, outside: number}} The inside and outside portions of the radius
    */
-  calculateThresholdAttenuation(wall) {
+  calculateThresholdAttenuation(edge) {
     const externalRadius = 0;
     const radius = this.source.radius;
     const origin = this.source;
-    const document = wall.document;
-    const d = document.threshold[this.sourceType];
+    const d = edge.threshold[this.sourceType];
     if ( !d ) return { inside: radius, outside: radius };
-    const proximity = document[this.sourceType] === CONST.WALL_SENSE_TYPES.PROXIMITY;
+    const proximity = edge[this.sourceType] === CONST.WALL_SENSE_TYPES.PROXIMITY;
 
     // Find the closest point on the threshold wall to the source.
     // Calculate the proportion of the source radius that is "inside" and "outside" the threshold wall.
-    const pt = foundry.utils.closestPointToSegment(origin, wall.edge.a, wall.edge.b);
+    const pt = foundry.utils.closestPointToSegment(origin, edge.a, edge.b);
     const inside = Math.hypot(pt.x - origin.x, pt.y - origin.y);
     const outside = radius - inside;
     if ( (outside < 0) || outside.almostEqual(0) ) return { inside, outside: 0 };
 
     // Attenuate the radius outside the threshold wall based on source proximity to the wall.
     const sourceDistance = proximity ? Math.max(inside - externalRadius, 0) : (inside + externalRadius);
-    const thresholdDistance = d * document.parent.dimensions.distancePixels;
+    const thresholdDistance = d * canvas.scene.dimensions.distancePixels;
     const percentDistance = sourceDistance / thresholdDistance;
     const pInv = proximity ? 1 - percentDistance : Math.min(1, percentDistance - 1);
     const a = (pInv / (2 * (1 - pInv))) * CONFIG.Wall.thresholdAttenuationMultiplier;
@@ -200,59 +204,67 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   }
 
   /**
-   * For threshold walls, determine if threshold applies.
-   * @param {Wall} wall
+   * For threshold edges, determine if threshold applies.
+   * @param {Edge} edge
    * @returns {boolean} True if the threshold applies.
    */
-  thresholdApplies(wall) { return wall.edge.applyThreshold(this.sourceType, this.source, this.source.data.externalRadius); }
+  thresholdApplies(edge) { return edge.applyThreshold(this.sourceType, this.source, this.source.data.externalRadius); }
 
   /**
-   * Should this wall be included in the geometry for this source shadow?
-   * @param {Wall} wall
-   * @returns {boolean}   True if wall should be included
+   * Should this edge be included in the geometry for this source shadow?
+   * @param {Edge} edge
+   * @returns {boolean}   True if edge should be included
    */
-  _includeWall(wall) {
-    return this.source._testWallInclusion(wall, PIXI.Point.fromObject(this.source));
+  _includeEdge(edge) {
+    return this.source._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
   }
 
   /**
-   * Retrieve wall endpoint data for a corner.
+   * Retrieve edge endpoint data for a corner.
    * A is top, B is bottom
-   * @param {Wall} wall
+   * @param {Edge} edge
    * @returns { corner0: {PIXI.Point}, corner1: {PIXI.Point}, topZ: {number}, bottomZ: {number} }
    */
-  wallCornerCoordinates(wall) {
-    const { topZ, bottomZ } = wall;
-    const A = wall.edge.a;
-    const B = wall.edge.b;
+  edgeCornerCoordinates(edge) {
+    // TODO: Handle different a/b elevations.
+    let topZ = Number.POSITIVE_INFINITY;
+    let bottomZ = Number.NEGATIVE_INFINITY;
+    if ( edge.object instanceof Wall ) {
+      topZ = edge.object.topZ;
+      bottomZ = edge.object.bottomZ;
+    } else if ( edge[MODULE_ID] ) {
+      topZ = edge[MODULE_ID].topZ;
+      bottomZ = edge[MODULE_ID].bottomZ;
+    }
+
     const top = Math.min(topZ, 1e6);
     const bottom = Math.max(bottomZ, -1e6);
 
     // Note if wall is bound to another.
     // Required to avoid light leakage due to penumbra in the shader.
     // Don't include the link if it is not a valid wall for this source.
-    const { linkedA, linkedB } = getLinkedWalls(wall);
+    const { linkedA, linkedB } = getLinkedEdges(edge);
 
     // Find the smallest angle between this wall and a linked wall that covers this light.
     // If less than 180º, the light is inside a "V" and so the point of the V blocks all light.
     // If greater than 180º, the light is outside the "V" and so the point of the V may not block all light.
 
-    let blockingWallA;
+    let blockingEdgeA;
     let blockAngleA = 360;
-    for ( const linkedWall of linkedA ) {
-      const blockAngle = this.sharedEndpointAngle(wall, linkedWall, "a");
+    for ( const linkedEdge of linkedA ) {
+      const blockAngle = this.sharedEndpointAngle(edge, linkedEdge, "a");
       if ( blockAngle === -1 || blockAngle > blockAngleA ) continue;
-      blockingWallA = linkedWall;
+      blockingEdgeA = linkedEdge;
       blockAngleA = blockAngle;
       if ( blockAngle === -2 ) break;
     }
 
-    let blockingWallB;
+    let blockingEdgeB;
     let blockAngleB = 360;
-    for ( const linkedWall of linkedB ) {
-      const blockAngle = this.sharedEndpointAngle(wall, linkedWall, "b");
+    for ( const linkedEdge of linkedB ) {
+      const blockAngle = this.sharedEndpointAngle(edge, linkedEdge, "b");
       if ( blockAngle === -1 || blockAngle > blockAngleB ) continue;
-      blockingWallB = linkedWall;
+      blockingEdgeB = linkedEdge;
       blockAngleB = blockAngle;
       if ( blockAngle === -2 ) break;
     }
@@ -264,18 +276,18 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const blockWallAKey = blockAngleA === 360 ? -1
       : blockAngleA === -2 ? -2
         : blockAngleA <= 180 ? -2 // Should not happen.
-          : blockingWallA.edge.a.key === wall.edge.a.key ? blockingWallA.edge.b.key
-            : blockingWallA.edge.a.key;
+          : blockingEdgeA.a.key === edge.a.key ? blockingEdgeA.b.key
+            : blockingEdgeA.a.key;
 
     const blockWallBKey = blockAngleB === 360 ? -1
       : blockAngleB === -2 ? -2
         : blockAngleB <= 180 ? -2 // Should not happen.
-          : blockingWallB.edge.a.key === wall.edge.a.key ? blockingWallB.edge.b.key
-            : blockingWallB.edge.a.key;
+          : blockingEdgeB.a.key === edge.a.key ? blockingEdgeB.b.key
+            : blockingEdgeB.a.key;
 
     return {
-      corner0: [A.x, A.y, top, blockWallAKey],
-      corner1: [B.x, B.y, bottom, blockWallBKey]
+      corner0: [edge.a.x, edge.a.y, top, blockWallAKey],
+      corner1: [edge.b.x, edge.b.y, bottom, blockWallBKey]
     };
   }
 
@@ -285,23 +297,23 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * If the source --> point of the V will end inside the V, it is also false.
    * Source --> point of V must end outside the V.
    * Tangential points do not block the light, but rather cause shadows.
-   * @param {Wall} wall                 Wall whose endpoint is shared with the linked wall
-   * @param {Wall} linkedWall           Linked wall to test for this endpoint
+   * @param {Edge} edge                 Edge whose endpoint is shared with the linked edge
+   * @param {Edge} linkedEdge           Linked edge to test for this endpoint
    * @param {"A"|"B"} endpointName      Which endpoint to test
    * @returns {number}
    *   -2 if not tangential to the V.
    *   -1 if not blocking.
    *   Angle in degrees outside the "V" if the point is tangential.
    */
-  sharedEndpointAngle(wall, linkedWall, sharedEndpointName) {
-    if ( !(this._triWallMap.has(linkedWall.id) || this._includeWall(linkedWall)) ) return -1; // Quicker to check the map first.
+  sharedEndpointAngle(edge, linkedEdge, sharedEndpointName) {
+    if ( !(this._triEdgeMap.has(linkedEdge.id) || this._includeWall(linkedEdge)) ) return -1; // Quicker to check the map first.
 
-    const sharedPt = wall.edge[sharedEndpointName];
-    const otherWallPt = wall.edge[flipEdgeLabel[sharedEndpointName]]; // a --> b, b --> a.
-    const otherLinkedPt = linkedWall.edge.a.key === sharedPt.key ? linkedWall.edge.b : linkedWall.edge.a;
+    const sharedPt = edge[sharedEndpointName];
+    const otherEdgePt = edge[flipEdgeLabel[sharedEndpointName]]; // Flip: a --> b, b --> a.
+    const otherLinkedPt = linkedEdge.edge.a.key === sharedPt.key ? linkedEdge.b : linkedEdge.a;
     const sourceOrigin = this.sourceOrigin;
-    if ( !tangentToV(otherWallPt, sharedPt, otherLinkedPt, sourceOrigin) ) return -2;
-    return pointVTest(otherWallPt, sharedPt, otherLinkedPt, sourceOrigin);
+    if ( !tangentToV(otherEdgePt, sharedPt, otherLinkedPt, sourceOrigin) ) return -2;
+    return pointVTest(otherEdgePt, sharedPt, otherLinkedPt, sourceOrigin);
   }
 
 
@@ -330,26 +342,7 @@ sourceOrigin = geom.sourceOrigin;
 
   */
 
-  /**
-   * Test if one or more walls are between the source origin and a destination point.
-   * @param {Point3d} dest
-   * @param {Wall[]} wallsToExclude   One or more walls to exclude
-   * @param {boolean} True if a wall is between source and destination
-   */
-  _wallBetween(dest, wallsToExclude = []) {
-    const origin = this.source instanceof DirectionalLightSource
-      ? dest.add(this.source.lightDirection.multiplyScalar(canvas.dimensions.maxR))
-      : Point3d.fromPointSource(this.source);
-    const xMinMax = Math.minMax(origin.x, dest.x);
-    const yMinMax = Math.minMax(origin.y, dest.y);
-    const bounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
-    const collisionTest = (o, _rect) => this._includeWall(o.t);
-    let walls = canvas.walls.quadtree.getObjects(bounds, { collisionTest });
-    if ( wallsToExclude.length ) walls = walls.filter(w => !wallsToExclude.some(ex => w === ex));
-    return testWallsForIntersections(origin, dest, walls, "any", this.sourceType);
-  }
-
-  // ----- Wall updates ----- //
+  // ----- Edge updates ----- //
   /**
    * Add single element (chunk) of data to a buffer and return a new buffer.
    *
@@ -414,55 +407,55 @@ sourceOrigin = geom.sourceOrigin;
   }
 
   /**
-   * For the given added wall, determine if it changes the link status of connected walls.
-   * If so, update those linked walls.
-   * @param {Wall} wall               Wall to update
+   * For the given added edge, determine if it changes the link status of connected edges.
+   * If so, update those linked edges.
+   * @param {Edge} edge               Edge to update
    * @param {boolean} [update=true]   If false, buffer will not be flagged for update
    * @returns {boolean}  Did the geometry need to be updated?
    */
-  _checkAddedWallLinks(addedWall, update = true) {
-    const { linkedA, linkedB } = getLinkedWalls(addedWall);
+  _checkAddedEdgeLinks(addedEdge, update = true) {
+    const { linkedA, linkedB } = getLinkedEdges(addedEdge);
     let linkUpdated = false;
-    for ( const linkedWall of linkedA.union(linkedB) ) {
-      const res = this._updateWallLinkBuffer(linkedWall, update);
+    for ( const linkedEdge of linkedA.union(linkedB) ) {
+      const res = this._updateEdgeLinkBuffer(linkedEdge, update);
       linkUpdated ||= res;
     }
     return linkUpdated;
   }
 
   /**
-   * For the given updated or removed wall, determine if it changes the link status of connected walls.
-   * @param {string} updatedWallId    ID of updated or removed wall
+   * For the given updated or removed edge, determine if it changes the link status of connected walls.
+   * @param {string} updatedEdgeId    ID of updated or removed edge
    * @param {boolean} [update=true]   If false, buffer will not be flagged for update
-   * @returns {boolean} Did the geometry need to be updated based on the wall update?
+   * @returns {boolean} Did the geometry need to be updated based on the edge update?
    */
-  _checkWallLinks(updatedWallId, update = true) {
-    // We cannot know what the wall links were previous to the update unless we store all that data.
+  _checkEdgeLinks(updatedEdgeId, update = true) {
+    // We cannot know what the edge links were previous to the update unless we store all that data.
     // Instead, cycle through each checking for changes.
     let linkUpdated = false;
-    for ( const wallId of this._triWallMap.keys() ) {
-      if ( wallId === updatedWallId ) continue;
-      const wall = canvas.walls.documentCollection.get(wallId)?.object;
-      if ( !wall ) continue;
-      const res = this._updateWallLinkBuffer(wall, update);
+    for ( const edgeId of this._triEdgeMap.keys() ) {
+      if ( edgeId === updatedEdgeId ) continue;
+      const edge = canvas.edges.get(edgeId);
+      if ( !edge ) continue;
+      const res = this._updateEdgeLinkBuffer(edge, update);
       linkUpdated ||= res;
     }
     return linkUpdated;
   }
 
   /**
-   * Update link buffers as necessary for a given wall.
+   * Update link buffers as necessary for a given edge.
    * Because this updates the coordinates, use this or _updateWallPosition, not both.
-   * @param {Wall} wall               Wall to update
+   * @param {Edge} edge               Edge to update
    * @param {number} idxToUpdate      Index of the coordinate in the buffer
    * @param {boolean} [update=true]   If false, buffer will not be flagged for update
    * @returns {boolean} Did the geometry need to be updated based on the wall update?
    */
-  _updateWallLinkBuffer(wall, update = true) {
-    if ( !this._triWallMap.has(wall.id) ) return false;
-    const idxToUpdate = this._triWallMap.get(wall.id);
+  _updateEdgeLinkBuffer(edge, update = true) {
+    if ( !this._triEdgeMap.has(edge.id) ) return false;
+    const idxToUpdate = this._triEdgeMap.get(edge.id);
 
-    const { corner0, corner1 } = this.wallCornerCoordinates(wall);
+    const { corner0, corner1 } = this.edgeCornerCoordinates(edge);
     let changedLink = this.getAttributeAtIndex("aWallCorner0", idxToUpdate)[3] !== corner0[3];
     changedLink ||= this.getAttributeAtIndex("aWallCorner1", idxToUpdate)[3] !== corner1[3];
     if ( changedLink ) {
@@ -473,29 +466,29 @@ sourceOrigin = geom.sourceOrigin;
   }
 
   /**
-   * Add a wall to this geometry.
-   * @param {Wall} wall   Wall to add
+   * Add an edge to this geometry.
+   * @param {Edge} edge   Edge to add
    * @param {boolean} [update=true]  If false, buffer will not be flagged for update
-   * @returns {boolean} Did the geometry need to be updated based on the wall addition?
+   * @returns {boolean} Did the geometry need to be updated based on the edge addition?
    */
-  addWall(wall, { update = true } = {}) {
+  addEdge(edge, { update = true } = {}) {
     // Theoretically, could have a link update even for a wall we are not including.
-    const linkUpdated = this._checkAddedWallLinks(wall, update);
-    if ( this._triWallMap.has(wall.id) ) return linkUpdated;
-    if ( !this._includeWall(wall) ) return linkUpdated;
+    const linkUpdated = this._checkAddedEdgeLinks(edge, update);
+    if ( this._triEdgeMap.has(edge.id) ) return linkUpdated;
+    if ( !this._includeWall(edge) ) return linkUpdated;
 
-    const idxToAdd = this._triWallMap.size;
+    const idxToAdd = this._triEdgeMap.size;
 
-    // Wall endpoints
-    const { corner0, corner1 } = this.wallCornerCoordinates(wall);
+    // Edge endpoints
+    const { corner0, corner1 } = this.edgeCornerCoordinates(edge);
     this._addToBuffer(corner0, "aWallCorner0", update);
     this._addToBuffer(corner1, "aWallCorner1", update);
 
-    // Wall sense type
-    this._addToBuffer([this.senseType(wall)], "aWallSenseType", update);
+    // Edge sense type
+    this._addToBuffer([this.senseType(edge)], "aWallSenseType", update);
 
     // Threshold value
-    this._addToBuffer([this.threshold2Attribute(wall)], "aThresholdRadius2", update);
+    this._addToBuffer([this.threshold2Attribute(edge)], "aThresholdRadius2", update);
 
     // Index
     const idx = idxToAdd * 3;
@@ -503,8 +496,8 @@ sourceOrigin = geom.sourceOrigin;
     this.indexBuffer.data = this.constructor.addToBuffer(this.indexBuffer.data, dataIdx);
     if ( update ) this.indexBuffer.update(this.indexBuffer.data);
 
-    // Add the wall id as the next triangle object to the tracker.
-    this._triWallMap.set(wall.id, idxToAdd);
+    // Add the edge id as the next triangle object to the tracker.
+    this._triEdgeMap.set(edge.id, idxToAdd);
 
     return true;
   }
@@ -518,39 +511,39 @@ sourceOrigin = geom.sourceOrigin;
   }
 
   /**
-   * Update a wall in this geometry.
-   * May result in a wall being added or removed.
-   * @param {Wall} wall   Wall to update
-   * @param {object} [opts]               Options that affect how the wall update is treated.
+   * Update an edge in this geometry.
+   * May result in an edge being added or removed.
+   * @param {Edge} edge   Edge to update
+   * @param {object} [opts]               Options that affect how the edge update is treated.
    * @param {boolean} [opts.update]       If false, buffer will not be flagged for update.
    * @returns {boolean} Did the geometry need to be updated based on the wall update?
    */
-  updateWall(wall, { update = true } = {}) {
-    if ( !this._triWallMap.has(wall.id) ) return this.addWall(wall, { update });
-    if ( !this._includeWall(wall) ) return this.removeWall(wall.id, { update });
+  updateEdge(edge, { update = true } = {}) {
+    if ( !this._triEdgeMap.has(edge.id) ) return this.addEdge(edge, { update });
+    if ( !this._includeEdge(edge) ) return this.removeEdge(edge.id, { update });
 
-    // Check for updates to wall link status for walls linked to this one.
-    const updatedLinkedWalls = this._checkWallLinks(wall.id, update);
+    // Check for updates to wall link status for edges linked to this one.
+    const updatedLinkedEdges = this._checkEdgeLinks(edge.id, update);
 
-    // Note: includeWall will handle changes to the threshold.attenuation.
+    // Note: includeEdge will handle changes to the threshold.attenuation.
     // Check for changes to the given coordinate set and update the buffers.
     // Don't need to update the index
-    const idxToUpdate = this._triWallMap.get(wall.id);
-    const changedPosition = this._updateWallPosition(wall, idxToUpdate, update);
-    const changedSenseType = this._updateWallSenseType(wall, idxToUpdate, update);
-    const changedThreshold = this._updateWallThreshold(wall, idxToUpdate, update);
-    return updatedLinkedWalls || changedPosition || changedSenseType || changedThreshold;
+    const idxToUpdate = this._triEdgeMap.get(edge.id);
+    const changedPosition = this._updateEdgePosition(edge, idxToUpdate, update);
+    const changedSenseType = this._updateEdgeSenseType(edge, idxToUpdate, update);
+    const changedThreshold = this._updateEdgeThreshold(edge, idxToUpdate, update);
+    return updatedLinkedEdges || changedPosition || changedSenseType || changedThreshold;
   }
 
   /**
-   * Check for change in wall endpoints or link status and update buffer accordingly.
-   * @param {Wall} wall               Wall to update
+   * Check for change in edge endpoints or link status and update buffer accordingly.
+   * @param {Edge} edge               Edge to update
    * @param {number} idxToUpdate      Index of the coordinate in the buffer
    * @param {boolean} [update=true]   If false, buffer will not be flagged for update
    * @returns {boolean} Did the geometry need to be updated based on the wall update?
    */
-  _updateWallPosition(wall, idxToUpdate, update = true) {
-    const { corner0, corner1 } = this.wallCornerCoordinates(wall);
+  _updateEdgePosition(edge, idxToUpdate, update = true) {
+    const { corner0, corner1 } = this.edgeCornerCoordinates(edge);
     let changedPosition = this.getAttributeAtIndex("aWallCorner0", idxToUpdate).some((x, i) => x !== corner0[i]);
     changedPosition ||= this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner1[i]);
     if ( changedPosition ) {
@@ -561,14 +554,14 @@ sourceOrigin = geom.sourceOrigin;
   }
 
   /**
-   * Check for change in the sense type for the wall and update buffer accordingly.
-   * @param {Wall} wall               Wall to update
+   * Check for change in the sense type for the edge and update buffer accordingly.
+   * @param {Edge} edge               Edge to update
    * @param {number} idxToUpdate      Index of the coordinate in the buffer
    * @param {boolean} [update=true]   If false, buffer will not be flagged for update
    * @returns {boolean} Did the geometry need to be updated based on the wall update?
    */
-  _updateWallSenseType(wall, idxToUpdate, update = true) {
-    const senseType = this.senseType(wall);
+  _updateEdgeSenseType(edge, idxToUpdate, update = true) {
+    const senseType = this.senseType(edge);
     const changedSenseType = this.getAttributeAtIndex("aWallSenseType")[0] !== senseType;
     if ( changedSenseType ) this._updateBuffer([senseType], "aWallSenseType", idxToUpdate, update);
     return changedSenseType;
@@ -576,12 +569,12 @@ sourceOrigin = geom.sourceOrigin;
 
   /**
    * Check for change in the relevant threshold attribute and update buffer accordingly.
-   * @param {Wall} wall   Wall to update
+   * @param {Edge} edge                   Edge to update
    * @param {boolean} [update=true]       If false, buffer will not be flagged for update.
    * @returns {boolean} Did the geometry need to be updated based on the wall update?
    */
-  _updateWallThreshold(wall, idxToUpdate, update = true) {
-    const threshold = this.threshold2Attribute(wall);
+  _updateEdgeThreshold(edge, idxToUpdate, update = true) {
+    const threshold = this.threshold2Attribute(edge);
     const changedThreshold = this.getAttributeAtIndex("aThresholdRadius2")[0] !== threshold;
     if ( changedThreshold ) this._updateBuffer([threshold], "aThresholdRadius2", idxToUpdate, update);
     return changedThreshold;
@@ -604,18 +597,18 @@ sourceOrigin = geom.sourceOrigin;
   }
 
   /**
-   * Remove a wall from this geometry.
-   * @param {string} id   Wall id (b/c that is what the remove hook uses)
+   * Remove a edge from this geometry.
+   * @param {string} id   Edge id (b/c that is what the remove hook uses)
    * @param {boolean} [update=true]   If false, buffer will not be flagged for update.
    * @returns {boolean} Did the geometry need to be updated based on the wall removal?
    */
-  removeWall(id, { update = true } = {}) {
-    if ( id instanceof Wall ) id = id.id;
+  removeEdge(id, { update = true } = {}) {
+    if ( id instanceof foundry.canvas.edges.Edge ) id = id.id;
 
     // Theoretically, could have a link update even for a wall we are not including.
-    if ( !this._triWallMap.has(id) ) return this._checkWallLinks(id, update);
+    if ( !this._triEdgeMap.has(id) ) return this._checkEdgeLinks(id, update);
 
-    const idxToRemove = this._triWallMap.get(id);
+    const idxToRemove = this._triEdgeMap.get(id);
     for ( const attr of Object.keys(this.attributes) ) {
       const size = this.getAttribute(attr).size * 3;
       const buffer = this.getBuffer(attr);
@@ -625,15 +618,15 @@ sourceOrigin = geom.sourceOrigin;
     this.indexBuffer.data = this.constructor.removeFromBuffer(this.indexBuffer.data, size, idxToRemove);
 
     // Remove the wall from the tracker and decrement other wall indices accordingly.
-    this._triWallMap.delete(id);
+    this._triEdgeMap.delete(id);
     const fn = (value, key, map) => { if ( value > idxToRemove ) map.set(key, value - 1); };
-    this._triWallMap.forEach(fn);
+    this._triEdgeMap.forEach(fn);
 
     // Currently, the index buffer is consecutive.
     this.indexBuffer.data = this.indexBuffer.data.map((value, index) => index);
 
     // Remove wall links at the end, so the removed wall is reflected properly.
-    this._checkWallLinks(id, update);
+    this._checkEdgeLinks(id, update);
 
     // Flag the updated buffers for uploading to the GPU.
     if ( update ) this.update();
@@ -643,16 +636,16 @@ sourceOrigin = geom.sourceOrigin;
 
   /**
    * Check all the walls in the scene b/c of some change to an array of walls
-   * @param {Wall[]} [walls]    Optional array of walls to consider.
+   * @param {Edges[]|Map<string,Edge>|Set<Edge>} [edges]    Optional array of walls to consider.
    * @returns {boolean} True if any changes to the geometry buffers resulted from the refresh.
    */
-  refreshWalls(walls) {
-    walls ??= canvas.walls.placeables;
+  refreshEdges(edges) {
+    edges ??= canvas.edges;
     const opts = { update: false }; // Avoid repeatedly updating the buffers.
     let changed = false;
-    walls.forEach(w => {
-      const wallBufferChanged = this.updateWall(w, opts);
-      changed ||= wallBufferChanged;
+    edges.forEach(e => {
+      const edgeBufferChanged = this.updateEdge(e, opts);
+      changed ||= edgeBufferChanged;
     });
     if ( changed ) this.update();
     return changed;
@@ -676,23 +669,23 @@ sourceOrigin = geom.sourceOrigin;
    */
   updateSourcePosition() {
     let updated = false;
-    const wallsChecked = new Set();
-    for ( const [id, idxToUpdate] of this._triWallMap ) {
-      const wall = canvas.walls.documentCollection.get(id).object;
-      wallsChecked.add(wall);
-      if ( !this._includeWall(wall) ) {
-        const wasUpdated = this.removeWall(wall.id, { update: false });
+    const edgesChecked = new Set();
+    for ( const [id, idxToUpdate] of this._triEdgeMap ) {
+      const edge = canvas.edges.get(id);
+      edgesChecked.add(edge);
+      if ( !this._includeEdge(edge) ) {
+        const wasUpdated = this.removeEdge(edge.id, { update: false });
         updated ||= wasUpdated;
       } else {
-        const resLink = this._updateWallLinkBuffer(wall, false);
-        const resThreshold = this._updateWallThreshold(wall, idxToUpdate, false);
+        const resLink = this._updateEdgeLinkBuffer(edge, false);
+        const resThreshold = this._updateEdgeThreshold(edge, idxToUpdate, false);
         updated ||= (resLink || resThreshold);
       }
     }
 
-    const wallsToAdd = this.source._getWalls().difference(wallsChecked);
-    wallsToAdd.forEach(wall => {
-      const wasUpdated = this.addWall(wall, { update: false });
+    const edgesToAdd = this.source._getEdges().difference(edgesChecked);
+    edgesToAdd.forEach(edge => {
+      const wasUpdated = this.addEdge(edge, { update: false });
       updated ||= wasUpdated;
     });
 
@@ -704,11 +697,11 @@ sourceOrigin = geom.sourceOrigin;
 
 export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
 
-  _includeWall(wall) {
-    if ( !super._includeWall(wall) ) return false;
+  _includeEdge(edge) {
+    if ( !super._includeEdge(edge) ) return false;
 
     // Wall must be within the light radius.
-    if ( !this.source.bounds.lineSegmentIntersects(wall.edge.a, wall.edge.b, { inside: true }) ) return false;
+    if ( !this.source.bounds.lineSegmentIntersects(edge.a, edge.b, { inside: true }) ) return false;
 
     return true;
   }
@@ -726,23 +719,23 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
   }
 
   /**
-   * Orientation of a wall to the source.
-   * @param {Wall} wall
+   * Orientation of a edge to the source.
+   * @param {Edge} edge
    * @returns {number}  See foundry.utils.orient2dFast.
    */
-  sourceWallOrientation(wall) {
-    // Wall must not be the same (2d) direction as the source
+  sourceEdgeOrientation(edge) {
+    // Edge must not be the same (2d) direction as the source
     // TODO: Do we need to add a scalar to the normalized source direction?
-    const A = PIXI.Point.fromObject(wall.edge.a);
-    return !foundry.utils.orient2dFast(A, wall.edge.b, A.add(this.source.lightDirection)).almostEqual(0, 1);
+    const A = PIXI.Point.fromObject(edge.a);
+    return !foundry.utils.orient2dFast(A, edge.b, A.add(this.source.lightDirection)).almostEqual(0, 1);
   }
 
   /**
    * Threshold walls cannot be triggered by directional sources.
-   * @param {Wall} wall
+   * @param {Edge} edge
    * @returns {boolean} True if the threshold applies.
    */
-  thresholdApplies(_wall) { return false; }
+  thresholdApplies(_edge) { return false; }
 }
 
 

@@ -1,7 +1,8 @@
 /* globals
 canvas,
 PIXI,
-Token
+Token,
+Wall
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -349,7 +350,7 @@ function pointInShadow({x, y, z} = {}) {
   z ??= canvas.elevation.elevationAt({x, y});
   const testPt = new Point3d(x, y, z);
   const origin = Point3d.fromPointSource(this);
-  const midCollision = this.hasWallCollision(origin, testPt);
+  const midCollision = this.hasEdgeCollision(origin, testPt);
   const lightSize = this.data.lightSize;
 
   /* Draw.point(origin, { color: Draw.COLORS.yellow }) */
@@ -358,15 +359,15 @@ function pointInShadow({x, y, z} = {}) {
 
   // Test the top/bottom/left/right points of the light for penumbra shadow.
   let dir = new Point3d(0, 0, lightSize);
-  const topCollision = this.hasWallCollision(origin.add(dir), testPt);
-  const bottomCollision = this.hasWallCollision(origin.subtract(dir), testPt);
+  const topCollision = this.hasEdgeCollision(origin.add(dir), testPt);
+  const bottomCollision = this.hasEdgeCollision(origin.subtract(dir), testPt);
 
   // Get the orthogonal direction to the origin --> testPt line at the light elevation.
   dir = testPt.subtract(origin);
   const orthoDir = (new Point3d(-dir.y, dir.x, 0)).normalize();
   dir = orthoDir.multiplyScalar(lightSize);
-  const side0Collision = this.hasWallCollision(origin.add(dir), testPt);
-  const side1Collision = this.hasWallCollision(origin.subtract(dir), testPt);
+  const side0Collision = this.hasEdgeCollision(origin.add(dir), testPt);
+  const side1Collision = this.hasEdgeCollision(origin.subtract(dir), testPt);
 
   // Shadows: side0/mid/side1 = 100%; side0/mid = 50%; mid/side1 = 50%; any one = 25%
   const sideSum = side0Collision + side1Collision + midCollision;
@@ -473,27 +474,27 @@ function targetInShadow(target, testPoint) {
 }
 
 /**
- * New method: RenderedEffectSource.prototype.wallAdded
- * Update shadow data based on the added wall, as necessary.
- * @param {Wall} wall     Wall that was added to the scene.
+ * New method: RenderedEffectSource.prototype.edgeAdded
+ * Update shadow data based on the added edge, as necessary.
+ * @param {Edge} edge     Edge that was added to the scene.
  */
-function wallAdded(wall) { handleWallChange(this, wall, "addWall"); }
+function edgeAdded(edge) { handleEdgeChange(this, edge, "addEdge"); }
 
 /**
- * New method: RenderedEffectSource.prototype.wallUpdated
- * Update shadow data based on the updated wall, as necessary.
- * @param {Wall} wall     Wall that was updated in the scene.
+ * New method: RenderedEffectSource.prototype.edgeUpdated
+ * Update shadow data based on the updated edge, as necessary.
+ * @param {Edge} edge     Edge that was updated in the scene.
  */
-function wallUpdated(wall, changes) {
-  handleWallChange(this, wall, "updateWall", { changes });
+function edgeUpdated(edge, changes) {
+  handleEdgeChange(this, edge, "updateEdge", { changes });
 }
 
 /**
- * New method: RenderedEffectSource.prototype.wallRemoved
- * Update shadow data based on the removed wall, as necessary.
- * @param {Wall} wallId     Wall id that was removed from the scene.
+ * New method: RenderedEffectSource.prototype.edgeRemoved
+ * Update shadow data based on the removed edge, as necessary.
+ * @param {Edge} edgeId     Edge id that was removed from the scene.
  */
-function wallRemoved(wallId) { handleWallChange(this, wallId, "removeWall"); }
+function edgeRemoved(edgeId) { handleEdgeChange(this, edgeId, "removeEdge"); }
 
 PATCHES.WEBGL.METHODS = {
   _initializeEVShadows,
@@ -504,9 +505,9 @@ PATCHES.WEBGL.METHODS = {
   _initializeEVShadowMask,
   _updateEVShadowData,
 
-  wallAdded,
-  wallUpdated,
-  wallRemoved
+  edgeAdded,
+  edgeUpdated,
+  edgeRemoved
 };
 
 
@@ -517,11 +518,11 @@ PATCHES.WEBGL.METHODS = {
  * @param {PIXI.Rectangle} bounds
  * @returns {Set<Wall>}
  */
-function _getWalls(bounds) {
+function _getEdges(bounds) {
   const origin = PIXI.Point.fromObject(this);
   bounds ??= this.bounds;
-  const collisionTest = o => this._testWallInclusion(o.t, origin);
-  return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
+  const collisionTest = o => this._testEdgeInclusion(o.t, origin);
+  return canvas.edges.quadtree.getObjects(bounds, { collisionTest });
 }
 
 /**
@@ -533,47 +534,58 @@ function _getWalls(bounds) {
  * @param {PIXI.Point} origin
  * @returns {boolean}
  */
-function _testWallInclusion(wall, origin) {
+function _testEdgeInclusion(edge, origin) {
   // Ignore walls that are non-blocking for this type.
   const type = this.constructor.sourceType;
-  if ( !wall.document[type] || wall.isOpen ) return false;
+  if ( !edge[type] || edge.isOpen ) return false;
 
-  // If wall is entirely above the light, do not keep.
-  if ( wall.bottomZ > this.elevationZ ) return false;
+  // TODO: Add elevation to edges.
+  let topZ = Number.POSITIVE_INFINITY;
+  let bottomZ = Number.NEGATIVE_INFINITY;
+  if ( edge.object instanceof Wall ) {
+    topZ = edge.object.topZ;
+    bottomZ = edge.object.bottomZ;
+  } else if ( edge[MODULE_ID] ) {
+    topZ = edge[MODULE_ID].topZ;
+    bottomZ = edge[MODULE_ID].bottomZ;
+  }
+
+  // If edge is entirely above the light, do not keep.
+  if ( bottomZ > this.elevationZ ) return false;
 
   // If wall is entirely below the canvas and source is above, do not keep.
   const minCanvasE = canvas.elevation?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
-  if ( wall.topZ <= minCanvasE && this.elevationZ > minCanvasE ) return false;
+  if ( topZ <= minCanvasE && this.elevationZ > minCanvasE ) return false;
 
   // Ignore collinear walls
-  const side = wall.edge.orientPoint(origin);
+  const side = edge.orientPoint(origin);
   if ( !side ) return false;
 
   // Ignore one-directional walls facing away from the origin.
-  if ( side === wall.document.dir ) return false;
+  if ( side === edge.dir ) return false;
 
   // Ignore non-attenuated threshold walls where the threshold applies.
-  if ( !wall.document.threshold.attenuation && this.thresholdApplies(wall) ) return false;
+  if ( !edge.threshold.attenuation && this.thresholdApplies(edge) ) return false;
 
   return true;
 }
 
 /**
- * For threshold walls, determine if threshold applies.
- * @param {Wall} wall
+ * For threshold edges, determine if threshold applies.
+ * @param {Edge} edge
  * @returns {boolean} True if the threshold applies.
  */
-function thresholdApplies(wall) {
-  return wall.edge.applyThreshold(this.constructor.sourceType, this, this.data.externalRadius);
+function thresholdApplies(edge) {
+  return edge.applyThreshold(this.constructor.sourceType, this, this.data.externalRadius);
 }
 
 /**
- * Test if this source has a wall collision between this source origin and test point.
+ * Test if this source has an edge collision between this source origin and test point.
  * Does not consider whether the test point is within radius of the source origin.
  * @param {PIXI.Point} testPt           Point to test against source origin
-* @returns {boolean}
+ * @returns {boolean}
  */
-function hasWallCollision(origin, testPt) {
+function hasEdgeCollision(origin, testPt) {
   origin = Point3d.fromObject(origin);
   testPt = Point3d.fromObject(testPt);
 
@@ -581,18 +593,28 @@ function hasWallCollision(origin, testPt) {
   const xMinMax = Math.minMax(origin.x, testPt.x);
   const yMinMax = Math.minMax(origin.y, testPt.y);
   const lineBounds = new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
-  const walls = this._getWalls(lineBounds);
-  if ( !walls.size ) return false;
+  const edges = this._getEdges(lineBounds);
+  if ( !edges.size ) return false;
 
   // Test the intersection of the ray with each wall.
   const dir = testPt.subtract(origin);
-  return walls.some(w => {
+  return edges.some(edge => {
     // Check if the test point falls within an attenuation area.
-    const wallPts = Point3d.fromWall(w, { finite: true });
-    const v0 = wallPts.A.top;
-    const v1 = wallPts.A.bottom;
-    const v2 = wallPts.B.bottom;
-    const v3 = wallPts.B.top;
+    let topZ = Number.POSITIVE_INFINITY;
+    let bottomZ = Number.NEGATIVE_INFINITY;
+    if ( edge.object instanceof Wall ) {
+      topZ = edge.object.topZ;
+      bottomZ = edge.object.bottomZ;
+    } else if ( edge[MODULE_ID] ) {
+      topZ = edge[MODULE_ID].topZ;
+      bottomZ = edge[MODULE_ID].bottomZ;
+    }
+
+    // TODO: Handle edge elevations
+    const v0 = new Point3d(edge.a.x, edge.a.y, topZ);
+    const v1 = new Point3d(edge.a.x, edge.a.y, bottomZ);
+    const v2 = new Point3d(edge.b.x, edge.b.y, bottomZ);
+    const v3 = new Point3d(edge.b.x, edge.b.y, topZ);
     const t = Plane.rayIntersectionQuad3dLD(origin, dir, v0, v1, v2, v3); // Null or t value
     if (!t || t < 0 || t > 1 ) return false;
     return true;
@@ -600,9 +622,9 @@ function hasWallCollision(origin, testPt) {
 }
 
 PATCHES.BASIC.METHODS = {
-  hasWallCollision,
-  _getWalls,
-  _testWallInclusion,
+  hasEdgeCollision,
+  _getEdges,
+  _testEdgeInclusion,
   thresholdApplies,
   pointInShadow,
   targetInShadow
@@ -673,19 +695,19 @@ function shadowPercentageFromCache(pixelCache, x, y) {
 }
 
 /**
- * Utility function to handle variety of wall changes to a source.
+ * Utility function to handle variety of edge changes to a source.
  * @param {RenderedEffectSource} source
- * @param {Wall} wall
+ * @param {Edge} edge
  * @param {string} updateFn   Name of the update method for the wall geometry.
  * @param {object} opts       Options passed to updateFn
  */
-function handleWallChange(source, wall, updateFn, opts = {}) {
+function handleEdgeChange(source, edge, updateFn, opts = {}) {
   const ev = source[MODULE_ID];
   if ( !ev ) return;
 
   // At this point, the wall caused a change to the geometry. Update accordingly.
-  if ( ev.wallGeometry?.[updateFn](wall, opts) ) ev.shadowRenderer.update();
+  if ( ev.wallGeometry?.[updateFn](edge, opts) ) ev.shadowRenderer.update();
 
   // For vision sources, update the LOS geometry.
-  if ( ev.wallGeometryUnbounded?.[updateFn](wall, opts) ) ev.shadowVisionLOSRenderer.update();
+  if ( ev.wallGeometryUnbounded?.[updateFn](edge, opts) ) ev.shadowVisionLOSRenderer.update();
 }

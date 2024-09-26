@@ -191,9 +191,6 @@ function originalTestWallInclusion(wall, bounds) {
   const side = wall.edge.orientPoint(this.origin);
   if ( (type !== "move") && !side ) return false;
 
-  // Always include interior walls underneath active roof tiles
-  if ( (type === "sight") && wall.hasActiveRoof ) return true;
-
   // Otherwise, ignore walls that are not blocking for this polygon type
   else if ( !wall.document[type] || wall.isOpen ) return false;
 
