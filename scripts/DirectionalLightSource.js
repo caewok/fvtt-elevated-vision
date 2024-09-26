@@ -482,16 +482,16 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
 
     // Project a point out beyond the canvas to stand in for the light position.
     const { azimuth, elevationAngle, solarAngle } = this;
-    const midCollision = this.hasWallCollision(testPt, azimuth, elevationAngle);
+    const midCollision = this.hasEdgeCollision(testPt, azimuth, elevationAngle);
 
     /* Draw.point(origin, { color: Draw.COLORS.yellow }) */
     if ( !solarAngle ) return Number(midCollision);
 
     // Test the top/bottom/left/right points of the light for penumbra shadow.
-    const topCollision = this.hasWallCollision(testPt, azimuth, elevationAngle + solarAngle);
-    const bottomCollision = this.hasWallCollision(testPt, testPt, azimuth, elevationAngle - solarAngle);
-    const side0Collision = this.hasWallCollision(testPt, testPt, azimuth + solarAngle, elevationAngle);
-    const side1Collision = this.hasWallCollision(testPt, testPt, azimuth - solarAngle, elevationAngle);
+    const topCollision = this.hasEdgeCollision(testPt, azimuth, elevationAngle + solarAngle);
+    const bottomCollision = this.hasEdgeCollision(testPt, testPt, azimuth, elevationAngle - solarAngle);
+    const side0Collision = this.hasEdgeCollision(testPt, testPt, azimuth + solarAngle, elevationAngle);
+    const side1Collision = this.hasEdgeCollision(testPt, testPt, azimuth - solarAngle, elevationAngle);
 
     // Shadows: side0/mid/side1 = 100%; side0/mid = 50%; mid/side1 = 50%; any one = 25%
     const sideSum = side0Collision + side1Collision + midCollision;
@@ -561,7 +561,7 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
    * Use a fake origin to test for collision.
    * Allow azimuth and elevationAngle to be adjusted.
    */
-  hasWallCollision(testPt, azimuth, elevationAngle) {
+  hasEdgeCollision(testPt, azimuth, elevationAngle) {
     azimuth ??= this.azimuth;
     elevationAngle ??= this.elevationAngle;
     const dir = DirectionalLightSource.lightDirection(azimuth, elevationAngle);

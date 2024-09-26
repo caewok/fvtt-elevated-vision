@@ -298,7 +298,7 @@ function refreshVisibility2(wrapped) {
   const vision = this.vision;
 
   // Remove all EV children so the drawings do not coexist with the children and children not repeated.
-  const sources = [
+  [
     vision.light.sources,
     vision.light.preview,
     vision.light.global.source,
@@ -307,12 +307,10 @@ function refreshVisibility2(wrapped) {
     vision.sight,
     vision.sight.preview,
     vision.darkness
-  ];
-  sources.forEach(s => s.children
-    .forEach(c => {
-      if ( c instanceof EVQuadMesh ) vision.light.sources.removeChild(c);
-    })
-  );
+  ].forEach(s => {
+    const toRemove = s.children.filter(c => c instanceof EVQuadMesh);
+    toRemove.forEach(c => s.removeChild(c));
+  });
 
   // Prevent light caching by temporarily making the light source objects point to a token.
   // See CanvasVisibility.prototype.#shouldCacheLight.
@@ -345,7 +343,7 @@ async function _tearDown(wrapped, options) {
   return wrapped(options);
 }
 
-PATCHES.WEBGL.WRAPS = { _tearDown, refreshVisibility: refreshVisibility2 };
+// PATCHES.WEBGL.WRAPS = { _tearDown, refreshVisibility: refreshVisibility2 };
 
 
 /**
@@ -395,7 +393,6 @@ function visibilityRefresh(cv) {
     los.addChild(mask);
   }
 
-
   for ( const visionSource of canvas.effects.visionSources ) {
     if ( !visionSource.hasActiveLayer ) continue;
 
@@ -422,7 +419,7 @@ function visibilityRefresh(cv) {
   }
 }
 
-PATCHES.WEBGL.HOOKS = { visibilityRefresh };
+// PATCHES.WEBGL.HOOKS = { visibilityRefresh };
 
 
 /**
