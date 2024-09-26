@@ -434,22 +434,22 @@ export function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-v
 }
 
 /**
- * Get walls that share an endpoint with this wall.
+ * Get edges that share an endpoint with this edge.
  * Organize by shared endpoint.
  * See Wall.prototype.getLinkedSegments for recursive version.
- * @param {Wall} wall
+ * @param {Edge} edge
  * @returns {object}
  */
-export function getLinkedWalls(wall) {
+export function getLinkedEdges(edge) {
   const linkedA = new Set();
   const linkedB = new Set();
-  const keyA = wall.edge.a.key;
-  const keyB = wall.edge.b.key;
-  canvas.walls.placeables.forEach(w => {
-    if ( w === wall ) return;
-    const wallKeys = new Set([w.edge.a.key, w.edge.b.key]);
-    if ( wallKeys.has(keyA) ) linkedA.add(w);
-    else if ( wallKeys.has(keyB) ) linkedB.add(w);
+  const keyA = edge.a.key;
+  const keyB = edge.b.key;
+  canvas.edges.forEach(e => {
+    if ( e === edge ) return;
+    const edgeKeys = new Set([edge.a.key, edge.b.key]);
+    if ( edgeKeys.has(keyA) ) linkedA.add(w);
+    else if ( edgeKeys.has(keyB) ) linkedB.add(w);
   });
   return { linkedA, linkedB };
 }
