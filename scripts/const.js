@@ -9,11 +9,6 @@ export const LEVELS_MODULE_ID = "levels";
 // Minimum absolute difference of floats before they are considered equal
 export const EPSILON = 1e-08;
 
-export const MODULES_ACTIVE = {
-  WALL_HEIGHT: false,
-  PERFECT_VISION: false
-};
-
 export const FLAGS = {
   BLOCKS_VISION: "blocksVision",
   ELEVATION_IMAGE: "elevationImage",
@@ -54,8 +49,12 @@ export const ICONS = {
   MODULE: "fa-solid fa-hurricane"
 };
 
+// Track certain modules that complement features of this module.
+export const OTHER_MODULES = {
+  TERRAIN_MAPPER: { ACTIVE: false, KEY: "terrainmapper", BACKGROUND_ELEVATION: "backgroundElevation" }
+}
+
 // Hook init b/c game.modules is not initialized at start.
 Hooks.once("init", function() {
-  MODULES_ACTIVE.WALL_HEIGHT = game.modules.get("wall-height")?.active;
-  MODULES_ACTIVE.PERFECT_VISION = game.modules.get("perfect-vision")?.active;
+  for ( const obj of Object.values(OTHER_MODULES) ) obj.ACTIVE = game.modules.get(obj.KEY)?.active
 });
