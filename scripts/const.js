@@ -1,4 +1,6 @@
 /* globals
+game,
+Hooks
 */
 "use strict";
 
@@ -27,10 +29,10 @@ export const FLAGS = {
       AVERAGE: "elevation_average"
     },
     LABELS: {
-      "elevation_point": "elevatedvision.tokenconfig.elevation-algorithm.elevation_point",
-      "elevation_points_close": "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_close",
-      "elevation_points_spread": "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_spread",
-      "elevation_average": "elevatedvision.tokenconfig.elevation-algorithm.elevation_average"
+      elevation_point: "elevatedvision.tokenconfig.elevation-algorithm.elevation_point",
+      elevation_points_close: "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_close",
+      elevation_points_spread: "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_spread",
+      elevation_average: "elevatedvision.tokenconfig.elevation-algorithm.elevation_average"
     }
   }
 };
@@ -52,7 +54,7 @@ export const ICONS = {
 // Track certain modules that complement features of this module.
 export const OTHER_MODULES = {
   TERRAIN_MAPPER: { ACTIVE: false, KEY: "terrainmapper", BACKGROUND_ELEVATION: "backgroundElevation" }
-}
+};
 
 // Hook init b/c game.modules is not initialized at start.
 Hooks.once("init", function() {
