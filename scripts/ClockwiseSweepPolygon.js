@@ -233,17 +233,18 @@ function edgePointsForEdge(edge, { finite = false } = {}) {
   let MAX = Number.POSITIVE_INFINITY;
   if ( finite ) {
     const numDigits = numPositiveDigits(canvas.dimensions.maxR);
-    MAX = Number(`1e0${numDigits}`);
+    MAX = CONFIG.GeometryLib.utils.pixelsToGridUnits(Number(`1e0${numDigits}`));
   }
 
+  const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
   const obj = {
     a: {
-      top: new Point3d(edge.a.x, edge.a.y, e.a.top ?? MAX),
-      bottom: new Point3d(edge.a.x, edge.a.y, edge.a.bottom ?? -MAX)
+      top: new Point3d(edge.a.x, edge.a.y, gridUnitsToPixels(e.a.top ?? MAX)),
+      bottom: new Point3d(edge.a.x, edge.a.y, gridUnitsToPixels(edge.a.bottom ?? -MAX))
     },
     b: {
-      top: new Point3d(edge.b.x, edge.b.y, e.b.top ?? MAX),
-      bottom: new Point3d(edge.b.x, edge.b.y, edge.b.bottom ?? -MAX)
+      top: new Point3d(edge.b.x, edge.b.y, gridUnitsToPixels(e.b.top ?? MAX)),
+      bottom: new Point3d(edge.b.x, edge.b.y, gridUnitsToPixels(edge.b.bottom ?? -MAX))
     }
   };
 
