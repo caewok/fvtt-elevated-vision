@@ -1,13 +1,15 @@
 /* globals
 canvas,
+CONST,
 foundry,
 PIXI
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, FLAGS } from "./const.js";
+import { MODULE_ID, FLAGS, OTHER_MODULES } from "./const.js";
 import { drawPolygonWithHoles } from "./util.js";
+import { getSceneSetting, Settings } from "./settings.js";
 
 // Patches for the Region class
 export const PATCHES = {};
@@ -15,19 +17,21 @@ PATCHES.REGIONS = {};
 
 /**
  * Hook canvasReady
- * Set up each blocking region.
- * @param {Document} document                       The existing Document which was updated
- * @param {object} changed                          Differential data that was used to update the document
- * @param {Partial<DatabaseUpdateOperation>} options Additional options which modified the update request
- * @param {string} userId                           The ID of the User who triggered the update workflow
+ * Add any blocking regions to the canvas edges.
  */
 function canvasReady() {
-  canvas.regions.placeables
-    .filter(r => r.document.getFlag(MODULE_ID, FLAGS.BLOCKS_VISION))
-    .forEach(r => {
-      addRegionElevation(r);
-      addRegionWalls(r);
-    });
+  canvas.regions.placeables.forEach(region => {
+    if ( !region.document.getFlag(MODULE_ID, FLAGS.BLOCKS_VISION) ) return;
+    addRegionElevation(region);
+    addRegionWalls(region);
+  });
+
+  const useWebGL = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) === Settings.KEYS.SHADING.TYPES.WEBGL;
+  const sources = useWebGL ? [
+    ...canvas.effects.lightSources,
+    ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
+  ] : [];
+  sources.forEach(src => src.refreshEdges());
 }
 
 /**
@@ -64,6 +68,8 @@ function destroyRegion(region) {
   removeRegionWalls(region);
 }
 
+PATCHES.REGIONS.HOOKS = { updateRegion, destroyRegion, canvasReady };
+
 /**
  * Fill in the shape of a region and add to the elevation set.
  * @param {Region} region
@@ -93,7 +99,54 @@ function removeRegionElevation(region) {
  * @param {Region} region
  */
 function addRegionWalls(region) {
+  const regionD = region.document;
+  let top = regionD.elevation?.top;
+  let bottom = regionD.elevation?.bottom;
+  const TM = OTHER_MODULES.TERRAIN_MAPPER;
+  if ( TM.ACTIVE && region[TM.KEY].isElevated ) top = region[TM.KEY].plateauElevation;
+  top ??= canvas.elevation.elevationMax;
+  bottom ??= canvas.elevation.elevationMin;
+  const useWebGL = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) === Settings.KEYS.SHADING.TYPES.WEBGL;
+  const sources = useWebGL ? [
+    ...canvas.effects.lightSources,
+    ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
+  ] : [];
 
+  // TODO: Handle wall options for the region in region config.
+  const opts = {
+    type: "regionWall",
+    direction: CONST.WALL_DIRECTIONS.BOTH,
+    light: CONST.WALL_SENSE_TYPES.NORMAL,
+    move: CONST.WALL_SENSE_TYPES.NONE,
+    sight: CONST.WALL_SENSE_TYPES.NORMAL,
+    sound: CONST.WALL_SENSE_TYPES.NORMAL,
+    threshold: undefined,
+    object: region,
+    id: region.id
+  };
+  const addedEdges = [];
+
+  region.polygons.forEach((poly, idx) => {
+    // TODO: For holes, flip direction option.
+    opts.id = `${region.id}_poly${idx}`;
+    const edges = polygonToEdges(poly, opts);
+    edges.forEach(edge => {
+      canvas.edges.set(edge.id, edge);
+      sources.forEach(src => src.edgeAdded(edge));
+    });
+    addedEdges.push(...edges);
+  });
+
+  // TODO: Handle ramp walls where endpoint a elevation will differ from endpoint b.
+  // ptA = region[TM.KEY].elevationUponEntry(a);
+  // ptB = region[TM.KEY].elevationUponEntry(b);
+
+
+  // const top = OTHER_MODULES.TERRAIN_MAPPER.ACTIVE ?
+
+  // TODO: Use render flags system instead.
+  // Following doesn't work b/c that method does not exist.
+  // sources.forEach(src => src.refreshEdges(addedEdges));
 }
 
 /**
@@ -101,7 +154,33 @@ function addRegionWalls(region) {
  * @param {Region} region
  */
 function removeRegionWalls(region) {
+  const useWebGL = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) === Settings.KEYS.SHADING.TYPES.WEBGL;
+  const sources = useWebGL ? [
+    ...canvas.effects.lightSources,
+    ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
+  ] : [];
+  const removedEdges = canvas.edges.filter(edge => edge.object === region);
+  removedEdges.forEach(edge => {
+    canvas.edges.delete(edge.id);
+    sources.forEach(src => src.edgeRemoved(edge.id));
+  });
 
+  // TODO: Use render flags system instead.
+  // Following doesn't work b/c that method does not exist.
+  // sources.forEach(src => src.refreshEdges(removedEdges));
 }
 
-PATCHES.REGIONS.HOOKS = { canvasReady, updateRegion, destroyRegion };
+/**
+ * For a given polygon, return an array of edges.
+ * @param {PIXI.Polygon} poly
+ * @param {object} opts
+ * @returns {Edge[]}
+ */
+function polygonToEdges(poly, opts = {}) {
+  const baseID = opts.id ?? foundry.utils.randomID();
+  const Edge = foundry.canvas.edges.Edge;
+  return [...poly.iterateEdges({ closed: true })].map((e, idx) => {
+    opts.id = `${baseID}_${idx}`;
+    return new Edge(e.A, e.B, opts);
+  });
+}
