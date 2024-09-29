@@ -26,6 +26,9 @@ function canvasReady() {
     addRegionWalls(region);
   });
 
+  canvas.scene[MODULE_ID] ??= {};
+  canvas.scene[MODULE_ID].sceneBackgroundRegion = sceneBackgroundRegion();
+
   const useWebGL = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) === Settings.KEYS.SHADING.TYPES.WEBGL;
   const sources = useWebGL ? [
     ...canvas.effects.lightSources,
@@ -55,6 +58,7 @@ function updateRegion(regionD, changed, _options, _userId) {
     addRegionElevation(region);
     addRegionWalls(region);
   }
+  if ( remove || add ) canvas.scene[MODULE_ID].sceneBackgroundRegion = sceneBackgroundRegion();
 }
 
 /**
@@ -66,6 +70,7 @@ function destroyRegion(region) {
   if ( !region.document.getFlag(MODULE_ID, FLAGS.BLOCKS_VISION) ) return;
   removeRegionElevation(region);
   removeRegionWalls(region);
+  canvas.scene[MODULE_ID].sceneBackgroundRegion = sceneBackgroundRegion();
 }
 
 PATCHES.REGIONS.HOOKS = { updateRegion, destroyRegion, canvasReady };
@@ -183,4 +188,69 @@ function polygonToEdges(poly, opts = {}) {
     opts.id = `${baseID}_${idx}`;
     return new Edge(e.A, e.B, opts);
   });
+}
+
+/**
+ * Any regions whose top elevation is below the scene elevation are "pits."
+ * @returns {Region[]}
+ */
+function regionPits() {
+  const TM = OTHER_MODULES.TERRAIN_MAPPER;
+  const sceneGroundE = TM.ACTIVE ? (canvas.scene.getFlag(TM.KEY, TM.BACKGROUND_ELEVATION) || 0) : 0;
+  return canvas.regions.placeables.filter(r => {
+    const regionTopE = ( TM.ACTIVE & r[TM.KEY].isElevated ) ? r[TM.KEY].plateauElevation : r.document.elevation.top;
+    if ( regionTopE == null ) return false;
+    return regionTopE < sceneGroundE;
+  });
+}
+
+/**
+ * Any regions whose top elevation is below the scene elevation are "pits."
+ * Construct edges for these region polygons that extend upward to the scene elevation.
+ * @param {Region[]} [pits]
+ * @returns {Edge[]}
+ */
+function sceneBackgroundEdges(pits) {
+  pits ??= regionPits();
+  if ( !pits.length ) return [];
+  const pitEdges = [];
+  for ( const pit of pits ) {
+    // TODO: Handle wall options for the region in region config.
+    const opts = {
+      type: "regionWall",
+      direction: CONST.WALL_DIRECTIONS.BOTH,
+      light: CONST.WALL_SENSE_TYPES.NORMAL,
+      move: CONST.WALL_SENSE_TYPES.NONE,
+      sight: CONST.WALL_SENSE_TYPES.NORMAL,
+      sound: CONST.WALL_SENSE_TYPES.NORMAL,
+      threshold: undefined,
+      object: region,
+      id: pit.id
+    };
+    pit.polygons.forEach((poly, idx) => {
+      // TODO: For holes, flip direction option.
+      opts.id = `${pit.id}_poly${idx}`;
+      const edges = polygonToEdges(poly, opts);
+      addedEdges.push(...edges);
+    });
+  }
+  return edges;
+}
+
+/**
+ * Construct a scene "region" that is the scene rectangle minus any region pits.
+ * @param {Region[]} [pits]
+ * @returns {ClipperPaths}
+ */
+function sceneBackgroundRegion() {
+  const ClipperPaths = CONFIG.GeometryLib.ClipperPaths;
+  const TM = OTHER_MODULES.TERRAIN_MAPPER;
+  pits ??= regionPits();
+  const scenePath = ClipperPaths.fromPolygons([canvas.dimensions.rect.toPolygon()]);
+  if ( !pits.length ) return scenePath;
+
+  // Subtract out the pit polygons from the scene rectangle.
+  const polys = pits.flatMap(pit => pit.polygons);
+  const paths = ClipperPaths.fromPolygons(polys);
+  return paths.diffPaths(scenePath).clean();
 }

@@ -82,17 +82,7 @@ function _compute(wrapped) {
   if ( sourceE >= sceneGroundE ) edges = edges.filter(e => edgeMaxTopE(e) >= sceneGroundE);
   else edges = edges.filter(e => edgeMinBottomE(e) <= sceneGroundE); // Source below ground; drop tiles above
 
-  /* Terrain wall shadows
-    If a limited-height wall is blocking a terrain wall of any height,
-    that will not be recorded by the LOS sweep b/c the limited-height wall is removed by Wall Height.
 
-    Non-terrain walls will create shadows that entirely overlap whatever shadow would
-    be caused by the terrain wall behind.
-
-    Thus, we only need to care about terrain walls that are behind other terrain walls.
-
-    The shadows of two terrain walls is the intersection of them.
-  */
   const evS = _constructPolygonShadowsObject(sweep);
   const sourceType = source.constructor.sourceType;
   edges.forEach(e => {
@@ -171,6 +161,18 @@ function _shadowForEdge(edge, proj) {
  * @param {RenderedEffectSource} source
  */
 function _constructLimitedEdgeShadows(evS, source) {
+  /* Terrain wall shadows
+    If a limited-height wall is blocking a terrain wall of any height,
+    that will not be recorded by the LOS sweep b/c the limited-height wall is removed by Wall Height.
+
+    Non-terrain walls will create shadows that entirely overlap whatever shadow would
+    be caused by the terrain wall behind.
+
+    Thus, we only need to care about terrain walls that are behind other terrain walls.
+
+    The shadows of two terrain walls is the intersection of them.
+  */
+
   if ( evS.limitedEdges.size < 2 ) return;
   // Temporarily cache the edge points
   evS.limitedEdges.forEach(e => {
@@ -437,6 +439,8 @@ function filterPotentialBlockingEdges(edgePoints, edgeArr, sourceOrigin) {
  */
 function numPositiveDigits(n) { return (Math.log(n) * Math.LOG10E) + 1 | 0; }
 
+
+
 // ----- Wall Tracing Enhancements to Sweep ----- //
 /**
  * Wrap ClockwiseSweepPolygon.prototype.initialize.
@@ -456,3 +460,4 @@ function initialize(wrapper, origin, config) {
 }
 
 PATCHES.SWEEP.WRAPS = { initialize };
+
