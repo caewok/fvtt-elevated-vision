@@ -30,6 +30,18 @@ const EDGE_TYPES = {
   ALWAYS: 2
 };
 
+
+/* TODO: Use region shapes to influence shadow elevation.
+1. Do shadow calcs for scene elevation.
+2. For a given region polygon, if not hole:
+- Erase the shadow calc in (1) for that poly area
+- Do the shadow calculation but change the background elevation. (Ramps? Hard)
+- Union the shadows from (1) and (2).
+- If region is above source, region is entirely shadowed
+
+Sort regions from low to high so overlapping regions are processed
+*/
+
 /**
  * Wrap ClockwiseSweepPolygon.prototype._identifyEdges
  * Get walls that are below the
@@ -81,26 +93,7 @@ function _compute(wrapped) {
 
     The shadows of two terrain walls is the intersection of them.
   */
-
-  const ev = sweep[MODULE_ID] ??= {};
-  if ( ev.polygonShadows ) {
-    const evS = ev.polygonShadows;
-    evS.shadows.length = 0;
-    evS.combined.length = 0;
-    evS.limitedEdges.clear();
-    evS.normalEdges.clear();
-
-  } else {
-    ev.polygonShadows = {
-      shadowProjection: new ShadowProjection(new Plane(), source),
-      shadows: [],             /** @type {Shadow[]} */
-      combined: [],            /** @type {PIXI.Polygon[]} */
-      limitedEdges: new Set(), /** @type {Set<Edge>} */
-      normalEdges: new Set()   /** @type {Set<Edge>} */
-    };
-  }
-  const evS = ev.polygonShadows;
-
+  const evS = _constructPolygonShadowsObject(sweep);
   const sourceType = source.constructor.sourceType;
   edges.forEach(e => {
     if ( e[sourceType] === CONST.WALL_SENSE_TYPES.LIMITED ) evS.limitedEdges.add(e);
@@ -109,50 +102,8 @@ function _compute(wrapped) {
   if ( !evS.limitedEdges.size && !evS.normalEdges.size) return;
 
   // Store each shadow individually
-
-  // For each terrain edge, find all other potentially blocking terrain edges.
-  // Intersect the shadow for each.
-
-  if ( evS.limitedEdges.size > 1 ) {
-    // Temporarily cache the edge points
-    evS.limitedEdges.forEach(e => {
-      e._elevatedvision ??= {};
-      e._elevatedvision.edgePoints = edgePointsForEdge(e, { finite: true });
-    });
-
-    const sourceOrigin = Point3d.fromPointSource(source);
-
-    for ( const e of evS.limitedEdges ) {
-      const blockingEdges = filterPotentialBlockingEdges(
-        e._elevatedvision.edgePoints,
-        evS.limitedEdges,
-        sourceOrigin);
-      blockingEdges.delete(e);
-
-      if ( blockingEdges.size ) {
-        const shadowWPts = evS.shadowProjection._constructShadowPointsForWallPoints(e._elevatedvision.edgePoints);
-        if ( !shadowWPts.length ) continue;
-        const shadowW = new Shadow(shadowWPts);
-
-        for ( const blockingEdge of blockingEdges ) {
-          const edgePoints = edgePointsForEdge(blockingEdge, { finite: true });
-          const shadowBWPts = evS.shadowProjection._constructShadowPointsForWallPoints(edgePoints);
-          if ( !shadowBWPts.length ) continue;
-          const shadowBW = new Shadow(shadowBWPts);
-          const shadowIX = shadowW.intersectPolygon(shadowBW)[0];
-          if ( shadowIX && shadowIX.points.length > 5 ) evS.shadows.push(shadowIX);
-        }
-      }
-    }
-  }
-
-  // Now process all the normal edges.
-  for ( const e of evS.normalEdges ) {
-    const edgePoints = edgePointsForEdge(e, { finite: true });
-    const shadowPoints = evS.shadowProjection._constructShadowPointsForWallPoints(edgePoints);
-    if ( !shadowPoints.length ) continue;
-    evS.shadows.push(new Shadow(shadowPoints));
-  }
+  _constructLimitedEdgeShadows(evS, source);
+  _constructNormalEdgeShadows(evS);
 
   if ( !evS.shadows.length ) return;
 
@@ -165,6 +116,103 @@ function _compute(wrapped) {
 }
 
 PATCHES.POLYGONS.WRAPS = { _compute };
+
+/**
+ * @typedef {object} PolygonShadows
+ * @prop {ShadowProjection} shadowProjection
+ * @prop {Shadow[]} shadows
+ * @prop {PIXI.Polygon[]} combined
+ * @prop {Set<Edge>} limitedEdges
+ * @prop {Set<Edge>} normalEdges
+ */
+
+/**
+ * Build the polygon shadows object for a sweep
+ * @param {ClockwisePolygonSweep} sweep
+ * @returns {PolygonShadows}
+ */
+function _constructPolygonShadowsObject(sweep) {
+  const ev = sweep[MODULE_ID] ??= {};
+  if ( ev.polygonShadows ) {
+    const evS = ev.polygonShadows;
+    evS.shadows.length = 0;
+    evS.combined.length = 0;
+    evS.limitedEdges.clear();
+    evS.normalEdges.clear();
+
+  } else {
+    ev.polygonShadows = {
+      shadowProjection: new ShadowProjection(new Plane(), sweep.config.source),
+      shadows: [],             /** @type {Shadow[]} */
+      combined: [],            /** @type {PIXI.Polygon[]} */
+      limitedEdges: new Set(), /** @type {Set<Edge>} */
+      normalEdges: new Set()   /** @type {Set<Edge>} */
+    };
+  }
+  return ev.polygonShadows;
+}
+
+/**
+ * Construct a shadow for an edge.
+ * @param {Edge} edge
+ * @param {ShadowProjection} proj
+ * @returns {Shadow|null}
+ */
+function _shadowForEdge(edge, proj) {
+  const edgePoints = edgePointsForEdge(edge, { finite: true });
+  const shadowPoints = proj._constructShadowPointsForWallPoints(edgePoints);
+  if ( !shadowPoints.length ) return null;
+  return new Shadow(shadowPoints);
+}
+
+/**
+ * Construct limited edge (terrain wall) shadows
+ * @param {PolygonShadows} evS
+ * @param {RenderedEffectSource} source
+ */
+function _constructLimitedEdgeShadows(evS, source) {
+  if ( evS.limitedEdges.size < 2 ) return;
+  // Temporarily cache the edge points
+  evS.limitedEdges.forEach(e => {
+    e._elevatedvision ??= {};
+    e._elevatedvision.edgePoints = edgePointsForEdge(e, { finite: true });
+  });
+
+  // For each limited edge, determine what edges block the source in relation to it.
+  const sourceOrigin = Point3d.fromPointSource(source);
+  for ( const e of evS.limitedEdges ) {
+    const blockingEdges = filterPotentialBlockingEdges(
+      e._elevatedvision.edgePoints,
+      evS.limitedEdges,
+      sourceOrigin);
+    blockingEdges.delete(e);
+
+    if ( blockingEdges.size ) {
+      const shadowWPts = evS.shadowProjection._constructShadowPointsForWallPoints(e._elevatedvision.edgePoints);
+      if ( !shadowWPts.length ) continue;
+      const shadowW = new Shadow(shadowWPts);
+
+      for ( const blockingEdge of blockingEdges ) {
+        const shadowBW = _shadowForEdge(blockingEdge, evS.shadowProjection);
+        if ( !shadowBW ) continue;
+        const shadowIX = shadowW.intersectPolygon(shadowBW)[0];
+        if ( shadowIX && shadowIX.points.length > 5 ) evS.shadows.push(shadowIX);
+      }
+    }
+  }
+}
+
+/**
+ * Construct normal edge shadows
+ * @param {PolygonShadows} evS
+ */
+function _constructNormalEdgeShadows(evS) {
+  for ( const e of evS.normalEdges ) {
+    const shadow = _shadowForEdge(e, evS.shadowProjection);
+    if ( !shadow ) continue;
+    evS.shadows.push(shadow);
+  }
+}
 
 /**
  * From point of view of a source (light or vision observer), is the wall underneath the tile?
