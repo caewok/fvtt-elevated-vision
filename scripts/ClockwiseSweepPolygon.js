@@ -1,19 +1,18 @@
 /* globals
 canvas,
-CONST,
-PIXI,
+ClipperLib,
 CONFIG,
+CONST,
 foundry,
+PIXI,
 PointSourcePolygon
 */
 "use strict";
 
-import { MODULE_ID, OTHER_MODULES } from "./const.js";
+import { MODULE_ID, OTHER_MODULES, FLAGS } from "./const.js";
 import { lineSegment3dWallIntersection, combineBoundaryPolygonWithHoles } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 import { Shadow, ShadowProjection } from "./geometry/Shadow.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
-import { Plane } from "./geometry/3d/Plane.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 
 export const PATCHES = {};
@@ -78,10 +77,23 @@ function _compute(wrapped) {
 
   const TM = OTHER_MODULES.TERRAIN_MAPPER;
   const sceneGroundE = TM.ACTIVE ? (canvas.scene.getFlag(TM.KEY, TM.BACKGROUND_ELEVATION) || 0) : 0;
+  const ClipperPaths = CONFIG.GeometryLib.ClipperPaths;
+  const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
+  const { Point3d, Plane } = CONFIG.GeometryLib.threeD;
 
-  if ( sourceE >= sceneGroundE ) edges = edges.filter(e => edgeMaxTopE(e) >= sceneGroundE);
-  else edges = edges.filter(e => edgeMinBottomE(e) <= sceneGroundE); // Source below ground; drop tiles above
-
+  // Locate all regions that block vision.
+  // Sort from lowest to highest elevation, including the scene background "region".
+  // Construct the shadow polygon for each and combine.
+  // If the region is above the source, simply shadow its polygon(s)
+  // If the region is below the source, apply shadows to its plane.
+  // TODO: Handle ramps and steps.
+  const blockingRegions = canvas.regions.placeables
+    .filter(r => r.document.getFlag(MODULE_ID, FLAGS.BLOCKS_VISION))
+    .map(r => {
+      return { paths: ClipperPaths.fromPolygons(r.polygons), maxE: maxRegionElevation(r) };
+    });
+  blockingRegions.push({ paths: canvas.scene[MODULE_ID].sceneBackgroundRegion, maxE: sceneGroundE });
+  blockingRegions.sort((a, b) => a.maxE - b.maxE);
 
   const evS = _constructPolygonShadowsObject(sweep);
   const sourceType = source.constructor.sourceType;
@@ -91,15 +103,55 @@ function _compute(wrapped) {
   });
   if ( !evS.limitedEdges.size && !evS.normalEdges.size) return;
 
-  // Store each shadow individually
-  _constructLimitedEdgeShadows(evS, source);
-  _constructNormalEdgeShadows(evS);
+  // Determine all the shadows in the scene.
+  let shadowPath = new ClipperPaths(); // Empty path.
+  for ( const blockingRegion of blockingRegions ) {
+    if ( blockingRegion.maxE > sourceE ) {
+      // Region top is above the source, so it is totally in shadow.
+      // Remove the area for this region from the sweep shape.
+      shadowPath.union(blockingRegion.paths);
+      continue;
+    }
 
-  if ( !evS.shadows.length ) return;
+    // Add back this region so shadows specific to its plane can be calculated.
+    shadowPath = blockingRegion.paths.diffPaths(shadowPath);
 
-  // Combine the shadows and trim to be within the LOS
-  // We want one or more LOS polygons along with non-overlapping holes.
-  evS.combinedShadows = combineBoundaryPolygonWithHoles(sweep, evS.shadows);
+    // TODO: Handle ramps
+    const ptOnPlane = new Point3d(0, 0, gridUnitsToPixels(blockingRegion.maxE));
+    const normal = new Point3d(0, 0, 1);
+    evS.shadowProjection = new ShadowProjection(new Plane(ptOnPlane, normal), sweep.config.source);
+
+    // Store each shadow individually
+    evS.shadows.length = 0;
+    _constructLimitedEdgeShadows(evS, source);
+    _constructNormalEdgeShadows(evS);
+
+    // Combine the shadows
+    // Use positive fill so any overlap is filled.
+    const regionShadows = ClipperPaths.fromPolygons(evS.shadows);
+
+    // Get the shadows that intersect the region shape only.
+    const regionShadowsTrimmed = ClipperPaths.clip(blockingRegion.paths, regionShadows, {
+      clipType: ClipperLib.ClipType.ctIntersection,
+      subjFillType: ClipperLib.PolyFillType.pftPositive, // {pftEvenOdd: 0, pftNonZero: 1, pftPositive: 2, pftNegative: 3
+      clipFillType: ClipperLib.PolyFillType.pftPositive
+    });
+
+    // Add back into the shadow path
+    if ( regionShadowsTrimmed.paths.length ) shadowPath = regionShadowsTrimmed.combine(shadowPath);
+  }
+
+  // Invert the shadow path, keeping within the bounds of the sweep.
+  // The sweep fills in the visible portions; shadows are effectively holes.
+  const sweepPath = ClipperPaths.fromPolygons([sweep]);
+  const sweepWithShadows = ClipperPaths.clip(sweepPath, shadowPath, {
+    clipType: ClipperLib.ClipType.ctDifference,
+    subjFillType: ClipperLib.PolyFillType.pftPositive, // {pftEvenOdd: 0, pftNonZero: 1, pftPositive: 2, pftNegative: 3
+    clipFillType: ClipperLib.PolyFillType.pftPositive
+  });
+
+  const shadows = shadowPath.toPolygons();
+  evS.combinedShadows = sweepWithShadows.toPolygons();
 
   // Trigger so that PIXI.Graphics.drawShape draws the holes.
   if ( evS.combinedShadows.length ) sweep._evPolygons = evS.combinedShadows;
@@ -132,7 +184,7 @@ function _constructPolygonShadowsObject(sweep) {
 
   } else {
     ev.polygonShadows = {
-      shadowProjection: new ShadowProjection(new Plane(), sweep.config.source),
+      shadowProjection: new ShadowProjection(new CONFIG.GeometryLib.threeD.Plane(), sweep.config.source),
       shadows: [],             /** @type {Shadow[]} */
       combined: [],            /** @type {PIXI.Polygon[]} */
       limitedEdges: new Set(), /** @type {Set<Edge>} */
@@ -181,7 +233,7 @@ function _constructLimitedEdgeShadows(evS, source) {
   });
 
   // For each limited edge, determine what edges block the source in relation to it.
-  const sourceOrigin = Point3d.fromPointSource(source);
+  const sourceOrigin = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
   for ( const e of evS.limitedEdges ) {
     const blockingEdges = filterPotentialBlockingEdges(
       e._elevatedvision.edgePoints,
@@ -287,6 +339,7 @@ function edgePointsForEdge(edge, { finite = false } = {}) {
   }
 
   const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
+  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
   const obj = {
     a: {
       top: new Point3d(edge.a.x, edge.a.y, gridUnitsToPixels(e.a.top ?? MAX)),
@@ -365,6 +418,7 @@ PATCHES.POLYGONS.METHODS = { _drawShadows };
 
 
 export function testWallsForIntersections(origin, destination, walls, mode, type, testTerrain = true) {
+  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
   origin = new Point3d(origin.x, origin.y, origin.z);
   destination = new Point3d(destination.x, destination.y, destination.z);
 
@@ -439,7 +493,16 @@ function filterPotentialBlockingEdges(edgePoints, edgeArr, sourceOrigin) {
  */
 function numPositiveDigits(n) { return (Math.log(n) * Math.LOG10E) + 1 | 0; }
 
-
+/**
+ * Top elevation for a region
+ * @param {Region} region
+ * @returns {EdgeElevation}
+ */
+function maxRegionElevation(region) {
+  const TM = OTHER_MODULES.TERRAIN_MAPPER;
+  if ( TM.ACTIVE && region[TM.KEY].isElevated ) return region[TM.KEY].plateauElevation;
+  return region.document.elevation.top ?? Number.POSITIVE_INFINITY;
+}
 
 // ----- Wall Tracing Enhancements to Sweep ----- //
 /**
@@ -450,6 +513,7 @@ function numPositiveDigits(n) { return (Math.log(n) * Math.LOG10E) + 1 | 0; }
  * @param {object} config
  */
 function initialize(wrapper, origin, config) {
+  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
   const sourceOrigin = config.source ? Point3d.fromPointSource(config.source) : new Point3d(origin.x, origin.y, 0);
   const encompassingPolygon = SCENE_GRAPH.encompassingPolygon(sourceOrigin, config.type);
   if ( encompassingPolygon ) {
@@ -461,3 +525,21 @@ function initialize(wrapper, origin, config) {
 
 PATCHES.SWEEP.WRAPS = { initialize };
 
+
+function drawClipperPath(cp, { graphics = canvas.controls.debug, color = CONFIG.GeometryLib.Draw.COLORS.black, width = 1, fill, fillAlpha = 1 } = {}) {
+    if ( !fill ) fill = color;
+    const polys = cp.toPolygons();
+
+    // Sort so holes are last. Note that PIXI.Graphics cannot draw multilevel holes. (fill inside a hole inside a fill)
+    // Nor can it handle a hole that overlaps the edge of a fill.
+    polys.sort((a, b) => a.isHole - b.isHole);
+    if ( !polys.length || polys[0].isHole ) return; // All the polys are holes.
+
+    graphics.beginFill(fill, fillAlpha);
+    for ( const poly of polys ) {
+      if ( poly.isHole ) graphics.beginHole();
+      graphics.lineStyle(width, color).drawShape(poly);
+      if ( poly.isHole ) graphics.endHole();
+    }
+    graphics.endFill();
+  }

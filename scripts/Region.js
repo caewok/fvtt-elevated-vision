@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 CONST,
 foundry,
 PIXI
@@ -224,17 +225,17 @@ function sceneBackgroundEdges(pits) {
       sight: CONST.WALL_SENSE_TYPES.NORMAL,
       sound: CONST.WALL_SENSE_TYPES.NORMAL,
       threshold: undefined,
-      object: region,
+      object: pit,
       id: pit.id
     };
     pit.polygons.forEach((poly, idx) => {
       // TODO: For holes, flip direction option.
       opts.id = `${pit.id}_poly${idx}`;
       const edges = polygonToEdges(poly, opts);
-      addedEdges.push(...edges);
+      pitEdges.push(...edges);
     });
   }
-  return edges;
+  return pitEdges;
 }
 
 /**
@@ -244,8 +245,7 @@ function sceneBackgroundEdges(pits) {
  */
 function sceneBackgroundRegion() {
   const ClipperPaths = CONFIG.GeometryLib.ClipperPaths;
-  const TM = OTHER_MODULES.TERRAIN_MAPPER;
-  pits ??= regionPits();
+  const pits = regionPits();
   const scenePath = ClipperPaths.fromPolygons([canvas.dimensions.rect.toPolygon()]);
   if ( !pits.length ) return scenePath;
 

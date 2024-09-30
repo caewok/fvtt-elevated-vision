@@ -22,7 +22,7 @@ function drawShape(wrapped, shape) {
 
   // Sort so holes are last.
   const polys = shape._evPolygons;
-  polys._evPolygons.sort((a, b) => a.isHole - b.isHole);
+  polys.sort((a, b) => a.isHole - b.isHole);
   if ( !polys.length || polys[0].isHole ) return this; // All the polys are holes.
   for ( const poly of polys ) {
     if ( poly.isHole ) {
