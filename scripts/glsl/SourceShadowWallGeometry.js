@@ -306,11 +306,11 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    *   Angle in degrees outside the "V" if the point is tangential.
    */
   sharedEndpointAngle(edge, linkedEdge, sharedEndpointName) {
-    if ( !(this._triEdgeMap.has(linkedEdge.id) || this._includeWall(linkedEdge)) ) return -1; // Quicker to check the map first.
+    if ( !(this._triEdgeMap.has(linkedEdge.id) || this._includeEdge(linkedEdge)) ) return -1; // Quicker to check the map first.
 
     const sharedPt = edge[sharedEndpointName];
     const otherEdgePt = edge[flipEdgeLabel[sharedEndpointName]]; // Flip: a --> b, b --> a.
-    const otherLinkedPt = linkedEdge.edge.a.key === sharedPt.key ? linkedEdge.b : linkedEdge.a;
+    const otherLinkedPt = linkedEdge.a.key === sharedPt.key ? linkedEdge.b : linkedEdge.a;
     const sourceOrigin = this.sourceOrigin;
     if ( !tangentToV(otherEdgePt, sharedPt, otherLinkedPt, sourceOrigin) ) return -2;
     return pointVTest(otherEdgePt, sharedPt, otherLinkedPt, sourceOrigin);
@@ -475,7 +475,7 @@ sourceOrigin = geom.sourceOrigin;
     // Theoretically, could have a link update even for a wall we are not including.
     const linkUpdated = this._checkAddedEdgeLinks(edge, update);
     if ( this._triEdgeMap.has(edge.id) ) return linkUpdated;
-    if ( !this._includeWall(edge) ) return linkUpdated;
+    if ( !this._includeEdge(edge) ) return linkUpdated;
 
     const idxToAdd = this._triEdgeMap.size;
 
