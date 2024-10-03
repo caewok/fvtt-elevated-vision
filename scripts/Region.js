@@ -35,7 +35,7 @@ function canvasReady() {
     ...canvas.effects.lightSources,
     ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
   ] : [];
-  sources.forEach(src => src.refreshEdges());
+  sources.forEach(src => src.refreshEdges?.());
 }
 
 /**
