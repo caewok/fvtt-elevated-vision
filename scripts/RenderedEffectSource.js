@@ -187,18 +187,16 @@ function destroy(wrapped) {
   return wrapped();
 }
 
-
+const ASSETS = [
+  "shadowMesh",
+  "shadowTerrainMesh",
+  "graphicsFOV",
+  "shadowRenderer",
+  "shadowVisionMask",
+  "wallGeometry"
+];
 function destroyEVAssets(ev) {
-  const assets = [
-    "shadowMesh",
-    "shadowTerrainMesh",
-    "graphicsFOV",
-    "shadowRenderer",
-    "shadowVisionMask",
-    "wallGeometry"
-  ];
-
-  for ( const asset of assets ) {
+  for ( const asset of ASSETS ) {
     if ( !ev[asset] ) continue;
     ev[asset].destroy();
     ev[asset] = undefined;
