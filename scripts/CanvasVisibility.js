@@ -343,7 +343,7 @@ async function _tearDown(wrapped, options) {
   return wrapped(options);
 }
 
-// PATCHES.WEBGL.WRAPS = { _tearDown, refreshVisibility: refreshVisibility2 };
+PATCHES.WEBGL.WRAPS = { _tearDown, refreshVisibility: refreshVisibility2 };
 
 
 /**
@@ -419,7 +419,7 @@ function visibilityRefresh(cv) {
   }
 }
 
-// PATCHES.WEBGL.HOOKS = { visibilityRefresh };
+PATCHES.WEBGL.HOOKS = { visibilityRefresh };
 
 
 /**
