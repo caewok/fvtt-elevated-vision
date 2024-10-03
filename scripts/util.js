@@ -448,8 +448,8 @@ export function getLinkedEdges(edge) {
   canvas.edges.forEach(e => {
     if ( e === edge ) return;
     const edgeKeys = new Set([edge.a.key, edge.b.key]);
-    if ( edgeKeys.has(keyA) ) linkedA.add(w);
-    else if ( edgeKeys.has(keyB) ) linkedB.add(w);
+    if ( edgeKeys.has(keyA) ) linkedA.add(e);
+    else if ( edgeKeys.has(keyB) ) linkedB.add(e);
   });
   return { linkedA, linkedB };
 }

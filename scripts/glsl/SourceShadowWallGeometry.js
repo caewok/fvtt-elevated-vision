@@ -114,7 +114,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const aThresholdRadius2 = []; // If within this radius squared of the light, ignore the wall.
 
     let triNumber = 0;
-    for ( const edge of edges ) {
+    for ( const edge of edges.values() ) {
       if ( !this._includeEdge(edge) ) continue;
       const {corner0, corner1 } = this.edgeCornerCoordinates(edge);
 
@@ -226,19 +226,21 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns { corner0: {PIXI.Point}, corner1: {PIXI.Point}, topZ: {number}, bottomZ: {number} }
    */
   edgeCornerCoordinates(edge) {
-    // TODO: Handle different a/b elevations.
-    let topZ = Number.POSITIVE_INFINITY;
-    let bottomZ = Number.NEGATIVE_INFINITY;
-    if ( edge.object instanceof Wall ) {
-      topZ = edge.object.topZ;
-      bottomZ = edge.object.bottomZ;
-    } else if ( edge[MODULE_ID] ) {
-      topZ = edge[MODULE_ID].topZ;
-      bottomZ = edge[MODULE_ID].bottomZ;
-    }
+    const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
+    const MAX_ELEV = 1e6;
 
-    const top = Math.min(topZ, 1e6);
-    const bottom = Math.max(bottomZ, -1e6);
+    // TODO: Handle different a/b elevations.
+    const edgeElev = edge.elevationLibGeometry;
+    let top = Math.max(
+      edgeElev.a.top ?? Number.POSITIVE_INFINITY,
+      edgeElev.b.top ?? Number.POSITIVE_INFINITY);
+    let bottom = Math.min(
+      edgeElev.a.bottom ?? Number.POSITIVE_INFINITY,
+      edgeElev.b.bottom ?? Number.POSITIVE_INFINITY);
+    top = gridUnitsToPixels(top);
+    bottom = gridUnitsToPixels(bottom);
+    top = Math.min(MAX_ELEV, top);
+    bottom = Math.max(-MAX_ELEV, bottom);
 
     // Note if wall is bound to another.
     // Required to avoid light leakage due to penumbra in the shader.
@@ -306,11 +308,11 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    *   Angle in degrees outside the "V" if the point is tangential.
    */
   sharedEndpointAngle(edge, linkedEdge, sharedEndpointName) {
-    if ( !(this._triEdgeMap.has(linkedEdge.id) || this._includeWall(linkedEdge)) ) return -1; // Quicker to check the map first.
+    if ( !(this._triEdgeMap.has(linkedEdge.id) || this._includeEdge(linkedEdge)) ) return -1; // Quicker to check the map first.
 
     const sharedPt = edge[sharedEndpointName];
     const otherEdgePt = edge[flipEdgeLabel[sharedEndpointName]]; // Flip: a --> b, b --> a.
-    const otherLinkedPt = linkedEdge.edge.a.key === sharedPt.key ? linkedEdge.b : linkedEdge.a;
+    const otherLinkedPt = linkedEdge.a.key === sharedPt.key ? linkedEdge.b : linkedEdge.a;
     const sourceOrigin = this.sourceOrigin;
     if ( !tangentToV(otherEdgePt, sharedPt, otherLinkedPt, sourceOrigin) ) return -2;
     return pointVTest(otherEdgePt, sharedPt, otherLinkedPt, sourceOrigin);
@@ -475,7 +477,7 @@ sourceOrigin = geom.sourceOrigin;
     // Theoretically, could have a link update even for a wall we are not including.
     const linkUpdated = this._checkAddedEdgeLinks(edge, update);
     if ( this._triEdgeMap.has(edge.id) ) return linkUpdated;
-    if ( !this._includeWall(edge) ) return linkUpdated;
+    if ( !this._includeEdge(edge) ) return linkUpdated;
 
     const idxToAdd = this._triEdgeMap.size;
 
