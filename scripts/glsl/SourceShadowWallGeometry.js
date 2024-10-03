@@ -114,7 +114,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const aThresholdRadius2 = []; // If within this radius squared of the light, ignore the wall.
 
     let triNumber = 0;
-    for ( const edge of edges ) {
+    for ( const edge of edges.values() ) {
       if ( !this._includeEdge(edge) ) continue;
       const {corner0, corner1 } = this.edgeCornerCoordinates(edge);
 
