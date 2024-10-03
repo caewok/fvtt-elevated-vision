@@ -199,7 +199,7 @@ function regionPits() {
   const TM = OTHER_MODULES.TERRAIN_MAPPER;
   const sceneGroundE = TM.ACTIVE ? (canvas.scene.getFlag(TM.KEY, TM.BACKGROUND_ELEVATION) || 0) : 0;
   return canvas.regions.placeables.filter(r => {
-    const regionTopE = ( TM.ACTIVE & r[TM.KEY].isElevated ) ? r[TM.KEY].plateauElevation : r.document.elevation.top;
+    const regionTopE = ( TM.ACTIVE && r[TM.KEY].isElevated ) ? r[TM.KEY].plateauElevation : r.document.elevation.top;
     if ( regionTopE == null ) return false;
     return regionTopE < sceneGroundE;
   });
