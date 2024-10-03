@@ -184,7 +184,7 @@ function destroy(wrapped) {
   const ev = this[MODULE_ID];
   if ( !ev ) return wrapped();
   destroyEVAssets(ev);
-  return wrapped;
+  return wrapped();
 }
 
 
