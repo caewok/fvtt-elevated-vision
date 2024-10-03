@@ -1,6 +1,6 @@
 /* globals
 canvas,
-GlobalLightSource,
+foundry
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -20,9 +20,11 @@ import { PATCHES as PATCHES_CanvasEdges } from "./CanvasEdges.js";
 import { PATCHES as PATCHES_PIXI_LegacyGraphics } from "./PIXI_LegacyGraphics.js";
 import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
 import { PATCHES as PATCHES_PointLightSource } from "./PointLightSource.js";
-import { PATCHES as PATCHES_RenderedEffectSource } from "./RenderedEffectSource.js";
 import { PATCHES as PATCHES_PointVisionSource } from "./PointVisionSource.js";
+import { PATCHES as PATCHES_RenderedEffectSource } from "./RenderedEffectSource.js";
+import { PATCHES as PATCHES_Region } from "./Region.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
+import { PATCHES as PATCHES_RegionConfig } from "./RegionConfig.js";
 
 import {
   PATCHES_DetectionMode,
@@ -61,7 +63,9 @@ export const PATCHES = {
   "foundry.canvas.sources.GlobalLightSource": PATCHES_GlobalLightSource,
   "foundry.canvas.sources.PointLightSource": PATCHES_PointLightSource,
   "PIXI.LegacyGraphics": PATCHES_PIXI_LegacyGraphics,
+  "foundry.applications.sheets.RegionConfig": PATCHES_RegionConfig,
   "foundry.canvas.sources.RenderedEffectSource": PATCHES_RenderedEffectSource,
+  Region: PATCHES_Region,
   Token: PATCHES_Token,
   "foundry.canvas.sources.PointVisionSource": PATCHES_PointVisionSource,
   Wall: PATCHES_Wall
@@ -72,6 +76,7 @@ PATCHER.addPatchesFromRegistrationObject(PATCHES);
 
 export function initializePatching() {
   PATCHER.registerGroup("BASIC");
+  PATCHER.registerGroup("REGIONS");
   registerPatchesForSettings();
 }
 

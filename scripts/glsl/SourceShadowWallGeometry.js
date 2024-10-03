@@ -183,7 +183,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const externalRadius = 0;
     const radius = this.source.radius;
     const origin = this.source;
-    const d = edge.threshold[this.sourceType];
+    const d = edge.threshold?.[this.sourceType];
     if ( !d ) return { inside: radius, outside: radius };
     const proximity = edge[this.sourceType] === CONST.WALL_SENSE_TYPES.PROXIMITY;
 

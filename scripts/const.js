@@ -1,4 +1,6 @@
 /* globals
+game,
+Hooks
 */
 "use strict";
 
@@ -9,12 +11,8 @@ export const LEVELS_MODULE_ID = "levels";
 // Minimum absolute difference of floats before they are considered equal
 export const EPSILON = 1e-08;
 
-export const MODULES_ACTIVE = {
-  WALL_HEIGHT: false,
-  PERFECT_VISION: false
-};
-
 export const FLAGS = {
+  BLOCKS_VISION: "blocksVision",
   ELEVATION_IMAGE: "elevationImage",
   ELEVATION: "elevation",
   LIGHT_SIZE: "lightSize",
@@ -31,10 +29,10 @@ export const FLAGS = {
       AVERAGE: "elevation_average"
     },
     LABELS: {
-      "elevation_point": "elevatedvision.tokenconfig.elevation-algorithm.elevation_point",
-      "elevation_points_close": "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_close",
-      "elevation_points_spread": "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_spread",
-      "elevation_average": "elevatedvision.tokenconfig.elevation-algorithm.elevation_average"
+      elevation_point: "elevatedvision.tokenconfig.elevation-algorithm.elevation_point",
+      elevation_points_close: "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_close",
+      elevation_points_spread: "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_spread",
+      elevation_average: "elevatedvision.tokenconfig.elevation-algorithm.elevation_average"
     }
   }
 };
@@ -44,7 +42,8 @@ export const TEMPLATES = {
   AMBIENT_SOURCE: `modules/${MODULE_ID}/templates/ambient-source-config.html`,
   AMBIENT_SOURCE_PARTIAL: `modules/${MODULE_ID}/templates/ambient-source-config-partial.html`,
   ELEVATION_STEP: `modules/${MODULE_ID}/templates/elevation-step-controls.html`,
-  SCENE: `modules/${MODULE_ID}/templates/scene-elevation-config.html`
+  SCENE: `modules/${MODULE_ID}/templates/scene-elevation-config.html`,
+  REGION: `modules/${MODULE_ID}/templates/region-config.html`
 };
 
 // Icons displayed in config tabs.
@@ -52,8 +51,12 @@ export const ICONS = {
   MODULE: "fa-solid fa-hurricane"
 };
 
+// Track certain modules that complement features of this module.
+export const OTHER_MODULES = {
+  TERRAIN_MAPPER: { ACTIVE: false, KEY: "terrainmapper", BACKGROUND_ELEVATION: "backgroundElevation" }
+};
+
 // Hook init b/c game.modules is not initialized at start.
 Hooks.once("init", function() {
-  MODULES_ACTIVE.WALL_HEIGHT = game.modules.get("wall-height")?.active;
-  MODULES_ACTIVE.PERFECT_VISION = game.modules.get("perfect-vision")?.active;
+  for ( const obj of Object.values(OTHER_MODULES) ) obj.ACTIVE = game.modules.get(obj.KEY)?.active;
 });

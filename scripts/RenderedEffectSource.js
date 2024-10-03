@@ -565,7 +565,7 @@ function _testEdgeInclusion(edge, origin) {
   if ( side === edge.dir ) return false;
 
   // Ignore non-attenuated threshold walls where the threshold applies.
-  if ( !edge.threshold.attenuation && this.thresholdApplies(edge) ) return false;
+  if ( !edge.threshold?.attenuation && this.thresholdApplies(edge) ) return false;
 
   return true;
 }
