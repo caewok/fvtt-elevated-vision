@@ -226,19 +226,21 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns { corner0: {PIXI.Point}, corner1: {PIXI.Point}, topZ: {number}, bottomZ: {number} }
    */
   edgeCornerCoordinates(edge) {
-    // TODO: Handle different a/b elevations.
-    let topZ = Number.POSITIVE_INFINITY;
-    let bottomZ = Number.NEGATIVE_INFINITY;
-    if ( edge.object instanceof Wall ) {
-      topZ = edge.object.topZ;
-      bottomZ = edge.object.bottomZ;
-    } else if ( edge[MODULE_ID] ) {
-      topZ = edge[MODULE_ID].topZ;
-      bottomZ = edge[MODULE_ID].bottomZ;
-    }
+    const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
+    const MAX_ELEV = 1e6;
 
-    const top = Math.min(topZ, 1e6);
-    const bottom = Math.max(bottomZ, -1e6);
+    // TODO: Handle different a/b elevations.
+    const edgeElev = edge.elevationLibGeometry;
+    let top = Math.max(
+      edgeElev.a.top ?? Number.POSITIVE_INFINITY,
+      edgeElev.b.top ?? Number.POSITIVE_INFINITY);
+    let bottom = Math.min(
+      edgeElev.a.bottom ?? Number.POSITIVE_INFINITY,
+      edgeElev.b.bottom ?? Number.POSITIVE_INFINITY);
+    top = gridUnitsToPixels(top);
+    bottom = gridUnitsToPixels(bottom);
+    top = Math.min(MAX_ELEV, top);
+    bottom = Math.max(-MAX_ELEV, bottom);
 
     // Note if wall is bound to another.
     // Required to avoid light leakage due to penumbra in the shader.
