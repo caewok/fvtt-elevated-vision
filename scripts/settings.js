@@ -41,24 +41,11 @@ export const SETTINGS = {
     LIGHT_SIZE: "point-light-size"
   },
 
-  ELEVATION_MEASUREMENT: {
-    ALGORITHM: "elevation-measurement",
-    TYPES: {
-      POINT: "elevation_point",
-      POINTS_CLOSE: "elevation_points_close",
-      POINTS_SPREAD: "elevation_points_spread",
-      AVERAGE: "elevation_average"
-    }
-  },
-
   TEST_VISIBILITY: "test-visibility",
   LIGHTS_FULL_PENUMBRA: "lights-full-penumbra",
   // VISION_USE_SHADER: "vision-use-shader",  // Deprecated
-  AUTO_ELEVATION: "auto-change-elevation",
   // AUTO_AVERAGING: "auto-change-elevation.averaging", // Deprecated
   CLOCKWISE_SWEEP: "enhance-cw-sweep",
-  FLY_BUTTON: "add-fly-button",
-  FLY_BUTTON_ENABLED: "fly-button-enabled",
   ELEVATION_MINIMUM: "elevationmin",
   ELEVATION_INCREMENT: "elevationstep",
   CHANGELOG: "changelog"
@@ -80,7 +67,6 @@ export function defaultSceneSetting(value) {
   switch ( value ) {
     case Settings.KEYS.ELEVATION_MINIMUM: return Settings.get(value) ?? 0;
     case Settings.KEYS.ELEVATION_INCREMENT: return Settings.get(value) ?? 1;
-    case Settings.KEYS.AUTO_ELEVATION: return Settings.get(value) ?? true;
     case Settings.KEYS.SHADING.ALGORITHM: return Settings.get(value) ?? Settings.KEYS.SHADING.TYPES.POLYGONS;
   }
 }
@@ -168,45 +154,6 @@ export class Settings extends ModuleSettingsAbstract {
       type: Number
     });
 
-    register(KEYS.AUTO_ELEVATION, {
-      name: localize(`${KEYS.AUTO_ELEVATION}.name`),
-      hint: localize(`${KEYS.AUTO_ELEVATION}.hint`),
-      scope: "world",
-      config: true,
-      default: true,
-      type: Boolean,
-      requiresReload: false,
-      onChange: reloadTokenControls
-    });
-
-    register(KEYS.FLY_BUTTON, {
-      name: localize(`${KEYS.FLY_BUTTON}.name`),
-      hint: localize(`${KEYS.FLY_BUTTON}.hint`),
-      scope: "user",
-      config: true,
-      default: true,
-      type: Boolean,
-      requiresReload: false,
-      onChange: reloadTokenControls
-    });
-
-    const ELEV_TYPES = KEYS.ELEVATION_MEASUREMENT.TYPES;
-    register(KEYS.ELEVATION_MEASUREMENT.ALGORITHM, {
-      name: localize(`${KEYS.ELEVATION_MEASUREMENT.ALGORITHM}.name`),
-      hint: localize(`${KEYS.ELEVATION_MEASUREMENT.ALGORITHM}.hint`),
-      scope: "world",
-      config: true,
-      default: ELEV_TYPES.POINTS_CLOSE,
-      type: String,
-      requiresReload: false,
-      choices: {
-        [ELEV_TYPES.POINT]: localize(`${ELEV_TYPES.POINT}`),
-        [ELEV_TYPES.POINTS_CLOSE]: localize(`${ELEV_TYPES.POINTS_CLOSE}`),
-        [ELEV_TYPES.POINTS_SPREAD]: localize(`${ELEV_TYPES.POINTS_SPREAD}`),
-        [ELEV_TYPES.AVERAGE]: localize(`${ELEV_TYPES.AVERAGE}`)
-      }
-    });
-
     if ( game.modules.get("color-picker")?.active ) {
       ColorPicker.register(MODULE_ID, KEYS.COLOR.MIN, {
         name: localize(`${KEYS.COLOR.MIN}.name`),
@@ -281,14 +228,6 @@ export class Settings extends ModuleSettingsAbstract {
       config: true,
       default: false,
       requiresReload: true,
-      type: Boolean
-    });
-
-    register(KEYS.FLY_BUTTON_ENABLED, {
-      scope: "user",
-      config: false,
-      default: false,
-      requiresReload: false,
       type: Boolean
     });
   }

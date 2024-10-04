@@ -29,8 +29,6 @@ import { ElevationLayer } from "./ElevationLayer.js";
 // Settings, to toggle whether to change elevation on token move
 import { Settings, getSceneSetting, setSceneSetting } from "./settings.js";
 
-import { updateFlyTokenControl } from "./scenes.js";
-
 // Other self-executing hooks
 import "./changelog.js";
 import "./controls.js";
@@ -157,7 +155,6 @@ Hooks.on("canvasInit", function(_canvas) {
   if ( !canvas.elevation ) return;
   canvas.elevation.initialize();
   registerPatchesForSceneSettings();
-  updateFlyTokenControl();
 });
 
 Hooks.on("canvasReady", function() {
@@ -186,13 +183,7 @@ Hooks.on("3DCanvasToggleMode", function(isOn) {
 });
 
 async function disableScene() {
-  const autoelevateDisabled = getSceneSetting(Settings.KEYS.AUTO_ELEVATION);
   const shadowsDisabled = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) !== Settings.KEYS.SHADING.TYPES.NONE;
-
-  if ( autoelevateDisabled ) {
-    await setSceneSetting(Settings.KEYS.AUTO_ELEVATION, false);
-    updateFlyTokenControl(false);
-  }
   if ( shadowsDisabled ) {
     await setSceneSetting(Settings.KEYS.SHADING.ALGORITHM, Settings.KEYS.SHADING.TYPES.NONE);
 
@@ -200,8 +191,8 @@ async function disableScene() {
     // await canvas.draw(canvas.scene);
   }
 
-  if ( autoelevateDisabled || shadowsDisabled ) {
-    ui.notifications.notify("Elevated Vision autoelevate and features for the scene disabled for compatibility with 3D Canvas.");
+  if ( shadowsDisabled ) {
+    ui.notifications.notify("Elevated Vision features for the scene disabled for compatibility with 3D Canvas.");
   }
 }
 
