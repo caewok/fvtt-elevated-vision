@@ -430,38 +430,6 @@ export class WebGLShadows {
   }
 
   /**
-   * Return the top and bottom elevation for an edge.
-   * @param {Edge} edge
-   * @returns {object}
-   *   - @prop {number} topE      Elevation in grid units
-   *   - @prop {number} bottomE   Elevation in grid units
-   */
-  static _edgeElevationE(edge) {
-    // TODO: Handle elevation for ramps where walls are not equal
-    const { a, b } = edge.elevationLibGeometry;
-    const topE = Math.max(
-      a.top ?? Number.POSITIVE_INFINITY,
-      b.top ?? Number.POSITIVE_INFINITY);
-    const bottomE = Math.min(
-      a.bottom ?? Number.NEGATIVE_INFINITY,
-      b.bottom ?? Number.NEGATIVE_INFINITY);
-    return { topE, bottomE };
-  }
-
-  /**
-   * Return the top and bottom elevation for an edge.
-   * @param {Edge} edge
-   * @returns {object}
-   *   - @prop {number} topZ      Elevation in base units
-   *   - @prop {number} bottomZ   Elevation in base units
-   */
-  static _edgeElevationZ(edge) {
-    const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
-    const { topE, bottomE } = this._edgeElevationE(edge);
-    return { topZ: gridUnitsToPixels(topE), bottomZ: gridUnitsToPixels(bottomE) };
-  }
-
-  /**
    * Comparable to PointSourcePolygon.prototype._testWallInclusion
    * Test for whether a given wall interacts with this source.
    * Used to filter walls in the quadtree in _getWalls
@@ -477,7 +445,7 @@ export class WebGLShadows {
     if ( !edge[type] || edge.isOpen ) return false;
 
     // TODO: Handle elevation for ramps where walls are not equal
-    const { topZ, bottomZ } = this.constructor._edgeElevationZ(edge);
+    const { topZ, bottomZ } = edgeElevationZ(edge);
 
     // If edge is entirely above the light, do not keep.
     const elevationZ = src.elevationZ;
@@ -956,7 +924,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     const { Point3d, Plane } = CONFIG.GeometryLib.threeD;
     const rayDir = testPt.subtract(origin);
     return edges.some(edge => {
-      const { topZ, bottomZ } = this.constructor._edgeElevationZ(edge);
+      const { topZ, bottomZ } = edgeElevationZ(edge);
       if ( !isFinite(topZ) && !isFinite(bottomZ) ) return true;
 
       // Build a vertical quad to represent the wall and intersect the ray against it.
@@ -1040,4 +1008,36 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     const collisionTest = o => this._testWallInclusion(o.t, azimuth, elevationAngle);
     return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
   }
+}
+
+  /**
+ * Return the top and bottom elevation for an edge.
+ * @param {Edge} edge
+ * @returns {object}
+ *   - @prop {number} topE      Elevation in grid units
+ *   - @prop {number} bottomE   Elevation in grid units
+ */
+export function edgeElevationE(edge) {
+  // TODO: Handle elevation for ramps where walls are not equal
+  const { a, b } = edge.elevationLibGeometry;
+  const topE = Math.max(
+    a.top ?? Number.POSITIVE_INFINITY,
+    b.top ?? Number.POSITIVE_INFINITY);
+  const bottomE = Math.min(
+    a.bottom ?? Number.NEGATIVE_INFINITY,
+    b.bottom ?? Number.NEGATIVE_INFINITY);
+  return { topE, bottomE };
+}
+
+/**
+ * Return the top and bottom elevation for an edge.
+ * @param {Edge} edge
+ * @returns {object}
+ *   - @prop {number} topZ      Elevation in base units
+ *   - @prop {number} bottomZ   Elevation in base units
+ */
+export function edgeElevationZ(edge) {
+  const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
+  const { topE, bottomE } = edgeElevationE(edge);
+  return { topZ: gridUnitsToPixels(topE), bottomZ: gridUnitsToPixels(bottomE) };
 }
