@@ -1,5 +1,6 @@
 /* globals
 canvas,
+foundry,
 GlobalLightSource,
 TokenDocument
 */
@@ -62,7 +63,8 @@ Draw = CONFIG.GeometryLib.Draw
 
 // see DetectionMode.prototype._testRange.
 function testWithinRadius(source, test) {
-  if ( source instanceof DirectionalLightSource || source instanceof foundry.canvas.sources.GlobalLightSource ) return true;
+  if ( source instanceof DirectionalLightSource
+    || source instanceof foundry.canvas.sources.GlobalLightSource ) return true;
   const radius = source.radius || source.data.externalRadius;
   const dx = test.point.x - source.x;
   const dy = test.point.y - source.y;
@@ -80,16 +82,3 @@ function testSourceAngle(source, test) {
   const a = Math.toDegrees(Math.atan2(dy, dx));
   return (((a - aMin) % 360) + 360) % 360 <= angle;
 }
-
-/**
- * Override DetectionModeTremor.prototype._canDetect
- * Use actual check for whether token is on the ground. Tiles count.
- */
-function _canDetect(visionSource, target) {
-  const tgt = target?.document;
-  if ( !(tgt instanceof TokenDocument) ) return false;
-  const calc = new canvas.elevation.TokenElevationCalculator(target);
-  return calc.isOnGround();
-}
-
-PATCHES_DetectionModeTremor.BASIC.OVERRIDES = { _canDetect };

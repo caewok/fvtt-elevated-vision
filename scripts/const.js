@@ -19,21 +19,6 @@ export const FLAGS = {
   DIRECTIONAL_LIGHT: {
     ENABLED: "directionalLight",
     SOLAR_ANGLE: "solarAngle"
-  },
-  ELEVATION_MEASUREMENT: {
-    ALGORITHM: "elevationMeasurement",
-    TYPES: {
-      POINT: "elevation_point",
-      POINTS_CLOSE: "elevation_points_close",
-      POINTS_SPREAD: "elevation_points_spread",
-      AVERAGE: "elevation_average"
-    },
-    LABELS: {
-      elevation_point: "elevatedvision.tokenconfig.elevation-algorithm.elevation_point",
-      elevation_points_close: "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_close",
-      elevation_points_spread: "elevatedvision.tokenconfig.elevation-algorithm.elevation_points_spread",
-      elevation_average: "elevatedvision.tokenconfig.elevation-algorithm.elevation_average"
-    }
   }
 };
 
