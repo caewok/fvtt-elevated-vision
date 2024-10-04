@@ -20,9 +20,6 @@
   "elevatedvision.settings.enhance-cw-sweep.name": "Enhance LOS calculation",
   "elevatedvision.settings.enhance-cw-sweep.hint": "Experimental. Uses the fill algorithm to provide a potential speed-up to the line-of-sight calculation used by vision, sound, and lighting. When the token or source is completely enclosed by a set of walls, this allows sweep to shortcut various calculations. Requires additional calculations when walls are created, updated, or destroyed. May be useful for very large dungeon scenes.",
 
-  "elevatedvision.settings.add-fly-button.name": "Add Token Fly control",
-  "elevatedvision.settings.add-fly-button.hint": "Add a control to the token toolbar that can be enabled or disabled to tell Elevated Vision when a token should be considered capable of flight. When the control is enabled, automatic token elevation will keep tokens above the ground when moved off a terrain or tile cliff greater than the token height.",
-
   "elevatedvision.settings.brush-size.name": "Fill by Pixel Brush Size",
   "elevatedvision.settings.brush-size.hint": "Set the size of the Fill by Pixel brush.",
 
