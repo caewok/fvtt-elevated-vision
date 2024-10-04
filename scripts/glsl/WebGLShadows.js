@@ -110,6 +110,8 @@ export class WebGLShadows {
    */
   #initialized = false;
 
+  get initialized() { return this.#initialized; }
+
   initializeShadows() {
     if ( this.#initialized ) return;
     this._initializeShadowGeometry();
@@ -503,6 +505,8 @@ export class WebGLShadows {
    * Destroy meshes, geometry, textures.
    */
   #destroyed = false;
+
+  get destroyed() { return this.#destroyed; }
 
   destroy() {
     if ( this.#destroyed ) return;
