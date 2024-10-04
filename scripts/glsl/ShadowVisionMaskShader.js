@@ -6,6 +6,7 @@ PIXI
 
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
+import { MODULE_ID } from "../const.js";
 
 
 export class ShadowVisionMaskShader extends AbstractEVShader {
@@ -84,7 +85,7 @@ void main() {
   static create(source, defaultUniforms = {}) {
     const radius = source.radius || source.data.externalRadius;
 
-    defaultUniforms.uShadowSampler = source.EVShadowTexture.baseTexture;
+    defaultUniforms.uShadowSampler = source[MODULE_ID].shadowTexture.baseTexture;
     defaultUniforms.uSourcePosition = [source.x, source.y];
     defaultUniforms.uSourceRadius2 = Math.pow(radius, 2);
 
@@ -189,7 +190,7 @@ void main() {
   };
 
   static create(source, defaultUniforms = {}) {
-    defaultUniforms.uShadowSampler = source.EVShadowTexture.baseTexture;
+    defaultUniforms.uShadowSampler = source[MODULE_ID].shadowTexture.baseTexture;
     return super.create(defaultUniforms);
   }
 
@@ -232,7 +233,7 @@ canvas.stage.removeChild(s)
 
 shadowShader = ShadowVisionMaskShader.create(rt);
 
-quadMesh = new EVQuadMesh(str.source.bounds, shadowShader);
+quadMesh = new EVQuadMesh(str.source[MODULE_ID].bounds, shadowShader);
 
 canvas.stage.addChild(quadMesh);
 canvas.stage.removeChild(quadMesh);

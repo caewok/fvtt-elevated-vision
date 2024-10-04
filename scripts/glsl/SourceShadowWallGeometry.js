@@ -216,7 +216,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns {boolean}   True if edge should be included
    */
   _includeEdge(edge) {
-    return this.source._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
+    return this.source[MODULE_ID]._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
   }
 
   /**
@@ -685,7 +685,7 @@ sourceOrigin = geom.sourceOrigin;
       }
     }
 
-    const edgesToAdd = this.source._getEdges().difference(edgesChecked);
+    const edgesToAdd = this.source[MODULE_ID]._getEdges().difference(edgesChecked);
     edgesToAdd.forEach(edge => {
       const wasUpdated = this.addEdge(edge, { update: false });
       updated ||= wasUpdated;
@@ -703,7 +703,7 @@ export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
     if ( !super._includeEdge(edge) ) return false;
 
     // Wall must be within the light radius.
-    if ( !this.source.bounds.lineSegmentIntersects(edge.a, edge.b, { inside: true }) ) return false;
+    if ( !this.source[MODULE_ID].bounds.lineSegmentIntersects(edge.a, edge.b, { inside: true }) ) return false;
 
     return true;
   }

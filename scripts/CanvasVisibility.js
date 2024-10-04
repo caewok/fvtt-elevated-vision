@@ -374,11 +374,13 @@ function visibilityRefresh(cv) {
 
   for ( const lightSource of canvas.effects.lightSources ) {
     if ( !lightSource.hasActiveLayer || (lightSource instanceof foundry.canvas.sources.GlobalLightSource) ) continue;
+    const ev = lightSource[MODULE_ID];
+    if ( !ev ) return;
 
     // Use the EV mask if available.
-    const mask = lightSource.EVVisionMask;
+    const mask = ev.shadowVisionMask;
     if ( !mask ) {
-      log(`refreshVisibility|lightSource.EVVisionMask not found for ${lightSource.object.id}`);
+      console.error(`refreshVisibility|lightSource.EVVisionMask not found for ${lightSource.object.id}`);
       continue;
     }
 
@@ -395,11 +397,13 @@ function visibilityRefresh(cv) {
 
   for ( const visionSource of canvas.effects.visionSources ) {
     if ( !visionSource.hasActiveLayer ) continue;
+    const ev = visionSource[MODULE_ID];
+    if ( !ev ) return;
 
-    const fovMask = visionSource.EVVisionFOVMask;
-    const losMask = visionSource.EVVisionMask;
+    const fovMask = ev.shadowFOVMask;
+    const losMask = ev.shadowVisionMask;
     if ( !(fovMask && losMask) ) {
-      log(`refreshVisibility|visionSource.EVVisionMask or EVVisionFOVMask not found for ${visionSource.object.id}`);
+      console.error(`refreshVisibility|visionSource.EVVisionMask or EVVisionFOVMask not found for ${visionSource.object.id}`);
       continue;
     }
 
