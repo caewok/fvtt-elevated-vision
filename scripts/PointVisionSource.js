@@ -57,7 +57,6 @@ for ( let i = 0; i < buff1.length; i += 12 ) {
 
 */
 
-
 // Methods related to VisionSource
 
 export const PATCHES = {};
@@ -76,11 +75,7 @@ function targetInShadow(target, testPoint) {
   return this[MODULE_ID].pointInShadow(testPoint);
 }
 
-
-PATCHES.VISIBILITY.METHODS = {
-  targetInShadow
-};
-
+PATCHES.VISIBILITY.METHODS = { targetInShadow };
 
 // ----- NOTE: Wraps -----
 
@@ -89,11 +84,8 @@ PATCHES.VISIBILITY.METHODS = {
  * Create/update the graphics used for the FOV.
  */
 function _createRestrictedPolygon(wrapped) {
-  const ev = this[MODULE_ID];
-  ev?.updateFOV?.();
+  this[MODULE_ID].updateFOV();
   return wrapped();
 }
 
-PATCHES.WEBGL.WRAPS = {
-  _createRestrictedPolygon
-};
+PATCHES.WEBGL.WRAPS = { _createRestrictedPolygon };

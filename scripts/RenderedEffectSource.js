@@ -5,6 +5,7 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "./const.js";
+import { log } from "./util.js";
 import { Draw } from "./geometry/Draw.js";
 import { WebGLShadows } from "./glsl/WebGLShadows.js";
 
@@ -158,11 +159,7 @@ PATCHES.POLYGONS.WRAPS = { _createShapes };
  */
 function _configure(wrapped, changes) {
   wrapped(changes);
-
-  // At this point, ev property should exist on source b/c of initialize shaders hook.
-  const ev = this[MODULE_ID];
-  if ( !ev ) return;
-  ev._updateShadowData(changes);
+  this[MODULE_ID]._updateShadowData(changes);
 }
 
 /**
@@ -170,8 +167,11 @@ function _configure(wrapped, changes) {
  * Destroy shadow meshes, geometry, textures.
  */
 function destroy(wrapped) {
-  const ev = this[MODULE_ID];
-  if ( ev ) ev.destroy();
+  // Don't rebuild just to delete, so check the underlying variable.
+  if ( this._elevatedvision ) {
+    this[MODULE_ID].destroy();
+    delete this._elevatedvision;
+  }
   return wrapped();
 }
 
@@ -187,27 +187,10 @@ PATCHES.WEBGL.WRAPS = {
  * Store as getter at source[MODULE_ID]
  */
 function webGLShadowsGetter() {
-  if ( this._elevatedvision ) return this._elevatedvision;
+  if ( this._elevatedvision && !this._elevatedvision.destroyed ) return this._elevatedvision;
   const ev = this._elevatedvision = WebGLShadows.fromSource(this);
   ev.initializeShadows();
   return ev;
 }
 
 PATCHES.WEBGL.GETTERS = { elevatedvision: webGLShadowsGetter };
-
-// NOTE: WebGL Hooks
-
-/**
- * Store a shadow texture for a given (rendered) source.
- * 1. Store wall geometry.
- * 2. Store a mesh with encoded shadow data.
- * 3. Render the shadow data to a texture.
- * @param {RenderedEffectSource} source
- */
-function initializeRenderedEffectSourceShaders(source) {
-  log("initializeRenderedEffectSourceShaders", source);
-//   const ev = this[MODULE_ID] ??= WebGLShadows.fromSource(source);
-//   ev.initializeShadows();
-}
-
-PATCHES.WEBGL.HOOKS = { initializeRenderedEffectSourceShaders };
