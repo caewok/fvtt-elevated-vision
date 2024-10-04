@@ -2,7 +2,6 @@
 Foundry v12 compatibility.
 Update libGeometry to v0.3.9
 
-
 ## 0.5.13
 Tweaks so elevation measurement works with Elevation Ruler.
 Fix for manual elevation change failing when autoelevate tokens is enabled. Closes issue #105.

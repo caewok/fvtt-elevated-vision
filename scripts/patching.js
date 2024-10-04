@@ -18,7 +18,6 @@ import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
 import { PATCHES as PATCHES_CanvasEdges } from "./CanvasEdges.js";
 import { PATCHES as PATCHES_PIXI_LegacyGraphics } from "./PIXI_LegacyGraphics.js";
-import { PATCHES as PATCHES_GlobalLightSource } from "./GlobalLightSource.js";
 import { PATCHES as PATCHES_PointLightSource } from "./PointLightSource.js";
 import { PATCHES as PATCHES_PointVisionSource } from "./PointVisionSource.js";
 import { PATCHES as PATCHES_RenderedEffectSource } from "./RenderedEffectSource.js";
@@ -60,7 +59,6 @@ export const PATCHES = {
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
   DetectionModeTremor: PATCHES_DetectionModeTremor,
   "foundry.canvas.edges.CanvasEdges": PATCHES_CanvasEdges,
-  "foundry.canvas.sources.GlobalLightSource": PATCHES_GlobalLightSource,
   "foundry.canvas.sources.PointLightSource": PATCHES_PointLightSource,
   "PIXI.LegacyGraphics": PATCHES_PIXI_LegacyGraphics,
   "foundry.applications.sheets.RegionConfig": PATCHES_RegionConfig,

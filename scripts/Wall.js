@@ -31,7 +31,7 @@ function createWall(wallD, _options, _userId) {
     ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
   ];
 
-  for ( const src of sources ) src.edgeAdded(wallD.object.edge);
+  for ( const src of sources ) src[MODULE_ID].edgeAdded(wallD.object.edge);
 }
 
 /**
@@ -57,7 +57,7 @@ function updateWall(wallD, data, _options, _userId) {
     ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
   ];
 
-  for ( const src of sources ) src.edgeUpdated(wallD.object.edge, changes);
+  for ( const src of sources ) src[MODULE_ID].edgeUpdated(wallD.object.edge, changes);
 }
 
 /**
@@ -77,7 +77,7 @@ function deleteWall(wallD, _options, _userId) {
     ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
   ];
 
-  for ( const src of sources ) src.edgeRemoved(wallD.id);
+  for ( const src of sources ) src[MODULE_ID].edgeRemoved(wallD.id);
 }
 
 PATCHES.WEBGL.HOOKS = {

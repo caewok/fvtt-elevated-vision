@@ -138,7 +138,7 @@ function addRegionWalls(region) {
     const edges = polygonToEdges(poly, opts);
     edges.forEach(edge => {
       canvas.edges.set(edge.id, edge);
-      sources.forEach(src => src.edgeAdded(edge));
+      sources.forEach(src => src[MODULE_ID].edgeAdded(edge));
     });
     addedEdges.push(...edges);
   });
@@ -168,7 +168,7 @@ function removeRegionWalls(region) {
   const removedEdges = canvas.edges.filter(edge => edge.object === region);
   removedEdges.forEach(edge => {
     canvas.edges.delete(edge.id);
-    sources.forEach(src => src.edgeRemoved(edge.id));
+    sources.forEach(src => src[MODULE_ID].edgeRemoved(edge.id));
   });
 
   // TODO: Use render flags system instead.

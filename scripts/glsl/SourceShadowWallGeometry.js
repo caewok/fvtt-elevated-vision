@@ -11,7 +11,7 @@ Wall
 
 import { MODULE_ID } from "../const.js";
 import { getLinkedEdges, pointVTest, tangentToV } from "../util.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
+import { edgeElevationZ } from "./WebGLShadows.js";
 
 const flipEdgeLabel = {
   a: "b",
@@ -80,7 +80,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
 
   /** @type {Point3d} */
   get sourceOrigin() {
-    return Point3d.fromPointSource(this.source);
+    return CONFIG.GeometryLib.threeD.Point3d.fromPointSource(this.source);
   }
 
   /**
@@ -216,7 +216,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns {boolean}   True if edge should be included
    */
   _includeEdge(edge) {
-    return this.source._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
+    return this.source[MODULE_ID]._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
   }
 
   /**
@@ -230,17 +230,9 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const MAX_ELEV = 1e6;
 
     // TODO: Handle different a/b elevations.
-    const edgeElev = edge.elevationLibGeometry;
-    let top = Math.max(
-      edgeElev.a.top ?? Number.POSITIVE_INFINITY,
-      edgeElev.b.top ?? Number.POSITIVE_INFINITY);
-    let bottom = Math.min(
-      edgeElev.a.bottom ?? Number.POSITIVE_INFINITY,
-      edgeElev.b.bottom ?? Number.POSITIVE_INFINITY);
-    top = gridUnitsToPixels(top);
-    bottom = gridUnitsToPixels(bottom);
-    top = Math.min(MAX_ELEV, top);
-    bottom = Math.max(-MAX_ELEV, bottom);
+    const { topZ, bottomZ } = edgeElevationZ(edge);
+    const top = Math.min(MAX_ELEV, topZ);
+    const bottom = Math.max(-MAX_ELEV, bottomZ);
 
     // Note if wall is bound to another.
     // Required to avoid light leakage due to penumbra in the shader.
@@ -685,7 +677,7 @@ sourceOrigin = geom.sourceOrigin;
       }
     }
 
-    const edgesToAdd = this.source._getEdges().difference(edgesChecked);
+    const edgesToAdd = this.source[MODULE_ID]._getEdges().difference(edgesChecked);
     edgesToAdd.forEach(edge => {
       const wasUpdated = this.addEdge(edge, { update: false });
       updated ||= wasUpdated;
@@ -703,7 +695,7 @@ export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
     if ( !super._includeEdge(edge) ) return false;
 
     // Wall must be within the light radius.
-    if ( !this.source.bounds.lineSegmentIntersects(edge.a, edge.b, { inside: true }) ) return false;
+    if ( !this.source[MODULE_ID].bounds.lineSegmentIntersects(edge.a, edge.b, { inside: true }) ) return false;
 
     return true;
   }
@@ -716,7 +708,7 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
   get sourceOrigin() {
     const { rect, maxR } = canvas.dimensions;
     const center = rect.center;
-    const centerPt = new Point3d(center.x, center.y, canvas.elevation.elevationMin);
+    const centerPt = new CONFIG.GeometryLib.threeD.Point3d(center.x, center.y, canvas.elevation.elevationMin);
     return centerPt.add(this.source.lightDirection.multiplyScalar(maxR));
   }
 
