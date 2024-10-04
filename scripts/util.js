@@ -8,9 +8,104 @@ PIXI
 */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, OTHER_MODULES } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
+/**
+ * What elevations are considered "ground" at this location?
+ * If Terrain Mapper is active, tiles (with flag), region plateaus, and region ramps are considered ground.
+ *
+ * If Levels is active,
+ * Scene elevation is considered ground otherwise.
+ * Plateaus/ramps with bottoms > scene cause scene to count.
+ * Tiles coexist with scene elevation.
+ * @param {RegionMovementWaypoint3d} waypoint
+ * @returns {Set<number>} Elevations, in grid units.
+ */
+export function groundElevationsAtLocation(waypoint) {
+  const RegionMovementWaypoint3d = CONFIG.GeometryLib.threeD.RegionMovementWaypoint3d;
+  if ( !(waypoint instanceof RegionMovementWaypoint3d ) ) {
+    waypoint = RegionMovementWaypoint3d.fromObject(waypoint);
+  }
+
+  let sceneE = 0;
+  const elevs = new Set();
+  const TM = OTHER_MODULES.TERRAIN_MAPPER;
+  let useSceneE = true;
+  if ( TM.ACTIVE ) {
+    sceneE = canvas.scene.getFlag(TM.ID, TM.BACKGROUND_ELEVATION);
+
+    // Locate tiles and regions at this location.
+    const targetSq = new PIXI.Rectangle(waypoint.x, waypoint.y, 1, 1);
+    const collisionTest = o => o.t[TM.ID].isElevated;
+    const regions = canvas.regions.quadtree.getObjects(targetSq, { collisionTest });
+    const tiles = canvas.tiles.quadtree.getObjects(targetSq, { collisionTest });
+
+    // All elevated tiles count.
+    tiles.forEach(t => elevs.add(t.elevation));
+
+    // If the region extends through the scene elevation, don't treat scene as floor.
+    // For ramps, get elevation at that point.
+    regions.forEach(r => {
+      const topE = r[TM.ID].elevationUponEntry(waypoint);
+      const bottomE = r.elevation.bottom ?? Number.NEGATIVE_INFINITY;
+      if ( useSceneE && sceneE.between(topE, bottomE) ) useSceneE = false;
+      elevs.add(topE);
+    })
+  }
+
+  if ( useSceneE ) elevs.push(sceneE);
+  return elevs;
+}
+
+/**
+ * What ground elevation is at or below this location and elevation?
+ * @param {RegionMovementWaypoint3d} waypoint
+ * @returns {number} Elevation in grid units
+ */
+export function groundElevationAtLocation(waypoint) {
+  const RegionMovementWaypoint3d = CONFIG.GeometryLib.threeD.RegionMovementWaypoint3d;
+  if ( !(waypoint instanceof RegionMovementWaypoint3d ) ) {
+    waypoint = RegionMovementWaypoint3d.fromObject(waypoint);
+  }
+  const elevs = [...groundElevationsAtLocation(waypoint)];
+  elevs.sort((a, b) => b - a);
+  return elevs.find(elem => elem <= waypoint.elevation);
+}
+
+/**
+ * What ground elevation is below or at this token?
+ * @param {Token} token
+ * @returns {number} Elevation in grid units
+ */
+export function groundElevationForToken(token) {
+  const RegionMovementWaypoint3d = CONFIG.GeometryLib.threeD.RegionMovementWaypoint3d;
+  const ctr = token.center;
+  const waypoint = RegionMovementWaypoint3d.fromLocationWithElevation(ctr.x, ctr.y, token.elevationE);
+  return groundElevationAtLocation(waypoint);
+}
+
+/**
+ * Is this token on the ground?
+ * @param {Token} token
+ * @returns {boolean}
+ */
+export function tokenIsOnGround(token) {
+  return token.elevationE.almostEqual(groundElevationForToken(token));
+}
+
+/**
+ * Is this waypoint on the ground?
+ * @param {RegionMovementWaypoint3d} waypoint
+ * @returns {boolean}
+ */
+export function waypointIsOnGround(waypoint) {
+  const RegionMovementWaypoint3d = CONFIG.GeometryLib.threeD.RegionMovementWaypoint3d;
+  if ( !(waypoint instanceof RegionMovementWaypoint3d ) ) {
+    waypoint = RegionMovementWaypoint3d.fromObject(waypoint);
+  }
+  return waypoint.elevation.almostEqual(groundElevationAtLocation(waypoint));
+}
 
 /**
  * N modulus 256

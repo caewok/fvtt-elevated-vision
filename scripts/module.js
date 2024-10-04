@@ -17,10 +17,6 @@ import * as extract from "./perfect-vision/extract-pixels.js";
 
 import { FILOQueue } from "./FILOQueue.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
-import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
-import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
-import { TravelElevationRay, MarkerTracker } from "./TravelElevationRay.js";
-
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Register methods, patches, settings
@@ -118,19 +114,6 @@ Hooks.once("init", function() {
      * @type {number}
      */
     shadowTextureSize: 4096,
-
-    /**
-     * TokenElevationCalculator.
-     * Percentage of the token shape between points when measuring elevation.
-     * For example, 10% will space out grid points every 1/10th of the token width/height.
-     * Average: Points spaced from outside --> in.
-     * Point close and spread: 8 points spaced from a center point.
-     */
-    skipPercentage: {
-      [Settings.KEYS.ELEVATION_MEASUREMENT.TYPES.AVERAGE]: 0.1,
-      [Settings.KEYS.ELEVATION_MEASUREMENT.TYPES.POINTS_CLOSE]: 0.1,
-      [Settings.KEYS.ELEVATION_MEASUREMENT.TYPES.POINTS_SPREAD]: 0.25
-    }
   };
 
   game.modules.get(MODULE_ID).api = {
@@ -142,10 +125,7 @@ Hooks.once("init", function() {
     WallTracerVertex,
     WallTracer,
     SCENE_GRAPH,
-    CoordinateElevationCalculator,
-    TokenElevationCalculator,
     DirectionalLightSource,
-    TravelElevationRay,
     MarkerTracker,
 
     PATCHER

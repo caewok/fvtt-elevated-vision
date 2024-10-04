@@ -32,9 +32,6 @@ import { testWallsForIntersections } from "./ClockwiseSweepPolygon.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { FILOQueue } from "./FILOQueue.js";
 import { setSceneSetting, getSceneSetting, Settings } from "./settings.js";
-import { CoordinateElevationCalculator } from "./CoordinateElevationCalculator.js";
-import { TokenElevationCalculator } from "./TokenElevationCalculator.js";
-import { TravelElevationRay } from "./TravelElevationRay.js";
 import { ElevationTextureManager } from "./ElevationTextureManager.js";
 
 import { Draw } from "./geometry/Draw.js";
@@ -85,13 +82,6 @@ export class ElevationLayer extends InteractionLayer {
     this.undoQueue = new FILOQueue();
     this._activateHoverListener();
   }
-
-  // Imported methods
-  TravelElevationRay = TravelElevationRay;
-
-  CoordinateElevationCalculator = CoordinateElevationCalculator;
-
-  TokenElevationCalculator = TokenElevationCalculator;
 
   /**
    * Activate a listener to display elevation values when the mouse hovers over an area

@@ -11,6 +11,7 @@ import { Patcher } from "./Patcher.js";
 import { getSceneSetting, Settings } from "./settings.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
+import { PATCHES as PATCHES_ActiveEffect } from "./ActiveEffect.js";
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_AmbientLightConfig } from "./AmbientLightConfig.js";
@@ -29,8 +30,6 @@ import {
   PATCHES_DetectionMode,
   PATCHES_DetectionModeBasicSight,
   PATCHES_DetectionModeTremor } from "./detection_modes.js";
-
-import { PATCHES_Token, PATCHES_ActiveEffect } from "./Token.js";
 
 
 /**
@@ -64,7 +63,6 @@ export const PATCHES = {
   "foundry.applications.sheets.RegionConfig": PATCHES_RegionConfig,
   "foundry.canvas.sources.RenderedEffectSource": PATCHES_RenderedEffectSource,
   Region: PATCHES_Region,
-  Token: PATCHES_Token,
   "foundry.canvas.sources.PointVisionSource": PATCHES_PointVisionSource,
   Wall: PATCHES_Wall
 };

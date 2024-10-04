@@ -12,6 +12,7 @@ Wall
 "use strict";
 
 import { MODULE_ID } from "../const.js";
+import { tokenIsOnGround, waypointIsOnGround } from "../util.js";
 import { Draw } from "../geometry/Draw.js";
 import { ShadowWallShader, SizedPointSourceShadowWallShader, DirectionalShadowWallShader, ShadowMesh } from "./ShadowWallShader.js";
 import { ShadowTerrainShader } from "./ShadowTerrainShader.js";
@@ -379,11 +380,8 @@ export class WebGLShadows {
     if ( !shadowRenderer ) return this.pointInShadow(testPoint);
 
     // If the target is on the terrain (likely), we can use the faster test using pixelCache.
-    const calc = target instanceof Token
-      ? new canvas.elevation.TokenElevationCalculator(target)
-      : new canvas.elevation.CoordinateElevationCalculator(testPoint);
-
-    return calc.isOnTerrain()
+    const onGround = target instanceof Token ? tokenIsOnGround(target) : waypointIsOnGround(testPoint);
+    return onGround
       ? this.#shadowPercentageFromCache(shadowRenderer.pixelCache, testPoint.x, testPoint.y)
       : this.pointInShadow(testPoint);
   }
