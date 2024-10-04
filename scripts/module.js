@@ -126,7 +126,6 @@ Hooks.once("init", function() {
     WallTracer,
     SCENE_GRAPH,
     DirectionalLightSource,
-    MarkerTracker,
 
     PATCHER
   };
