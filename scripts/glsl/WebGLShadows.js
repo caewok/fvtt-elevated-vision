@@ -754,7 +754,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
    * Render the wall shadows.
    */
   _initializeShadowRenderer() {
-    this.shadowRenderer = new ShadowDirectionalTextureRenderer(this.source, this.mesh, this.shadowTerrainMesh);
+    this.shadowRenderer = new ShadowDirectionalTextureRenderer(this.source, this.shadowMesh, this.shadowTerrainMesh);
   }
 
   /**
@@ -866,7 +866,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
    * @param {number} elevationAngle
    * @returns {boolean}
    */
-  _testEdgelInclusion(edge, azimuth, elevationAngle) {
+  _testEdgeInclusion(edge, azimuth, elevationAngle) {
     // Ignore reverse proximity walls (b/c this is a near-infinite light source)
     const src = this.source;
     const type = src.constructor.sourceType;
@@ -896,7 +896,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
 
   _getWalls(bounds, azimuth, elevationAngle) {
     bounds ??= this.bounds;
-    const collisionTest = o => this._testWallInclusion(o.t, azimuth, elevationAngle);
+    const collisionTest = o => this._testEdgeInclusion(o.t, azimuth, elevationAngle);
     return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
   }
 
@@ -1005,7 +1005,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
    */
   _getEdges(bounds, azimuth, elevationAngle) {
     bounds ??= this.bounds;
-    const collisionTest = o => this._testWallInclusion(o.t, azimuth, elevationAngle);
+    const collisionTest = o => this._testEdgeInclusion(o.t, azimuth, elevationAngle);
     return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
   }
 }
