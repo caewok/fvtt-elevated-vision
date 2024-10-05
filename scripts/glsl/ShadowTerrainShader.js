@@ -10,7 +10,7 @@ PIXI
 
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
-
+import { MODULE_ID } from "../const.js";
 
 export class ShadowTerrainShader extends AbstractEVShader {
   static vertexShader =
@@ -118,7 +118,7 @@ void main() {
       sceneRect.height
     ];
 
-    const ev = canvas.elevation;
+    const ev = canvas.scene[MODULE_ID];
     defaultUniforms.uElevationRes ??= [
       ev.elevationMin,
       ev.elevationStep,

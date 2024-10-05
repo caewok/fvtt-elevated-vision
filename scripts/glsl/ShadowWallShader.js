@@ -4,8 +4,8 @@ PIXI
 */
 "use strict";
 
+import { MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
-
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
 
@@ -389,7 +389,6 @@ vec4 lightEncoding(in float light) {
 
 // NOTE: PENUMBRA_FRAGMENT_CALCULATIONS
 const PENUMBRA_FRAGMENT_CALCULATIONS =
-// eslint-disable-next-line indent
 `
   // Assume no shadow as the default
   fragColor = noShadow();
@@ -903,7 +902,7 @@ void main() {
       sceneRect.height
     ];
 
-    const ev = canvas.elevation;
+    const ev = canvas.scene[MODULE_ID];
     defaultUniforms.uElevationRes ??= [
       ev.elevationMin,
       ev.elevationStep,
@@ -1144,7 +1143,7 @@ void main() {
       sceneRect.height
     ];
 
-    const ev = canvas.elevation;
+    const ev = canvas.scene[MODULE_ID];
     defaultUniforms.uElevationRes ??= [
       ev.elevationMin,
       ev.elevationStep,
@@ -1152,7 +1151,6 @@ void main() {
       distancePixels
     ];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
-
     defaultUniforms.uAzimuth = source.azimuth;
     defaultUniforms.uElevationAngle = source.elevationAngle;
     defaultUniforms.uSolarAngle = source.solarAngle;
@@ -1380,7 +1378,7 @@ void main() {
       sceneRect.height
     ];
 
-    const ev = canvas.elevation;
+    const ev = canvas.scene[MODULE_ID];
     defaultUniforms.uElevationRes ??= [
       ev.elevationMin,
       ev.elevationStep,
@@ -1462,8 +1460,6 @@ canvas.stage.addChild(mesh)
 canvas.stage.removeChild(mesh)
 
 mesh = ev.terrainShadowMesh
-
-
 
 dir = mesh.shader.uniforms.uLightDirection
 dirV = new PIXI.Point(dir[0], dir[1])
@@ -1582,13 +1578,19 @@ dirInnerSidePenumbra = [
 
 
 // Test: Draw from endpoint toward canvas for each direction
-Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirOuterSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.orange })
-Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirMidSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.blue })
-Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirInnerSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.red })
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirOuterSidePenumbra[0].multiplyScalar(500))},
+  { color: Draw.COLORS.orange })
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirMidSidePenumbra[0].multiplyScalar(500))},
+  { color: Draw.COLORS.blue })
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirInnerSidePenumbra[0].multiplyScalar(500))},
+  { color: Draw.COLORS.red })
 
-Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirOuterSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.orange })
-Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirMidSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.blue })
-Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirInnerSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.red })
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirOuterSidePenumbra[1].multiplyScalar(500))},
+  { color: Draw.COLORS.orange })
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirMidSidePenumbra[1].multiplyScalar(500))},
+  { color: Draw.COLORS.blue })
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirInnerSidePenumbra[1].multiplyScalar(500))},
+  { color: Draw.COLORS.red })
 */
 
 
@@ -1658,13 +1660,19 @@ dirOuterSidePenumbra = dirOuterSidePenumbra.map(dir => dir.normalize())
 dirInnerSidePenumbra = dirInnerSidePenumbra.map(dir => dir.normalize())
 
 // Test: Draw from endpoint toward canvas for each direction
-Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirOuterSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.orange })
-Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirMidSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.blue })
-Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirInnerSidePenumbra[0].multiplyScalar(500))}, { color: Draw.COLORS.red })
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirOuterSidePenumbra[0].multiplyScalar(500))},
+  { color: Draw.COLORS.orange })
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirMidSidePenumbra[0].multiplyScalar(500))},
+  { color: Draw.COLORS.blue })
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirInnerSidePenumbra[0].multiplyScalar(500))},
+  { color: Draw.COLORS.red })
 
-Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirOuterSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.orange })
-Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirMidSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.blue })
-Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirInnerSidePenumbra[1].multiplyScalar(500))}, { color: Draw.COLORS.red })
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirOuterSidePenumbra[1].multiplyScalar(500))},
+  { color: Draw.COLORS.orange })
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirMidSidePenumbra[1].multiplyScalar(500))},
+  { color: Draw.COLORS.blue })
+Draw.segment({ A: wall2d[1], B: wall2d[1].add(dirInnerSidePenumbra[1].multiplyScalar(500))},
+  { color: Draw.COLORS.red })
 
 */
 
@@ -1740,12 +1748,14 @@ if ( farLightRayZChange < 0 ) {
 
 if ( farLightRayZChange >= 0 || PIXI.Point.distanceBetween(sideMidPenumbra[0], wall2d[0]) > maxR ){
   // if point source light
-  closerIdx = PIXI.Point.distanceSquaredBetween(uLightPosition, wall2d[0]) < PIXI.Point.distanceSquaredBetween(uLightPosition, wall2d[1]) ? 0 : 1;
+  closerIdx = PIXI.Point.distanceSquaredBetween(uLightPosition, wall2d[0])
+    < PIXI.Point.distanceSquaredBetween(uLightPosition, wall2d[1]) ? 0 : 1;
   furtherIdx = closerIdx % 2;
   // end if
   penumbraCloser = { origin: wall2d[closerIdx], direction: dirMidSidePenumbra[closerIdx] }
   penumbraCloser.direction = penumbraCloser.direction.normalize();
-  sideMidPenumbra[closerIdx] = penumbraCloser.origin.projectToward(penumbraCloser.origin.add(penumbraCloser.direction), maxR)
+  sideMidPenumbra[closerIdx] = penumbraCloser.origin.projectToward(penumbraCloser.origin.add(penumbraCloser.direction),
+    maxR)
 }
 
 // Construct a parallel ray to the wall and use that to intersect the further penumbra ray.
@@ -1762,8 +1772,10 @@ sideMidPenumbra[furtherIdx] = foundry.utils.lineLineIntersection(
 sideMidPenumbra[furtherIdx] = PIXI.Point.fromObject(sideMidPenumbra[furtherIdx])
 Draw.segment({ A: sideMidPenumbra[0], B: sideMidPenumbra[1] }, { color: Draw.COLORS.blue })
 
-Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirOuterSidePenumbra[0].multiplyScalar(maxR))}, { color: Draw.COLORS.red })
-Draw.segment({ A: wall2d[1], B: wall2d[0].add(dirOuterSidePenumbra[1].multiplyScalar(maxR))}, { color: Draw.COLORS.green })
+Draw.segment({ A: wall2d[0], B: wall2d[0].add(dirOuterSidePenumbra[0].multiplyScalar(maxR))},
+  { color: Draw.COLORS.red })
+Draw.segment({ A: wall2d[1], B: wall2d[0].add(dirOuterSidePenumbra[1].multiplyScalar(maxR))},
+  { color: Draw.COLORS.green })
 
 sidePenumbra = Array(2);
 sidePenumbra[0] = foundry.utils.lineLineIntersection(
@@ -1920,12 +1932,14 @@ midPenumbra1 = rayTopMid1.origin.projectToward(rayTopMid1.origin.add(rayTopMid1.
 rayTopMid2 = { origin: wallTop2, direction: lightDirectionRev }
 t = canvasPlane.rayIntersection(rayTopMid2.origin, rayTopMid2.direction)
 midPenumbra2 = rayTopMid2.origin.projectToward(rayTopMid2.origin.add(rayTopMid2.direction), t)
+ll = foundry.utils.lineLineIntersection
 
-outerPenumbra1 = foundry.utils.lineLineIntersection(midPenumbra1, midPenumbra2, wallTop1, wallTop1.add(lightPenumbraDirRev1))
-outerPenumbra2 = foundry.utils.lineLineIntersection(midPenumbra1, midPenumbra2, wallTop2, wallTop2.add(lightPenumbraDirRev2))
 
-innerPenumbra1 = foundry.utils.lineLineIntersection(midPenumbra1, midPenumbra2, wallTop1, wallTop1.add(lightPenumbraDirRev2))
-innerPenumbra2 = foundry.utils.lineLineIntersection(midPenumbra1, midPenumbra2, wallTop2, wallTop2.add(lightPenumbraDirRev1))
+outerPenumbra1 = ll(midPenumbra1, midPenumbra2, wallTop1, wallTop1.add(lightPenumbraDirRev1))
+outerPenumbra2 = ll(midPenumbra1, midPenumbra2, wallTop2, wallTop2.add(lightPenumbraDirRev2))
+
+innerPenumbra1 = ll(midPenumbra1, midPenumbra2, wallTop1, wallTop1.add(lightPenumbraDirRev2))
+innerPenumbra2 = ll(midPenumbra1, midPenumbra2, wallTop2, wallTop2.add(lightPenumbraDirRev1))
 
 
 Draw.segment({ A: wallTop1, B: outerPenumbra1 }, { color: Draw.COLORS.red })
@@ -1987,7 +2001,9 @@ distFarUmbra = PIXI.Point.distanceBetween(outerPenumbra, farUmbra);
 distWallTop1 = PIXI.Point.distanceBetween(lightCenter, wallCoords.A.top);
 fWallRatio = 1.0 - (distWallTop1 * distShadowInv); // mid-penumbra
 fNearRatios = new Point3d(fWallRatio, fWallRatio, fWallRatio)
-fFarRatios = new Point3d(lightSizeProjectedUnit * 2.0, lightSizeProjectedUnit, 0.0); // 0.0 is the penumbra value (0 at shadow end)
+
+// 0.0 is the penumbra value (0 at shadow end)
+fFarRatios = new Point3d(lightSizeProjectedUnit * 2.0, lightSizeProjectedUnit, 0.0);
 fWallHeights = { x: wallTopZ, y: wallBottomZ };
 
 vVertexPosition = PIXI.Point.fromObject(lightCenter)
@@ -2018,7 +2034,8 @@ vSidePenumbra2 = barycentric(vVertexPosition, p2A, p2B, p2C);
 /*
 function elevateShadowRatios(ratios, wallHeight, wallRatio, elevChange) {
   if ( wallHeight == 0.0 ) return ratios;
-  const ratiosDist = ratios.subtract(new Point3d(wallRatio, wallRatio, wallRatio)).multiplyScalar(-1) // wallRatio - ratios
+  // WallRatio - ratios
+  const ratiosDist = ratios.subtract(new Point3d(wallRatio, wallRatio, wallRatio)).multiplyScalar(-1)
   const heightFraction = elevChange / wallHeight;
   return ratios.add(ratiosDist.multiplyScalar(heightFraction))
 }

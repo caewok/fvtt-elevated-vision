@@ -1,8 +1,9 @@
 /* globals
-Hooks,
-game,
 canvas,
 CONFIG,
+game,
+Hooks,
+loadTemplates,
 ui
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -15,7 +16,6 @@ import { log } from "./util.js";
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
 
-import { FILOQueue } from "./FILOQueue.js";
 import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
@@ -23,15 +23,14 @@ import { DirectionalLightSource } from "./DirectionalLightSource.js";
 import { PATCHER, initializePatching, registerPatchesForSceneSettings } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
 
-// For elevation layer registration and API
-import { ElevationLayer } from "./ElevationLayer.js";
+// Region elevation tracking
+import { ElevationTextureHandler } from "./ElevationTextureHandler.js";
 
 // Settings, to toggle whether to change elevation on token move
 import { Settings, getSceneSetting, setSceneSetting } from "./settings.js";
 
 // Other self-executing hooks
 import "./changelog.js";
-import "./controls.js";
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -117,8 +116,6 @@ Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
     util,
     extract,
-    ElevationLayer,
-    FILOQueue,
     WallTracerEdge,
     WallTracerVertex,
     WallTracer,
@@ -131,7 +128,6 @@ Hooks.once("init", function() {
   // These methods need to be registered early
   Settings.registerAll();
   initializePatching();
-  registerLayer();
 
   // Register new render flag for elevation changes to placeables.
   CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshElevation = {};
@@ -147,13 +143,12 @@ Hooks.once("init", function() {
 
 Hooks.once("setup", function() {
   log("Setup...");
-  loadTemplates(Object.values(TEMPLATES)).then(_value => log(`Templates loaded.`));
+  loadTemplates(Object.values(TEMPLATES)).then(_value => log("Templates loaded."));
 });
 
 Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
-  if ( !canvas.elevation ) return;
-  canvas.elevation.initialize();
+  canvas.scene[MODULE_ID] = new ElevationTextureHandler();
   registerPatchesForSceneSettings();
 });
 
@@ -201,7 +196,3 @@ async function disableScene() {
 Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(MODULE_ID);
 });
-
-function registerLayer() {
-  CONFIG.Canvas.layers.elevation = { group: "primary", layerClass: ElevationLayer };
-}

@@ -11,6 +11,8 @@ PIXI
 import { MODULE_ID, OTHER_MODULES } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
+// ----- NOTE: Define ground elevation ----- //
+
 /**
  * What elevations are considered "ground" at this location?
  * If Terrain Mapper is active, tiles (with flag), region plateaus, and region ramps are considered ground.
@@ -106,6 +108,8 @@ export function waypointIsOnGround(waypoint) {
   }
   return waypoint.elevation.almostEqual(groundElevationAtLocation(waypoint));
 }
+
+// ----- NOTE: Other utility functions ----- //
 
 /**
  * N modulus 256

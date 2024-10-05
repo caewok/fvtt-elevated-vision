@@ -12,7 +12,7 @@ import { MODULE_ID } from "./const.js";
 import { quotient256, mod256, log } from "./util.js";
 import { getSceneSetting, Settings } from "./settings.js";
 import { PixelCache } from "./geometry/PixelCache.js";
-import { extractPixels } from "./extract-pixels.js";
+import { extractPixels } from "./perfect-vision/extract-pixels.js";
 
 // ----- NOTE: Imported from Elevation Layer ----- //
 // TODO: Can these be removed / made obsolete? What range of elevations can we have here?
@@ -223,6 +223,41 @@ export class ElevationTextureHandler {
     log(`elevationHex elevation ${elevation}, rgb ${channels.r},${channels.g},${channels.b}`);
     return new PIXI.Color(channels);
   }
+
+  /**
+   * Increment between elevation measurements. Should be a positive integer or float of 1 decimal place.
+   * @type {number}
+   */
+  get elevationStep() {
+    const step = getSceneSetting(Settings.KEYS.ELEVATION_INCREMENT);
+    return step ?? canvas.scene.dimensions.distance;
+  }
+
+  set elevationStep(stepNew) {
+    if ( stepNew < 0.1 ) {
+      console.warn("elevationStep should be a positive integer or float, to be rounded to 1 decimal place.");
+      return;
+    }
+
+    stepNew = Number.isInteger(stepNew) ? stepNew : Math.round((stepNew * 10)) / 10;
+
+    // Function to set the new normalized elevation value such that elevation stays (mostly) the same.
+    // e = min + value * step.
+    // min + value * step = min + valueNew * stepNew
+    // valueNew * stepNew = min + value * step - min
+    // valueNew = value * step / stepNew
+    const step = this.elevationStep;
+    const mult = step / stepNew;
+    const max = this.#maximumNormalizedElevation;
+    const stepAdjust = function(normE) {
+      const out = Math.clamp(Math.round(mult * normE), 0, max);
+      return out || 0;
+    };
+
+    setSceneSetting(Settings.KEYS.ELEVATION_INCREMENT, stepNew);
+    this.changePixelValuesUsingFunction(stepAdjust);
+  }
+
 
   /* -------------------------------------------- */
   /* NOTE: Elevation pixel cache */

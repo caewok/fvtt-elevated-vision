@@ -3,8 +3,7 @@ canvas,
 CONFIG,
 CONST,
 foundry,
-PIXI,
-Wall
+PIXI
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -226,7 +225,6 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns { corner0: {PIXI.Point}, corner1: {PIXI.Point}, topZ: {number}, bottomZ: {number} }
    */
   edgeCornerCoordinates(edge) {
-    const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
     const MAX_ELEV = 1e6;
 
     // TODO: Handle different a/b elevations.
@@ -708,7 +706,7 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
   get sourceOrigin() {
     const { rect, maxR } = canvas.dimensions;
     const center = rect.center;
-    const centerPt = new CONFIG.GeometryLib.threeD.Point3d(center.x, center.y, canvas.elevation.elevationMin);
+    const centerPt = new CONFIG.GeometryLib.threeD.Point3d(center.x, center.y, canvas.scene[MODULE_ID].elevationMin);
     return centerPt.add(this.source.lightDirection.multiplyScalar(maxR));
   }
 

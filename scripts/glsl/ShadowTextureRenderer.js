@@ -222,7 +222,4 @@ s = new PIXI.Sprite(shadowRenderer.renderTexture);
 canvas.stage.addChild(s)
 canvas.stage.removeChild(s)
 
-
-
-
 */
