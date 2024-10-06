@@ -420,7 +420,6 @@ export class ElevationTextureHandler {
     return this.setElevationForShape(shape, elevation, opts);
   }
 
-
   /**
    * Set elevation for a circle centered at the provided location.
    * @param {PolygonVertex} p
@@ -463,4 +462,32 @@ export class ElevationTextureHandler {
     return graphics;
   }
 
+  _squareGridShape(p) {
+    // Get the top left corner
+    const tl = canvas.grid.getTopLeftPoint(p);
+    const { sizeX, sizeY } = canvas.grid;
+    return new PIXI.Rectangle(tl.x, tl.y, sizeX, sizeY);
+  }
+
+  _hexGridShape(p, { width = 1, height = 1 } = {}) {
+    // Canvas.grid.grid.getBorderPolygon will return null if width !== height.
+    if ( width !== height ) return null;
+
+    // Get the top left corner
+    const tl = canvas.grid.getTopLeftPoint(p);
+    const points = canvas.grid.grid.getBorderPolygon(width, height, 0); // TO-DO: Should a border be included to improve calc?
+    const pointsTranslated = [];
+    const ln = points.length;
+    for ( let i = 0; i < ln; i += 2) {
+      pointsTranslated.push(points[i] + tl.x, points[i+1] + tl.y);
+    }
+
+    return new PIXI.Polygon(pointsTranslated);
+  }
+
+  _circleShape(p) {
+    const brushSize = Settings.get(Settings.KEYS.BRUSH.SIZE);
+    const r = (brushSize > 1) ? Math.round(Settings.get(Settings.KEYS.BRUSH.SIZE) / 2) : 1;
+    return new PIXI.Circle(p.x, p.y, r);
+  }
 }

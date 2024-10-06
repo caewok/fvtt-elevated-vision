@@ -245,6 +245,10 @@ shadowMesh = source.elevatedvision.shadowMesh
 canvas.stage.addChild(shadowMesh)
 canvas.stage.removeChild(shadowMesh)
 
+shadowTerrainMesh = source.elevatedvision.shadowTerrainMesh
+canvas.stage.addChild(shadowTerrainMesh)
+canvas.stage.removeChild(shadowTerrainMesh)
+
 str = source.elevatedvision.shadowRenderer;
 s = new PIXI.Sprite(str.renderTexture)
 canvas.stage.addChild(s)
@@ -268,8 +272,7 @@ mesh = source.elevatedvision.shadowVisionLOSMesh
 canvas.stage.addChild(mesh)
 canvas.stage.removeChild(mesh)
 
-
-s = new PIXI.Sprite(source.elevatedvision.shadowVisionLOSRenderer.renderTexture)
+s = new PIXI.Sprite(source.elevatedvision.shadowRenderer.renderTexture)
 canvas.stage.addChild(s)
 canvas.stage.removeChild(s)
 
