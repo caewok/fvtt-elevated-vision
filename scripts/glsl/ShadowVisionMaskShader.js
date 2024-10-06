@@ -214,6 +214,10 @@ EVQuadMesh = api.EVQuadMesh
 ShadowTextureRenderer = api.ShadowTextureRenderer
 TestShadowShader = api.TestShadowShader
 
+ev = canvas.scene.elevatedvision
+s = new PIXI.Sprite(ev._elevationTexture)
+canvas.stage.addChild(s)
+canvas.stage.removeChild(s)
 
 let [l] = canvas.lighting.placeables;
 source = l.lightSource;
