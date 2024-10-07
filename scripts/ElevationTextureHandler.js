@@ -625,16 +625,20 @@ export class ElevationTextureHandler {
     this.renderElevation();
   }
 
+  /** @type {boolean} */
+  #destroyed = false;
+
+  get destroyed() { return this.#destroyed; }
+
   /**
    * Destroy elevation data when changing scenes or clearing data.
    */
   destroy() {
+    if ( this.#destroyed ) return;
     this._clearElevationPixelCache();
-
     this._graphicsContainer.destroy({children: true});
-    this._graphicsContainer = new PIXI.Container();
-
     this._elevationTexture?.destroy();
+    this.#destroyed = true;
   }
 
   /**
