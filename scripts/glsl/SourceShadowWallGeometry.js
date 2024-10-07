@@ -297,11 +297,12 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     const linkedB = new Set();
     const keyA = edge.a.key;
     const keyB = edge.b.key;
-    const edgeKeys = new Set([edge.a.key, edge.b.key]);
     canvas.edges.forEach(e => {
       if ( e === edge ) return;
-      if ( edgeKeys.has(e.a.key) ) linkedA.add(e);
-      else if ( edgeKeys.has(e.b.key) ) linkedB.add(e);
+      const eA = e.a.key;
+      const eB = e.b.key;
+      if ( keyA === eA || keyA === eB ) linkedA.add(e);
+      else if ( keyB === eA || keyB === eB ) linkedB.add(e);
     });
     return { linkedA, linkedB };
   }
