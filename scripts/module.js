@@ -16,7 +16,6 @@ import { log } from "./util.js";
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
 
-import { WallTracerEdge, WallTracerVertex, WallTracer, SCENE_GRAPH } from "./WallTracer.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Register methods, patches, settings
@@ -115,10 +114,6 @@ Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
     util,
     extract,
-    WallTracerEdge,
-    WallTracerVertex,
-    WallTracer,
-    SCENE_GRAPH,
     DirectionalLightSource,
 
     PATCHER
