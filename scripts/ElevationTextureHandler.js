@@ -44,6 +44,14 @@ export class ElevationTextureHandler {
   _graphicsContainer = new PIXI.Container();
 
   /**
+   * Sprite that contains the elevation values from the saved elevation file.
+   * This is added to the _graphicsContainer, along with any graphics representing
+   * adjustments by the GM to the scene elevation.
+   * @type {PIXI.Sprite}
+   */
+  _backgroundElevation = PIXI.Sprite.from(PIXI.Texture.EMPTY);
+
+  /**
    * The handler corresponds to a single texture that maps elevation across a scene.
    */
   constructor() {
@@ -52,6 +60,34 @@ export class ElevationTextureHandler {
 
     // Set the clear color of the render texture to black. The texture needs to be opaque.
     this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
+
+    // TODO: Add in a basic scene background.
+    // Add the sprite that holds the default background elevation settings
+    const { sceneX, sceneY } = canvas.dimensions;
+    this._backgroundElevation.position = { x: sceneX, y: sceneY };
+    this._graphicsContainer.addChild(this._backgroundElevation);
+
+    // this.renderElevation();
+
+    // Update the source shadow meshes with the elevation texture.
+//     const sources = [
+//       ...canvas.effects.lightSources,
+//       ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
+//     ];
+//
+//     for ( const src of sources ) {
+//       const ev = src[MODULE_ID];
+//       if ( !ev ) continue;
+//       if ( ev.shadowMesh ) {
+//         ev.shadowMesh.shader.uniforms.uTerrainSampler = canvas.elevation._elevationTexture;
+//         ev.shadowRenderer.update();
+//       }
+//
+//       if ( ev.shadowVisionLOSMesh ) {
+//         ev.shadowVisionLOSMesh.shader.uniforms.uTerrainSampler = canvas.elevation._elevationTexture;
+//         ev.shadowVisionLOSRenderer.update();
+//       }
+//     }
   }
 
   /* -------------------------------------------- */
@@ -138,6 +174,15 @@ export class ElevationTextureHandler {
 
   /** @type {number} */
   get elevationMax() { return this._scaleNormalizedElevation(this.#maximumNormalizedElevation); }
+
+  /**
+   * Update the current elevation maximum to a specific value.
+   * @param {number} e    Elevation value
+   */
+  _updateElevationCurrentMax(e) {
+    this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, e);
+    this._elevationColorsMesh.shader.updateMaxCurrentElevation();
+  }
 
   /**
    * Convert a pixel value to an elevation value.
@@ -308,8 +353,8 @@ export class ElevationTextureHandler {
    * @returns {number} Average of pixel values within the shape
    */
   averageElevationWithinShape(shape) {
-    const skip = CONFIG[MODULE_ID]?.averageTerrain ?? 1;
-    const average = this.elevationPixelCache.average(shape, skip);
+    const aggFn = PixelCache.pixelAggregator("average");
+    const average = PixelCache.reducePixels(this.elevationPixelCache.pixels, aggFn);
     return this._scaleNormalizedElevation(average);
   }
 
@@ -415,8 +460,8 @@ export class ElevationTextureHandler {
    *
    * @returns {PIXI.Graphics} The child graphics added to the _graphicsContainer
    */
-  setElevationForGridSpace(p, elevation = 0, { useHex = canvas.grid.isHexagonal, ...opts } = {}) {
-    const shape = useHex ? this._hexGridShape(p) : this._squareGridShape(p);
+  setElevationForGridSpace(p, elevation) {
+    const shape = canvas.grid.isHexagonal ? this._hexGridShape(p) : this._squareGridShape(p);
     return this.setElevationForShape(shape, elevation, opts);
   }
 
@@ -424,11 +469,10 @@ export class ElevationTextureHandler {
    * Set elevation for a circle centered at the provided location.
    * @param {PolygonVertex} p
    * @param {number} [elevation]          The elevation, in grid units.
-   * @param {object}  [opts]   Options passed to setElevationForShape
    */
-  setElevationForCircle(p, elevation, opts) {
+  setElevationForCircle(p, elevation) {
     const shape = this._circleShape(p);
-    return this.setElevationForShape(shape, elevation, opts);
+    return this.setElevationForShape(shape, elevation);
   }
 
   /**
@@ -437,27 +481,24 @@ export class ElevationTextureHandler {
    * @param {number} [elevation=0]          The elevation use to fill the grid space, in grid units.
    * @param {object}  [opts]   Options passed to _setElevationForGraphics.
    */
-  setElevationForShape(shape, elevation, opts) {
+  setElevationForShape(shape, elevation) {
     const graphics = new PIXI.Graphics();
 
     // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
     // and that causes a lighter-color border to appear outside the shape.
     const draw = new CONFIG.GeometryLib.Draw(graphics);
     draw.shape(shape, { width: 0, fill: this.elevationColor(elevation) });
-    return this._setElevationForGraphics(graphics, elevation, opts);
+    return this._setElevationForGraphics(graphics);
   }
 
   /**
    * Set elevation for a given PIXI graphics, in which shapes are already drawn.
    * @param {PIXI.Graphics} graphics
    * @param {number} [elevation=0]          The elevation use to fill the grid space, in grid units.
-   * @param {object}  [opts]
-   * @param {boolean} [opts.temporary]      If true, don't immediately require a save.
-   *   This does not prevent a save if the user further modifies the canvas.
    */
-  _setElevationForGraphics(graphics, elevation = 0, { temporary = false } = {}) {
+  _setElevationForGraphics(graphics) {
     this._graphicsContainer.addChild(graphics);
-    const color = this.elevationColor(elevation);
+    this._updateElevationCurrentMax(elevation);
     this.renderElevation();
     return graphics;
   }
