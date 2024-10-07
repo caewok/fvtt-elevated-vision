@@ -7,7 +7,6 @@ Hooks
 */
 "use strict";
 
-import { ElevationLayerToolBar } from "./ElevationLayerToolBar.js";
 import { MODULE_ID } from "./const.js";
 
 Hooks.on("getSceneControlButtons", addElevationLayerSceneControls);
