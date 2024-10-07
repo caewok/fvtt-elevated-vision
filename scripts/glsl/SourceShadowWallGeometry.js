@@ -10,7 +10,7 @@ Wall
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "../const.js";
-import { getLinkedEdges, pointVTest, tangentToV } from "../util.js";
+import { pointVTest, tangentToV } from "../util.js";
 import { edgeElevationZ } from "./WebGLShadows.js";
 
 const flipEdgeLabel = {
@@ -237,7 +237,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // Note if wall is bound to another.
     // Required to avoid light leakage due to penumbra in the shader.
     // Don't include the link if it is not a valid wall for this source.
-    const { linkedA, linkedB } = getLinkedEdges(edge);
+    const { linkedA, linkedB } = this.constructor.getLinkedEdges(edge);
 
     // Find the smallest angle between this wall and a linked wall that covers this light.
     // If less than 180º, the light is inside a "V" and so the point of the V blocks all light.
@@ -283,6 +283,27 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
       corner0: [edge.a.x, edge.a.y, top, blockWallAKey],
       corner1: [edge.b.x, edge.b.y, bottom, blockWallBKey]
     };
+  }
+
+  /**
+   * Get edges that share an endpoint with this edge.
+   * Organize by shared endpoint.
+   * See Wall.prototype.getLinkedSegments for recursive version.
+   * @param {Edge} edge
+   * @returns {object}
+   */
+  static getLinkedEdges(edge) {
+    const linkedA = new Set();
+    const linkedB = new Set();
+    const keyA = edge.a.key;
+    const keyB = edge.b.key;
+    canvas.edges.forEach(e => {
+      if ( e === edge ) return;
+      const edgeKeys = new Set([edge.a.key, edge.b.key]);
+      if ( edgeKeys.has(keyA) ) linkedA.add(e);
+      else if ( edgeKeys.has(keyB) ) linkedB.add(e);
+    });
+    return { linkedA, linkedB };
   }
 
   /**
@@ -408,7 +429,7 @@ sourceOrigin = geom.sourceOrigin;
    * @returns {boolean}  Did the geometry need to be updated?
    */
   _checkAddedEdgeLinks(addedEdge, update = true) {
-    const { linkedA, linkedB } = getLinkedEdges(addedEdge);
+    const { linkedA, linkedB } = this.constructor.getLinkedEdges(addedEdge);
     let linkUpdated = false;
     for ( const linkedEdge of linkedA.union(linkedB) ) {
       const res = this._updateEdgeLinkBuffer(linkedEdge, update);
