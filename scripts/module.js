@@ -15,6 +15,10 @@ import { log } from "./util.js";
 // API imports
 import * as util from "./util.js";
 import * as extract from "./perfect-vision/extract-pixels.js";
+import {
+  SourceShadowWallGeometry,
+  PointSourceShadowWallGeometry,
+  DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
@@ -115,8 +119,13 @@ Hooks.once("init", function() {
     util,
     extract,
     DirectionalLightSource,
+    PATCHER,
 
-    PATCHER
+    glsl: {
+      SourceShadowWallGeometry,
+      PointSourceShadowWallGeometry,
+      DirectionalSourceShadowWallGeometry,
+    }
   };
 
   // These methods need to be registered early
