@@ -5,7 +5,6 @@
   "elevatedvision.settings.shading-algorithm.hint": "Set the default shadow method for new scenes. Can adjust per-scene using the scene configuration. Polygons: Represent shadows caused by limited-height walls using polygons for token vision. WebGL: Use WebGL for light shadows and token vision caused by limited height walls. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively. Enables directional lighting.",
 
   "elevatedvision.settings.shading-none": "None",
-  "elevatedvision.settings.shading-polygons": "Polygons",
   "elevatedvision.settings.shading-webgl": "WebGL",
 
   "elevatedvision.settings.elevationmin.name": "Default elevation minimum",

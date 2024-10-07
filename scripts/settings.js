@@ -13,7 +13,6 @@ export const SETTINGS = {
     ALGORITHM: "shading-algorithm",
     TYPES: {
       NONE: "shading-none",
-      POLYGONS: "shading-polygons",
       WEBGL: "shading-webgl"
     },
     LABELS: {
@@ -85,7 +84,6 @@ export class Settings extends ModuleSettingsAbstract {
       requiresReload: false,
       choices: {
         [STYPES.NONE]: localize(`${STYPES.NONE}`),
-        [STYPES.POLYGONS]: localize(`${STYPES.POLYGONS}`),
         [STYPES.WEBGL]: localize(`${STYPES.WEBGL}`)
       }
     });

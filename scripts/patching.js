@@ -16,9 +16,7 @@ import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLighti
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_AmbientLightConfig } from "./AmbientLightConfig.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
-import { PATCHES as PATCHES_ClockwiseSweepPolygon } from "./ClockwiseSweepPolygon.js";
 import { PATCHES as PATCHES_CanvasEdges } from "./CanvasEdges.js";
-import { PATCHES as PATCHES_PIXI_LegacyGraphics } from "./PIXI_LegacyGraphics.js";
 import { PATCHES as PATCHES_PointLightSource } from "./PointLightSource.js";
 import { PATCHES as PATCHES_PointVisionSource } from "./PointVisionSource.js";
 import { PATCHES as PATCHES_RenderedEffectSource } from "./RenderedEffectSource.js";
@@ -52,13 +50,11 @@ export const PATCHES = {
   AmbientLight: PATCHES_AmbientLight,
   "foundry.applications.sheets.AmbientLightConfig": PATCHES_AmbientLightConfig,
   CanvasVisibility: PATCHES_CanvasVisibility,
-  ClockwiseSweepPolygon: PATCHES_ClockwiseSweepPolygon,
   DetectionMode: PATCHES_DetectionMode,
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
   DetectionModeTremor: PATCHES_DetectionModeTremor,
   "foundry.canvas.edges.CanvasEdges": PATCHES_CanvasEdges,
   "foundry.canvas.sources.PointLightSource": PATCHES_PointLightSource,
-  "PIXI.LegacyGraphics": PATCHES_PIXI_LegacyGraphics,
   "foundry.applications.sheets.RegionConfig": PATCHES_RegionConfig,
   "foundry.canvas.sources.RenderedEffectSource": PATCHES_RenderedEffectSource,
   Region: PATCHES_Region,
@@ -96,7 +92,6 @@ export function registerPatchesForSceneSettings() {
   const algorithm = getSceneSetting(ALGORITHM);
   unregisterPatchesForSceneSettings();
   switch ( algorithm ) {
-    case TYPES.POLYGONS: PATCHER.registerGroup("POLYGONS"); break;
     case TYPES.WEBGL: {
       PATCHER.registerGroup("WEBGL");
       canvas.effects.lightSources.forEach(src => src._initializeEVShadows());
@@ -123,6 +118,5 @@ export function registerPatchesForSceneSettings() {
 }
 
 function unregisterPatchesForSceneSettings() {
-  PATCHER.deregisterGroup("POLYGONS");
   PATCHER.deregisterGroup("WEBGL");
 }

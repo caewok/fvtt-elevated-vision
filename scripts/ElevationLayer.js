@@ -28,7 +28,6 @@ import {
   drawPolygonWithHoles,
   quotient256,
   mod256 } from "./util.js";
-import { testWallsForIntersections } from "./ClockwiseSweepPolygon.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { setSceneSetting, getSceneSetting, Settings } from "./settings.js";
 import { Draw } from "./geometry/Draw.js";
