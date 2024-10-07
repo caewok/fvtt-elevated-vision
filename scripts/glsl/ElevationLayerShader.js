@@ -6,6 +6,7 @@ PIXI
 "use strict";
 
 import { Settings } from "../settings.js";
+import { MODULE_ID } from "../const.js";
 
 import { defineFunction } from "./GLSLFunctions.js";
 import { AbstractEVShader } from "./AbstractEVShader.js";
@@ -102,7 +103,7 @@ void main() {
   };
 
   static create(defaultUniforms = {}) {
-    const ev = canvas.elevation;
+    const ev = canvas.scene[MODULE_ID];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
     defaultUniforms.uMinColor = this.getDefaultColorArray("MIN");
     defaultUniforms.uMaxColor = this.getDefaultColorArray("MAX");
@@ -132,7 +133,7 @@ void main() {
    * @param {number}
    */
   updateMaxCurrentElevation() {
-    this.uniforms.uMaxNormalizedElevation = canvas.elevation._normalizeElevation(canvas.elevation.elevationCurrentMax);
+    this.uniforms.uMaxNormalizedElevation = canvas.scene[MODULE_ID]._normalizeElevation(canvas.scene[MODULE_ID].elevationCurrentMax);
   }
 
   /**

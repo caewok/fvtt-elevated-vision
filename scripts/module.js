@@ -28,9 +28,12 @@ import { ElevationLayer } from "./ElevationLayer.js";
 // Settings, to toggle whether to change elevation on token move
 import { Settings, getSceneSetting, setSceneSetting } from "./settings.js";
 
+import { ElevationTextureHandler } from "./ElevationTextureHandler.js";
+
 // Other self-executing hooks
 import "./changelog.js";
-import "./controls.js";
+// import "./controls.js";
+
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -129,7 +132,7 @@ Hooks.once("init", function() {
   // These methods need to be registered early
   Settings.registerAll();
   initializePatching();
-  registerLayer();
+  // registerLayer();
 
   // Register new render flag for elevation changes to placeables.
   CONFIG.AmbientLight.objectClass.RENDER_FLAGS.refreshElevation = {};
@@ -150,8 +153,11 @@ Hooks.once("setup", function() {
 
 Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
-  if ( !canvas.elevation ) return;
-  canvas.elevation.initialize();
+  // if ( !canvas.elevation ) return;
+  canvas.scene[MODULE_ID] = new ElevationTextureHandler();
+  canvas.scene[MODULE_ID].initialize(); // Async.
+
+  // canvas.elevation.initialize();
   registerPatchesForSceneSettings();
 });
 

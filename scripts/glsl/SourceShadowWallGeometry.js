@@ -708,7 +708,7 @@ export class DirectionalSourceShadowWallGeometry extends SourceShadowWallGeometr
   get sourceOrigin() {
     const { rect, maxR } = canvas.dimensions;
     const center = rect.center;
-    const centerPt = new CONFIG.GeometryLib.threeD.Point3d(center.x, center.y, canvas.elevation.elevationMin);
+    const centerPt = new CONFIG.GeometryLib.threeD.Point3d(center.x, center.y, canvas.scene[MODULE_ID].elevationMin);
     return centerPt.add(this.source.lightDirection.multiplyScalar(maxR));
   }
 

@@ -8,6 +8,7 @@ PIXI
 // Shadow terrain when the source is below.
 // Also shadow based on limited angle.
 
+import { MODULE_ID } from "../const.js";
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
 
@@ -118,7 +119,7 @@ void main() {
       sceneRect.height
     ];
 
-    const ev = canvas.elevation;
+    const ev = canvas.scene[MODULE_ID];
     defaultUniforms.uElevationRes ??= [
       ev.elevationMin,
       ev.elevationStep,

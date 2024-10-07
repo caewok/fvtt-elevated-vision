@@ -1,78 +1,30 @@
 /* globals
-canvas,
-CONFIG,
-Dialog,
-document,
-foundry,
-FullCanvasObjectMixin,
 game,
-InteractionLayer,
-isEmpty,
-mergeObject,
+foundry,
+canvas,
+ClipperLib,
+CONFIG,
 PIXI,
-PolygonVertex,
-PreciseText,
-Ray,
-renderTemplate,
-saveDataToFile,
-ui,
+ui
 */
 "use strict";
 
 import { MODULE_ID, FLAGS } from "./const.js";
+import { quotient256, mod256, log } from "./util.js";
+import { getSceneSetting, setSceneSetting, Settings } from "./settings.js";
 import { PixelCache } from "./geometry/PixelCache.js";
-import {
-  log,
-  readDataURLFromFile,
-  convertBase64ToImage,
-  drawPolygonWithHoles,
-  quotient256,
-  mod256 } from "./util.js";
-import { SCENE_GRAPH } from "./WallTracer.js";
-import { setSceneSetting, getSceneSetting, Settings } from "./settings.js";
+import { extractPixels } from "./perfect-vision/extract-pixels.js";
 import { Draw } from "./geometry/Draw.js";
-import { ElevationLayerShader } from "./glsl/ElevationLayerShader.js";
-import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
-import "./perfect-vision/extract-async.js";
 
-/* Elevation layer
 
-Allow the user to "paint" areas with different elevations. This elevation data will then
-be used by the light shader (and eventually the vision shader) to identify areas that
-are not in shadow. For example, a mesa at 30' elevation should cast a shadow but should
-not cast a shadow on itself.
-  _____ <- no shadow
- /     \
-/       \--- <- shadow area
+// ----- NOTE: Imported from Elevation Layer ----- //
+// TODO: Can these be removed / made obsolete? What range of elevations can we have here?
 
-Set elevation in grid increments. Maximum 265; use texture (sprite?) to store.
+/**
+ * Methods originally in Elevation Layer that handle storing elevation values in texture.
+ */
+export class ElevationTextureHandler {
 
-Anticipated UI:
-
-Controls:
-- Current elevation for painting. Scroll wheel to increment / decrement
-- Tool to fill by grid square
-- Tool to fill all space contained between walls
-- Tool to fill by pixel. Resize and choose shape: grid square, hex, circle. Reset size to grid size.
-- Reset
-- Undo
-
-On canvas:
-- hover to see the current elevation value
-- Elevation indicated as shaded color going from red (low) to blue (high)
-- Solid lines representing walls of different heights. Near white for infinite.
-*/
-
-// TODO: What should replace this now that FullCanvasContainer is deprecated in v11?
-class FullCanvasContainer extends FullCanvasObjectMixin(PIXI.Container) {
-
-}
-
-export class ElevationLayer extends InteractionLayer {
-  constructor() {
-    super();
-    this.controls = ui.controls.controls.find(obj => obj.name === "elevation");
-  }
 
   /**
    * Sprite that contains the elevation values from the saved elevation file.
@@ -99,18 +51,6 @@ export class ElevationLayer extends InteractionLayer {
   _elevationTexture;
 
   /**
-   * PIXI.Mesh used to display the elevation colors when the layer is active.
-   * @type {ElevationLayerShader}
-   */
-  _elevationColorsMesh;
-
-  /**
-   * Container representing the canvas
-   * @type {FullCanvasContainer}
-   */
-  container;
-
-  /**
    * This is the z-order replacement in v10. Not elevation for the terrain!
    * @type {number}
    */
@@ -129,6 +69,66 @@ export class ElevationLayer extends InteractionLayer {
    * @type {number}
    */
   static #MAXIMUM_ELEVATION_TEXTURE_SIZE = CONFIG[MODULE_ID]?.elevationTextureSize ?? 4096;
+
+  constructor() {
+
+  }
+
+  /**
+   * Has the elevation layer been initialized?
+   * @type {boolean}
+   */
+  #initialized = false;
+
+  get initialized() { return this.#initialized; }
+
+  /**
+   * Initialize elevation data - resetting it when switching scenes or re-drawing canvas
+   */
+  async initialize() {
+    log("Initializing elevation layer");
+
+    this.#initialized = false;
+    this._clearElevationPixelCache();
+
+    // Background elevation sprite should start at the upper left scene corner
+    const { sceneX, sceneY } = canvas.dimensions;
+    this._backgroundElevation.position = { x: sceneX, y: sceneY };
+
+    // Add the render texture for displaying elevation information to the GM
+    const config = this._getElevationTextureConfiguration();
+    this._elevationTexture = PIXI.RenderTexture.create(config);
+    // Set the clear color of the render texture to black. The texture needs to be opaque.
+    this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
+
+    // Add the sprite that holds the default background elevation settings
+    this._graphicsContainer.addChild(this._backgroundElevation);
+
+    this.renderElevation();
+
+    this.#initialized = true;
+
+    // Update the source shadow meshes with the elevation texture.
+    const sources = [
+      ...canvas.effects.lightSources,
+      ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
+    ];
+
+    for ( const src of sources ) {
+      const ev = src[MODULE_ID];
+      if ( !ev ) continue;
+      if ( ev.shadowMesh ) {
+        ev.shadowMesh.shader.uniforms.uTerrainSampler = canvas.scene[MODULE_ID]._elevationTexture;
+        ev.shadowRenderer.update();
+      }
+
+      if ( ev.shadowVisionLOSMesh ) {
+        ev.shadowVisionLOSMesh.shader.uniforms.uTerrainSampler = canvas.scene[MODULE_ID]._elevationTexture;
+        ev.shadowVisionLOSRenderer.update();
+      }
+    }
+  }
+
 
   /**
    * Values used when rendering elevation data to a texture representing the scene canvas.
@@ -294,7 +294,6 @@ export class ElevationLayer extends InteractionLayer {
    */
   _updateElevationCurrentMax(e) {
     this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, e);
-    this._elevationColorsMesh.shader.updateMaxCurrentElevation();
   }
 
   /* ------------------------ */
@@ -427,105 +426,8 @@ export class ElevationLayer extends InteractionLayer {
     return Math.clamp(e, this.elevationMin, this.elevationMax);
   }
 
-  /** @override */
-  static get layerOptions() {
-    return foundry.utils.mergeObject(super.layerOptions, {
-      name: "Elevation"
-    });
-  }
-
-  /** @override */
-  _activate() {
-    log("Activating Elevation Layer.");
-    this.drawElevation();
-    this.container.visible = true;
-  }
-
-  /** @override */
-  _deactivate() {
-    log("De-activating Elevation Layer.");
-    if ( !this.container ) return;
-    this.eraseElevation();
-    Draw.clearDrawings();
-    this.container.visible = false;
-  }
-
   /* -------------------------------------------- */
 
-  /** @inheritdoc */
-  async _tearDown(options) {
-    log("_tearDown Elevation Layer");
-
-    // Probably need to figure out how to destroy and/or remove these objects
-    //     this._graphicsContainer.destroy({children: true});
-    //     this._graphicsContainer = null;
-    this.#destroy();
-    this.container = null;
-    return super._tearDown(options);
-  }
-
-  /* -------------------------------------------- */
-
-  /**
-   * Has the elevation layer been initialized?
-   * @type {boolean}
-   */
-  _initialized = false;
-
-  /**
-   * Initialize elevation data - resetting it when switching scenes or re-drawing canvas
-   */
-  async initialize() {
-    log("Initializing elevation layer");
-
-    this._initialized = false;
-    this._clearElevationPixelCache();
-
-    // Initialize container to hold the elevation data and GM modifications
-    const w = new FullCanvasContainer();
-    this.container = this.addChild(w);
-
-    // Background elevation sprite should start at the upper left scene corner
-    const { sceneX, sceneY } = canvas.dimensions;
-    this._backgroundElevation.position = { x: sceneX, y: sceneY };
-
-    // Add the render texture for displaying elevation information to the GM
-    const config = this._getElevationTextureConfiguration();
-    this._elevationTexture = PIXI.RenderTexture.create(config);
-    // Set the clear color of the render texture to black. The texture needs to be opaque.
-    this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
-
-    // Add the sprite that holds the default background elevation settings
-    this._graphicsContainer.addChild(this._backgroundElevation);
-
-    // Add the elevation color mesh
-    const shader = ElevationLayerShader.create();
-    this._elevationColorsMesh = new EVQuadMesh(canvas.dimensions.sceneRect, shader);
-
-    this.renderElevation();
-
-    this._initialized = true;
-
-    // Update the source shadow meshes with the elevation texture.
-    const sources = [
-      ...canvas.effects.lightSources,
-      ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
-    ];
-
-    for ( const src of sources ) {
-      const ev = src[MODULE_ID];
-      if ( !ev ) continue;
-      if ( ev.shadowMesh ) {
-        ev.shadowMesh.shader.uniforms.uTerrainSampler = canvas.scene[MODULE_ID]._elevationTexture;
-        ev.shadowRenderer.update();
-      }
-
-      if ( ev.shadowVisionLOSMesh ) {
-        ev.shadowVisionLOSMesh.shader.uniforms.uTerrainSampler = canvas.scene[MODULE_ID]._elevationTexture;
-        ev.shadowVisionLOSRenderer.update();
-      }
-    }
-  }
 
   /**
    * Update minimum elevation for the scene based on the Levels minimum tile elevation.
@@ -802,20 +704,16 @@ export class ElevationLayer extends InteractionLayer {
   /**
    * Destroy elevation data when changing scenes or clearing data.
    */
-  #destroy() {
+  destroy() {
     this._clearElevationPixelCache();
     this._backgroundElevation.destroy();
     this._backgroundElevation = PIXI.Sprite.from(PIXI.Texture.EMPTY);
-    this._elevationColorsMesh?.destroy();
 
     this._graphicsContainer.destroy({children: true});
     this._graphicsContainer = new PIXI.Container();
 
     this._elevationTexture?.destroy();
   }
-
-  /* -------------------------------------------- */
-  /* NOTE: DRAWING ELEVATION ON CANVAS */
 
   /**
    * (Re)render the graphics stored in the container.
@@ -829,69 +727,4 @@ export class ElevationLayer extends InteractionLayer {
     this._clearElevationPixelCache();
   }
 
-  /**
-   * Draw the elevation container.
-   */
-  drawElevation() {
-    this.container.addChild(this._elevationColorsMesh);
-  }
-
-  /**
-   * Remove the elevation color shading.
-   */
-  eraseElevation() {
-    this.container.removeChild(this._elevationColorsMesh);
-  }
-
-  _updateMinColor() {
-    this._elevationColorsMesh.shader.updateMinColor();
-  }
 }
-
-// NOTE: Testing elevation texture pixels
-/*
-api = game.modules.get("elevatedvision").api
-extractPixels = api.extract.extractPixels
-
-let { pixels, width, height } = extractPixels(canvas.app.renderer, canvas.scene[MODULE_ID]._elevationTexture)
-
-filterPixelsByChannel = function(pixels, channel = 0, numChannels = 4) {
-  if ( numChannels === 1 ) return;
-  if ( channel < 0 || numChannels < 0 ) {
-    console.error("channels and numChannels must be greater than 0.");
-  }
-  if ( channel >= numChannels ) {
-    console.error("channel must be less than numChannels. (First channel is 0.)");
-  }
-
-  const numPixels = pixels.length;
-  const filteredPixels = new Array(Math.floor(numPixels / numChannels));
-  for ( let i = channel, j = 0; i < numPixels; i += numChannels, j += 1 ) {
-    filteredPixels[j] = pixels[i];
-  }
-  return filteredPixels;
-}
-
-
-pixelRange = function(pixels) {
-  const out = {
-    min: pixels.reduce((acc, curr) => Math.min(curr, acc), Number.POSITIVE_INFINITY),
-    max: pixels.reduce((acc, curr) => Math.max(curr, acc), Number.NEGATIVE_INFINITY)
-  };
-
-  out.nextMin = pixels.reduce((acc, curr) => curr > out.min ? Math.min(curr, acc) : acc, Number.POSITIVE_INFINITY);
-  out.nextMax = pixels.reduce((acc, curr) => curr < out.max ? Math.max(curr, acc) : acc, Number.NEGATIVE_INFINITY);
-  return out;
-}
-uniquePixels = function(pixels) {
-  s = new Set();
-  pixels.forEach(px => s.add(px))
-  return s;
-}
-
-countPixels = function(pixels, value) {
-  let sum = 0;
-  pixels.forEach(px => sum += px === value);
-  return sum;
-}
-*/

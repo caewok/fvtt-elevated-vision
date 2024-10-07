@@ -258,7 +258,7 @@ export class WebGLShadows {
 
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const src = this.source;
-    z ??= canvas.elevation.elevationAt({x, y});
+    z ??= canvas.scene[MODULE_ID].elevationAt({x, y});
     const testPt = new Point3d(x, y, z);
     const origin = Point3d.fromPointSource(this.source);
     const midCollision = this.hasEdgeCollision(origin, testPt);
@@ -450,7 +450,7 @@ export class WebGLShadows {
     if ( bottomZ > elevationZ ) return false;
 
     // If wall is entirely below the canvas and source is above, do not keep.
-    const minCanvasE = canvas.elevation?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
+    const minCanvasE = canvas.scene[MODULE_ID]?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
     if ( topZ <= minCanvasE && elevationZ > minCanvasE ) return false;
 
     // Ignore collinear walls
@@ -817,7 +817,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     let { x, y, z } = pt
     */
 
-    z ??= canvas.elevation.elevationAt({x, y});
+    z ??= canvas.scene[MODULE_ID].elevationAt({x, y});
     const testPt = new CONFIG.GeometryLib.threeD.Point3d(x, y, z);
 
     // Project a point out beyond the canvas to stand in for the light position.
@@ -886,7 +886,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     if ( side === edge.dir ) return false;
 
     // If wall is entirely below the canvas, do not keep.
-    const minCanvasE = canvas.elevation?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
+    const minCanvasE = canvas.scene[MODULE_ID]?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
     if ( edge.topZ <= minCanvasE ) return false;
 
     return true;
@@ -957,7 +957,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
 
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const src = this.source;
-    z ??= canvas.elevation.elevationAt({x, y});
+    z ??= canvas.scene[MODULE_ID].elevationAt({x, y});
     const testPt = new Point3d(x, y, z);
 
     // Project a point out beyond the canvas to stand in for the light position.
