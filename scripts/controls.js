@@ -113,17 +113,6 @@ function addElevationLayerSceneControls(controls) {
         button: true,
         onClick: () => { canvas.elevation.downloadElevationData({format: "image/webp"}); }
       },
-
-      {
-        name: "undo",
-        title: game.i18n.localize(`${MODULE_ID}.controls.undo.name`),
-        icon: "fas fa-rotate-left",
-        button: true,
-        onClick: () => {
-          canvas.elevation.undo();
-        }
-      }
-
     ]
   });
 }
@@ -144,7 +133,7 @@ function addElevationLayerSubControls(controls) {
 function drawBrush(controls) {
   if ( !canvas.elevation ) return;
   switch (controls.tool) {
-    case 'fill-by-pixel': 
+    case 'fill-by-pixel':
       canvas.elevation.drawBrush();
       break;
     default:

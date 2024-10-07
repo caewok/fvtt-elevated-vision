@@ -96,8 +96,6 @@ function addRegionElevation(region) {
 function removeRegionElevation(region) {
   let idx = canvas.elevation._graphicsContainer.children.findIndex(c => c._region === region);
   if ( ~idx ) canvas.elevation._graphicsContainer.removeChildAt(idx);
-  idx = canvas.elevation.undoQueue.elements.findIndex(e => e._region === region);
-  if ( ~idx ) canvas.elevation.undoQueue.elements.splice(idx, 1);
 }
 
 /**

@@ -30,7 +30,6 @@ import {
   mod256 } from "./util.js";
 import { testWallsForIntersections } from "./ClockwiseSweepPolygon.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
-import { FILOQueue } from "./FILOQueue.js";
 import { setSceneSetting, getSceneSetting, Settings } from "./settings.js";
 import { ElevationTextureManager } from "./ElevationTextureManager.js";
 
@@ -78,8 +77,6 @@ export class ElevationLayer extends InteractionLayer {
   constructor() {
     super();
     this.controls = ui.controls.controls.find(obj => obj.name === "elevation");
-
-    this.undoQueue = new FILOQueue();
     this._activateHoverListener();
   }
 
@@ -1038,7 +1035,6 @@ export class ElevationLayer extends InteractionLayer {
     // and that causes a lighter-color border to appear outside the shape.
     this.renderElevation();
     this._requiresSave = !temporary;
-    this.undoQueue.enqueue(graphics);
     return graphics;
   }
 
@@ -1248,19 +1244,6 @@ export class ElevationLayer extends InteractionLayer {
 
     if ( poly.isClosed ) return poly;
     return false;
-  }
-
-  /**
-   * Undo the prior graphics addition.
-   */
-  undo() {
-    const g = this.undoQueue.dequeue();
-    if ( !g ) return;
-    this._graphicsContainer.removeChild(g);
-    g.destroy();
-    this.#elevationCurrentMax = undefined;
-    this._requiresSave = true;
-    this.renderElevation();
   }
 
   /**
