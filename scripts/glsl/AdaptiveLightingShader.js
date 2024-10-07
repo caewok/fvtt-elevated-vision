@@ -30,7 +30,6 @@ function create(wrapped, ...args) {
   );
 
   const shader = wrapped(...args);
-  const shaderAlgorithm = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM);
   shader.uniforms.uEVShadowSampler = PIXI.Texture.EMPTY;
   shader.uniforms.uEVShadows = false;
   return shader;

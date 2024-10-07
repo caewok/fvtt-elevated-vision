@@ -110,41 +110,8 @@ _createPolygon
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
-PATCHES.POLYGONS = {};
-PATCHES.WEBGL = {};
 
-// ----- NOTE: Polygon Shadows ----- //
-// NOTE: Polygon Wraps
-function EVVisionMaskPolygon() {
-  const g = new PIXI.Graphics();
-  const draw = new Draw(g);
 
-  const ev = this[MODULE_ID];
-  if ( !ev || !ev.polygonShadows?.combined?.length ) {
-    draw.shape(this.shape, { fill: 0xFF0000 });
-    return g;
-  }
-
-  for ( const poly of ev.polygonShadows.combined ) {
-    if ( poly.isHole ) {
-      g.beginHole();
-      g.drawShape(poly, { fill: 0xFF0000 });
-      g.endHole();
-    } else this.drawShape(poly, { fill: 0xFF0000 });
-  }
-  return g;
-}
-
-PATCHES.POLYGONS.METHODS = { EVVisionMask: EVVisionMaskPolygon };
-
-// NOTE: Polygon Methods
-
-function _createShapes(wrapped) {
-  wrapped();
-  // TODO: this.polygonShadows(this.shape);
-}
-
-PATCHES.POLYGONS.WRAPS = { _createShapes };
 
 // ----- NOTE: WebGL Shadows ----- //
 
@@ -175,7 +142,7 @@ function destroy(wrapped) {
   return wrapped();
 }
 
-PATCHES.WEBGL.WRAPS = {
+PATCHES.BASIC.WRAPS = {
   _configure,
   destroy
 };
@@ -193,4 +160,4 @@ function webGLShadowsGetter() {
   return ev;
 }
 
-PATCHES.WEBGL.GETTERS = { elevatedvision: webGLShadowsGetter };
+PATCHES.BASIC.GETTERS = { elevatedvision: webGLShadowsGetter };

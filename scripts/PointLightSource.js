@@ -10,7 +10,7 @@ import { Settings } from "./settings.js";
 // Methods related to LightSource
 
 export const PATCHES = {};
-PATCHES.WEBGL = {};
+PATCHES.LIGHTING = {};
 
 
 /**
@@ -44,7 +44,7 @@ function _updateCommonUniforms(wrapped, shader) {
   wrapped(shader);
 }
 
-PATCHES.WEBGL.WRAPS = {
+PATCHES.LIGHTING.WRAPS = {
   _initialize,
   _getPolygonConfiguration,
   _updateCommonUniforms

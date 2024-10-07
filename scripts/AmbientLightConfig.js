@@ -105,11 +105,8 @@ function calculateDirectionalData(app, context) {
   const { x, y } = app.document;
   const { azimuth, elevationAngle } = DirectionalLightSource.directionalParametersFromPosition({x, y});
   const isDirectional = Boolean(app.document.flags[MODULE_ID]?.directionalLight);
-  const { ALGORITHM, TYPES } = Settings.KEYS.SHADING;
-  const algorithm = getSceneSetting(ALGORITHM);
-
   context[MODULE_ID] = {
-    directionalDisabled: algorithm !== TYPES.WEBGL,
+    directionalDisabled: false,
     defaultLightSize: Settings.get(Settings.KEYS.LIGHTING.LIGHT_SIZE),
     pixelsDistance: (1 / canvas.dimensions.distancePixels).toPrecision(1),
     azimuth: Math.normalizeDegrees(Math.toDegrees(azimuth)).toFixed(1),

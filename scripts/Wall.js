@@ -10,7 +10,7 @@ import { SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
 // Methods related to Wall
 
 export const PATCHES = {};
-PATCHES.WEBGL = {};
+PATCHES.BASIC = {};
 
 // NOTE: Wall Document Hooks
 
@@ -80,7 +80,7 @@ function deleteWall(wallD, _options, _userId) {
   for ( const src of sources ) src[MODULE_ID].edgeRemoved(wallD.id);
 }
 
-PATCHES.WEBGL.HOOKS = {
+PATCHES.BASIC.HOOKS = {
   createWall,
   updateWall,
   deleteWall

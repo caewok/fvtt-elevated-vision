@@ -170,32 +170,6 @@ function setDirectionalLightSources(lights) {
   });
 }
 
-Hooks.on("3DCanvasSceneReady", function(_previewArr) {
-  disableScene();
-});
-
-Hooks.on("3DCanvasToggleMode", function(isOn) {
-  // TODO: Do we need to reset the values for the scene? Seems unnecessary, as a 3d canvas
-  //       is not likely to be used in a non-3d state and require EV for it.
-  if ( !isOn ) return;
-  disableScene();
-});
-
-async function disableScene() {
-  const shadowsDisabled = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) !== Settings.KEYS.SHADING.TYPES.NONE;
-  if ( shadowsDisabled ) {
-    await setSceneSetting(Settings.KEYS.SHADING.ALGORITHM, Settings.KEYS.SHADING.TYPES.NONE);
-
-    // Looks like we don't need to redraw the scene?
-    // await canvas.draw(canvas.scene);
-  }
-
-  if ( shadowsDisabled ) {
-    ui.notifications.notify("Elevated Vision features for the scene disabled for compatibility with 3D Canvas.");
-  }
-}
-
-
 // https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
 Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(MODULE_ID);

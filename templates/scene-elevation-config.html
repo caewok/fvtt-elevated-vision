@@ -1,6 +1,6 @@
 <fieldset>
 
-<legend>Elevated Vision</legend>
+<legend>{{ localize "elevationvision.name" }}</legend>
   <div class="form-group">
     <label>{{ localize "elevatedvision.sceneconfig.elevationmin.name"}}</label>
     <div class="form-fields">
@@ -18,13 +18,19 @@
   <p class="notes">{{ localize "elevatedvision.sceneconfig.elevationstep.hint" }}</p>
 
   <div class="form-group">
-    <label>{{ localize "elevatedvision.sceneconfig.shading-algorithm.name"}}</label>
+    <label>{{ localize "elevatedvision.sceneconfig.use-shadow-lighting.name"}}</label>
     <div class="form-fields">
-      <select id="EValgorithm" name="flags.elevatedvision.shading-algorithm" class="elevatedvision">
-      {{ selectOptions elevatedvision.algorithms selected=data.flags.elevatedvision.shading-algorithm localize=true }}
-      </select>
+      <input type="checkbox" id="EVuseshadowlighting" name="flags.elevatedvision.useShadowLighting" class="elevatedvision" {{ checked flags.elevatedvision.useShadowLighting }}>
     </div>
   </div>
-  <p class="notes">{{ localize "elevatedvision.sceneconfig.shading-algorithm.hint" }}</p>
+  <p class="notes">{{ localize "elevatedvision.sceneconfig.use-shadow-lighting.hint" }}</p>
+
+  <div class="form-group">
+    <label>{{ localize "elevatedvision.sceneconfig.use-shadow-vision.name"}}</label>
+    <div class="form-fields">
+      <input type="checkbox" id="EVuseshadowvision" name="flags.elevatedvision.useShadowVision" class="elevatedvision" {{ checked flags.elevatedvision.useShadowVision }}>
+    </div>
+  </div>
+  <p class="notes">{{ localize "elevatedvision.sceneconfig.use-shadow-vision.hint" }}</p>
 
 </fieldset>

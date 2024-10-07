@@ -16,7 +16,7 @@ PATCHES.BASIC = {};
  * This will cause shadows to change based on the changed token height.
  */
 function createOrRemoveActiveEffectHook(effect, _opts, _userId) {
-  if ( getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) === Settings.KEYS.SHADING.TYPES.NONE ) return;
+  if ( !getSceneSetting(Settings.KEYS.SHADOWS.VISION) ) return;
   if ( !effect.statuses.has(CONFIG.GeometryLib.proneStatusId) ) return;
 
   const tokens = effect.parent?.getActiveTokens();

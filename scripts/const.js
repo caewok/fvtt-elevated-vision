@@ -12,10 +12,8 @@ export const LEVELS_MODULE_ID = "levels";
 export const EPSILON = 1e-08;
 
 export const FLAGS = {
-  BLOCKS_VISION: "blocksVision",
-  ELEVATION_IMAGE: "elevationImage",
-  ELEVATION: "elevation",
-  LIGHT_SIZE: "lightSize",
+  BLOCKS_VISION: "blocksVision",  // For regions
+  LIGHT_SIZE: "lightSize",  // How large is this light for purposes of penumbra
   DIRECTIONAL_LIGHT: {
     ENABLED: "directionalLight",
     SOLAR_ANGLE: "solarAngle"
@@ -23,10 +21,8 @@ export const FLAGS = {
 };
 
 export const TEMPLATES = {
-  TOKEN: `modules/${MODULE_ID}/templates/token-config.html`,
   AMBIENT_SOURCE: `modules/${MODULE_ID}/templates/ambient-source-config.html`,
   AMBIENT_SOURCE_PARTIAL: `modules/${MODULE_ID}/templates/ambient-source-config-partial.html`,
-  ELEVATION_STEP: `modules/${MODULE_ID}/templates/elevation-step-controls.html`,
   SCENE: `modules/${MODULE_ID}/templates/scene-elevation-config.html`,
   REGION: `modules/${MODULE_ID}/templates/region-config.html`
 };
