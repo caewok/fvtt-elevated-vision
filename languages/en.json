@@ -5,7 +5,6 @@
   "elevatedvision.settings.shading-algorithm.hint": "Set the default shadow method for new scenes. Can adjust per-scene using the scene configuration. Polygons: Represent shadows caused by limited-height walls using polygons for token vision. WebGL: Use WebGL for light shadows and token vision caused by limited height walls. In addition, use WebGL to shade canvas areas for lights and token vision where terrain is higher than the light or token vision respectively. Enables directional lighting.",
 
   "elevatedvision.settings.shading-none": "None",
-  "elevatedvision.settings.shading-polygons": "Polygons",
   "elevatedvision.settings.shading-webgl": "WebGL",
 
   "elevatedvision.settings.elevationmin.name": "Default elevation minimum",
@@ -17,37 +16,15 @@
   "elevatedvision.settings.point-light-size.name": "Default light size",
   "elevatedvision.settings.point-light-size.hint": "Default radius of the physical light sphere. Foundry default treats lights as point sources (0-sized). Larger values create larger shadow penumbra.",
 
-  "elevatedvision.settings.enhance-cw-sweep.name": "Enhance LOS calculation",
-  "elevatedvision.settings.enhance-cw-sweep.hint": "Experimental. Uses the fill algorithm to provide a potential speed-up to the line-of-sight calculation used by vision, sound, and lighting. When the token or source is completely enclosed by a set of walls, this allows sweep to shortcut various calculations. Requires additional calculations when walls are created, updated, or destroyed. May be useful for very large dungeon scenes.",
-
-  "elevatedvision.settings.brush-size.name": "Fill by Pixel Brush Size",
-  "elevatedvision.settings.brush-size.hint": "Set the size of the Fill by Pixel brush.",
-
-  "elevatedvision.settings.color-min.name": "Elevation Minimum Color",
-  "elevatedvision.settings.color-min.hint": "Set the color used to display the minimum elevation (above the scene minimum) on the elevation layer.",
-  "elevatedvision.settings.color-max.name": "Elevation Maximum Color",
-  "elevatedvision.settings.color-max.hint": "Set the color used to display the maximum elevation on the elevation layer. Colors between min and max will be interpolated.",
-  "elevatedvision.settings.color-min.string_hint": "Set the color used to display the minimum elevation (above the scene minimum) on the elevation layer. Install the Color Picker module to get a color picker here.",
-  "elevatedvision.settings.color-max.string_hint": "Set the color used to display the maximum elevation on the elevation layer. Colors between min and max will be interpolated. Install the Color Picker module to get a color picker here.",
-
   "elevatedvision.settings.lights-full-penumbra.name": "Full Shadow Penumbra",
   "elevatedvision.settings.lights-full-penumbra.hint": "When enabled, lighting for all walls will display a full penumbra for the shadow. When disabled, the penumbra shadow for infinite-height walls may display differently than the shadow for limited-height walls. Disabling may improve compatibility with other modules. Only applies when WebGL shadows are enabled.",
 
   "elevatedvision.settings.test-visibility.name": "Override Visibility Tests",
   "elevatedvision.settings.test-visibility.hint": "When enabled, Elevated Vision will override the Foundry default visibility testing. This is necessary if you want token visibility to work with directional lighting, limited height walls, or with the Full Shadow Penumbra setting. Disable if some other module is taking over visibility testing.",
 
-  "elevatedvision.controls.fill-by-grid.name": "Fill by grid",
-  "elevatedvision.controls.fill-by-los.name": "Fill by line-of-sight",
-  "elevatedvision.controls.fill-space.name": "Fill space enclosed by walls",
   "elevatedvision.controls.clear.name": "Clear all",
   "elevatedvision.controls.clear.confirm.title": "Clear all elevation data",
   "elevatedvision.controls.clear.confirm.content": "Are you sure you want to remove all elevation data from the scene?",
-  "elevatedvision.controls.upload.name": "Upload elevation data and replace in scene",
-  "elevatedvision.controls.download.name": "Download elevation data",
-  "elevatedvision.controls.undo.name": "Undo",
-  "elevatedvision.controls.directional-light.name": "Directional Light",
-
-  "elevatedvision.controls.add-fly-button.name": "Elevated Tokens Fly",
 
   "elevatedvision.shading-none": "None",
   "elevatedvision.shading-polygons": "Polygons",

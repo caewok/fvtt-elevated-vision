@@ -13,7 +13,6 @@ export const SETTINGS = {
     ALGORITHM: "shading-algorithm",
     TYPES: {
       NONE: "shading-none",
-      POLYGONS: "shading-polygons",
       WEBGL: "shading-webgl"
     },
     LABELS: {
@@ -21,20 +20,6 @@ export const SETTINGS = {
       "shading-polygons": `${MODULE_ID}.shading-polygons`,
       "shading-webgl": `${MODULE_ID}.shading-webgl`
     }
-  },
-
-  BRUSH: {
-    SIZE: "brush-size",
-    DEFAULT_SIZE: 100,
-    MAX_SIZE: 500,
-    MIN_SIZE: 1
-  },
-
-  COLOR: {
-    MIN: "color-min",
-    MAX: "color-max",
-    DEFAULT_MIN: "#03000003",
-    DEFAULT_MAX: "#80000080"
   },
 
   LIGHTING: {
@@ -45,7 +30,6 @@ export const SETTINGS = {
   LIGHTS_FULL_PENUMBRA: "lights-full-penumbra",
   // VISION_USE_SHADER: "vision-use-shader",  // Deprecated
   // AUTO_AVERAGING: "auto-change-elevation.averaging", // Deprecated
-  CLOCKWISE_SWEEP: "enhance-cw-sweep",
   ELEVATION_MINIMUM: "elevationmin",
   ELEVATION_INCREMENT: "elevationstep",
   CHANGELOG: "changelog"
@@ -100,7 +84,6 @@ export class Settings extends ModuleSettingsAbstract {
       requiresReload: false,
       choices: {
         [STYPES.NONE]: localize(`${STYPES.NONE}`),
-        [STYPES.POLYGONS]: localize(`${STYPES.POLYGONS}`),
         [STYPES.WEBGL]: localize(`${STYPES.WEBGL}`)
       }
     });
@@ -139,68 +122,6 @@ export class Settings extends ModuleSettingsAbstract {
       type: Number
     });
 
-    register(KEYS.BRUSH.SIZE, {
-      name: localize(`${KEYS.BRUSH.SIZE}.name`),
-      hint: localize(`${KEYS.BRUSH.SIZE}.hint`),
-      scope: "world",
-      config: true,
-      range: {
-        min: 1,
-        step: 1,
-        max: KEYS.BRUSH.MAX_SIZE
-      },
-      default: KEYS.BRUSH.DEFAULT_SIZE,
-      requiresReload: false,
-      type: Number
-    });
-
-    if ( game.modules.get("color-picker")?.active ) {
-      ColorPicker.register(MODULE_ID, KEYS.COLOR.MIN, {
-        name: localize(`${KEYS.COLOR.MIN}.name`),
-        hint: localize(`${KEYS.COLOR.MIN}.hint`),
-        scope: "world",
-        config: true,
-        default: KEYS.COLOR.DEFAULT_MIN,
-        format: "hexa",
-        mode: "HVS",
-        onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMinColor(value)
-      });
-
-      ColorPicker.register(MODULE_ID, KEYS.COLOR.MAX, {
-        name: localize(`${KEYS.COLOR.MAX}.name`),
-        hint: localize(`${KEYS.COLOR.MAX}.hint`),
-        scope: "world",
-        config: true,
-        default: KEYS.COLOR.DEFAULT_MAX,
-        format: "hexa",
-        mode: "HVS",
-        onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMaxColor(value)
-      });
-
-    } else {
-      register(KEYS.COLOR.MIN, {
-        name: localize(`${KEYS.COLOR.MIN}.name`),
-        hint: localize(`${KEYS.COLOR.MIN}.string_hint`),
-        scope: "world",
-        config: true,
-        default: KEYS.COLOR.DEFAULT_MIN,
-        type: String,
-        requiresReload: false,
-        onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMinColor(value)
-      });
-
-      register(KEYS.COLOR.MAX, {
-        name: localize(`${KEYS.COLOR.MAX}.name`),
-        hint: localize(`${KEYS.COLOR.MAX}.string_hint`),
-        scope: "world",
-        config: true,
-        default: KEYS.COLOR.DEFAULT_MAX,
-        type: String,
-        requiresReload: false,
-        onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMaxColor(value)
-      });
-    }
-
     register(KEYS.TEST_VISIBILITY, {
       name: localize(`${KEYS.TEST_VISIBILITY}.name`),
       hint: localize(`${KEYS.TEST_VISIBILITY}.hint`),
@@ -217,16 +138,6 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: true,
       default: true,
-      requiresReload: true,
-      type: Boolean
-    });
-
-    register(KEYS.CLOCKWISE_SWEEP, {
-      name: localize(`${KEYS.CLOCKWISE_SWEEP}.name`),
-      hint: localize(`${KEYS.CLOCKWISE_SWEEP}.hint`),
-      scope: "world",
-      config: true,
-      default: false,
       requiresReload: true,
       type: Boolean
     });

@@ -84,9 +84,9 @@ function addRegionElevation(region) {
   const polys = region.polygons;
   const graphics = new PIXI.Graphics();
   graphics._region = region;
-  const elevation = region.document.elevation.top ?? canvas.elevation.elevationMax;
-  drawPolygonWithHoles(polys, { graphics, fillColor: canvas.elevation.elevationColor(elevation) });
-  canvas.elevation._setElevationForGraphics(graphics, elevation);
+  const elevation = region.document.elevation.top ?? canvas.scene[MODULE_ID].elevationMax;
+  drawPolygonWithHoles(polys, { graphics, fillColor: canvas.scene[MODULE_ID].elevationColor(elevation) });
+  canvas.scene[MODULE_ID]._setElevationForGraphics(graphics, elevation);
 }
 
 /**
@@ -94,10 +94,8 @@ function addRegionElevation(region) {
  * @param {Region} region
  */
 function removeRegionElevation(region) {
-  let idx = canvas.elevation._graphicsContainer.children.findIndex(c => c._region === region);
-  if ( ~idx ) canvas.elevation._graphicsContainer.removeChildAt(idx);
-  idx = canvas.elevation.undoQueue.elements.findIndex(e => e._region === region);
-  if ( ~idx ) canvas.elevation.undoQueue.elements.splice(idx, 1);
+  let idx = canvas.scene[MODULE_ID]._graphicsContainer.children.findIndex(c => c._region === region);
+  if ( ~idx ) canvas.scene[MODULE_ID]._graphicsContainer.removeChildAt(idx);
 }
 
 /**
@@ -110,8 +108,8 @@ function addRegionWalls(region) {
   let bottom = regionD.elevation?.bottom;
   const TM = OTHER_MODULES.TERRAIN_MAPPER;
   if ( TM.ACTIVE && region[TM.KEY].isElevated ) top = region[TM.KEY].plateauElevation;
-  top ??= canvas.elevation.elevationMax;
-  bottom ??= canvas.elevation.elevationMin;
+  top ??= canvas.scene[MODULE_ID].elevationMax;
+  bottom ??= canvas.scene[MODULE_ID].elevationMin;
   const useWebGL = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) === Settings.KEYS.SHADING.TYPES.WEBGL;
   const sources = useWebGL ? [
     ...canvas.effects.lightSources,
