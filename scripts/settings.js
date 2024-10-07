@@ -23,13 +23,6 @@ export const SETTINGS = {
     }
   },
 
-  BRUSH: {
-    SIZE: "brush-size",
-    DEFAULT_SIZE: 100,
-    MAX_SIZE: 500,
-    MIN_SIZE: 1
-  },
-
   COLOR: {
     MIN: "color-min",
     MAX: "color-max",
@@ -135,21 +128,6 @@ export class Settings extends ModuleSettingsAbstract {
         step: 1
       },
       default: 0,
-      requiresReload: false,
-      type: Number
-    });
-
-    register(KEYS.BRUSH.SIZE, {
-      name: localize(`${KEYS.BRUSH.SIZE}.name`),
-      hint: localize(`${KEYS.BRUSH.SIZE}.hint`),
-      scope: "world",
-      config: true,
-      range: {
-        min: 1,
-        step: 1,
-        max: KEYS.BRUSH.MAX_SIZE
-      },
-      default: KEYS.BRUSH.DEFAULT_SIZE,
       requiresReload: false,
       type: Number
     });

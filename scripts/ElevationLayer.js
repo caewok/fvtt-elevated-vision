@@ -120,67 +120,6 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
-   * Initialize the brush.
-   */
-  initializeBrush() {
-    const brush = new PIXI.Graphics();
-    brush.visible = false;
-    brush.x = 0;
-    brush.y = 0;
-    brush.zIndex = 10;
-
-    return brush;
-  }
-
-  /**
-   * Draw the brush.
-   */
-  drawBrush(data = {}) {
-    const canvasScale = game?.canvas?.stage?.scale?._x ?? 1.5;
-    const size = Settings.get(Settings.KEYS.BRUSH.SIZE) ?? 100;
-    const lineWidth = Math.round(4 - canvasScale);
-
-    this.brush.clear();
-    this.brush.lineStyle(lineWidth);
-
-    switch (game.activeTool) {
-      case "fill-by-pixel":
-        const ellipseSize = Math.round(size / 2);
-        this.brush.drawEllipse(0, 0, ellipseSize, ellipseSize);
-        break;
-      default:
-        break;
-    }
-
-    this.brush.endFill();
-
-    this.brush.visible = data?.visible ?? false;
-    this.brush.x = data?.x ?? canvas.mousePosition.x;
-    this.brush.y = data?.y ?? canvas.mousePosition.y;
-  }
-
-  /**
-   * Update the brush size when the [ or ] keys are pressed.
-   * Potentially replace with keybindings if/when it supports holding the key.
-   */
-  updateBrushSize(event) {
-    if ( game.activeTool !== "fill-by-pixel" ) return;
-    if ( !["BracketLeft", "BracketRight"].includes(event.code) ) return;
-    if ( !this.brush.visible ) return;
-
-    const size = Settings.get(Settings.KEYS.BRUSH.SIZE);
-    const increment = (event.shiftKey) ? 5 : 1;
-
-    if (event.code === "BracketLeft") {
-      if (size > Settings.KEYS.BRUSH.MIN_SIZE) Settings.set(Settings.KEYS.BRUSH.SIZE, size - increment);
-    } else {
-      if (size < Settings.KEYS.BRUSH.MAX_SIZE ) Settings.set(Settings.KEYS.BRUSH.SIZE, size + increment);
-    }
-
-    this.drawBrush({ visible: true });
-  }
-
-  /**
    * Update the elevation label to the elevation value at the provided location,
    * and move the label to that location.
    * @param {number} x
@@ -1068,12 +1007,6 @@ export class ElevationLayer extends InteractionLayer {
     }
 
     return new PIXI.Polygon(pointsTranslated);
-  }
-
-  _circleShape(p) {
-    const brushSize = Settings.get(Settings.KEYS.BRUSH.SIZE);
-    const r = (brushSize > 1) ? Math.round(Settings.get(Settings.KEYS.BRUSH.SIZE) / 2) : 1;
-    return new PIXI.Circle(p.x, p.y, r);
   }
 
   /* -------------------------------------------- */

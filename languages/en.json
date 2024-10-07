@@ -20,9 +20,6 @@
   "elevatedvision.settings.enhance-cw-sweep.name": "Enhance LOS calculation",
   "elevatedvision.settings.enhance-cw-sweep.hint": "Experimental. Uses the fill algorithm to provide a potential speed-up to the line-of-sight calculation used by vision, sound, and lighting. When the token or source is completely enclosed by a set of walls, this allows sweep to shortcut various calculations. Requires additional calculations when walls are created, updated, or destroyed. May be useful for very large dungeon scenes.",
 
-  "elevatedvision.settings.brush-size.name": "Fill by Pixel Brush Size",
-  "elevatedvision.settings.brush-size.hint": "Set the size of the Fill by Pixel brush.",
-
   "elevatedvision.settings.color-min.name": "Elevation Minimum Color",
   "elevatedvision.settings.color-min.hint": "Set the color used to display the minimum elevation (above the scene minimum) on the elevation layer.",
   "elevatedvision.settings.color-max.name": "Elevation Maximum Color",
