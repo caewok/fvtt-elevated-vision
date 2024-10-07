@@ -77,54 +77,6 @@ export class ElevationLayer extends InteractionLayer {
   constructor() {
     super();
     this.controls = ui.controls.controls.find(obj => obj.name === "elevation");
-    this._activateHoverListener();
-  }
-
-  /**
-   * Activate a listener to display elevation values when the mouse hovers over an area
-   * of the canvas in the elevation layer.
-   * See Ruler.prototype._onMouseMove
-   */
-  _onMouseMove(event) {
-    if ( !canvas.ready || !canvas.elevation.active ) return;
-
-    // Get the canvas position of the mouse pointer.
-    const pos = event.getLocalPosition(canvas.app.stage);
-    if ( !canvas.dimensions.sceneRect.contains(pos.x, pos.y) ) {
-      this.elevationLabel.visible = false;
-      return;
-    }
-
-    // Update the numeric label with the elevation at this position.
-    this.updateElevationLabel(pos);
-    this.elevationLabel.visible = true;
-  }
-
-  _activateHoverListener() {
-    log("activatingHoverListener");
-    const textStyle = PreciseText.getTextStyle({
-      fontSize: 24,
-      fill: "#333333",
-      strokeThickness: 2,
-      align: "right",
-      dropShadow: false
-    });
-
-    this.elevationLabel = new PreciseText(undefined, textStyle);
-    this.elevationLabel.anchor = {x: 0, y: 1};
-    canvas.stage.addChild(this.elevationLabel);
-  }
-
-  /**
-   * Update the elevation label to the elevation value at the provided location,
-   * and move the label to that location.
-   * @param {number} x
-   * @param {number} y
-   */
-  updateElevationLabel({x, y}) {
-    const value = this.elevationAt({x, y});
-    this.elevationLabel.text = value.toString();
-    this.elevationLabel.position = {x, y};
   }
 
   /**
@@ -476,7 +428,6 @@ export class ElevationLayer extends InteractionLayer {
 
     this.drawElevation();
     this.container.visible = true;
-    canvas.stage.addChild(this.elevationLabel);
     canvas.stage.addChild(this._wallDataContainer);
   }
 
@@ -493,7 +444,6 @@ export class ElevationLayer extends InteractionLayer {
     const wallData = this._wallDataContainer.removeChildren();
     wallData.forEach(d => d.destroy(true));
 
-    canvas.stage.removeChild(this.elevationLabel);
     if ( this._requiresSave ) this.saveSceneElevationData();
     Draw.clearDrawings();
     this.container.visible = false;
