@@ -128,13 +128,6 @@ export class ElevationLayer extends InteractionLayer {
    */
   #maximumNormalizedElevation = Math.pow(256, 2) - 1;
 
-  /**
-   * Flag for when the elevation data has changed for the scene, requiring a save.
-   * Currently happens when the user changes the data or uploads a new data file.
-   * @type {boolean}
-   */
-  _requiresSave = false; // Avoid private field here b/c it causes problems for arrow functions
-
   /** @type {ElevationTextureManager} */
   _textureManager = new ElevationTextureManager();
 
@@ -423,7 +416,6 @@ export class ElevationLayer extends InteractionLayer {
     log("De-activating Elevation Layer.");
     if ( !this.container ) return;
     this.eraseElevation();
-    if ( this._requiresSave ) this.saveSceneElevationData();
     Draw.clearDrawings();
     this.container.visible = false;
   }
@@ -439,7 +431,6 @@ export class ElevationLayer extends InteractionLayer {
   /** @inheritdoc */
   async _tearDown(options) {
     log("_tearDown Elevation Layer");
-    if ( this._requiresSave ) await this.saveSceneElevationData();
 
     // Probably need to figure out how to destroy and/or remove these objects
     //     this._graphicsContainer.destroy({children: true});
@@ -487,9 +478,6 @@ export class ElevationLayer extends InteractionLayer {
     // Add the sprite that holds the default background elevation settings
     this._graphicsContainer.addChild(this._backgroundElevation);
 
-
-    await this.loadSceneElevationData();
-
     // Add the elevation color mesh
     const shader = ElevationLayerShader.create();
     this._elevationColorsMesh = new EVQuadMesh(canvas.dimensions.sceneRect, shader);
@@ -532,140 +520,6 @@ export class ElevationLayer extends InteractionLayer {
       this.elevationMin = min;
       ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${this.elevationMin} based on the minimum elevation of one or more tiles in the scene.`);
     }
-  }
-
-  /**
-   * Load the elevation data from the stored image.
-   */
-  async loadSceneElevationData() {
-    log("loadSceneElevationData");
-
-    const elevationImage = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-    if ( !elevationImage ) return;
-
-    if ( foundry.utils.isEmpty(elevationImage) || foundry.utils.isEmpty(elevationImage.imageURL) ) {
-      canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-      return;
-    }
-
-    const texture = await this._textureManager.load();
-    if ( !texture || !texture.valid ) {
-      const msg = `ElevatedVision|importFromImageFile failed to import expected elevation data from ${elevationImage.imageURL}. Using empty data file instead.`;
-      ui.notifications.warn(msg);
-      console.warn(msg, elevationImage);
-      canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-      this._textureManager.initialize();
-      return;
-    }
-
-    // We are loading a saved file, so we only want to require a save if the scene
-    // elevation has already been modified.
-    const neededSave = this._requiresSave;
-    this.#replaceBackgroundElevationTexture(texture);
-    this._requiresSave = neededSave;
-  }
-
-  /**
-   * Store the elevation data for the scene.
-   * Stores the elevation image to the world folder and stores metadata to the scene flag.
-   */
-  async saveSceneElevationData() {
-    const res = await this._textureManager.save(this._elevationTexture);
-    if ( res.status !== "success" ) {
-      ui.notifications.error("There was an error saving the elevation texture for the scene. Check the console for details.");
-      console.error(res);
-      return;
-    }
-
-    const saveObj = {
-      format: "image/webp",
-      imageURL: res.path,
-      width: this._elevationTexture.width,
-      height: this._elevationTexture.height,
-      resolution: this._elevationTexture.resolution,
-      timestamp: Date.now(),
-      version: game.modules.get(MODULE_ID).version };
-
-    await canvas.scene.setFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE, saveObj);
-    this._requiresSave = false;
-  }
-
-  /**
-   * Import elevation data as png. Same format as download.
-   * See importFromJSONDialog in Foundry.
-   * @returns {Promise<void>}
-   */
-  async importDialog() {
-    new Dialog({
-      title: `Import Elevation Data: ${canvas.scene.name}`,
-      content: await renderTemplate("templates/apps/import-data.html", {
-        hint1: game.i18n.format("Elevation.ImportDataHint1", {document: "PNG or webp"}),
-        hint2: game.i18n.format("Elevation.ImportDataHint2", {name: canvas.scene.name})
-      }),
-      buttons: {
-        import: {
-          icon: '<i class="fas fa-file-import"></i>',
-          label: "Import",
-          callback: html => {
-            const form = html.find("form")[0];
-            if ( !form.data.files.length ) return ui.notifications.error("You did not upload a data file!");
-            log("import", form.data.files);
-            readDataURLFromFile(form.data.files[0]).then(dataURL => this.importFromImageFile(dataURL));
-          }
-        },
-        no: {
-          icon: '<i class="fas fa-times"></i>',
-          label: "Cancel"
-        }
-      },
-      default: "import"
-    }, {
-      width: 400
-    }).render(true);
-  }
-
-  /**
-   * Import elevation data from the provided image file location into the scene.
-   * @param {File} file
-   */
-  async importFromImageFile(file) {
-    const texture = await this._textureManager.loadFromFile(file);
-    if ( !texture || !texture.valid ) {
-      const msg = `ElevatedVision|importFromImageFile failed to import ${file.name}.`;
-      ui.notifications.error(msg);
-      console.error(msg, file);
-    }
-
-    log(`Loaded texture with dim ${texture.width},${texture.height}`, texture);
-    this.#replaceBackgroundElevationTexture(texture);
-  }
-
-  /**
-   * Replace the background elevation texture with a new one.
-   * Used by loadSceneElevationData and importFromImageFile.
-   * @param {PIXI.Texture} texture
-   */
-  #replaceBackgroundElevationTexture(texture) {
-    canvas.elevation._backgroundElevation.texture.destroy();
-    canvas.elevation._backgroundElevation.texture = texture;
-    canvas.elevation.renderElevation();
-    canvas.elevation._requiresSave = true;
-  }
-
-
-  /**
-   * Download the elevation data as an image file.
-   * @param {object} [opts]  Options that affect how the image file is formatted.
-   * @param {string} [opts.format]    Image format, e.g. "image/jpeg" or "image/webp"
-   * @param {string} [opts.fileName]  Name of the file. Extension will be added based on format
-   * @param {number} [opts.quality]   Value that affects some image types, such as jpeg
-   */
-  async downloadElevationData({ format = "image/png", fileName = canvas.scene.name, quality } = {}) {
-    const imageExtension = format.split("/")[1];
-    fileName += `.${imageExtension}`;
-
-    const image64 = await this._textureManager.convertTextureToImage(this._elevationTexture, { type: format, quality });
-    saveDataToFile(convertBase64ToImage(image64), format, fileName);
   }
 
   /* -------------------------------------------- */
@@ -770,14 +624,6 @@ export class ElevationLayer extends InteractionLayer {
 
     // Reset the elevation maximum, b/c we don't know this value anymore.
     this.#elevationCurrentMax = undefined;
-
-    // This makes vertical lines: newTex = PIXI.Texture.fromBuffer(pixels, width, height)
-    const br = new PIXI.BufferResource(pixels, {width, height});
-    const bt = new PIXI.BaseTexture(br);
-    const newTex = new PIXI.Texture(bt);
-
-    // Save to the background texture (used by the background sprite, like with saved images)
-    this.#replaceBackgroundElevationTexture(newTex);
   }
 
   /**
@@ -820,16 +666,6 @@ export class ElevationLayer extends InteractionLayer {
     // Update the elevation maximum.
     if ( this.#elevationCurrentMax === from ) this.#elevationCurrentMax = undefined;
     else this._updateElevationCurrentMax(to);
-
-    // Error Makes vertical lines:
-    // newTex = PIXI.Texture.fromBuffer(pixels, width, height)
-    const br = new PIXI.BufferResource(pixels, {width, height});
-    const bt = new PIXI.BaseTexture(br);
-    const newTex = new PIXI.Texture(bt);
-
-    // Save to the background texture (used by the background sprite, like with saved images)
-    this.#replaceBackgroundElevationTexture(newTex);
-
   }
 
   /**
@@ -892,7 +728,6 @@ export class ElevationLayer extends InteractionLayer {
     // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
     // and that causes a lighter-color border to appear outside the shape.
     this.renderElevation();
-    this._requiresSave = !temporary;
     return graphics;
   }
 
@@ -940,7 +775,6 @@ export class ElevationLayer extends InteractionLayer {
     this._graphicsContainer = new PIXI.Container();
 
     await canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-    this._requiresSave = false;
     this.#elevationCurrentMax = 0;
     this.renderElevation();
   }
