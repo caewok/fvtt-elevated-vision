@@ -25,15 +25,6 @@ import { Draw } from "./geometry/Draw.js";
  */
 export class ElevationTextureHandler {
 
-
-  /**
-   * Sprite that contains the elevation values from the saved elevation file.
-   * This is added to the _graphicsContainer, along with any graphics representing
-   * adjustments by the GM to the scene elevation.
-   * @type {PIXI.Sprite}
-   */
-  _backgroundElevation = PIXI.Sprite.from(PIXI.Texture.EMPTY);
-
   /**
    * Container to hold the current graphics objects representing elevation.
    * These graphics objects are created when the GM modifies the scene elevation using
@@ -91,18 +82,11 @@ export class ElevationTextureHandler {
     this.#initialized = false;
     this._clearElevationPixelCache();
 
-    // Background elevation sprite should start at the upper left scene corner
-    const { sceneX, sceneY } = canvas.dimensions;
-    this._backgroundElevation.position = { x: sceneX, y: sceneY };
-
     // Add the render texture for displaying elevation information to the GM
     const config = this._getElevationTextureConfiguration();
     this._elevationTexture = PIXI.RenderTexture.create(config);
     // Set the clear color of the render texture to black. The texture needs to be opaque.
     this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
-
-    // Add the sprite that holds the default background elevation settings
-    this._graphicsContainer.addChild(this._backgroundElevation);
 
     this.renderElevation();
 
@@ -690,8 +674,6 @@ export class ElevationTextureHandler {
    */
   async clearElevationData() {
     this._clearElevationPixelCache();
-    this._backgroundElevation.destroy();
-    this._backgroundElevation = PIXI.Sprite.from(PIXI.Texture.EMPTY);
 
     this._graphicsContainer.destroy({children: true});
     this._graphicsContainer = new PIXI.Container();
@@ -706,8 +688,6 @@ export class ElevationTextureHandler {
    */
   destroy() {
     this._clearElevationPixelCache();
-    this._backgroundElevation.destroy();
-    this._backgroundElevation = PIXI.Sprite.from(PIXI.Texture.EMPTY);
 
     this._graphicsContainer.destroy({children: true});
     this._graphicsContainer = new PIXI.Container();
