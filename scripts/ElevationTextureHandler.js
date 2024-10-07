@@ -61,10 +61,6 @@ export class ElevationTextureHandler {
    */
   static #MAXIMUM_ELEVATION_TEXTURE_SIZE = CONFIG[MODULE_ID]?.elevationTextureSize ?? 4096;
 
-  constructor() {
-
-  }
-
   /**
    * Has the elevation layer been initialized?
    * @type {boolean}
@@ -149,21 +145,6 @@ export class ElevationTextureHandler {
       format: PIXI.FORMATS.RG, // 256 * 256 = 65,536 elevation increments in total.
       type: PIXI.TYPES.UNSIGNED_BYTE
     };
-  }
-
-  /* ------------------------ */
-
-  /**
-   * Value used by Foundry for sorting display of the layer. *NOT* related to elevation data.
-   * @type {number}
-   */
-  get elevation() {
-    return this.#elevation;
-  }
-
-  set elevation(value) {
-    this.#elevation = value;
-    canvas.primary.sortChildren();
   }
 
   /* ------------------------ */
