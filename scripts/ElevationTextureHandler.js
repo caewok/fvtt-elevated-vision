@@ -230,36 +230,6 @@ export class ElevationTextureHandler {
     return this._scaleNormalizedElevation(this.#maximumNormalizedElevation);
   }
 
-  /**
-   * Current maximum elevation value for the scene.
-   * @type {number}
-   */
-  #elevationCurrentMax;
-
-  get elevationCurrentMax() {
-    return this.#elevationCurrentMax ?? (this.#elevationCurrentMax = this._calculateElevationCurrentMax());
-  }
-
-  /**
-   * Calculate the current maximum elevation value in the scene.
-   * @returns {number}
-   */
-  _calculateElevationCurrentMax() {
-    // Reduce is slow, so do this the hard way.
-    let max = Number.NEGATIVE_INFINITY;
-    const pix = this.elevationPixelCache.pixels;
-    const ln = pix.length;
-    for ( let i = 0; i < ln; i += 1 ) max = Math.max(max, pix[i]);
-    return this._scaleNormalizedElevation(max);
-  }
-
-  /**
-   * Update the current elevation maximum to a specific value.
-   * @param {number} e    Elevation value
-   */
-  _updateElevationCurrentMax(e) {
-    this.#elevationCurrentMax = Math.max(this.#elevationCurrentMax, e);
-  }
 
   /* ------------------------ */
 
@@ -508,9 +478,6 @@ export class ElevationTextureHandler {
       pixels[i] = newPixelChannels.r;
       pixels[i + 1] = newPixelChannels.g;
     }
-
-    // Reset the elevation maximum, b/c we don't know this value anymore.
-    this.#elevationCurrentMax = undefined;
   }
 
   /**
@@ -549,10 +516,6 @@ export class ElevationTextureHandler {
         pixels[i + 1] = toPixelChannels.g;
       }
     }
-
-    // Update the elevation maximum.
-    if ( this.#elevationCurrentMax === from ) this.#elevationCurrentMax = undefined;
-    else this._updateElevationCurrentMax(to);
   }
 
   /**
@@ -610,7 +573,6 @@ export class ElevationTextureHandler {
   _setElevationForGraphics(graphics, elevation = 0, { temporary = false } = {}) {
     this._graphicsContainer.addChild(graphics);
     const color = this.elevationColor(elevation);
-    this._updateElevationCurrentMax(elevation);
 
     // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
     // and that causes a lighter-color border to appear outside the shape.
@@ -660,7 +622,6 @@ export class ElevationTextureHandler {
     this._graphicsContainer = new PIXI.Container();
 
     await canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-    this.#elevationCurrentMax = 0;
     this.renderElevation();
   }
 
