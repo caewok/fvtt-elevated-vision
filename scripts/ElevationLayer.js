@@ -80,11 +80,6 @@ export class ElevationLayer extends InteractionLayer {
   }
 
   /**
-   * Container to hold objects to display wall information on the canvas
-   */
-  _wallDataContainer = new PIXI.Container();
-
-  /**
    * Sprite that contains the elevation values from the saved elevation file.
    * This is added to the _graphicsContainer, along with any graphics representing
    * adjustments by the GM to the scene elevation.
@@ -419,31 +414,15 @@ export class ElevationLayer extends InteractionLayer {
   /** @override */
   _activate() {
     log("Activating Elevation Layer.");
-
-    // Draw walls
-    for ( const wall of canvas.walls.placeables ) {
-      this._drawWallSegment(wall);
-      this._drawWallRange(wall);
-    }
-
     this.drawElevation();
     this.container.visible = true;
-    canvas.stage.addChild(this._wallDataContainer);
   }
 
   /** @override */
   _deactivate() {
     log("De-activating Elevation Layer.");
     if ( !this.container ) return;
-    canvas.stage.removeChild(this._wallDataContainer);
-
     this.eraseElevation();
-
-    // TO-DO: keep the wall graphics and labels and just update as necessary.
-    // Destroy only in tearDown
-    const wallData = this._wallDataContainer.removeChildren();
-    wallData.forEach(d => d.destroy(true));
-
     if ( this._requiresSave ) this.saveSceneElevationData();
     Draw.clearDrawings();
     this.container.visible = false;
@@ -1012,55 +991,6 @@ export class ElevationLayer extends InteractionLayer {
 
   _updateMinColor() {
     this._elevationColorsMesh.shader.updateMinColor();
-  }
-
-  /**
-   * Draw wall segments
-   */
-  _drawWallSegment(wall) {
-    const g = new PIXI.Graphics();
-    const draw = new Draw(g);
-    const color = wall.isOpen ? Draw.COLORS.blue : Draw.COLORS.red;
-    const alpha = wall.isOpen ? 0.5 : 1;
-
-    draw.segment(wall, { color, alpha });
-    draw.point(wall.edge.a, { color: Draw.COLORS.red });
-    draw.point(wall.edge.b, { color: Draw.COLORS.red });
-    this._wallDataContainer.addChild(g);
-  }
-
-  /**
-   * From https://github.com/theripper93/wall-height/blob/12c204b44e6acfa1e835464174ac1d80e77cec4a/scripts/patches.js#L318
-   * Draw the wall lower and upper heights on the canvas.
-   */
-  _drawWallRange(wall) {
-    // Fill in for WallHeight.getWallBounds
-    const bounds = {
-      top: wall.document.flags?.["wall-height"]?.top ?? Number.POSITIVE_INFINITY,
-      bottom: wall.document.flags?.["wall-height"]?.bottom ?? Number.NEGATIVE_INFINITY
-    };
-    if ( bounds.top === Infinity && bounds.bottom === -Infinity ) return;
-
-    const style = CONFIG.canvasTextStyle.clone();
-    style.fontSize /= 1.5;
-    style.fill = wall._getWallColor();
-    if ( bounds.top === Infinity ) bounds.top = "Inf";
-    if ( bounds.bottom === -Infinity ) bounds.bottom = "-Inf";
-    const range = `${bounds.top} / ${bounds.bottom}`;
-
-    // This would mess with the existing text used in walls layer, which may not be what we want.
-    // const oldText = wall.children.find(c => c.name === "wall-height-text");
-    // const text = oldText ?? new PreciseText(range, style);
-    const text = new PreciseText(range, style);
-    text.text = range;
-    text.name = "wall-height-text";
-    let angle = (Math.atan2( wall.coords[3] - wall.coords[1], wall.coords[2] - wall.coords[0] ) * ( 180 / Math.PI ));
-    angle = ((angle + 90 ) % 180) - 90;
-    text.position.set(wall.center.x, wall.center.y);
-    text.anchor.set(0.5, 0.5);
-    text.angle = angle;
-
-    this._wallDataContainer.addChild(text);
   }
 }
 
