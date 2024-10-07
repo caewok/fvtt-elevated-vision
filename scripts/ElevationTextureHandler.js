@@ -42,12 +42,6 @@ export class ElevationTextureHandler {
   _elevationTexture;
 
   /**
-   * This is the z-order replacement in v10. Not elevation for the terrain!
-   * @type {number}
-   */
-  #elevation = 9000;
-
-  /**
    * Maximum normalized value.
    * 256 values (8 bit) per channel; two channels currently used. Don't forget 0!
    * @type {number}
@@ -74,7 +68,6 @@ export class ElevationTextureHandler {
    */
   async initialize() {
     log("Initializing elevation layer");
-
     this.#initialized = false;
     this._clearElevationPixelCache();
 
@@ -83,9 +76,7 @@ export class ElevationTextureHandler {
     this._elevationTexture = PIXI.RenderTexture.create(config);
     // Set the clear color of the render texture to black. The texture needs to be opaque.
     this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
-
     this.renderElevation();
-
     this.#initialized = true;
 
     // Update the source shadow meshes with the elevation texture.
