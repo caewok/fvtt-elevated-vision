@@ -31,7 +31,6 @@ export const SETTINGS = {
   LIGHTS_FULL_PENUMBRA: "lights-full-penumbra",
   // VISION_USE_SHADER: "vision-use-shader",  // Deprecated
   // AUTO_AVERAGING: "auto-change-elevation.averaging", // Deprecated
-  CLOCKWISE_SWEEP: "enhance-cw-sweep",
   ELEVATION_MINIMUM: "elevationmin",
   ELEVATION_INCREMENT: "elevationstep",
   CHANGELOG: "changelog"
@@ -141,16 +140,6 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: true,
       default: true,
-      requiresReload: true,
-      type: Boolean
-    });
-
-    register(KEYS.CLOCKWISE_SWEEP, {
-      name: localize(`${KEYS.CLOCKWISE_SWEEP}.name`),
-      hint: localize(`${KEYS.CLOCKWISE_SWEEP}.hint`),
-      scope: "world",
-      config: true,
-      default: false,
       requiresReload: true,
       type: Boolean
     });

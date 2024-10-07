@@ -17,7 +17,6 @@ import { SCENE_GRAPH } from "./WallTracer.js";
 
 export const PATCHES = {};
 PATCHES.POLYGONS = {};
-PATCHES.SWEEP = {};
 
 /**
  * From ClockwiseSweepPolygon#_determineEdgeTypes
@@ -503,43 +502,3 @@ function maxRegionElevation(region) {
   if ( TM.ACTIVE && region[TM.KEY].isElevated ) return region[TM.KEY].plateauElevation;
   return region.document.elevation.top ?? Number.POSITIVE_INFINITY;
 }
-
-// ----- Wall Tracing Enhancements to Sweep ----- //
-/**
- * Wrap ClockwiseSweepPolygon.prototype.initialize.
- * Determine if the origin is enclosed by interior boundary polygon and add as a containing shape.
- * @param {Function} wrapper
- * @param {Point} origin
- * @param {object} config
- */
-function initialize(wrapper, origin, config) {
-  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-  const sourceOrigin = config.source ? Point3d.fromPointSource(config.source) : new Point3d(origin.x, origin.y, 0);
-  const encompassingPolygon = SCENE_GRAPH.encompassingPolygon(sourceOrigin, config.type);
-  if ( encompassingPolygon ) {
-    config.boundaryShapes ||= [];
-    config.boundaryShapes.push(encompassingPolygon);
-  }
-  wrapper(origin, config);
-}
-
-PATCHES.SWEEP.WRAPS = { initialize };
-
-
-function drawClipperPath(cp, { graphics = canvas.controls.debug, color = CONFIG.GeometryLib.Draw.COLORS.black, width = 1, fill, fillAlpha = 1 } = {}) {
-    if ( !fill ) fill = color;
-    const polys = cp.toPolygons();
-
-    // Sort so holes are last. Note that PIXI.Graphics cannot draw multilevel holes. (fill inside a hole inside a fill)
-    // Nor can it handle a hole that overlaps the edge of a fill.
-    polys.sort((a, b) => a.isHole - b.isHole);
-    if ( !polys.length || polys[0].isHole ) return; // All the polys are holes.
-
-    graphics.beginFill(fill, fillAlpha);
-    for ( const poly of polys ) {
-      if ( poly.isHole ) graphics.beginHole();
-      graphics.lineStyle(width, color).drawShape(poly);
-      if ( poly.isHole ) graphics.endHole();
-    }
-    graphics.endFill();
-  }

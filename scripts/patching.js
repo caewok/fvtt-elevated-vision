@@ -37,7 +37,6 @@ import {
  * - BASIC        Always in effect
  * - POLYGON      When Polygon shadow setting is selected
  * - WEBGL        When WebGL shadow setting is selected
- * - SWEEP        When Sweep enhancement setting is selected
  * - VISIBILITY   When EV is responsibility for testing visibility
  *
  * Patching options:
@@ -81,15 +80,12 @@ export function initializePatching() {
  */
 export function registerPatchesForSettings() {
   const visibility = Settings.get(Settings.KEYS.TEST_VISIBILITY);
-  const sweep = Settings.get(Settings.KEYS.CLOCKWISE_SWEEP);
   unregisterPatchesForSettings();
   if ( visibility ) PATCHER.registerGroup("VISIBILITY");
-  if ( sweep ) PATCHER.registerGroup("SWEEP");
 }
 
 function unregisterPatchesForSettings() {
   PATCHER.deregisterGroup("VISIBILITY");
-  PATCHER.deregisterGroup("SWEEP");
 }
 
 /**
