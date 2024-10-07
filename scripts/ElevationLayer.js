@@ -31,13 +31,9 @@ import {
 import { testWallsForIntersections } from "./ClockwiseSweepPolygon.js";
 import { SCENE_GRAPH } from "./WallTracer.js";
 import { setSceneSetting, getSceneSetting, Settings } from "./settings.js";
-import { ElevationTextureManager } from "./ElevationTextureManager.js";
-
 import { Draw } from "./geometry/Draw.js";
-
 import { ElevationLayerShader } from "./glsl/ElevationLayerShader.js";
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
-
 import "./perfect-vision/extract-async.js";
 
 /* Elevation layer
@@ -128,8 +124,49 @@ export class ElevationLayer extends InteractionLayer {
    */
   #maximumNormalizedElevation = Math.pow(256, 2) - 1;
 
-  /** @type {ElevationTextureManager} */
-  _textureManager = new ElevationTextureManager();
+  /**
+   * The maximum allowable visibility texture size.
+   * In v11, this is equal to CanvasVisibility.#MAXIMUM_VISIBILITY_TEXTURE_SIZE
+   * @type {number}
+   */
+  static #MAXIMUM_ELEVATION_TEXTURE_SIZE = CONFIG[MODULE_ID]?.elevationTextureSize ?? 4096;
+
+  /**
+   * Values used when rendering elevation data to a texture representing the scene canvas.
+   * It may be important that width/height of the elevation texture is evenly divisible
+   * by the downscaling resolution. (It is important for fog manager to prevent drift.)
+   * @returns {ElevationTextureConfiguration}
+   */
+  _getElevationTextureConfiguration() {
+    // In v11, see CanvasVisibility.prototype.#configureVisibilityTexture
+    const dims = canvas.scene.dimensions;
+    let width = dims.sceneWidth;
+    let height = dims.sceneHeight;
+
+    let resolution = Math.clamp(CONFIG[MODULE_ID]?.resolution ?? 0.25, .01, 1);
+    const maxSize = Math.min(
+      this.constructor.#MAXIMUM_ELEVATION_TEXTURE_SIZE,
+      resolution * Math.max(width, height));
+
+    if ( width >= height ) {
+      resolution = maxSize / width;
+      height = Math.ceil(height * resolution) / resolution;
+    } else {
+      resolution = maxSize / height;
+      width = Math.ceil(width * resolution) / resolution;
+    }
+
+    return {
+      resolution,
+      width,
+      height,
+      mipmap: PIXI.MIPMAP_MODES.OFF,
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      multisample: PIXI.MSAA_QUALITY.NONE,
+      format: PIXI.FORMATS.RG, // 256 * 256 = 65,536 elevation increments in total.
+      type: PIXI.TYPES.UNSIGNED_BYTE
+    };
+  }
 
   /* ------------------------ */
 
@@ -457,11 +494,6 @@ export class ElevationLayer extends InteractionLayer {
     this._initialized = false;
     this._clearElevationPixelCache();
 
-    // Initialize the texture manager for the scene.
-    const sceneEVData = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-    const fileURL = sceneEVData?.imageURL ?? undefined;
-    await this._textureManager.initialize({ fileURL });
-
     // Initialize container to hold the elevation data and GM modifications
     const w = new FullCanvasContainer();
     this.container = this.addChild(w);
@@ -471,7 +503,8 @@ export class ElevationLayer extends InteractionLayer {
     this._backgroundElevation.position = { x: sceneX, y: sceneY };
 
     // Add the render texture for displaying elevation information to the GM
-    this._elevationTexture = PIXI.RenderTexture.create(this._textureManager.textureConfiguration);
+    const config = this._getElevationTextureConfiguration();
+    this._elevationTexture = PIXI.RenderTexture.create(config);
     // Set the clear color of the render texture to black. The texture needs to be opaque.
     this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
 
