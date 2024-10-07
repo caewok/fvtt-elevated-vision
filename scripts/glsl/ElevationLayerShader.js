@@ -140,9 +140,13 @@ void main() {
    * @param {string} type   MIN or MAX
    * @returns {number[4]}
    */
+  static COLORS = {
+    MIN: "#03000003",
+    MAX: "#80000080"
+  }
+
   static getDefaultColorArray(type = "MIN") {
-    const hex = Settings.get(Settings.KEYS.COLOR[type]);
-    return this.getColorArray(hex);
+    return this.getColorArray(this.COLORS[type]);
   }
 
   /**

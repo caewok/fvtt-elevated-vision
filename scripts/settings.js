@@ -23,13 +23,6 @@ export const SETTINGS = {
     }
   },
 
-  COLOR: {
-    MIN: "color-min",
-    MAX: "color-max",
-    DEFAULT_MIN: "#03000003",
-    DEFAULT_MAX: "#80000080"
-  },
-
   LIGHTING: {
     LIGHT_SIZE: "point-light-size"
   },
@@ -131,53 +124,6 @@ export class Settings extends ModuleSettingsAbstract {
       requiresReload: false,
       type: Number
     });
-
-    if ( game.modules.get("color-picker")?.active ) {
-      ColorPicker.register(MODULE_ID, KEYS.COLOR.MIN, {
-        name: localize(`${KEYS.COLOR.MIN}.name`),
-        hint: localize(`${KEYS.COLOR.MIN}.hint`),
-        scope: "world",
-        config: true,
-        default: KEYS.COLOR.DEFAULT_MIN,
-        format: "hexa",
-        mode: "HVS",
-        onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMinColor(value)
-      });
-
-      ColorPicker.register(MODULE_ID, KEYS.COLOR.MAX, {
-        name: localize(`${KEYS.COLOR.MAX}.name`),
-        hint: localize(`${KEYS.COLOR.MAX}.hint`),
-        scope: "world",
-        config: true,
-        default: KEYS.COLOR.DEFAULT_MAX,
-        format: "hexa",
-        mode: "HVS",
-        onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMaxColor(value)
-      });
-
-    } else {
-      register(KEYS.COLOR.MIN, {
-        name: localize(`${KEYS.COLOR.MIN}.name`),
-        hint: localize(`${KEYS.COLOR.MIN}.string_hint`),
-        scope: "world",
-        config: true,
-        default: KEYS.COLOR.DEFAULT_MIN,
-        type: String,
-        requiresReload: false,
-        onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMinColor(value)
-      });
-
-      register(KEYS.COLOR.MAX, {
-        name: localize(`${KEYS.COLOR.MAX}.name`),
-        hint: localize(`${KEYS.COLOR.MAX}.string_hint`),
-        scope: "world",
-        config: true,
-        default: KEYS.COLOR.DEFAULT_MAX,
-        type: String,
-        requiresReload: false,
-        onChange: value => canvas.elevation._elevationColorsMesh.shader.updateMaxColor(value)
-      });
-    }
 
     register(KEYS.TEST_VISIBILITY, {
       name: localize(`${KEYS.TEST_VISIBILITY}.name`),
