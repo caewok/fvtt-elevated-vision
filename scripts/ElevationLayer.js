@@ -300,12 +300,6 @@ export class ElevationLayer extends InteractionLayer {
   /* ------------------------ */
 
   /**
-   * Stores graphics created when dragging using the fill-by-grid control.
-   * @param {Map<PIXI.Graphics>}
-   */
-  #temporaryGraphics = new Map();
-
-  /**
    * Convert a pixel value to an elevation value.
    * @param {object} value    Pixel value
    * @returns {number}
@@ -454,12 +448,6 @@ export class ElevationLayer extends InteractionLayer {
     this.eraseElevation();
     Draw.clearDrawings();
     this.container.visible = false;
-  }
-
-  /** @override */
-  async _draw(options) {
-  // Not needed?
-  // if ( canvas.elevation.active ) this.drawElevation();
   }
 
   /* -------------------------------------------- */
