@@ -91,13 +91,9 @@ export class ElevationLayer extends InteractionLayer {
     // Get the canvas position of the mouse pointer.
     const pos = event.getLocalPosition(canvas.app.stage);
     if ( !canvas.dimensions.sceneRect.contains(pos.x, pos.y) ) {
-      this.brush.visible = false;
       this.elevationLabel.visible = false;
       return;
     }
-
-    // Update the brush preview.
-    this.drawBrush({ x: pos.x, y: pos.y, visible: true });
 
     // Update the numeric label with the elevation at this position.
     this.updateElevationLabel(pos);
@@ -480,7 +476,6 @@ export class ElevationLayer extends InteractionLayer {
 
     this.drawElevation();
     this.container.visible = true;
-    canvas.stage.addChild(this.brush);
     canvas.stage.addChild(this.elevationLabel);
     canvas.stage.addChild(this._wallDataContainer);
   }
@@ -498,7 +493,6 @@ export class ElevationLayer extends InteractionLayer {
     const wallData = this._wallDataContainer.removeChildren();
     wallData.forEach(d => d.destroy(true));
 
-    canvas.stage.removeChild(this.brush);
     canvas.stage.removeChild(this.elevationLabel);
     if ( this._requiresSave ) this.saveSceneElevationData();
     Draw.clearDrawings();
@@ -542,10 +536,6 @@ export class ElevationLayer extends InteractionLayer {
 
     this._initialized = false;
     this._clearElevationPixelCache();
-
-    // Initialize the brush
-    this.brush = this.initializeBrush();
-    document.addEventListener("keypress", event => { this.updateBrushSize(event); });
 
     // Initialize the texture manager for the scene.
     const sceneEVData = canvas.scene.getFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
