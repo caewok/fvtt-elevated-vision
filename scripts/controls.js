@@ -52,30 +52,8 @@ function addElevationLayerSceneControls(controls) {
     icon: "fas fa-elevator",
     visible: isGM,
     layer: "elevation",
-    activeTool: "fill-by-grid",
     currentElevation: canvas.scene?.dimensions?.distance || 0,
     tools: [
-      {
-        name: "fill-by-grid",
-        title: game.i18n.localize(`${MODULE_ID}.controls.fill-by-grid.name`),
-        icon: "fas fa-brush"
-      },
-
-      {
-        name: "fill-by-los",
-        title: game.i18n.localize(`${MODULE_ID}.controls.fill-by-los.name`),
-        icon: "fas fa-eye"
-      },
-      {
-        name: "fill-by-pixel",
-        title: "Fill by Pixel",
-        icon: "fas fa-paintbrush-fine"
-      },
-      {
-        name: "fill-space",
-        title: game.i18n.localize(`${MODULE_ID}.controls.fill-space.name`),
-        icon: "fas fa-fill-drip"
-      },
 
       {
         name: "clear",
@@ -89,30 +67,7 @@ function addElevationLayerSceneControls(controls) {
             yes: () => canvas.elevation.clearElevationData()
           });
         }
-      },
-
-      {
-        name: "upload",
-        title: game.i18n.localize(`${MODULE_ID}.controls.upload.name`),
-        icon: "fas fa-file-arrow-up",
-        button: true,
-        onClick: () => {
-          new FilePicker({
-            type: "image",
-            displayMode: "thumbs",
-            tileSize: false,
-            callback: file => { canvas.elevation.importFromImageFile(file); }
-          }).render(true);
-        }
-      },
-
-      {
-        name: "download",
-        title: game.i18n.localize(`${MODULE_ID}.controls.download.name`),
-        icon: "fas fa-file-arrow-down",
-        button: true,
-        onClick: () => { canvas.elevation.downloadElevationData({format: "image/webp"}); }
-      },
+      }
     ]
   });
 }
