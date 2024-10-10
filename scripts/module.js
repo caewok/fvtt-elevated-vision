@@ -70,6 +70,25 @@ Hooks.once("init", function() {
      * @type {number}
      */
     shadowTextureSize: 4096, // 64^2
+
+    /**
+     * WebGL region elevations.
+     * Minimum elevation to use.
+     * Maximum will be min + step * ElevationHandler.#maximumNormalizedElevation,
+     * ElevationHandler.#maximumNormalizedElevation is Math.pow(256, 2) - 1 b/c elevation
+     *   currently is two channels of texture in EV.
+     * So -2000 (min) + 0.1 (step) * 65556 (max normalized) = 4555
+     * @type {number}
+     */
+    elevationMin: -2000,
+
+    /**
+     * WebGL region elevations.
+     * Step size between elevations.
+     * See minElevation.
+     * @type {number}
+     */
+    elevationStep: 0.1
   };
 
   game.modules.get(MODULE_ID).api = {
@@ -108,8 +127,8 @@ Hooks.once("setup", function() {
 
 Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
-  canvas.scene[MODULE_ID] = new ElevationTextureHandler();
-  canvas.scene[MODULE_ID].initialize(); // Async.
+  const ev = canvas.scene[MODULE_ID] = new ElevationTextureHandler();
+  ev.initialize(); // Async.
   registerPatchesForSceneSettings();
 });
 

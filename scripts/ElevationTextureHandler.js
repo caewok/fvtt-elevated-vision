@@ -144,82 +144,20 @@ export class ElevationTextureHandler {
    * Increment between elevation measurements. Should be a positive integer or float of 1 decimal place.
    * @type {number}
    */
-  get elevationStep() {
-    const step = getSceneSetting(Settings.KEYS.ELEVATION_INCREMENT);
-    return step ?? canvas.scene.dimensions.distance;
-  }
-
-  set elevationStep(stepNew) {
-    if ( stepNew < 0.1 ) {
-      console.warn("elevationStep should be a positive integer or float, to be rounded to 1 decimal place.");
-      return;
-    }
-
-    stepNew = Number.isInteger(stepNew) ? stepNew : Math.round((stepNew * 10)) / 10;
-
-    // Function to set the new normalized elevation value such that elevation stays (mostly) the same.
-    // e = min + value * step.
-    // min + value * step = min + valueNew * stepNew
-    // valueNew * stepNew = min + value * step - min
-    // valueNew = value * step / stepNew
-    const step = this.elevationStep;
-    const mult = step / stepNew;
-    const max = this.#maximumNormalizedElevation;
-    const stepAdjust = function(normE) {
-      const out = Math.clamp(Math.round(mult * normE), 0, max);
-      return out || 0;
-    };
-
-    setSceneSetting(Settings.KEYS.ELEVATION_INCREMENT, stepNew);
-    this.changePixelValuesUsingFunction(stepAdjust);
-  }
-
-  /* ------------------------ */
+  get elevationStep() { return CONFIG[MODULE_ID]?.elevationMin ?? canvas.scene.dimensions.distance; }
 
   /**
    * Minimum elevation value for a scene.
    * @type {number}
    */
-  get elevationMin() {
-    const min = getSceneSetting(Settings.KEYS.ELEVATION_MINIMUM);
-    return min ?? 0;
-  }
+  get elevationMin() { return CONFIG[MODULE_ID]?.elevationMin || 0; }
 
-  set elevationMin(minNew) {
-    minNew = Math.floor(minNew);
-    const min = this.elevationMin;
-    const step = this.elevationStep;
-    minNew = Math.round(minNew / step) * step;
-    if ( min === minNew ) return;
-
-    // Function to set the new pixel value such that elevation stays the same.
-    // e = min + value * step.
-    // min + value * step = minNew + valueNew * step
-    // valueNew * step = min + value * step - minNew
-    // valueNew = (min - minNew + value * step) / step
-    // valueNew = min / step - minNew / step  + value
-
-    const stepInv = 1 / step;
-    const adder = (min * stepInv) - (minNew * stepInv);
-
-    const minAdjust = function(pixel) {
-      const out = Math.clamp(Math.round(adder + pixel), 0, 255);
-      return out || 0; // In case of NaN, etc.
-    };
-
-    setSceneSetting(Settings.KEYS.ELEVATION_MINIMUM, minNew);
-    this.changePixelValuesUsingFunction(minAdjust);
-  }
-
-  /* ------------------------ */
 
   /**
    * Calculated maximum elevation value for the scene.
    * @type {number}
    */
-  get elevationMax() {
-    return this._scaleNormalizedElevation(this.#maximumNormalizedElevation);
-  }
+  get elevationMax() { return this._scaleNormalizedElevation(this.#maximumNormalizedElevation); }
 
 
   /* ------------------------ */
@@ -350,24 +288,6 @@ export class ElevationTextureHandler {
     e = isNaN(e) ? 0 : e;
     e = Math.round(e / this.elevationStep) * this.elevationStep;
     return Math.clamp(e, this.elevationMin, this.elevationMax);
-  }
-
-  /* -------------------------------------------- */
-
-
-  /**
-   * Update minimum elevation for the scene based on the Levels minimum tile elevation.
-   */
-  _updateMinimumElevationFromSceneTiles() {
-    const tiles = canvas.tiles.placeables.filter(tile => tile.document.overhead);
-    const currMin = this.elevationMin;
-    let min = currMin;
-    for ( const tile of tiles ) min = Math.min(min, tile.elevationE);
-
-    if ( min < currMin ) {
-      this.elevationMin = min;
-      ui.notifications.notify(`Elevated Vision: Scene elevation minimum set to ${this.elevationMin} based on the minimum elevation of one or more tiles in the scene.`);
-    }
   }
 
   /* -------------------------------------------- */
