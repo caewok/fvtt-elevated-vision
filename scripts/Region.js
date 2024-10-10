@@ -30,7 +30,8 @@ function canvasReady() {
   canvas.scene[MODULE_ID] ??= {};
   canvas.scene[MODULE_ID].sceneBackgroundRegion = sceneBackgroundRegion();
 
-  const useWebGL = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) === Settings.KEYS.SHADING.TYPES.WEBGL;
+  const useWebGL = getSceneSetting(Settings.KEYS.SHADOWS.LIGHTING)
+                || getSceneSetting(Settings.KEYS.SHADOWS.VISION);
   const sources = useWebGL ? [
     ...canvas.effects.lightSources,
     ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
@@ -110,7 +111,8 @@ function addRegionWalls(region) {
   if ( TM.ACTIVE && region[TM.KEY].isElevated ) top = region[TM.KEY].plateauElevation;
   top ??= canvas.scene[MODULE_ID].elevationMax;
   bottom ??= canvas.scene[MODULE_ID].elevationMin;
-  const useWebGL = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) === Settings.KEYS.SHADING.TYPES.WEBGL;
+  const useWebGL = getSceneSetting(Settings.KEYS.SHADOWS.LIGHTING)
+                || getSceneSetting(Settings.KEYS.SHADOWS.VISION);
   const sources = useWebGL ? [
     ...canvas.effects.lightSources,
     ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
@@ -158,7 +160,8 @@ function addRegionWalls(region) {
  * @param {Region} region
  */
 function removeRegionWalls(region) {
-  const useWebGL = getSceneSetting(Settings.KEYS.SHADING.ALGORITHM) === Settings.KEYS.SHADING.TYPES.WEBGL;
+  const useWebGL = getSceneSetting(Settings.KEYS.SHADOWS.LIGHTING)
+                || getSceneSetting(Settings.KEYS.SHADOWS.VISION);
   const sources = useWebGL ? [
     ...canvas.effects.lightSources,
     ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))

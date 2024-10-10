@@ -61,7 +61,7 @@ for ( let i = 0; i < buff1.length; i += 12 ) {
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
-PATCHES.WEBGL = {};
+PATCHES.VISION = {};
 PATCHES.VISIBILITY = {};
 
 // ----- NOTE: Methods -----
@@ -88,4 +88,4 @@ function _createRestrictedPolygon(wrapped) {
   return wrapped();
 }
 
-PATCHES.WEBGL.WRAPS = { _createRestrictedPolygon };
+PATCHES.VISION.WRAPS = { _createRestrictedPolygon };

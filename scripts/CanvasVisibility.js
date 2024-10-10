@@ -14,7 +14,7 @@ import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 // NOTE: Polygon and Shader methods for CanvasVisibility
 
 export const PATCHES = {};
-PATCHES.WEBGL = {};
+PATCHES.VISION = {};
 
 /**
  * Override CanvasVisibility.prototype.refreshVisibility
@@ -343,7 +343,7 @@ async function _tearDown(wrapped, options) {
   return wrapped(options);
 }
 
-PATCHES.WEBGL.WRAPS = { _tearDown, refreshVisibility: refreshVisibility2 };
+PATCHES.VISION.WRAPS = { _tearDown, refreshVisibility: refreshVisibility2 };
 
 
 /**
@@ -423,7 +423,7 @@ function visibilityRefresh(cv) {
   }
 }
 
-PATCHES.WEBGL.HOOKS = { visibilityRefresh };
+PATCHES.VISION.HOOKS = { visibilityRefresh };
 
 
 /**
@@ -451,7 +451,7 @@ PATCHES.WEBGL.HOOKS = { visibilityRefresh };
 //   this.vision.fov.lights.renderable = false;
 // }
 
-PATCHES.WEBGL.METHODS = {
+PATCHES.VISION.METHODS = {
   // cacheLights,
   renderTransform: new PIXI.Matrix(),
   pointSourcesStates: new Map()

@@ -603,19 +603,6 @@ export class ElevationTextureHandler {
     return new PIXI.Polygon(pointsTranslated);
   }
 
-  /**
-   * Remove all elevation data from the scene.
-   */
-  async clearElevationData() {
-    this._clearElevationPixelCache();
-
-    this._graphicsContainer.destroy({children: true});
-    this._graphicsContainer = new PIXI.Container();
-
-    await canvas.scene.unsetFlag(MODULE_ID, FLAGS.ELEVATION_IMAGE);
-    this.renderElevation();
-  }
-
   /** @type {boolean} */
   #destroyed = false;
 

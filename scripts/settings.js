@@ -9,17 +9,9 @@ import { MODULE_ID } from "./const.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
 
 export const SETTINGS = {
-  SHADING: {
-    ALGORITHM: "shading-algorithm",
-    TYPES: {
-      NONE: "shading-none",
-      WEBGL: "shading-webgl"
-    },
-    LABELS: {
-      "shading-none": `${MODULE_ID}.shading-none`,
-      "shading-polygons": `${MODULE_ID}.shading-polygons`,
-      "shading-webgl": `${MODULE_ID}.shading-webgl`
-    }
+  SHADOWS: {
+    LIGHTING: "use-shadow-lighting",
+    VISION: "use-shadow-vision"
   },
 
   LIGHTING: {
@@ -37,22 +29,12 @@ export const SETTINGS = {
 
 export function getSceneSetting(settingName, scene) {
   scene ??= canvas.scene;
-  // TODO: Do we still need this?
-  // if ( canvas.performance.mode === CONST.CANVAS_PERFORMANCE_MODES.LOW ) return Settings.KEYS.SHADING.NONE;
-  return scene.flags[MODULE_ID]?.[settingName] ?? defaultSceneSetting(settingName);
+  return scene.flags[MODULE_ID]?.[settingName] ?? Settings.get(settingName);
 }
 
 export async function setSceneSetting(settingName, value, scene) {
   scene ??= canvas.scene;
   return await scene.setFlag(MODULE_ID, settingName, value);
-}
-
-export function defaultSceneSetting(value) {
-  switch ( value ) {
-    case Settings.KEYS.ELEVATION_MINIMUM: return Settings.get(value) ?? 0;
-    case Settings.KEYS.ELEVATION_INCREMENT: return Settings.get(value) ?? 1;
-    case Settings.KEYS.SHADING.ALGORITHM: return Settings.get(value) ?? Settings.KEYS.SHADING.TYPES.POLYGONS;
-  }
 }
 
 /**
@@ -73,19 +55,24 @@ export class Settings extends ModuleSettingsAbstract {
   static registerAll() {
     const { KEYS, register, localize } = this;
 
-    const STYPES = KEYS.SHADING.TYPES;
-    register(KEYS.SHADING.ALGORITHM, {
-      name: localize(`${KEYS.SHADING.ALGORITHM}.name`),
-      hint: localize(`${KEYS.SHADING.ALGORITHM}.hint`),
+    register(KEYS.SHADOWS.LIGHTING, {
+      name: localize(`${KEYS.SHADOWS.LIGHTING}.name`),
+      hint: localize(`${KEYS.SHADOWS.LIGHTING}.hint`),
       scope: "world",
       config: true,
-      default: STYPES.WEBGL,
-      type: String,
-      requiresReload: false,
-      choices: {
-        [STYPES.NONE]: localize(`${STYPES.NONE}`),
-        [STYPES.WEBGL]: localize(`${STYPES.WEBGL}`)
-      }
+      default: true,
+      requiresReload: true,
+      type: Boolean
+    });
+
+    register(KEYS.SHADOWS.VISION, {
+      name: localize(`${KEYS.SHADOWS.VISION}.name`),
+      hint: localize(`${KEYS.SHADOWS.VISION}.hint`),
+      scope: "world",
+      config: true,
+      default: true,
+      requiresReload: true,
+      type: Boolean
     });
 
     register(KEYS.ELEVATION_MINIMUM, {

@@ -23,6 +23,7 @@ import { PATCHES as PATCHES_RenderedEffectSource } from "./RenderedEffectSource.
 import { PATCHES as PATCHES_Region } from "./Region.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
 import { PATCHES as PATCHES_RegionConfig } from "./RegionConfig.js";
+import { PATCHES as PATCHES_Scene } from "./Scene.js";
 
 import {
   PATCHES_DetectionMode,
@@ -33,9 +34,10 @@ import {
 /**
  * Groupings:
  * - BASIC        Always in effect
- * - POLYGON      When Polygon shadow setting is selected
- * - WEBGL        When WebGL shadow setting is selected
+ * - LIGHTING     When EV adjusts lighting for elevation
+ * - VISION       When EV adjust vision for elevation
  * - VISIBILITY   When EV is responsibility for testing visibility
+ * - REGIONS      Code specific to Foundry Regions
  *
  * Patching options:
  * - WRAPS
@@ -59,6 +61,7 @@ export const PATCHES = {
   "foundry.canvas.sources.RenderedEffectSource": PATCHES_RenderedEffectSource,
   Region: PATCHES_Region,
   "foundry.canvas.sources.PointVisionSource": PATCHES_PointVisionSource,
+  Scene: PATCHES_Scene,
   Wall: PATCHES_Wall
 };
 
@@ -88,18 +91,22 @@ function unregisterPatchesForSettings() {
  * Register patches for the current scene settings
  */
 export function registerPatchesForSceneSettings() {
-  const { ALGORITHM, TYPES } = Settings.KEYS.SHADING;
-  const algorithm = getSceneSetting(ALGORITHM);
   unregisterPatchesForSceneSettings();
-  switch ( algorithm ) {
-    case TYPES.WEBGL: {
-      PATCHER.registerGroup("WEBGL");
-      canvas.effects.lightSources.forEach(src => src._initializeEVShadows());
-      break;
-    }
+  const { LIGHTING, VISION } = Settings.KEYS.SHADOWS;
+  if ( LIGHTING )
+  if ( VISION )
+
+  // Trigger initialization of light source shadows.
+  if ( LIGHTING ) {
+    PATCHER.registerGroup("LIGHTING");
+    canvas.effects.lightSources.forEach(src => src._initializeEVShadows());
   }
 
-  if ( algorithm !== TYPES.WEBGL ) {
+  if ( VISION ) {
+    PATCHER.registerGroup("VISION");
+  }
+
+  if ( !(LIGHTING || VISION) ) {
     canvas.effects.lightSources.forEach(src => {
       Object.values(src.layers).forEach(layer => layer.shader.uniforms.uEVShadows = false);
     });
@@ -118,5 +125,6 @@ export function registerPatchesForSceneSettings() {
 }
 
 function unregisterPatchesForSceneSettings() {
-  PATCHER.deregisterGroup("WEBGL");
+  PATCHER.deregisterGroup("LIGHTING");
+  PATCHER.deregisterGroup("VISION");
 }
