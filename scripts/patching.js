@@ -23,6 +23,7 @@ import { PATCHES as PATCHES_RenderedEffectSource } from "./RenderedEffectSource.
 import { PATCHES as PATCHES_Region } from "./Region.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
 import { PATCHES as PATCHES_RegionConfig } from "./RegionConfig.js";
+import { PATCHES as PATCHES_Scene } from "./Scene.js";
 
 import {
   PATCHES_DetectionMode,
@@ -60,6 +61,7 @@ export const PATCHES = {
   "foundry.canvas.sources.RenderedEffectSource": PATCHES_RenderedEffectSource,
   Region: PATCHES_Region,
   "foundry.canvas.sources.PointVisionSource": PATCHES_PointVisionSource,
+  Scene: PATCHES_Scene,
   Wall: PATCHES_Wall
 };
 

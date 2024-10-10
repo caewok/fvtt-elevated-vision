@@ -5,7 +5,6 @@ PIXI
 "use strict";
 
 import { MODULE_ID } from "../const.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
 
@@ -912,7 +911,7 @@ void main() {
     ];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
 
-    const lightPosition = Point3d.fromPointSource(source);
+    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
 
     return super.create(defaultUniforms);
@@ -938,7 +937,7 @@ void main() {
    * @param {number} z
    */
   updateLightPosition(source) {
-    const lightPosition = Point3d.fromPointSource(source);
+    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
     this.uniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
   }
 }
@@ -1389,7 +1388,7 @@ void main() {
     ];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
 
-    const lightPosition = Point3d.fromPointSource(source);
+    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
     defaultUniforms.uLightSize = source.data.lightSize;
 
@@ -1411,7 +1410,7 @@ void main() {
   }
 
   updateLightPosition(source) {
-    const lightPosition = Point3d.fromPointSource(source);
+    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
     this.uniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
   }
 

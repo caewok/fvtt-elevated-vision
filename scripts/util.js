@@ -9,7 +9,9 @@ PIXI
 "use strict";
 
 import { MODULE_ID, OTHER_MODULES } from "./const.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
+
+
+
 
 /**
  * What elevations are considered "ground" at this location?
@@ -421,6 +423,7 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
   if ( !isFinite(topZ) ) topZ = Number.MAX_SAFE_INTEGER;
 
   // Four corners of the wall: c, d, e, f
+  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
   const c = new Point3d(wall.edge.a.x, wall.edge.a.y, bottomZ);
   const d = new Point3d(wall.edge.b.x, wall.edge.b.y, bottomZ);
 
@@ -451,6 +454,7 @@ export function lineSegment3dWallIntersection(a, b, wall, epsilon = 1e-8) {
  * @param {Wall} wall   Wall to intersect
  */
 export function lineWall3dIntersection(a, b, wall, epsilon = 1e-8) {
+  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
   const x = wall.edge.a.x;
   const y = wall.edge.a.y;
   const c = new Point3d(x, y, 0);
