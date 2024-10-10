@@ -55,7 +55,6 @@ function _getPolygonConfiguration(wrapped) {
   // Construct polygon points for the primary angle
   // Extend out the limited angle polygon to reach the radius at c and d.
   const extRadius = PIXI.Point.distanceBetween(this.data, c);
-  const { x, y } = la.origin;
   const primaryAngle = la.aMax - la.aMin;
   const nPrimary = Math.ceil((primaryAngle * la.density) / (2 * Math.PI));
   const dPrimary = primaryAngle / nPrimary;

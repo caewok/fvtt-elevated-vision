@@ -8,7 +8,7 @@ PIXI
 // Shadow terrain when the source is below.
 // Also shadow based on limited angle.
 
-import { MODULE_ID } from "../const.js";
+import { MODULE_ID, FLAGS } from "../const.js";
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
 
@@ -137,7 +137,14 @@ void main() {
     // Rotation: 0º / 360º points due south; 90º due west. Rotate so 0º is due west; 90º is due south
     const rot = source.data.rotation || 360;
     defaultUniforms.uRotation = Math.normalizeRadians(Math.toRadians(rot + 90));
-    defaultUniforms.uEmissionAngle = source.data.angle || 360;
+
+    let angle = source.data.angle || 360;
+    if ( angle < 180
+      && !source.isDirectional
+      && source.object.document.getFlag(MODULE_ID, FLAGS.LIGHT_SIZE) ) {
+      angle = 180;
+    }
+    defaultUniforms.uEmissionAngle = angle;
 
     return super.create(defaultUniforms);
   }
@@ -152,7 +159,12 @@ void main() {
    * @param {boolean} [changes.changedEmissionAngle]  True if the source changed emission angle
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  sourceUpdated(source, { changedPosition, changedElevation, changedRadius, changedRotation, changedEmissionAngle } = {}) {
+  sourceUpdated(source, {
+    changedPosition,
+    changedElevation,
+    changedRadius,
+    changedRotation,
+    changedEmissionAngle } = {}) {
     if ( changedPosition || changedElevation ) this.updateSourcePosition(source);
     if ( changedRadius ) this.updateSourceRadius(source);
     if ( changedRotation ) this.updateSourceRotation(source);
@@ -175,6 +187,12 @@ void main() {
   }
 
   updateSourceEmissionAngle(source) {
-    this.uniforms.uEmissionAngle = source.data.angle || 360;
+    let angle = source.data.angle || 360;
+    if ( angle < 180
+      && !source.isDirectional
+      && source.object.document.getFlag(MODULE_ID, FLAGS.LIGHT_SIZE) ) {
+      angle = 180;
+    }
+    this.uniforms.uEmissionAngle = angle;
   }
 }
