@@ -117,6 +117,14 @@ Hooks.on("canvasReady", function() {
   // Set the elevation grid now that we know scene dimensions
   setDirectionalLightSources(canvas.lighting.placeables);
   DirectionalLightSource._refreshElevationAngleGuidelines();
+
+  // Refresh lights which may be set incorrectly on scene load (displaying without shadows).
+  // TODO: Is there a better way to do this without deleting them all?
+  canvas.lighting.placeables.forEach(l => {
+    l.initializeLightSource({deleted: true });
+    l.initializeLightSource({deleted: false });
+  });
+
 });
 
 function setDirectionalLightSources(lights) {
