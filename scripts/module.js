@@ -49,18 +49,11 @@ Hooks.once("init", function() {
   CONFIG[MODULE_ID] = {
 
     /**
-     * TravelElevation.
-     * The percent threshold under which a tile should be considered transparent at that pixel.
-     * @type {number}
-     */
-    alphaThreshold: 0.75,
-
-    /**
      * ElevationLayer.
      * Maximum texture size used to represent elevation values.
      * @type {number}
      */
-    elevationTextureSize: 4096,
+    elevationTextureSize: 4096, // 64^2
 
     /**
      * ElevationLayer.
@@ -72,47 +65,11 @@ Hooks.once("init", function() {
     resolution: 0.25,
 
     /**
-     * TravelElevation.
-     * Permitted step size to allow tokens to move between tiles of similar elevations before flying.
-     * If undefined, will use token height.
-     * @type {number|undefined}
-     */
-    tileStep: undefined,
-
-    /**
-     * TravelElevation.
-     * Permitted step size to allow tokens to move between terrains of similar elevations before flying.
-     * If undefined, will use token height or (for coordinate testing) terrain height.
-     * @type {number|undefined}
-     */
-    terrainStep: undefined,
-
-    /**
-     * TravelElevation.
-     * When auto-averaging is enabled, this value will be used to average over terrain when
-     * calculating token travel elevation. 0 means do not average, 1+ means test every N pixels.
-     * Should be a positive number or 0. Decimals are allowed.
-     * Larger numbers will make averaging faster but less precise.
-     * @type {number}
-     */
-    averageTerrain: 2,
-
-    /**
-     * TravelElevation.
-     * When auto-averaging is enabled, this value will be used to average over tiles when
-     * calculating token travel elevation. 0 means do not average, 1+ means test every N pixels.
-     * Should be a positive number or 0. Decimals are allowed.
-     * Larger numbers will make averaging faster but less precise.
-     * @type {number}
-     */
-    averageTiles: 2,
-
-    /**
      * WebGL shadows.
      * Maximum texture size used to represent shadows.
      * @type {number}
      */
-    shadowTextureSize: 4096,
+    shadowTextureSize: 4096, // 64^2
   };
 
   game.modules.get(MODULE_ID).api = {
