@@ -33,16 +33,6 @@ export async function setSceneSetting(settingName, value, scene) {
   return await scene.setFlag(MODULE_ID, settingName, value);
 }
 
-/**
- * Force a reload of token controls layer.
- * Used to force the added control to appear/disappear.
- */
-export function reloadTokenControls() {
-  if ( !canvas.tokens.active ) return;
-  canvas.tokens.deactivate();
-  canvas.tokens.activate();
-}
-
 export class Settings extends ModuleSettingsAbstract {
 
   /** @type {object} */
