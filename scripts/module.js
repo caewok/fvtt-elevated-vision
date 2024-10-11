@@ -49,18 +49,11 @@ Hooks.once("init", function() {
   CONFIG[MODULE_ID] = {
 
     /**
-     * TravelElevation.
-     * The percent threshold under which a tile should be considered transparent at that pixel.
-     * @type {number}
-     */
-    alphaThreshold: 0.75,
-
-    /**
      * ElevationLayer.
      * Maximum texture size used to represent elevation values.
      * @type {number}
      */
-    elevationTextureSize: 4096,
+    elevationTextureSize: 4096, // 64^2
 
     /**
      * ElevationLayer.
@@ -72,47 +65,30 @@ Hooks.once("init", function() {
     resolution: 0.25,
 
     /**
-     * TravelElevation.
-     * Permitted step size to allow tokens to move between tiles of similar elevations before flying.
-     * If undefined, will use token height.
-     * @type {number|undefined}
-     */
-    tileStep: undefined,
-
-    /**
-     * TravelElevation.
-     * Permitted step size to allow tokens to move between terrains of similar elevations before flying.
-     * If undefined, will use token height or (for coordinate testing) terrain height.
-     * @type {number|undefined}
-     */
-    terrainStep: undefined,
-
-    /**
-     * TravelElevation.
-     * When auto-averaging is enabled, this value will be used to average over terrain when
-     * calculating token travel elevation. 0 means do not average, 1+ means test every N pixels.
-     * Should be a positive number or 0. Decimals are allowed.
-     * Larger numbers will make averaging faster but less precise.
-     * @type {number}
-     */
-    averageTerrain: 2,
-
-    /**
-     * TravelElevation.
-     * When auto-averaging is enabled, this value will be used to average over tiles when
-     * calculating token travel elevation. 0 means do not average, 1+ means test every N pixels.
-     * Should be a positive number or 0. Decimals are allowed.
-     * Larger numbers will make averaging faster but less precise.
-     * @type {number}
-     */
-    averageTiles: 2,
-
-    /**
      * WebGL shadows.
      * Maximum texture size used to represent shadows.
      * @type {number}
      */
-    shadowTextureSize: 4096,
+    shadowTextureSize: 4096, // 64^2
+
+    /**
+     * WebGL region elevations.
+     * Minimum elevation to use.
+     * Maximum will be min + step * ElevationHandler.#maximumNormalizedElevation,
+     * ElevationHandler.#maximumNormalizedElevation is Math.pow(256, 2) - 1 b/c elevation
+     *   currently is two channels of texture in EV.
+     * So -2000 (min) + 0.1 (step) * 65556 (max normalized) = 4555
+     * @type {number}
+     */
+    elevationMin: -2000,
+
+    /**
+     * WebGL region elevations.
+     * Step size between elevations.
+     * See minElevation.
+     * @type {number}
+     */
+    elevationStep: 0.1
   };
 
   game.modules.get(MODULE_ID).api = {
@@ -151,8 +127,8 @@ Hooks.once("setup", function() {
 
 Hooks.on("canvasInit", function(_canvas) {
   log("canvasInit");
-  canvas.scene[MODULE_ID] = new ElevationTextureHandler();
-  canvas.scene[MODULE_ID].initialize(); // Async.
+  const ev = canvas.scene[MODULE_ID] = new ElevationTextureHandler();
+  ev.initialize(); // Async.
   registerPatchesForSceneSettings();
 });
 
@@ -160,6 +136,14 @@ Hooks.on("canvasReady", function() {
   // Set the elevation grid now that we know scene dimensions
   setDirectionalLightSources(canvas.lighting.placeables);
   DirectionalLightSource._refreshElevationAngleGuidelines();
+
+  // Refresh lights which may be set incorrectly on scene load (displaying without shadows).
+  // TODO: Is there a better way to do this without deleting them all?
+  canvas.lighting.placeables.forEach(l => {
+    l.initializeLightSource({deleted: true });
+    l.initializeLightSource({deleted: false });
+  });
+
 });
 
 function setDirectionalLightSources(lights) {

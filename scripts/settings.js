@@ -20,10 +20,6 @@ export const SETTINGS = {
 
   TEST_VISIBILITY: "test-visibility",
   LIGHTS_FULL_PENUMBRA: "lights-full-penumbra",
-  // VISION_USE_SHADER: "vision-use-shader",  // Deprecated
-  // AUTO_AVERAGING: "auto-change-elevation.averaging", // Deprecated
-  ELEVATION_MINIMUM: "elevationmin",
-  ELEVATION_INCREMENT: "elevationstep",
   CHANGELOG: "changelog"
 };
 
@@ -35,16 +31,6 @@ export function getSceneSetting(settingName, scene) {
 export async function setSceneSetting(settingName, value, scene) {
   scene ??= canvas.scene;
   return await scene.setFlag(MODULE_ID, settingName, value);
-}
-
-/**
- * Force a reload of token controls layer.
- * Used to force the added control to appear/disappear.
- */
-export function reloadTokenControls() {
-  if ( !canvas.tokens.active ) return;
-  canvas.tokens.deactivate();
-  canvas.tokens.activate();
 }
 
 export class Settings extends ModuleSettingsAbstract {
@@ -73,26 +59,6 @@ export class Settings extends ModuleSettingsAbstract {
       default: true,
       requiresReload: true,
       type: Boolean
-    });
-
-    register(KEYS.ELEVATION_MINIMUM, {
-      name: localize(`${KEYS.ELEVATION_MINIMUM}.name`),
-      hint: localize(`${KEYS.ELEVATION_MINIMUM}.hint`),
-      scope: "world",
-      config: true,
-      default: 0,
-      requiresReload: false,
-      type: Number
-    });
-
-    register(KEYS.ELEVATION_INCREMENT, {
-      name: localize(`${KEYS.ELEVATION_INCREMENT}.name`),
-      hint: localize(`${KEYS.ELEVATION_INCREMENT}.hint`),
-      scope: "world",
-      config: true,
-      default: 5,
-      requiresReload: false,
-      type: Number
     });
 
     register(KEYS.LIGHTING.LIGHT_SIZE, {
