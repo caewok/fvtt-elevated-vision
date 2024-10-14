@@ -455,7 +455,7 @@ export class WebGLShadows {
 
     // Ignore collinear walls
     const side = edge.orientPoint(origin);
-    if ( !side ) return false;
+ //   if ( !side ) return false;
 
     // Ignore one-directional walls facing away from the origin.
     if ( side === edge.dir ) return false;
