@@ -5,13 +5,25 @@ foundry
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, TEMPLATES } from "./const.js";
+import { MODULE_ID, TEMPLATES, FLAGS } from "./const.js";
 import { log, renderTemplateSync } from "./util.js";
 import { Settings, getSceneSetting } from "./settings.js";
+import { registerPatchesForSceneSettings } from "./patching.js";
 
 // Patches for the Scene class
 export const PATCHES = {};
 PATCHES.BASIC = {};
+
+/**
+ * Hook scene config updates so lighting/vision shadows can be modified.
+ */
+function updateScene(scene, changes, options, userId) {
+  if ( scene !== canvas.scene ) return;
+  const lightingValue = changes.flags?.elevatedvision?.[FLAGS.SHADOWS.LIGHTING];
+  const shadowsValue = changes.flags?.elevatedvision?.[FLAGS.SHADOWS.VISION];
+  if ( typeof lightingValue === "undefined" && typeof lightingValue === "undefined" ) return;
+  registerPatchesForSceneSettings();
+}
 
 /**
  * Update data for pull-down algorithm menu for the scene config.
@@ -36,4 +48,4 @@ function renderSceneConfig(app, html, data) {
   app.setPosition({ height: "auto" });
 }
 
-PATCHES.BASIC.HOOKS = { renderSceneConfig };
+PATCHES.BASIC.HOOKS = { renderSceneConfig, updateScene };

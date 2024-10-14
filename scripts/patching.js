@@ -5,8 +5,9 @@ foundry
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// Patches
+import { MODULE_ID, FLAGS } from "./const.js";
 
+// Patches
 import { Patcher } from "./Patcher.js";
 import { getSceneSetting, Settings } from "./settings.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
@@ -92,21 +93,20 @@ function unregisterPatchesForSettings() {
  */
 export function registerPatchesForSceneSettings() {
   unregisterPatchesForSceneSettings();
-  const { LIGHTING, VISION } = Settings.KEYS.SHADOWS;
-  if ( LIGHTING )
-  if ( VISION )
+  const lightingShadows = getSceneSetting(FLAGS.SHADOWS.LIGHTING);
+  const visionShadows = getSceneSetting(FLAGS.SHADOWS.VISION);
 
-  // Trigger initialization of light source shadows.
-  if ( LIGHTING ) {
+  // Initialize the patches
+  if ( lightingShadows ) {
     PATCHER.registerGroup("LIGHTING");
-    canvas.effects.lightSources.forEach(src => src._initializeEVShadows());
+    canvas.effects.lightSources.forEach(src => src[MODULE_ID]?.initializeShadows());
   }
-
-  if ( VISION ) {
+  if ( visionShadows ) {
     PATCHER.registerGroup("VISION");
+    canvas.effects.visionSources.forEach(src => src[MODULE_ID]?.initializeShadows());
   }
 
-  if ( !(LIGHTING || VISION) ) {
+  if ( !(lightingShadows || visionShadows) ) {
     canvas.effects.lightSources.forEach(src => {
       Object.values(src.layers).forEach(layer => layer.shader.uniforms.uEVShadows = false);
     });
@@ -115,8 +115,7 @@ export function registerPatchesForSceneSettings() {
   // Trigger initialization of all lights when switching so that the visibility cache is updated.
   for ( const lightSource of canvas.effects.lightSources ) {
     if ( lightSource instanceof foundry.canvas.sources.GlobalLightSource ) continue;
-    if ( lightSource instanceof DirectionalLightSource
-      && algorithm !== TYPES.WEBGL ) lightSource.object.convertFromDirectionalLight();
+    if ( lightSource instanceof DirectionalLightSource ) lightSource.object.convertFromDirectionalLight();
 
     lightSource.initialize(lightSource.data);
   }

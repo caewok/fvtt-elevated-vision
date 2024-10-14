@@ -17,6 +17,10 @@ export const FLAGS = {
   DIRECTIONAL_LIGHT: {
     ENABLED: "directionalLight",
     SOLAR_ANGLE: "solarAngle"
+  },
+  SHADOWS: {
+    LIGHTING: "useShadowLighting",
+    VISION: "useShadowVision"
   }
 };
 
