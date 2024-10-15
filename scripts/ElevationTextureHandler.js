@@ -144,7 +144,7 @@ export class ElevationTextureHandler {
    * Increment between elevation measurements. Should be a positive integer or float of 1 decimal place.
    * @type {number}
    */
-  get elevationStep() { return CONFIG[MODULE_ID]?.elevationMin ?? canvas.scene.dimensions.distance; }
+  get elevationStep() { return CONFIG[MODULE_ID]?.elevationStep ?? canvas.scene.dimensions.distance; }
 
   /**
    * Minimum elevation value for a scene.
