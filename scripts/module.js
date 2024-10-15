@@ -18,7 +18,13 @@ import {
   SourceShadowWallGeometry,
   PointSourceShadowWallGeometry,
   DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
+import { TestShadowShader } from "./glsl/TestShadowShader.js";
+import {
+  ShadowTextureRenderer,
+  ShadowVisionLOSTextureRenderer,
+  ShadowDirectionalTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
+import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
+
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Register methods, patches, settings
@@ -100,7 +106,11 @@ Hooks.once("init", function() {
       SourceShadowWallGeometry,
       PointSourceShadowWallGeometry,
       DirectionalSourceShadowWallGeometry,
-      ShadowTextureRenderer
+      ShadowTextureRenderer,
+      ShadowVisionLOSTextureRenderer,
+      ShadowDirectionalTextureRenderer,
+      TestShadowShader,
+      EVQuadMesh
     }
   };
 

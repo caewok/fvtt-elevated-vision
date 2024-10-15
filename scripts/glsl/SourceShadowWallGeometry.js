@@ -760,13 +760,15 @@ MODULE_ID = "elevatedvision"
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 Draw = CONFIG.GeometryLib.Draw;
 api = game.modules.get("elevatedvision").api
-AbstractEVShader = api.AbstractEVShader
-EVQuadMesh = api.EVQuadMesh
-ShadowTextureRenderer = api.ShadowTextureRenderer
-TestShadowShader = api.TestShadowShader
-SourceShadowWallGeometry = api.SourceShadowWallGeometry
-DirectionalSourceShadowWallGeometry = api.DirectionalSourceShadowWallGeometry
-PointSourceShadowWallGeometry = api.PointSourceShadowWallGeometry
+
+
+const glsl = api.glsl;
+EVQuadMesh = glsl.EVQuadMesh
+ShadowTextureRenderer = glsl.ShadowTextureRenderer
+TestShadowShader = glsl.TestShadowShader
+SourceShadowWallGeometry = glsl.SourceShadowWallGeometry
+DirectionalSourceShadowWallGeometry = glsl.DirectionalSourceShadowWallGeometry
+PointSourceShadowWallGeometry = glsl.PointSourceShadowWallGeometry
 
 let [l] = canvas.lighting.placeables;
 source = l.source;
@@ -796,7 +798,7 @@ function renderShadow(source) {
 }
 
 function renderLOS(source) {
-  return source.elevatedvision.shadowVisionLOSRenderer.renderShadowMeshToTexture();
+  return source.elevatedvision.shadowRenderer.renderShadowMeshToTexture();
 }
 
 renderTexture = PIXI.RenderTexture.create({

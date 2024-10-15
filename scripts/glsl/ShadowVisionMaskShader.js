@@ -209,10 +209,9 @@ MODULE_ID = "elevatedvision"
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 Draw = CONFIG.GeometryLib.Draw;
 api = game.modules.get("elevatedvision").api
-AbstractEVShader = api.AbstractEVShader
-EVQuadMesh = api.EVQuadMesh
-ShadowTextureRenderer = api.ShadowTextureRenderer
-TestShadowShader = api.TestShadowShader
+EVQuadMesh = api.glsl.EVQuadMesh
+ShadowTextureRenderer = api.glsl.ShadowTextureRenderer
+TestShadowShader = api.glsl.TestShadowShader
 
 
 let [l] = canvas.lighting.placeables;
@@ -225,11 +224,16 @@ ev.wallGeometry._triEdgeMap.keys().forEach(key => Draw.segment(canvas.edges.get(
 
 
 
-shadowMesh = source.elevatedvision.shadowMesh
-canvas.stage.addChild(shadowMesh)
-canvas.stage.removeChild(shadowMesh)
+canvas.stage.addChild(ev.shadowMesh)
+canvas.stage.removeChild(ev.shadowMesh)
 
-str = new ShadowTextureRenderer(source, shadowMesh);
+canvas.stage.addChild(ev.shadowTerrainMesh)
+canvas.stage.removeChild(ev.shadowTerrainMesh)
+
+canvas.stage.addChild(ev.shadowVisionMask)
+canvas.stage.removeChild(ev.shadowVisionMask)
+
+str = new ShadowTextureRenderer(source, ev.shadowMesh, ev.shadowTerrainMesh);
 rt = str.renderShadowMeshToTexture()
 
 s = new PIXI.Sprite(rt)

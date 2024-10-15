@@ -1455,8 +1455,9 @@ canvas.stage.removeChild(geomMesh)
 
 ev = source.elevatedvision;
 
-mesh = ev.shadowVisionLOSMesh
+mesh = ev.shadowTerrainMesh
 mesh = ev.shadowMesh
+mesh = ev.shadowVisionMask
 canvas.stage.addChild(mesh)
 canvas.stage.removeChild(mesh)
 
