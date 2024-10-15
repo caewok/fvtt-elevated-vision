@@ -1,6 +1,5 @@
 /* globals
-game,
-Settings
+game
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -31,7 +30,7 @@ PATCHES.BASIC.WRAPS = { set };
  * @param {Partial<DatabaseUpdateOperation>} options Additional options which modified the update request
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
-function updateSetting(document, changed, options, userId) {
+function updateSetting(document, _changed, _options, _userId) {
   const [theNamespace, key] = document.key.split(".", 2);
   if ( !(theNamespace || key) ) return;
   if ( theNamespace !== MODULE_ID ) return;
@@ -60,11 +59,11 @@ export class ModuleSettingsAbstract {
     const cached = this.cache.get(key);
     if ( typeof cached !== "undefined" ) {
     // For debugging, can confirm against what the value should be.
-//       const origValue = game.settings.get(MODULE_ID, key);
-//       if ( origValue !== cached ) {
-//         console.debug(`Settings cache fail: ${origValue} !== ${cached} for key ${key}`);
-//         return origValue;
-//       }
+    //       const origValue = game.settings.get(MODULE_ID, key);
+    //       if ( origValue !== cached ) {
+    //         console.debug(`Settings cache fail: ${origValue} !== ${cached} for key ${key}`);
+    //         return origValue;
+    //       }
 
       return cached;
 

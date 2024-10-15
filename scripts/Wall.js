@@ -1,6 +1,6 @@
 /* globals
 canvas,
-flattenObject
+foundry
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */

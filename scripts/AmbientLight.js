@@ -1,10 +1,8 @@
 /* globals
 canvas,
 CONFIG,
-flattenObject,
-getTexture,
-LightSource,
-PreciseText
+foundry,
+getTexture
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */

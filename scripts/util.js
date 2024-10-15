@@ -1,17 +1,17 @@
 /* globals
-game,
-foundry,
 canvas,
 ClipperLib,
 CONFIG,
+game,
+foundry,
+FileReader,
+Handlebars,
+LimitedAnglePolygon,
 PIXI
 */
 "use strict";
 
 import { MODULE_ID, OTHER_MODULES } from "./const.js";
-
-
-
 
 /**
  * What elevations are considered "ground" at this location?
@@ -53,7 +53,7 @@ export function groundElevationsAtLocation(waypoint) {
       const bottomE = r.elevation.bottom ?? Number.NEGATIVE_INFINITY;
       if ( useSceneE && sceneE.between(topE, bottomE) ) useSceneE = false;
       elevs.add(topE);
-    })
+    });
   }
 
   if ( useSceneE ) elevs.push(sceneE);
@@ -373,10 +373,10 @@ export function log(...args) {
 export function readDataURLFromFile(file) {
   const reader = new FileReader();
   return new Promise((resolve, reject) => {
-    reader.onload = ev => { // eslint-disable-line no-unused-vars
+    reader.onload = ev => {
       resolve(reader.result);
     };
-    reader.onerror = ev => { // eslint-disable-line no-unused-vars
+    reader.onerror = ev => {
       reader.abort();
       reject();
     };
@@ -524,7 +524,7 @@ function circleCoord(a, r, c = 0, invR = 1 / r) {
  * @param {number} r    Radius
  * @returns {number}
  */
-export function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-vars
+export function revCircleCoord(p, r, c = 0) {
   // ((a - c) * 1/r * 0.5) + 0.5 = p
   // (a - c) * 1/r = (p - 0.5) / 0.5
   // a - c = 2 * (p - 0.5) / 1/r = 2 * (p - 0.5) * r
@@ -542,7 +542,7 @@ export function revCircleCoord(p, r, c = 0) { // eslint-disable-line no-unused-v
  */
 export function pointVTest(a, b, c, pt) {
   const angle = Math.toDegrees(PIXI.Point.angleBetween(a, b, c));
-  if ( isNaN(angle) || !angle ) return 180; // collinear lines
+  if ( isNaN(angle) || !angle ) return 180; // Collinear lines
 
   const oAC = foundry.utils.orient2dFast(b, a, c);
   let ccwRay = { A: b, B: a };

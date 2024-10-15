@@ -1,6 +1,5 @@
 /* globals
 canvas,
-CONFIG,
 document,
 foundry,
 Hooks
@@ -10,7 +9,7 @@ Hooks
 
 import { MODULE_ID, TEMPLATES, ICONS } from "./const.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
-import { Settings, getSceneSetting } from "./settings.js";
+import { Settings } from "./settings.js";
 
 // Patches for the AmbientLightConfig class.
 export const PATCHES = {};
@@ -127,7 +126,7 @@ function activateLightConfigListeners(app, html) {
   azimuthInput.addEventListener("change", onChangeAzimuth.bind(app));
 
   const elevationAngleInput = html.querySelector("#elevatedvisionElevationAngleConfig");
-  azimuthInput.addEventListener("change", onChangeElevationAngle.bind(app));
+  elevationAngleInput.addEventListener("change", onChangeElevationAngle.bind(app));
 }
 
 /**

@@ -1,12 +1,9 @@
 /* globals
-PIXI
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "./const.js";
-import { log } from "./util.js";
-import { Draw } from "./geometry/Draw.js";
 import { WebGLShadows } from "./glsl/WebGLShadows.js";
 
 /* Methods related to RenderedEffectSource
@@ -110,8 +107,6 @@ _createPolygon
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
-
-
 
 // ----- NOTE: WebGL Shadows ----- //
 

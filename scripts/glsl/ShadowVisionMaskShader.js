@@ -220,6 +220,11 @@ source = l.lightSource;
 
 source = _token.vision
 
+ev = source.elevatedvision;
+ev.wallGeometry._triEdgeMap.keys().forEach(key => Draw.segment(canvas.edges.get(key)))
+
+
+
 shadowMesh = source.elevatedvision.shadowMesh
 canvas.stage.addChild(shadowMesh)
 canvas.stage.removeChild(shadowMesh)
