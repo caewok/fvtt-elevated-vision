@@ -30,13 +30,11 @@ export function groundElevationsAtLocation(waypoint) {
     waypoint = RegionMovementWaypoint3d.fromObject(waypoint);
   }
 
-  let sceneE = 0;
+  let sceneE = canvas.scene[MODULE_ID].sceneBackgroundElevation;;
   const elevs = new Set();
   const TM = OTHER_MODULES.TERRAIN_MAPPER;
   let useSceneE = true;
   if ( TM.ACTIVE ) {
-    sceneE = canvas.scene.getFlag(TM.ID, TM.BACKGROUND_ELEVATION);
-
     // Locate tiles and regions at this location.
     const targetSq = new PIXI.Rectangle(waypoint.x, waypoint.y, 1, 1);
     const collisionTest = o => o.t[TM.ID].isElevated;

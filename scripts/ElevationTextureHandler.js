@@ -9,7 +9,7 @@ ui
 */
 "use strict";
 
-import { MODULE_ID, FLAGS } from "./const.js";
+import { MODULE_ID, OTHER_MODULES, FLAGS } from "./const.js";
 import { quotient256, mod256, log } from "./util.js";
 import { getSceneSetting, setSceneSetting, Settings } from "./settings.js";
 import { PixelCache } from "./geometry/PixelCache.js";
@@ -75,7 +75,14 @@ export class ElevationTextureHandler {
     const config = this._getElevationTextureConfiguration();
     this._elevationTexture = PIXI.RenderTexture.create(config);
     // Set the clear color of the render texture to black. The texture needs to be opaque.
-    this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
+    // this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
+    const backgroundColor = this.elevationColor(this.sceneBackgroundElevation);
+    this._elevationTexture.baseTexture.clearColor = [
+      backgroundColor.red,
+      backgroundColor.green,
+      backgroundColor.blue,
+      1];
+
     this.renderElevation();
     this.#initialized = true;
 
@@ -159,6 +166,14 @@ export class ElevationTextureHandler {
    */
   get elevationMax() { return this._scaleNormalizedElevation(this.#maximumNormalizedElevation); }
 
+  /**
+   * Scene background elevation if no regions or tiles present.
+   * @type {number}
+   */
+  get sceneBackgroundElevation() {
+    const TM = OTHER_MODULES.TERRAIN_MAPPER;
+    return TM.ACTIVE ? (canvas.scene.getFlag(TM.KEY, TM.BACKGROUND_ELEVATION) || 0) : 0;
+  }
 
   /* ------------------------ */
 
