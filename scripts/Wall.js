@@ -6,6 +6,7 @@ flattenObject
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
+import { MODULE_ID } from "./const.js";
 
 // Methods related to Wall
 
