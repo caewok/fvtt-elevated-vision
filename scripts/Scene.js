@@ -23,7 +23,7 @@ function updateScene(scene, changes, _options, _userId) {
       && typeof shadowsValue === "undefined") ) registerPatchesForSceneSettings();
 
   const TM = OTHER_MODULES.TERRAIN_MAPPER;
-  if ( changes.flags?.[TM.KEY]?.[TM.BACKGROUND_ELEVATION] !== "undefined" ) {
+  if ( typeof changes.flags?.[TM.KEY]?.[TM.BACKGROUND_ELEVATION] !== "undefined" ) {
     canvas.scene[MODULE_ID].updateSceneBackgroundElevation(); // Really unneeded if reloading canvas.
     SettingsConfig.reloadConfirm({world: true}); // TODO: Redo the elevation without the canvas reload
   }
