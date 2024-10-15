@@ -1,18 +1,10 @@
 /* globals
-canvas,
-game,
-PIXI
+
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "./const.js";
-import { Draw } from "./geometry/Draw.js";
-import { ShadowTerrainShader } from "./glsl/ShadowTerrainShader.js";
-import { ShadowVisionLOSTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
-import { ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
-import { SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 
 
 /* Testing

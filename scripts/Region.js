@@ -207,39 +207,6 @@ function regionPits() {
 }
 
 /**
- * Any regions whose top elevation is below the scene elevation are "pits."
- * Construct edges for these region polygons that extend upward to the scene elevation.
- * @param {Region[]} [pits]
- * @returns {Edge[]}
- */
-function sceneBackgroundEdges(pits) {
-  pits ??= regionPits();
-  if ( !pits.length ) return [];
-  const pitEdges = [];
-  for ( const pit of pits ) {
-    // TODO: Handle wall options for the region in region config.
-    const opts = {
-      type: "regionWall",
-      direction: CONST.WALL_DIRECTIONS.BOTH,
-      light: CONST.WALL_SENSE_TYPES.NORMAL,
-      move: CONST.WALL_SENSE_TYPES.NONE,
-      sight: CONST.WALL_SENSE_TYPES.NORMAL,
-      sound: CONST.WALL_SENSE_TYPES.NORMAL,
-      threshold: undefined,
-      object: pit,
-      id: pit.id
-    };
-    pit.polygons.forEach((poly, idx) => {
-      // TODO: For holes, flip direction option.
-      opts.id = `${pit.id}_poly${idx}`;
-      const edges = polygonToEdges(poly, opts);
-      pitEdges.push(...edges);
-    });
-  }
-  return pitEdges;
-}
-
-/**
  * Construct a scene "region" that is the scene rectangle minus any region pits.
  * @param {Region[]} [pits]
  * @returns {ClipperPaths}

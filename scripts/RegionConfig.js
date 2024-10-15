@@ -1,11 +1,10 @@
 /* globals
-foundry,
-Hooks
+document
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, TEMPLATES } from "./const.js";
+import { TEMPLATES } from "./const.js";
 import { renderTemplateSync } from "./util.js";
 
 // Patches for the RegionConfig class

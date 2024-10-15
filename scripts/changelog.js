@@ -1,6 +1,9 @@
 /* globals
+Dialog,
 Hooks,
-game
+game,
+showdown,
+window
 */
 "use strict";
 
@@ -13,26 +16,26 @@ const CHANGELOG = Settings.KEYS.CHANGELOG;
 
 
 Hooks.once("ready", () => {
-    if (!game.user.isGM) {
-        return;
+  if (!game.user.isGM) {
+    return;
+  }
+
+  game.settings.register(
+    MODULE_ID,
+    CHANGELOG,
+    {
+      scope: "client",
+      config: false,
+      type: Number,
+      default: 0
     }
+  );
 
-    game.settings.register(
-        MODULE_ID,
-        CHANGELOG,
-        {
-            scope: "client",
-            config: false,
-            type: Number,
-            default: 0
-        }
-    );
-
-    new ChangelogBuilder()
-        .addEntry({
-            version: "0.4.0",
-            title: "Autoelevation and Scene Configuration",
-            body: `\
+  new ChangelogBuilder()
+    .addEntry({
+      version: "0.4.0",
+      title: "Autoelevation and Scene Configuration",
+      body: `\
                 - **Autoelevation:** New methodology to automatically determine elevation. Tokens considered
                   *on-the-ground* if a terrain or tile is at or below the token, within the token's height.
                   Transparent tile portions are treated as holes. A token's elevation will be modified if
@@ -47,35 +50,35 @@ Hooks.once("ready", () => {
                   data will be downloaded in case the conversion to lower resolution fails.
                 - **Levels:** Elevation of basement tiles should now work regardless of the minimum elevation level for
                   the scene.`
-        })
+    })
 
-        .addEntry({
-            version: "0.5.0",
-            title: "FoundryVTT v11",
-            body: `\
+    .addEntry({
+      version: "0.5.0",
+      title: "FoundryVTT v11",
+      body: `\
                 - **Updated for v11:** Updated for FoundryVTT v11. If you need to fall back to v10, please use the
                   Elevated Vision v0.4 series.
                 - **No WebGL:** WebGL shadows is not functional and so for now it will default back to Polygon shadows.
                   I will continue to work on a more robust implementation and intend to bring back lighting and
                   elevation shadows in a future update. I wanted to get this update out quickly because all of the
                   EV functionality appears to be working, just not the prettier visual shadows.`
-        })
+    })
 
-        .addEntry({
-            version: "0.5.1",
-            title: "Elevation data changes",
-            body: `\
+    .addEntry({
+      version: "0.5.1",
+      title: "Elevation data changes",
+      body: `\
                 - **Larger elevation range:** Elevation data is now stored in red and green channels of the
                   elevation image. This allows elevation to have 65,536 distinct values in a scene, for all the
                   mountaineers in your party!
                 - **Elevation data storage:** Elevation data for each scene is now stored as a webp image in
                   worlds/[world-id]/assets/elevatedvision/[world-id][scene-id]-elevationMap.webp.`
-        })
+    })
 
-        .addEntry({
-            version: "0.5.2",
-            title: "Elevation colors",
-            body: `\
+    .addEntry({
+      version: "0.5.2",
+      title: "Elevation colors",
+      body: `\
                 GM can define a minimum and maximum elevation color in settings. The coloration in the elevation layer
                 will be interpolated between the two colors, based on the scene minimum and the current maximum elevation
                 in the scene. Alpha (transparency) values will also be interpolated.
@@ -87,12 +90,12 @@ Hooks.once("ready", () => {
                 elevation gradients on a scene! Or share your preferred min/max color choices. There is an open
                 comment on the Github page regarding "Multicolor height indicators." I will leave it open in case
                 anyone has additional suggestions.`
-        })
+    })
 
-        .addEntry({
-            version: "0.5.3",
-            title: "WebGL shadows are back!",
-            body: `\
+    .addEntry({
+      version: "0.5.3",
+      title: "WebGL shadows are back!",
+      body: `\
                 - **WebGL shadows:** The WebGL setting for elevation shadows is back! Pretty much rewritten
                   from scratch. WebGL shadows should be a lot more performant. Plus, the number of walls
                   it can consider when calculating shadows using the GPU is not longer limited.
@@ -105,12 +108,12 @@ Hooks.once("ready", () => {
                   When the prone status is enabled/disabled on a token, its height is decreased by two-thirds
                   (consistent with Wall Height) and the token vision shadows are updated to reflect
                   the new height.`
-        })
+    })
 
-        .addEntry({
-            version: "0.5.5",
-            title: "Directional lighting",
-            body: `\
+    .addEntry({
+      version: "0.5.5",
+      title: "Directional lighting",
+      body: `\
                 - **Directional lighting:** In the lighting configuration, a new "Directional Light" checkbox
                   is available if you have WebGL shading selected for the scene. A directional light physically
                   models a distant light source, like the sun or moon. Dragging the light around the scene will
@@ -128,12 +131,12 @@ Hooks.once("ready", () => {
                 lighting shadows and also have some ideas for how to better incorporate terrain shadows. And directional
                 shadows is proof-of-concept at this point; I intend to address the pixelation along the edges that can sometimes be seen
                 with directional shadows. Please submit bug reports to the [Git issue tracker](https://github.com/caewok/fvtt-elevated-vision/issues).`
-        })
+    })
 
-        .addEntry({
-            version: "0.5.8",
-            title: "Automated elevation improvements",
-            body: `\
+    .addEntry({
+      version: "0.5.8",
+      title: "Automated elevation improvements",
+      body: `\
                 - **Automated Elevation:**  Added options in the token configuration (and default token configuration)
                   to set the algorithm used for estimating terrain elevation and whether the token is on a tile:
                   1. Center point. Use only the token center point. This is the least resource-intensive.
@@ -144,18 +147,18 @@ Hooks.once("ready", () => {
                   3. 9 points. Use default Foundry spacing for the 9 points. Otherwise same as (2).
                   4. Average. Use a grid of closely spaced points on the token shape.
                      For both elevation and tile opacity, use the average. This is the most resource-intensive.`
-        })
+    })
 
-        .addEntry({
-            version: "0.5.11",
-            title: "Circular brush",
-            body: `\
+    .addEntry({
+      version: "0.5.11",
+      title: "Circular brush",
+      body: `\
                 Thanks entirely to @Larkinabout, you can now select a resizable circular brush for painting
                 elevation in the scene. You can resize the brush in the module settings.`
-        })
+    })
 
-        .build()
-        ?.render(true);
+    .build()
+    ?.render(true);
 });
 
 
@@ -163,68 +166,68 @@ Hooks.once("ready", () => {
  * Display a dialog with changes; store changes as entries.
  */
 class ChangelogBuilder {
-    #entries = [];
+  #entries = [];
 
-    addEntry({ version, title = "", body }) {
-        this.#entries.push({ version, title, body });
+  addEntry({ version, title = "", body }) {
+    this.#entries.push({ version, title, body });
 
-        return this;
+    return this;
+  }
+
+  build() {
+    const converter = new showdown.Converter();
+    const curr = Settings.get(CHANGELOG);
+    const next = this.#entries.length;
+    let content = "";
+
+    if (curr >= next) {
+      return;
     }
 
-    build() {
-        const converter = new showdown.Converter();
-        const curr = Settings.get(CHANGELOG);
-        const next = this.#entries.length;
-        let content = "";
+    for (let [index, { version, title, body }] of this.#entries.entries()) {
+      let entry = `<strong>v${version}</strong>${title ? `: ${title}` : ""}`;
 
-        if (curr >= next) {
-            return;
-        }
+      if (index < curr) {
+        entry = `<summary>${entry}</summary>`;
+      } else {
+        entry = `<h3>${entry}</h3>`;
+      }
 
-        for (let [index, { version, title, body }] of this.#entries.entries()) {
-            let entry = `<strong>v${version}</strong>${title ? ": " + title : ""}`;;
+      let indentation = 0;
 
-            if (index < curr) {
-                entry = `<summary>${entry}</summary>`;
-            } else {
-                entry = `<h3>${entry}</h3>`;
-            }
+      while (body[indentation] === " ") indentation++;
 
-            let indentation = 0;
+      if (indentation) {
+        body = body.replace(new RegExp(`^ {0,${indentation}}`, "gm"), "");
+      }
 
-            while (body[indentation] === " ") indentation++;
+      entry += converter.makeHtml(body);
 
-            if (indentation) {
-                body = body.replace(new RegExp(`^ {0,${indentation}}`, "gm"), "");
-            }
+      if (index < curr) {
+        entry = `<details>${entry}</details><hr>`;
+      } else if (index === curr) {
+        entry += "<hr><hr>";
+      }
 
-            entry += converter.makeHtml(body);
-
-            if (index < curr) {
-                entry = `<details>${entry}</details><hr>`;
-            } else if (index === curr) {
-                entry += `<hr><hr>`;
-            }
-
-            content = entry + content;
-        }
-
-        return new Dialog({
-            title: "Elevated Vision: Changelog",
-            content,
-            buttons: {
-                view_documentation: {
-                    icon: `<i class="fas fa-book"></i>`,
-                    label: "View documentation",
-                    callback: () => window.open("https://github.com/caewok/fvtt-elevated-vision/blob/master/README.md")
-                },
-                dont_show_again: {
-                    icon: `<i class="fas fa-times"></i>`,
-                    label: "Don't show again",
-                    callback: () => Settings.set(CHANGELOG, next)
-                }
-            },
-            default: "dont_show_again"
-        });
+      content = entry + content;
     }
+
+    return new Dialog({
+      title: "Elevated Vision: Changelog",
+      content,
+      buttons: {
+        view_documentation: {
+          icon: "<i class=\"fas fa-book\"></i>",
+          label: "View documentation",
+          callback: () => window.open("https://github.com/caewok/fvtt-elevated-vision/blob/master/README.md")
+        },
+        dont_show_again: {
+          icon: "<i class=\"fas fa-times\"></i>",
+          label: "Don't show again",
+          callback: () => Settings.set(CHANGELOG, next)
+        }
+      },
+      default: "dont_show_again"
+    });
+  }
 }

@@ -3,8 +3,7 @@ Hooks,
 game,
 canvas,
 CONFIG,
-loadTemplates,
-ui
+loadTemplates
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -19,7 +18,7 @@ import {
   SourceShadowWallGeometry,
   PointSourceShadowWallGeometry,
   DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-
+import { ShadowTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 // Register methods, patches, settings
@@ -27,7 +26,7 @@ import { PATCHER, initializePatching, registerPatchesForSceneSettings } from "./
 import { registerGeometry } from "./geometry/registration.js";
 
 // Settings, to toggle whether to change elevation on token move
-import { Settings, getSceneSetting, setSceneSetting } from "./settings.js";
+import { Settings } from "./settings.js";
 
 import { ElevationTextureHandler } from "./ElevationTextureHandler.js";
 
@@ -62,7 +61,7 @@ Hooks.once("init", function() {
      * Texture will still be limited by elevationTextureSize; resolution may be rounded.
      * @type {number}
      */
-    resolution: 0.25,
+    resolution: .25,
 
     /**
      * WebGL shadows.
@@ -101,6 +100,7 @@ Hooks.once("init", function() {
       SourceShadowWallGeometry,
       PointSourceShadowWallGeometry,
       DirectionalSourceShadowWallGeometry,
+      ShadowTextureRenderer
     }
   };
 
