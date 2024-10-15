@@ -75,7 +75,7 @@ _initializeEVShadowMask
 _updateEVShadowData(changes)
 - Update the shadow mesh, geometry, render, given changes.
 
-pointInShadow(point)
+elevatedPointInShadow(point)
 - Return percentage shadow for the point
 
 targetInShadow(target, testPoint)

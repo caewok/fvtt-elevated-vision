@@ -235,12 +235,11 @@ export class WebGLShadows {
   edgeRemoved(edgeId) { this._handleEdgeChange(this, edgeId, "removeEdge"); }
 
   /**
-   * Return percentage in shadow for a point.
    * Detect whether a point is in partial or full shadow based on testing wall collisions.
-   * @param {Point3d|object} {x, y, z}    Object with x, y, and z properties. Z optional.
+   * @param {RegionMovementWaypoint3d} elevatedPoint
    * @returns {number} Approximate shadow value between 0 (no shadow) and 1 (full shadow).
    */
-  pointInShadow({x, y, z} = {}) {
+  elevatedPointInShadow(elevatedPoint) {
     /* Testing
     Point3d = CONFIG.GeometryLib.threeD.Point3d
     Plane = CONFIG.GeometryLib.threeD.Plane
@@ -258,10 +257,8 @@ export class WebGLShadows {
 
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const src = this.source;
-    z ??= canvas.scene[MODULE_ID].elevationAt({x, y});
-    const testPt = new Point3d(x, y, z);
     const origin = Point3d.fromPointSource(this.source);
-    const midCollision = this.hasEdgeCollision(origin, testPt);
+    const midCollision = this.hasEdgeCollision(origin, elevatedPoint);
     const lightSize = src.data.lightSize;
 
     /* Draw.point(origin, { color: Draw.COLORS.yellow }) */
@@ -270,15 +267,15 @@ export class WebGLShadows {
 
     // Test the top/bottom/left/right points of the light for penumbra shadow.
     let dir = new Point3d(0, 0, lightSize);
-    const topCollision = this.hasEdgeCollision(origin.add(dir), testPt);
-    const bottomCollision = this.hasEdgeCollision(origin.subtract(dir), testPt);
+    const topCollision = this.hasEdgeCollision(origin.add(dir), elevatedPoint);
+    const bottomCollision = this.hasEdgeCollision(origin.subtract(dir), elevatedPoint);
 
-    // Get the orthogonal direction to the origin --> testPt line at the light elevation.
-    dir = testPt.subtract(origin);
+    // Get the orthogonal direction to the origin --> elevatedPoint line at the light elevation.
+    dir = elevatedPoint.subtract(origin);
     const orthoDir = (new Point3d(-dir.y, dir.x, 0)).normalize();
     dir = orthoDir.multiplyScalar(lightSize);
-    const side0Collision = this.hasEdgeCollision(origin.add(dir), testPt);
-    const side1Collision = this.hasEdgeCollision(origin.subtract(dir), testPt);
+    const side0Collision = this.hasEdgeCollision(origin.add(dir), elevatedPoint);
+    const side1Collision = this.hasEdgeCollision(origin.subtract(dir), elevatedPoint);
 
     // Shadows: side0/mid/side1 = 100%; side0/mid = 50%; mid/side1 = 50%; any one = 25%
     const sideSum = side0Collision + side1Collision + midCollision;
@@ -308,7 +305,7 @@ export class WebGLShadows {
    * Currently works only for canvas elevation, accounting for terrain.
    * Returns the exact percentage or undefined if the shadow render texture is not present.
    * @param {Token} target
-   * @param {PIXI.Point} testPoint
+   * @param {RegionWaypoint3d} testPoint
    * @returns {number} Between 0 and 1.
    */
   targetInShadow(target, testPoint) {
@@ -360,7 +357,7 @@ export class WebGLShadows {
     }
 
     function collision(source, pt) {
-      return source.pointInShadow(pt)
+      return source.elevatedPointInShadow(pt)
     }
 
 
@@ -373,17 +370,22 @@ export class WebGLShadows {
     await foundry.utils.benchmark(cache, 1000, source, pt)
     */
 
-    // TODO: Fix
+    const RegionMovementWaypoint3d = CONFIG.GeometryLib.threeD.RegionMovementWaypoint3d;
+    testPoint ??= target instanceof Token
+      ? RegionMovementWaypoint3d.fromLocationWithElevation(target.center, target.elevationE)
+      : target;
+    if ( !Object.hasOwn(testPoint, "z") ) {
+      testPoint = RegionMovementWaypoint3d.fromLocationWithElevation(testPoint, canvas.scene[MODULE_ID].elevationAt(testPoint));
+    }
 
-    testPoint ??= target;
     const shadowRenderer = this.shadowRenderer;
-    if ( !shadowRenderer ) return this.pointInShadow(testPoint);
+    if ( !shadowRenderer ) return this.elevatedPointInShadow(testPoint);
 
     // If the target is on the terrain (likely), we can use the faster test using pixelCache.
     const onGround = target instanceof Token ? tokenIsOnGround(target) : waypointIsOnGround(testPoint);
     return onGround
       ? this.#shadowPercentageFromCache(shadowRenderer.pixelCache, testPoint.x, testPoint.y)
-      : this.pointInShadow(testPoint);
+      : this.elevatedPointInShadow(testPoint);
   }
 
   static #shadowPercentageFromCache(pixelCache, x, y) {
@@ -491,7 +493,7 @@ export class WebGLShadows {
    * @returns {boolean}
    */
   hasEdgeCollision(origin, testPt) {
-    const { Plane, Point3d } = CONFIG.GeometryLib.threeD;
+    const { Plane, Point3d, RegionMovementWaypoint3d } = CONFIG.GeometryLib.threeD;
     origin = Point3d.fromObject(origin);
     testPt = Point3d.fromObject(testPt);
 
@@ -507,27 +509,17 @@ export class WebGLShadows {
     if ( !edges.size ) return false;
 
     // Test the intersection of the ray with each wall.
+    const MAX_ELEV = 1e06;
+    const MIN_ELEV = -MAX_ELEV;
     const dir = testPt.subtract(origin);
     return edges.some(edge => {
-
-
       // Check if the test point falls within an attenuation area.
-      let topZ = Number.POSITIVE_INFINITY;
-      let bottomZ = Number.NEGATIVE_INFINITY;
-      if ( edge.object instanceof Wall ) {
-        topZ = edge.object.topZ;
-        bottomZ = edge.object.bottomZ;
-      } else if ( edge[MODULE_ID] ) {
-        topZ = edge[MODULE_ID].topZ;
-        bottomZ = edge[MODULE_ID].bottomZ;
-      }
-
-      // TODO: Handle edge elevations
-      const v0 = new Point3d(edge.a.x, edge.a.y, topZ);
-      const v1 = new Point3d(edge.a.x, edge.a.y, bottomZ);
-      const v2 = new Point3d(edge.b.x, edge.b.y, bottomZ);
-      const v3 = new Point3d(edge.b.x, edge.b.y, topZ);
-      const t = Plane.rayIntersectionQuad3dLD(origin, dir, v0, v1, v2, v3); // Null or t value
+      const edgeElevs = edge.elevationLibGeometry;
+      const v0 = RegionMovementWaypoint3d.fromLocationWithElevation(edge.a, edgeElevs.a.top ?? MAX_ELEV);
+      const v1 = RegionMovementWaypoint3d.fromLocationWithElevation(edge.a, edgeElevs.a.bottom ?? MIN_ELEV);
+      const v2 = RegionMovementWaypoint3d.fromLocationWithElevation(edge.b, edgeElevs.b.top ?? MAX_ELEV);
+      const v3 = RegionMovementWaypoint3d.fromLocationWithElevation(edge.b, edgeElevs.b.bottom ?? MIN_ELEV);
+      const t = Plane.rayIntersectionPolygon3d(origin, dir, [v0, v1, v2, v3]); // Null or t value
       if (!t || t < 0 || t > 1 ) return false;
       return true;
     });
@@ -641,10 +633,18 @@ export class PointVisionWebGLShadows extends WebGLShadows {
   /**
    * New method: VisionSource.prototype.targetInShadow
    * Do not use the shadow texture cache b/c it takes too long to construct and vision moves a lot.
+   * @param {Token} target
+   * @param {RegionMovementWaypoint3d} testPoint
    */
   targetInShadow(target, testPoint) {
-    testPoint ??= target;
-    return this.pointInShadow(testPoint);
+    const RegionMovementWaypoint3d = CONFIG.GeometryLib.threeD.RegionMovementWaypoint3d;
+    testPoint ??= target instanceof Token
+      ? RegionMovementWaypoint3d.fromLocationWithElevation(target.center, target.elevationE)
+      : target;
+    if ( !Object.hasOwn(testPoint, "z") ) {
+      testPoint = RegionMovementWaypoint3d.fromLocationWithElevation(testPoint, canvas.scene[MODULE_ID].elevationAt(testPoint));
+    }
+    return this.elevatedPointInShadow(testPoint);
   }
 
   /**
@@ -798,10 +798,10 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
 
   /**
    * Detect whether a point is in partial or full shadow based on testing wall collisions.
-   * @param {Point3d|object} {x, y, z}    Object with x, y, and z properties. Z optional.
+   * @param {RegionMovementWaypoint3d} elevatedPoint
    * @returns {number} Approximate shadow value between 0 (no shadow) and 1 (full shadow).
    */
-  pointInShadowRenderedPointSource({x, y, z} = {}) {
+  elevatedPointInShadow(elevatedPoint) {
     /* Testing
     Point3d = CONFIG.GeometryLib.threeD.Point3d
     Plane = CONFIG.GeometryLib.threeD.Plane
@@ -817,21 +817,19 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     let { x, y, z } = pt
     */
 
-    z ??= canvas.scene[MODULE_ID].elevationAt({x, y});
-    const testPt = new CONFIG.GeometryLib.threeD.Point3d(x, y, z);
 
     // Project a point out beyond the canvas to stand in for the light position.
     const { azimuth, elevationAngle, solarAngle } = this;
-    const midCollision = this.hasEdgeCollision(testPt, azimuth, elevationAngle);
+    const midCollision = this.hasEdgeCollision(elevatedPoint, azimuth, elevationAngle);
 
     /* Draw.point(origin, { color: Draw.COLORS.yellow }) */
     if ( !solarAngle ) return Number(midCollision);
 
     // Test the top/bottom/left/right points of the light for penumbra shadow.
-    const topCollision = this.hasEdgeCollision(testPt, azimuth, elevationAngle + solarAngle);
-    const bottomCollision = this.hasEdgeCollision(testPt, testPt, azimuth, elevationAngle - solarAngle);
-    const side0Collision = this.hasEdgeCollision(testPt, testPt, azimuth + solarAngle, elevationAngle);
-    const side1Collision = this.hasEdgeCollision(testPt, testPt, azimuth - solarAngle, elevationAngle);
+    const topCollision = this.hasEdgeCollision(elevatedPoint, azimuth, elevationAngle + solarAngle);
+    const bottomCollision = this.hasEdgeCollision(elevatedPoint, elevatedPoint, azimuth, elevationAngle - solarAngle);
+    const side0Collision = this.hasEdgeCollision(elevatedPoint, elevatedPoint, azimuth + solarAngle, elevationAngle);
+    const side1Collision = this.hasEdgeCollision(elevatedPoint, elevatedPoint, azimuth - solarAngle, elevationAngle);
 
     // Shadows: side0/mid/side1 = 100%; side0/mid = 50%; mid/side1 = 50%; any one = 25%
     const sideSum = side0Collision + side1Collision + midCollision;
@@ -934,12 +932,12 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     });
   }
 
-  /**
+/**
    * Detect whether a point is in partial or full shadow based on testing wall collisions.
-   * @param {Point3d|object} {x, y, z}    Object with x, y, and z properties. Z optional.
+   * @param {RegionMovementWaypoint3d} elevatedPoint
    * @returns {number} Approximate shadow value between 0 (no shadow) and 1 (full shadow).
    */
-  pointInShadow({x, y, z} = {}) {
+  elevatedPointInShadow(elevatedPoint) {
     /* Testing
     Point3d = CONFIG.GeometryLib.threeD.Point3d
     Plane = CONFIG.GeometryLib.threeD.Plane
@@ -955,23 +953,21 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     let { x, y, z } = pt
     */
 
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+
     const src = this.source;
-    z ??= canvas.scene[MODULE_ID].elevationAt({x, y});
-    const testPt = new Point3d(x, y, z);
 
     // Project a point out beyond the canvas to stand in for the light position.
     const { azimuth, elevationAngle, solarAngle } = src;
-    const midCollision = this.hasEdgeCollision(testPt, azimuth, elevationAngle);
+    const midCollision = this.hasEdgeCollision(elevatedPoint, azimuth, elevationAngle);
 
     /* Draw.point(origin, { color: Draw.COLORS.yellow }) */
     if ( !solarAngle ) return Number(midCollision);
 
     // Test the top/bottom/left/right points of the light for penumbra shadow.
-    const topCollision = this.hasEdgeCollision(testPt, azimuth, elevationAngle + solarAngle);
-    const bottomCollision = this.hasEdgeCollision(testPt, testPt, azimuth, elevationAngle - solarAngle);
-    const side0Collision = this.hasEdgeCollision(testPt, testPt, azimuth + solarAngle, elevationAngle);
-    const side1Collision = this.hasEdgeCollision(testPt, testPt, azimuth - solarAngle, elevationAngle);
+    const topCollision = this.hasEdgeCollision(elevatedPoint, azimuth, elevationAngle + solarAngle);
+    const bottomCollision = this.hasEdgeCollision(elevatedPoint, elevatedPoint, azimuth, elevationAngle - solarAngle);
+    const side0Collision = this.hasEdgeCollision(elevatedPoint, elevatedPoint, azimuth + solarAngle, elevationAngle);
+    const side1Collision = this.hasEdgeCollision(elevatedPoint, elevatedPoint, azimuth - solarAngle, elevationAngle);
 
     // Shadows: side0/mid/side1 = 100%; side0/mid = 50%; mid/side1 = 50%; any one = 25%
     const sideSum = side0Collision + side1Collision + midCollision;

@@ -63,8 +63,14 @@ PATCHES.VISIBILITY = {};
  * Do not use the shadow texture cache b/c it takes too long to construct and vision moves a lot.
  */
 function targetInShadow(target, testPoint) {
-  testPoint ??= target;
-  return this[MODULE_ID].pointInShadow(testPoint);
+  const RegionMovementWaypoint3d = CONFIG.GeometryLib.threeD.RegionMovementWaypoint3d;
+  testPoint ??= target instanceof Token
+    ? RegionMovementWaypoint3d.fromLocationWithElevation(target.center, target.elevationE)
+    : target;
+  if ( !Object.hasOwn(testPoint, "z") ) {
+    testPoint = RegionMovementWaypoint3d.fromLocationWithElevation(testPoint, canvas.scene[MODULE_ID].elevationAt(testPoint));
+  }
+  return this[MODULE_ID].elevatedPointInShadow(testPoint);
 }
 
 PATCHES.VISIBILITY.METHODS = { targetInShadow };
