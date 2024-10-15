@@ -74,16 +74,10 @@ export class ElevationTextureHandler {
     // Add the render texture for displaying elevation information to the GM
     const config = this._getElevationTextureConfiguration();
     this._elevationTexture = PIXI.RenderTexture.create(config);
+
     // Set the clear color of the render texture to black. The texture needs to be opaque.
     // this._elevationTexture.baseTexture.clearColor = [0, 0, 0, 1];
-    const backgroundColor = this.elevationColor(this.sceneBackgroundElevation);
-    this._elevationTexture.baseTexture.clearColor = [
-      backgroundColor.red,
-      backgroundColor.green,
-      backgroundColor.blue,
-      1];
-
-    this.renderElevation();
+    this.updateSceneBackgroundElevation();
     this.#initialized = true;
 
     // Update the source shadow meshes with the elevation texture.
@@ -173,6 +167,19 @@ export class ElevationTextureHandler {
   get sceneBackgroundElevation() {
     const TM = OTHER_MODULES.TERRAIN_MAPPER;
     return TM.ACTIVE ? (canvas.scene.getFlag(TM.KEY, TM.BACKGROUND_ELEVATION) || 0) : 0;
+  }
+
+  /**
+   * Update the scene background elevation due to some modification elsewhere.
+   */
+  updateSceneBackgroundElevation() {
+    const backgroundColor = this.elevationColor(this.sceneBackgroundElevation);
+    this._elevationTexture.baseTexture.clearColor = [
+      backgroundColor.red,
+      backgroundColor.green,
+      backgroundColor.blue,
+      1];
+    this.renderElevation();
   }
 
   /* ------------------------ */

@@ -4,7 +4,7 @@ canvas
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { TEMPLATES, FLAGS } from "./const.js";
+import { MODULE_ID, TEMPLATES, FLAGS, OTHER_MODULES } from "./const.js";
 import { log, renderTemplateSync } from "./util.js";
 import { registerPatchesForSceneSettings } from "./patching.js";
 
@@ -17,10 +17,16 @@ PATCHES.BASIC = {};
  */
 function updateScene(scene, changes, _options, _userId) {
   if ( scene !== canvas.scene ) return;
-  const lightingValue = changes.flags?.elevatedvision?.[FLAGS.SHADOWS.LIGHTING];
-  const shadowsValue = changes.flags?.elevatedvision?.[FLAGS.SHADOWS.VISION];
-  if ( typeof lightingValue === "undefined" && typeof shadowsValue === "undefined" ) return;
-  registerPatchesForSceneSettings();
+  const lightingValue = changes.flags?.[MODULE_ID]?.[FLAGS.SHADOWS.LIGHTING];
+  const shadowsValue = changes.flags?.[MODULE_ID]?.[FLAGS.SHADOWS.VISION];
+  if ( !(typeof lightingValue === "undefined"
+      && typeof shadowsValue === "undefined") ) registerPatchesForSceneSettings();
+
+  const TM = OTHER_MODULES.TERRAIN_MAPPER;
+  if ( changes.flags?.[TM.KEY]?.[TM.BACKGROUND_ELEVATION] !== "undefined" ) {
+    canvas.scene[MODULE_ID].updateSceneBackgroundElevation(); // Really unneeded if reloading canvas.
+    SettingsConfig.reloadConfirm({world: true}); // TODO: Redo the elevation without the canvas reload
+  }
 }
 
 /**
