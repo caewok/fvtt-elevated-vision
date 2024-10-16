@@ -5,6 +5,7 @@ PIXI
 "use strict";
 
 import { MODULE_ID } from "../const.js";
+import { sourceAtCanvasElevation } from "../util.js";
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
 
@@ -576,7 +577,7 @@ void main() {
    */
   static create(lightPosition, defaultUniforms = {}) {
     if ( !lightPosition ) console.error("ShadowMaskWallShader requires a lightPosition.");
-
+    if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
     return super.create(defaultUniforms);
   }
@@ -645,7 +646,6 @@ void main() {
   }
 
   // Plane describing the canvas surface at minimum elevation for the scene.
-  // If the light (or token vision) is at canvas elevation, lower the canvas elevation slightly.
   float canvasElevation = uElevationRes.x;
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
   vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
@@ -912,8 +912,8 @@ void main() {
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
 
     const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
+    if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
-
     return super.create(defaultUniforms);
   }
 
@@ -938,6 +938,7 @@ void main() {
    */
   updateLightPosition(source) {
     const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
+    if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     this.uniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
   }
 }
@@ -1389,6 +1390,7 @@ void main() {
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
 
     const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
+    if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
     defaultUniforms.uLightSize = source.data.lightSize;
 
@@ -1411,6 +1413,7 @@ void main() {
 
   updateLightPosition(source) {
     const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
+    if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     this.uniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
   }
 
@@ -1423,6 +1426,7 @@ export class ShadowMesh extends PIXI.Mesh {
     this.blendMode = PIXI.BLEND_MODES.MULTIPLY;
   }
 }
+
 
 /* Testing
 MODULE_ID = "elevatedvision"

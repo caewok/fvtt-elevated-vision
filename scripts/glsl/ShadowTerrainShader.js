@@ -9,6 +9,7 @@ PIXI
 // Also shadow based on limited angle.
 
 import { MODULE_ID, FLAGS } from "../const.js";
+import { sourceAtCanvasElevation } from "../util.js";
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { defineFunction } from "./GLSLFunctions.js";
 
@@ -128,7 +129,10 @@ void main() {
     ];
 
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
-    defaultUniforms.uSourcePosition = [source.x, source.y, source.elevationZ];
+
+    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
+    if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
+    defaultUniforms.uSourcePosition = [lightPosition.x, lightPosition.y, lightPosition.z];
 
     const radius = source.radius || source.data.externalRadius;
     defaultUniforms.uSourceRadius2 = Math.pow(radius, 2);
@@ -173,7 +177,9 @@ void main() {
   }
 
   updateSourcePosition(source) {
-    this.uniforms.uSourcePosition = [source.x, source.y, source.elevationZ];
+    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
+    if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
+    this.uniforms.uSourcePosition = [lightPosition.x, lightPosition.y, lightPosition.z];
   }
 
   updateSourceRadius(source) {

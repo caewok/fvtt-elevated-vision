@@ -13,6 +13,13 @@ PIXI
 
 import { MODULE_ID, OTHER_MODULES } from "./const.js";
 
+export function sourceAtCanvasElevation(sourcePosition) {
+  const pixelsToGridUnits = CONFIG.GeometryLib.utils.pixelsToGridUnits;
+  const evScene = canvas.scene[MODULE_ID];
+  return evScene.elevationAt(sourcePosition).almostEqual(pixelsToGridUnits(sourcePosition.z));
+}
+
+
 /**
  * What elevations are considered "ground" at this location?
  * If Terrain Mapper is active, tiles (with flag), region plateaus, and region ramps are considered ground.
