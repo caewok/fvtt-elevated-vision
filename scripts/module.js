@@ -23,6 +23,9 @@ import {
   ShadowTextureRenderer,
   ShadowVisionLOSTextureRenderer,
   ShadowDirectionalTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
+import { TestGeometryShader } from "./glsl/ShadowWallShader.js";
+
+
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
@@ -38,6 +41,21 @@ import { ElevationTextureHandler } from "./ElevationTextureHandler.js";
 
 // Other self-executing hooks
 import "./changelog.js";
+
+// Testing shaders
+import {
+  vec2,
+  vec3,
+  vec4,
+  GLSLRay2d,
+  GLSLRay,
+  GLSLPlane,
+  intersectRayPlane,
+  lineLineIntersectionRayT,
+  lineLineIntersectionRay,
+  lineLineIntersectionVector,
+  SizedPointSourceShadowWallVertexShaderTest } from "./testing/WallShaderTest.js";
+
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -110,7 +128,22 @@ Hooks.once("init", function() {
       ShadowVisionLOSTextureRenderer,
       ShadowDirectionalTextureRenderer,
       TestShadowShader,
-      EVQuadMesh
+      EVQuadMesh,
+      TestGeometryShader,
+      GLSLRay2d,
+      GLSLRay,
+      GLSLPlane,
+      intersectRayPlane,
+      lineLineIntersectionRayT,
+      lineLineIntersectionRay,
+      lineLineIntersectionVector
+    },
+
+    testing: {
+      vec2,
+      vec3,
+      vec4,
+      SizedPointSourceShadowWallVertexShaderTest
     }
   };
 

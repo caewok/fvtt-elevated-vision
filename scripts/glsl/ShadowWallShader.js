@@ -1437,7 +1437,7 @@ api = game.modules.get("elevatedvision").api
 DirectionalLightSource = api.DirectionalLightSource
 
 let [l] = canvas.lighting.placeables;
-source = l.source;
+source = l.lightSource;
 ev = source.elevatedvision
 
 sourcePosition = Point3d.fromPointSource(source)
@@ -1446,7 +1446,7 @@ sourcePosition = Point3d.fromPointSource(source)
 source = _token.vision
 sourcePosition = Point3d.fromPointSource(source)
 
-
+mesh = ev.shadowMesh
 mesh = new ShadowWallPointSourceMesh(source)
 
 canvas.stage.addChild(mesh)

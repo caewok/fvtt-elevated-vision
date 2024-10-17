@@ -1004,7 +1004,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
   }
 }
 
-  /**
+/**
  * Return the top and bottom elevation for an edge.
  * @param {Edge} edge
  * @returns {object}
