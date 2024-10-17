@@ -1248,6 +1248,58 @@ float zChangeForElevationAngle(in float elevationAngle) {
   // return max(z, 1e-06); // Don't let z go to 0.
 }
 
+/**
+ * Determine the top, bottom, left, right light positions.
+ */
+void calculateLightPositions(out vec3 lightLR0, out vec3 lightLR1, out vec3 lightTop, out vec3 lightBottom) {
+  vec2 wallDir = normalize(aWallCorner0.xy - aWallCorner1.xy);
+  vec2 dir = wallDir * uLightSize;
+
+  // Form a cross based on the light center.
+  vec2 lr0 = uLightPosition.xy - dir;
+  vec2 lr1 = uLightPosition.xy + dir;
+  float top = uLightPosition.z + uLightSize;
+  float bottom = uLightPosition.z - uLightSize;
+  lightLR0 = vec3(lr0.xy, uLightPosition.z);
+  lightLR1 = vec3(lr1.xy, uLightPosition.z);
+  lightTop = vec3(uLightPosition.xy, top);
+  lightBottom = vec3(uLightPosition.xy, bottom);
+}
+
+/**
+ * Determine the side penumbra using the light positions.
+ */
+void calculateSidePenumbraDirections(in vec2 lightLR0, in vec2 lightLR1, out vec2[2] dirInnerSidePenumbra, out vec2[2] dirMidSidePenumbra, out vec2[2] dirOuterSidePenumbra) {
+  vec2 wall2d[2] = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
+
+  // Direction from light center --> wall endpoints.
+  vec2[2] baseDirection = vec2[2](
+    wall2d[0] - uLightPosition.xy,
+    wall2d[1] - uLightPosition.xy
+  );
+  dirMidSidePenumbra = baseDirection;
+  dirOuterSidePenumbra = baseDirection;
+  dirInnerSidePenumbra = baseDirection;
+
+  // Direction from light LR --> wall endpoints
+  // If the endpoint is blocked, don't use the light size. See issue #95.
+  // TODO: Can we use additive shading to handle this instead?
+  //   i.e., umbra shadow + penumbra shadow near 1 when added together.
+  if ( aWallCorner0.w != EV_ENDPOINT_LINKED_CONCAVE ) {
+    dirOuterSidePenumbra = vec2[2](
+      wall2d[0] - lightLR0,
+      wall2d[1] - lightLR1
+    );
+  }
+  if ( aWallCorner1.w != EV_ENDPOINT_LINKED_CONCAVE ) {
+    dirInnerSidePenumbra = vec2[2](
+      wall2d[0] - lightLR1,
+      wall2d[1] - lightLR0
+    );
+  }
+}
+
+
 void main() {
   // Shadow is a trapezoid formed from the intersection of the wall with the
   // triangle ABC, where
@@ -1285,28 +1337,16 @@ void main() {
     normalize(dirLightWallBottom - lightSizeVec).z
   );
 
-  // Direction from light center --> wall endpoints
-  vec2 dirMidSidePenumbra[2] = vec2[2](wall2d[0] - uLightPosition.xy, wall2d[1] - uLightPosition.xy);
+  vec3 lightLR0;
+  vec3 lightLR1;
+  vec3 lightTop;
+  vec3 lightBottom;
+  calculateLightPositions(lightLR0, lightLR1, lightTop, lightBottom);
 
-  // Use wall direction to determine the left/right light points
-  vec2 lightLR0 = uLightPosition.xy - (wallDir * lightSize);
-  vec2 lightLR1 = uLightPosition.xy + (wallDir * lightSize);
-
-  // Direction from light LR --> wall endpoints
-  vec2 dirOuterSidePenumbra[2] = vec2[2](wall2d[0] - lightLR0, wall2d[1] - lightLR1);
-  vec2 dirInnerSidePenumbra[2] = vec2[2](wall2d[0] - lightLR1, wall2d[1] - lightLR0);
-
-  // If the endpoint is blocked, don't use the light size. See issue #95.
-  if ( aWallCorner0.w == EV_ENDPOINT_LINKED_CONCAVE ) {
-    dirOuterSidePenumbra[0] = wall2d[0] - uLightPosition.xy;
-    dirInnerSidePenumbra[0] = wall2d[0] - uLightPosition.xy;
-  }
-
-  if ( aWallCorner1.w == EV_ENDPOINT_LINKED_CONCAVE ) {
-    dirOuterSidePenumbra[1] = wall2d[1] - uLightPosition.xy;
-    dirInnerSidePenumbra[1] = wall2d[1] - uLightPosition.xy;
-  }
-
+  vec2[2] dirInnerSidePenumbra; // Direction from light LR --> wall endpoints
+  vec2[2] dirMidSidePenumbra; // Direction from light center --> wall endpoints
+  vec2[2] dirOuterSidePenumbra; // Direction from light LR --> wall endpoints
+  calculateSidePenumbraDirections(lightLR0.xy, lightLR1.xy, dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra);
 
   ${PENUMBRA_VERTEX_CALCULATIONS}
 }`;

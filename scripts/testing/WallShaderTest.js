@@ -492,8 +492,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
    */
   calculateLightPositions() {
     const uLightPosition = this._uniforms.uLightPosition;
-    const { aWallCorner0, aWallCorner1 } = this._inVars;
-    const { wallDir, lightSize, wall2d } = this;
+    const { wallDir, lightSize } = this;
 
     const lr0 = uLightPosition.xy.subtract(wallDir.multiplyScalar(lightSize));
     const lr1 = uLightPosition.xy.add(wallDir.multiplyScalar(lightSize));
@@ -535,14 +534,14 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     let dirInnerSidePenumbra = dirMidSidePenumbra;
     if ( aWallCorner0.w !== this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
       dirOuterSidePenumbra = [
-        wall2d[0].subtract(lightLR0),
-        wall2d[1].subtract(lightLR1)
+        wall2d[0].subtract(lightLR0.xy),
+        wall2d[1].subtract(lightLR1.xy)
       ];
     }
     if ( aWallCorner1.w !== this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
       dirInnerSidePenumbra = [
-        wall2d[0].subtract(lightLR1),
-        wall2d[1].subtract(lightLR0)
+        wall2d[0].subtract(lightLR1.xy),
+        wall2d[1].subtract(lightLR0.xy)
       ];
     }
     return { dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra };
