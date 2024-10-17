@@ -68,29 +68,53 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
 
       get y() { return this[SWIZZLE.y]; }
 
+      get z() { return this[SWIZZLE.z]; }
+
+      get w() { return this[SWIZZLE.q]; }
+
       get r() { return this[SWIZZLE.r]; }
 
       get b() { return this[SWIZZLE.b]; }
+
+      get g() { return this[SWIZZLE.g]; }
+
+      get a() { return this[SWIZZLE.a]; }
 
       get s() { return this[SWIZZLE.s]; }
 
       get t() { return this[SWIZZLE.t]; }
 
-      get z() { return this[SWIZZLE.z]; }
-
-      get b() { return this[SWIZZLE.b]; }
-
       get p() { return this[SWIZZLE.p]; }
-
-      get w() { return this[SWIZZLE.q]; }
-
-      get a() { return this[SWIZZLE.a]; }
 
       get q() { return this[SWIZZLE.q]; }
 
       get xy() { return new vec2(this.x, this.y); }
 
       get xyz() { return new vec3(this.x, this.y, this.z); }
+
+      set x(value) { this[SWIZZLE.x] = value; }
+
+      set y(value) { this[SWIZZLE.y] = value; }
+
+      set z(value) { this[SWIZZLE.z] = value; }
+
+      set w(value) { this[SWIZZLE.q] = value; }
+
+      set r(value) { this[SWIZZLE.r] = value; }
+
+      set b(value) { this[SWIZZLE.b] = value; }
+
+      set g(value) { this[SWIZZLE.g] = value; }
+
+      set a(value) { this[SWIZZLE.a] = value; }
+
+      set s(value) { this[SWIZZLE.s] = value; }
+
+      set t(value) { this[SWIZZLE.t] = value; }
+
+      set p(value) { this[SWIZZLE.p] = value; }
+
+      set q(value) { this[SWIZZLE.q] = value; }
 
       add(other) {
         const out = new this.constructor();
@@ -130,8 +154,8 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
         const delta = other.subtract(this);
         return delta.dot(delta);
       }
-    }
-  }
+    };
+  };
 
   class vec2 extends vectorMixin(vec2Base) {}
 
@@ -152,8 +176,6 @@ a = new vec2(1, 2);
 b = new vec2(3, 4);
 a.add(b)
 */
-
-
 
 
 /**
@@ -293,7 +315,6 @@ export function lineLineIntersectionVector(a, b, c, d, ix) {
   const rayB = GLSLRay2d.fromPoints(c, d);
   return lineLineIntersectionRay(rayA, rayB, ix);
 }
-
 
 
 /**
@@ -450,7 +471,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
   /** @type {float} */
   get maxR() {
     const uSceneDims = this._uniforms.uSceneDims;
-    return Math.sqrt(uSceneDims.z * uSceneDims.z + uSceneDims.w * uSceneDims.w) * 2.0;
+    return Math.sqrt((uSceneDims.z * uSceneDims.z) + (uSceneDims.w * uSceneDims.w)) * 2.0;
   }
 
   /** @type {Plane} */
@@ -461,6 +482,71 @@ export class SizedPointSourceShadowWallVertexShaderTest {
   }
 
   /* ----- Calculations ----- */
+
+  /**
+   * NEW
+   * Determine the 4 points of the light:
+   * left, right, top, bottom in relation to the wall.
+   * Center is always uLightPosition
+   * Forms a cross with equal sized bars and the light position in the center; faces the wall.
+   */
+  calculateLightPositions() {
+    const uLightPosition = this._uniforms.uLightPosition;
+    const { aWallCorner0, aWallCorner1 } = this._inVars;
+    const { wallDir, lightSize, wall2d } = this;
+
+    const lr0 = uLightPosition.xy.subtract(wallDir.multiplyScalar(lightSize));
+    const lr1 = uLightPosition.xy.add(wallDir.multiplyScalar(lightSize));
+    const top = uLightPosition.z + lightSize;
+    const bottom = uLightPosition.z - lightSize;
+
+    return {
+      lightLR0: new vec3(lr0.x, lr0.y, uLightPosition.z),
+      lightLR1: new vec3(lr1.x, lr1.y, uLightPosition.z),
+      lightTop: new vec3(uLightPosition.x, uLightPosition.y, top),
+      lightBottom: new vec3(uLightPosition.x, uLightPosition.y, bottom)
+    };
+  }
+
+  /**
+   * NEW
+   * Determine the side penumbra directions using the light positions.
+   * midSidePenumbra: from light center to wall endpoint
+   * outerSidePenumbra: widest point of the shadow, where it is the lightest
+   * innerSidePenumbra: narrowest point of the shadow, where it is the darkest
+   */
+  calculateSidePenumbraDirections() {
+    const uLightPosition = this._uniforms.uLightPosition;
+    const { lightLR0, lightLR1 } = this.calculateLightPositions();
+    const { wall2d } = this;
+    const { aWallCorner0, aWallCorner1 } = this._inVars;
+
+    // Direction from light center --> wall endpoints.
+    const dirMidSidePenumbra = [
+      wall2d[0].subtract(uLightPosition.xy),
+      wall2d[1].subtract(uLightPosition.xy)
+    ];
+
+    // Direction from light LR --> wall endpoints
+    // If the endpoint is blocked, don't use the light size. See issue #95.
+    // TODO: Can we use additive shading to handle this instead?
+    //   i.e., umbra shadow + penumbra shadow near 1 when added together.
+    let dirOuterSidePenumbra = dirMidSidePenumbra;
+    let dirInnerSidePenumbra = dirMidSidePenumbra;
+    if ( aWallCorner0.w !== this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
+      dirOuterSidePenumbra = [
+        wall2d[0].subtract(lightLR0),
+        wall2d[1].subtract(lightLR1)
+      ];
+    }
+    if ( aWallCorner1.w !== this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
+      dirInnerSidePenumbra = [
+        wall2d[0].subtract(lightLR1),
+        wall2d[1].subtract(lightLR0)
+      ];
+    }
+    return { dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra };
+  }
 
   calculatePenumbra() {
     // Use wall direction to determine the left/right light points
@@ -489,11 +575,11 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     ];
 
     // If the endpoint is blocked, don't use the light size. See issue #95.
-    if ( aWallCorner0.w == this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
+    if ( aWallCorner0.w === this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
       dirOuterSidePenumbra[0] = wall2d[0].subtract(uLightPosition.xy);
       dirInnerSidePenumbra[0] = wall2d[0].subtract(uLightPosition.xy);
     }
-    if ( aWallCorner1.w == this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
+    if ( aWallCorner1.w === this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
       dirOuterSidePenumbra[1] = wall2d[1].subtract(uLightPosition.xy);
       dirInnerSidePenumbra[1] = wall2d[1].subtract(uLightPosition.xy);
     }
@@ -502,6 +588,14 @@ export class SizedPointSourceShadowWallVertexShaderTest {
 
   normalizedPenumbraVectors() {
     let { dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra } = this.calculatePenumbra();
+    dirInnerSidePenumbra = this._cleanDirectionalVector(dirInnerSidePenumbra);
+    dirMidSidePenumbra = this._cleanDirectionalVector(dirMidSidePenumbra);
+    dirOuterSidePenumbra = this._cleanDirectionalVector(dirOuterSidePenumbra);
+    return { dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra };
+  }
+
+  normalizedPenumbraVectors2() {
+    let { dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra } = this.calculateSidePenumbraDirections();
     dirInnerSidePenumbra = this._cleanDirectionalVector(dirInnerSidePenumbra);
     dirMidSidePenumbra = this._cleanDirectionalVector(dirMidSidePenumbra);
     dirOuterSidePenumbra = this._cleanDirectionalVector(dirOuterSidePenumbra);
@@ -532,6 +626,31 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     return { inner0, inner1, mid0, mid1, outer0, outer1 };
   }
 
+  drawPenumbra2(dist = canvas.dimensions.maxR) {
+    const { dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra } = this.normalizedPenumbraVectors2();
+    const { wall2d } = this;
+
+    Draw.segment({ a: wall2d[0], b: wall2d[1] }); // Wall
+
+    const inner0 = wall2d[0].add(dirInnerSidePenumbra[0].multiplyScalar(dist));
+    const inner1 = wall2d[1].add(dirInnerSidePenumbra[1].multiplyScalar(dist));
+    Draw.segment({ a: wall2d[0], b: inner0 }, { color: Draw.COLORS.red });
+    Draw.segment({ a: wall2d[1], b: inner1 }, { color: Draw.COLORS.red });
+
+    const mid0 = wall2d[0].add(dirMidSidePenumbra[0].multiplyScalar(dist));
+    const mid1 = wall2d[1].add(dirMidSidePenumbra[1].multiplyScalar(dist));
+    Draw.segment({ a: wall2d[0], b: mid0 }, { color: Draw.COLORS.orange });
+    Draw.segment({ a: wall2d[1], b: mid1 }, { color: Draw.COLORS.orange });
+
+    const outer0 = wall2d[0].add(dirOuterSidePenumbra[0].multiplyScalar(dist));
+    const outer1 = wall2d[1].add(dirOuterSidePenumbra[1].multiplyScalar(dist));
+    Draw.segment({ a: wall2d[0], b: outer0 }, { color: Draw.COLORS.yellow });
+    Draw.segment({ a: wall2d[1], b: outer1 }, { color: Draw.COLORS.yellow });
+
+    return { inner0, inner1, mid0, mid1, outer0, outer1 };
+  }
+
+
   calculateZChange() {
     const uLightPosition = this._uniforms.uLightPosition;
     const aWallCorner0 = this._inVars.aWallCorner0;
@@ -548,7 +667,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
       dirLightWallBottom.add(lightSizeVec).normalize().z,
       dirLightWallBottom.normalize().z,
       dirLightWallBottom.subtract(lightSizeVec).normalize().z
-    )
+    );
     return { zChangeLightWallTop, zChangeLightWallBottom };
   }
 
@@ -556,6 +675,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     const { zChangeLightWallTop, zChangeLightWallBottom } = this.calculateZChange();
     const { dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra } = this.normalizedPenumbraVectors();
     const { wall2d, wallTopZ, maxR } = this;
+    const { uLightPosition } = this._uniforms;
 
     const sideUmbra = [new vec2(), new vec2()];
     const sideMidPenumbra = [new vec2(), new vec2()];
@@ -563,8 +683,8 @@ export class SizedPointSourceShadowWallVertexShaderTest {
 
     // Determine where the light ray hits the canvas when passing through one of the endpoints.
     // This marks the furthest extension of the shadow from the wall.
-    const closerIdx = 0;
-    const furtherIdx = 1;
+    let closerIdx = 0;
+    let furtherIdx = 1;
     const farLightRayZChange = zChangeLightWallTop.b;
     const wall0Top3d = new vec3(wall2d[0].x, wall2d[0].y, wallTopZ);
     if ( farLightRayZChange < 0.0 ) {
@@ -574,17 +694,21 @@ export class SizedPointSourceShadowWallVertexShaderTest {
       sideMidPenumbra[0] = ixCanvas.xy;
 
     } else {
-     // Infinite shadow.
-     // Use the closer wall endpoint to project the ray from the endpoint a given distance
-     const closerIdx = uLightPosition.xy.distanceSquared(wall2d[0]) < uLightPosition.xy.distanceSquared(wall2d[1]) ? 0 : 1;
-     furtherIdx = closerIdx % 2;
-     const penumbraCloser = (new GLSLRay2d(wall2d[closerIdx], dirMidSidePenumbra[closerIdx])).normalize();
-     sideMidPenumbra[closerIdx] = penumbraCloser.project(maxR);
+      // Infinite shadow.
+      // Use the closer wall endpoint to project the ray from the endpoint a given distance
+      closerIdx = uLightPosition.xy.distanceSquared(wall2d[0]) < uLightPosition.xy.distanceSquared(wall2d[1])
+        ? 0 : 1;
+      furtherIdx = closerIdx % 2;
+      const penumbraCloser = (new GLSLRay2d(wall2d[closerIdx], dirMidSidePenumbra[closerIdx])).normalize();
+      sideMidPenumbra[closerIdx] = penumbraCloser.project(maxR);
     }
 
     // Construct a parallel ray to the wall and use that to intersect the further penumbra ray.
     const farParallelRay = new GLSLRay2d(sideMidPenumbra[closerIdx], this.wallDir);
-    lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall2d[furtherIdx], dirMidSidePenumbra[furtherIdx]), sideMidPenumbra[furtherIdx]);
+    lineLineIntersectionRay(
+      farParallelRay,
+      new GLSLRay2d(wall2d[furtherIdx], dirMidSidePenumbra[furtherIdx]),
+      sideMidPenumbra[furtherIdx]);
 
     // Use the parallel ray to intersect the other side penumbra rays.
     lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall2d[0], dirOuterSidePenumbra[0]), sidePenumbra[0]);
@@ -603,32 +727,128 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     lineLineIntersectionVector(sideMidPenumbra[0], wall2d[0], sideMidPenumbra[1], wall2d[1], midLightCenter);
     lineLineIntersectionVector(sideUmbra[0], wall2d[0], sideUmbra[1], wall2d[1], umbraLightCenter);
 
-    return { sideUmbra, sideMidPenumbra, sidePenumbra, newLightCenter, sideLightCenter, midLightCenter, umbraLightCenter};
+    return {
+      sideUmbra, sideMidPenumbra, sidePenumbra,
+      newLightCenter, sideLightCenter, midLightCenter, umbraLightCenter };
+  }
+
+  /**
+   * NEW
+   * Determine the points of the side penumbra.
+   */
+  calculateSidePenumbra2() {
+    const { dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra } = this.normalizedPenumbraVectors2();
+    const { wall2d, maxR } = this;
+    const uLightPosition = this._uniforms.uLightPosition;
+    const { lightLR0, lightLR1, lightTop, lightBottom } = this.calculateLightPositions();
+    const { aWallCorner0, aWallCorner1 } = this._inVars;
+
+    const sideUmbra = [new vec2(), new vec2()];
+    const sideMidPenumbra = [new vec2(), new vec2()];
+    const sidePenumbra = [new vec2(), new vec2()];
+
+    // Determine where the light ray hits the canvas when passing through the light bottom to one of the endpoints.
+    const wallTop = [
+      new vec3(aWallCorner0.x, aWallCorner0.y, aWallCorner0.z),
+      new vec3(aWallCorner1.x, aWallCorner1.y, aWallCorner0.z)
+    ];
+    const bottomMidSideDir0 = wallTop[0].subtract(lightBottom).normalize();
+
+    const infiniteShadow = aWallCorner0.z >= lightBottom;
+
+    // Get the first intersection point with the canvas.
+    if ( infiniteShadow ) {
+      // No height change for an infinite shadow.
+      const bottomMidSideDir2d = bottomMidSideDir0.xy;
+      const midRay = new GLSLRay2d(wall2d[0], bottomMidSideDir2d).normalize();
+      sideMidPenumbra[0] = midRay.project(maxR);
+
+    } else {
+      // Project a 3d ray from wall top endpoint in direction away from light bottom onto the canvas plane
+      const ixCanvas = new vec3();
+      const midRay = new GLSLRay(wallTop[0], bottomMidSideDir0);
+      intersectRayPlane(midRay, this.canvasPlane, ixCanvas);
+      sideMidPenumbra[0] = ixCanvas.xy;
+    }
+
+    // Draw a line parallel to the wall that goes through the intersection point.
+    // The intersection of that with each penumbra ray will define the penumbra points.
+    const farParallelRay = new GLSLRay2d(sideMidPenumbra[0], this.wallDir);
+    lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall2d[1], dirMidSidePenumbra[1]), sideMidPenumbra[1]);
+    lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall2d[0], dirOuterSidePenumbra[0]), sidePenumbra[0]);
+    lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall2d[1], dirOuterSidePenumbra[1]), sidePenumbra[1]);
+    lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall2d[0], dirInnerSidePenumbra[0]), sideUmbra[0]);
+    lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall2d[1], dirInnerSidePenumbra[1]), sideUmbra[1]);
+
+    // Define distinct light centers (2d) based on intersection of the penumbra vectors.
+    // Intersection of the middle (sideMidPenumbra) should equal the light center.
+    const sideLightCenter = new vec2();
+    const midLightCenter = new vec2();
+    const umbraLightCenter = new vec2();
+    lineLineIntersectionVector(sidePenumbra[0], wall2d[0], sidePenumbra[1], wall2d[1], sideLightCenter);
+    lineLineIntersectionVector(sideMidPenumbra[0], wall2d[0], sideMidPenumbra[1], wall2d[1], midLightCenter);
+    lineLineIntersectionVector(sideUmbra[0], wall2d[0], sideUmbra[1], wall2d[1], umbraLightCenter);
+
+    return {
+      sideUmbra, sideMidPenumbra, sidePenumbra,
+      sideLightCenter, midLightCenter, umbraLightCenter };
   }
 
   /**
    * Draw the points of the side penumbra and segments to each.
    */
   drawSidePenumbra() {
-    const { sideUmbra, sideMidPenumbra, sidePenumbra, sideLightCenter, midLightCenter, umbraLightCenter } = this.calculateSidePenumbra();
+    const {
+      sideUmbra, sideMidPenumbra, sidePenumbra,
+      sideLightCenter, midLightCenter, umbraLightCenter } = this.calculateSidePenumbra();
     const { wall2d } = this;
 
     Draw.segment({ a: wall2d[0], b: wall2d[1] }); // Wall
 
     Draw.segment({ a: wall2d[0], b: sideUmbra[0] }, { color: Draw.COLORS.red });
     Draw.segment({ a: wall2d[1], b: sideUmbra[1] }, { color: Draw.COLORS.red });
-    Draw.point(sideUmbra[0], { color: Draw.COLORS.red })
-    Draw.point(sideUmbra[1], { color: Draw.COLORS.red })
+    Draw.point(sideUmbra[0], { color: Draw.COLORS.red });
+    Draw.point(sideUmbra[1], { color: Draw.COLORS.red });
 
     Draw.segment({ a: wall2d[0], b: sideMidPenumbra[0] }, { color: Draw.COLORS.orange });
     Draw.segment({ a: wall2d[1], b: sideMidPenumbra[1] }, { color: Draw.COLORS.orange });
-    Draw.point(sideMidPenumbra[0], { color: Draw.COLORS.orange })
-    Draw.point(sideMidPenumbra[1], { color: Draw.COLORS.orange })
+    Draw.point(sideMidPenumbra[0], { color: Draw.COLORS.orange });
+    Draw.point(sideMidPenumbra[1], { color: Draw.COLORS.orange });
 
     Draw.segment({ a: wall2d[0], b: sidePenumbra[0] }, { color: Draw.COLORS.yellow });
     Draw.segment({ a: wall2d[1], b: sidePenumbra[1] }, { color: Draw.COLORS.yellow });
-    Draw.point(sidePenumbra[0], { color: Draw.COLORS.yellow })
-    Draw.point(sidePenumbra[1], { color: Draw.COLORS.yellow })
+    Draw.point(sidePenumbra[0], { color: Draw.COLORS.yellow });
+    Draw.point(sidePenumbra[1], { color: Draw.COLORS.yellow });
+
+    // Light centers
+    Draw.point(this._uniforms.uLightPosition, { color: Draw.COLORS.white, radius: this.lightSize * 0.5 });
+    Draw.point(sideLightCenter, { color: Draw.COLORS.yellow });
+    Draw.point(midLightCenter, { color: Draw.COLORS.orange });
+    Draw.point(umbraLightCenter, { color: Draw.COLORS.red });
+  }
+
+  drawSidePenumbra2() {
+    const {
+      sideUmbra, sideMidPenumbra, sidePenumbra,
+      sideLightCenter, midLightCenter, umbraLightCenter } = this.calculateSidePenumbra2();
+    const { wall2d } = this;
+
+    Draw.segment({ a: wall2d[0], b: wall2d[1] }); // Wall
+
+    Draw.segment({ a: wall2d[0], b: sideUmbra[0] }, { color: Draw.COLORS.red });
+    Draw.segment({ a: wall2d[1], b: sideUmbra[1] }, { color: Draw.COLORS.red });
+    Draw.point(sideUmbra[0], { color: Draw.COLORS.red });
+    Draw.point(sideUmbra[1], { color: Draw.COLORS.red });
+
+    Draw.segment({ a: wall2d[0], b: sideMidPenumbra[0] }, { color: Draw.COLORS.orange });
+    Draw.segment({ a: wall2d[1], b: sideMidPenumbra[1] }, { color: Draw.COLORS.orange });
+    Draw.point(sideMidPenumbra[0], { color: Draw.COLORS.orange });
+    Draw.point(sideMidPenumbra[1], { color: Draw.COLORS.orange });
+
+    Draw.segment({ a: wall2d[0], b: sidePenumbra[0] }, { color: Draw.COLORS.yellow });
+    Draw.segment({ a: wall2d[1], b: sidePenumbra[1] }, { color: Draw.COLORS.yellow });
+    Draw.point(sidePenumbra[0], { color: Draw.COLORS.yellow });
+    Draw.point(sidePenumbra[1], { color: Draw.COLORS.yellow });
 
     // Light centers
     Draw.point(this._uniforms.uLightPosition, { color: Draw.COLORS.white, radius: this.lightSize * 0.5 });
@@ -644,25 +864,25 @@ export class SizedPointSourceShadowWallVertexShaderTest {
 
   }
 
- /**
+  /**
   * Make sure the vector does not exceed the wall angle (i.e., does not go the "light" side)
   */
- _cleanDirectionalVector(dirArr, wall2d, oWallLight) {
+  _cleanDirectionalVector(dirArr, wall2d, oWallLight) {
     // Duplicate the vector for testing purposes.
     dirArr = [dirArr[0].xy, dirArr[1].xy];
 
     wall2d ??= this.wall2d;
     oWallLight ??= this.oWallLight;
     let oWallPenumbra = Math.sign(foundry.utils.orient2dFast(wall2d[0], wall2d[1], wall2d[0].add(dirArr[0])));
-    if ( oWallPenumbra == oWallLight ) dirArr[0] = wall2d[0].subtract(wall2d[1]);
+    if ( oWallPenumbra === oWallLight ) dirArr[0] = wall2d[0].subtract(wall2d[1]);
 
     oWallPenumbra = Math.sign(foundry.utils.orient2dFast(wall2d[0], wall2d[1], wall2d[1].add(dirArr[1])));
-    if ( oWallPenumbra == oWallLight ) dirArr[1] = wall2d[1].subtract(wall2d[0]);
+    if ( oWallPenumbra === oWallLight ) dirArr[1] = wall2d[1].subtract(wall2d[0]);
 
     dirArr[0] = dirArr[0].normalize();
     dirArr[1] = dirArr[1].normalize();
     return dirArr;
- }
+  }
 
 
 }
@@ -704,7 +924,8 @@ MODULE_ID = "elevatedvision"
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 Draw = CONFIG.GeometryLib.Draw;
 api = game.modules.get("elevatedvision").api
-let { SizedPointSourceShadowWallVertexShaderTest, vec2, vec3, vec4 } = api.testing
+let { SizedPointSourceShadowWallVertexShaderTest, vec2, vec3, vec4,  } = api.testing
+
 
 l = canvas.lighting.placeables[0];
 edge0 = canvas.walls.placeables[0].edge
@@ -733,6 +954,11 @@ resSidePenumbra = shader0.calculateSidePenumbra();
 shader0.drawSidePenumbra()
 shader1.drawSidePenumbra()
 
+shader0.calculateSidePenumbra2()
+shader1.calculateSidePenumbra2()
+
+shader0.drawSidePenumbra2()
+shader1.drawSidePenumbra2()
 
 */
 
