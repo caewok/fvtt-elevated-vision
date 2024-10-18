@@ -451,6 +451,13 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     return [aWallCorner0.xy, aWallCorner1.xy];
   }
 
+  get endpoints() {
+    return [
+      new vec3(...shader0._inVars.aWallCorner0.slice(0,3)),
+      new vec3(...shader0._inVars.aWallCorner1.slice(0,3))
+    ];
+  }
+
   /** @type {vec2} */
   get wallDir() { return this.wall2d[0].subtract(this.wall2d[1]).normalize(); }
 
@@ -513,38 +520,43 @@ export class SizedPointSourceShadowWallVertexShaderTest {
    * midSidePenumbra: from light center to wall endpoint
    * outerSidePenumbra: widest point of the shadow, where it is the lightest
    * innerSidePenumbra: narrowest point of the shadow, where it is the darkest
+   * bottomPenumbra: from light bottom to wall endpoint
+   * topPenumbra: from light top to wall endpoint
    */
   calculateSidePenumbraDirections() {
     const uLightPosition = this._uniforms.uLightPosition;
-    const { lightLR0, lightLR1 } = this.calculateLightPositions();
-    const { wall2d } = this;
+    const { lightLR0, lightLR1, lightTop, lightBottom } = this.calculateLightPositions();
+    const { endpoints } = this;
     const { aWallCorner0, aWallCorner1 } = this._inVars;
 
     // Direction from light center --> wall endpoints.
     const dirMidSidePenumbra = [
-      wall2d[0].subtract(uLightPosition.xy),
-      wall2d[1].subtract(uLightPosition.xy)
+      endpoints[0].subtract(uLightPosition),
+      endpoints[1].subtract(uLightPosition)
     ];
 
     // Direction from light LR --> wall endpoints
     // If the endpoint is blocked, don't use the light size. See issue #95.
     // TODO: Can we use additive shading to handle this instead?
     //   i.e., umbra shadow + penumbra shadow near 1 when added together.
-    let dirOuterSidePenumbra = dirMidSidePenumbra;
-    let dirInnerSidePenumbra = dirMidSidePenumbra;
+    // Start by duplicating the mid entry for when light size is 0 or endpoint is linked.
+    let dirOuterSidePenumbra = [dirMidSidePenumbra[0].xy, dirMidSidePenumbra[1].xy];
+    let dirInnerSidePenumbra = [dirMidSidePenumbra[0].xy, dirMidSidePenumbra[1].xy];
+    let dirTopPenumbra = [dirMidSidePenumbra[0].xy, dirMidSidePenumbra[1].xy];
+    let dirBottomPenumbra = [dirMidSidePenumbra[0].xy, dirMidSidePenumbra[1].xy];
     if ( aWallCorner0.w !== this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
-      dirOuterSidePenumbra = [
-        wall2d[0].subtract(lightLR0.xy),
-        wall2d[1].subtract(lightLR1.xy)
-      ];
+      dirOuterSidePenumbra[0] = endpoints[0].subtract(lightLR0);
+      dirInnerSidePenumbra[0] = endpoints[0].subtract(lightLR1);
+      dirTopPenumbra[0] = endpoints[0].subtract(lightTop);
+      dirBottomPenumbra[0] = endpoints[0].subtract(lightBottom)
     }
     if ( aWallCorner1.w !== this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
-      dirInnerSidePenumbra = [
-        wall2d[0].subtract(lightLR1.xy),
-        wall2d[1].subtract(lightLR0.xy)
-      ];
+      dirOuterSidePenumbra[1] = endpoints[1].subtract(lightLR1); // Note flipped from endpoint 0.
+      dirInnerSidePenumbra[1] = endpoints[1].subtract(lightLR0); // Note flipped from endpoint 0.
+      dirTopPenumbra[1] = endpoints[1].subtract(lightTop);
+      dirBottomPenumbra[1] = endpoints[1].subtract(lightBottom);
     }
-    return { dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra };
+    return { dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra, dirTopPenumbra, dirBottomPenumbra };
   }
 
   calculatePenumbra() {
