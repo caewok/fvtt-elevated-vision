@@ -88,9 +88,45 @@ ${defineFunction("angleBetween")}
 ${defineFunction("toDegrees")}
 ${defineFunction("wallKeyCoordinates")}
 ${defineFunction("terrainElevation")}
+${defineFunction("normalizedDirection")}
 
 #define EV_ENDPOINT_LINKED_UNBLOCKED  -1.0
 #define EV_ENDPOINT_LINKED_CONCAVE    -2.0
+
+// Structs to simplify the data organization.
+struct Wall {
+  vec3[2] top;
+  vec3[2] bottom;
+  vec2 direction;   // Normalized.
+  float[2] linkValue;
+  float type;
+  float thresholdRadius2;
+};
+
+struct PenumbraDir {
+  // All normalized.
+  vec3[2] umbra;
+  vec3[2] mid;
+  vec3[2] penumbra;
+  vec3[2] top;
+  vec3[2] bottom;
+};
+
+struct Light {
+  vec3 center;
+  vec3 left;
+  vec3 right;
+  vec3 top;
+  vec3 bottom;
+  float size;
+  float oWallLight; // Which side of the wall the light is on.
+};
+
+struct PenumbraPoints {
+  vec2[2] umbra;
+  vec2[2] mid;
+  vec2[2] penumbra;
+};
 
 float calculateRatio(in vec3 wallEndpoint, in vec3 dir, in vec2 furthestPoint, in Plane canvasPlane, in float maxDist) {
   if ( dir.z >= 0.0 ) return 0.0;
@@ -107,24 +143,68 @@ float calculateRatio(in vec3 wallEndpoint, in vec3 dir, in vec2 furthestPoint, i
 /**
  * Make sure the vector does not exceed the wall angle (i.e., does not go the "light" side)
  */
-void cleanDirectionalVector(inout vec2[2] dirArr, in vec2[2] wall2d, float oWallLight) {
-  float oWallPenumbra = sign(orient(wall2d[0], wall2d[1], wall2d[0] + dirArr[0]));
-  if ( oWallPenumbra == oWallLight ) dirArr[0] = wall2d[0] - wall2d[1];
+void cleanDirectionalVector(inout vec3[2] dirArr, in Wall wall, in Light light) {
+  float oWallPenumbra = sign(orient(wall.top[0].xy, wall.top[1].xy, wall.top[0].xy + dirArr[0].xy));
+  if ( oWallPenumbra == light.oWallLight ) {
+    dirArr[0].xy = wall.top[0].xy - wall.top[1].xy;
+    dirArr[0] = normalize(dirArr[0]);
+  }
 
-  oWallPenumbra = sign(orient(wall2d[0], wall2d[1], wall2d[1] + dirArr[1]));
-  if ( oWallPenumbra == oWallLight ) dirArr[1] = wall2d[1] - wall2d[0];
+  oWallPenumbra = sign(orient(wall.top[0].xy, wall.top[1].xy, wall.top[1].xy + dirArr[1].xy));
+  if ( oWallPenumbra == light.oWallLight ) {
+    dirArr[1].xy = wall.top[1].xy - wall.top[0].xy;
+    dirArr[1] = normalize(dirArr[1]);
+  }
+}
 
-  dirArr[0] = normalize(dirArr[0]);
-  dirArr[1] = normalize(dirArr[1]);
-}`;
+/**
+ * Determine the points of the side penumbra.
+ */
+PenumbraPoints calculateSidePenumbra(in PenumbraDir penumbraDir, in Wall wall, in Light light, in float maxR, in Plane canvasPlane) {
+  vec2[2] umbra;
+  vec2[2] mid;
+  vec2[2] outer;
+
+  // Determine where the light ray hits the canvas when passing through the light bottom to one of the endpoints.
+  // This is the furthest point of the shadow, as the top of the light casts a shorter shadow.
+  bool infiniteShadow = wall.top[0].z >= light.bottom.z;
+  if ( infiniteShadow ) {
+    // No height change for an infinite shadow.
+    Ray2d midRay = Ray2d(wall.top[0].xy, normalize(penumbraDir.mid[0].xy));
+    mid[0] = projectRay(midRay, maxR);
+  } else {
+    // Project a 3d ray from wall top endpoint in direction away from light bottom onto the canvas plane.
+    vec3 ixCanvas;
+    Ray midRay = Ray(wall.top[0], penumbraDir.bottom[0]);
+    intersectRayPlane(midRay, canvasPlane, ixCanvas);
+    mid[0] = ixCanvas.xy;
+  }
+
+  // Draw a line parallel to the wall that goes through the intersection point.
+  // The intersection of that with each penumbra ray will define the penumbra points.
+  Ray2d farParallelRay = Ray2d(mid[0].xy, wall.direction);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, penumbraDir.mid[1].xy), mid[1]);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[0].xy, penumbraDir.penumbra[0].xy), outer[0]);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, penumbraDir.penumbra[1].xy), outer[1]);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[0].xy, penumbraDir.umbra[0].xy), umbra[0]);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, penumbraDir.umbra[1].xy), umbra[1]);
+
+  return PenumbraPoints(
+    umbra,
+    mid,
+    outer
+  );
+}
+
+
+`;
 
 // NOTE: PENUMBRA_VERTEX_CALCULATIONS
 const PENUMBRA_VERTEX_CALCULATIONS =
 `
-// Normalize the directional vectors and ensure they point to the shadow side.
-cleanDirectionalVector(dirInnerSidePenumbra, wall2d, oWallLight);
-cleanDirectionalVector(dirMidSidePenumbra, wall2d, oWallLight);
-cleanDirectionalVector(dirOuterSidePenumbra, wall2d, oWallLight);
+// Ensure directional vectors point to the shadow side
+cleanDirectionalVector(penumbraDir.umbra, wall, light);
+cleanDirectionalVector(penumbraDir.penumbra, wall, light);
 
 // Define some terms for ease-of-reference.
 float canvasElevation = uElevationRes.x;
@@ -140,45 +220,12 @@ vec3 planeNormal = vec3(0.0, 0.0, 1.0);
 vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
 Plane canvasPlane = Plane(planePoint, planeNormal);
 
-vec2 sideUmbra[2];
-vec2 sideMidPenumbra[2];
-vec2 sidePenumbra[2];
-
-// Determine where the light ray hits the canvas when passing through one of the endpoints.
-// This marks the furthest extension of the shadow from the wall.
-int closerIdx = 0;
-int furtherIdx = 1;
-float farLightRayZChange = zChangeLightWallTop.b;
-vec3 wall0Top3d = vec3(wall2d[0], wallTopZ);
-if ( farLightRayZChange < 0.0 ) {
-  vec3 dir = normalize(vec3(dirMidSidePenumbra[0], farLightRayZChange));
-  vec3 ixCanvas;
-  intersectRayPlane(Ray(wall0Top3d, dir), canvasPlane, ixCanvas);
-  sideMidPenumbra[0] = ixCanvas.xy;
-} else {
-  // Infinite shadow.
-  // Use the closer wall endpoint to project the ray from the endpoint a given distance.
-  #ifndef EV_DIRECTIONAL_LIGHT
-  closerIdx = distanceSquared(uLightPosition.xy, wall2d[0]) < distanceSquared(uLightPosition.xy, wall2d[1]) ? 0 : 1;
-  furtherIdx = closerIdx % 2;
-  #endif
-  Ray2d penumbraCloser = normalizeRay(Ray2d(wall2d[closerIdx], dirMidSidePenumbra[closerIdx]));
-  sideMidPenumbra[closerIdx] = projectRay(penumbraCloser, maxR);
-}
-
-// Construct a parallel ray to the wall and use that to intersect the further penumbra ray.
-Ray2d farParallelRay = Ray2d(sideMidPenumbra[closerIdx], wallDir);
-lineLineIntersection(farParallelRay, Ray2d(wall2d[furtherIdx], dirMidSidePenumbra[furtherIdx]), sideMidPenumbra[furtherIdx]);
-
-// Use the parallel ray to intersect the other side penumbra rays.
-lineLineIntersection(farParallelRay, Ray2d(wall2d[0], dirOuterSidePenumbra[0]), sidePenumbra[0]);
-lineLineIntersection(farParallelRay, Ray2d(wall2d[1], dirOuterSidePenumbra[1]), sidePenumbra[1]);
-lineLineIntersection(farParallelRay, Ray2d(wall2d[0], dirInnerSidePenumbra[0]), sideUmbra[0]);
-lineLineIntersection(farParallelRay, Ray2d(wall2d[1], dirInnerSidePenumbra[1]), sideUmbra[1]);
+// Determine the penumbra endpoints.
+PenumbraPoints penumbraPoints = calculateSidePenumbra(penumbraDir, wall, light, maxR, canvasPlane);
 
 // Construct a new light position based on the xy intersection of the outer penumbra points --> wall corner
 vec2 newLightCenter;
-lineLineIntersection(sidePenumbra[0], wall2d[0], sidePenumbra[1], wall2d[1], newLightCenter);
+lineLineIntersection(penumbraPoints.penumbra[0], wall.top[0].xy, penumbraPoints.penumbra[1], wall.top[1].xy, newLightCenter);
 
 
 // Big triangle ABC is the bounds of the potential shadow.
@@ -191,10 +238,10 @@ switch ( vertexNum ) {
     vVertexPosition = newLightCenter;
     break;
   case 1:
-    vVertexPosition = sidePenumbra[0];
+    vVertexPosition = penumbraPoints.penumbra[0];
     break;
   case 2:
-    vVertexPosition = sidePenumbra[1];
+    vVertexPosition = penumbraPoints.penumbra[1];
     break;
 }
 
@@ -203,11 +250,8 @@ gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition,
 // If the endpoint is blocking, move the sideUmbra to match the blocking line.
 // If the sideUmbra moves past the sidePenumbra, then there will be no penumbra.
 // Must orient against the wall and light to get the correct direction
-float wallKey0 = aWallCorner0.w;
-float wallKey1 = aWallCorner1.w;
-
 #ifndef EV_DIRECTIONAL_LIGHT
-bool hasSidePenumbra0 = uLightSize > 0.0;
+bool hasSidePenumbra0 = light.size > 0.0;
 bool hasSidePenumbra1 = hasSidePenumbra0;
 #endif
 
@@ -216,39 +260,41 @@ bool hasSidePenumbra0 = uSolarAngle > 0.0;
 bool hasSidePenumbra1 = hasSidePenumbra0;
 #endif
 
-hasSidePenumbra0 = hasSidePenumbra0 && wallKey0 != EV_ENDPOINT_LINKED_CONCAVE;
-hasSidePenumbra1 = hasSidePenumbra1 && wallKey1 != EV_ENDPOINT_LINKED_CONCAVE;
+hasSidePenumbra0 = hasSidePenumbra0 && wall.linkValue[0] != EV_ENDPOINT_LINKED_CONCAVE;
+hasSidePenumbra1 = hasSidePenumbra1 && wall.linkValue[1] != EV_ENDPOINT_LINKED_CONCAVE;
 
-if ( hasSidePenumbra0 && wallKey0 != EV_ENDPOINT_LINKED_UNBLOCKED ) {
-  vec2 linkedPt = wallKeyCoordinates(wallKey0);
+if ( hasSidePenumbra0 && wall.linkValue[0] != EV_ENDPOINT_LINKED_UNBLOCKED ) {
+  vec2 linkedPt = wallKeyCoordinates(wall.linkValue[0]);
 
-  float oUmbraPenumbra = sign(orient(aWallCorner0.xy, sideUmbra[0], sidePenumbra[0]));
-  float oUmbraLinked = sign(orient(aWallCorner0.xy, sideUmbra[0], linkedPt));
-  float oPenumbraLinked = sign(orient(aWallCorner0.xy, sidePenumbra[0], linkedPt));
+  float oUmbraPenumbra = sign(orient(wall.top[0].xy, penumbraPoints.umbra[0], penumbraPoints.penumbra[0]));
+  float oUmbraLinked = sign(orient(wall.top[0].xy, penumbraPoints.umbra[0], linkedPt));
+  float oPenumbraLinked = sign(orient(wall.top[0].xy, penumbraPoints.penumbra[0], linkedPt));
 
   if ( oUmbraPenumbra == oUmbraLinked ) {
     if ( oPenumbraLinked != oUmbraLinked ) {
       // Linked wall goes through the penumbra.
       // Move the umbra to the linked wall.
-      vec2 dirLinked = linkedPt - wall2d[0];
-      lineLineIntersection(farParallelRay, Ray2d(wall2d[0], dirLinked), sideUmbra[0]);
+      vec2 dirLinked = linkedPt - wall.top[0].xy;
+      Ray2d farParallelRay = Ray2d(penumbraPoints.mid[0].xy, wall.direction.xy);
+      lineLineIntersection(farParallelRay, Ray2d(wall.top[0].xy, dirLinked), penumbraPoints.umbra[0]);
     } else hasSidePenumbra0 = false; // Linked wall blocks the penumbra.
   }
 }
 
-if ( hasSidePenumbra1 && wallKey1 != EV_ENDPOINT_LINKED_UNBLOCKED ) {
-  vec2 linkedPt = wallKeyCoordinates(wallKey1);
+if ( hasSidePenumbra1 && wall.linkValue[1] != EV_ENDPOINT_LINKED_UNBLOCKED ) {
+  vec2 linkedPt = wallKeyCoordinates(wall.linkValue[1]);
 
-  float oUmbraPenumbra = sign(orient(aWallCorner1.xy, sideUmbra[1], sidePenumbra[1]));
-  float oUmbraLinked = sign(orient(aWallCorner1.xy, sideUmbra[1], linkedPt));
-  float oPenumbraLinked = sign(orient(aWallCorner1.xy, sidePenumbra[1], linkedPt));
+  float oUmbraPenumbra = sign(orient(wall.top[1].xy, penumbraPoints.umbra[1], penumbraPoints.penumbra[1]));
+  float oUmbraLinked = sign(orient(wall.top[1].xy, penumbraPoints.umbra[1], linkedPt));
+  float oPenumbraLinked = sign(orient(wall.top[1].xy, penumbraPoints.penumbra[1], linkedPt));
 
   if ( oUmbraPenumbra == oUmbraLinked ) {
     if ( oPenumbraLinked != oUmbraLinked ) {
       // Linked wall goes through the penumbra.
       // Move the umbra to the linked wall.
-      vec2 dirLinked = linkedPt - wall2d[1];
-      lineLineIntersection(farParallelRay, Ray2d(wall2d[1], dirLinked), sideUmbra[1]);
+      vec2 dirLinked = linkedPt - wall.top[1].xy;
+      Ray2d farParallelRay = Ray2d(penumbraPoints.mid[0].xy, wall.direction.xy);
+      lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, dirLinked), penumbraPoints.umbra[1]);
     } else hasSidePenumbra1 = false; // Linked wall blocks the penumbra.
   }
 }
@@ -256,18 +302,18 @@ if ( hasSidePenumbra1 && wallKey1 != EV_ENDPOINT_LINKED_UNBLOCKED ) {
 vSidePenumbra0 = vec3(1.0, 1.0, 1.0);
 if ( hasSidePenumbra0 ) {
   // Penumbra0 triangle
-  vec2 p0A = wall2d[0];
-  vec2 p0B = sidePenumbra[0];
-  vec2 p0C = sideUmbra[0];
+  vec2 p0A = wall.top[0].xy;
+  vec2 p0B = penumbraPoints.penumbra[0];
+  vec2 p0C = penumbraPoints.umbra[0];
   vSidePenumbra0 = barycentric(vVertexPosition, p0A, p0B, p0C);
 }
 
 vSidePenumbra1 = vec3(1.0, 1.0, 1.0);
 if ( hasSidePenumbra1 ) {
   // Penumbra1 triangle
-  vec2 p1A = wall2d[1];
-  vec2 p1C = sideUmbra[1];
-  vec2 p1B = sidePenumbra[1];
+  vec2 p1A = wall.top[1].xy;
+  vec2 p1C = penumbraPoints.umbra[1];
+  vec2 p1B = penumbraPoints.penumbra[1];
   vSidePenumbra1 = barycentric(vVertexPosition, p1A, p1B, p1C);
 }
 
@@ -276,45 +322,48 @@ vTerrainTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
 
 if ( vertexNum == 2 ) {
   // Calculate flat variables
-  fWallCornerLinked = vec2(aWallCorner0.a, aWallCorner1.a);
-  fWallHeights = vec2(wallTopZ, wallBottomZ);
-  fWallSenseType = aWallSenseType;
+  fWallCornerLinked = vec2(wall.linkValue[0], wall.linkValue[1]);
+  fWallHeights = vec2(wall.top[0].z, wall.bottom[0].z);
+  fWallSenseType = wall.type;
   #ifndef EV_DIRECTIONAL_LIGHT
-  fThresholdRadius2 = aThresholdRadius2;
+  fThresholdRadius2 = wall.thresholdRadius2;
   #endif
 
   // Wall ratio
-  float distShadowInv = 1.0 / distance(newLightCenter, sidePenumbra[0]);
-  float distWallTop = distance(wall2d[0], sidePenumbra[0]);
+  float distShadowInv = 1.0 / distance(newLightCenter, penumbraPoints.penumbra[0]);
+  float distWallTop = distance(wall.top[0].xy, penumbraPoints.penumbra[0].xy);
   fWallRatio = distWallTop * distShadowInv;
 
   // Near/far penumbra ratios
   // x: penumbra; y: mid-penumbra; z: umbra
+  // Measured along the penumbra (outer) line.
   fNearRatios = vec3(fWallRatio);
   fFarRatios = vec3(0.0);
 
+  // Define directions from the new light position to the end of the outer penumbra.
+  vec3 newLightCenter3d = vec3(newLightCenter, light.center.z);
+  vec3 newLightTop = newLightCenter3d + vec3(0.0, 0.0, light.size);
+  vec3 dirTop = normalizedDirection(newLightTop, wall.top[0]);
+  vec3 dirMid = normalizedDirection(newLightCenter3d, wall.top[0]);
+
   // Light center
-  vec3 dirTmp = normalize(vec3(dirOuterSidePenumbra[0], zChangeLightWallTop.g));
-  fFarRatios.y = distShadowInv * calculateRatio(wall0Top3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
+  fFarRatios.y = distShadowInv * calculateRatio(wall.top[0], dirMid, penumbraPoints.penumbra[0], canvasPlane, distWallTop);
 
   // Light top
-  dirTmp = normalize(vec3(dirOuterSidePenumbra[0], zChangeLightWallTop.r));
-  fFarRatios.x = distShadowInv * calculateRatio(wall0Top3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
+  fFarRatios.x = distShadowInv * calculateRatio(wall.top[0], dirTop, penumbraPoints.penumbra[0], canvasPlane, distWallTop);
 
-  if ( wallBottomZ > canvasElevation ) {
-    vec3 wall0Bottom3d = vec3(wall2d[0], wallTopZ);
+  if ( wall.bottom[0].z > canvasElevation ) {
+    vec3 newLightBottom = newLightCenter3d - vec3(0.0, 0.0, light.size);
+    vec3 dirBottom = normalizedDirection(newLightBottom, wall.top[0]);
 
     // Light top
-    dirTmp = normalize(vec3(dirOuterSidePenumbra[0], zChangeLightWallBottom.r));
-    fNearRatios.x = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
+    fNearRatios.x = distShadowInv * calculateRatio(wall.bottom[0], dirTop, penumbraPoints.penumbra[0], canvasPlane, distWallTop);
 
     // Light center
-    dirTmp = normalize(vec3(dirOuterSidePenumbra[0], zChangeLightWallBottom.g));
-    fNearRatios.y = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
+    fNearRatios.y = distShadowInv * calculateRatio(wall.bottom[0], dirMid, penumbraPoints.penumbra[0], canvasPlane, distWallTop);
 
     // Light bottom
-    dirTmp = normalize(vec3(dirOuterSidePenumbra[0], zChangeLightWallBottom.b));
-    fNearRatios.z = distShadowInv * calculateRatio(wall0Bottom3d, dirTmp, sidePenumbra[0], canvasPlane, distWallTop);
+    fNearRatios.z = distShadowInv * calculateRatio(wall.bottom[0], dirBottom, penumbraPoints.penumbra[0], canvasPlane, distWallTop);
   }
 
 }`;
@@ -1237,6 +1286,7 @@ ${defineFunction("orient")}
 ${defineFunction("fromAngle")}
 ${defineFunction("distanceSquared")}
 ${defineFunction("projectRay")}
+${defineFunction("normalizedDirection")}
 
 ${PENUMBRA_VERTEX_FUNCTIONS}
 
@@ -1249,54 +1299,86 @@ float zChangeForElevationAngle(in float elevationAngle) {
 }
 
 /**
+ * Determine the four points of the wall and its properties.
+ */
+Wall calculateWallPositions() {
+  vec3 aTop = vec3(aWallCorner0.x, aWallCorner0.y, aWallCorner0.z);
+  vec3 bTop = vec3(aWallCorner1.x, aWallCorner1.y, aWallCorner0.z);
+  vec3 aBottom = vec3(aWallCorner0.x, aWallCorner0.y, aWallCorner1.z);
+  vec3 bBottom = vec3(aWallCorner1.x, aWallCorner1.y, aWallCorner1.z);
+  return Wall(
+    vec3[2](aTop, bTop),
+    vec3[2](aBottom, bBottom),
+    normalizedDirection(aWallCorner1.xy, aWallCorner0.xy),
+    float[2](aWallCorner0.w, aWallCorner1.w),
+    aWallSenseType,
+    aThresholdRadius2
+  );
+}
+
+/**
  * Determine the top, bottom, left, right light positions.
  */
-void calculateLightPositions(out vec3 lightLR0, out vec3 lightLR1, out vec3 lightTop, out vec3 lightBottom) {
-  vec2 wallDir = normalize(aWallCorner0.xy - aWallCorner1.xy);
-  vec2 dir = wallDir * uLightSize;
+Light calculateLightPositions(in Wall wall) {
+  vec2 dir = wall.direction * uLightSize;
 
   // Form a cross based on the light center.
   vec2 lr0 = uLightPosition.xy - dir;
   vec2 lr1 = uLightPosition.xy + dir;
   float top = uLightPosition.z + uLightSize;
   float bottom = uLightPosition.z - uLightSize;
-  lightLR0 = vec3(lr0.xy, uLightPosition.z);
-  lightLR1 = vec3(lr1.xy, uLightPosition.z);
-  lightTop = vec3(uLightPosition.xy, top);
-  lightBottom = vec3(uLightPosition.xy, bottom);
+
+  return Light(
+    uLightPosition,                 // Center
+    vec3(lr0.xy, uLightPosition.z), // Left
+    vec3(lr1.xy, uLightPosition.z), // Right
+    vec3(uLightPosition.xy, top),   // Top
+    vec3(uLightPosition.xy, bottom), // Bottom
+    uLightSize,
+    sign(orient(wall.top[0].xy, wall.top[1].xy, uLightPosition.xy))
+  );
 }
 
 /**
  * Determine the side penumbra using the light positions.
  */
-void calculateSidePenumbraDirections(in vec2 lightLR0, in vec2 lightLR1, out vec2[2] dirInnerSidePenumbra, out vec2[2] dirMidSidePenumbra, out vec2[2] dirOuterSidePenumbra) {
-  vec2 wall2d[2] = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
-
+PenumbraDir calculatePenumbraDirections(in Wall wall, in Light light) {
   // Direction from light center --> wall endpoints.
-  vec2[2] baseDirection = vec2[2](
-    wall2d[0] - uLightPosition.xy,
-    wall2d[1] - uLightPosition.xy
+  vec3[2] baseDirection = vec3[2](
+    wall.top[0] - light.center,
+    wall.top[1] - light.center
   );
-  dirMidSidePenumbra = baseDirection;
-  dirOuterSidePenumbra = baseDirection;
-  dirInnerSidePenumbra = baseDirection;
+
+  // Start by duplicating the mid entry for when light size is 0 or endpoint is linked.
+  vec3[2] dirMidSidePenumbra = baseDirection;
+  vec3[2] dirOuterSidePenumbra = baseDirection;
+  vec3[2] dirInnerSidePenumbra = baseDirection;
+  vec3[2] dirTopPenumbra = baseDirection;
+  vec3[2] dirBottomPenumbra = baseDirection;
 
   // Direction from light LR --> wall endpoints
   // If the endpoint is blocked, don't use the light size. See issue #95.
   // TODO: Can we use additive shading to handle this instead?
   //   i.e., umbra shadow + penumbra shadow near 1 when added together.
-  if ( aWallCorner0.w != EV_ENDPOINT_LINKED_CONCAVE ) {
-    dirOuterSidePenumbra = vec2[2](
-      wall2d[0] - lightLR0,
-      wall2d[1] - lightLR1
-    );
+  if ( wall.linkValue[0] != EV_ENDPOINT_LINKED_CONCAVE ) {
+    dirOuterSidePenumbra[0] = normalizedDirection(light.left, wall.top[0]);
+    dirInnerSidePenumbra[0] = normalizedDirection(light.right, wall.top[0]);
+    dirTopPenumbra[0] = normalizedDirection(light.top, wall.top[0]);
+    dirBottomPenumbra[0] = normalizedDirection(light.bottom, wall.top[0]);
   }
   if ( aWallCorner1.w != EV_ENDPOINT_LINKED_CONCAVE ) {
-    dirInnerSidePenumbra = vec2[2](
-      wall2d[0] - lightLR1,
-      wall2d[1] - lightLR0
-    );
+    dirOuterSidePenumbra[0] = normalizedDirection(light.left, wall.top[0]);
+    dirInnerSidePenumbra[0] = normalizedDirection(light.right, wall.top[0]);
+    dirTopPenumbra[0] = normalizedDirection(light.top, wall.top[0]);
+    dirBottomPenumbra[0] = normalizedDirection(light.bottom, wall.top[0]);
   }
+  return PenumbraDir(
+    dirInnerSidePenumbra,
+    dirMidSidePenumbra,
+    dirOuterSidePenumbra,
+    dirTopPenumbra,
+    dirBottomPenumbra
+  );
 }
 
 
@@ -1307,46 +1389,9 @@ void main() {
   // A is the intersection of the line light --> wall endpointA --> canvas plane
   // B is the intersection of the line light --> wall endpointB --> canvas plane
 
-  // Define some terms for ease-of-reference.
-  //float lightSize = max(1.0, uLightSize); // TODO: Cannot currently go to 0.
-  float lightSize = uLightSize;
-
-  // Define wall dimensions.
-  float wallTopZ = aWallCorner0.z;
-  float wallBottomZ = aWallCorner1.z;
-  vec2 wall2d[2] = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
-  vec2 wallDir = normalize(aWallCorner0.xy - aWallCorner1.xy);
-  vec3 wallBottom0 = vec3(aWallCorner0.xy, wallBottomZ);
-
-  // Determine which side of the wall the light is on.
-  float oWallLight = sign(orient(wall2d[0], wall2d[1], uLightPosition.xy));
-
-  // Determine the z change between the light and the wall. light top / middle / bottom
-  // Must be the z portion of the normalized vector between the light and the first endpoint.
-  vec3 lightSizeVec = vec3(0.0, 0.0, lightSize);
-  vec3 dirLightWallTop = aWallCorner0.xyz - uLightPosition;
-  vec3 dirLightWallBottom = wallBottom0 - uLightPosition;
-  vec3 zChangeLightWallTop = vec3(
-    normalize(dirLightWallTop + lightSizeVec).z,
-    normalize(dirLightWallTop).z,
-    normalize(dirLightWallTop - lightSizeVec).z
-  );
-  vec3 zChangeLightWallBottom = vec3(
-    normalize(dirLightWallBottom + lightSizeVec).z,
-    normalize(dirLightWallBottom).z,
-    normalize(dirLightWallBottom - lightSizeVec).z
-  );
-
-  vec3 lightLR0;
-  vec3 lightLR1;
-  vec3 lightTop;
-  vec3 lightBottom;
-  calculateLightPositions(lightLR0, lightLR1, lightTop, lightBottom);
-
-  vec2[2] dirInnerSidePenumbra; // Direction from light LR --> wall endpoints
-  vec2[2] dirMidSidePenumbra; // Direction from light center --> wall endpoints
-  vec2[2] dirOuterSidePenumbra; // Direction from light LR --> wall endpoints
-  calculateSidePenumbraDirections(lightLR0.xy, lightLR1.xy, dirInnerSidePenumbra, dirMidSidePenumbra, dirOuterSidePenumbra);
+  Wall wall = calculateWallPositions();
+  Light light = calculateLightPositions(wall);
+  PenumbraDir penumbraDir = calculatePenumbraDirections(wall, light);
 
   ${PENUMBRA_VERTEX_CALCULATIONS}
 }`;

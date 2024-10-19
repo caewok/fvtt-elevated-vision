@@ -523,6 +523,14 @@ vec3 projectRay(in Ray r, in float distanceMultiplier) {
 
 // NOTE: Geometry lines
 
+GLSLFunctions.normalizedDirection =
+`
+vec2 normalizedDirection(in vec2 a, in vec2 b) { return normalize(b - a); }
+
+vec3 normalizedDirection(in vec3 a, in vec3 b) { return normalize(b - a); }
+
+`;
+
 GLSLFunctions.distanceSquared =
 `
 float distanceSquared(in vec2 a, in vec2 b) {
