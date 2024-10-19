@@ -163,7 +163,7 @@ void cleanDirectionalVector(inout vec3[2] dirArr, in Wall wall, in Light light) 
 PenumbraPoints calculateSidePenumbra(in PenumbraDir penumbraDir, in Wall wall, in Light light, in float maxR, in Plane canvasPlane) {
   vec2[2] umbra;
   vec2[2] mid;
-  vec2[2] outer;
+  vec2[2] penumbra;
 
   // Determine where the light ray hits the canvas when passing through the light bottom to one of the endpoints.
   // This is the furthest point of the shadow, as the top of the light casts a shorter shadow.
@@ -184,15 +184,15 @@ PenumbraPoints calculateSidePenumbra(in PenumbraDir penumbraDir, in Wall wall, i
   // The intersection of that with each penumbra ray will define the penumbra points.
   Ray2d farParallelRay = Ray2d(mid[0].xy, wall.direction);
   lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, penumbraDir.mid[1].xy), mid[1]);
-  lineLineIntersection(farParallelRay, Ray2d(wall.top[0].xy, penumbraDir.penumbra[0].xy), outer[0]);
-  lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, penumbraDir.penumbra[1].xy), outer[1]);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[0].xy, penumbraDir.penumbra[0].xy), penumbra[0]);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, penumbraDir.penumbra[1].xy), penumbra[1]);
   lineLineIntersection(farParallelRay, Ray2d(wall.top[0].xy, penumbraDir.umbra[0].xy), umbra[0]);
   lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, penumbraDir.umbra[1].xy), umbra[1]);
 
   return PenumbraPoints(
     umbra,
     mid,
-    outer
+    penumbra
   );
 }
 
@@ -1367,10 +1367,10 @@ PenumbraDir calculatePenumbraDirections(in Wall wall, in Light light) {
     dirBottomPenumbra[0] = normalizedDirection(light.bottom, wall.top[0]);
   }
   if ( aWallCorner1.w != EV_ENDPOINT_LINKED_CONCAVE ) {
-    dirOuterSidePenumbra[0] = normalizedDirection(light.left, wall.top[0]);
-    dirInnerSidePenumbra[0] = normalizedDirection(light.right, wall.top[0]);
-    dirTopPenumbra[0] = normalizedDirection(light.top, wall.top[0]);
-    dirBottomPenumbra[0] = normalizedDirection(light.bottom, wall.top[0]);
+    dirOuterSidePenumbra[1] = normalizedDirection(light.right, wall.top[1]);
+    dirInnerSidePenumbra[1] = normalizedDirection(light.left, wall.top[1]);
+    dirTopPenumbra[1] = normalizedDirection(light.top, wall.top[0]);
+    dirBottomPenumbra[1] = normalizedDirection(light.bottom, wall.top[0]);
   }
   return PenumbraDir(
     dirInnerSidePenumbra,

@@ -325,6 +325,13 @@ export function lineLineIntersectionRay(a, b, ix) {
 }
 
 /**
+ * @param {vec2|vec3} a
+ * @param {vec2|vec3} b
+ * @returns {vec2|vec3}
+ */
+export function normalizedDirection(a, b) { return b.subtract(a).normalize(); }
+
+/**
  * @param {vec2} a
  * @param {vec2} b
  * @param {vec2} c
@@ -389,48 +396,92 @@ export class WallGLSLStruct {
 }
 
 export class PenumbraDirGLSLStruct {
-  constructor({ inner, mid, outer, top, bottom } = {}) {
-    const args = { inner, mid, outer, top, bottom };
+  constructor({ umbra, mid, penumbra, top, bottom } = {}) {
+    const args = { umbra, mid, penumbra, top, bottom };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 
   static calculatePenumbraDirections(wall, light) {
     // Direction from light center --> wall endpoints.
-    const dirMidSidePenumbra = [
+    const baseDirection = [
       wall.top[0].subtract(light.center),
       wall.top[1].subtract(light.center)
     ];
 
     // Start by duplicating the mid entry for when light size is 0 or endpoint is linked.
-    let dirOuterSidePenumbra = [dirMidSidePenumbra[0].xy, dirMidSidePenumbra[1].xy];
-    let dirInnerSidePenumbra = [dirMidSidePenumbra[0].xy, dirMidSidePenumbra[1].xy];
-    let dirTopPenumbra = [dirMidSidePenumbra[0].xy, dirMidSidePenumbra[1].xy];
-    let dirBottomPenumbra = [dirMidSidePenumbra[0].xy, dirMidSidePenumbra[1].xy];
+    const dirMidSidePenumbra = [baseDirection[0].xy, baseDirection[1].xy];
+    const dirOuterSidePenumbra = [baseDirection[0].xy, baseDirection[1].xy];
+    const dirInnerSidePenumbra = [baseDirection[0].xy, baseDirection[1].xy];
+    const dirTopPenumbra = [baseDirection[0].xy, baseDirection[1].xy];
+    const dirBottomPenumbra = [baseDirection[0].xy, baseDirection[1].xy];
 
     // Direction from light LR --> wall endpoints
     // If the endpoint is blocked, don't use the light size. See issue #95.
     // TODO: Can we use additive shading to handle this instead?
     //   i.e., umbra shadow + penumbra shadow near 1 when added together.
     if ( wall.linkValue[0] !== this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
-      dirOuterSidePenumbra[0] = wall.top[0].subtract(light.left);
-      dirInnerSidePenumbra[0] = wall.top[0].subtract(light.right);
-      dirTopPenumbra[0] = wall.top[0].subtract(light.top);
-      dirBottomPenumbra[0] = wall.top[0].subtract(light.bottom);
+      dirOuterSidePenumbra[0] = normalizedDirection(light.left, wall.top[0]);
+      dirInnerSidePenumbra[0] = normalizedDirection(light.right, wall.top[0]);
+      dirTopPenumbra[0] = normalizedDirection(light.top, wall.top[0]);
+      dirBottomPenumbra[0] = normalizedDirection(light.bottom, wall.top[0]);
     }
     if ( wall.linkValue[1] !== this.constructor.EV_ENDPOINT_LINKED_CONCAVE ) {
-      dirOuterSidePenumbra[1] = wall.top[1].subtract(light.right); // Note flipped from endpoint 0.
-      dirInnerSidePenumbra[1] = wall.top[1].subtract(light.left); // Note flipped from endpoint 0.
-      dirTopPenumbra[1] = wall.top[1].subtract(light.top);
-      dirBottomPenumbra[1] = wall.top[1].subtract(light.bottom);
+      dirOuterSidePenumbra[1] = normalizedDirection(light.right, wall.top[1]); // Note flipped from endpoint 0.
+      dirInnerSidePenumbra[1] = normalizedDirection(light.left, wall.top[1]); // Note flipped from endpoint 0.
+      dirTopPenumbra[1] = normalizedDirection(light.top, wall.top[1]);
+      dirBottomPenumbra[1] = normalizedDirection(light.bottom, wall.top[1]);
     }
 
     return new this({
-      inner: dirInnerSidePenumbra.map(dir => dir.normalize()),
+      umbra: dirInnerSidePenumbra.map(dir => dir.normalize()),
       mid: dirMidSidePenumbra.map(dir => dir.normalize()),
-      outer: dirOuterSidePenumbra.map(dir => dir.normalize()),
+      penumbra: dirOuterSidePenumbra.map(dir => dir.normalize()),
       top: dirTopPenumbra.map(dir => dir.normalize()),
       bottom: dirBottomPenumbra.map(dir => dir.normalize())
     });
+  }
+}
+
+export class PenumbraPointsGLSLStruct {
+  constructor({ umbra, mid, penumbra } = {}) {
+    const args = { umbra, mid, penumbra };
+    for ( const [key, value] of Object.entries(args) ) this[key] = value;
+  }
+
+  static calculateSidePenumbra(penumbraDir, wall, light, maxR, canvasPlane) {
+    const umbra = [new vec2(), new vec2()];
+    const mid = [new vec2(), new vec2()];
+    const penumbra = [new vec2(), new vec2()];
+
+    // Determine where the light ray hits the canvas when passing through the light bottom to one of the endpoints.
+    // This is the furthest point of the shadow, as the top of the light casts a shorter shadow.
+    const infiniteShadow = wall.top[0].z >= light.bottom.z;
+    if ( infiniteShadow ) {
+      // No height change for an infinite shadow.
+      const midRay = new GLSLRay2d(wall.top[0].xy, normalize(penumbraDir.mid[0].xy));
+      mid[0] = midRay.project(maxR);
+    } else {
+      // Project a 3d ray from wall top endpoint in direction away from light bottom onto the canvas plane
+      const ixCanvas = new vec3();
+      const midRay = new GLSLRay(wall.top[0], penumbraDir.bottom[0]);
+      intersectRayPlane(midRay, canvasPlane, ixCanvas);
+      mid[0] = ixCanvas.xy;
+    }
+
+    // Draw a line parallel to the wall that goes through the intersection point.
+    // The intersection of that with each penumbra ray will define the penumbra points.
+    const farParallelRay = new GLSLRay2d(mid[0].xy, wall.direction);
+    lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall.top[1].xy, penumbraDir.mid[1].xy), mid[1]);
+    lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall.top[0].xy, penumbraDir.penumbra[0].xy), penumbra[0]);
+    lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall.top[1].xy, penumbraDir.penumbra[1].xy), penumbra[1]);
+    lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall.top[0].xy, penumbraDir.inner[0].xy), umbra[0]);
+    lineLineIntersectionRay(farParallelRay, new GLSLRay2d(wall.top[1].xy, penumbraDir.inner[1].xy), umbra[1]);
+
+    return new this(
+      umbra,
+      mid,
+      penumbra
+    )
   }
 }
 
