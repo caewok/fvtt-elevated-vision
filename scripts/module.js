@@ -47,13 +47,6 @@ import {
   vec2,
   vec3,
   vec4,
-  GLSLRay2d,
-  GLSLRay,
-  GLSLPlane,
-  intersectRayPlane,
-  lineLineIntersectionRayT,
-  lineLineIntersectionRay,
-  lineLineIntersectionVector,
   SizedPointSourceShadowWallVertexShaderTest } from "./testing/WallShaderTest.js";
 
 
@@ -129,14 +122,7 @@ Hooks.once("init", function() {
       ShadowDirectionalTextureRenderer,
       TestShadowShader,
       EVQuadMesh,
-      TestGeometryShader,
-      GLSLRay2d,
-      GLSLRay,
-      GLSLPlane,
-      intersectRayPlane,
-      lineLineIntersectionRayT,
-      lineLineIntersectionRay,
-      lineLineIntersectionVector
+      TestGeometryShader
     },
 
     testing: {
