@@ -27,6 +27,17 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   static WALL_OFFSET_PIXELS = 2;
 
   /**
+   * Signal that a wall endpoint has no linked walls.
+   * @type {number}
+   */
+  static EV_ENDPOINT_LINKED_UNBLOCKED = -10.0;
+
+  /**
+   * Signal that a linked wall to the edge will completely block the light.
+   */
+  static EV_ENDPOINT_LINK_BLOCKED = -20.0;
+
+  /**
    * Changes to monitor in the edge data that indicate a relevant change.
    */
   static CHANGE_FLAGS = [
@@ -242,42 +253,37 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
     // Find the smallest angle between this wall and a linked wall that covers this light.
     // If less than 180º, the light is inside a "V" and so the point of the V blocks all light.
     // If greater than 180º, the light is outside the "V" and so the point of the V may not block all light.
+    const { EV_ENDPOINT_LINKED_UNBLOCKED, EV_ENDPOINT_LINK_BLOCKED } = this.constructor;
 
     let blockingEdgeA;
     let blockAngleA = 360;
     for ( const linkedEdge of linkedA ) {
       const blockAngle = this.sharedEndpointAngle(edge, linkedEdge, "a");
-      if ( blockAngle === -1 || blockAngle > blockAngleA ) continue;
+      if ( blockAngle === EV_ENDPOINT_LINKED_UNBLOCKED || blockAngle > blockAngleA ) continue;
       blockingEdgeA = linkedEdge;
       blockAngleA = blockAngle;
-      if ( blockAngle === -2 ) break;
+      if ( blockAngle === EV_ENDPOINT_LINK_BLOCKED ) break;
     }
 
     let blockingEdgeB;
     let blockAngleB = 360;
     for ( const linkedEdge of linkedB ) {
       const blockAngle = this.sharedEndpointAngle(edge, linkedEdge, "b");
-      if ( blockAngle === -1 || blockAngle > blockAngleB ) continue;
+      if ( blockAngle === EV_ENDPOINT_LINKED_UNBLOCKED || blockAngle > blockAngleB ) continue;
       blockingEdgeB = linkedEdge;
       blockAngleB = blockAngle;
-      if ( blockAngle === -2 ) break;
+      if ( blockAngle === EV_ENDPOINT_LINK_BLOCKED ) break;
     }
 
     // For a given wall, its "w" coordinate is:
     // -2: The two walls are concave w/r/t the light, meaning light is completely blocked.
     // -1: No blocking
     // 0+: wall.key representing location of the opposite endpoint of the linked wall.
-    const blockWallAKey = blockAngleA === 360 ? -1
-      : blockAngleA === -2 ? -2
-        : blockAngleA <= 180 ? -2 // Should not happen.
-          : blockingEdgeA.a.key === edge.a.key ? blockingEdgeA.b.key
-            : blockingEdgeA.a.key;
+    const blockWallAKey = blockAngleA === 360 ? EV_ENDPOINT_LINKED_UNBLOCKED
+      : this.linkedWallAngle(edge, blockingEdgeA, "a");
 
-    const blockWallBKey = blockAngleB === 360 ? -1
-      : blockAngleB === -2 ? -2
-        : blockAngleB <= 180 ? -2 // Should not happen.
-          : blockingEdgeB.a.key === edge.a.key ? blockingEdgeB.b.key
-            : blockingEdgeB.a.key;
+    const blockWallBKey = blockAngleB === 360 ? EV_ENDPOINT_LINKED_UNBLOCKED
+      : this.linkedWallAngle(edge, blockingEdgeB, "b");
 
     return {
       corner0: [edge.a.x, edge.a.y, top, blockWallAKey],
@@ -322,16 +328,40 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    *   Angle in degrees outside the "V" if the point is tangential.
    */
   sharedEndpointAngle(edge, linkedEdge, sharedEndpointName) {
-    if ( !(this._triEdgeMap.has(linkedEdge.id) || this._includeEdge(linkedEdge)) ) return -1; // Quicker to check the map first.
+    const { EV_ENDPOINT_LINKED_UNBLOCKED, EV_ENDPOINT_LINK_BLOCKED } = this.constructor;
+
+    // Quicker to check the map first.
+    if ( !(this._triEdgeMap.has(linkedEdge.id)
+        || this._includeEdge(linkedEdge)) ) return EV_ENDPOINT_LINKED_UNBLOCKED;
 
     const sharedPt = edge[sharedEndpointName];
     const otherEdgePt = edge[flipEdgeLabel[sharedEndpointName]]; // Flip: a --> b, b --> a.
     const otherLinkedPt = linkedEdge.a.key === sharedPt.key ? linkedEdge.b : linkedEdge.a;
     const sourceOrigin = this.sourceOrigin;
-    if ( !tangentToV(otherEdgePt, sharedPt, otherLinkedPt, sourceOrigin) ) return -2;
+    if ( !tangentToV(otherEdgePt, sharedPt, otherLinkedPt, sourceOrigin) ) return EV_ENDPOINT_LINK_BLOCKED;
     return pointVTest(otherEdgePt, sharedPt, otherLinkedPt, sourceOrigin);
   }
 
+  /**
+   * Angle of the linked wall, measured from the shared endpoint.
+   * @param {Edge} edge                 Edge whose endpoint is shared with the linked edge
+   * @param {Edge} linkedEdge           Linked edge to test for this endpoint
+   * @param {"A"|"B"} endpointName      Which endpoint to use
+   * @returns {number}
+   *   -10 if not blocking.
+   *   Angle in radians between -π and π
+   */
+  linkedWallAngle(edge, linkedEdge, sharedEndpointName) {
+    // Quicker to check the map first.
+    if ( !(this._triEdgeMap.has(linkedEdge.id)
+        || this._includeEdge(linkedEdge)) ) return this.constructor.EV_ENDPOINT_LINKED_UNBLOCKED;
+
+    const sharedPt = edge[sharedEndpointName];
+    const otherLinkedPt = linkedEdge.a.key === sharedPt.key ? linkedEdge.b : linkedEdge.a;
+
+    // Same as Foundry's Ray.angle.
+    return Math.atan2(otherLinkedPt.y - sharedPt.y, otherLinkedPt.x - sharedPt.x);
+  }
 
   /** Testing endpoint blocks
 [wall] = canvas.walls.controlled
