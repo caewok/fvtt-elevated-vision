@@ -1343,10 +1343,19 @@ PenumbraDir calculatePenumbraDirection(in Wall wall, in Light light, in int idx)
     normalizedDirection(light.bottom, w) // bottom
   );
 
+  // Testing
+//   penObj.umbra = penObj.mid;
+//   penObj.penumbra = penObj.mid;
+//   penObj.top = penObj.mid;
+//   penObj.bottom = penObj.mid;
+//   return penObj;
+
   // If no linked wall, full penumbra is used.
   float linkAngle = wall.linkValue[idx];
   if ( linkAngle == EV_ENDPOINT_LINKED_UNBLOCKED ) return penObj;
-  return penObj;
+
+  // Testing:
+  // return penObj;
 
 
   // Determine orientation relative to the mid-penumbra.
@@ -1374,6 +1383,10 @@ PenumbraDir calculatePenumbraDirection(in Wall wall, in Light light, in int idx)
     penObj.umbra.x = penObj.mid.x;
     penObj.umbra.y = penObj.mid.y;
     penObj.umbra.z = penObj.mid.z;
+
+    // penObj.penumbra.x = penObj.mid.x;
+//     penObj.penumbra.y = penObj.mid.y;
+//     penObj.penumbra.z = penObj.mid.z;
     return penObj;
   }
 
@@ -1406,9 +1419,9 @@ PenumbraDir calculatePenumbraDirection(in Wall wall, in Light light, in int idx)
   bool linkBeforeMid = (oMidUmbra * oMidLink) > 0.0;
   if ( linkBeforeMid ) return penObj;
 
-  // Linked wall is after mid; adjust mid as well.
-  penObj.mid.x = linkDir.x;
-  penObj.mid.y = linkDir.y;
+  // Linked wall is after mid; adjust penumbra as well.
+  penObj.penumbra.x = penObj.mid.x;
+  penObj.penumbra.y = penObj.mid.y;
   return penObj;
 }
 

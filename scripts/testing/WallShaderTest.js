@@ -594,6 +594,13 @@ export class PenumbraDirGLSLStruct {
       bottom: normalizedDirection(light.bottom, w)
     });
 
+    // Testing
+    penObj.umbra = penObj.mid;
+    penObj.penumbra = penObj.mid;
+    penObj.top = penObj.mid;
+    penObj.bottom = penObj.mid;
+    return penObj;
+
     // If no linked wall, full penumbra is used.
     const linkAngle = wall.linkValue[idx];
     if ( linkAngle === this.EV_ENDPOINT_LINKED_UNBLOCKED ) return penObj;
@@ -624,6 +631,10 @@ export class PenumbraDirGLSLStruct {
       penObj.umbra.x = penObj.mid.x;
       penObj.umbra.y = penObj.mid.y;
       penObj.umbra.z = penObj.mid.z;
+
+      penObj.penumbra.x = penObj.mid.x;
+      penObj.penumbra.y = penObj.mid.y;
+      penObj.penumbra.z = penObj.mid.z;
       return penObj;
     }
 
@@ -1086,7 +1097,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
       const dirBottom = normalizedDirection(newLightBottom, top);
 
       // Light top
-      nearRatios.back = distShadowInv
+      nearRatios.front = distShadowInv
         * this._calculateRatio(bottom, dirTop, penumbra, canvasPlane, distWallTop);
 
       // Light center
@@ -1094,7 +1105,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
         * this._calculateRatio(bottom, dirMid, penumbra, canvasPlane, distWallTop);
 
       // Light bottom
-      nearRatios.front = distShadowInv
+      nearRatios.back = distShadowInv
         * this._calculateRatio(bottom, dirBottom, penumbra, canvasPlane, distWallTop);
     }
 
