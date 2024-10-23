@@ -115,7 +115,7 @@ float calculateRatio(in vec3 wallEndpoint, in vec3 dir, in vec2 furthestPoint, i
 /**
  * Determine the points of the side penumbra.
  */
-SidePenumbra[2] calculateSidePenumbra(in PenumbraDir[2] penumbraDirs, in Wall wall, in Light light, in float maxR, in Plane canvasPlane) {
+SidePenumbra[2] calculateSidePenumbras(in PenumbraDir[2] penumbraDirs, in Wall wall, in Light light, in float maxR, in Plane canvasPlane) {
   SidePenumbra[2] sidePenumbras = SidePenumbra[2](
     SidePenumbra(vec2(0.0), vec2(0.0), vec2(0.0)),
     SidePenumbra(vec2(0.0), vec2(0.0), vec2(0.0))
@@ -138,12 +138,12 @@ SidePenumbra[2] calculateSidePenumbra(in PenumbraDir[2] penumbraDirs, in Wall wa
 
   // Draw a line parallel to the wall that goes through the intersection point.
   // The intersection of that with each penumbra ray will define the penumbra points.
-  Ray2d farParallelRay = Ray2d(sidePenumbras[0].mid.xy, wall.direction);
-  lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, penumbraDirs[1].mid.xy), sidePenumbras[1].mid);
-  lineLineIntersection(farParallelRay, Ray2d(wall.top[0].xy, penumbraDirs[0].penumbra.xy), sidePenumbras[0].penumbra);
-  lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, penumbraDirs[1].penumbra.xy), sidePenumbras[1].penumbra);
-  lineLineIntersection(farParallelRay, Ray2d(wall.top[0].xy, penumbraDirs[0].umbra.xy), sidePenumbras[0].umbra);
-  lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, penumbraDirs[1].umbra.xy), sidePenumbras[1].umbra);
+  Ray2d farParallelRay = Ray2d(sidePenumbras[0].mid, wall.direction);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, normalize(penumbraDirs[1].mid.xy)), sidePenumbras[1].mid);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[0].xy, normalize(penumbraDirs[0].penumbra.xy)), sidePenumbras[0].penumbra);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, normalize(penumbraDirs[1].penumbra.xy)), sidePenumbras[1].penumbra);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[0].xy, normalize(penumbraDirs[0].umbra.xy)), sidePenumbras[0].umbra);
+  lineLineIntersection(farParallelRay, Ray2d(wall.top[1].xy, normalize(penumbraDirs[1].umbra.xy)), sidePenumbras[1].umbra);
 
   return sidePenumbras;
 }
@@ -283,7 +283,7 @@ vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
 Plane canvasPlane = Plane(planePoint, planeNormal);
 
 // Determine the penumbra endpoints.
-SidePenumbra[2] sidePenumbras = calculateSidePenumbra(penumbraDirs, wall, light, maxR, canvasPlane);
+SidePenumbra[2] sidePenumbras = calculateSidePenumbras(penumbraDirs, wall, light, maxR, canvasPlane);
 
 // Construct a new light position based on the xy intersection of the outer penumbra points --> wall corner
 vec2 newLightCenter;

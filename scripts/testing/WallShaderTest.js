@@ -595,11 +595,11 @@ export class PenumbraDirGLSLStruct {
     });
 
     // Testing
-    penObj.umbra = penObj.mid;
-    penObj.penumbra = penObj.mid;
-    penObj.top = penObj.mid;
-    penObj.bottom = penObj.mid;
-    return penObj;
+//     penObj.umbra = penObj.mid;
+//     penObj.penumbra = penObj.mid;
+//     penObj.top = penObj.mid;
+//     penObj.bottom = penObj.mid;
+//     return penObj;
 
     // If no linked wall, full penumbra is used.
     const linkAngle = wall.linkValue[idx];
@@ -713,13 +713,13 @@ export class SidePenumbraGLSLStruct {
 
     // Draw a line parallel to the wall that goes through the intersection point.
     // The intersection of that with each penumbra ray will define the penumbra points.
-    const farParallelRay = new Ray2dGLSLStruct(sidePenumbras[0].mid.xy, wall.direction);
+    const farParallelRay = new Ray2d(sidePenumbras[0].mid, wall.direction);
 
-    lineLineIntersectionRay(farParallelRay, new Ray2d(top[1].xy, dirs[1].mid.xy), sidePenumbras[1].mid);
-    lineLineIntersectionRay(farParallelRay, new Ray2d(top[0].xy, dirs[0].penumbra.xy), sidePenumbras[0].penumbra);
-    lineLineIntersectionRay(farParallelRay, new Ray2d(top[1].xy, dirs[1].penumbra.xy), sidePenumbras[1].penumbra);
-    lineLineIntersectionRay(farParallelRay, new Ray2d(top[0].xy, dirs[0].umbra.xy), sidePenumbras[0].umbra);
-    lineLineIntersectionRay(farParallelRay, new Ray2d(top[1].xy, dirs[1].umbra.xy), sidePenumbras[1].umbra);
+    lineLineIntersectionRay(farParallelRay, new Ray2d(top[1].xy, dirs[1].mid.xy.normalize()), sidePenumbras[1].mid);
+    lineLineIntersectionRay(farParallelRay, new Ray2d(top[0].xy, dirs[0].penumbra.xy.normalize()), sidePenumbras[0].penumbra);
+    lineLineIntersectionRay(farParallelRay, new Ray2d(top[1].xy, dirs[1].penumbra.xy.normalize()), sidePenumbras[1].penumbra);
+    lineLineIntersectionRay(farParallelRay, new Ray2d(top[0].xy, dirs[0].umbra.xy.normalize()), sidePenumbras[0].umbra);
+    lineLineIntersectionRay(farParallelRay, new Ray2d(top[1].xy, dirs[1].umbra.xy.normalize()), sidePenumbras[1].umbra);
 
     return sidePenumbras;
   }
