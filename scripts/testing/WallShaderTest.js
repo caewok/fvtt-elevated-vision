@@ -488,6 +488,25 @@ export function between(a, b, x) {
   return step(a, x) * step(x, b);
 }
 
+/**
+ * Shift the front or back border of the shadow, specified as a ratio between 0 and 1.
+ * Shadow moves forward---towards the light---as terrain elevation rises.
+ * Thus higher fragment elevation means less shadow.
+ * @param {float} ratio       Ratio indicating where the shadow border lies between 0 and 1.
+ * @param {float} wallHeight  Height of the wall, relative to the canvas elevation.
+ * @param {float} wallRatio   Where the wall is relative to the light, where
+ *                              0 means at the shadow end;
+ *                              1 means at the light.
+ * @param {float} elevChange  Percentage elevation change compared to the canvas
+ * @returns {float} Modified ratio.
+ */
+export function elevateShadowRatio(ratio, wallHeight, wallRatio, elevChange) {
+  if ( wallHeight === 0.0 ) return ratio;
+  const ratioDist = wallRatio - ratio; // Distance between the wall and the canvas intersect as a ratio.
+  const heightFraction = elevChange / wallHeight;
+  return ratio + (heightFraction * ratioDist);
+}
+
 export class LightGLSLStruct {
   constructor({ center, lr0, lr1, top, bottom, size } = {}) {
     const args = { center, lr0, lr1, top, bottom, size };
@@ -533,6 +552,17 @@ export class WallGLSLStruct {
       thresholdRadius2: aThresholdRadius2
     });
   }
+}
+
+export class PenumbraRatiosGLSLStruct {
+  constructor({ front, mid, back } = {}) {
+    const args = { front, mid, back };
+    for ( const [key, value] of Object.entries(args) ) this[key] = value;
+  }
+
+  static fromVec3(v) { return new this({ front: v.x, mid: v.y, back: v.z }); }
+
+  toVec3(v) { return new vec3(this.front, this.mid, this.back); }
 }
 
 /**
@@ -1031,8 +1061,8 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     // Near/far penumbra ratios
     // x: penumbra; y: mid-penumbra; z: umbra
     // Measured along the penumbra (outer) line.
-    const fNearRatios = new vec3(fWallRatio, fWallRatio, fWallRatio);
-    const fFarRatios = new vec3();
+    const nearRatios = new PenumbraRatiosGLSLStruct({ front: fWallRatio, mid: fWallRatio, back: fWallRatio });
+    const farRatios = new PenumbraRatiosGLSLStruct({ front: 0.0, mid: 0.0, back: 0.0 });
 
     // Define directions from the new light position to the end of the outer penumbra.
     const newLightCenter3d = new vec3(newLightCenter, light.center.z);
@@ -1040,12 +1070,15 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     const dirTop = normalizedDirection(newLightTop, top);
     const dirMid = normalizedDirection(newLightCenter3d, top);
 
+    // Light bottom
+    // Far ratios is always 0.
+
     // Light center
-    fFarRatios.y = distShadowInv
+    farRatios.mid = distShadowInv
       * this._calculateRatio(top, dirMid, penumbra, canvasPlane, distWallTop);
 
     // Light top
-    fFarRatios.x = distShadowInv
+    farRatios.front = distShadowInv
       * this._calculateRatio(top, dirTop, penumbra, canvasPlane, distWallTop);
 
     if ( bottom.z > canvasElevation ) {
@@ -1053,17 +1086,20 @@ export class SizedPointSourceShadowWallVertexShaderTest {
       const dirBottom = normalizedDirection(newLightBottom, top);
 
       // Light top
-      fNearRatios.x = distShadowInv
+      nearRatios.back = distShadowInv
         * this._calculateRatio(bottom, dirTop, penumbra, canvasPlane, distWallTop);
 
       // Light center
-      fNearRatios.y = distShadowInv
+      nearRatios.mid = distShadowInv
         * this._calculateRatio(bottom, dirMid, penumbra, canvasPlane, distWallTop);
 
       // Light bottom
-      fNearRatios.z = distShadowInv
+      nearRatios.front = distShadowInv
         * this._calculateRatio(bottom, dirBottom, penumbra, canvasPlane, distWallTop);
     }
+
+    const fNearRatios = nearRatios.toVec3();
+    const fFarRatios = farRatios.toVec3();
 
     return { fWallCornerLinked, fWallHeights, fWallSenseType, fThresholdRadius2, fNearRatios, fFarRatios, fWallRatio };
   }
@@ -1104,47 +1140,28 @@ export class SizedPointSourceShadowWallVertexShaderTest {
   }
 
   /**
-   * Shift the front or back border of the shadow, specified as a ratio between 0 and 1.
-   * Shadow moves forward---towards the light---as terrain elevation rises.
-   * Thus higher fragment elevation means less shadow.
-   * @param {vec3} ratios       Ratios indicating where the shadow border lies between 0 and 1
-   *                            for close/middle/far shadow borders
-   * @param {float} wallHeight  Height of the wall, relative to the canvas elevation.
-   * @param {float} wallRatio   Where the wall is relative to the light, where
-   *                              0 means at the shadow end;
-   *                              1 means at the light.
-   * @param {float} elevChange  Percentage elevation change compared to the canvas
-   * @returns {vec3} Modified ratios.
-   */
-  _elevateShadowRatios(ratios, wallHeight, wallRatio, elevChange) {
-    if ( wallHeight === 0.0 ) return ratios;
-
-    // Distance between the wall and the canvas intersect as a ratio.
-    const ratiosDist = new vec3(
-      wallRatio - ratios.x,
-      wallRatio - ratios.y,
-      wallRatio - ratios.z
-    );
-    const heightFraction = elevChange / wallHeight;
-    return ratios.add(ratiosDist.multiplyScalar(heightFraction));
-  }
-
-  /**
    * Get the elevated shadow ratios.
    */
   calculateElevatedShadowRatios({ elevationE, elevationZ = this.canvasElevation } = {}) {
     const elevation = (typeof elevationE === "undefined") ? elevationZ : CONFIG.GeometryLib.utils.pixelsToGridUnits(elevationE);
     const { fFarRatios, fNearRatios, fWallHeights, fWallRatio } = this.calculateFlatVariables();
+    const nearRatios = PenumbraRatiosGLSLStruct.fromVec3(fNearRatios);
+    const farRatios = PenumbraRatiosGLSLStruct.fromVec3(fFarRatios);
+
     const { canvasElevation } = this;
     const wallHeights = new vec2(
       Math.max(fWallHeights.x - canvasElevation, 0.0),
       Math.max(fWallHeights.y - canvasElevation, 0.0),
     );
     const elevationChange = elevation - canvasElevation;
-    return {
-      nearRatios: this._elevateShadowRatios(fNearRatios, wallHeights.y, fWallRatio, elevationChange),
-      farRatios: this._elevateShadowRatios(fFarRatios, wallHeights.x, fWallRatio, elevationChange)
-    };
+    nearRatios.front = elevateShadowRatio(nearRatios.front, wallHeights.y, fWallRatio, elevationChange);
+    nearRatios.mid = elevateShadowRatio(nearRatios.mid, wallHeights.y, fWallRatio, elevationChange);
+    nearRatios.back = elevateShadowRatio(nearRatios.back, wallHeights.y, fWallRatio, elevationChange);
+    farRatios.front = elevateShadowRatio(farRatios.front, wallHeights.x, fWallRatio, elevationChange);
+    farRatios.mid = elevateShadowRatio(farRatios.mid, wallHeights.x, fWallRatio, elevationChange);
+    farRatios.back = elevateShadowRatio(farRatios.back, wallHeights.x, fWallRatio, elevationChange);
+
+    return { nearRatios, farRatios };
   }
 
   /**
@@ -1153,7 +1170,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
   outsideOfShadow(pt, elevationOpts) {
     const { nearRatios, farRatios } = this.calculateElevatedShadowRatios(elevationOpts);
     const vBary = this.baryForPoint(pt);
-    return between(farRatios.z, nearRatios.x, vBary.x) === 0.0;
+    return between(farRatios.back, nearRatios.front, vBary.x) === 0.0;
   }
 
   /**
@@ -1178,7 +1195,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
 
     const { farRatios } = this.calculateElevatedShadowRatios(elevationOpts);
     const vBary = this.baryForPoint(pt);
-    return vBary.x < farRatios.x && vBary.x > 0.0;
+    return vBary.x < farRatios.front && vBary.x > 0.0;
   }
 
   inNearPenumbra(pt, elevationOpts) {
@@ -1187,7 +1204,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
 
     const { nearRatios } = this.calculateElevatedShadowRatios(elevationOpts);
     const vBary = this.baryForPoint(pt);
-    return vBary.x > nearRatios.z && vBary.x < nearRatios.x;
+    return vBary.x > nearRatios.back && vBary.x < nearRatios.front;
   }
 
   /**
@@ -1200,28 +1217,28 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     return [
       {
         near: [
-          tri[1].projectToward(tri[0], nearRatios.x),
-          tri[1].projectToward(tri[0], nearRatios.y),
-          tri[1].projectToward(tri[0], nearRatios.z),
+          tri[1].projectToward(tri[0], nearRatios.front),
+          tri[1].projectToward(tri[0], nearRatios.mid),
+          tri[1].projectToward(tri[0], nearRatios.back),
         ],
 
         far: [
-          tri[1].projectToward(tri[0], farRatios.x),
-          tri[1].projectToward(tri[0], farRatios.y),
-          tri[1].projectToward(tri[0], farRatios.z),
+          tri[1].projectToward(tri[0], farRatios.front),
+          tri[1].projectToward(tri[0], farRatios.mid),
+          tri[1].projectToward(tri[0], farRatios.back),
         ]
       },
       {
         near: [
-          tri[2].projectToward(tri[0], nearRatios.x),
-          tri[2].projectToward(tri[0], nearRatios.y),
-          tri[2].projectToward(tri[0], nearRatios.z),
+          tri[2].projectToward(tri[0], nearRatios.front),
+          tri[2].projectToward(tri[0], nearRatios.mid),
+          tri[2].projectToward(tri[0], nearRatios.back),
         ],
 
         far: [
-          tri[2].projectToward(tri[0], farRatios.x),
-          tri[2].projectToward(tri[0], farRatios.y),
-          tri[2].projectToward(tri[0], farRatios.z),
+          tri[2].projectToward(tri[0], farRatios.front),
+          tri[2].projectToward(tri[0], farRatios.mid),
+          tri[2].projectToward(tri[0], farRatios.back),
         ]
       },
     ];
@@ -1271,10 +1288,10 @@ export class SizedPointSourceShadowWallVertexShaderTest {
 
     let nearShadow = 1.0;
     if ( inNearPenumbra ) {
-      const inLighterPenumbra = vBary.x > nearRatios.y;
+      const inLighterPenumbra = vBary.x > nearRatios.mid;
       nearShadow = inLighterPenumbra
-        ? linearConversion(vBary.x, nearRatios.x, nearRatios.y, 0.0, 0.5)
-        : linearConversion(vBary.x, nearRatios.y, nearRatios.z, 0.5, 1.0);
+        ? linearConversion(vBary.x, nearRatios.front, nearRatios.mid, 0.0, 0.5)
+        : linearConversion(vBary.x, nearRatios.mid, nearRatios.back, 0.5, 1.0);
     }
 
     return side0Shadow * side1Shadow * farShadow * nearShadow;

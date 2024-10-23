@@ -852,14 +852,4 @@ float elevateShadowRatio(in float ratio, in float wallHeight, in float wallRatio
   float ratioDist = wallRatio - ratio; // Distance between the wall and the canvas intersect as a ratio.
   float heightFraction = elevChange / wallHeight;
   return ratio + (heightFraction * ratioDist);
-}
-
-/**
- * Same as the float version except that the ratios represent close/middle/far shadow borders.
- */
-vec3 elevateShadowRatios(in vec3 ratios, in float wallHeight, in float wallRatio, in float elevChange) {
-  if ( wallHeight == 0.0 ) return ratios;
-  vec3 ratiosDist = wallRatio - ratios; // Distance between the wall and the canvas intersect as a ratio.
-  float heightFraction = elevChange / wallHeight;
-  return ratios + (heightFraction * ratiosDist);
 }`;
