@@ -400,7 +400,7 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
   }
 
   // If in front of the near shadow or behind the far shadow, then no shadow.
-  // if ( between(farRatios.z, nearRatios.x, vBary.x) == 0.0 ) return;
+  if ( between(farRatios.z, nearRatios.x, vBary.x) == 0.0 ) return;
 
   // ----- Calculate percentage of light ----- //
 
