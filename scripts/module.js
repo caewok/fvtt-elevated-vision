@@ -49,7 +49,7 @@ import {
   vec4,
   SizedPointSourceShadowWallVertexShaderTest,
   PenumbraDirGLSLStruct,
-  PenumbraPointsGLSLStruct } from "./testing/WallShaderTest.js";
+  SidePenumbraGLSLStruct } from "./testing/WallShaderTest.js";
 
 
 // Imported elsewhere: import "./scenes.js";
@@ -98,7 +98,7 @@ Hooks.once("init", function() {
      * So -2000 (min) + 0.1 (step) * 65556 (max normalized) = 4555
      * @type {number}
      */
-    elevationMin: -2000,
+    elevationMin: -1000,
 
     /**
      * WebGL region elevations.
@@ -133,7 +133,7 @@ Hooks.once("init", function() {
       vec4,
       SizedPointSourceShadowWallVertexShaderTest,
       PenumbraDirGLSLStruct,
-      PenumbraPointsGLSLStruct
+      SidePenumbraGLSLStruct
     }
   };
 

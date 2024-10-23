@@ -227,6 +227,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns {boolean}   True if edge should be included
    */
   _includeEdge(edge) {
+    if ( edge.type !== "wall" && edge.type !== "regionWall" ) return false;
     return this.source[MODULE_ID]._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
   }
 
