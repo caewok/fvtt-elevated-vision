@@ -507,6 +507,15 @@ export function elevateShadowRatio(ratio, wallHeight, wallRatio, elevChange) {
   return ratio + (heightFraction * ratioDist);
 }
 
+/**
+ * GLSL representation of a point light.
+ * @prop {vec3} center
+ * @prop {vec3} lr0       Point closest to wall endpoint 0
+ * @prop {vec3} lr1       Point closest to wall endpoint 1
+ * @prop {vec3} top
+ * @prop {vec3} bottom
+ * @prop {float} size
+ */
 export class LightGLSLStruct {
   constructor({ center, lr0, lr1, top, bottom, size } = {}) {
     const args = { center, lr0, lr1, top, bottom, size };
@@ -532,6 +541,16 @@ export class LightGLSLStruct {
   }
 }
 
+/**
+ * GLSL representation of a Foundry wall.
+ * TODO: Represent walls with different endpoint elevations.
+ * @prop {vec3[2]} top
+ * @prop {vec3[2]} bottom
+ * @prop {vec3} direction
+ * @prop {float[2]} linkValue
+ * @prop {float} type
+ * @prop {float} thresholdRadius2
+ */
 export class WallGLSLStruct {
   constructor({ top, bottom, direction, linkValue, type, thresholdRadius2 } = {}) {
     const args = { top, bottom, direction, linkValue, type, thresholdRadius2 };
@@ -554,176 +573,10 @@ export class WallGLSLStruct {
   }
 }
 
-export class PenumbraRatiosGLSLStruct {
-  constructor({ front, mid, back } = {}) {
-    const args = { front, mid, back };
-    for ( const [key, value] of Object.entries(args) ) this[key] = value;
-  }
+const UMBRA = 0;
+const MIDPENUMBRA = 1;
+const PENUMBRA = 2;
 
-  static fromVec3(v) { return new this({ front: v.x, mid: v.y, back: v.z }); }
-
-  toVec3(v) { return new vec3(this.front, this.mid, this.back); }
-}
-
-/**
- * @prop {vec3} umbra
- * @prop {vec3} mid
- * @prop {vec3} penumbra
- * @prop {vec3} top
- * @prop {vec3} bottom
- */
-export class PenumbraDirGLSLStruct {
-  static EV_ENDPOINT_LINKED_UNBLOCKED = -10.0;
-
-  constructor({ umbra, mid, penumbra, top, bottom } = {}) {
-    const args = { umbra, mid, penumbra, top, bottom };
-    for ( const [key, value] of Object.entries(args) ) this[key] = value;
-  }
-
-  static calculatePenumbraDirection(wall, light, idx = 0) {
-    const w = wall.top[idx]; // Wall endpoint from which a penumbra is cast.
-    const umbraL = idx === 0 ? light.lr0 : light.lr1; // Outer light 0 --> to endpoint 0 is umbra
-    const penumbraL = idx === 0 ? light.lr1 : light.lr0; // Inner light 1 --> to endpoint 0 is penumbra
-
-    // Direction from light --> wall endpoint.
-    const penObj = new this({
-      umbra: normalizedDirection(umbraL, w),
-      mid: normalizedDirection(light.center, w),
-      penumbra: normalizedDirection(penumbraL, w),
-      top: normalizedDirection(light.top, w),
-      bottom: normalizedDirection(light.bottom, w)
-    });
-
-    // Testing
-//     penObj.umbra = penObj.mid;
-//     penObj.penumbra = penObj.mid;
-//     penObj.top = penObj.mid;
-//     penObj.bottom = penObj.mid;
-//     return penObj;
-
-    // If no linked wall, full penumbra is used.
-    const linkAngle = wall.linkValue[idx];
-    if ( linkAngle === this.EV_ENDPOINT_LINKED_UNBLOCKED ) return penObj;
-
-    // Determine orientation relative to the mid-penumbra.
-    // 4 quadrants:
-    // 1 & 2: linked wall is on opposite side from wall, so it blocks.
-    // 3 & 4: linked wall is on same side as light:
-    // - 3: Linked wall not between wall and mid: no block (tight "V")
-    // - 4: Linked wall between wall and mid
-    //     • If umbra - linked - mid-penumbra, adjust umbra direction.
-    //     • If umbra - mid - linked - penumbra, umbra set to mid.
-
-    // Point positions.
-    const linkPt = fromAngle(w.xy, linkAngle, 1);
-    const midR = new Ray2dGLSLStruct(w.xy, penObj.mid.xy);
-    const midPt = midR.project(1);
-
-    // Orientation re mid.
-    const other = (wall.top[1 - idx]).xy;
-    const orient = foundry.utils.orient2dFast;
-    const oMidLink = orient(w.xy, midPt, linkPt);
-    const oMidWall = orient(w.xy, midPt, other);
-
-    // 1 & 2: linked wall blocks light.
-    const linkOppositeWall = oMidWall * oMidLink <= 0;
-    if ( linkOppositeWall ) {
-      penObj.umbra.x = penObj.mid.x;
-      penObj.umbra.y = penObj.mid.y;
-      penObj.umbra.z = penObj.mid.z;
-
-      penObj.penumbra.x = penObj.mid.x;
-      penObj.penumbra.y = penObj.mid.y;
-      penObj.penumbra.z = penObj.mid.z;
-      return penObj;
-    }
-
-    // 3 & 4: Linked wall between wall and mid
-    const oLinkWall = orient(w.xy, linkPt, other);
-    const oLinkMid = orient(w.xy, linkPt, midPt);
-    const linkBetweenWallAndMid = oLinkWall * oLinkMid < 0;
-
-    // 3: Linked wall in quadrant with light, not blocking.
-    if ( !linkBetweenWallAndMid ) return penObj;
-
-    // 4. possible block.
-    // What side of umbra is the linked wall on? If not on the mid-side, it doesn't block.
-    const umbraR = new Ray2dGLSLStruct(w.xy, penObj.umbra.xy);
-    const umbraPt = umbraR.project(1);
-    const oUmbraLink = orient(w.xy, umbraPt, linkPt);
-    const oUmbraMid = orient(w.xy, umbraPt, midPt);
-    const linkAfterUmbra = oUmbraLink * oUmbraMid > 0;
-    if ( !linkAfterUmbra ) return penObj;
-
-    // Linked wall is after umbra, moving toward mid.
-    const oMidUmbra = orient(w.xy, midPt, umbraPt);
-
-    // Set umbra to the link direction.
-    // TODO: This results in a non-normalized direction. Is there a way to get the normalized direction?
-    // - normalizing again could change x/y, so cannot do that ?
-    const linkDir = normalizedDirection(w.xy, linkPt);
-    penObj.umbra.x = linkDir.x;
-    penObj.umbra.y = linkDir.y;
-    if ( oMidUmbra * oMidLink > 0 ) return penObj;
-
-    // Linked wall is after mid; adjust mid as well.
-    penObj.mid.x = linkDir.x;
-    penObj.mid.y = linkDir.y;
-    return penObj;
-  }
-
-  static calculatePenumbraDirections(wall, light) {
-    return [
-      this.calculatePenumbraDirection(wall, light, 0),
-      this.calculatePenumbraDirection(wall, light, 1),
-    ];
-  }
-}
-
-export class SidePenumbraGLSLStruct {
-  constructor({ umbra, mid, penumbra } = {}) {
-    const args = { umbra, mid, penumbra };
-    for ( const [key, value] of Object.entries(args) ) this[key] = value;
-  }
-
-  static calculateSidePenumbras(penumbraDirs, wall, light, maxR, canvasPlane) {
-    const Ray2d = Ray2dGLSLStruct;
-    const top = wall.top;
-    const dirs = penumbraDirs;
-
-    const sidePenumbras = [
-      new this({ umbra: new vec2(), mid: new vec2(), penumbra: new vec2() }),
-      new this({ umbra: new vec2(), mid: new vec2(), penumbra: new vec2() }),
-    ];
-
-    // Determine where the light ray hits the canvas when passing through the light bottom to one of the endpoints.
-    // This is the furthest point of the shadow, as the top of the light casts a shorter shadow.
-    const infiniteShadow = top[0].z >= light.bottom.z;
-    if ( infiniteShadow ) {
-      // No height change for an infinite shadow.
-      const midRay = new Ray2d(top[0].xy, dirs[0].mid.xy.normalize());
-      sidePenumbras[0].mid = midRay.project(maxR);
-    } else {
-      // Project a 3d ray from wall top endpoint in direction away from light bottom onto the canvas plane
-      const ixCanvas = new vec3();
-      const midRay = new RayGLSLStruct(top[0], dirs[0].bottom);
-      intersectRayPlane(midRay, canvasPlane, ixCanvas);
-      sidePenumbras[0].mid = ixCanvas.xy;
-    }
-
-    // Draw a line parallel to the wall that goes through the intersection point.
-    // The intersection of that with each penumbra ray will define the penumbra points.
-    const farParallelRay = new Ray2d(sidePenumbras[0].mid, wall.direction);
-
-    lineLineIntersectionRay(farParallelRay, new Ray2d(top[1].xy, dirs[1].mid.xy.normalize()), sidePenumbras[1].mid);
-    lineLineIntersectionRay(farParallelRay, new Ray2d(top[0].xy, dirs[0].penumbra.xy.normalize()), sidePenumbras[0].penumbra);
-    lineLineIntersectionRay(farParallelRay, new Ray2d(top[1].xy, dirs[1].penumbra.xy.normalize()), sidePenumbras[1].penumbra);
-    lineLineIntersectionRay(farParallelRay, new Ray2d(top[0].xy, dirs[0].umbra.xy.normalize()), sidePenumbras[0].umbra);
-    lineLineIntersectionRay(farParallelRay, new Ray2d(top[1].xy, dirs[1].umbra.xy.normalize()), sidePenumbras[1].umbra);
-
-    return sidePenumbras;
-  }
-}
 
 /**
  * Based on SizedPointSourceShadowWallShader.
@@ -742,7 +595,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
 
   static DISTANCE_WALL = 40.0;
 
-  // ----- IN variables ----- //
+  // ----- NOTE: IN variables ----- //
   _inVars = {
     /** @type {in vec4} */
     aWallCorner0: new vec4(),
@@ -757,7 +610,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     aThresholdRadius2: 0
   };
 
-  // ----- UNIFORM variables ----- //
+  // ----- NOTE: UNIFORM variables ----- //
 
   _uniforms = {
     /** @type {uniform vec4} */
@@ -852,7 +705,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
   }
 
 
-  /* ----- Defined terms ---- */
+  /* ----- NOTE: Defined terms ---- */
 
   /** @type {float} */
   get canvasElevation() { return this._uniforms.uElevationRes.x; }
@@ -880,151 +733,313 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     return LightGLSLStruct.calculateLightPositions(this.wall, this._uniforms);
   }
 
-  get penumbraDirs() {
-    return PenumbraDirGLSLStruct.calculatePenumbraDirections(this.wall, this.light);
+  /** @type {vec3[2][3]} */
+  get sidePenumbraDirs() {
+    return [
+      this.calculateSidePenumbraDirection(0),
+      this.calculateSidePenumbraDirection(1)
+    ];
   }
 
-  get sidePenumbras() {
-    return SidePenumbraGLSLStruct.calculateSidePenumbras(this.penumbraDirs, this.wall,
-      this.light, this.maxR, this.canvasPlane);
+  /** @type {vec3[2][3]} */
+  get nearPenumbraDirs() {
+    return [
+      this.calculateNearPenumbraDirection(0),
+      this.calculateNearPenumbraDirection(1)
+    ];
   }
 
-  /* ----- Calculations ----- */
+  /** @type {vec3[2][3]} */
+  get farPenumbraDirs() {
+    return [
+      this.calculateFarPenumbraDirection(0),
+      this.calculateFarPenumbraDirection(1)
+    ];
+  }
 
-  drawPenumbra(dist = canvas.dimensions.maxR) {
-    const { penumbraDirs, wall } = this;
+  /** @type {vec3[2][3]} */
+  get farPenumbraPoints() {
+    return [
+      this.penumbraEndpoints(true, 0),
+      this.penumbraEndpoints(true, 1)
+    ];
+  }
 
-    Draw.segment({ a: wall.top[0], b: wall.top[1] }); // Wall
+  /** @type {vec3[2][3]} */
+  get nearPenumbraPoints() {
+    return [
+      this.penumbraEndpoints(false, 0),
+      this.penumbraEndpoints(false, 1)
+    ];
+  }
 
-    const inner0 = wall.top[0].add(penumbraDirs[0].umbra.multiplyScalar(dist));
-    const inner1 = wall.top[1].add(penumbraDirs[1].umbra.multiplyScalar(dist));
-    Draw.segment({ a: wall.top[0], b: inner0 }, { color: Draw.COLORS.red });
-    Draw.segment({ a: wall.top[1], b: inner1 }, { color: Draw.COLORS.red });
+  /** @type {float[3]} */
+  get wallRatios() {
+    const arr = new Array(3);
+    const { fWallRatio } = this.calculateFlatVariables();
+    arr[UMBRA] = fWallRatio.x;
+    arr[MIDPENUMBRA] = fWallRatio.x;
+    arr[PENUMBRA] = fWallRatio.x;
+    return arr;
+  }
 
-    const mid0 = wall.top[0].add(penumbraDirs[0].mid.multiplyScalar(dist));
-    const mid1 = wall.top[1].add(penumbraDirs[1].mid.multiplyScalar(dist));
-    Draw.segment({ a: wall.top[0], b: mid0 }, { color: Draw.COLORS.orange });
-    Draw.segment({ a: wall.top[1], b: mid1 }, { color: Draw.COLORS.orange });
+  /** @type {vec2[2]} */
+  get wallHeights() {
+    const { fWallHeights } = this.calculateFlatVariables();
+    return new vec2(
+      Math.max(fWallHeights.x - this.canvasElevation, 0.0),
+      Math.max(fWallHeights.y - this.canvasElevation, 0.0),
+    );
+  }
 
-    const outer0 = wall.top[0].add(penumbraDirs[0].penumbra.multiplyScalar(dist));
-    const outer1 = wall.top[1].add(penumbraDirs[1].penumbra.multiplyScalar(dist));
-    Draw.segment({ a: wall.top[0], b: outer0 }, { color: Draw.COLORS.yellow });
-    Draw.segment({ a: wall.top[1], b: outer1 }, { color: Draw.COLORS.yellow });
+  /* ----- NOTE: Penumbras ----- */
 
-    return { inner0, inner1, mid0, mid1, outer0, outer1 };
+  /**
+   * @param {int} idx     Which wall endpoint corresponds to this penumbra
+   * @returns {vec3[3]} Direction from the endpoint away from the light for umbra, mid, and penumbra.
+   */
+  calculateSidePenumbraDirection(idx = 0) {
+    const { light, wall } = this;
+    const Ray2d = Ray2dGLSLStruct;
+
+    const w = wall.top[idx]; // Wall endpoint from which a penumbra is cast.
+    const umbraL = idx === 0 ? light.lr0 : light.lr1; // Outer light 0 --> to endpoint 0 is umbra
+    const penumbraL = idx === 0 ? light.lr1 : light.lr0; // Inner light 1 --> to endpoint 0 is penumbra
+
+    // Direction from light --> wall endpoint.
+    const penObj = Array(3);
+    penObj[UMBRA] = normalizedDirection(umbraL, w);
+    penObj[MIDPENUMBRA] = normalizedDirection(light.center, w);
+    penObj[PENUMBRA] = normalizedDirection(penumbraL, w);
+
+    // If no linked wall, full penumbra is used.
+    const linkAngle = wall.linkValue[idx];
+    if ( linkAngle === this.constructor.EV_ENDPOINT_LINKED_UNBLOCKED ) return penObj;
+
+    // Determine orientation relative to the mid-penumbra.
+    // 4 quadrants:
+    // 1 & 2: linked wall is on opposite side from wall, so it blocks.
+    // 3 & 4: linked wall is on same side as light:
+    // - 3: Linked wall not between wall and mid: no block (tight "V")
+    // - 4: Linked wall between wall and mid
+    //     • If umbra - linked - mid-penumbra, adjust umbra direction.
+    //     • If umbra - mid - linked - penumbra, umbra set to mid.
+
+    // Point positions.
+    const linkPt = fromAngle(w.xy, linkAngle, 1);
+    const midR = new Ray2d(w.xy, penObj[MIDPENUMBRA].xy);
+    const midPt = midR.project(1);
+
+    // Orientation re mid.
+    const other = (wall.top[1 - idx]).xy;
+    const orient = foundry.utils.orient2dFast;
+    const oMidLink = orient(w.xy, midPt, linkPt);
+    const oMidWall = orient(w.xy, midPt, other);
+
+    // 1 & 2: linked wall blocks light.
+    const linkOppositeWall = oMidWall * oMidLink <= 0;
+    if ( linkOppositeWall ) {
+      penObj[UMBRA].x = penObj[MIDPENUMBRA].x;
+      penObj[UMBRA].y = penObj[MIDPENUMBRA].y;
+      penObj[UMBRA].z = penObj[MIDPENUMBRA].z;
+
+      penObj[PENUMBRA].x = penObj[MIDPENUMBRA].x;
+      penObj[PENUMBRA].y = penObj[MIDPENUMBRA].y;
+      penObj[PENUMBRA].z = penObj[MIDPENUMBRA].z;
+      return penObj;
+    }
+
+    // 3 & 4: Linked wall between wall and mid
+    const oLinkWall = orient(w.xy, linkPt, other);
+    const oLinkMid = orient(w.xy, linkPt, midPt);
+    const linkBetweenWallAndMid = oLinkWall * oLinkMid < 0;
+
+    // 3: Linked wall in quadrant with light, not blocking.
+    if ( !linkBetweenWallAndMid ) return penObj;
+
+    // 4. possible block.
+    // What side of umbra is the linked wall on? If not on the mid-side, it doesn't block.
+    const umbraR = new Ray2dGLSLStruct(w.xy, penObj[UMBRA].xy);
+    const umbraPt = umbraR.project(1);
+    const oUmbraLink = orient(w.xy, umbraPt, linkPt);
+    const oUmbraMid = orient(w.xy, umbraPt, midPt);
+    const linkAfterUmbra = oUmbraLink * oUmbraMid > 0;
+    if ( !linkAfterUmbra ) return penObj;
+
+    // Linked wall is after umbra, moving toward mid.
+    const oMidUmbra = orient(w.xy, midPt, umbraPt);
+
+    // Set umbra to the link direction.
+    // TODO: This results in a non-normalized direction. Is there a way to get the normalized direction?
+    // - normalizing again could change x/y, so cannot do that ?
+    const linkDir = normalizedDirection(w.xy, linkPt);
+    penObj[UMBRA].x = linkDir.x;
+    penObj[UMBRA].y = linkDir.y;
+    if ( oMidUmbra * oMidLink > 0 ) return penObj;
+
+    // Linked wall is after mid; adjust mid as well.
+    penObj[MIDPENUMBRA].x = linkDir.x;
+    penObj[MIDPENUMBRA].y = linkDir.y;
+    return penObj;
   }
 
   /**
-   * Define distinct intersections (light centers) (2d) based on intersection of the penumbra vectors.
-   * Intersection of the middle (sideMidPenumbra) should equal the light center.
+   * @param {int} idx     The wall endpoint associated with this penumbra
+   * @returns {vec3[3]}
    */
-  calculatePenumbraIntersections() {
-    const { sidePenumbras, wall } = this;
-    const penumbra = new vec2();
-    const mid= new vec2();
-    const umbra = new vec2();
-    lineLineIntersectionVector(sidePenumbras[0].penumbra, wall.top[0].xy,
-      sidePenumbras[1].penumbra, wall.top[1].xy, penumbra);
-    lineLineIntersectionVector(sidePenumbras[0].mid, wall.top[0].xy,
-      sidePenumbras[1].mid, wall.top[1].xy, mid);
-    lineLineIntersectionVector(sidePenumbras[0].umbra, wall.top[0].xy,
-      sidePenumbras[1].umbra, wall.top[1].xy, umbra);
-    return { penumbra, mid, umbra };
+  calculateFarPenumbraDirection(idx = 0) {
+    return this._calculateNearFarPenumbraDirection(true, idx);
   }
 
-  drawSidePenumbra() {
-    const { sidePenumbras, wall, light } = this;
-    const penumbraIx = this.calculatePenumbraIntersections();
-
-    Draw.segment({ a: wall.top[0], b: wall.top[1] }); // Wall
-
-    Draw.segment({ a: wall.top[0], b: sidePenumbras[0].umbra }, { color: Draw.COLORS.red });
-    Draw.segment({ a: wall.top[1], b: sidePenumbras[1].umbra }, { color: Draw.COLORS.red });
-    Draw.point(sidePenumbras[0].umbra, { color: Draw.COLORS.red });
-    Draw.point(sidePenumbras[1].umbra, { color: Draw.COLORS.red });
-
-    Draw.segment({ a: wall.top[0], b: sidePenumbras[0].mid }, { color: Draw.COLORS.orange });
-    Draw.segment({ a: wall.top[1], b: sidePenumbras[1].mid }, { color: Draw.COLORS.orange });
-    Draw.point(sidePenumbras[0].mid, { color: Draw.COLORS.orange });
-    Draw.point(sidePenumbras[1].mid, { color: Draw.COLORS.orange });
-
-    Draw.segment({ a: wall.top[0], b: sidePenumbras[0].penumbra }, { color: Draw.COLORS.yellow });
-    Draw.segment({ a: wall.top[1], b: sidePenumbras[1].penumbra }, { color: Draw.COLORS.yellow });
-    Draw.point(sidePenumbras[0].penumbra, { color: Draw.COLORS.yellow });
-    Draw.point(sidePenumbras[1].penumbra, { color: Draw.COLORS.yellow });
-
-    // Light centers
-    Draw.point(light.center, { color: Draw.COLORS.white, radius: light.size * 0.5 });
-    Draw.point(penumbraIx.penumbra, { color: Draw.COLORS.yellow });
-    Draw.point(penumbraIx.mid, { color: Draw.COLORS.orange });
-    Draw.point(penumbraIx.umbra, { color: Draw.COLORS.red });
+  /**
+   * @param {int} idx     The wall endpoint associated with this penumbra
+   * @returns {vec3[3]}
+   */
+  calculateNearPenumbraDirection(idx = 0) {
+    return this._calculateNearFarPenumbraDirection(false, idx);
   }
+
+  /**
+   * @param {bool} far    Far if true, near if false
+   * @param {int} idx     The wall endpoint associated with this penumbra
+   * @returns {vec3[3]}
+   */
+  _calculateNearFarPenumbraDirection(far = true, idx = 0) {
+    const { wall, light } = this;
+    const w = far ? wall.top[idx] : wall.bottom[idx]; // Wall endpoint from which a penumbra is cast.
+    const dirs = new Array(3);
+    dirs[UMBRA] = normalizedDirection(light.top, w);
+    dirs[MIDPENUMBRA] = normalizedDirection(light.center, w);
+    dirs[PENUMBRA] = normalizedDirection(light.bottom, w);
+    return dirs;
+  }
+
+  /**
+   * Determine the point where the near/far penumbra intersects the side penumbra, if any
+   * @param {vec2} ix                 Placeholder to store the intersection point.
+   * @param {UMBRA|MIDPENUMBRA|PENUMBRA} shadowType
+   * @param {bool} far                Far if true, near if false
+   * @param {int} idx                 The wall endpoint associated with this penumbra
+   * @returns {bool}
+   */
+  _penumbraCanvasIntersection(ix, shadowType = PENUMBRA, far = true, idx = 0, canvasElevation = this.canvasElevation) {
+    // For testing.
+    const planeNormal = new vec3(0.0, 0.0, 1.0);
+    const planePoint = new vec3(0.0, 0.0, canvasElevation);
+    const canvasPlane = new PlaneGLSLStruct(planePoint, planeNormal);
+
+    const { wall, sidePenumbraDirs } = this;
+    const Ray2d = Ray2dGLSLStruct;
+    const Ray = RayGLSLStruct;
+    const nfDirs = far ? this.farPenumbraDirs : this.nearPenumbraDirs;
+    const wallEndpoint = wall.top[idx];
+    const canvasIx = new vec3();
+    const infiniteShadow = nfDirs[idx][shadowType].z >= 0.0;
+    if ( infiniteShadow
+      || !intersectRayPlane(new Ray(wallEndpoint, nfDirs[idx][shadowType]), canvasPlane, canvasIx)) return false;
+
+    // Draw a line parallel to the wall that goes through the intersection point.
+    // The intersection of that with the side penumbra defines the point.
+    const farParallelRay = new Ray2d(canvasIx.xy, wall.direction);
+    const sideDir = sidePenumbraDirs[idx][shadowType];
+    if ( !lineLineIntersectionRay(farParallelRay, new Ray2d(wallEndpoint.xy, sideDir.xy), ix) ) return false;
+    return true;
+  }
+
+  /**
+   * Get either the point where the penumbra direction intersects the canvas or the point
+   * at maximum canvas distance, as measured from wall endpoint 0.
+   * @param {UMBRA|MIDPENUMBRA|PENUMBRA} shadowType
+   * @param {bool} far                Far if true, near if false
+   * @param {int} idx                 The wall endpoint associated with this penumbra
+   */
+  penumbraEndpoint(shadowType = PENUMBRA, far = true, idx = 0) {
+    const { wall, sidePenumbraDirs, maxR } = this;
+    const Ray2d = Ray2dGLSLStruct;
+    const canvasIx = new vec3();
+    if ( !this._penumbraCanvasIntersection(canvasIx, shadowType, far, idx) ) {
+      // Use max distance from wall endpoint 0 to fake infinite shadow.
+      const wallEndpoint = wall.top[idx];
+      const dirRay = new Ray2d(wallEndpoint.xy, sidePenumbraDirs[idx][shadowType].xy.normalize());
+      return dirRay.project(maxR);
+    }
+    return canvasIx;
+  }
+
+  /**
+   * Get all shadow-canvas intersections for a given wall endpoint.
+   * @param {bool} far                Far if true, near if false
+   * @param {int} idx                 The wall endpoint associated with this penumbra
+   * @returns {vec3[3]}
+   */
+  penumbraEndpoints(far = true, idx = 0) {
+    const arr = new Array(3);
+    arr[UMBRA] = this.penumbraEndpoint(UMBRA, far, idx);
+    arr[MIDPENUMBRA] = this.penumbraEndpoint(MIDPENUMBRA, far, idx);
+    arr[PENUMBRA] = this.penumbraEndpoint(PENUMBRA, far, idx);
+    return arr;
+  }
+
+  /**
+   * Get the intersections of the side shadows that form the V near the light.
+   * @returns {vec3[3]}
+   */
+  penumbraIntersections() {
+    const Ray2d = Ray2dGLSLStruct;
+    const { wall, sidePenumbraDirs } = this;
+
+    const rays = new Array(2);
+    rays[0] = new Array(3);
+    rays[1] = new Array(3);
+    rays[0][UMBRA] = new Ray2d(wall.top[0].xy, sidePenumbraDirs[0][UMBRA].xy);
+    rays[1][UMBRA] = new Ray2d(wall.top[1].xy, sidePenumbraDirs[1][UMBRA].xy);
+    rays[0][MIDPENUMBRA] = new Ray2d(wall.top[0].xy, sidePenumbraDirs[0][MIDPENUMBRA].xy);
+    rays[1][MIDPENUMBRA] = new Ray2d(wall.top[1].xy, sidePenumbraDirs[1][MIDPENUMBRA].xy);
+    rays[0][PENUMBRA] = new Ray2d(wall.top[0].xy, sidePenumbraDirs[0][PENUMBRA].xy);
+    rays[1][PENUMBRA] = new Ray2d(wall.top[1].xy, sidePenumbraDirs[1][PENUMBRA].xy);
+
+    const arr = new Array(3);
+    arr[UMBRA] = new vec3();
+    arr[MIDPENUMBRA] = new vec3();
+    arr[PENUMBRA] = new vec3();
+
+    lineLineIntersectionRay(rays[0][UMBRA], rays[1][UMBRA], arr[UMBRA]);
+    lineLineIntersectionRay(rays[0][MIDPENUMBRA], rays[1][MIDPENUMBRA], arr[MIDPENUMBRA]);
+    lineLineIntersectionRay(rays[0][PENUMBRA], rays[1][PENUMBRA], arr[PENUMBRA]);
+
+    return arr;
+  }
+
+  /* ----- NOTE: Vertex shader calculations ----- */
 
   /**
    * Build the triangle to represent this light's shadow vis-a-vis the wall.
+   * @param {UMBRA|MIDPENUMBRA|PENUMBRA} shadowType
+   * @returns {vec3[3]}
    */
-  buildTriangle() {
-    const { wall } = this;
-    const sidePenumbras = this.sidePenumbras;
+  buildTriangle(shadowType = PENUMBRA) {
+    const { wall, farPenumbraPoints } = this;
 
-    // Construct a new light position based on the xy intersection of the outer penumbra points --> wall corner
-    const newLightCenter = new vec2();
-    lineLineIntersectionVector(sidePenumbras[0].penumbra, wall.top[0].xy,
-      sidePenumbras[1].penumbra, wall.top[1].xy, newLightCenter);
-    return [newLightCenter, sidePenumbras[0].penumbra, sidePenumbras[1].penumbra];
-  }
-
-  drawTriangle() {
-    const tri = this.buildTriangle();
-    const poly = new PIXI.Polygon(...tri);
-    Draw.shape(poly, { color: Draw.COLORS.black, width: 2 });
+    // Construct a new light position based on the xy intersection of the penumbra points --> wall corner
+    const a = new vec2(); // Will be the new light center.
+    const b = farPenumbraPoints[0][shadowType].xy;
+    const c = farPenumbraPoints[1][shadowType].xy;
+    lineLineIntersectionVector(b, wall.top[0].xy, c, wall.top[1].xy, a);
+    return [a, b, c];
   }
 
   /**
-   * Barycentric coordinates for the penumbra.
-   * @returns {[vec3, vec3]} The bary coordinates for the a and b endpoints.
+   * Barycentric coordinates for a given vertex and shadow type.
+   * For the penumbra, this is set to 1.0 at the vertex number.
+   * @param {UMBRA|MIDPENUMBRA|PENUMBRA} shadowType
+   * @param {int} vertexNum
+   * @returns {vec3}
    */
-  calculatePenumbraBaryCoords(vertexNum = 0) {
-    const Ray2d = Ray2dGLSLStruct;
-    const sidePenumbras = this.sidePenumbras;
-    const { light, wall } = this;
-    const sign = Math.sign;
-    const orient = foundry.utils.orient2dFast;
-    const vVertexPosition = this.buildTriangle()[vertexNum];
-    const vSidePenumbras = [new vec3(1.0, 1.0, 1.0), new vec3(1.0, 1.0, 1.0)];
-
-    for ( let i = 0; i < 2; i += 1 ) {
-      const endpoint = wall.top[i];
-      const sidePenumbra = sidePenumbras[i];
-      const linkValue = wall.linkValue[i];
-      let hasSidePenumbra = light.size > 0.0;
-
-      if ( hasSidePenumbra && linkValue !== this.constructor.EV_ENDPOINT_LINKED_UNBLOCKED ) {
-        const linkedPt = wallKeyCoordinates(linkValue);
-        const oUmbraPenumbra = sign(orient(endpoint.xy, sidePenumbra.umbra, sidePenumbra.penumbra));
-        const oUmbraLinked = sign(orient(endpoint.xy, sidePenumbra.umbra, linkedPt));
-        const oPenumbraLinked = sign(orient(endpoint.xy, sidePenumbra.penumbra, linkedPt));
-
-        if ( oUmbraPenumbra === oUmbraLinked ) {
-          if ( oPenumbraLinked !== oUmbraLinked ) {
-            // Linked wall goes through the penumbra.
-            // Move the umbra to the linked wall.
-            const dirLinked = linkedPt.subtract(endpoint.xy);
-            const farParallelRay = new Ray2d(sidePenumbra.mid.xy, wall.direction.xy);
-            lineLineIntersectionRay(farParallelRay, new Ray2d(endpoint.xy, dirLinked), sidePenumbra.umbra);
-          } else hasSidePenumbra = false; // Linked wall blocks the penumbra.
-        }
-      }
-
-      if ( hasSidePenumbra ) {
-        // Penumbra triangle
-        const pA = endpoint.xy;
-        const pB = sidePenumbra.penumbra;
-        const pC = sidePenumbra.umbra;
-        vSidePenumbras[i] = barycentric(vVertexPosition, pA, pB, pC);
-      }
-    }
-    return vSidePenumbras;
+  calculateBaryCoords(shadowType = PENUMBRA, vertexNum = 0) {
+    const outerTri = this.buildTriangle(PENUMBRA);
+    const vVertexPosition = outerTri[vertexNum];
+    const tri = this.buildTriangle(shadowType);
+    return barycentric(vVertexPosition, tri[0], tri[1], tri[2]);
   }
 
   /**
@@ -1052,68 +1067,49 @@ export class SizedPointSourceShadowWallVertexShaderTest {
    * Calculate the flat variables, including near/far ratios.
    */
   calculateFlatVariables() {
-    const { wall, light, canvasPlane, canvasElevation } = this;
-    const sidePenumbras = this.sidePenumbras;
-    const penumbra = sidePenumbras[0].penumbra;
-    const newLightCenter = this.buildTriangle()[0];
-    const top = wall.top[0];
-    const bottom = wall.bottom[0];
+    const { wall, farPenumbraPoints, nearPenumbraPoints } = this;
+    const wTop = wall.top[0];
+    const wBottom = wall.bottom[0];
 
     const fWallCornerLinked = new vec2(wall.linkValue[0], wall.linkValue[1]);
-    const fWallHeights = new vec2(top.z, bottom.z);
+    const fWallHeights = new vec2(wTop.z, wBottom.z);
     const fWallSenseType = wall.type;
     const fThresholdRadius2 = wall.thresholdRadius2;
 
-    // Wall ratio
-    const distShadowInv = 1.0 / newLightCenter.distance(penumbra);
-    const distWallTop = top.xy.distance(penumbra);
-    const fWallRatio = distWallTop * distShadowInv;
+    // Location of the wall along the x axis of the barycentric triangle for umbra/mid/penumbra.
+    // Stored as UMBRA (x), MID (y), PENUMBRA (z)
+    const fWallRatio = new vec3(
+      this.baryForPoint(wTop, UMBRA).x,
+      this.baryForPoint(wTop, MIDPENUMBRA).x,
+      this.baryForPoint(wTop, PENUMBRA).x
+    );
 
-    // Near/far penumbra ratios
-    // x: penumbra; y: mid-penumbra; z: umbra
-    // Measured along the penumbra (outer) line.
-    const nearRatios = new PenumbraRatiosGLSLStruct({ front: fWallRatio, mid: fWallRatio, back: fWallRatio });
-    const farRatios = new PenumbraRatiosGLSLStruct({ front: 0.0, mid: 0.0, back: 0.0 });
+    // Location of the near shadow along the x axis of the barycentric triangle for umbra/mid/penumbra.
+    // Stored as three vec3s, each with UMBRA (x), MID (y), PENUMBRA (z)
+    // TODO: Can we just use the Penumbra and test for inclusion/exclusion from there?
+    const nearPts = nearPenumbraPoints[0];
+    const fUmbraNearRatio = new vec3(
+      this.baryForPoint(nearPts[UMBRA], UMBRA).x,
+      this.baryForPoint(nearPts[MIDPENUMBRA], UMBRA).x,
+      this.baryForPoint(nearPts[PENUMBRA], UMBRA).x
+    )
+    const fMidPenumbraNearRatio = new vec3(
+      this.baryForPoint(nearPts[UMBRA], MIDPENUMBRA).x,
+      this.baryForPoint(nearPts[MIDPENUMBRA], MIDPENUMBRA).x,
+      this.baryForPoint(nearPts[PENUMBRA], MIDPENUMBRA).x
+    )
+    const fPenumbraNearRatio = new vec3(
+      this.baryForPoint(nearPts[UMBRA], PENUMBRA).x,
+      this.baryForPoint(nearPts[MIDPENUMBRA], PENUMBRA).x,
+      this.baryForPoint(nearPts[PENUMBRA], PENUMBRA).x
+    )
 
-    // Define directions from the new light position to the end of the outer penumbra.
-    const newLightCenter3d = new vec3(newLightCenter, light.center.z);
-    const newLightTop = newLightCenter3d.add(new vec3(0.0, 0.0, light.size));
-    const dirTop = normalizedDirection(newLightTop, top);
-    const dirMid = normalizedDirection(newLightCenter3d, top);
-
-    // Light bottom
-    // Far ratios is always 0.
-
-    // Light center
-    farRatios.mid = distShadowInv
-      * this._calculateRatio(top, dirMid, penumbra, canvasPlane, distWallTop);
-
-    // Light top
-    farRatios.front = distShadowInv
-      * this._calculateRatio(top, dirTop, penumbra, canvasPlane, distWallTop);
-
-    if ( bottom.z > canvasElevation ) {
-      const newLightBottom = newLightCenter3d.subtract(new vec3(0.0, 0.0, light.size));
-      const dirBottom = normalizedDirection(newLightBottom, top);
-
-      // Light top
-      nearRatios.front = distShadowInv
-        * this._calculateRatio(bottom, dirTop, penumbra, canvasPlane, distWallTop);
-
-      // Light center
-      nearRatios.mid = distShadowInv
-        * this._calculateRatio(bottom, dirMid, penumbra, canvasPlane, distWallTop);
-
-      // Light bottom
-      nearRatios.back = distShadowInv
-        * this._calculateRatio(bottom, dirBottom, penumbra, canvasPlane, distWallTop);
-    }
-
-    const fNearRatios = nearRatios.toVec3();
-    const fFarRatios = farRatios.toVec3();
-
-    return { fWallCornerLinked, fWallHeights, fWallSenseType, fThresholdRadius2, fNearRatios, fFarRatios, fWallRatio };
+    return { fWallCornerLinked, fWallHeights, fWallSenseType, fThresholdRadius2,
+      fWallRatio, fUmbraNearRatio, fMidPenumbraNearRatio, fPenumbraNearRatio };
   }
+
+  // ----- NOTE: Fragment shader testing ----- //
+
 
   /**
    * Get the barycentric position for a given 2d canvas point.
@@ -1121,19 +1117,9 @@ export class SizedPointSourceShadowWallVertexShaderTest {
    * @param {Point} pt
    * @returns {vec3}
    */
-  baryForPoint(pt) {
-    const tri = this.buildTriangle();
+  baryForPoint(pt, shadowType = PENUMBRA) {
+    const tri = this.buildTriangle(shadowType);
     return barycentric(new vec2(pt.x, pt.y), tri[0], tri[1], tri[2]);
-  }
-
-  barySidesForPoint(pt) {
-    const { wall } = this;
-    const sidePenumbras = this.sidePenumbras;
-    pt = new vec2(pt.x, pt.y);
-    return [
-      barycentric(pt, wall.top[0].xy, sidePenumbras[0].penumbra, sidePenumbras[0].umbra),
-      barycentric(pt, wall.top[1].xy, sidePenumbras[1].penumbra, sidePenumbras[0].umbra)
-    ];
   }
 
   /**
@@ -1156,8 +1142,17 @@ export class SizedPointSourceShadowWallVertexShaderTest {
   calculateElevatedShadowRatios({ elevationE, elevationZ = this.canvasElevation } = {}) {
     const elevation = (typeof elevationE === "undefined") ? elevationZ : CONFIG.GeometryLib.utils.pixelsToGridUnits(elevationE);
     const { fFarRatios, fNearRatios, fWallHeights, fWallRatio } = this.calculateFlatVariables();
-    const nearRatios = PenumbraRatiosGLSLStruct.fromVec3(fNearRatios);
-    const farRatios = PenumbraRatiosGLSLStruct.fromVec3(fFarRatios);
+    const nearRatios = [
+      fNearRatios.x,
+      fNearRatios.y,
+      fNearRatios.z
+    ];
+
+    const farRatios = [
+      fFarRatios.x,
+      fFarRatios.y,
+      fFarRatios.z
+    ];
 
     const { canvasElevation } = this;
     const wallHeights = new vec2(
@@ -1165,15 +1160,60 @@ export class SizedPointSourceShadowWallVertexShaderTest {
       Math.max(fWallHeights.y - canvasElevation, 0.0),
     );
     const elevationChange = elevation - canvasElevation;
-    nearRatios.front = elevateShadowRatio(nearRatios.front, wallHeights.y, fWallRatio, elevationChange);
-    nearRatios.mid = elevateShadowRatio(nearRatios.mid, wallHeights.y, fWallRatio, elevationChange);
-    nearRatios.back = elevateShadowRatio(nearRatios.back, wallHeights.y, fWallRatio, elevationChange);
-    farRatios.front = elevateShadowRatio(farRatios.front, wallHeights.x, fWallRatio, elevationChange);
-    farRatios.mid = elevateShadowRatio(farRatios.mid, wallHeights.x, fWallRatio, elevationChange);
-    farRatios.back = elevateShadowRatio(farRatios.back, wallHeights.x, fWallRatio, elevationChange);
+    nearRatios[UMBRA] = elevateShadowRatio(nearRatios[UMBRA], wallHeights.y, fWallRatio, elevationChange);
+    nearRatios[MIDPENUMBRA] = elevateShadowRatio(nearRatios[MIDPENUMBRA], wallHeights.y, fWallRatio, elevationChange);
+    nearRatios[PENUMBRA] = elevateShadowRatio(nearRatios[PENUMBRA], wallHeights.y, fWallRatio, elevationChange);
+    farRatios[UMBRA] = elevateShadowRatio(farRatios[UMBRA], wallHeights.x, fWallRatio, elevationChange);
+    farRatios[MIDPENUMBRA] = elevateShadowRatio(farRatios[MIDPENUMBRA], wallHeights.x, fWallRatio, elevationChange);
+    farRatios[PENUMBRA] = elevateShadowRatio(farRatios[PENUMBRA], wallHeights.x, fWallRatio, elevationChange);
 
     return { nearRatios, farRatios };
   }
+
+  /**
+   * Determine the ratio for a given penumbra endpoint at a given elevation.
+   * Barycentric x values less than this ratio (for far) or more than this ratio (for near)
+   * will be outside the given umbra/mid/penumbra shadow triangle.
+   */
+  _elevateShadowRatio(elevationZ, wallHeight, wallRatio, shadowType = PENUMBRA) {
+    const elevChange = elevationZ - this.canvasElevation;
+    const heightFraction = elevChange / wallHeight;
+    return heightFraction * wallRatio;
+  }
+
+  inFrontOfWall(pt) {
+    const vPenumbra = this.baryForPoint(pt, PENUMBRA);
+    return vPenumbra.x > this.wallRatios[PENUMBRA];
+  }
+
+  inUmbra(pt, elevation) {
+    let elevationZ = this.canvasElevation;
+    if ( typeof elevation !== "undefined" ) elevationZ = CONFIG.GeometryLib.utils.pixelsForGridUnits(elevation);
+
+    if ( this.inFrontOfWall(pt) ) return false;
+    const vUmbra = this.baryForPoint(pt, UMBRA);
+    if ( !barycentricPointInsideTriangle(vUmbra) ) return false;
+
+    // Must be ahead of the furtherest umbra distance when elevated.
+    const { fWallRatio } = this.calculateFlatVariables();
+    const wallHeights = this.wallHeights;
+    const farRatio = this._elevateShadowRatio(elevationZ, wallHeights, fWallRatio )
+
+
+    // Need to check if it is in the near penumbra or midpenumbra, which may overlap the umbra triangle.
+
+
+  }
+
+  inPenumbra(pt) {
+    if ( this.inFrontOfWall(pt) ) return false;
+    const vPenumbra = this.baryForPoint(pt, PENUMBRA);
+    if ( !barycentricPointInsideTriangle(vPenumbra) ) return false;
+
+    //
+  }
+
+
 
   /**
    * Determine if a point is in front of the near/far shadow.
@@ -1181,7 +1221,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
   outsideOfShadow(pt, elevationOpts) {
     const { nearRatios, farRatios } = this.calculateElevatedShadowRatios(elevationOpts);
     const vBary = this.baryForPoint(pt);
-    return between(farRatios.back, nearRatios.front, vBary.x) === 0.0;
+    return between(farRatios.penumbra, nearRatios.penumbra, vBary.x) === 0.0;
   }
 
   /**
@@ -1206,7 +1246,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
 
     const { farRatios } = this.calculateElevatedShadowRatios(elevationOpts);
     const vBary = this.baryForPoint(pt);
-    return vBary.x < farRatios.front && vBary.x > 0.0;
+    return vBary.x < farRatios.umbra && vBary.x > 0.0;
   }
 
   inNearPenumbra(pt, elevationOpts) {
@@ -1215,7 +1255,7 @@ export class SizedPointSourceShadowWallVertexShaderTest {
 
     const { nearRatios } = this.calculateElevatedShadowRatios(elevationOpts);
     const vBary = this.baryForPoint(pt);
-    return vBary.x > nearRatios.back && vBary.x < nearRatios.front;
+    return vBary.x > nearRatios.umbra && vBary.x < nearRatios.penumbra;
   }
 
   /**
@@ -1224,54 +1264,18 @@ export class SizedPointSourceShadowWallVertexShaderTest {
   nearFarCoordinates(elevationOpts) {
     const { nearRatios, farRatios } = this.calculateElevatedShadowRatios(elevationOpts);
     const tri = this.buildTriangle().map(pt => PIXI.Point.fromObject(pt));
-
-    return [
-      {
-        near: [
-          tri[1].projectToward(tri[0], nearRatios.front),
-          tri[1].projectToward(tri[0], nearRatios.mid),
-          tri[1].projectToward(tri[0], nearRatios.back),
-        ],
-
-        far: [
-          tri[1].projectToward(tri[0], farRatios.front),
-          tri[1].projectToward(tri[0], farRatios.mid),
-          tri[1].projectToward(tri[0], farRatios.back),
-        ]
-      },
-      {
-        near: [
-          tri[2].projectToward(tri[0], nearRatios.front),
-          tri[2].projectToward(tri[0], nearRatios.mid),
-          tri[2].projectToward(tri[0], nearRatios.back),
-        ],
-
-        far: [
-          tri[2].projectToward(tri[0], farRatios.front),
-          tri[2].projectToward(tri[0], farRatios.mid),
-          tri[2].projectToward(tri[0], farRatios.back),
-        ]
-      },
-    ];
-  }
-
-  /**
-   * Draw the near/far markers.
-   */
-  drawNear(elevationOpts) {
-    const coords = this.nearFarCoordinates(elevationOpts);
-
-    Draw.segment({ a: coords[0].near[0], b: coords[1].near[0]}, { color: Draw.COLORS.yellow, alpha: 0.5 });
-    Draw.segment({ a: coords[0].near[1], b: coords[1].near[1]}, { color: Draw.COLORS.orange, alpha: 0.5 });
-    Draw.segment({ a: coords[0].near[2], b: coords[1].near[2]}, { color: Draw.COLORS.red, alpha: 0.5 });
-  }
-
-  drawFar(elevationOpts) {
-    const coords = this.nearFarCoordinates(elevationOpts);
-
-    Draw.segment({ a: coords[0].far[0], b: coords[1].far[0]}, { color: Draw.COLORS.yellow });
-    Draw.segment({ a: coords[0].far[1], b: coords[1].far[1]}, { color: Draw.COLORS.orange });
-    Draw.segment({ a: coords[0].far[2], b: coords[1].far[2]}, { color: Draw.COLORS.red });
+    const arr = Array(2);
+    for ( let i = 0; i < 2; i += 1 ) {
+      const j = i + 1;
+      const near = {};
+      const far = {};
+      arr[i] = { near, far };
+      for ( const loc of ["umbra", "mid", "penumbra"] ) {
+        near[loc] = tri[j].projectToward(tri[0], nearRatios[loc]);
+        far[loc] = tri[j].projectToward(tri[0], farRatios[loc]);
+      }
+    }
+    return arr;
   }
 
   /**
@@ -1291,22 +1295,80 @@ export class SizedPointSourceShadowWallVertexShaderTest {
 
     let farShadow = 1.0;
     if ( inFarPenumbra ) {
-      const inLighterPenumbra = vBary.x < farRatios.y;
+      const inLighterPenumbra = vBary.x < farRatios.mid;
       farShadow = inLighterPenumbra
-        ? linearConversion(vBary.x, 0.0, farRatios.y, 0.0, 0.5)
-        : linearConversion(vBary.x, farRatios.y, farRatios.x, 0.5, 1.0);
+        ? linearConversion(vBary.x, 0.0, farRatios.mid, 0.0, 0.5)
+        : linearConversion(vBary.x, farRatios.mid, farRatios.umbra, 0.5, 1.0);
     }
 
     let nearShadow = 1.0;
     if ( inNearPenumbra ) {
       const inLighterPenumbra = vBary.x > nearRatios.mid;
       nearShadow = inLighterPenumbra
-        ? linearConversion(vBary.x, nearRatios.front, nearRatios.mid, 0.0, 0.5)
-        : linearConversion(vBary.x, nearRatios.mid, nearRatios.back, 0.5, 1.0);
+        ? linearConversion(vBary.x, nearRatios.penumbra, nearRatios.mid, 0.0, 0.5)
+        : linearConversion(vBary.x, nearRatios.mid, nearRatios.umbra, 0.5, 1.0);
     }
 
     return side0Shadow * side1Shadow * farShadow * nearShadow;
+  }
 
+  // ----- NOTE: Drawing ----- //
+
+  drawWall() { Draw.segment({ a: this.wall.top[0], b: this.wall.top[1] }); }
+
+  drawLight() { Draw.point(this.light.center, { radius: this.light.size, color: Draw.COLORS.yellow }); }
+
+  drawSidePenumbraDirections(dist = canvas.dimensions.maxR) {
+    const { sidePenumbraDirs, wall } = this;
+    const COLOR_KEYS = {
+      [UMBRA]: Draw.COLORS.red,
+      [MIDPENUMBRA]: Draw.COLORS.orange,
+      [PENUMBRA]: Draw.COLORS.yellow
+    };
+    for ( const [key, color] of Object.entries(COLOR_KEYS) ) {
+      for ( let i = 0; i < 2; i += 1 ) {
+        const endpoint = wall.top[i];
+        const penumbraPt = endpoint.add(sidePenumbraDirs[i][key].multiplyScalar(dist));
+        Draw.segment({ a: endpoint, b: penumbraPt }, { color });
+      }
+    }
+  }
+
+  drawTriangle(shadowType = PENUMBRA) {
+    const COLOR_KEYS = {
+      [UMBRA]: Draw.COLORS.red,
+      [MIDPENUMBRA]: Draw.COLORS.orange,
+      [PENUMBRA]: Draw.COLORS.yellow
+    };
+    const tri = this.buildTriangle(shadowType);
+    const poly = new PIXI.Polygon(...tri);
+    Draw.shape(poly, { color: COLOR_KEYS[shadowType], width: 2 });
+  }
+
+  /**
+   * Draw the near/far markers.
+   */
+  drawNear() { this._drawNearFar(false); }
+
+  drawFar() { this._drawNearFar(true); }
+
+  _drawNearFar(far = true) {
+    const { wall } = this;
+    const COLOR_KEYS = {
+      [UMBRA]: Draw.COLORS.red,
+      [MIDPENUMBRA]: Draw.COLORS.orange,
+      [PENUMBRA]: Draw.COLORS.yellow
+    };
+    const penumbraPoints = far ? this.farPenumbraPoints : this.nearPenumbraPoints;
+
+    for ( const [key, color] of Object.entries(COLOR_KEYS) ) {
+      for ( let i = 0; i < 2; i += 1 ) {
+        const a = wall.top[i];
+        const b = penumbraPoints[i][key];
+        Draw.segment({ a, b }, { color });
+        Draw.point(b, { color });
+      }
+    }
   }
 }
 
@@ -1349,14 +1411,15 @@ Draw = CONFIG.GeometryLib.Draw;
 api = game.modules.get("elevatedvision").api
 let {
   SizedPointSourceShadowWallVertexShaderTest,
-  vec2, vec3, vec4,
-  PenumbraDirGLSLStruct,
-  SidePenumbraGLSLStruct  } = api.testing
+  vec2, vec3, vec4 } = api.testing
 
 l = canvas.lighting.placeables[0];
 edge0 = canvas.walls.placeables[0].edge
 edge1 = canvas.walls.placeables[1].edge
 ev = l.lightSource.elevatedvision
+UMBRA = 0;
+MIDPENUMBRA = 1;
+PENUMBRA = 2;
 
 // shader0 = SizedPointSourceShadowWallVertexShaderTest.fromEdgeAndSource(edge0, l.lightSource)
 // shader1 = SizedPointSourceShadowWallVertexShaderTest.fromEdgeAndSource(edge1, l.lightSource)
@@ -1462,6 +1525,68 @@ shader1.drawFar({ elevationE: 0 })
 
 shader0.drawNear({ elevationE: 0 })
 shader1.drawNear({ elevationE: 0 })
+
+*/
+
+/* Calculate penumbra endpoint based on elevation
+
+ixBase = new vec3()
+ix500 = new vec3()
+ix0 = new vec3()
+shader0._penumbraCanvasIntersection(ixBase, PENUMBRA, true, 0, shader0.canvasElevation)
+shader0._penumbraCanvasIntersection(ix500, PENUMBRA, true, 0, -500)
+shader0._penumbraCanvasIntersection(ix0, PENUMBRA, true, 0, 0)
+
+-1000: { x: 5100, y: 952 }    dist: 2342
+-500:  { x: 4350, y: 1322 }   dist: 1506
+0:     { x: 3600, y: 1692 }   dist: 669
+
+Full distance = 2342, for -1000 to 400
+
+UMBRA = 0;
+MIDPENUMBRA = 1;
+PENUMBRA = 2;
+
+wallEndpoint = PIXI.Point.fromObject(shader0.wall.top[0])
+penumbraEndpoint = PIXI.Point.fromObject(shader0.farPenumbraPoints[0][PENUMBRA])
+otherWallEndpoint = PIXI.Point.fromObject(shader0.wall.top[1])
+otherPenumbraEndpoint = PIXI.Point.fromObject(shader0.farPenumbraPoints[1][PENUMBRA])
+lightIx = PIXI.Point.fromObject(foundry.utils.lineLineIntersection(wallEndpoint, penumbraEndpoint, otherWallEndpoint, otherPenumbraEndpoint))
+elevChange = 0 - shader0.canvasElevation
+wallHeight = shader0.wall.top[0].z - shader0.canvasElevation
+ratio = 0
+wallRatio = PIXI.Point.distanceBetween(penumbraEndpoint, wallEndpoint) / PIXI.Point.distanceBetween(penumbraEndpoint, lightIx)
+ratioDist = wallRatio - ratio
+heightFraction = elevChange / wallHeight;
+newRatio = ratio + (heightFraction * ratioDist);
+newIx = penumbraEndpoint.projectToward(lightIx, newRatio)
+
+
+// Using only the outer penumbra, can we still determine a ratio that applies to inner?
+ixBase = new vec3()
+ix500 = new vec3()
+ix0 = new vec3()
+shader0._penumbraCanvasIntersection(ixBase, UMBRA, true, 0, shader0.canvasElevation)
+shader0._penumbraCanvasIntersection(ix500, UMBRA, true, 0, -500)
+shader0._penumbraCanvasIntersection(ix0, UMBRA, true, 0, 0)
+
+elevationZ = 0;
+wallEndpoint = PIXI.Point.fromObject(shader0.wall.top[0])
+penumbraEndpoint = PIXI.Point.fromObject(shader0.farPenumbraPoints[0][PENUMBRA])
+otherWallEndpoint = PIXI.Point.fromObject(shader0.wall.top[1])
+otherPenumbraEndpoint = PIXI.Point.fromObject(shader0.farPenumbraPoints[1][PENUMBRA])
+lightIx = PIXI.Point.fromObject(foundry.utils.lineLineIntersection(wallEndpoint, penumbraEndpoint, otherWallEndpoint, otherPenumbraEndpoint))
+elevChange = elevationZ - shader0.canvasElevation
+wallHeight = shader0.wall.top[0].z - shader0.canvasElevation
+wallRatio = PIXI.Point.distanceBetween(penumbraEndpoint, wallEndpoint) / PIXI.Point.distanceBetween(penumbraEndpoint, lightIx)
+ratioDist = wallRatio
+heightFraction = elevChange / wallHeight;
+newRatio = heightFraction * wallRatio;
+
+umbraEndpoint =  PIXI.Point.fromObject(shader0.farPenumbraPoints[0][UMBRA])
+otherUmbraEndpoint = PIXI.Point.fromObject(shader0.farPenumbraPoints[1][UMBRA])
+umbraLightIx = PIXI.Point.fromObject(foundry.utils.lineLineIntersection(wallEndpoint, umbraEndpoint, otherWallEndpoint, otherUmbraEndpoint))
+newIx = umbraEndpoint.projectToward(umbraLightIx, newRatio)
 
 */
 

@@ -47,9 +47,7 @@ import {
   vec2,
   vec3,
   vec4,
-  SizedPointSourceShadowWallVertexShaderTest,
-  PenumbraDirGLSLStruct,
-  SidePenumbraGLSLStruct } from "./testing/WallShaderTest.js";
+  SizedPointSourceShadowWallVertexShaderTest } from "./testing/WallShaderTest.js";
 
 
 // Imported elsewhere: import "./scenes.js";
@@ -131,9 +129,7 @@ Hooks.once("init", function() {
       vec2,
       vec3,
       vec4,
-      SizedPointSourceShadowWallVertexShaderTest,
-      PenumbraDirGLSLStruct,
-      SidePenumbraGLSLStruct
+      SizedPointSourceShadowWallVertexShaderTest
     }
   };
 
