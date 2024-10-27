@@ -1043,6 +1043,31 @@ export class SizedPointSourceShadowWallVertexShaderTest {
   }
 
   /**
+   * Barycentric coordinates of the side penumbra for a given vertex.
+   * @param {int} vertexNum
+   * @returns {vec3[2]}
+   */
+  calculateSidePenumbraBaryCoords(vertexNum = 0) {
+    const penumbraTri = this.buildTriangle(PENUMBRA);
+    const vVertexPosition = penumbraTri[vertexNum];
+    return this._vSidePenumbrasBaryCoords(vVertexPosition);
+  }
+
+  _vSidePenumbrasBaryCoords(pt) {
+    const endpoints = this.wall.top;
+    const penumbraTri = this.buildTriangle(PENUMBRA);
+    const umbraTri = this.buildTriangle(UMBRA);
+    const vSidePenumbras = new Array(2);
+    for ( let i = 0; i < 2; i += 1 ) {
+      const a = endpoints[i].xy;
+      const b = penumbraTri[i + 1]; // Add 1 b/c 0 is the light center
+      const c = umbraTri[i + 1];
+      vSidePenumbras[i] = barycentric(pt, a, b, c);
+    }
+    return vSidePenumbras;
+  }
+
+  /**
    * Distance between a defined furthest point and the intersection of a ray with the plane.
    * @param {vec3} wallEndpoint
    * @param {vec3} dir
@@ -1076,39 +1101,49 @@ export class SizedPointSourceShadowWallVertexShaderTest {
     const fWallSenseType = wall.type;
     const fThresholdRadius2 = wall.thresholdRadius2;
 
-    // Location of the wall along the x axis of the barycentric triangle for umbra/mid/penumbra.
-    // Stored as UMBRA (x), MID (y), PENUMBRA (z)
-    const fWallRatio = new vec3(
-      this.baryForPoint(wTop, UMBRA).x,
-      this.baryForPoint(wTop, MIDPENUMBRA).x,
-      this.baryForPoint(wTop, PENUMBRA).x
-    );
+    // Location of the wall along the x axis of the barycentric penumbra triangle.
+    const fWallRatio = this.baryForPoint(wTop, PENUMBRA).x;
 
-    // Location of the near shadow along the x axis of the barycentric triangle for umbra/mid/penumbra.
-    // Stored as three vec3s, each with UMBRA (x), MID (y), PENUMBRA (z)
-    // TODO: Can we just use the Penumbra and test for inclusion/exclusion from there?
+    // Location of the near shadow along the x axis of the barycentric penumbra triangle.
+    // Stored as vec3: UMBRA (x), MID (y), PENUMBRA (z)
     const nearPts = nearPenumbraPoints[0];
-    const fUmbraNearRatio = new vec3(
-      this.baryForPoint(nearPts[UMBRA], UMBRA).x,
-      this.baryForPoint(nearPts[MIDPENUMBRA], UMBRA).x,
-      this.baryForPoint(nearPts[PENUMBRA], UMBRA).x
-    )
-    const fMidPenumbraNearRatio = new vec3(
-      this.baryForPoint(nearPts[UMBRA], MIDPENUMBRA).x,
-      this.baryForPoint(nearPts[MIDPENUMBRA], MIDPENUMBRA).x,
-      this.baryForPoint(nearPts[PENUMBRA], MIDPENUMBRA).x
-    )
-    const fPenumbraNearRatio = new vec3(
+    const fNearRatios = new vec3(
       this.baryForPoint(nearPts[UMBRA], PENUMBRA).x,
       this.baryForPoint(nearPts[MIDPENUMBRA], PENUMBRA).x,
       this.baryForPoint(nearPts[PENUMBRA], PENUMBRA).x
-    )
+    );
+
+    // Location of the far shadow along the x axis of the barycentric penumbra triangle.
+    const farPts = farPenumbraPoints[0];
+    const fFarRatios = new vec3(
+      this.baryForPoint(farPts[UMBRA], PENUMBRA).x,
+      this.baryForPoint(farPts[MIDPENUMBRA], PENUMBRA).x,
+      this.baryForPoint(farPts[PENUMBRA], PENUMBRA).x
+    );
 
     return { fWallCornerLinked, fWallHeights, fWallSenseType, fThresholdRadius2,
-      fWallRatio, fUmbraNearRatio, fMidPenumbraNearRatio, fPenumbraNearRatio };
+      fWallRatio, fNearRatios, fFarRatios };
   }
 
   // ----- NOTE: Fragment shader testing ----- //
+
+  /**
+   * Value of varyings at a given point.
+   * @param {Point} pt
+   * @returns {object} Object with varying variables:
+   *    - vPenumbra (formerly vBary)
+   *    - vMidPenumbra
+   *    - vUmbra
+   *    - vSidePenumbra0
+   *    - vSidePenumbra1
+   */
+  calculateVaryings(pt) {
+    const vPenumbra = this.baryForPoint(pt, PENUMBRA);
+    const vMidPenumbra = this.baryForPoint(pt, MIDPENUMBRA);
+    const vUmbra = this.baryForPoint(pt, UMBRA);
+    const [vSidePenumbra0, vSidePenumbra1] = this._vSidePenumbrasBaryCoords(pt);
+    return { vPenumbra, vMidPenumbra, vUmbra, vSidePenumbra0, vSidePenumbra1 };
+  }
 
 
   /**
@@ -1141,173 +1176,238 @@ export class SizedPointSourceShadowWallVertexShaderTest {
    */
   calculateElevatedShadowRatios({ elevationE, elevationZ = this.canvasElevation } = {}) {
     const elevation = (typeof elevationE === "undefined") ? elevationZ : CONFIG.GeometryLib.utils.pixelsToGridUnits(elevationE);
-    const { fFarRatios, fNearRatios, fWallHeights, fWallRatio } = this.calculateFlatVariables();
+    const { fFarRatios, fNearRatios } = this.calculateFlatVariables();
     const nearRatios = [
       fNearRatios.x,
       fNearRatios.y,
       fNearRatios.z
     ];
-
     const farRatios = [
       fFarRatios.x,
       fFarRatios.y,
       fFarRatios.z
     ];
-
-    const { canvasElevation } = this;
-    const wallHeights = new vec2(
-      Math.max(fWallHeights.x - canvasElevation, 0.0),
-      Math.max(fWallHeights.y - canvasElevation, 0.0),
-    );
-    const elevationChange = elevation - canvasElevation;
-    nearRatios[UMBRA] = elevateShadowRatio(nearRatios[UMBRA], wallHeights.y, fWallRatio, elevationChange);
-    nearRatios[MIDPENUMBRA] = elevateShadowRatio(nearRatios[MIDPENUMBRA], wallHeights.y, fWallRatio, elevationChange);
-    nearRatios[PENUMBRA] = elevateShadowRatio(nearRatios[PENUMBRA], wallHeights.y, fWallRatio, elevationChange);
-    farRatios[UMBRA] = elevateShadowRatio(farRatios[UMBRA], wallHeights.x, fWallRatio, elevationChange);
-    farRatios[MIDPENUMBRA] = elevateShadowRatio(farRatios[MIDPENUMBRA], wallHeights.x, fWallRatio, elevationChange);
-    farRatios[PENUMBRA] = elevateShadowRatio(farRatios[PENUMBRA], wallHeights.x, fWallRatio, elevationChange);
-
+    const elevationFarFn = this.elevateShadowRatioFn(elevation, true);
+    const elevationNearFn = this.elevateShadowRatioFn(elevation, false);
+    for ( const shadowType of [UMBRA, MIDPENUMBRA, PENUMBRA] ) {
+      nearRatios[shadowType] = elevationNearFn(nearRatios[shadowType]);
+      farRatios[shadowType] = elevationFarFn(farRatios[shadowType]);
+    }
     return { nearRatios, farRatios };
   }
 
   /**
-   * Determine the ratio for a given penumbra endpoint at a given elevation.
-   * Barycentric x values less than this ratio (for far) or more than this ratio (for near)
-   * will be outside the given umbra/mid/penumbra shadow triangle.
+   * @param {float} elevationZ    Desired elevation
+   * @param {bool} top            Use top or bottom wall height?
+   * @returns {function}
    */
-  _elevateShadowRatio(elevationZ, wallHeight, wallRatio, shadowType = PENUMBRA) {
-    const elevChange = elevationZ - this.canvasElevation;
-    const heightFraction = elevChange / wallHeight;
-    return heightFraction * wallRatio;
-  }
+  elevateShadowRatioFn(elevationZ = 0, top = true) {
+    const { canvasElevation } = this;
+    const { fWallRatio, fWallHeights } = this.calculateFlatVariables();
+    const fWallHeight = top ? fWallHeights.x : fWallHeights.y;
+    const wallHeight = Math.max(fWallHeight - canvasElevation, 0.0);
+    if ( wallHeight === 0.0 ) return ratio => ratio;
 
-  inFrontOfWall(pt) {
-    const vPenumbra = this.baryForPoint(pt, PENUMBRA);
-    return vPenumbra.x > this.wallRatios[PENUMBRA];
-  }
-
-  inUmbra(pt, elevation) {
-    let elevationZ = this.canvasElevation;
-    if ( typeof elevation !== "undefined" ) elevationZ = CONFIG.GeometryLib.utils.pixelsForGridUnits(elevation);
-
-    if ( this.inFrontOfWall(pt) ) return false;
-    const vUmbra = this.baryForPoint(pt, UMBRA);
-    if ( !barycentricPointInsideTriangle(vUmbra) ) return false;
-
-    // Must be ahead of the furtherest umbra distance when elevated.
-    const { fWallRatio } = this.calculateFlatVariables();
-    const wallHeights = this.wallHeights;
-    const farRatio = this._elevateShadowRatio(elevationZ, wallHeights, fWallRatio )
-
-
-    // Need to check if it is in the near penumbra or midpenumbra, which may overlap the umbra triangle.
-
-
-  }
-
-  inPenumbra(pt) {
-    if ( this.inFrontOfWall(pt) ) return false;
-    const vPenumbra = this.baryForPoint(pt, PENUMBRA);
-    if ( !barycentricPointInsideTriangle(vPenumbra) ) return false;
-
-    //
-  }
-
-
-
-  /**
-   * Determine if a point is in front of the near/far shadow.
-   */
-  outsideOfShadow(pt, elevationOpts) {
-    const { nearRatios, farRatios } = this.calculateElevatedShadowRatios(elevationOpts);
-    const vBary = this.baryForPoint(pt);
-    return between(farRatios.penumbra, nearRatios.penumbra, vBary.x) === 0.0;
+    const elevationChange = elevationZ - canvasElevation;
+    const heightFraction = elevationChange / wallHeight;
+    return ratio => ratio + (heightFraction * fWallRatio) - (heightFraction * ratio);
   }
 
   /**
-   * Determine if a point is in the penumbra.
+   * Is this point in front of the wall (side of the light)?
    * @param {Point} pt
    * @returns {bool}
    */
-  inSidePenumbra(pt, elevationOpts) {
-    if ( this.thresholdApplies(pt) ) return false;
-    if ( this.outsideOfShadow(pt, elevationOpts) ) return false;
+  inFrontOfWall(pt) {
+    const { vPenumbra } = this.calculateVaryings(pt);
+    const { fWallRatio } = this.calculateFlatVariables();
+    return vPenumbra.x > fWallRatio;
+  }
 
-    const [vSidePenumbra0, vSidePenumbra1] = this.barySidesForPoint(pt);
+  /**
+   * Is the point in the original umbra triangle?
+   * Does not check for other containment nor does it do a wall test.
+   * @param {Point} pt
+   * @returns {bool}
+   */
+  _inUmbra(pt) {
+    const { vUmbra } = this.calculateVaryings(pt);
+    return barycentricPointInsideTriangle(vUmbra);
+  }
+
+  /**
+   * Is the point in the original midpenumbra triangle?
+   * Does not check for other containment nor does it do a wall test.
+   * @param {Point} pt
+   * @returns {bool}
+   */
+  _inMidPenumbra(pt) {
+    const { vMidPenumbra } = this.calculateVaryings(pt);
+    return barycentricPointInsideTriangle(vMidPenumbra);
+  }
+
+  // No check for _inPenumbra b/c that is always true b/c penumbra triangle defines the vertices.
+
+  /**
+   * Is the point in the umbra triangle, accounting for near/far?
+   * @param {Point} pt
+   * @param {float} elevationE
+   * @returns {bool}
+   */
+  inUmbra(pt, elevationE) {
+    if ( !this._inUmbra(pt) || this.inFrontOfWall(pt) ) return false;
+    const { nearRatios, farRatios } = this.calculateElevatedShadowRatios({ elevationE });
+    const { vPenumbra } = this.calculateVaryings(pt);
+    return between(farRatios[UMBRA], nearRatios[UMBRA], vPenumbra.x);
+  }
+
+  /**
+   * Is the point in the midPenumbra triangle, accounting for near/far?
+   * Overlapping umbra triangle counts.
+   * @param {Point} pt
+   * @param {float} elevationE
+   * @returns {bool}
+   */
+  inMidPenumbra(pt, elevationE) {
+    if ( !this._inMidPenumbra(pt) || this.inFrontOfWall(pt) ) return false;
+    const { nearRatios, farRatios } = this.calculateElevatedShadowRatios({ elevationE });
+    const { vPenumbra } = this.calculateVaryings(pt);
+    return between(farRatios[MIDPENUMBRA], nearRatios[MIDPENUMBRA], vPenumbra.x);
+  }
+
+  inPenumbra(pt, elevationE) {
+    // Always in the penumbra triangle.
+    if ( this.inFrontOfWall(pt) ) return false;
+    const { nearRatios, farRatios } = this.calculateElevatedShadowRatios({ elevationE });
+    const { vPenumbra } = this.calculateVaryings(pt);
+    return between(farRatios[PENUMBRA], nearRatios[PENUMBRA], vPenumbra.x);
+  }
+
+  inFarPenumbra(pt, elevationE) {
+    if ( this.inFrontOfWall(pt) ) return false;
+
+    // TODO: Omit these to change what counts as mid-penumbra?
+    if ( this.inMidPenumbra(pt, elevationE) ) return false;
+
+    const { vPenumbra } = this.calculateVaryings(pt);
+    const { farRatios } = this.calculateElevatedShadowRatios({ elevationE });
+    return between(farRatios[PENUMBRA], farRatios[MIDPENUMBRA], vPenumbra.x);
+  }
+
+  inFarMidPenumbra(pt, elevationE) {
+    if ( this.inFrontOfWall(pt) ) return false;
+
+    // TODO: Omit these to change what counts as mid-penumbra?
+    if ( this.inUmbra(pt, elevationE) ) return false;
+    if ( !this.inMidPenumbra(pt, elevationE) ) return false;
+
+    // In the mid-penumbra but is it in the far strip?
+    const { vPenumbra } = this.calculateVaryings(pt);
+    const { farRatios } = this.calculateElevatedShadowRatios({ elevationE });
+    return between(farRatios[MIDPENUMBRA], farRatios[UMBRA], vPenumbra.x);
+  }
+
+  inNearPenumbra(pt, elevationE) {
+    if ( this.inFrontOfWall(pt) ) return false;
+
+    // TODO: Omit these to change what counts as mid-penumbra?
+    if ( this.inMidPenumbra(pt, elevationE)  ) return false;
+
+    // In the penumbra but is it in the near strip?
+    const { vPenumbra } = this.calculateVaryings(pt);
+    const { nearRatios } = this.calculateElevatedShadowRatios({ elevationE });
+    return between(nearRatios[PENUMBRA], nearRatios[MIDPENUMBRA], vPenumbra.x);
+  }
+
+  inNearMidPenumbra(pt, elevationE) {
+    if ( this.inFrontOfWall(pt) ) return false;
+
+    // TODO: Omit these to change what counts as mid-penumbra?
+    if ( this.inUmbra(pt, elevationE) ) return false;
+    if ( !this.inMidPenumbra(pt, elevationE) ) return false;
+
+    // In the penumbra but is it in the near strip?
+    const { vPenumbra } = this.calculateVaryings(pt);
+    const { nearRatios } = this.calculateElevatedShadowRatios({ elevationE });
+    return between(nearRatios[MIDPENUMBRA], nearRatios[UMBRA], vPenumbra.x);
+  }
+
+  /**
+   * Determine if a point is in either of the side penumbras.
+   * @param {Point} pt
+   * @param {float} elevationE
+   * @returns {bool}
+   */
+  inSidePenumbras(pt, elevationE) {
+    const { vSidePenumbra0, vSidePenumbra1 } = this.calculateVaryings(pt);
     return [
       barycentricPointInsideTriangle(vSidePenumbra0),
       barycentricPointInsideTriangle(vSidePenumbra1),
     ];
   }
 
-  inFarPenumbra(pt, elevationOpts) {
-    if ( this.thresholdApplies(pt) ) return false;
-    if ( this.outsideOfShadow(pt, elevationOpts) ) return false;
-
-    const { farRatios } = this.calculateElevatedShadowRatios(elevationOpts);
-    const vBary = this.baryForPoint(pt);
-    return vBary.x < farRatios.umbra && vBary.x > 0.0;
-  }
-
-  inNearPenumbra(pt, elevationOpts) {
-    if ( this.thresholdApplies(pt) ) return false;
-    if ( this.outsideOfShadow(pt, elevationOpts) ) return false;
-
-    const { nearRatios } = this.calculateElevatedShadowRatios(elevationOpts);
-    const vBary = this.baryForPoint(pt);
-    return vBary.x > nearRatios.umbra && vBary.x < nearRatios.penumbra;
-  }
-
   /**
-   * What are the near/far coordinates at a given elevation?
+   * Determine if a point is in one or more of the shadow areas.
+   * @param {Point} pt
+   * @param {float} elevationE
+   * @returns {bool}
    */
-  nearFarCoordinates(elevationOpts) {
-    const { nearRatios, farRatios } = this.calculateElevatedShadowRatios(elevationOpts);
-    const tri = this.buildTriangle().map(pt => PIXI.Point.fromObject(pt));
-    const arr = Array(2);
-    for ( let i = 0; i < 2; i += 1 ) {
-      const j = i + 1;
-      const near = {};
-      const far = {};
-      arr[i] = { near, far };
-      for ( const loc of ["umbra", "mid", "penumbra"] ) {
-        near[loc] = tri[j].projectToward(tri[0], nearRatios[loc]);
-        far[loc] = tri[j].projectToward(tri[0], farRatios[loc]);
-      }
-    }
-    return arr;
+  inShadows(pt, elevationE) {
+    const out = {
+      inSidePenumbra0: false,
+      inSidePenumbra1: false,
+      inPenumbra: false,
+      inMidPenumbra: false,
+      inUmbra: false,
+      inFarPenumbra: false,
+      inNearPenumbra: false,
+      inFarMidPenumbra: false,
+      inNearMidPenumbra: false
+    };
+    if ( this.inFrontOfWall(pt) ) return out;
+    if ( this.thresholdApplies(pt) ) return out;
+
+    const [inSidePenumbra0, inSidePenumbra1] = this.inSidePenumbras(pt, elevationE);
+    out.inSidePenumbra0 = inSidePenumbra0;
+    out.inSidePenumbra1 = inSidePenumbra1;
+    out.inPenumbra = this.inPenumbra(pt, elevationE);
+    out.inMidPenumbra = this.inMidPenumbra(pt, elevationE);
+    out.inUmbra = this.inUmbra(pt, elevationE);
+
+    out.inFarPenumbra = this.inFarPenumbra(pt, elevationE);
+    out.inNearPenumbra = this.inNearPenumbra(pt, elevationE);
+    out.inFarMidPenumbra = this.inFarMidPenumbra(pt, elevationE);
+    out.inNearMidPenumbra = this.inNearMidPenumbra(pt, elevationE);
+
+    return out;
   }
 
   /**
    * Return the amount of shadow for a point.
    */
-  shadow(pt, elevationOpts) {
-    const { nearRatios, farRatios } = this.calculateElevatedShadowRatios(elevationOpts);
-    const vBary = this.baryForPoint(pt);
-    const [vSidePenumbra0, vSidePenumbra1] = this.barySidesForPoint(pt);
-    const [inSidePenumbra0, inSidePenumbra1] = this.inSidePenumbra(pt, elevationOpts);
-    const inFarPenumbra = this.inFarPenumbra(pt, elevationOpts);
-    const inNearPenumbra = this.inNearPenumbra(pt, elevationOpts);
+  shadow(pt, elevationE) {
+    const {
+      inSidePenumbra0,
+      inSidePenumbra1,
+      inFarPenumbra,
+      inNearPenumbra,
+      inFarMidPenumbra,
+      inNearMidPenumbra } = this.inShadows(pt, elevationE);
+
+    const { vPenumbra, vSidePenumbra0, vSidePenumbra1 } = this.calculateVaryings(pt);
+    const { farRatios, nearRatios } = this.calculateElevatedShadowRatios({ elevationE });
 
     // Blend the two side penumbras if overlapping by multiplying the light amounts.
     const side0Shadow = inSidePenumbra0 ? vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z) : 1.0;
     const side1Shadow = inSidePenumbra1 ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
 
-    let farShadow = 1.0;
-    if ( inFarPenumbra ) {
-      const inLighterPenumbra = vBary.x < farRatios.mid;
-      farShadow = inLighterPenumbra
-        ? linearConversion(vBary.x, 0.0, farRatios.mid, 0.0, 0.5)
-        : linearConversion(vBary.x, farRatios.mid, farRatios.umbra, 0.5, 1.0);
-    }
+    const farShadow = inFarPenumbra ? linearConversion(vPenumbra.x, 0.0, farRatios.mid, 0.0, 0.5)
+      : inFarMidPenumbra ? linearConversion(vPenumbra.x, farRatios.mid, farRatios.umbra, 0.5, 1.0)
+        : 1.0;
 
-    let nearShadow = 1.0;
-    if ( inNearPenumbra ) {
-      const inLighterPenumbra = vBary.x > nearRatios.mid;
-      nearShadow = inLighterPenumbra
-        ? linearConversion(vBary.x, nearRatios.penumbra, nearRatios.mid, 0.0, 0.5)
-        : linearConversion(vBary.x, nearRatios.mid, nearRatios.umbra, 0.5, 1.0);
-    }
+    const nearShadow = inNearPenumbra ? linearConversion(vPenumbra.x, nearRatios.penumbra, nearRatios.mid, 0.0, 0.5)
+      : inNearMidPenumbra ? linearConversion(vPenumbra.x, nearRatios.mid, nearRatios.umbra, 0.5, 1.0)
+        : 1.0;
 
     return side0Shadow * side1Shadow * farShadow * nearShadow;
   }
@@ -1551,11 +1651,13 @@ wallEndpoint = PIXI.Point.fromObject(shader0.wall.top[0])
 penumbraEndpoint = PIXI.Point.fromObject(shader0.farPenumbraPoints[0][PENUMBRA])
 otherWallEndpoint = PIXI.Point.fromObject(shader0.wall.top[1])
 otherPenumbraEndpoint = PIXI.Point.fromObject(shader0.farPenumbraPoints[1][PENUMBRA])
-lightIx = PIXI.Point.fromObject(foundry.utils.lineLineIntersection(wallEndpoint, penumbraEndpoint, otherWallEndpoint, otherPenumbraEndpoint))
+lightIx = PIXI.Point.fromObject(
+  foundry.utils.lineLineIntersection(wallEndpoint, penumbraEndpoint, otherWallEndpoint, otherPenumbraEndpoint))
 elevChange = 0 - shader0.canvasElevation
 wallHeight = shader0.wall.top[0].z - shader0.canvasElevation
 ratio = 0
-wallRatio = PIXI.Point.distanceBetween(penumbraEndpoint, wallEndpoint) / PIXI.Point.distanceBetween(penumbraEndpoint, lightIx)
+wallRatio = PIXI.Point.distanceBetween(penumbraEndpoint, wallEndpoint)
+  / PIXI.Point.distanceBetween(penumbraEndpoint, lightIx)
 ratioDist = wallRatio - ratio
 heightFraction = elevChange / wallHeight;
 newRatio = ratio + (heightFraction * ratioDist);
@@ -1575,17 +1677,20 @@ wallEndpoint = PIXI.Point.fromObject(shader0.wall.top[0])
 penumbraEndpoint = PIXI.Point.fromObject(shader0.farPenumbraPoints[0][PENUMBRA])
 otherWallEndpoint = PIXI.Point.fromObject(shader0.wall.top[1])
 otherPenumbraEndpoint = PIXI.Point.fromObject(shader0.farPenumbraPoints[1][PENUMBRA])
-lightIx = PIXI.Point.fromObject(foundry.utils.lineLineIntersection(wallEndpoint, penumbraEndpoint, otherWallEndpoint, otherPenumbraEndpoint))
+lightIx = PIXI.Point.fromObject(
+  foundry.utils.lineLineIntersection(wallEndpoint, penumbraEndpoint, otherWallEndpoint, otherPenumbraEndpoint))
 elevChange = elevationZ - shader0.canvasElevation
 wallHeight = shader0.wall.top[0].z - shader0.canvasElevation
-wallRatio = PIXI.Point.distanceBetween(penumbraEndpoint, wallEndpoint) / PIXI.Point.distanceBetween(penumbraEndpoint, lightIx)
+wallRatio = PIXI.Point.distanceBetween(penumbraEndpoint, wallEndpoint)
+  / PIXI.Point.distanceBetween(penumbraEndpoint, lightIx)
 ratioDist = wallRatio
 heightFraction = elevChange / wallHeight;
 newRatio = heightFraction * wallRatio;
 
 umbraEndpoint =  PIXI.Point.fromObject(shader0.farPenumbraPoints[0][UMBRA])
 otherUmbraEndpoint = PIXI.Point.fromObject(shader0.farPenumbraPoints[1][UMBRA])
-umbraLightIx = PIXI.Point.fromObject(foundry.utils.lineLineIntersection(wallEndpoint, umbraEndpoint, otherWallEndpoint, otherUmbraEndpoint))
+umbraLightIx = PIXI.Point.fromObject(
+  foundry.utils.lineLineIntersection(wallEndpoint, umbraEndpoint, otherWallEndpoint, otherUmbraEndpoint))
 newIx = umbraEndpoint.projectToward(umbraLightIx, newRatio)
 
 */
@@ -1611,3 +1716,4 @@ uElevationRes
 uTerrainSampler
 
 */
+
