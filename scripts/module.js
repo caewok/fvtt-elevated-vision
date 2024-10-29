@@ -47,7 +47,8 @@ import {
   vec2,
   vec3,
   vec4,
-  SizedPointSourceShadowWallVertexShaderTest } from "./testing/WallShaderTest.js";
+  SizedPointSourceShadowWallVertexShaderTest,
+  DirectionalSourceShadowWallVertexShaderTest } from "./testing/WallShaderTest.js";
 
 
 // Imported elsewhere: import "./scenes.js";
@@ -129,7 +130,8 @@ Hooks.once("init", function() {
       vec2,
       vec3,
       vec4,
-      SizedPointSourceShadowWallVertexShaderTest
+      SizedPointSourceShadowWallVertexShaderTest,
+      DirectionalSourceShadowWallVertexShaderTest
     }
   };
 
