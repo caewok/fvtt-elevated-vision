@@ -191,6 +191,65 @@ bool penumbraCanvasIntersection(in Plane canvasPlane, in vec3 wallEndpoint, in v
 }
 
 /**
+ * Test if a rect, represented as an array of 4 clockwise points from top left, contains point.
+ */
+bool _rectContains(vec2[4] rect, vec2 pt) {
+  const int TL = 0;
+  const int TR = 1;
+  const int BR = 2;
+  const int BL = 3;
+  return pt.x >= rect[TL].x
+    && pt.x < rect[TR].x
+    && pt.y >= rect[TL].y
+    && pt.y < rect[BR].y;
+}
+
+/**
+ * Get the corner that can be used to project a far parallel ray to a wall.
+ * Used in penumbraEndpoints to determine the infinite shadow parallel ray.
+ */
+vec2 _parallelFarCorner(vec3[2] wallEndpoints, vec2 wallDir, vec3 nearFarDir) {
+  const int TL = 0;
+  const int TR = 1;
+  const int BR = 2;
+  const int BL = 3;
+
+  // Ensure the shadow extends to the canvas edges.
+  // Set the far parallel to intersect a corner.
+  vec2[4] sceneRect;
+  sceneRect[TL] = vec2(0.0, 0.0);
+  sceneRect[TR] = vec2((uSceneDims.x * 2.0) + uSceneDims.z, 0.0);
+  sceneRect[BR] = vec2((uSceneDims.x * 2.0) + uSceneDims.z, (uSceneDims.y * 2.0) + uSceneDims.w);
+  sceneRect[BL] = vec2(0.0, (uSceneDims.y * 2.0) + uSceneDims.w);
+
+  float oWallLight = orient((wallEndpoints[0]).xy, wallEndpoints[1].xy, wallEndpoints[0].xy - normalize(nearFarDir.xy));
+  if ( wallDir.x == 0.0 ) {
+    // Wall parallel to left/right.
+    float oTL = orient(wallEndpoints[0].xy, wallEndpoints[1].xy, sceneRect[TL]);
+    return (oTL * oWallLight) < 0.0 ? sceneRect[TL] : sceneRect[TR];
+  }
+
+  if ( wallDir.y == 0.0 ) {
+    // Wall parallel to top/bottom.
+    float oTL = orient(wallEndpoints[0].xy, wallEndpoints[1].xy, sceneRect[TL]);
+    return (oTL * oWallLight) < 0.0 ? sceneRect[TL] : sceneRect[BL];
+  }
+
+  // One corner opposite the light can be used; its line will not intersect the canvas rect.
+  for ( int i = 0; i < 4; i += 1 ) {
+    vec2 corner = sceneRect[i];
+    float oCorner = orient(wallEndpoints[0].xy, wallEndpoints[1].xy, corner);
+    if ( (oCorner * oWallLight) < 0.0 ) {
+      Ray2d r = Ray2d(corner, wallDir);
+      vec2 testPt = projectRay(r, 1.0);
+      if ( !_rectContains(sceneRect, testPt) ) return corner;
+    }
+  }
+  return sceneRect[0]; // Should not happen.
+}
+
+
+/**
  * Get either the point where the penumbra direction intersects the canvas or the point
  * at maximum canvas distance, as measured from wall endpoint 0.
  * Calculates points from both wall endpoints 0 and 1.
@@ -203,21 +262,23 @@ vec2[2] penumbraEndpoints(in vec3[2] wallEndpoints, in vec2 wallDir, in vec3 sid
   vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
   Plane canvasPlane = Plane(planePoint, planeNormal);
 
-  vec2[2] canvasIx = vec2[2](vec2(0.0), vec2(0.0));
   bool infiniteShadow = nearFarDir.z >= 0.0; // Ray is rising as it moves from light --> wall.
+  vec2 keyPoint;
   if ( infiniteShadow ||
-    !penumbraCanvasIntersection(canvasPlane, wallEndpoints[0], wallDir, sideDir0, nearFarDir, canvasIx[0]) ) {
-    // Use max distance from wall endpoint 0 to fake infinite shadow.
-    float maxR = sqrt(uSceneDims.z * uSceneDims.z + uSceneDims.w * uSceneDims.w) * 2.0;
-    Ray2d dirRay = Ray2d(wallEndpoints[0].xy, normalize(sideDir0.xy));
-    canvasIx[0] = projectRay(dirRay, maxR);
+    !penumbraCanvasIntersection(canvasPlane, wallEndpoints[0], wallDir, sideDir0, nearFarDir, keyPoint) ) {
+
+    keyPoint = _parallelFarCorner(wallEndpoints, wallDir, nearFarDir);
   }
+
   // Get the other endpoint by intersecting the other ray.
   // TODO: If the endpoint heights are different, a more nuanced approach would be required.
-  Ray2d farParallelRay = Ray2d(canvasIx[0], wallDir);
-  lineLineIntersection(farParallelRay, Ray2d(wallEndpoints[1].xy, sideDir1.xy), canvasIx[1]);
+  Ray2d farParallelRay = Ray2d(keyPoint, wallDir);
+  vec2[2] canvasIx = vec2[2](vec2(0.0), vec2(0.0));
+  lineLineIntersection(farParallelRay, Ray2d(wallEndpoints[0].xy, normalize(sideDir0.xy)), canvasIx[0]);
+  lineLineIntersection(farParallelRay, Ray2d(wallEndpoints[1].xy, normalize(sideDir1.xy)), canvasIx[1]);
   return canvasIx;
 }
+
 
 /**
  * Get all shadow-canvas intersections for a given wall endpoint.
@@ -670,10 +731,12 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
 //   else if ( inFarPenumbra ) fragColor = vec4(0.0, vBary.x, 0.0, 0.8);
 //   return;
 
-  float farShadow = inFarPenumbra ? linearConversion(vPenumbra.x, 0.0, farRatios[MIDPENUMBRA], 0.0, 0.5)
+  // UMBRA is nearer to 1; PENUMBRA is nearer to 0.
+  float farShadow = inFarPenumbra ? linearConversion(vPenumbra.x, farRatios[PENUMBRA], farRatios[MIDPENUMBRA], 0.0, 0.5)
       : inFarMidPenumbra ? linearConversion(vPenumbra.x, farRatios[MIDPENUMBRA], farRatios[UMBRA], 0.5, 1.0)
         : 1.0;
 
+  // Near shadow is reversed, so UMBRA is nearer 0 and PENUMBRA is nearer to 1.
   float nearShadow = inNearPenumbra ? linearConversion(vPenumbra.x, nearRatios[PENUMBRA], nearRatios[MIDPENUMBRA], 0.0, 0.5)
       : inNearMidPenumbra ? linearConversion(vPenumbra.x, nearRatios[MIDPENUMBRA], nearRatios[UMBRA], 0.5, 1.0)
         : 1.0;
