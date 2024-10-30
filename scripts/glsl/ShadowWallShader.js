@@ -193,8 +193,9 @@ bool penumbraCanvasIntersection(in Plane canvasPlane, in vec3 wallEndpoint, in v
 /**
  * Get either the point where the penumbra direction intersects the canvas or the point
  * at maximum canvas distance, as measured from wall endpoint 0.
+ * Calculates points from both wall endpoints 0 and 1.
  */
-vec2 penumbraEndpoint(in vec3 wallEndpoint, in vec2 wallDirection, in vec3 sideDir, in vec3 nearFarDir) {
+vec2[2] penumbraEndpoints(in vec3[2] wallEndpoints, in vec2 wallDir, in vec3 sideDir0, in vec3 sideDir1, in vec3 nearFarDir) {
   float canvasElevation = uElevationRes.x;
 
   // Plane describing the canvas at elevation.
@@ -202,28 +203,35 @@ vec2 penumbraEndpoint(in vec3 wallEndpoint, in vec2 wallDirection, in vec3 sideD
   vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
   Plane canvasPlane = Plane(planePoint, planeNormal);
 
-  vec2 canvasIx;
-  if ( !penumbraCanvasIntersection(canvasPlane, wallEndpoint, wallDirection, sideDir, nearFarDir, canvasIx) ) {
+  vec2[2] canvasIx = vec2[2](vec2(0.0), vec2(0.0));
+  bool infiniteShadow = nearFarDir.z >= 0.0; // Ray is rising as it moves from light --> wall.
+  if ( infiniteShadow ||
+    !penumbraCanvasIntersection(canvasPlane, wallEndpoints[0], wallDir, sideDir0, nearFarDir, canvasIx[0]) ) {
     // Use max distance from wall endpoint 0 to fake infinite shadow.
     float maxR = sqrt(uSceneDims.z * uSceneDims.z + uSceneDims.w * uSceneDims.w) * 2.0;
-    Ray2d dirRay = Ray2d(wallEndpoint.xy, normalize(sideDir.xy));
-    return projectRay(dirRay, maxR);
+    Ray2d dirRay = Ray2d(wallEndpoints[0].xy, normalize(sideDir0.xy));
+    canvasIx[0] = projectRay(dirRay, maxR);
   }
+  // Get the other endpoint by intersecting the other ray.
+  // TODO: If the endpoint heights are different, a more nuanced approach would be required.
+  Ray2d farParallelRay = Ray2d(canvasIx[0], wallDir);
+  lineLineIntersection(farParallelRay, Ray2d(wallEndpoints[1].xy, sideDir1.xy), canvasIx[1]);
   return canvasIx;
 }
 
 /**
  * Get all shadow-canvas intersections for a given wall endpoint.
  */
-ShadowPoints penumbraEndpoints(in ShadowDirections[2] sidePenumbraDirs, in ShadowDirections[2] nearFarPenumbraDirs, in Wall wall, in int idx) {
-  ShadowDirections sidePenumbraDir = sidePenumbraDirs[idx];
-  ShadowDirections nearFarPenumbraDir = nearFarPenumbraDirs[idx];
-  vec3 wallEndpoint = wall.top[idx];
-  return ShadowPoints(
-    penumbraEndpoint(wallEndpoint, wall.direction, sidePenumbraDir.umbra, nearFarPenumbraDir.umbra),
-    penumbraEndpoint(wallEndpoint, wall.direction, sidePenumbraDir.midpenumbra, nearFarPenumbraDir.midpenumbra),
-    penumbraEndpoint(wallEndpoint, wall.direction, sidePenumbraDir.penumbra, nearFarPenumbraDir.penumbra)
-  );
+ShadowPoints[2] endpointsForPenumbras(in ShadowDirections[2] sidePenumbraDirs, in ShadowDirections[2] nearFarPenumbraDirs, in vec3[2] wallEndpoints, in vec2 wallDir) {
+  vec2[2] umbra = penumbraEndpoints(wallEndpoints, wallDir,
+      sidePenumbraDirs[0].umbra, sidePenumbraDirs[1].umbra, nearFarPenumbraDirs[0].umbra);
+  vec2[2] midpenumbra = penumbraEndpoints(wallEndpoints, wallDir,
+      sidePenumbraDirs[0].midpenumbra, sidePenumbraDirs[1].midpenumbra, nearFarPenumbraDirs[0].midpenumbra);
+  vec2[2] penumbra = penumbraEndpoints(wallEndpoints, wallDir,
+      sidePenumbraDirs[0].penumbra, sidePenumbraDirs[1].penumbra, nearFarPenumbraDirs[0].penumbra);
+  return ShadowPoints[2](
+    ShadowPoints(umbra[0], midpenumbra[0], penumbra[0]),
+    ShadowPoints(umbra[1], midpenumbra[1], penumbra[1]));
 }
 
 /**
@@ -275,9 +283,16 @@ void setSidePenumbraVars(in vec2 pt, in Wall wall, in vec2[3] penumbraTri, in ve
 /**
  * Calculate the flat variables, including near/far ratios.
  */
-void calculateFlatVariables(in Wall wall, in ShadowPoints[2] farPenumbraPoints, in ShadowPoints[2] nearPenumbraPoints, in vec2[3] penumbraTri) {
+void calculateFlatVariables(
+  in Wall wall,
+  in ShadowDirections[2] sidePenumbraDirs,
+  in ShadowPoints farPenumbraPoints0,
+  in ShadowDirections[2] nearPenumbraDirs,
+  in vec2[3] penumbraTri) {
+
   vec3 wTop = wall.top[0];
   vec3 wBottom = wall.bottom[0];
+  float canvasElevation = uElevationRes.x;
 
   fWallCornerLinked = vec2(wall.linkValue[0], wall.linkValue[1]);
   fWallHeights = vec2(wTop.z, wBottom.z);
@@ -291,22 +306,23 @@ void calculateFlatVariables(in Wall wall, in ShadowPoints[2] farPenumbraPoints, 
 
   // Location of the near shadow along the x axis of the barycentric penumbra triangle.
   // Stored as vec3: UMBRA (x), MID (y), PENUMBRA (z)
-  ShadowPoints nearPts = nearPenumbraPoints[0];
-  ShadowPoints farPts = farPenumbraPoints[0];
-  fNearRatios = vec3(
-    baryForPoint(nearPts.umbra, penumbraTri).x,
-    baryForPoint(nearPts.midpenumbra, penumbraTri).x,
-    baryForPoint(nearPts.penumbra, penumbraTri).x
-  );
-  fFarRatios = vec3(
-    baryForPoint(farPts.umbra, penumbraTri).x,
-    baryForPoint(farPts.midpenumbra, penumbraTri).x,
-    0.0 // By definition
-  );
+  ShadowPoints farPts = farPenumbraPoints0;
+  fFarRatios = vec3(0.0);
+  fFarRatios[UMBRA] = baryForPoint(farPts.umbra, penumbraTri).x;
+  fFarRatios[MIDPENUMBRA] = baryForPoint(farPts.midpenumbra, penumbraTri).x;
+  // PENUMBRA is 0.0 by definition, b/c it is at end of triangle.
 
-  // TODO: Can we still test for whether near ratios can be just set to the fWallRatio?
-  //       Could test if nearPenumbraPoints !== wall endpoint?
-  // vec3 fNearRatios = vec3(fWallRatio);
+  // Location of the near shadow along the x axis of the barycentric penumbra triangle.
+  // Stored as vec3: UMBRA (x), MID (y), PENUMBRA (z)
+  fNearRatios = vec3(fWallRatio); // Near shadow starts at wall unless the wall is "floating."
+  if ( wBottom.z > canvasElevation ) {
+    ShadowPoints[2] nearPenumbraPoints = endpointsForPenumbras(
+      sidePenumbraDirs, nearPenumbraDirs, wall.bottom, wall.direction);
+    ShadowPoints nearPts = nearPenumbraPoints[0];
+    fNearRatios[UMBRA] = baryForPoint(nearPts.umbra, penumbraTri).x;
+    fNearRatios[MIDPENUMBRA] = baryForPoint(nearPts.midpenumbra, penumbraTri).x;
+    fNearRatios[PENUMBRA] = baryForPoint(nearPts.penumbra, penumbraTri).x;
+  }
 }
 
 
@@ -335,10 +351,7 @@ int vertexNum = gl_VertexID % 3;
 // Penumbra structures.
 adjustSidePenumbraForLinkedEndpoints(sidePenumbraDirs[0], wall, 0);
 adjustSidePenumbraForLinkedEndpoints(sidePenumbraDirs[1], wall, 1);
-ShadowPoints[2] farPenumbraPoints = ShadowPoints[2](
-  penumbraEndpoints(sidePenumbraDirs, farPenumbraDirs, wall, 0),
-  penumbraEndpoints(sidePenumbraDirs, farPenumbraDirs, wall, 1)
-);
+ShadowPoints[2] farPenumbraPoints = endpointsForPenumbras(sidePenumbraDirs, farPenumbraDirs, wall.top, wall.direction);
 
 // Vertex Calculations
 // Big triangle ABC is the bounds of the potential shadow.
@@ -364,11 +377,7 @@ gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition,
 
 // Finally, set the flat variables when we hit the last vertex for this triangle.
 if ( vertexNum == 2 ) {
-  ShadowPoints[2] nearPenumbraPoints = ShadowPoints[2](
-    penumbraEndpoints(sidePenumbraDirs, nearPenumbraDirs, wall, 0),
-    penumbraEndpoints(sidePenumbraDirs, nearPenumbraDirs, wall, 1)
-  );
-  calculateFlatVariables(wall, farPenumbraPoints, nearPenumbraPoints, penumbraTri);
+  calculateFlatVariables(wall, sidePenumbraDirs, farPenumbraPoints[0], nearPenumbraDirs, penumbraTri);
 }
 `;
 
