@@ -1733,11 +1733,22 @@ export class SizedPointSourceShadowWallVertexShaderTest extends ShadowWallVertex
    * @returns {ShadowDirections}
    */
   calculateNearFarPenumbraDirection(light, wall, far, idx) {
-    const w = far ? wall.top[idx] : wall.bottom[idx]; // Wall endpoint from which a penumbra is cast.
+    let w; // Wall endpoint from which a penumbra is cast.
+    let umbraLight;
+    let penumbraLight;
+    if ( far ) {
+      w = wall.top[idx];
+      umbraLight = light.top;
+      penumbraLight = light.bottom;
+    } else {
+      w = wall.bottom[idx];
+      umbraLight = light.bottom;
+      penumbraLight = light.top;
+    }
     return new ShadowDirectionsGLSLStruct({
-      umbra: normalizedDirection(light.top, w), // Umbra
+      umbra: normalizedDirection(umbraLight, w), // Umbra
       midpenumbra: normalizedDirection(light.center, w), // Mid
-      penumbra: normalizedDirection(light.bottom, w) // Penumbra
+      penumbra: normalizedDirection(penumbraLight, w) // Penumbra
     });
   }
 

@@ -1464,11 +1464,22 @@ ShadowDirections calculateSidePenumbraDirection(in Light light, in Wall wall, in
  * Calculate the umbra, mid, and penumbra direction near or far rays from a given wall endpoint.a
  */
 ShadowDirections calculateNearFarPenumbraDirection(in Light light, in Wall wall, in bool far, in int idx) {
-  vec3 w = far ? wall.top[idx] : wall.bottom[idx]; // Wall endpoint from which a penumbra is cast.
+  vec3 w; // Wall endpoint from which a penumbra is cast.
+  vec3 umbraLight;
+  vec3 penumbraLight;
+  if ( far ) {
+    w = wall.top[idx];
+    umbraLight = light.top;
+    penumbraLight = light.bottom;
+  } else {
+    w = wall.bottom[idx];
+    umbraLight = light.bottom;
+    penumbraLight = light.top;
+  }
   return ShadowDirections(
-    normalizedDirection(light.top, w), // Umbra
+    normalizedDirection(umbraLight, w), // Umbra
     normalizedDirection(light.center, w), // Mid
-    normalizedDirection(light.bottom, w) // Penumbra
+    normalizedDirection(penumbraLight, w) // Penumbra
   );
 }
 
