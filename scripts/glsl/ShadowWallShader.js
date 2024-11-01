@@ -335,7 +335,11 @@ void setSidePenumbraVars(in vec2 pt, in Wall wall, in vec2[3] penumbraTri, in ve
     vec2 a = wall.top[i].xy;
     vec2 b = penumbraTri[i + 1];
     vec2 c = umbraTri[i + 1];
-    vSidePenumbras[i] = barycentric(pt, a, b, c);
+
+    // If b and c are equal, there is no side penumbra; set so all points are outside.
+    if ( b.x == c.x && b.y == c.y ) vSidePenumbras[i] = vec3(-1.0);
+    else vSidePenumbras[i] = barycentric(pt, a, b, c);
+    // vSidePenumbras[i] = barycentric(pt, a, b, c);
   }
   vSidePenumbra0 = vSidePenumbras[0];
   vSidePenumbra1 = vSidePenumbras[1];
@@ -637,8 +641,8 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
   if ( inFrontOfWall() ) return;
 
   // For testing
-  // fragColor = vec4(vBary.x, 0.0, 0.0, 0.8);
-  // fragColor = vec4(vBary, 0.8);
+  // fragColor = vec4(vPenumbra.x, 0.0, 0.0, 0.8);
+  // fragColor = vec4(vPenumbra, 0.8);
   // fragColor = vec4(vec3(0.0), 0.8);
   // return;
 
@@ -646,8 +650,6 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
   // If a threshold applies, we may be able to ignore the wall.
   if ( thresholdApplies() ) return;
   #endif
-
-  if ( inFrontOfWall() ) return;
 
   // The light position is artificially set to the intersection of the outer two penumbra
   // lines. So all fragment points must be either in a penumbra or in the umbra.
@@ -698,12 +700,12 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
 //     fragColor = lightEncoding(0.0);
 //     return;
 //   }
-
-  // if ( inFarPenumbra ) fragColor = vec4(vec3(0.0), 0.8);
-  // if ( inFarPenumbra) fragColor = vec4(vBary, 0.8);
-  // if ( inSidePenumbra0) fragColor = vec4(vSidePenumbra0, 0.8);
-  // if ( inSidePenumbra1 ) fragColor = vec4(vSidePenumbra1, 0.8);
-  // return;
+  //fragColor = vec4(vSidePenumbra0, 0.8);
+//   if ( inFarPenumbra ) fragColor = vec4(vec3(0.0), 0.8);
+//   if ( inFarPenumbra) fragColor = vec4(vPenumbra, 0.8);
+// if ( inSidePenumbra0) fragColor = vec4(vSidePenumbra0, 0.8);
+//   if ( inSidePenumbra1 ) fragColor = vec4(vSidePenumbra1, 0.8);
+  //return;
 
   // Blend the two side penumbras if overlapping by multiplying the light amounts.
   float side0Shadow = inSidePenumbra0 ? vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z) : 1.0;
@@ -727,8 +729,8 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
 //   return;
 
   // Testing
-//   if ( vBary.x < farRatios.mid ) fragColor = vec4(vBary.x, 0.0, 0.0, 0.8);
-//   else if ( inFarPenumbra ) fragColor = vec4(0.0, vBary.x, 0.0, 0.8);
+//   if ( vPenumbra.x < farRatios.mid ) fragColor = vec4(vPenumbra.x, 0.0, 0.0, 0.8);
+//   else if ( inFarPenumbra ) fragColor = vec4(0.0, vPenumbra.x, 0.0, 0.8);
 //   return;
 
   // UMBRA is nearer to 1; PENUMBRA is nearer to 0.

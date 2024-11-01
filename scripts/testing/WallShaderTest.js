@@ -253,7 +253,10 @@ export function barycentric(p, a, b, c) {
   const d20 = v2.dot(v0);
   const d21 = v2.dot(v1);
 
-  const denomInv = 1.0 / ((d00 * d11) - (d01 * d01)); // Fixed for given triangle
+  const denom = ((d00 * d11) - (d01 * d01));
+  if ( denom == 0.0 ) return new vec3(-1.0, -1.0, -1.0);
+
+  const denomInv = 1.0 / denom; // Fixed for given triangle
   const v = ((d11 * d20) - (d01 * d21)) * denomInv;
   const w = ((d00 * d21) - (d01 * d20)) * denomInv;
   const u = 1.0 - v - w;
@@ -785,6 +788,7 @@ class ShadowWallVertexShaderTest {
       vVertexPosition,
       vTerrainTexCoord,
       vPenumbra,
+      vMidPenumbra,
       vUmbra,
       vSidePenumbra0,
       vSidePenumbra1 } = this;
@@ -1128,6 +1132,8 @@ class ShadowWallVertexShaderTest {
       const a = wall.top[i].xy;
       const b = penumbraTri[i + 1];
       const c = umbraTri[i + 1];
+
+      // If b and c are equal, there is no side penumbra;
       vSidePenumbras[i] = barycentric(pt, a, b, c);
     }
     this.vSidePenumbra0 = vSidePenumbras[0];
@@ -2123,6 +2129,8 @@ shader0.uniforms.uElevationRes[0] = 0
 shader1.uniforms.uElevationRes[0] = 0
 
 
+canvas.stage.addChild(ev.shadowMesh)
+
 // Calculate angle between the two edges.
 // Angle first --> linked endpoint --> other, on side away from light
 function linkedEndpoints(edge0, edge1) {
@@ -2301,6 +2309,57 @@ vec2 fWallCornerLinked?
 uLightPosition
 uElevationRes
 uTerrainSampler
+
+barycentric:
+vec3 vPenumbra
+vec3 vSidePenumbra0
+vec3 vSidePenumbra1
+
+interpolated:
+vec2 vVertexPosition
+
+flats:
+vec2 fWallRatio — for elevation
+vec2 fFarRatios -- technically a vec2 b/c penumbra is 0.0
+vec3 fNearRatios
+float fWallSenseType
+float fThresholdRadius2
+
+
+
+
+Currently, per vertex:
+float aThresholdRadius2
+vec4 aWallCorner0
+vec4 aWallCorner1
+float aWallSenseType
+10 total floats.
+
+Could do per vertex:
+bary coords:
+// vPenumbra based on vertexNum
+float vSidePenumbra0 (baryForPoint)
+float vSidePenumbra1 (baryForPoint)
+
+if useful:
+float vMidPenumbra
+float vUmbra
+
+Other:
+vec2 vVertexPosition
+
+Flats:
+vec2 fWallRatio
+vec2 fFarRatios
+vec3 fNearRatios
+float fWallSenseType
+float fThresholdRadius2
+Likely 13–15 total floats
+Need to cut back on flats.
+
+
+
+
 
 */
 

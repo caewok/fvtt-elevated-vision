@@ -408,7 +408,10 @@ vec3 barycentric(in vec3 p, in vec3 a, in vec3 b, in vec3 c) {
   float d20 = dot(v2, v0);
   float d21 = dot(v2, v1);
 
-  float denomInv = 1.0 / ((d00 * d11) - (d01 * d01)); // Fixed for given triangle
+  float denom = ((d00 * d11) - (d01 * d01));
+  // if ( denom == 0.0 ) return vec3(-1.0);
+
+  float denomInv = 1.0 / denom; // Fixed for given triangle
   float v = ((d11 * d20) - (d01 * d21)) * denomInv;
   float w = ((d00 * d21) - (d01 * d20)) * denomInv;
   float u = 1.0 - v - w;
