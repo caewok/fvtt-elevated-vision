@@ -1290,6 +1290,8 @@ ShadowDirections calculateSidePenumbraDirection(in Wall wall, in int idx) {
   float solarWallAngle = solarAngle * oWallLight;
   float multiplier = idx == 0 ? 1.0 : -1.0;
   vec2 dirPenumbra = fromAngle(vec2(0.0), uAzimuth + (solarWallAngle * multiplier), 1.0) * -1.0;
+  vec2 dirUmbra = fromAngle(vec2(0.0), uAzimuth - (solarWallAngle * multiplier), 1.0) * -1.0;
+  // vec2 dirMidPenumbra = fromAngle(vec2(0.0), uAzimuth, 1.0) * -1.0;
 
   // Calculate the change in z for the light direction based on differing solar angles.
   float[3] zFar;
@@ -1299,8 +1301,8 @@ ShadowDirections calculateSidePenumbraDirection(in Wall wall, in int idx) {
 
   // Normalize based on the mid penumbra for corner 0
   return ShadowDirections(
-    normalize(vec3(dirPenumbra, zFar[UMBRA])), // umbra
-    normalize(vec3(dirPenumbra, zFar[MIDPENUMBRA])), // midpenumbra
+    normalize(vec3(dirUmbra, zFar[UMBRA])), // umbra
+    normalize(vec3(dirMidPenumbra, zFar[MIDPENUMBRA])), // midpenumbra
     normalize(vec3(dirPenumbra, zFar[PENUMBRA])) // penumbra
   );
 }

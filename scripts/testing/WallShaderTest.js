@@ -2033,6 +2033,8 @@ export class DirectionalSourceShadowWallVertexShaderTest extends ShadowWallVerte
     const solarWallAngle = solarAngle * oWallLight;
     const multiplier = idx === 0 ? 1.0 : -1.0;
     const dirPenumbra = fromAngle(new vec2(0.0), uAzimuth + (solarWallAngle * multiplier), 1.0).multiplyScalar(-1.0);
+    const dirUmbra = fromAngle(new vec2(0.0), uAzimuth - (solarWallAngle * multiplier), 1.0).multiplyScalar(-1.0);
+    // const dirMidPenumbra = fromAngle(new vec2(0.0), uAzimuth, 1.0).multiplyScalar(-1.0);
 
     // Calculate the change in z for the light direction based on differing solar angles.
     const zFar = new Array(3);
@@ -2042,8 +2044,8 @@ export class DirectionalSourceShadowWallVertexShaderTest extends ShadowWallVerte
 
     // Normalize based on the mid penumbra for corner 0
     return new ShadowDirectionsGLSLStruct({
-      umbra: (new vec3(dirPenumbra, zFar[UMBRA])).normalize(),
-      midpenumbra: (new vec3(dirPenumbra, zFar[MIDPENUMBRA])).normalize(),
+      umbra: (new vec3(dirUmbra, zFar[UMBRA])).normalize(),
+      midpenumbra: (new vec3(dirMidPenumbra, zFar[MIDPENUMBRA])).normalize(),
       penumbra: (new vec3(dirPenumbra, zFar[PENUMBRA])).normalize()
     });
   }
