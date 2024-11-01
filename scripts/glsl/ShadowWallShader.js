@@ -107,6 +107,7 @@ void adjustSidePenumbraForLinkedEndpoints(inout ShadowDirections penObj, in Wall
   // If no linked wall, full penumbra is used.
   float linkAngle = wall.linkValue[idx];
   if ( linkAngle == EV_ENDPOINT_LINKED_UNBLOCKED ) return;
+  // return;
 
   // Determine orientation relative to the mid-penumbra.
   // 4 quadrants:
@@ -336,8 +337,10 @@ void setSidePenumbraVars(in vec2 pt, in Wall wall, in vec2[3] penumbraTri, in ve
     vec2 b = penumbraTri[i + 1];
     vec2 c = umbraTri[i + 1];
 
-    // If b and c are equal, there is no side penumbra; set so all points are outside.
-    if ( b.x == c.x && b.y == c.y ) vSidePenumbras[i] = vec3(-1.0);
+    // If b and c are equal, there is no side penumbra;
+    // If a/b/c line up, there is no side penumbra.
+    // Set so all points are outside by making the triangle a fixed -1.
+    if ( (b.x == c.x && b.y == c.y) || abs(orient(a, b, c)) < 1.0 )  vSidePenumbras[i] = vec3(-1.0);
     else vSidePenumbras[i] = barycentric(pt, a, b, c);
     // vSidePenumbras[i] = barycentric(pt, a, b, c);
   }
@@ -703,9 +706,9 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
   //fragColor = vec4(vSidePenumbra0, 0.8);
 //   if ( inFarPenumbra ) fragColor = vec4(vec3(0.0), 0.8);
 //   if ( inFarPenumbra) fragColor = vec4(vPenumbra, 0.8);
-// if ( inSidePenumbra0) fragColor = vec4(vSidePenumbra0, 0.8);
-//   if ( inSidePenumbra1 ) fragColor = vec4(vSidePenumbra1, 0.8);
-  //return;
+   // if ( inSidePenumbra0) fragColor = vec4(vSidePenumbra0, 0.8);
+   // if ( inSidePenumbra1 ) fragColor = vec4(vSidePenumbra1, 0.8);
+  // return;
 
   // Blend the two side penumbras if overlapping by multiplying the light amounts.
   float side0Shadow = inSidePenumbra0 ? vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z) : 1.0;

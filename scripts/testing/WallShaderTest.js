@@ -254,7 +254,7 @@ export function barycentric(p, a, b, c) {
   const d21 = v2.dot(v1);
 
   const denom = ((d00 * d11) - (d01 * d01));
-  if ( denom == 0.0 ) return new vec3(-1.0, -1.0, -1.0);
+  // if ( denom == 0.0 ) return new vec3(-1.0, -1.0, -1.0);
 
   const denomInv = 1.0 / denom; // Fixed for given triangle
   const v = ((d11 * d20) - (d01 * d21)) * denomInv;
@@ -761,9 +761,16 @@ class ShadowWallVertexShaderTest {
   /** @type {vec3[2][3]} */
   get sidePenumbraDirs() {
     return [
-      this._adjustSidePenumbraForLinkedEndpoints(this.calculateSidePenumbraDirection(0), 0),
-      this._adjustSidePenumbraForLinkedEndpoints(this.calculateSidePenumbraDirection(1), 1)
+      this.calculateSidePenumbraDirection(0),
+      this.calculateSidePenumbraDirection(1)
     ];
+  }
+
+  get adjSidePenumbraDirs() {
+    const sidePenumbraDirs = this.sidePenumbraDirs;
+    this.adjustSidePenumbraForLinkedEndpoints(sidePenumbraDirs[0], this.wall, 0);
+    this.adjustSidePenumbraForLinkedEndpoints(sidePenumbraDirs[1], this.wall, 1);
+    return sidePenumbraDirs;
   }
 
   /** @type {vec3[2][3]} */
@@ -824,7 +831,10 @@ class ShadowWallVertexShaderTest {
 
     // If no linked wall, full penumbra is used.
     const linkAngle = wall.linkValue[idx];
-    if ( linkAngle === this.constructor.EV_ENDPOINT_LINKED_UNBLOCKED ) return;
+    if ( linkAngle === this.constructor.EV_ENDPOINT_LINKED_UNBLOCKED ) {
+      console.log(`adjustSidePenumbraForLinkedEndpoints|idx ${idx} is unblocked.`);
+      return;
+    }
 
     // Determine orientation relative to the mid-penumbra.
     // 4 quadrants:
@@ -838,7 +848,7 @@ class ShadowWallVertexShaderTest {
     // Point positions.
     const linkPt = fromAngle(wXY, linkAngle, 1.0);
     const midR = new Ray2d(wXY, penObj.midpenumbra.xy);
-    const midPt = midR.project(1);
+    const midPt = midR.project(1.0);
 
     // Orientation re mid.
     const other = (wall.top[1 - idx]).xy;
@@ -855,7 +865,8 @@ class ShadowWallVertexShaderTest {
       penObj.penumbra.x = penObj.midpenumbra.x;
       penObj.penumbra.y = penObj.midpenumbra.y;
       penObj.penumbra.z = penObj.midpenumbra.z;
-      return penObj;
+      console.log(`adjustSidePenumbraForLinkedEndpoints|idx ${idx} linked wall blocks light fully.`);
+      return;
     }
 
     // 3 & 4: Linked wall between wall and mid
@@ -863,7 +874,10 @@ class ShadowWallVertexShaderTest {
     const oLinkWall = orient(wXY, linkPt, other);
     const oLinkMid = orient(wXY, linkPt, midPt);
     const linkBetweenWallAndMid = oLinkWall * oLinkMid < 0.0;
-    if ( !linkBetweenWallAndMid ) return;
+    if ( !linkBetweenWallAndMid ) {
+      console.log(`adjustSidePenumbraForLinkedEndpoints|idx ${idx} not blocking (#3).`);
+      return;
+    }
 
     // 4. possible block.
     // What side of umbra is the linked wall on? If not on the mid-side, it doesn't block.
@@ -872,7 +886,10 @@ class ShadowWallVertexShaderTest {
     const oUmbraLink = orient(wXY, umbraPt, linkPt);
     const oUmbraMid = orient(wXY, umbraPt, midPt);
     const linkAfterUmbra = oUmbraLink * oUmbraMid > 0.0;
-    if ( !linkAfterUmbra ) return;
+    if ( !linkAfterUmbra ) {
+      console.log(`adjustSidePenumbraForLinkedEndpoints|idx ${idx} is unblocked.`);
+      return;
+    }
 
     // Linked wall is after umbra, moving toward mid.
     const oMidUmbra = orient(wXY, midPt, umbraPt);
@@ -883,11 +900,14 @@ class ShadowWallVertexShaderTest {
     const linkDir = normalizedDirection(wXY, linkPt);
     penObj.umbra.x = linkDir.x;
     penObj.umbra.y = linkDir.y;
+    console.log(`adjustSidePenumbraForLinkedEndpoints|idx ${idx} partially blocked. Adjusting umbra.`);
     if ( oMidUmbra * oMidLink > 0.0 ) return;
 
     // Linked wall is after mid; adjust mid as well.
     penObj.midpenumbra.x = linkDir.x;
     penObj.midpenumbra.y = linkDir.y;
+    console.log(`adjustSidePenumbraForLinkedEndpoints|idx ${idx} partially blocked. Adjusting mid.`);
+
   }
 
 
@@ -1124,6 +1144,9 @@ class ShadowWallVertexShaderTest {
    * @returns {object} For testing only, returns the varyings. Returns void in shader.
    */
   setSidePenumbraVars(pt, wall, penumbraTri, umbraTri) {
+    const orient = foundry.utils.orient2dFast;
+    const abs = Math.abs;
+
     const vSidePenumbras = [
       new vec3(),
       new vec3()
@@ -1134,7 +1157,11 @@ class ShadowWallVertexShaderTest {
       const c = umbraTri[i + 1];
 
       // If b and c are equal, there is no side penumbra;
-      vSidePenumbras[i] = barycentric(pt, a, b, c);
+      // If a/b/c line up, there is no side penumbra.
+      // Set so all points are outside by making the triangle a fixed -1.
+      if ( abs(orient(a, b, c)) < 1.0 ) vSidePenumbras[i] = new vec3(-1.0);
+      else vSidePenumbras[i] = barycentric(pt, a, b, c);
+      // vSidePenumbras[i] = barycentric(pt, a, b, c);
     }
     this.vSidePenumbra0 = vSidePenumbras[0];
     this.vSidePenumbra1 = vSidePenumbras[1];
@@ -1207,15 +1234,16 @@ class ShadowWallVertexShaderTest {
     * @returns {object} Object containing all out variables.
     */
   vertexCalculations(gl_VertexID = 0) {
-    const { sidePenumbraDirs, farPenumbraDirs, nearPenumbraDirs, wall } = this;
+    const { farPenumbraDirs, nearPenumbraDirs, wall } = this;
     const { uSceneDims } = this;
 
     const vertexNum = gl_VertexID % 3;
     // Penumbra structures.
-    this.adjustSidePenumbraForLinkedEndpoints(sidePenumbraDirs[0], wall, 0);
-    this.adjustSidePenumbraForLinkedEndpoints(sidePenumbraDirs[1], wall, 1);
+    // this.adjustSidePenumbraForLinkedEndpoints(sidePenumbraDirs[0], wall, 0);
+    // this.adjustSidePenumbraForLinkedEndpoints(sidePenumbraDirs[1], wall, 1);
+    const adjSidePenumbraDirs = this.adjSidePenumbraDirs;
     const farPenumbraPoints = this.farPenumbraPoints = this.endpointsForPenumbras(
-      sidePenumbraDirs, farPenumbraDirs, wall.top, wall.direction);
+      adjSidePenumbraDirs, farPenumbraDirs, wall.top, wall.direction);
 
     // Vertex Calculations
     // Big triangle ABC is the bounds of the potential shadow.
@@ -1243,7 +1271,7 @@ class ShadowWallVertexShaderTest {
 
     // Finally, set the flat variables when we hit the last vertex for this triangle.
     if ( vertexNum === 2 ) {
-      this.calculateFlatVariables(wall, sidePenumbraDirs, farPenumbraPoints[0], nearPenumbraDirs, penumbraTri);
+      this.calculateFlatVariables(wall, adjSidePenumbraDirs, farPenumbraPoints[0], nearPenumbraDirs, penumbraTri);
     }
 
     // For debugging.
@@ -1658,6 +1686,22 @@ class ShadowWallVertexShaderTest {
       for ( let i = 0; i < 2; i += 1 ) {
         const endpoint = wall.top[i].xy;
         const penumbraPt = endpoint.add(sidePenumbraDirs[i][key].xy.normalize().multiplyScalar(dist));
+        Draw.segment({ a: endpoint, b: penumbraPt }, { color });
+      }
+    }
+  }
+
+  drawAdjustedSidePenumbraDirections(dist = canvas.dimensions.maxR) {
+    const { adjSidePenumbraDirs, wall } = this;
+    const COLOR_KEYS = {
+      umbra: Draw.COLORS.red,
+      midpenumbra: Draw.COLORS.orange,
+      penumbra: Draw.COLORS.yellow
+    };
+    for ( const [key, color] of Object.entries(COLOR_KEYS) ) {
+      for ( let i = 0; i < 2; i += 1 ) {
+        const endpoint = wall.top[i].xy;
+        const penumbraPt = endpoint.add(adjSidePenumbraDirs[i][key].xy.normalize().multiplyScalar(dist));
         Draw.segment({ a: endpoint, b: penumbraPt }, { color });
       }
     }
@@ -2325,9 +2369,6 @@ vec3 fNearRatios
 float fWallSenseType
 float fThresholdRadius2
 
-
-
-
 Currently, per vertex:
 float aThresholdRadius2
 vec4 aWallCorner0
@@ -2356,10 +2397,6 @@ float fWallSenseType
 float fThresholdRadius2
 Likely 13–15 total floats
 Need to cut back on flats.
-
-
-
-
 
 */
 
