@@ -340,7 +340,7 @@ void setSidePenumbraVars(in vec2 pt, in Wall wall, in vec2[3] penumbraTri, in ve
     // If b and c are equal, there is no side penumbra;
     // If a/b/c line up, there is no side penumbra.
     // Set so all points are outside by making the triangle a fixed -1.
-    if ( (b.x == c.x && b.y == c.y) || abs(orient(a, b, c)) < 1.0 )  vSidePenumbras[i] = vec3(-1.0);
+    if ( abs(orient(a, b, c)) < 1.0 )  vSidePenumbras[i] = vec3(-1.0);
     else vSidePenumbras[i] = barycentric(pt, a, b, c);
     // vSidePenumbras[i] = barycentric(pt, a, b, c);
   }
@@ -560,9 +560,14 @@ bool inFrontOfWall() { return vPenumbra.x > fWallRatio; }
  * Does a threshold apply?
  */
 bool thresholdApplies() {
+  #ifdef EV_DIRECTIONAL_LIGHT
+  return false;
+  #endif
+  #ifndef EV_DIRECTIONAL_LIGHT
   return (fWallSenseType == DISTANCE_WALL || fWallSenseType == PROXIMATE_WALL)
     && fThresholdRadius2 != 0.0
     && distanceSquared(vVertexPosition, uLightPosition.xy) < fThresholdRadius2;
+  #endif
 }
 
 /**
@@ -1205,11 +1210,14 @@ in float aThresholdRadius2; // Note: no thresholds for walls apply for direction
 
 out vec2 vVertexPosition;
 out vec2 vTerrainTexCoord;
-out vec3 vBary;
+out vec3 vPenumbra;
+out vec3 vMidPenumbra;
+out vec3 vUmbra;
 out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
 
 flat out float fWallSenseType;
+flat out float fThresholdRadius2;
 flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bottom
 flat out float fWallRatio;
 flat out vec3 fNearRatios; // x: penumbra, y: mid-penumbra, z: umbra
@@ -1225,7 +1233,7 @@ uniform float uElevationAngle; // radians
 uniform float uSolarAngle; // radians
 
 #define PI_1_2 1.5707963267948966
-#define EV_DIRECTIONAL_LIGHT
+#define EV_DIRECTIONAL_LIGHT true
 
 ${defineFunction("normalizeRay")}
 ${defineFunction("rayFromPoints")}
@@ -1248,46 +1256,79 @@ float zChangeForElevationAngle(in float elevationAngle) {
 }
 
 /**
- * Determine the penumbra directions for the directional light.
+ * Determine the change in z for the directional rays.
  */
-PenumbraDir calculatePenumbraDirection(in Wall wall, in int idx) {
-  // Define some terms for ease-of-reference.
+float[3] _calculateZChangeRays() {
+  float solarAngle = max(0.1, uSolarAngle); // TODO: Cannot currently go all the way to 0.
+
+  // Calculate the change in z for the light direction based on differing solar angles.
+  float[3] zDelta;
+  zDelta[UMBRA] = zChangeForElevationAngle(uElevationAngle + solarAngle); // Light top
+  zDelta[MIDPENUMBRA] = zChangeForElevationAngle(uElevationAngle); // Light middle
+  zDelta[PENUMBRA] = zChangeForElevationAngle(uElevationAngle - solarAngle); // Light bottom
+  return zDelta;
+}
+
+/**
+ * The rays from the wall endpoint along the side.
+ */
+ShadowDirections calculateSidePenumbraDirection(in Wall wall, in int idx) {
   float solarAngle = max(0.1, uSolarAngle); // TODO: Cannot currently go all the way to 0.
 
   // Direction from endpoint toward the light
   vec2 lightDirection2d = normalize(fromAngle(vec2(0.0), uAzimuth, 1.0));
 
   // Reverse for determining penumbra
-  vec2 dirMidSidePenumbra = vec2(lightDirection2d * -1.0, lightDirection2d * -1.0);
-
-  // Calculate the change in z for the light direction based on differing solar angles.
-  float zFarUmbra = zChangeForElevationAngle(uElevationAngle + solarAngle); // light top
-  float zFarMidPenumbra = zChangeForElevationAngle(uElevationAngle); // light middle
-  float zFarPenumbra = zChangeForElevationAngle(uElevationAngle - solarAngle); // light bottom
+  vec2 dirMidPenumbra = lightDirection2d * -1.0;
 
   // Determine which side of the wall the light is on.
-  float oWallLight = sign(orient(wall.top[0], wall.top[1], wall.top[0] + lightDirection2d));
+  float oWallLight = sign(orient(wall.top[0].xy, wall.top[1].xy, wall.top[0].xy + lightDirection2d));
 
   // Adjust azimuth by the solarAngle.
   // Determine the direction of the outer penumbra rays from light --> wallCorner1 / wallCorner2.
   // The angle for the penumbra is the azimuth ± the solarAngle.
   float solarWallAngle = solarAngle * oWallLight;
-  float multiplier = idx === 0 ? 1.0 : -1.0;
-  vec2 dirOuterSidePenumbra = vec2(
-    fromAngle(vec2(0.0),
-    uAzimuth + (solarWallAngle * multiplier), 1.0) * -1.0,
-  );
-  // innerSidePenumbra is the same.
+  float multiplier = idx == 0 ? 1.0 : -1.0;
+  vec2 dirPenumbra = fromAngle(vec2(0.0), uAzimuth + (solarWallAngle * multiplier), 1.0) * -1.0;
+
+  // Calculate the change in z for the light direction based on differing solar angles.
+  float[3] zFar;
+  zFar[UMBRA] = zChangeForElevationAngle(uElevationAngle + solarAngle); // Light top
+  zFar[MIDPENUMBRA] = zChangeForElevationAngle(uElevationAngle); // Light middle
+  zFar[PENUMBRA] = zChangeForElevationAngle(uElevationAngle - solarAngle); // Light bottom
 
   // Normalize based on the mid penumbra for corner 0
-  return PenumbraDir(
-    normalize(vec3(dirOuterSidePenumbra, zFarUmbra)),          // Umbra
-    normalize(vec3(dirMidSidePenumbra, zFarMidPenumbra))     // Mid
-    normalize(vec3(dirOuterSidePenumbra, zFarPenumbra)),       // Penumbra
-    normalize(vec3(dirMidSidePenumbra, zFarUmbra))           // Top
-    normalize(vec3(dirMidSidePenumbra, zFarPenumbra))     // Bottom
+  return ShadowDirections(
+    normalize(vec3(dirPenumbra, zFar[UMBRA])), // umbra
+    normalize(vec3(dirPenumbra, zFar[MIDPENUMBRA])), // midpenumbra
+    normalize(vec3(dirPenumbra, zFar[PENUMBRA])) // penumbra
   );
 }
+
+/**
+ * The rays from the wall top endpoint away from the light.
+ */
+ShadowDirections calculateFarPenumbraDirection(in vec3 dirMidSidePenumbra, int idx) {
+  float[3] zDelta = _calculateZChangeRays();
+  return ShadowDirections(
+    vec3(dirMidSidePenumbra.xy, zDelta[UMBRA]), // umbra
+    vec3(dirMidSidePenumbra.xy, zDelta[MIDPENUMBRA]), // midpenumbra
+    vec3(dirMidSidePenumbra.xy, zDelta[PENUMBRA]) // penumbra
+  );
+}
+
+/**
+ * The rays from the wall bottom endpoint away from the light.
+ */
+ShadowDirections calculateNearPenumbraDirection(in vec3 dirMidSidePenumbra, int idx) {
+  float[3] zDelta = _calculateZChangeRays();
+  return ShadowDirections(
+    vec3(dirMidSidePenumbra.xy, zDelta[PENUMBRA]), // umbra
+    vec3(dirMidSidePenumbra.xy, zDelta[MIDPENUMBRA]), // midpenumbra
+    vec3(dirMidSidePenumbra.xy, zDelta[UMBRA]) // penumbra
+  );
+}
+
 
 void main() {
   // Shadow is a trapezoid formed from the intersection of the wall with the
@@ -1304,20 +1345,20 @@ void main() {
   // 2. Much easier to deal with penumbra shading as a triangle.
   // 3. Would require much different approach to the fragment shader.
 
-  // Define some terms for ease-of-reference.
-  float solarAngle = max(0.1, uSolarAngle); // TODO: Cannot currently go all the way to 0.
-  // float solarAngle = uSolarAngle;
-
-  float zFarUmbra = zChangeForElevationAngle(uElevationAngle + solarAngle); // light top
-  float zFarMidPenumbra = zChangeForElevationAngle(uElevationAngle); // light middle
-  float zFarPenumbra = zChangeForElevationAngle(uElevationAngle - solarAngle); // light bottom
-
-
   Wall wall = calculateWallPositions();
-  PenumbraDir[2] penumbraDirs = PenumbraDir[2](
-    calculatePenumbraDirection(wall, 0),
-    calculatePenumbraDirection(wall, 1)
+  ShadowDirections[2] sidePenumbraDirs = ShadowDirections[2](
+    calculateSidePenumbraDirection(wall, 0),
+    calculateSidePenumbraDirection(wall, 1)
   );
+  ShadowDirections[2] farPenumbraDirs = ShadowDirections[2](
+    calculateFarPenumbraDirection(sidePenumbraDirs[0].midpenumbra, 0),
+    calculateFarPenumbraDirection(sidePenumbraDirs[1].midpenumbra, 1)
+  );
+  ShadowDirections[2] nearPenumbraDirs = ShadowDirections[2](
+    calculateNearPenumbraDirection(sidePenumbraDirs[0].midpenumbra, 0),
+    calculateNearPenumbraDirection(sidePenumbraDirs[1].midpenumbra, 1)
+  );
+
   ${PENUMBRA_VERTEX_CALCULATIONS}
 }`;
 
@@ -1333,7 +1374,7 @@ void main() {
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 // #define SHADOW
-#define EV_DIRECTIONAL_LIGHT
+#define EV_DIRECTIONAL_LIGHT true
 
 uniform sampler2D uTerrainSampler;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
@@ -1341,7 +1382,9 @@ uniform vec4 uSceneDims;
 
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
-in vec3 vBary;
+in vec3 vPenumbra;
+in vec3 vMidPenumbra;
+in vec3 vUmbra;
 in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
 
@@ -1351,6 +1394,7 @@ flat in vec3 fNearRatios;
 flat in vec3 fFarRatios;
 flat in float fWallSenseType;
 flat in vec2 fWallCornerLinked;
+flat in float fThresholdRadius2;
 
 out vec4 fragColor;
 

@@ -742,8 +742,11 @@ class ShadowWallVertexShaderTest {
 
   /* ----- NOTE: Defined terms ---- */
 
+  /** @type {WallGLSLStruct} */
+  get wall() { return this.calculateWallPositions(); }
+
   /** @type {float} */
-  get canvasElevation() { return this.uniforms.uElevationRes.x; }
+  get canvasElevation() { return this.uElevationRes.x; }
 
   /** @type {float} */
   get maxR() {
@@ -1764,9 +1767,6 @@ export class SizedPointSourceShadowWallVertexShaderTest extends ShadowWallVertex
 
   /* ----- NOTE: Getters ----- */
 
-  /** @type {WallGLSLStruct} */
-  get wall() { return this.calculateWallPositions(); }
-
   /** @type {LightGLSLStruct} */
   get light() { return this.calculateLightPositions(this.wall); }
 
@@ -1970,9 +1970,6 @@ export class DirectionalSourceShadowWallVertexShaderTest extends ShadowWallVerte
   get uAzimuth() { return this.uniforms.uAzimuth ?? 0; }
 
   /** @type {float<radians>} */
-  get uElevation() { return this.uniforms.uElevation ?? 0; }
-
-  /** @type {float<raidans>} */
   get uSolarAngle() { return this.uniforms.uSolarAngle ?? 0; }
 
   // ----- NOTE: Getters ----- //
@@ -1981,33 +1978,61 @@ export class DirectionalSourceShadowWallVertexShaderTest extends ShadowWallVerte
   // TODO: Cannot currently go all the way to 0.
   get solarAngle() { return Math.max(0.1, this.uSolarAngle); }
 
+  /** @type {ShadowDirections[2]} */
+  get sidePenumbraDirs() {
+    const { wall } = this;
+    return [
+      this.calculateSidePenumbraDirection(wall, 0),
+      this.calculateSidePenumbraDirection(wall, 1)
+    ];
+  }
+
+  /** @type {ShadowDirections[2]} */
+  get farPenumbraDirs() {
+    const { sidePenumbraDirs } = this;
+    return [
+      this.calculateFarPenumbraDirection(sidePenumbraDirs[0].midpenumbra, 0),
+      this.calculateFarPenumbraDirection(sidePenumbraDirs[1].midpenumbra, 1)
+    ];
+  }
+
+  /** @type {ShadowDirections[2]} */
+  get nearPenumbraDirs() {
+    const { sidePenumbraDirs } = this;
+    return [
+      this.calculateNearPenumbraDirection(sidePenumbraDirs[0].midpenumbra, 0),
+      this.calculateNearPenumbraDirection(sidePenumbraDirs[1].midpenumbra, 1)
+    ];
+  }
 
   /* ----- NOTE: Penumbras ----- */
 
   /**
+   * The rays from the wall endpoint along the side.
    * @param {int} idx     Which wall endpoint corresponds to this penumbra
-   * @returns {vec3[3]} Direction from the endpoint away from the light for umbra, mid, and penumbra.
+   * @returns {ShadowDirectionsGLSLStruct} Direction from the endpoint away from the light for umbra, mid, and penumbra.
    */
-  calculateSidePenumbraDirection(idx = 0) {
+  calculateSidePenumbraDirection(wall, idx = 0) {
     const orient = foundry.utils.orient2dFast;
+    const sign = Math.sign;
     const { uAzimuth, uElevationAngle } = this.uniforms;
-    const { solarAngle, wall } = this;
+    const { solarAngle } = this;
 
     // Direction from endpoint toward the light
-    const lightDirection2d = fromAngle(vec2(0.0), uAzimuth, 1.0).normalize();
+    const lightDirection2d = fromAngle(new vec2(0.0), uAzimuth, 1.0).normalize();
 
     // Reverse for determining penumbra
-    const dirMidPenumbra = new vec2(lightDirection2d.multiplyScalar(-1.0), lightDirection2d.multiplyScalar(-1.0));
+    const dirMidPenumbra = lightDirection2d.multiplyScalar(-1.0);
 
     // Determine which side of the wall the light is on.
-    const oWallLight = Math.sign(orient(wall.top[0], wall.top[1], wall.top[0].add(lightDirection2d)));
+    const oWallLight = sign(orient(wall.top[0].xy, wall.top[1].xy, wall.top[0].xy.add(lightDirection2d)));
 
     // Adjust azimuth by the solarAngle.
     // Determine the direction of the outer penumbra rays from light --> wallCorner1 / wallCorner2.
     // The angle for the penumbra is the azimuth ± the solarAngle.
     const solarWallAngle = solarAngle * oWallLight;
     const multiplier = idx === 0 ? 1.0 : -1.0;
-    const dirPenumbra = fromAngle(new vec2(0.0), uAzimuth + (solarWallAngle * multiplier), 1.0) * -1.0;
+    const dirPenumbra = fromAngle(new vec2(0.0), uAzimuth + (solarWallAngle * multiplier), 1.0).multiplyScalar(-1.0);
 
     // Calculate the change in z for the light direction based on differing solar angles.
     const zFar = new Array(3);
@@ -2016,31 +2041,39 @@ export class DirectionalSourceShadowWallVertexShaderTest extends ShadowWallVerte
     zFar[PENUMBRA] = this.zChangeForElevationAngle(uElevationAngle - solarAngle); // Light bottom
 
     // Normalize based on the mid penumbra for corner 0
-    const penObj = new Array(3);
-    penObj[UMBRA] = (new vec3(dirPenumbra, zFar[UMBRA])).normalize();
-    penObj[MIDPENUMBRA] = (new vec3(dirPenumbra, zFar[MIDPENUMBRA])).normalize();
-    penObj[PENUMBRA] = (new vec3(dirPenumbra, zFar[PENUMBRA])).normalize();
-    return penObj;
+    return new ShadowDirectionsGLSLStruct({
+      umbra: (new vec3(dirPenumbra, zFar[UMBRA])).normalize(),
+      midpenumbra: (new vec3(dirPenumbra, zFar[MIDPENUMBRA])).normalize(),
+      penumbra: (new vec3(dirPenumbra, zFar[PENUMBRA])).normalize()
+    });
   }
 
   /**
+   * The rays from the wall top endpoint away from the light.
    * @param {int} idx     The wall endpoint associated with this penumbra
-   * @returns {vec3[3]}
+   * @returns {ShadowDirectionsGLSLStruct}
    */
-  calculateFarPenumbraDirection(idx = 0) {
-    const dirMidSidePenumbra = this.calculateSidePenumbraDirection(idx)[MIDPENUMBRA];
+  calculateFarPenumbraDirection(dirMidSidePenumbra, idx = 0) {
     const zDelta = this._calculateZChangeRays();
-    return new vec3(dirMidSidePenumbra.x, dirMidSidePenumbra.y, zDelta[PENUMBRA]);
+    return new ShadowDirectionsGLSLStruct({
+      umbra: new vec3(dirMidSidePenumbra.xy, zDelta[UMBRA]),
+      midpenumbra: new vec3(dirMidSidePenumbra.xy, zDelta[MIDPENUMBRA]),
+      penumbra: new vec3(dirMidSidePenumbra.xy, zDelta[PENUMBRA])
+    });
   }
 
   /**
+   * The rays from the wall bottom endpoint away from the light.
    * @param {int} idx     The wall endpoint associated with this penumbra
-   * @returns {vec3[3]}
+   * @returns {ShadowDirectionsGLSLStruct}
    */
-  calculateNearPenumbraDirection(idx = 0) {
-    const dirMidSidePenumbra = this.calculateSidePenumbraDirection(idx)[MIDPENUMBRA];
+  calculateNearPenumbraDirection(dirMidSidePenumbra, idx = 0) {
     const zDelta = this._calculateZChangeRays();
-    return new vec3(dirMidSidePenumbra.x, dirMidSidePenumbra.y, zDelta[UMBRA]);
+    return new ShadowDirectionsGLSLStruct({
+      umbra: new vec3(dirMidSidePenumbra.x, dirMidSidePenumbra.y, zDelta[PENUMBRA]),
+      midpenumbra: new vec3(dirMidSidePenumbra.x, dirMidSidePenumbra.y, zDelta[MIDPENUMBRA]),
+      penumbra: new vec3(dirMidSidePenumbra.x, dirMidSidePenumbra.y, zDelta[UMBRA])
+    });
   }
 
   /**
@@ -2065,13 +2098,32 @@ export class DirectionalSourceShadowWallVertexShaderTest extends ShadowWallVerte
    * @returns {float}
    */
   zChangeForElevationAngle(elevationAngle) {
-    const pt = fromAngle(vec2(0.0), elevationAngle, 1.0);
+    const pt = fromAngle(new vec2(0.0), elevationAngle, 1.0);
 
     // How much z (y) change for every change in x?
     const z = pt.x === 0.0 ? 1e06 : pt.y / pt.x;
     return -z;
     // Don't let z go to 0?
     // return max(z, 1e-06);
+  }
+
+  /**
+   * Mimic calculations done in the vertex shader.
+   */
+  vertexCalculations(gl_VertexID = 0) {
+    const wall = this.wall;
+    const sidePenumbraDirs = this.sidePenumbraDirs;
+    const farPenumbraDirs = this.farPenumbraDirs;
+    const nearPenumbraDirs = this.nearPenumbraDirs;
+    return super.vertexCalculations(gl_VertexID);
+  }
+
+  /**
+   * Mimic the fragment calculations at a specific point.
+   * @param {Point} pt
+   */
+  fragmentCalculations(pt) {
+    return super.fragmentCalculations(pt);
   }
 }
 
@@ -2114,6 +2166,7 @@ Draw = CONFIG.GeometryLib.Draw;
 api = game.modules.get("elevatedvision").api
 let {
   SizedPointSourceShadowWallVertexShaderTest,
+  DirectionalSourceShadowWallVertexShaderTest,
   vec2, vec3, vec4 } = api.testing
 
 l = canvas.lighting.placeables[0];
@@ -2127,8 +2180,11 @@ PENUMBRA = 2;
 // shader0 = SizedPointSourceShadowWallVertexShaderTest.fromEdgeAndSource(edge0, l.lightSource)
 // shader1 = SizedPointSourceShadowWallVertexShaderTest.fromEdgeAndSource(edge1, l.lightSource)
 
-let [shader0, shader1] = SizedPointSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
-let [shader2, shader3] = SizedPointSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
+//let [shader0, shader1] = SizedPointSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
+//let [shader2, shader3] = SizedPointSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
+
+let [shader0, shader1] = DirectionalSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
+let [shader2, shader3] = DirectionalSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
 
 // Set alt shaders to elevation 0 to compare with changing ratios
 shader2.uniforms.uElevationRes[0] = 0
