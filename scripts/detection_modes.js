@@ -47,7 +47,7 @@ function _testPoint(visionSource, mode, target, test) {
     if ( lightSource instanceof foundry.canvas.sources.GlobalLightSource ) return true;
     if ( !testWithinRadius(lightSource, test) ) continue;
     if ( !testSourceAngle(lightSource, test) ) continue;
-    if ( lightSource.targetInShadow(target, test.point) < 0.5 ) return true;
+    if ( lightSource[MODULE_ID].targetInShadow(target, test.point) < 0.5 ) return true;
   }
   return false;
 }
