@@ -23,6 +23,9 @@ import {
   ShadowTextureRenderer,
   ShadowVisionLOSTextureRenderer,
   ShadowDirectionalTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
+import { TestGeometryShader } from "./glsl/ShadowWallShader.js";
+
+
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
@@ -38,6 +41,15 @@ import { ElevationTextureHandler } from "./ElevationTextureHandler.js";
 
 // Other self-executing hooks
 import "./changelog.js";
+
+// Testing shaders
+import {
+  vec2,
+  vec3,
+  vec4,
+  SizedPointSourceShadowWallVertexShaderTest,
+  DirectionalSourceShadowWallVertexShaderTest } from "./testing/WallShaderTest.js";
+
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -85,7 +97,7 @@ Hooks.once("init", function() {
      * So -2000 (min) + 0.1 (step) * 65556 (max normalized) = 4555
      * @type {number}
      */
-    elevationMin: -2000,
+    elevationMin: -1000,
 
     /**
      * WebGL region elevations.
@@ -110,7 +122,16 @@ Hooks.once("init", function() {
       ShadowVisionLOSTextureRenderer,
       ShadowDirectionalTextureRenderer,
       TestShadowShader,
-      EVQuadMesh
+      EVQuadMesh,
+      TestGeometryShader
+    },
+
+    testing: {
+      vec2,
+      vec3,
+      vec4,
+      SizedPointSourceShadowWallVertexShaderTest,
+      DirectionalSourceShadowWallVertexShaderTest
     }
   };
 
