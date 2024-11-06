@@ -231,6 +231,8 @@ function visibilityRefresh(cv) {
   vision.light.sources.clear();
   vision.light.mask.preview.clear();
   vision.light.mask.clear();
+  vision.sight.clear();
+  vision.sight.preview.clear();
 
   for ( const lightSource of canvas.effects.lightSources ) {
     if ( !lightSource.hasActiveLayer || (lightSource instanceof foundry.canvas.sources.GlobalLightSource) ) continue;
@@ -268,13 +270,12 @@ function visibilityRefresh(cv) {
     }
 
     // Draw vision FOV
-    // Not needed b/c that can be drawn using the defaults.
     const blinded = visionSource.isBlinded;
-    // Currently unused:
-    //     const fov = ((visionSource.radius > 0)
-    //       && !blinded
-    //       && !visionSource.isPreview) ? vision.sight : vision.sight.preview;
-    //     fov.addChild(fovMask);
+    const fov = ((visionSource.radius > 0)
+      && !blinded
+      && !visionSource.isPreview) ? vision.sight : vision.sight.preview;
+    fov.addChild(fovMask);
+    // fov.mask = losMask; Blocks all vision outside the radius; errors out when destroying shader.
 
     // Draw light perception
     const los = ((visionSource.lightRadius > 0)

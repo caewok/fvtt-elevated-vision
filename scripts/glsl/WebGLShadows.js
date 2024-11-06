@@ -540,7 +540,7 @@ export class GlobalLightWebGLShadows extends WebGLShadows {
    * Define the canvas rectangle as a graphics object.
    */
   #initializeVisionMask() {
-    this.shadowVisionMask = new PIXI.Graphics();
+    this.shadowVisionMask = new PIXI.LegacyGraphics();
     const draw = new Draw(this.shadowVisionMask);
     draw.shape(this.source.shape, { fill: this.source.constructor.maskColor });
   }
@@ -577,15 +577,18 @@ export class PointVisionWebGLShadows extends WebGLShadows {
   /** @type {PIXI.Rectangle} */
   get bounds() { return canvas.dimensions.rect; }
 
-  /** @type {PIXI.Graphics} */
-  shadowFOVMask = new PIXI.Graphics();
+  /** @type {PIXI.Container} */
+  shadowFOVMask = new PIXI.Container();
+
+  /** @type {PIXI.LegacyGraphics} */
+  shadowFOVGraphics = new PIXI.LegacyGraphics();
 
   /**
    * Update the graphics used for the field of view.
    */
   updateFOV() {
     const data = this.source.data;
-    const draw = new Draw(this.shadowFOVMask);
+    const draw = new Draw(this.shadowFOVGraphics);
     draw.clearDrawings();
 
     // Mask the radius circle for this vision source.
@@ -628,6 +631,12 @@ export class PointVisionWebGLShadows extends WebGLShadows {
   _initializeShadowMask() {
     const shader = ShadowVisionMaskTokenLOSShader.create(this.source);
     this.shadowVisionMask = new EVQuadMesh(canvas.dimensions.rect, shader);
+
+    // Link the container and mask for the FOV.
+    this.shadowFOVMask.addChild(this.shadowVisionMask);
+    this.shadowFOVMask.addChild(this.shadowFOVGraphics);
+    this.shadowFOVMask.mask = this.shadowFOVGraphics;
+    //this.shadowFOVMask.mask = this.shadowVisionMask;
   }
 
   /**
