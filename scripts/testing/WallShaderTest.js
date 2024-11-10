@@ -801,8 +801,11 @@ class ShadowWallVertexShaderTest {
       vMidPenumbra,
       vUmbra,
       vSidePenumbra0,
-      vSidePenumbra1 } = this;
-    return { vVertexPosition, vTerrainTexCoord, vPenumbra, vUmbra, vSidePenumbra0, vSidePenumbra1 };
+      vSidePenumbra1,
+      vWall,
+      vNearPenumbra,
+      vNearMidPenumbra } = this;
+    return { vVertexPosition, vTerrainTexCoord, vPenumbra, vUmbra, vSidePenumbra0, vSidePenumbra1, vWall, vNearPenumbra, vNearMidPenumbra };
   }
 
   get flats() {
@@ -1238,7 +1241,7 @@ class ShadowWallVertexShaderTest {
     */
   vertexCalculations(gl_VertexID = 0) {
     const { farPenumbraDirs, nearPenumbraDirs, wall } = this;
-    const { uSceneDims } = this;
+    const { uSceneDims, uElevationRes } = this;
 
     const vertexNum = gl_VertexID % 3;
     // Penumbra structures.
@@ -1268,6 +1271,40 @@ class ShadowWallVertexShaderTest {
     // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
     // (vVertexPosition - uSceneDims.xy) / uSceneDims.zw
     this.vTerrainTexCoord = (vVertexPosition.subtract(uSceneDims.xy)).divide(uSceneDims.zw);
+
+    // Test using the light --> endpoints triangle for testing in front of wall.
+    // Looking for better resolution on the wall shading for infinite shadows.
+    const wallTri = [
+      penumbraTri[0],
+      wall.top[0].xy,
+      wall.top[1].xy
+    ];
+    this.vWall = this.baryForPoint(vVertexPosition, wallTri);
+
+    // Same for the near umbra and midpenumbra near triangles.
+    // Lessen number of flat variables and attempt to address resolution issue with
+    // infinite wall vision shadows.
+    const canvasElevation = uElevationRes.x;
+    if ( wall.bottom[0].z > canvasElevation ) {
+      const nearPenumbraPoints = this.endpointsForPenumbras(
+        adjSidePenumbraDirs, nearPenumbraDirs, wall.bottom, wall.direction);
+      const nearPenumbraTri = [
+        penumbraTri[0],
+        nearPenumbraPoints[0].penumbra,
+        nearPenumbraPoints[1].penumbra
+      ];
+      const nearMidPenumbraTri = [
+        penumbraTri[0],
+        nearPenumbraPoints[0].midpenumbra,
+        nearPenumbraPoints[1].midpenumbra
+      ];
+      this.vNearPenumbra = this.baryForPoint(vVertexPosition, nearPenumbraTri);
+      this.vNearMidPenumbra = this.baryForPoint(vVertexPosition, nearMidPenumbraTri);
+
+    } else {
+      this.vNearPenumbra = this.vWall;
+      this.vNearMidPenumbra = this.vWall;
+    }
 
     // In shader:
     // gl_Position = vec4((projectionMatrix * translationMatrix * vec3(this.vVertexPosition, 1.0)).xy, 0.0, 1.0);
@@ -1502,7 +1539,10 @@ class ShadowWallVertexShaderTest {
       "vMidPenumbra",
       "vUmbra",
       "vSidePenumbra0",
-      "vSidePenumbra1"
+      "vSidePenumbra1",
+      "vWall",
+      "vNearPenumbra",
+      "vNearMidPenumbra"
     ];
 
     // The penumbra triangle that defines this shader.
@@ -2182,8 +2222,8 @@ PENUMBRA = 2;
 // shader0 = SizedPointSourceShadowWallVertexShaderTest.fromEdgeAndSource(edge0, l.lightSource)
 // shader1 = SizedPointSourceShadowWallVertexShaderTest.fromEdgeAndSource(edge1, l.lightSource)
 
-//let [shader0, shader1] = SizedPointSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
-//let [shader2, shader3] = SizedPointSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
+let [shader0, shader1] = SizedPointSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
+let [shader2, shader3] = SizedPointSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
 
 let [shader0, shader1] = DirectionalSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
 let [shader2, shader3] = DirectionalSourceShadowWallVertexShaderTest.fromMesh(ev.shadowMesh)
@@ -2455,6 +2495,23 @@ float fWallSenseType
 float fThresholdRadius2
 Likely 13–15 total floats
 Need to cut back on flats.
+
+Alt:
+float vSidePenumbra0 (baryForPoint)
+float vSidePenumbra1 (baryForPoint)
+float vMidPenumbra
+float vUmbra
+vec2 vVertexPosition
+float vWall
+float vNearMidPenumbra
+float vNearPenumbra
+
+Flats:
+float fWallSenseType
+float fThresholdRadius2
+
+11 total. So only 1 more but a lot less webGPU calcs.
+
 
 */
 
