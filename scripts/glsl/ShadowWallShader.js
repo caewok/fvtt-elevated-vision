@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 PIXI
 */
 "use strict";
@@ -7,7 +8,7 @@ PIXI
 import { MODULE_ID } from "../const.js";
 import { sourceAtCanvasElevation } from "../util.js";
 import { AbstractEVShader } from "./AbstractEVShader.js";
-import { defineFunction } from "./GLSLFunctions.js";
+import { defineFunction, defineStruct } from "./GLSLFunctions.js";
 
 
 // Calculation used to construct penumbra vertices from a set of light directions.
@@ -26,6 +27,9 @@ import { defineFunction } from "./GLSLFunctions.js";
 // NOTE: PENUMBRA_VERTEX_FUNCTIONS
 const PENUMBRA_VERTEX_FUNCTIONS =
 `
+${defineStruct("Plane")}
+
+${defineFunction("orient")}
 ${defineFunction("projectRay")}
 ${defineFunction("toRadians")}
 ${defineFunction("angleBetween")}
@@ -35,6 +39,8 @@ ${defineFunction("terrainElevation")}
 ${defineFunction("normalizedDirection")}
 ${defineFunction("barycentric")}
 ${defineFunction("fromAngle")}
+${defineFunction("intersectRayPlane")}
+${defineFunction("lineLineIntersection")}
 
 #define EV_ENDPOINT_LINKED_UNBLOCKED  -10.0
 
@@ -640,7 +646,6 @@ bool inNearMidPenumbra(in vec3 farRatios, in vec3 nearRatios) {
 
 // NOTE: PENUMBRA_FRAGMENT_CALCULATIONS
 const PENUMBRA_FRAGMENT_CALCULATIONS =
-// eslint-disable-next-line indent
 `
   // Assume no shadow as the default
   fragColor = noShadow();
@@ -849,12 +854,19 @@ in float aThresholdRadius2;
 
 out vec2 vVertexPosition;
 out vec2 vTerrainTexCoord;
-out vec3 vBary;
+out vec3 vPenumbra;
+out vec3 vMidPenumbra;
+out vec3 vUmbra;
+out vec3 vSidePenumbra0;
+out vec3 vSidePenumbra1;
+
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
 flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bottom
 flat out float fWallRatio;
-flat out float fNearRatio;
+flat out vec3 fNearRatios;
+flat out vec3 fFarRatios;
+flat out vec2 fWallCornerLinked;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -862,11 +874,52 @@ uniform vec3 uLightPosition;
 uniform vec4 uSceneDims;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 
-${defineFunction("normalizeRay")}
-${defineFunction("rayFromPoints")}
-${defineFunction("intersectRayPlane")}
+${defineFunction("normalizedDirection")}
 
-#define EV_CONST_INFINITE_SHADOW_OFFSET   0.01
+${PENUMBRA_VERTEX_FUNCTIONS}
+
+/**
+ * Determine the top, bottom, left, right light positions.
+ * For vision, light size is assumed to be 0, so this is just the light position.
+ */
+Light calculateLightPositions() {
+  return Light(
+    uLightPosition, // Center
+    uLightPosition, // Closest to endpoint 0
+    uLightPosition, // Closest to endpoint 1
+    uLightPosition, // Top
+    uLightPosition, // Bottom
+    0.0 // Size
+  );
+}
+
+/**
+ * Calculate the umbra, mid, and penumbra direction side rays from a given wall endpoint.
+ * For vision, this is simply the mid-penumbra (cast from light center).
+ */
+ShadowDirections calculateSidePenumbraDirection(in Light light, in Wall wall, in int idx) {
+  // Direction from light --> wall endpoint.
+  vec3 midPenumbra = normalizedDirection(light.center, wall.top[idx]);
+  return ShadowDirections(
+    midPenumbra,
+    midPenumbra,
+    midPenumbra
+  );
+}
+
+/**
+ * Calculate the umbra, mid, and penumbra direction near or far rays from a given wall endpoint.a.
+ * For vision, this is simply the mid-penumbra (cast from light center).
+ */
+ShadowDirections calculateNearFarPenumbraDirection(in Light light, in Wall wall, in bool far, in int idx) {
+  vec3 w = far ? wall.top[idx] : wall.bottom[idx];
+  vec3 midPenumbra = normalizedDirection(light.center, w);
+  return ShadowDirections(
+    midPenumbra,
+    midPenumbra,
+    midPenumbra
+  );
+}
 
 void main() {
   // Shadow is a trapezoid formed from the intersection of the wall with the
@@ -874,79 +927,22 @@ void main() {
   // C is the light position.
   // A is the intersection of the line light --> wall endpointA --> canvas plane
   // B is the intersection of the line light --> wall endpointB --> canvas plane
-  int vertexNum = gl_VertexID % 3;
+  Wall wall = calculateWallPositions();
+  Light light = calculateLightPositions();
+  ShadowDirections[2] sidePenumbraDirs = ShadowDirections[2](
+    calculateSidePenumbraDirection(light, wall, 0),
+    calculateSidePenumbraDirection(light, wall, 1)
+  );
+  ShadowDirections[2] farPenumbraDirs = ShadowDirections[2](
+    calculateNearFarPenumbraDirection(light, wall, true, 0),
+    calculateNearFarPenumbraDirection(light, wall, true, 1)
+  );
+  ShadowDirections[2] nearPenumbraDirs = ShadowDirections[2](
+    calculateNearFarPenumbraDirection(light, wall, false, 0),
+    calculateNearFarPenumbraDirection(light, wall, false, 1)
+  );
 
-  // Set the barymetric coordinates for each corner of the triangle.
-  vBary = vec3(0.0);
-  vBary[vertexNum] = 1.0;
-
-  // Vertex 0 is the light; can end early.
-  if ( vertexNum == 0 ) {
-    vVertexPosition = uLightPosition.xy;
-    vTerrainTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
-    gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition.xy, 1.0)).xy, 0.0, 1.0);
-    return;
-  }
-
-  // Plane describing the canvas surface at minimum elevation for the scene.
-  float canvasElevation = uElevationRes.x;
-  vec3 planeNormal = vec3(0.0, 0.0, 1.0);
-  vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
-  Plane canvasPlane = Plane(planePoint, planeNormal);
-
-  // Determine top and bottom wall coordinates at this vertex
-  vec2 vertex2d = vertexNum == 1 ? aWallCorner0.xy : aWallCorner1.xy;
-  vec3 wallTop = vec3(vertex2d, aWallCorner0.z);
-  vec3 wallBottom = vec3(vertex2d, aWallCorner1.z);
-
-  // Light position must be above the canvas floor to get expected shadows.
-  vec3 lightPosition = uLightPosition;
-  lightPosition.z = max(canvasElevation + 1.0, lightPosition.z);
-
-  // Trim walls to be between light elevation and canvas elevation.
-  // If wall top is above or equal to the light, need to approximate an infinite shadow.
-  // Cannot just set the ray to the scene maxR, b/c the ray from light --> vertex is
-  // different lengths for each vertex. Instead, make wall very slightly lower than light,
-  // thus casting a very long shadow.
-  float actualWallTop = wallTop.z;
-  wallTop.z = min(wallTop.z, lightPosition.z - EV_CONST_INFINITE_SHADOW_OFFSET);
-  wallBottom.z = max(wallBottom.z, canvasElevation);
-
-  // Intersect the canvas plane: light --> vertex --> plane
-  // We know there is an intersect because we manipulated the wall height.
-  Ray rayLT = rayFromPoints(lightPosition, wallTop);
-  vec3 ixFarShadow;
-  intersectRayPlane(rayLT, canvasPlane, ixFarShadow);
-
-  // Calculate wall dimensions used in fragment shader.
-  if ( vertexNum == 2 ) {
-    float distWallTop = distance(uLightPosition.xy, wallTop.xy);
-    float distShadow = distance(uLightPosition.xy, ixFarShadow.xy);
-    float wallRatio = 1.0 - (distWallTop / distShadow);
-    float nearRatio = wallRatio;
-    if ( wallBottom.z > canvasElevation ) {
-      // Wall bottom floats above the canvas.
-      vec3 ixNearPenumbra;
-      Ray rayLB = rayFromPoints(lightPosition, wallBottom);
-      intersectRayPlane(rayLB, canvasPlane, ixNearPenumbra);
-      nearRatio = 1.0 - (distance(uLightPosition.xy, ixNearPenumbra.xy) / distShadow);
-    }
-
-    // Flat variables.
-    // Use actual wall top so that terrain does not poke above a wall that was cut off.
-    fWallHeights = vec2(actualWallTop, wallBottom.z);
-    fWallRatio = wallRatio;
-    fNearRatio = nearRatio;
-    fWallSenseType = aWallSenseType;
-    fThresholdRadius2 = aThresholdRadius2;
-  }
-
-  vVertexPosition = ixFarShadow.xy;
-
-  // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
-  vTerrainTexCoord = (vVertexPosition.xy - uSceneDims.xy) / uSceneDims.zw;
-
-  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
+  ${PENUMBRA_VERTEX_CALCULATIONS}
 }`;
 
   // NOTE: ShadowWallShader.fragmentShader
@@ -962,157 +958,32 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 // #define SHADOW true
 
-// From CONST.WALL_SENSE_TYPES
-#define LIMITED_WALL      10.0
-#define PROXIMATE_WALL    30.0
-#define DISTANCE_WALL     40.0
-
 uniform sampler2D uTerrainSampler;
 uniform vec3 uLightPosition;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
-in vec3 vBary;
+in vec3 vPenumbra;
+in vec3 vMidPenumbra;
+in vec3 vUmbra;
+in vec3 vSidePenumbra0;
+in vec3 vSidePenumbra1;
 
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
-flat in float fNearRatio;
+flat in vec3 fNearRatios;
+flat in vec3 fFarRatios;
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;
+flat in vec2 fWallCornerLinked;
 
 out vec4 fragColor;
 
-${defineFunction("terrainElevation")}
-${defineFunction("between")}
-${defineFunction("distanceSquared")}
-
-/**
- * Shift the front and end percentages of the wall, relative to the light, based on height
- * of this fragment. Higher fragment elevation means less shadow.
- * @param {vec2} nearFarShadowRatios  The close and far shadow ratios, where far starts at 0.
- * @param {vec2} elevRatio            Elevation change as a percentage of wall bottom/top height from canvas.
- * @returns {vec2} Modified elevation ratio
- */
-vec2 elevateShadowRatios(in vec2 nearFarRatios, in vec2 wallHeights, in float wallRatio, in float elevChange) {
-  vec2 nearFarDist = wallRatio - nearFarRatios; // Distance between wall and the near/far canvas intersect as a ratio.
-  vec2 heightFractions = elevChange / wallHeights.yx; // Wall bottom, top
-  vec2 nfRatios = nearFarRatios + (heightFractions * nearFarDist);
-  if ( wallHeights.y == 0.0 ) nfRatios.x = 1.0;
-  if ( wallHeights.x == 0.0 ) nfRatios.y = 1.0;
-  return nfRatios;
-}
-
-/**
- * Encode the amount of light in the fragment color to accommodate limited walls.
- * Percentage light is used so 2+ shadows can be multiplied together.
- * For example, if two shadows each block 50% of the light, would expect 25% of light to get through.
- * @param {float} light   Percent of light for this fragment, between 0 and 1.
- * @returns {vec4}
- *   - r: percent light for a non-limited wall fragment
- *   - g: wall type: limited (1.0) or non-limited (0.5) (again, for multiplication: .5 * .5 = .25)
- *   - b: percent light for a limited wall fragment
- *   - a: unused (1.0)
- * @example
- * light = 0.8
- * r: (0.8 * (1. - ltd)) + ltd
- * g: 1. - (0.5 * ltd)
- * b: (0.8 * ltd) + (1. - ltd)
- * limited == 0: 0.8, 1.0, 1.0
- * limited == 1: 1.0, 0.5, 0.8
- *
- * light = 1.0
- * limited == 0: 1.0, 1.0, 1.0
- * limited == 1: 1.0, 0.5, 1.0
- *
- * light = 0.0
- * limited == 0: 0.0, 1.0, 1.0
- * limited == 1: 1.0, 0.5, 0.0
- */
-
-// If not in shadow, need to treat limited wall as non-limited
-vec4 noShadow() {
-  #ifdef SHADOW
-  return vec4(0.0);
-  #endif
-  return vec4(1.0);
-}
-
-vec4 lightEncoding(in float light) {
-  if ( light == 1.0 ) return noShadow();
-
-  float ltd = fWallSenseType == LIMITED_WALL ? 1.0 : 0.0;
-  float ltdInv = 1.0 - ltd;
-
-  vec4 c = vec4((light * ltdInv) + ltd, 1.0 - (0.5 * ltd), (light * ltd) + ltdInv, 1.0);
-
-  #ifdef SHADOW
-  // For testing, return the amount of shadow, which can be directly rendered to the canvas.
-  if ( light < 1.0 && light > 0.0 ) return vec4(0.0, 1.0, 0.0, 1.0);
-
-  c = vec4(vec3(0.0), (1.0 - light) * 0.7);
-  #endif
-
-  return c;
-}
+${PENUMBRA_FRAGMENT_FUNCTIONS}
 
 void main() {
-//   if ( vBary.x > fWallRatio ) {
-//     fragColor = vec4(vBary.x, 0.0, 0.0, 0.8);
-//   } else {
-//     fragColor = vec4(0.0, vBary.x, 0.0, 0.8);
-//   }
-//   return;
-
-
-  // Assume no shadow as the default
-  fragColor = noShadow();
-
-  // If elevation is above the light, then shadow.
-  // Equal to light elevation should cause shadow, but foundry defaults to lights at elevation 0.
-//   if ( elevation > uLightPosition.z ) {
-//     fragColor = lightEncoding(0.0);
-//     return;
-//   }
-
-  // If in front of the wall, can return early.
-  if ( vBary.x > fWallRatio ) return;
-
-  // If a threshold applies, we may be able to ignore the wall.
-  if ( (fWallSenseType == DISTANCE_WALL || fWallSenseType == PROXIMATE_WALL)
-    && fThresholdRadius2 != 0.0
-    && distanceSquared(vVertexPosition, uLightPosition.xy) < fThresholdRadius2 ) return;
-
-  // Get the elevation at this fragment.
-  float canvasElevation = uElevationRes.x;
-  float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
-
-  // If elevation is above the wall, then no shadow.
-  if ( elevation > fWallHeights.x ) {
-    fragColor = noShadow();
-    return;
-  }
-
-  // Determine the start and end of the shadow, relative to the light.
-  vec2 nearFarShadowRatios = vec2(fNearRatio, 0.0);
-  if ( elevation > canvasElevation ) {
-    // Elevation change relative the canvas.
-    float elevationChange = elevation - canvasElevation;
-
-    // Wall heights relative to the canvas.
-    vec2 wallHeights = max(fWallHeights - canvasElevation, 0.0);
-
-    // Adjust the end of the shadows based on terrain height for this fragment.
-    nearFarShadowRatios = elevateShadowRatios(nearFarShadowRatios, wallHeights, fWallRatio, elevationChange);
-  }
-
-  // If fragment is between the start and end shadow points, then full shadow.
-  // If in front of the near shadow or behind the far shadow, then full light.
-  // Remember, vBary.x is 1.0 at the light, and 0.0 at the far end of the shadow.
-  float nearShadowRatio = nearFarShadowRatios.x;
-  float farShadowRatio = nearFarShadowRatios.y;
-  float lightPercentage = 1.0 - between(farShadowRatio, nearShadowRatio, vBary.x);
-  fragColor = lightEncoding(lightPercentage);
+  ${PENUMBRA_FRAGMENT_CALCULATIONS}
 }`;
 
   /**
@@ -1521,17 +1392,6 @@ uniform vec3 uLightPosition;
 uniform float uLightSize;
 uniform vec4 uSceneDims;
 
-#define PI_1_2 1.5707963267948966
-
-${defineFunction("normalizeRay")}
-${defineFunction("rayFromPoints")}
-${defineFunction("intersectRayPlane")}
-${defineFunction("lineLineIntersection")}
-${defineFunction("barycentric")}
-${defineFunction("orient")}
-${defineFunction("fromAngle")}
-${defineFunction("distanceSquared")}
-${defineFunction("projectRay")}
 ${defineFunction("normalizedDirection")}
 
 ${PENUMBRA_VERTEX_FUNCTIONS}
@@ -1779,8 +1639,6 @@ canvas.stage.addChild(mesh)
 canvas.stage.removeChild(mesh)
 
 mesh = ev.terrainShadowMesh
-
-
 
 dir = mesh.shader.uniforms.uLightDirection
 dirV = new PIXI.Point(dir[0], dir[1])
