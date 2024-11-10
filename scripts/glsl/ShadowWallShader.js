@@ -438,6 +438,14 @@ vMidPenumbra = baryForPoint(vVertexPosition, midPenumbraTri);
 vUmbra = baryForPoint(vVertexPosition, umbraTri);
 setSidePenumbraVars(vVertexPosition, wall, penumbraTri, umbraTri);
 
+// Set barymetric coordinates for the wall position.
+vec2[3] wallTri = vec2[3](
+  penumbraTri[0],
+  wall.top[0].xy,
+  wall.top[1].xy
+);
+vWall = baryForPoint(vVertexPosition, wallTri);
+
 // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
 vTerrainTexCoord = (vVertexPosition - uSceneDims.xy) / uSceneDims.zw;
 
@@ -554,7 +562,10 @@ vec3 elevateNearShadowRatios(in float elevation) {
 /**
  * Is the fragment location in front of the wall?
  */
-bool inFrontOfWall() { return vPenumbra.x > fWallRatio; }
+bool inFrontOfWall() {
+  return barycentricPointInsideTriangle(vWall);
+ // return vPenumbra.x > fWallRatio;
+}
 
 /**
  * Does a threshold apply?
@@ -669,7 +680,8 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
 
   // Determine the start and end of the shadow, relative to the light.
   vec3 farRatios = elevateFarShadowRatios(elevation);
-  vec3 nearRatios = elevateNearShadowRatios(elevation);
+  vec3 nearRatios = fNearRatios;
+  if ( nearRatios[MIDPENUMBRA] != fWallRatio ) nearRatios = elevateNearShadowRatios(elevation);
 
   // If in front of the near shadow or behind the far shadow, then no shadow.
   if ( between(farRatios[PENUMBRA], nearRatios[PENUMBRA], vPenumbra.x) == 0.0 ) return;
@@ -1215,6 +1227,7 @@ out vec3 vMidPenumbra;
 out vec3 vUmbra;
 out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
+out vec3 vWall;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
@@ -1389,6 +1402,7 @@ in vec3 vMidPenumbra;
 in vec3 vUmbra;
 in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
+in vec3 vWall;
 
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
@@ -1505,6 +1519,7 @@ out vec3 vMidPenumbra;
 out vec3 vUmbra;
 out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
+out vec3 vWall;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
@@ -1646,6 +1661,7 @@ in vec3 vMidPenumbra;
 in vec3 vUmbra;
 in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
+in vec3 vWall;
 
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
