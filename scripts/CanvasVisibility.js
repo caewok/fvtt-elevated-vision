@@ -231,6 +231,8 @@ function visibilityRefresh(cv) {
   vision.light.sources.clear();
   vision.light.mask.preview.clear();
   vision.light.mask.clear();
+//   vision.sight.clear();
+//   vision.sight.preview.clear();
 
   for ( const lightSource of canvas.effects.lightSources ) {
     if ( !lightSource.hasActiveLayer || (lightSource instanceof foundry.canvas.sources.GlobalLightSource) ) continue;
