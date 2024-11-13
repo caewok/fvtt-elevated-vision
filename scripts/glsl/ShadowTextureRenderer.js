@@ -67,7 +67,6 @@ export class ShadowTextureRenderer {
     const maxSize = Math.min(this.constructor.MAX_TEXTURE_SIZE, resolution * Math.max(width, height));
     if ( width >= height ) resolution = maxSize / width;
     else resolution = maxSize / height;
-
     return resolution;
   }
 
