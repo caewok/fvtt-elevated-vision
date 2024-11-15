@@ -1423,11 +1423,29 @@ class ShadowWallVertexShaderTest {
     return ratios.add(tmpV).subtract(ratios.multiplyScalar(heightFraction));
   }
 
-  ratio + (elevationChange / wallHeight) * fWallRatio - (elevationChange / wallHeight) * ratio = X
-  ratio + elevationChange * fWallRatio + invWallHeight * fWallRatio - elevationChange * ratio - invWallHeight * ratio = X
-  ratio + elevationChange * fWallRatio - elevationChange * ratio + invWallHeight * fWallRatio  - invWallHeight * ratio = X
-  ratio + elevationChange * (fWallRatio - ratio) + invWallHeight * (fWallRatio  - ratio) = X
-  ratio + ((fWallRatio  - ratio) * (elevationChange + invWallHeight)) = X
+//   ratio + ((elevationChange / wallHeight) * fWallRatio) - ((elevationChange / wallHeight) * ratio) = X
+//   ratio + elevationChange * fWallRatio + invWallHeight * fWallRatio - elevationChange * ratio - invWallHeight * ratio = X
+//   ratio + elevationChange * fWallRatio - elevationChange * ratio + invWallHeight * fWallRatio  - invWallHeight * ratio = X
+//   ratio + elevationChange * (fWallRatio - ratio) + invWallHeight * (fWallRatio  - ratio) = X
+//   ratio + ((fWallRatio  - ratio) * (elevationChange + invWallHeight)) = X
+
+  /*
+  elevation = 0
+  wallHeight = shader0.fWallHeights.x
+  ratios = shader0.fFarRatios
+  canvasElevation = shader0.uElevationRes.x;
+  wallHeight = Math.max(wallHeight - canvasElevation, 0.0);
+  fWallRatio = shader0.fWallRatio
+
+  invWallHeight = 1/wallHeight
+  tmpA = (elevationChange * invWallHeight) * fWallRatio
+  tmpB = ratios.multiplyScalar(elevationChange * invWallHeight)
+  ratios.add(new vec3(tmpA)).subtract(tmpB)
+
+  tmpA = new vec3(fWallRatio  - ratios.x, fWallRatio  - ratios.y, fWallRatio  - ratios.z)
+  tmpB = elevationChange + (1 / wallHeight)
+  ratios.add(tmpA.multiplyScalar(tmpB))
+  */
 
   /**
    * Elevate the far shadow ratios.
@@ -2635,14 +2653,15 @@ Also need the side penumbra:
 
 So attributes could be:
 vec2 vertexPosition
-vec4 wallHeights
 vec2 vSidePenumbra (0, 1)
 vec3 near (flats)
 - vertex 0: fNearUmbra, fNearMidPenumbra, fNearPenumbra
 vec2 far (flats)
-- vertex 1: fFarUmbra, fFarMidPenumbra
+- vertex 1: fFarUmbra, fFarMidPenumbra, wallHeightBottom1 (currently unused)
 vec3 other (flats)
-- fWallRatio, fWallSenseType, fThresholdRadius
+- fWallRatio, fWallSenseType, fThresholdRadius, wallHeight0Bottom
+vec3 wallHeights
+- top0, bottom0, top1 (top1 current unused)
 
 */
 

@@ -25,6 +25,15 @@ import {
   ShadowDirectionalTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
 import { TestGeometryShader } from "./glsl/ShadowWallShader.js";
 
+import {
+  SourceEdgeShadows,
+  PointSourceWallShadows,
+  DirectionalSourceWallShadows,
+  VisionSourceWallShadows,
+  Ray2d,
+  Ray3d,
+  BarycentricPoint } from "./glsl/SourceEdgeShadows.js";
+
 
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 
@@ -123,7 +132,14 @@ Hooks.once("init", function() {
       ShadowDirectionalTextureRenderer,
       TestShadowShader,
       EVQuadMesh,
-      TestGeometryShader
+      TestGeometryShader,
+      SourceEdgeShadows,
+      PointSourceWallShadows,
+      DirectionalSourceWallShadows,
+      VisionSourceWallShadows,
+      Ray2d,
+      Ray3d,
+      BarycentricPoint
     },
 
     testing: {
