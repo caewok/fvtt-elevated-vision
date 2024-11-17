@@ -57,10 +57,107 @@ export class SourceEdgeShadows {
   /** @type {number} */
   minCanvasElevation = -1000; // Must match the shader uElevationRes.x.
 
+
+
   constructor(source, edge) {
     this.source = source;
     this.edge = edge;
     this.sourceType = source.constructor.sourceType;
+  }
+
+  // ----- NOTE: Buffer data ----- //
+
+  /**
+   * The penumbra triangle points.
+   * @returns {number[6]}
+   */
+  aVertexPosition() {
+    const penumbraTri = this.buildTriangle("far", "penumbra");
+    return penumbraTri.flatMap(pt => [pt.x, pt.y]);
+  }
+
+  /**
+   * The penumbra area, repeated.
+   * @returns {number[3]}
+   */
+  aPenumbraArea() {
+    const sarea = foundry.utils.orient2dFast;
+    const penumbraTri = this.buildTriangle("far", "penumbra");
+    const penumbraArea = sarea(...penumbraTri);
+    return [penumbraArea, penumbraArea, penumbraArea];
+  }
+
+  /**
+   * The midpenumbra area, for each vertex.
+   * @returns {number[9]}
+   */
+  aMidPenumbraArea() {
+    const sarea = foundry.utils.orient2dFast;
+    const penumbraTri = this.buildTriangle("far", "penumbra");
+    const midPenumbraTri = this.buildTriangle("far", "midpenumbra");
+    const area = sarea(...midPenumbraTri);
+    const p0 = new Point3d(area, 0, 0);
+    const p1 = new Point3d(0, area, 0)
+    const p2 = new Point3d(0, 0, area)
+    const v0 = Barycentric.coordinates(penumbraTri[0], ...midPenumbraTri).interpolate(p0, p1, p2);
+    const v1 = Barycentric.coordinates(penumbraTri[1], ...midPenumbraTri).interpolate(p0, p1, p2);
+    const v2 = Barycentric.coordinates(penumbraTri[2], ...midPenumbraTri).interpolate(p0, p1, p2);
+    return [v0, v1, v2].flatMap(pt => [pt.x, pt.y, pt.z]);
+  }
+
+  /**
+   * The umbra area, for each vertex.
+   * @returns {number[9]}
+   */
+  aUmbraArea() {
+    const sarea = foundry.utils.orient2dFast;
+    const penumbraTri = this.buildTriangle("far", "penumbra");
+    const umbraTri = this.buildTriangle("far", "umbra");
+    const area = sarea(...umbraTri);
+    const p0 = new Point3d(area, 0, 0);
+    const p1 = new Point3d(0, area, 0)
+    const p2 = new Point3d(0, 0, area)
+    const v0 = Barycentric.coordinates(penumbraTri[0], ...umbraTri).interpolate(p0, p1, p2);
+    const v1 = Barycentric.coordinates(penumbraTri[1], ...umbraTri).interpolate(p0, p1, p2);
+    const v2 = Barycentric.coordinates(penumbraTri[2], ...umbraTri).interpolate(p0, p1, p2);
+    return [v0, v1, v2].flatMap(pt => [pt.x, pt.y, pt.z]);
+  }
+
+  /**
+   * The threshold radius, or a negative value if not applicable.
+   * @returns {number[3]}
+   */
+  aThresholdRadius() {
+    const { DISTANCE, PROXIMATE } = CONST.WALL_SENSE_TYPES;
+    const wallSenseType = this.wallSenseType;
+    if ( !(wallSenseType === DISTANCE || wallSenseType === PROXIMATE) ) return [-1, -1, -1];
+    const thresholdRadius = this.thresholdRadius;
+    return [thresholdRadius, thresholdRadius, thresholdRadius];
+  }
+
+  /**
+   * The placement of the wall along the far penumbra AB edge.
+   * @returns {number[3]}
+   */
+  aWallRatio() {
+
+  }
+
+  /**
+   * The placement of the near shadow along the far penumbra AB edge.
+   * TODO: Should this be one per penumbra, mid, umbra?
+   * @returns {number[9]}
+   */
+  aNearRatios() {
+
+  }
+
+  /**
+   * The side penumbras
+   * @returns {number[9]}
+   */
+  aSidePenumbra(idx = 0) {
+
   }
 
   // ----- NOTE: Basic getters ----- //
@@ -289,7 +386,7 @@ export class SourceEdgeShadows {
   /**
    * Calculate the side penumbra for a given side as barycentric coordinates.
    * @param {0|1} idx
-   * @returns {BarycentricPoint[3]} The coordinates, for vertices 0, 1, 2
+   * @returns {Barycentric[3]} The coordinates, for vertices 0, 1, 2
    */
   sidePenumbra(idx = 0) {
     const orient = foundry.utils.orient2dFast;
@@ -302,8 +399,8 @@ export class SourceEdgeShadows {
       const a = edgeEndpoints.top[idx];
       const b = penumbraTri[idx + 1];
       const c = umbraTri[idx + 1];
-      if ( Math.abs(orient(a, b, c)) < 1 ) out[vertexNum] = new BarycentricPoint(-1, -1, -1);
-      else out[vertexNum] = BarycentricPoint.coordinates(pt, a, b, c);
+      if ( Math.abs(orient(a, b, c)) < 1 ) out[vertexNum] = new Barycentric(-1, -1, -1);
+      else out[vertexNum] = Barycentric.coordinates(pt, a, b, c);
     }
     return out;
   }
@@ -315,12 +412,12 @@ export class SourceEdgeShadows {
    */
   nearFarRatios(type = "far") {
     const penumbraTri = this.buildTriangle("far", "penumbra");
-    const triData = BarycentricPoint._triangleData(penumbraTri[0], penumbraTri[1], penumbraTri[2]);
+    const triData = Barycentric._triangleData(penumbraTri[0], penumbraTri[1], penumbraTri[2]);
     const pts = this.shadowCanvasIntersections(type)[0];
     return {
-      umbra: BarycentricPoint._coordinates(pts.umbra, triData).x,
-      midpenumbra: BarycentricPoint._coordinates(pts.midpenumbra, triData).x,
-      penumbra: type === "far" ? 0 : BarycentricPoint._coordinates(pts.penumbra, triData).x,
+      umbra: Barycentric._coordinates(pts.umbra, triData).x,
+      midpenumbra: Barycentric._coordinates(pts.midpenumbra, triData).x,
+      penumbra: type === "far" ? 0 : Barycentric._coordinates(pts.penumbra, triData).x,
     };
   }
 
@@ -332,7 +429,7 @@ export class SourceEdgeShadows {
   wallRatio() {
     const penumbraTri = this.buildTriangle("far", "penumbra");
     const endpoint = this.edgeEndpoints[0].top;
-    return BarycentricPoint.coordinates(endpoint, penumbraTri[0], penumbraTri[1], penumbraTri[2]).x;
+    return Barycentric.coordinates(endpoint, penumbraTri[0], penumbraTri[1], penumbraTri[2]).x;
   }
 
   /**
@@ -647,6 +744,36 @@ export class SourceEdgeShadows {
     return Math.atan2(otherLinkedPt.y - sharedPt.y, otherLinkedPt.x - sharedPt.x);
   }
 
+  // ----- NOTE: Fragment testing ----- //
+
+  varyingsForPoint(pt) {
+    const penumbraTri = this.buildTriangle("far", "penumbra");
+    const vertices = Array(3);
+    for ( let v = 0; v < 3; v += 1 ) {
+      const vertexData = vertices[v] = {};
+      vertexData.vThresholdRadius = this.aThresholdRadius()[v];
+
+      switch ( v ) {
+        case 0: vertexData.vPenumbraArea = new Point3d(this.aPenumbraArea()[v], 0, 0); break;
+        case 1: vertexData.vPenumbraArea = new Point3d(0, this.aPenumbraArea()[v], 0); break;
+        case 2: vertexData.vPenumbraArea = new Point3d(0, 0, this.aPenumbraArea()[v]); break;
+      }
+
+      const i2 = v * 2;
+      const i3 = v * 3;
+      vertexData.vVertexPosition = new PIXI.Point(...this.aVertexPosition().slice(i2, i2 + 2));
+      vertexData.vMidPenumbraArea = new Point3d(...this.aMidPenumbraArea().slice(i3, i3 + 3));
+      vertexData.vUmbraArea = new Point3d(...this.aUmbraArea().slice(i3, i3 + 3));
+    }
+
+    const varyings = {};
+    const pBary = Barycentric.coordinates(pt, ...penumbraTri);
+    for ( const key of ["vPenumbraArea", "vThresholdRadius", "vVertexPosition", "vMidPenumbraArea", "vUmbraArea"]) {
+      varyings[key] = pBary.interpolate(vertices[0][key], vertices[1][key], vertices[2][key]);
+    }
+    return { varyings, vertices };
+  }
+
   // ----- NOTE: Drawings ----- //
 
   drawEdge() { Draw.segment(this.edge); }
@@ -820,7 +947,7 @@ export class Ray3d {
   }
 }
 
-export class BarycentricPoint extends Point3d {
+export class Barycentric extends Point3d {
 
   /**
    * Calculate barycentric coordinate within a given triangle.
@@ -830,7 +957,7 @@ export class BarycentricPoint extends Point3d {
    * @param {PIXI.Point} a      First triangle vertex
    * @param {PIXI.Point} b      Second triangle vertex
    * @param {PIXI.Point} c      Third triangle vertex
-   * @returns {BarycentricPoint}
+   * @returns {Barycentric}
    */
   static coordinates(p, a, b, c) {
     return this._coordinates(p, this._triangleData(a, b, c));
@@ -841,7 +968,7 @@ export class BarycentricPoint extends Point3d {
    * Use cached triangle data for the calculation.
    * @param {PIXI.Point} p                          Point to transform
    * @param {BarycentricTriangleData} triData       From this._triangleData
-   * @returns {BarycentricPoint}
+   * @returns {Barycentric}
    */
   static _coordinates(p, triData) {
     const { a, v0, v1, d00, d01, d11, denomInv } = triData;
@@ -885,7 +1012,7 @@ export class BarycentricPoint extends Point3d {
 
   /**
    * Determine the 2d coordinate for a given barycentric coordinate and triangle.
-   * @param {BarycentricPoint} bary
+   * @param {Barycentric} bary
    * @param {PIXI.Point} a      First triangle vertex
    * @param {PIXI.Point} b      Second triangle vertex
    * @param {PIXI.Point} c      Third triangle vertex
@@ -899,7 +1026,7 @@ export class BarycentricPoint extends Point3d {
 
   /**
    * Is this point inside its triangle?
-   * @param {BarycentricPoint} bary
+   * @param {Barycentric} bary
    * @returns {bool}
    */
   insideTriangle() { return this.y >= 0.0 && this.z >= 0.0 && (this.y + this.z) <= 1.0; }
@@ -925,6 +1052,8 @@ export class BarycentricPoint extends Point3d {
 
 
 
+
+
 /* Testing
 MODULE_ID = "elevatedvision"
 Point3d = CONFIG.GeometryLib.threeD.Point3d
@@ -933,7 +1062,7 @@ api = game.modules.get("elevatedvision").api
 SourceEdgeShadows = api.glsl.SourceEdgeShadows
 Ray2d = api.glsl.Ray2d
 Ray3d = api.glsl.Ray3d
-BarycentricPoint = api.glsl.BarycentricPoint
+Barycentric = api.glsl.Barycentric
 
 l = canvas.lighting.placeables[0];
 edge0 = canvas.walls.placeables[0].edge
@@ -962,8 +1091,8 @@ pt = _token.center
 farPenumbraTriOrig = ses0.buildTriangle("far", "penumbra")
 farPenumbraTriElev = ses0Elev.buildTriangle("far", "penumbra")
 
-baryOrig = BarycentricPoint.coordinates(pt, ...farPenumbraTriOrig)
-baryElev = BarycentricPoint.coordinates(pt, ...farPenumbraTriElev)
+baryOrig = Barycentric.coordinates(pt, ...farPenumbraTriOrig)
+baryElev = Barycentric.coordinates(pt, ...farPenumbraTriElev)
 
 
 Ratio:
@@ -992,10 +1121,10 @@ A = farPenumbraTriOrig[0]
 C = farPenumbraTriOrig[1]
 B = farPenumbraTriOrig[2]
 P = pt
-Pbary = BarycentricPoint.coordinates(pt, ...farPenumbraTriOrig)
+Pbary = Barycentric.coordinates(pt, ...farPenumbraTriOrig)
 
 // We want to determine Pprime using ratio.
-PBaryprime = BarycentricPoint.coordinates(pt, ...farPenumbraTriElev)
+PBaryprime = Barycentric.coordinates(pt, ...farPenumbraTriElev)
 
 E = farPenumbraTriElev[1]
 D = farPenumbraTriElev[2]
@@ -1146,8 +1275,8 @@ F = new PIXI.Point(2200, 1400) // Corresponds to C
 
 P = new PIXI.Point(2234, 1337)
 
-P_abc = BarycentricPoint.coordinates(P, A, B, C)
-P_def = BarycentricPoint.coordinates(P, D, E, F)
+P_abc = Barycentric.coordinates(P, A, B, C)
+P_def = Barycentric.coordinates(P, D, E, F)
 
 dNorm = D.normalize()
 eNorm = E.normalize()
@@ -1165,17 +1294,17 @@ saV = sarea(C, A, P)
 saW = sarea(A, B, P)
 total = saU + saV + saW
 
-tmp = new BarycentricPoint(saU, saV, saW)
+tmp = new Barycentric(saU, saV, saW)
 tmp = tmp.multiplyScalar(1/total)
-P_abc = BarycentricPoint.coordinates(P, A, B, C)
+P_abc = Barycentric.coordinates(P, A, B, C)
 
 saU2 = sarea(E, F, P)
 saV2 = sarea(F, D, P)
 saW2 = sarea(D, E, P)
 total2 = saU2 + saV2 + saW2
-tmp2 = new BarycentricPoint(saU2, saV2, saW2)
+tmp2 = new Barycentric(saU2, saV2, saW2)
 tmp2 = tmp2.multiplyScalar(1/total2)
-P_def = BarycentricPoint.coordinates(P, D, E, F)
+P_def = Barycentric.coordinates(P, D, E, F)
 
 ratio = 3
 (total2 * ratio * ratio).almostEqual(total)
@@ -1214,16 +1343,16 @@ function baryInterpolation(bary, a, b, c) {
 }
 
 // Vertices, Penumbra triangle
-v0_vBary = BarycentricPoint.coordinates(A, A, B, C)
-v1_vBary = BarycentricPoint.coordinates(B, A, B, C)
-v2_vBary = BarycentricPoint.coordinates(C, A, B, C)
+v0_vBary = Barycentric.coordinates(A, A, B, C)
+v1_vBary = Barycentric.coordinates(B, A, B, C)
+v2_vBary = Barycentric.coordinates(C, A, B, C)
 
 v0_vArea = new Point3d(total, 0, 0)
 v1_vArea = new Point3d(0, total, 0)
 v2_vArea = new Point3d(0, 0, total)
 
-vBary = baryInterpolation(BarycentricPoint.coordinates(P, A, B, C), v0_vBary, v1_vBary, v2_vBary)
-vArea = baryInterpolation(BarycentricPoint.coordinates(P, A, B, C), v0_vArea, v1_vArea, v2_vArea)
+vBary = baryInterpolation(Barycentric.coordinates(P, A, B, C), v0_vBary, v1_vBary, v2_vBary)
+vArea = baryInterpolation(Barycentric.coordinates(P, A, B, C), v0_vArea, v1_vArea, v2_vArea)
 
 total = vArea.x + vArea.y + vArea.z
 ratio = 3
@@ -1235,7 +1364,7 @@ v2 = saV2 / total2
 w2 = saW2 / total2
 u2 = 1 - v2 - w2
 
-vNewBary = new BarycentricPoint(u2, v2, w2)
+vNewBary = new Barycentric(u2, v2, w2)
 
 /*
 
@@ -1253,39 +1382,39 @@ areaPenumbra = sarea(...penumbraTri)
 v0_penumbra_area = new Point3d(areaPenumbra, 0, 0)
 v1_penumbra_area = new Point3d(0, areaPenumbra, 0)
 v2_penumbra_area = new Point3d(0, 0, areaPenumbra)
-vPenumbraArea = BarycentricPoint.coordinates(P, ...penumbraTri).interpolate(v0_penumbra_area, v1_penumbra_area, v2_penumbra_area)
+vPenumbraArea = Barycentric.coordinates(P, ...penumbraTri).interpolate(v0_penumbra_area, v1_penumbra_area, v2_penumbra_area)
 
 // Confirm
-vPenumbraBary = BarycentricPoint.fromObject(vPenumbraArea.multiplyScalar(1 / (vPenumbraArea.x + vPenumbraArea.y + vPenumbraArea.z)))
-vPenumbraBary.almostEqual(BarycentricPoint.coordinates(P, ...penumbraTri))
+vPenumbraBary = Barycentric.fromObject(vPenumbraArea.multiplyScalar(1 / (vPenumbraArea.x + vPenumbraArea.y + vPenumbraArea.z)))
+vPenumbraBary.almostEqual(Barycentric.coordinates(P, ...penumbraTri))
 
 // Midpenumbra
 areaMid = sarea(...midPenumbraTri)
 mid0 = new Point3d(areaMid, 0, 0)
 mid1 = new Point3d(0, areaMid, 0)
 mid2 = new Point3d(0, 0, areaMid)
-v0_mid_area = BarycentricPoint.coordinates(A, ...midPenumbraTri).interpolate(mid0, mid1, mid2)
-v1_mid_area = BarycentricPoint.coordinates(B, ...midPenumbraTri).interpolate(mid0, mid1, mid2)
-v2_mid_area = BarycentricPoint.coordinates(C, ...midPenumbraTri).interpolate(mid0, mid1, mid2)
-vMidPenumbraArea = BarycentricPoint.coordinates(P, ...penumbraTri).interpolate(v0_mid_area, v1_mid_area, v2_mid_area)
+v0_mid_area = Barycentric.coordinates(A, ...midPenumbraTri).interpolate(mid0, mid1, mid2)
+v1_mid_area = Barycentric.coordinates(B, ...midPenumbraTri).interpolate(mid0, mid1, mid2)
+v2_mid_area = Barycentric.coordinates(C, ...midPenumbraTri).interpolate(mid0, mid1, mid2)
+vMidPenumbraArea = Barycentric.coordinates(P, ...penumbraTri).interpolate(v0_mid_area, v1_mid_area, v2_mid_area)
 
 // Confirm
-vMidPenumbraBary = BarycentricPoint.fromObject(vMidPenumbraArea.multiplyScalar(1 / (vMidPenumbraArea.x + vMidPenumbraArea.y + vMidPenumbraArea.z)))
-vMidPenumbraBary.almostEqual(BarycentricPoint.coordinates(P, ...midPenumbraTri))
+vMidPenumbraBary = Barycentric.fromObject(vMidPenumbraArea.multiplyScalar(1 / (vMidPenumbraArea.x + vMidPenumbraArea.y + vMidPenumbraArea.z)))
+vMidPenumbraBary.almostEqual(Barycentric.coordinates(P, ...midPenumbraTri))
 
 // Umbra
 areaUmbra = sarea(...umbraTri)
 umbra0 = new Point3d(areaUmbra, 0, 0)
 umbra1 = new Point3d(0, areaUmbra, 0)
 umbra2 = new Point3d(0, 0, areaUmbra)
-v0_umbra_area = BarycentricPoint.coordinates(A, ...umbraTri).interpolate(umbra0, umbra1, umbra2)
-v1_umbra_area = BarycentricPoint.coordinates(B, ...umbraTri).interpolate(umbra0, umbra1, umbra2)
-v2_umbra_area = BarycentricPoint.coordinates(C, ...umbraTri).interpolate(umbra0, umbra1, umbra2)
-vUmbraArea = BarycentricPoint.coordinates(P, ...penumbraTri).interpolate(v0_umbra_area, v1_umbra_area, v2_umbra_area)
+v0_umbra_area = Barycentric.coordinates(A, ...umbraTri).interpolate(umbra0, umbra1, umbra2)
+v1_umbra_area = Barycentric.coordinates(B, ...umbraTri).interpolate(umbra0, umbra1, umbra2)
+v2_umbra_area = Barycentric.coordinates(C, ...umbraTri).interpolate(umbra0, umbra1, umbra2)
+vUmbraArea = Barycentric.coordinates(P, ...penumbraTri).interpolate(v0_umbra_area, v1_umbra_area, v2_umbra_area)
 
 // Confirm
-vUmbraBary = BarycentricPoint.fromObject(vUmbraArea.multiplyScalar(1 / (vUmbraArea.x + vUmbraArea.y + vUmbraArea.z)))
-vUmbraBary.almostEqual(BarycentricPoint.coordinates(P, ...umbraTri))
+vUmbraBary = Barycentric.fromObject(vUmbraArea.multiplyScalar(1 / (vUmbraArea.x + vUmbraArea.y + vUmbraArea.z)))
+vUmbraBary.almostEqual(Barycentric.coordinates(P, ...umbraTri))
 
 
 */
@@ -1356,8 +1485,35 @@ in vec4 aWallCorner1; (x, y, top, bottom)
 in vec2 linkAngle
 in float aWallSenseType
 4 + 4 + 2 + 1 = 11
-But could use the same set for each vertex.
 
+
+0, -x <---> y, 0
+
+y', x'
+
+At edge: yPen = 0, yUmb = -?
+At inner: yPen = ?, yUmb = 0
+
+0 -> 5
+10 -> 0
+
+0 1 2 3 4 5
+10 8 6 4 2 0
+
+function sideRatio(baryP, baryU) {
+  const ratioU = baryU.z / (baryU.z + baryU.y);
+  const ratioP = baryP.z / (baryP.z + baryP.y);
+  const percentU = ratioU - 1;
+  const percentP = 1 - ratioP;
+  return percentU / (percentU + percentP);
+}
+
+sideRatio(baryP0, baryU0)
+sideRatio(baryP1, baryU1)
+baryP0 = Barycentric.coordinates(P0, ...penumbraTri)
+baryP1 = Barycentric.coordinates(P1, ...penumbraTri)
+baryU0 = Barycentric.coordinates(P0, ...umbraTri)
+baryU1 = Barycentric.coordinates(P1, ...umbraTri)
 
 
 

@@ -32,7 +32,7 @@ import {
   VisionSourceWallShadows,
   Ray2d,
   Ray3d,
-  BarycentricPoint } from "./glsl/SourceEdgeShadows.js";
+  Barycentric } from "./glsl/SourceEdgeShadows.js";
 
 
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
@@ -52,13 +52,14 @@ import { ElevationTextureHandler } from "./ElevationTextureHandler.js";
 import "./changelog.js";
 
 // Testing shaders
+import * as glsl_mock from "./testing/glsl_mock.js";
 import {
-  vec2,
-  vec3,
-  vec4,
   SizedPointSourceShadowWallVertexShaderTest,
   DirectionalSourceShadowWallVertexShaderTest } from "./testing/WallShaderTest.js";
 
+import {
+  SizedPointSourceShadowWallVertexShaderTest2,
+  DirectionalSourceShadowWallVertexShaderTest2 } from "./testing/WallShaderTest2.js";
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -139,15 +140,15 @@ Hooks.once("init", function() {
       VisionSourceWallShadows,
       Ray2d,
       Ray3d,
-      BarycentricPoint
+      Barycentric
     },
 
     testing: {
-      vec2,
-      vec3,
-      vec4,
+      glsl_mock,
       SizedPointSourceShadowWallVertexShaderTest,
-      DirectionalSourceShadowWallVertexShaderTest
+      DirectionalSourceShadowWallVertexShaderTest,
+      SizedPointSourceShadowWallVertexShaderTest2,
+      DirectionalSourceShadowWallVertexShaderTest2
     }
   };
 
