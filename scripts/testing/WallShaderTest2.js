@@ -32,7 +32,8 @@ import {
   lineLineIntersection,
   distanceSquared,
   linearConversion,
-  interpolateBarycentric
+  interpolateBarycentric,
+  between
 } from "./glsl_mock.js";
 
 const UMBRA = 0;
@@ -236,13 +237,13 @@ class ShadowWallVertexShaderTest2 {
     const {
       vVertexPosition,
       vTerrainTexCoord,
-      vPenumbraArea,
-      vUmbraArea } = this;
+      vPenumbra,
+      vUmbra } = this;
     return {
       vVertexPosition,
       vTerrainTexCoord,
-      vPenumbraArea,
-      vUmbraArea
+      vPenumbra,
+      vUmbra
     };
   }
 
@@ -250,9 +251,16 @@ class ShadowWallVertexShaderTest2 {
     const {
       fThresholdRadius2,
       fWallHeights,
-      fWallRatios,
+      fFarRatio,
+      fWallRatio,
       fNearRatios } = this;
-    return { fThresholdRadius2, fWallHeights, fWallRatios, fNearRatios };
+    return {
+      fThresholdRadius2,
+      fWallHeights,
+      fFarRatio,
+      fWallRatio,
+      fNearRatios
+    };
   }
 
   // ----- NOTE: Penumbras ----- //
@@ -577,7 +585,7 @@ class ShadowWallVertexShaderTest2 {
    * @param {vec2[3]} penumbraTri
    * @returns {object} For testing only, the flat variables.
    */
-  calculateFlatVariables(wall, sidePenumbraDirs, farPenumbraPoints0, nearPenumbraDirs, penumbraTri, umbraTri) {
+  calculateFlatVariables(wall, sidePenumbraDirs, farPenumbraPoints0, nearPenumbraDirs, penumbraTri) {
     const { uElevationRes } = this;
     const { DISTANCE, PROXIMATE } = CONST.WALL_SENSE_TYPES;
 
@@ -591,19 +599,23 @@ class ShadowWallVertexShaderTest2 {
     const wallSenseType = wall.type;
     this.fThresholdRadius2 = !(wallSenseType === DISTANCE || wallSenseType === PROXIMATE) ? -1 : wall.thresholdRadius2;
 
-    // Location of the wall along the x axis of the barycentric penumbra and umbra triangles.
-    this.fWallRatios = new vec2();
-    this.fWallRatios[PENUMBRA] = barycentric(wTop.xy, ...penumbraTri).x;
-    this.fWallRatios[UMBRA] = barycentric(wTop.xy, ...umbraTri).x;
+    // Location of the wall along the x axis of the barycentric penumbra triangle
+    this.fWallRatio = barycentric(wTop.xy, ...penumbraTri).x;
 
-    // Location of the near shadow along the x axis of the barycentric penumbra and umbra triangles.
+    // Two options for the far ratio:
+    // 1. float fFarRatio, storing UMBRA. PENUMBRA is initially 0.0 until modified by elevation.
+    // 2. pass umbra area to get barycentric; elevate the umbra triangle coordinate to determine far.
+    // - But still need the fFarRatio so we can use a shadow gradient in the far penumbra.
+    this.fFarRatio = barycentric(farPenumbraPoints0.umbra, ...penumbraTri).x;
+
+    // Location of the near shadow along the x axis of the barycentric penumbra triangle.
     // Stored as vec3: UMBRA (x), MID (y), PENUMBRA (z)
     this.fNearRatios = new vec2(this.fWallRatios); // Near shadow starts at wall unless the wall is "floating."
     if ( wBottom.z > canvasElevation ) {
       const nearPenumbraPoints = this.nearPenumbraPoints = this.endpointsForPenumbras(
         sidePenumbraDirs, nearPenumbraDirs, wall.bottom, wall.direction);
       const nearPts = nearPenumbraPoints[0];
-      this.fNearRatios[UMBRA] = barycentric(nearPts.umbra, ...umbraTri).x;
+      this.fNearRatios[UMBRA] = barycentric(nearPts.umbra, ...penumbraTri).x;
       this.fNearRatios[PENUMBRA] = barycentric(nearPts.penumbra, ...penumbraTri).x;
     } else {
       // Debugging only.
@@ -652,17 +664,12 @@ class ShadowWallVertexShaderTest2 {
     const vVertexPosition = this.vVertexPosition = penumbraTri[vertexNum];
 
     // Set barymetric unnormalized coordinates for each corner of the triangle.
-    this.vPenumbraArea = new vec3(0.0);
-    this.vPenumbraArea[vertexNum] = sarea(...penumbraTri);
+    this.vPenumbra = new vec3(0.0);
+    this.vPenumbra[vertexNum] = 1.0;
 
-    // For the umbra triangle, must set the area at each of the vertices.
+    // Define the umbra triangle in relation to the penumbra triangle.
     const umbraTri = this.buildTriangle(farPenumbraPoints, wall, UMBRA);
-    const umbraArea = sarea(...umbraTri);
-    const p0 = new vec3(umbraArea, 0.0, 0.0);
-    const p1 = new vec3(0.0, umbraArea, 0.0);
-    const p2 = new vec3(0.0, 0.0, umbraArea);
-    const umbraBary = barycentric(penumbraTri[vertexNum], ...umbraTri);
-    this.vUmbraArea = interpolateBarycentric(umbraBary, p0, p1, p2);
+    this.vUmbra = barycentric(penumbraTri[vertexNum], ...umbraTri);
 
     // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
     // (vVertexPosition - uSceneDims.xy) / uSceneDims.zw
@@ -674,7 +681,7 @@ class ShadowWallVertexShaderTest2 {
     // Finally, set the flat variables when we hit the last vertex for this triangle.
     if ( vertexNum === 2 ) {
       this.calculateFlatVariables(wall, adjSidePenumbraDirs, farPenumbraPoints[0],
-        nearPenumbraDirs, penumbraTri, umbraTri);
+        nearPenumbraDirs, penumbraTri);
     }
 
     // For debugging.
@@ -685,24 +692,6 @@ class ShadowWallVertexShaderTest2 {
   // ----- NOTE: Fragment shader testing ----- //
 
   // ----- NOTE: Fragment variables ----- //
-
-  vPenumbra(elevation) {
-    const { vPenumbraArea, fWallHeight } = this;
-    if ( typeof elevation === "undefined" ) return normalizeBarycentricArea(vPenumbraArea);
-
-    const elevationChangeRatioFar = this._elevationChangeRatio(elevation, fWallHeight[PENUMBRA]);
-    const ratio = this._elevateShadowRatio(0.0, elevationChangeRatioFar);
-    return convertBarycentericAreaSimilarTriangle(vPenumbraArea, ratio);
-  }
-
-  vUmbra(elevation) {
-    const { vUmbraArea, fWallHeight } = this;
-    if ( typeof elevation === "undefined" ) return normalizeBarycentricArea(vUmbraArea);
-
-    const elevationChangeRatioFar = this._elevationChangeRatio(elevation, fWallHeight[UMBRA]);
-    const ratio = this._elevateShadowRatio(0.0, elevationChangeRatioFar);
-    return convertBarycentericAreaSimilarTriangle(vUmbraArea, ratio);
-  }
 
   // ----- NOTE: Fragment calculations ----- //
 
@@ -719,13 +708,13 @@ class ShadowWallVertexShaderTest2 {
     const numeratorUmbra = baryUmbra.z > baryUmbra.y ? baryUmbra.z : baryUmbra.y;
     const numeratorPenumbra = baryPenumbra.z > baryPenumbra.y ? baryPenumbra.z : baryPenumbra.y;
 
-
-    const ratioU = numeratorUmbra / umbraSum
-    const ratioP = numeratorPenumbra / penumbraSum
+    const ratioU = numeratorUmbra / umbraSum;
+    const ratioP = numeratorPenumbra / penumbraSum;
     const percentU = ratioU - 1.0;
     const percentP = 1.0 - ratioP;
     return percentU / (percentU + percentP);
   }
+
 
   /**
    * @param {bool} SHADOW   The #define SHADOW parameter
@@ -759,50 +748,40 @@ class ShadowWallVertexShaderTest2 {
    * @returns {float}
    */
   _elevateShadowRatio(ratio, elevation, wallHeight, wallRatio) {
-    const { uElevationRes } = this;
-    const canvasElevation = uElevationRes.x;
-    if ( elevation <= canvasElevation ) return ratio;
+    const heightFraction = this._elevationHeightFraction(elevation, wallHeight);
+    return this._elevateShadowRatioUsingHeightFraction(ratio, wallRatio, heightFraction);
+  }
 
-    wallHeight = Math.max(wallHeight - canvasElevation, 0.0);
-    if ( wallHeight === 0.0 ) return ratio;
-
-    const elevationChange = elevation - canvasElevation;
-    const heightFraction = elevationChange / wallHeight;
-    // return ratio + (heightFraction * wallRatio) - (heightFraction * ratio);
+  _elevateShadowRatioUsingHeightFraction(ratio, wallRatio, heightFraction) {
     return ratio + (heightFraction * (wallRatio - ratio));
   }
 
-//   _elevateShadowRatios(elevation, wallHeight, ratios) {
-//     const { uElevationRes, fWallRatio } = this;
-//
-//     const canvasElevation = uElevationRes.x;
-//     if ( elevation <= canvasElevation ) return ratios;
-//
-//     wallHeight = Math.max(wallHeight - canvasElevation, 0.0);
-//     if ( wallHeight === 0.0 ) return ratios;
-//
-//     const elevationChange = elevation - canvasElevation;
-//     const heightFraction = elevationChange / wallHeight;
-//
-//     // For JS only.
-//     // GLSL: return ratios + (heightFraction * fWallRatio) - (heightFraction * ratios);
-//     const tmpV = new vec3(heightFraction * fWallRatio);
-//     return ratios.add(tmpV).subtract(ratios.multiplyScalar(heightFraction));
-//   }
+  _elevationHeightFraction(elevation, wallHeight) {
+    const { uElevationRes } = this;
+    const canvasElevation = uElevationRes.x;
+    if ( elevation <= canvasElevation ) return 0.0;
+
+    wallHeight = Math.max(wallHeight - canvasElevation, 0.0);
+    if ( wallHeight === 0.0 ) return 0.0;
+
+    const elevationChange = elevation - canvasElevation;
+    const heightFraction = elevationChange / wallHeight;
+    return heightFraction;
+  }
 
   elevateNearShadowRatios(elevation = this.canvasElevation) {
-    const { fWallHeights, fWallRatios, fNearRatios } = this;
+    const { fWallHeights, fWallRatio, fNearRatios } = this;
     const out = new vec2();
-    out[PENUMBRA] = this._elevateShadowRatio(fNearRatios[PENUMBRA], elevation, fWallHeights[BOTTOM], fWallRatios[PENUMBRA]);
-    out[UMBRA] = this._elevateShadowRatio(fNearRatios[UMBRA], elevation, fWallHeights[BOTTOM], fWallRatios[UMBRA]);
+    out[PENUMBRA] = this._elevateShadowRatio(fNearRatios[PENUMBRA], elevation, fWallHeights[BOTTOM], fWallRatio);
+    out[UMBRA] = this._elevateShadowRatio(fNearRatios[UMBRA], elevation, fWallHeights[BOTTOM], fWallRatio);
     return out;
   }
 
   elevateFarShadowRatios(elevation = this.canvasElevation) {
-    const { fWallHeights, fWallRatios } = this;
+    const { fWallHeights, fWallRatio, fFarRatio } = this;
     const out = new vec2();
-    out[PENUMBRA] = this._elevateShadowRatio(0.0, elevation, fWallHeights[TOP], fWallRatios[PENUMBRA]);
-    out[UMBRA] = this._elevateShadowRatio(0.0, elevation, fWallHeights[TOP], fWallRatios[UMBRA]);
+    out[PENUMBRA] = this._elevateShadowRatio(0.0, elevation, fWallHeights[TOP], fWallRatio);
+    out[UMBRA] = this._elevateShadowRatio(fFarRatio, elevation, fWallHeights[TOP], fWallRatio);
     return out;
   }
 
@@ -820,8 +799,7 @@ class ShadowWallVertexShaderTest2 {
    * @returns {bool}
    */
   inFrontOfWall() {
-    const { vPenumbraArea, fWallRatio } = this;
-    const vPenumbra = normalizeBarycentricArea(vPenumbraArea);
+    const { vPenumbra, fWallRatio } = this;
     return vPenumbra.x > fWallRatio;
   }
 
@@ -864,8 +842,6 @@ class ShadowWallVertexShaderTest2 {
     return varying;
   }
 
-
-
   /**
    * Get the barycentric position for a given 2d canvas point.
    * Used to mimic the vBary coordinates in the fragment shader.
@@ -891,11 +867,11 @@ class ShadowWallVertexShaderTest2 {
    * @returns {vec4} For testing only, returns fragColor.
    */
   fragmentCalculations(pt, elevation = 0) {
-    const { side0Shadow, side1Shadow, farShadow, nearShadow, hasShadow } = this.shadowComponents(pt, elevation);
+    const { sideShadow, farShadow, nearShadow, hasShadow } = this.shadowComponents(pt, elevation);
 
     let fragColor = this.noShadow();
     if ( !hasShadow ) return fragColor;
-    const shadow = side0Shadow * side1Shadow * farShadow * nearShadow;
+    const shadow = sideShadow * farShadow * nearShadow;
     const totalLight = Math.clamp(0.0, 1.0, 1.0 - shadow);
 
     fragColor = this.lightEncoding(totalLight);
@@ -907,7 +883,7 @@ class ShadowWallVertexShaderTest2 {
    * Determine the shadow components.
    */
   shadowComponents(pt, elevation = this.canvasElevation) {
-    const { uElevationRes } = this;
+    const { uElevationRes, fWallHeights, fWallRatio, fFarRatio, fNearRatios, vPenumbra, vUmbra } = this;
     elevation = CONFIG.GeometryLib.utils.gridUnitsToPixels(elevation);
 
     // Set the flat variables
@@ -924,141 +900,37 @@ class ShadowWallVertexShaderTest2 {
     // Get the elevation at this fragment.
     const canvasElevation = uElevationRes.x;
 
-
-
-
-    // Determine the placement in the bary x direction: from light source to end of shadow.
-    const { vPenumbraArea, vUmbraArea, fWallHeights, fWallRatios, fNearRatios } = this;
-    const vPenumbra = normalizeBarycentricArea(vPenumbraArea);
-
-    // If outside the elevation-adjusted far penumbra, no shadow.
-    const farPenumbraRatio = this._elevateShadowRatio(0.0, elevation, fWallHeights[TOP], fWallRatios[PENUMBRA]);
+    // Elevate the far penumbra ratio and confirm inclusion.
+    const farElevationHeightFraction = this._elevationHeightFraction(elevation, fWallHeights[TOP]);
+    const farPenumbraRatio = this._elevateShadowRatioUsingHeightFraction(0.0, fWallRatio, farElevationHeightFraction);
     if ( vPenumbra.x < farPenumbraRatio ) return { hasShadow: false };
 
-    // If outside the elevation-adjusted near penumbra, no shadow.
-    // Technically, not needed if elevation === canvasElevation b/c it would be the wall.
-    const nearPenumbraRatio = this._elevateShadowRatio(fNearRatios[PENUMBRA], elevation, fWallHeights[BOTTOM], fWallRatios[PENUMBRA]);
+    // Elevate the near penumbra ratio and confirm inclusion.
+    const nearElevationHeightFraction = this._elevationHeightFraction(elevation, fWallHeights[BOTTOM]);
+    const nearPenumbraRatio = this._elevateShadowRatioUsingHeightFraction(
+      fNearRatios[PENUMBRA], fWallRatio, nearElevationHeightFraction);
     if ( vPenumbra.x > nearPenumbraRatio ) return { hasShadow: false };
 
-    // Umbra ratios.
-    const farUmbraRatio = this._elevateShadowRatio(0.0, elevation, fWallHeights[TOP], fWallRatios[UMBRA]);
-    const nearUmbraRatio = this._elevateShadowRatio(fNearRatios[UMBRA], elevation, fWallHeights[BOTTOM], fWallRatios[UMBRA]);
+    // The point is either in the umbra or in a penumbra.
+    // Elevate the umbra ratios.
+    const farUmbraRatio = this._elevateShadowRatioUsingHeightFraction(
+      fFarRatio, fWallRatio, farElevationHeightFraction);
+    const nearUmbraRatio = this._elevateShadowRatioUsingHeightFraction(
+      fNearRatios[UMBRA], fWallRatio, nearElevationHeightFraction);
 
-    // Construct the elevated umbra and penumbra triangles.
-    const vElevatedPenumbra = convertBarycentericAreaSimilarTriangle(vPenumbraArea, farPenumbraRatio);
-    const vElevatedUmbra = convertBarycentericAreaSimilarTriangle(vUmbraArea, farUmbraRatio);
-
-    let inFarPenumbra = false;
-    let inNearPenumbra = false;
-    let inSidePenumbra0 = false;
-    let inSidePenumbra1 = false;
-    let side0Shadow = 1.0;
-    let side1Shadow = 1.0;
+    // Determine the near/far penumbra inclusion.
+    const inFarPenumbra = between(farPenumbraRatio, farUmbraRatio, vPenumbra.x);
+    const inNearPenumbra = between(nearPenumbraRatio, nearUmbraRatio, vPenumbra.x);
     let farShadow = 1.0;
     let nearShadow = 1.0;
+    if ( inFarPenumbra ) farShadow = linearConversion(vPenumbra.x, farPenumbraRatio, farUmbraRatio, 0.0, 1.0);
+    if ( inNearPenumbra ) nearShadow = linearConversion(vPenumbra.x, nearPenumbraRatio, nearUmbraRatio, 0.0, 1.0);
 
-    if ( vPenumbra.x < farUmbraRatio ) inFarPenumbra = true;
-    if ( vPenumbra.x > nearUmbraRatio ) inNearPenumbra = true;
-
-    // If in the umbra, has full shadow.
-    const vUmbra = normalizeBarycentricArea(vUmbraArea);
-//     if ( barycentricPointInsideTriangle(vElevatedUmbra) ) {
-//       if ( vUmbra.x > nearUmbraRatio ) inNearPenumbra = true;
-//
-//     } else {
-//       // In one or more penumbra. Determine which.
-//
-//     }
-//
-//     if ( vUmbra.x <= nearUmbraRatio && barycentricPointInsideTriangle(vElevatedUmbra) ) {
-//       return { hasShadow: true, side0Shadow: 1.0, side1Shadow: 1.0, farShadow: 1.0, nearShadow: 1.0 };
-//     }
-//
-//     // In one or more penumbra. Determine which.
-//     // If in umbra y,z (ignore x) then is not in side penumbra.
-//     let inFarPenumbra = false;
-//     let inNearPenumbra = false;
-//     let inSidePenumbra0 = false;
-//     let inSidePenumbra1 = false;
-//     if ( )
-//
-//     if ( vUmbra.y.between(0, 1) && vUmbra.z.between(0, 1) ) {
-//       // not in side penumbra
-//     } else {
-//       // in one or more side penumbra
-//     }
-//
-//
-//
-//
-//
-//
-//
-//
-//     // Determine if the fragment is within one or more penumbra.
-//     const inSidePenumbra0 = this.inSidePenumbra0();
-//     const inSidePenumbra1 = this.inSidePenumbra1();
-//     const inFarPenumbra = this.inFarPenumbraShadow(canvasElevation);
-//     const inNearPenumbra = this.inNearPenumbraShadow(canvasElevation);
-//     const inFarMidPenumbra = this.inFarMidPenumbraShadow(canvasElevation);
-//     const inNearMidPenumbra = this.inNearMidPenumbraShadow(canvasElevation);
-//
-//     // Blend the two side penumbras if overlapping by multiplying the light amounts.
-//     const side0Shadow = inSidePenumbra0 ? vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z) : 1.0;
-//     const side1Shadow = inSidePenumbra1 ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
-//
-//     // UMBRA is nearer to 1; PENUMBRA is nearer to 0.
-//     const farShadow = inFarPenumbra
-//       ? linearConversion(vPenumbra.x, farRatios[PENUMBRA], farRatios[MIDPENUMBRA], 0.0, 0.5)
-//       : inFarMidPenumbra ? linearConversion(vPenumbra.x, farRatios[MIDPENUMBRA], farRatios[UMBRA], 0.5, 1.0)
-//         : 1.0;
-//
-//     // Near shadow is reversed, so UMBRA is nearer 0 and PENUMBRA is nearer to 1.
-//     const nearShadow = inNearPenumbra
-//       ? linearConversion(vPenumbra.x, nearRatios[PENUMBRA], nearRatios[MIDPENUMBRA], 0.0, 0.5)
-//       : inNearMidPenumbra ? linearConversion(vPenumbra.x, nearRatios[MIDPENUMBRA], nearRatios[UMBRA], 0.5, 1.0)
-//         : 1.0;
-//
-    return { side0Shadow, side1Shadow, farShadow, nearShadow, hasShadow: true };
-  }
-
-  /**
-   * For debugging only.
-   * Calculate whether fragment point is in certain areas.
-   */
-  testPoint(pt, elevation = this.canvasElevation) {
-    const { uElevationRes } = this;
-    elevation = CONFIG.GeometryLib.utils.gridUnitsToPixels(elevation);
-
-    // Set the flat variables
-    this.vertexCalculations(2);
-
-    // Define the placement of the fragment and calculate varying variables.
-    this.vVertexPosition = new vec2(pt.x, pt.y);
-    this.setVaryings();
-
-
-    return {
-      farRatios,
-      nearRatios,
-      thresholdApplies: this.thresholdApplies(),
-      inFrontOfWall: this.inFrontOfWall(),
-
-      inSidePenumbra0: this.inSidePenumbra0(),
-      inSidePenumbra1: this.inSidePenumbra1(),
-      inFarPenumbra: this.inFarPenumbra(elevation),
-      inFarMidPenumbra: this.inFarMidPenumbra(elevation),
-      inFarUmbra: this.inFarUmbra(elevation),
-      inNearUmbra: this.inNearUmbra(elevation),
-      inNearMidPenumbra: this.inNearMidPenumbra(elevation),
-      inNearPenumbra: this.inNearPenumbra(elevation),
-
-      inFarPenumbraShadow: this.inFarPenumbraShadow(elevation),
-      inFarMidPenumbraShadow: this.inFarMidPenumbraShadow(elevation),
-      inNearPenumbraShadow: this.inNearPenumbraShadow(elevation),
-      inNearMidPenumbraShadow: this.inNearMidPenumbraShadow(elevation)
-
-    };
+    // For side penumbra, use the percent ratio between penumbra and umbra to determine percentage.
+    const percentSide = this.percentSideShadow(vPenumbra, vUmbra);
+    let sideShadow = 1.0;
+    if ( percentSide > 0.0 && percentSide < 1.0 ) sideShadow = percentSide;
+    return { sideShadow, farShadow, nearShadow, hasShadow: true };
   }
 
   // ----- NOTE: Drawing ----- //
@@ -1123,18 +995,11 @@ class ShadowWallVertexShaderTest2 {
     const penumbraTri = this.buildTriangle(this.farPenumbraPoints, this.wall, PENUMBRA);
     const [A, B, C] = penumbraTri.map(pt => PIXI.Point.fromObject(pt));
 
-    const umbraTri = this.buildTriangle(this.farPenumbraPoints, this.wall, UMBRA);
-    const [uA, uB, uC] = umbraTri.map(pt => PIXI.Point.fromObject(pt));
-
-    const ratios = far ? this.elevateFarShadowRatios(elevation) : this.elevateNearShadowRatios(elevation)
+    const ratios = far ? this.elevateFarShadowRatios(elevation) : this.elevateNearShadowRatios(elevation);
     for ( const [key, color] of Object.entries(COLOR_KEYS) ) {
       const idx = key === "umbra" ? UMBRA : PENUMBRA;
-      const a = key === "umbra" ? uA : A;
-      const b = key === "umbra" ? uB : B;
-      const c = key === "umbra" ? uC : C;
-
-      const p0 = b.projectToward(a, ratios[idx]);
-      const p1 = foundry.utils.lineLineIntersection(a, c, p0, p0.add(this.wall.direction.multiplyScalar(1)));
+      const p0 = B.projectToward(A, ratios[idx]);
+      const p1 = foundry.utils.lineLineIntersection(A, C, p0, p0.add(this.wall.direction.multiplyScalar(1)));
       Draw.point(p0, { color });
       Draw.point(p1, { color });
       Draw.segment({ a: p0, b: p1 }, { color });
@@ -1605,7 +1470,6 @@ shader2.uniforms.uElevationRes[0] = -999
 shader4.uniforms.uElevationRes[0] = -998
 
 shader0.vertexCalculations(2)
-
 shader0.drawWall()
 shader0.drawLight()
 shader0.drawTriangle(UMBRA)
@@ -1995,7 +1859,8 @@ bary.x === 1 at the light center; 0 at the far penumbra edge
 
 
 ratio = Math.pow(PIXI.Point.distanceBetween(D, E) / PIXI.Point.distanceBetween(A, B), 2)
-tmp = a.towardsPoint(b, Math.sqrt(ratio) * PIXI.Point.distanceBetween(A, B)); // this is just a.towardsPoint(b, PIXI.Point.distanceBetween(D, E))
+// this is just a.towardsPoint(b, PIXI.Point.distanceBetween(D, E))
+tmp = a.towardsPoint(b, Math.sqrt(ratio) * PIXI.Point.distanceBetween(A, B));
 barycentric(tmp, A, B, C); // Gives the x value for which the line is crossed for A, B, C at elevation
 
 
@@ -2004,3 +1869,37 @@ baryABC.x + (heightFraction * wallRatio) - (heightFraction * baryABC.x)
 
 
 */
+
+/*
+
+Varying:
+vec2 vVertexPosition
+vec3 vUmbra
+
+
+Flat:
+vec2 fWallHeights
+float fThresholdRadius2
+float fWallRatio
+float fFarRatio
+vec2 fNearRatios
+
+Calculated:
+vec2 VTerrainTexCoord
+vec3 vPenumbra          Based on vertexNum
+
+Per vertex:
+2 + 3 + 2 + 1 + 1 + 1 + 2 = 12
+
+
+vs:
+Flat:
+vec4 edge0 {x, y, top, bottom}
+vec4 edge1 {x, y, top, bottom}
+float fThresholdRadius
+vec2 linkedAngle
+4 + 4 + 1 + 2 = 11
+*/
+
+
+
