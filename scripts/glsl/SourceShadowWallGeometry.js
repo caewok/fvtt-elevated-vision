@@ -609,7 +609,7 @@ sourceOrigin = geom.sourceOrigin;
    */
   _updateEdgeSenseType(edge, idxToUpdate, update = true) {
     const senseType = this.senseType(edge);
-    const changedSenseType = this.getAttributeAtIndex("aWallSenseType")[0] !== senseType;
+    const changedSenseType = this.getAttributeAtIndex("aWallSenseType", idxToUpdate)[0] !== senseType;
     if ( changedSenseType ) this._updateBuffer([senseType], "aWallSenseType", idxToUpdate, update);
     return changedSenseType;
   }
@@ -622,7 +622,7 @@ sourceOrigin = geom.sourceOrigin;
    */
   _updateEdgeThreshold(edge, idxToUpdate, update = true) {
     const threshold = this.threshold2Attribute(edge);
-    const changedThreshold = this.getAttributeAtIndex("aThresholdRadius2")[0] !== threshold;
+    const changedThreshold = this.getAttributeAtIndex("aThresholdRadius2", idxToUpdate)[0] !== threshold;
     if ( changedThreshold ) this._updateBuffer([threshold], "aThresholdRadius2", idxToUpdate, update);
     return changedThreshold;
   }
