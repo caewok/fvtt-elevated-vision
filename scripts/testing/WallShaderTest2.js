@@ -610,7 +610,7 @@ class ShadowWallVertexShaderTest2 {
 
     // Location of the near shadow along the x axis of the barycentric penumbra triangle.
     // Stored as vec3: UMBRA (x), MID (y), PENUMBRA (z)
-    this.fNearRatios = new vec2(this.fWallRatios); // Near shadow starts at wall unless the wall is "floating."
+    this.fNearRatios = new vec2(this.fWallRatio); // Near shadow starts at wall unless the wall is "floating."
     if ( wBottom.z > canvasElevation ) {
       const nearPenumbraPoints = this.nearPenumbraPoints = this.endpointsForPenumbras(
         sidePenumbraDirs, nearPenumbraDirs, wall.bottom, wall.direction);
@@ -663,7 +663,7 @@ class ShadowWallVertexShaderTest2 {
     const penumbraTri = this.buildTriangle(farPenumbraPoints, wall, PENUMBRA);
     const vVertexPosition = this.vVertexPosition = penumbraTri[vertexNum];
 
-    // Set barymetric unnormalized coordinates for each corner of the triangle.
+    // Set barymetric coordinates for each corner of the triangle.
     this.vPenumbra = new vec3(0.0);
     this.vPenumbra[vertexNum] = 1.0;
 
@@ -743,8 +743,9 @@ class ShadowWallVertexShaderTest2 {
   /**
    * Elevate given shadow ratios.
    * @param {float} ratio
-   * @param {float} elevationChangeRatio
-   * @param {float} fWallRatio
+   * @param {float} elevation
+   * @param {float} wallHeight
+   * @param {float} wallRatio
    * @returns {float}
    */
   _elevateShadowRatio(ratio, elevation, wallHeight, wallRatio) {
@@ -752,10 +753,21 @@ class ShadowWallVertexShaderTest2 {
     return this._elevateShadowRatioUsingHeightFraction(ratio, wallRatio, heightFraction);
   }
 
+  /**
+   * @param {float} ratio
+   * @param {float} wallRatio
+   * @param {float} heightFraction
+   * @returns {float}
+   */
   _elevateShadowRatioUsingHeightFraction(ratio, wallRatio, heightFraction) {
     return ratio + (heightFraction * (wallRatio - ratio));
   }
 
+  /**
+   * @param {float} elevation
+   * @param {float} wallHeight
+   * @returns {float}
+   */
   _elevationHeightFraction(elevation, wallHeight) {
     const { uElevationRes } = this;
     const canvasElevation = uElevationRes.x;
@@ -765,8 +777,7 @@ class ShadowWallVertexShaderTest2 {
     if ( wallHeight === 0.0 ) return 0.0;
 
     const elevationChange = elevation - canvasElevation;
-    const heightFraction = elevationChange / wallHeight;
-    return heightFraction;
+    return elevationChange / wallHeight;
   }
 
   elevateNearShadowRatios(elevation = this.canvasElevation) {

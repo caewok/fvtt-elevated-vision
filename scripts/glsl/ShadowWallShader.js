@@ -48,6 +48,8 @@ ${defineFunction("lineLineIntersection")}
 #define UMBRA                             0
 #define MIDPENUMBRA                       1
 #define PENUMBRA                          2
+#define TOP                               0
+#define BOTTOM                            1
 
 // Structs to simplify the data organization.
 
@@ -98,7 +100,6 @@ Wall calculateWallPositions() {
     vec3[2](aBottom, bBottom),
     normalizedDirection(aWallCorner0.xy, aWallCorner1.xy), // Moving from 0 --> 1.
     float[2](aWallCorner0.w, aWallCorner1.w),
-    aWallSenseType,
     aThresholdRadius2
   );
 }
@@ -121,8 +122,8 @@ void adjustSidePenumbraForLinkedEndpoints(inout ShadowDirections penObj, in Wall
   // 3 & 4: linked wall is on same side as light:
   // - 3: Linked wall not between wall and mid: no block (tight "V")
   // - 4: Linked wall between wall and mid
-  //     ¥ If umbra - linked - mid-penumbra, adjust umbra direction.
-  //     ¥ If umbra - mid - linked - penumbra, umbra set to mid.
+  //     ï¿½ If umbra - linked - mid-penumbra, adjust umbra direction.
+  //     ï¿½ If umbra - mid - linked - penumbra, umbra set to mid.
 
   // Point positions.
   vec2 linkPt = fromAngle(wXY, linkAngle, 1.0);
@@ -369,32 +370,28 @@ void calculateFlatVariables(
   float canvasElevation = uElevationRes.x;
 
   fWallCornerLinked = vec2(wall.linkValue[0], wall.linkValue[1]);
-  fWallHeights = vec2(wTop.z, wBottom.z);
-  fWallSenseType = wall.type;
+  fWallHeights[TOP] = wTop.z;
+  fWallHeights[BOTTOM] = wBottom.z;
   #ifndef EV_DIRECTIONAL_LIGHT
   fThresholdRadius2 = wall.thresholdRadius2;
   #endif
 
-  // Wall ratio
+  // Location of the wall along the x axis of the barycentric penumbra triangle
   fWallRatio = baryForPoint(wTop.xy, penumbraTri).x;
 
-  // Location of the near shadow along the x axis of the barycentric penumbra triangle.
-  // Stored as vec3: UMBRA (x), MID (y), PENUMBRA (z)
-  ShadowPoints farPts = farPenumbraPoints0;
-  fFarRatios = vec3(0.0);
-  fFarRatios[UMBRA] = baryForPoint(farPts.umbra, penumbraTri).x;
-  fFarRatios[MIDPENUMBRA] = baryForPoint(farPts.midpenumbra, penumbraTri).x;
-  // PENUMBRA is 0.0 by definition, b/c it is at end of triangle.
+  // Two options for the far ratio:
+  // 1. float fFarRatio, storing UMBRA. PENUMBRA is initially 0.0 until modified by elevation.
+  // 2. pass umbra area to get barycentric; elevate the umbra triangle coordinate to determine far.
+  // - But still need the fFarRatio so we can use a shadow gradient in the far penumbra.
+  fFarRatio = baryForPoint(farPenumbraPoints0.umbra, penumbraTri).x;
 
   // Location of the near shadow along the x axis of the barycentric penumbra triangle.
-  // Stored as vec3: UMBRA (x), MID (y), PENUMBRA (z)
-  fNearRatios = vec3(fWallRatio); // Near shadow starts at wall unless the wall is "floating."
+  fNearRatios = vec2(fWallRatio); // Near shadow starts at wall unless the wall is "floating."
   if ( wBottom.z > canvasElevation ) {
     ShadowPoints[2] nearPenumbraPoints = endpointsForPenumbras(
       sidePenumbraDirs, nearPenumbraDirs, wall.bottom, wall.direction);
     ShadowPoints nearPts = nearPenumbraPoints[0];
     fNearRatios[UMBRA] = baryForPoint(nearPts.umbra, penumbraTri).x;
-    fNearRatios[MIDPENUMBRA] = baryForPoint(nearPts.midpenumbra, penumbraTri).x;
     fNearRatios[PENUMBRA] = baryForPoint(nearPts.penumbra, penumbraTri).x;
   }
 }
@@ -436,13 +433,11 @@ vec2[3] penumbraTri = buildTriangle(farPenumbraPoints, wall, PENUMBRA);
 vVertexPosition = penumbraTri[vertexNum];
 
 // Set barymetric coordinates for each corner of the triangle.
-vec2[3] midPenumbraTri = buildTriangle(farPenumbraPoints, wall, MIDPENUMBRA);
-vec2[3] umbraTri = buildTriangle(farPenumbraPoints, wall, UMBRA);
-vPenumbra = vec3(0.0);
 vPenumbra[vertexNum] = 1.0;
-vMidPenumbra = baryForPoint(vVertexPosition, midPenumbraTri);
-vUmbra = baryForPoint(vVertexPosition, umbraTri);
-setSidePenumbraVars(vVertexPosition, wall, penumbraTri, umbraTri);
+
+// Define the umbra triangle in relation to the penumbra triangle.
+vec2[3] umbraTri = buildTriangle(farPenumbraPoints, wall, UMBRA);
+vUmbra = baryForPoint(penumbraTri[vertexNum], umbraTri);
 
 // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
 vTerrainTexCoord = (vVertexPosition - uSceneDims.xy) / uSceneDims.zw;
@@ -467,6 +462,8 @@ const PENUMBRA_FRAGMENT_FUNCTIONS =
 #define UMBRA                             0
 #define MIDPENUMBRA                       1
 #define PENUMBRA                          2
+#define TOP                               0
+#define BOTTOM                            1
 
 ${defineFunction("terrainElevation")}
 ${defineFunction("between")}
@@ -529,32 +526,25 @@ vec4 lightEncoding(in float light) {
 }
 
 /**
- * Elevate given shadow ratios.
+ * Elevate given shadow ratios
+ * Use a stored height fraction to avoid repetitive calcs.
  */
-vec3 _elevateShadowRatios(in float elevation, in float wallHeight, in vec3 ratios) {
+vec3 _elevateShadowRatioUsingHeightFraction(in float ratio, in float wallRatio, in float heightFraction) {
+  return ratio + (heightFraction * (wallRatio - ratio));
+}
+
+/**
+ * Calculate the height fraction for elevating shadow ratios.
+ */
+float _elevationHeightFraction(in float elevation, in float wallHeight) {
   float canvasElevation = uElevationRes.x;
-  if ( elevation <= canvasElevation ) return ratios;
+  if ( elevation <= canvasElevation ) return 0.0;
 
   wallHeight = max(wallHeight - canvasElevation, 0.0);
-  if ( wallHeight == 0.0 ) return ratios;
+  if ( wallHeight == 0.0 ) return 0.0;
 
   float elevationChange = elevation - canvasElevation;
-  float heightFraction = elevationChange / wallHeight;
-  return ratios + (heightFraction * fWallRatio) - (heightFraction * ratios);
-}
-
-/**
- * Elevate the far shadow ratios.
- */
-vec3 elevateFarShadowRatios(in float elevation) {
-  return _elevateShadowRatios(elevation, fWallHeights.x, fFarRatios);
-}
-
-/**
- * Elevate the near shadow ratios.
- */
-vec3 elevateNearShadowRatios(in float elevation) {
-  return _elevateShadowRatios(elevation, fWallHeights.y, fNearRatios);
+  return elevationChange / wallHeight;
 }
 
 /**
@@ -570,78 +560,28 @@ bool thresholdApplies() {
   return false;
   #endif
   #ifndef EV_DIRECTIONAL_LIGHT
-  return (fWallSenseType == DISTANCE_WALL || fWallSenseType == PROXIMATE_WALL)
-    && fThresholdRadius2 != 0.0
+  return fThresholdRadius2 != 0.0
     && distanceSquared(vVertexPosition, uLightPosition.xy) < fThresholdRadius2;
   #endif
 }
 
 /**
- * Is the fragment in the umbra triangle, accounting for near/far?
- * Does not test for in front of wall.
+ * Determine the percent side shadow based on the barycentric penumbra and umbra positions.
  */
-bool inUmbra(in vec3 farRatios, in vec3 nearRatios) {
-  if ( !barycentricPointInsideTriangle(vUmbra) ) return false;
-  return between(farRatios[UMBRA], nearRatios[UMBRA], vPenumbra.x) == 1.0;
+float percentSideShadow(in vec3 baryPenumbra, in vec3 baryUmbra) {
+  float umbraSum = baryUmbra.z + baryUmbra.y;
+  float penumbraSum = baryPenumbra.z + baryPenumbra.y;
+
+  float numeratorUmbra = baryUmbra.z > baryUmbra.y ? baryUmbra.z : baryUmbra.y;
+  float numeratorPenumbra = baryPenumbra.z > baryPenumbra.y ? baryPenumbra.z : baryPenumbra.y;
+
+  float ratioU = numeratorUmbra / umbraSum;
+  float ratioP = numeratorPenumbra / penumbraSum;
+  float percentU = ratioU - 1.0;
+  float percentP = 1.0 - ratioP;
+  return percentU / (percentU + percentP);
 }
 
-/**
- * Is the fragment in the mid-penumbra triangle, accounting for near/far?
- * Does not test for in front of wall.
- */
-bool inMidPenumbra(in vec3 farRatios, in vec3 nearRatios) {
-  if ( !barycentricPointInsideTriangle(vMidPenumbra) ) return false;
-  return between(farRatios[MIDPENUMBRA], nearRatios[MIDPENUMBRA], vPenumbra.x) == 1.0;
-}
-
-/**
- * Is the fragment in the penumbra triangle, accounting for near/far?
- * Does not test for in front of wall.
- */
-bool inPenumbra(in vec3 farRatios, in vec3 nearRatios) {
-  // Always in the penumbra triangle b/c it defines the vertices.
-  return between(farRatios[PENUMBRA], nearRatios[PENUMBRA], vPenumbra.x) == 1.0;
-}
-
-/**
- * Is the fragment in the far penumbra area?
- * Does not test for in front of wall.
- */
-bool inFarPenumbra(in vec3 farRatios, in vec3 nearRatios) {
-  if ( inUmbra(farRatios, nearRatios) ) return false;
-  // if ( inMidPenumbra(farRatios, nearRatios) ) return false;
-  return between(farRatios[PENUMBRA], farRatios[MIDPENUMBRA], vPenumbra.x) == 1.0;
-}
-
-/**
- * Is the fragment in the far mid-penumbra area?
- * Does not test for in front of wall.
- */
-bool inFarMidPenumbra(in vec3 farRatios, in vec3 nearRatios) {
-  if ( inUmbra(farRatios, nearRatios) ) return false;
-  // if ( !inMidPenumbra(farRatios, nearRatios) ) return false;
-  return between(farRatios[MIDPENUMBRA], farRatios[UMBRA], vPenumbra.x) == 1.0;
-}
-
-/**
- * Is the fragment in the near penumbra area?
- * Does not test for in front of wall.
- */
-bool inNearPenumbra(in vec3 farRatios, in vec3 nearRatios) {
-  if ( inUmbra(farRatios, nearRatios) ) return false;
-  // if ( inMidPenumbra(farRatios, nearRatios) ) return false;
-  return between(nearRatios[MIDPENUMBRA], nearRatios[PENUMBRA], vPenumbra.x) == 1.0;
-}
-
-/**
- * Is the fragment in the near mid-penumbra area?
- * Does not test for in front of wall.
- */
-bool inNearMidPenumbra(in vec3 farRatios, in vec3 nearRatios) {
-  if ( inUmbra(farRatios, nearRatios) ) return false;
-  // if ( !inMidPenumbra(farRatios, nearRatios) ) return false;
-  return between(nearRatios[UMBRA], nearRatios[MIDPENUMBRA], vPenumbra.x) == 1.0;
-}
 `;
 
 // NOTE: PENUMBRA_FRAGMENT_CALCULATIONS
@@ -652,12 +592,6 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
 
   // If in front of the wall, no shadow.
   if ( inFrontOfWall() ) return;
-
-  // For testing
-  // fragColor = vec4(vPenumbra.x, 0.0, 0.0, 0.8);
-  // fragColor = vec4(vPenumbra, 0.8);
-  // fragColor = vec4(vec3(0.0), 0.8);
-  // return;
 
   #ifndef EV_DIRECTIONAL_LIGHT
   // If a threshold applies, we may be able to ignore the wall.
@@ -672,99 +606,36 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
   float canvasElevation = uElevationRes.x;
   float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
 
-  // Determine the start and end of the shadow, relative to the light.
-  vec3 farRatios = elevateFarShadowRatios(elevation);
-  vec3 nearRatios = elevateNearShadowRatios(elevation);
+  // Elevate the far penumbra ratio and confirm inclusion.
+  float farElevationHeightFraction = _elevationHeightFraction(elevation, fWallHeights[TOP]);
+  float farPenumbraRatio = _elevateShadowRatioUsingHeightFraction(0.0, fWallRatio, farElevationHeightFraction);
+  if ( vPenumbra.x < farPenumbraRatio ) return;
 
-  // If in front of the near shadow or behind the far shadow, then no shadow.
-  if ( between(farRatios[PENUMBRA], nearRatios[PENUMBRA], vPenumbra.x) == 0.0 ) return;
+  // Elevate the near penumbra ratio and confirm inclusion.
+  float nearElevationHeightFraction = _elevationHeightFraction(elevation, fWallHeights[BOTTOM]);
+  float nearPenumbraRatio = _elevateShadowRatioUsingHeightFraction(fNearRatios[PENUMBRA], fWallRatio, nearElevationHeightFraction);
+  if ( vPenumbra.x > nearPenumbraRatio ) return;
 
-  // ----- Calculate percentage of light ----- //
+  // The point is either in the umbra or in a penumbra.
+  // Elevate the umbra ratios.
+  float farUmbraRatio = _elevateShadowRatioUsingHeightFraction(fFarRatio, fWallRatio, farElevationHeightFraction);
+  float nearUmbraRatio = _elevateShadowRatioUsingHeightFraction(fNearRatios[UMBRA], fWallRatio, nearElevationHeightFraction);
 
-  // Determine if the fragment is within one or more penumbra.
-  // x, y, z ==> u, v, w barycentric
-  bool inSidePenumbra0 = barycentricPointInsideTriangle(vSidePenumbra0);
-  bool inSidePenumbra1 = barycentricPointInsideTriangle(vSidePenumbra1);
-  bool inFarPenumbra = inFarPenumbra(farRatios, nearRatios);
-  bool inNearPenumbra = inNearPenumbra(farRatios, nearRatios);
-  bool inFarMidPenumbra = inFarMidPenumbra(farRatios, nearRatios);
-  bool inNearMidPenumbra = inNearMidPenumbra(farRatios, nearRatios);
+  // Determine the near/far penumbra inclusion.
+  bool inFarPenumbra = bool(between(farPenumbraRatio, farUmbraRatio, vPenumbra.x));
+  bool inNearPenumbra = bool(between(nearPenumbraRatio, nearUmbraRatio, vPenumbra.x));
+  float farShadow = 1.0;
+  float nearShadow = 1.0;
+  if ( inFarPenumbra ) farShadow = linearConversion(vPenumbra.x, farPenumbraRatio, farUmbraRatio, 0.0, 1.0);
+  if ( inNearPenumbra ) nearShadow = linearConversion(vPenumbra.x, nearPenumbraRatio, nearUmbraRatio, 0.0, 1.0);
 
-//   For testing
-//   if ( !inSidePenumbra0 && !inSidePenumbra1 && !inFarPenumbra && !inNearPenumbra ) fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-//   else fragColor = vec4(vec3(0.0), 0.8);
-//   return;
+  // For side penumbra, use the percent ratio between penumbra and umbra to determine percentage.
+  const percentSide = percentSideShadow(vPenumbra, vUmbra);
+  let sideShadow = 1.0;
+  if ( percentSide > 0.0 && percentSide < 1.0 ) sideShadow = percentSide;
 
-//   fragColor = vec4(vec3(0.0), 0.0);
-//   if ( inSidePenumbra0 && fWallCornerLinked.x > 0.5 ) fragColor.r = 1.0;
-//   if ( inSidePenumbra1 && fWallCornerLinked.y > 0.5 ) fragColor.b = 1.0;
-//
-//   if ( inSidePenumbra0 || inSidePenumbra1 ) fragColor.r = 1.0;
-//   if ( inFarPenumbra ) fragColor.b = 1.0;
-//   if ( inNearPenumbra ) fragColor.g = 1.0;
-//   return;
-
-//   if ( inSidePenumbra0 && vSidePenumbra0.z < 0.5 ) fragColor = vec4(1.0, 0.0, 0.0, 0.8);
-//   if ( inSidePenumbra1 && vSidePenumbra1.z < 0.5 ) fragColor = vec4(0.0, 0.0, 1.0, 0.8);
-//   return;
-//
-//   // If a corner is linked to another wall, block penumbra light from "leaking" through the linked endpoint.
-//   if ( (inSidePenumbra0 && (fWallCornerLinked.x > 0.5)) || (inSidePenumbra1 && (fWallCornerLinked.y > 0.5)) ) {
-//     fragColor = lightEncoding(0.0);
-//     return;
-//   }
-  //fragColor = vec4(vSidePenumbra0, 0.8);
-//   if ( inFarPenumbra ) fragColor = vec4(vec3(0.0), 0.8);
-//   if ( inFarPenumbra) fragColor = vec4(vPenumbra, 0.8);
-   // if ( inSidePenumbra0) fragColor = vec4(vSidePenumbra0, 0.8);
-   // if ( inSidePenumbra1 ) fragColor = vec4(vSidePenumbra1, 0.8);
-  // return;
-
-  // Blend the two side penumbras if overlapping by multiplying the light amounts.
-  float side0Shadow = inSidePenumbra0 ? vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z) : 1.0;
-  float side1Shadow = inSidePenumbra1 ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
-
-  // If a corner is linked to another wall, block penumbra light from "leaking" through the linked endpoint.
-  // Directional lights have bigger risk of leakage b/c the direction is the same for each endpoint.
-//   #ifdef EV_DIRECTIONAL_LIGHT
-//   if ( fWallCornerLinked.x > 0.0 && side0Shadow > (1.0 - fWallCornerLinked.x - 0.1) ) side0Shadow = 1.0;
-//   if ( fWallCornerLinked.y > 0.0 && side1Shadow > (1.0 - fWallCornerLinked.y - 0.1) ) side1Shadow = 1.0;
-//   #endif
-//
-//   #ifndef EV_DIRECTIONAL_LIGHT
-//   if ( fWallCornerLinked.x > 0.5 && side0Shadow > 0.49 ) side0Shadow = 1.0;
-//   if ( fWallCornerLinked.y > 0.5 && side1Shadow > 0.49 ) side1Shadow = 1.0;
-//   #endif
-
-//   fragColor = vec4(vec3(0.0), 0.0);
-//   if ( inSidePenumbra0 && side0Shadow < 0.5 ) fragColor = vec4(side0Shadow, 0.0, 0.0, 0.8);
-//   if ( inSidePenumbra1 && side1Shadow < 0.5 ) fragColor = vec4(0.0, 0.0, side1Shadow, 0.8);
-//   return;
-
-  // Testing
-//   if ( vPenumbra.x < farRatios.mid ) fragColor = vec4(vPenumbra.x, 0.0, 0.0, 0.8);
-//   else if ( inFarPenumbra ) fragColor = vec4(0.0, vPenumbra.x, 0.0, 0.8);
-//   return;
-
-  // UMBRA is nearer to 1; PENUMBRA is nearer to 0.
-  float farShadow = inFarPenumbra ? linearConversion(vPenumbra.x, farRatios[PENUMBRA], farRatios[MIDPENUMBRA], 0.0, 0.5)
-      : inFarMidPenumbra ? linearConversion(vPenumbra.x, farRatios[MIDPENUMBRA], farRatios[UMBRA], 0.5, 1.0)
-        : 1.0;
-
-  // Near shadow is reversed, so UMBRA is nearer 0 and PENUMBRA is nearer to 1.
-  float nearShadow = inNearPenumbra ? linearConversion(vPenumbra.x, nearRatios[PENUMBRA], nearRatios[MIDPENUMBRA], 0.0, 0.5)
-      : inNearMidPenumbra ? linearConversion(vPenumbra.x, nearRatios[MIDPENUMBRA], nearRatios[UMBRA], 0.5, 1.0)
-        : 1.0;
-
-//   fragColor = vec4(vec3(0.0), 0.8);
-//   if ( inSidePenumbra0 || inSidePenumbra1 ) fragColor.r = side0Shadow * side1Shadow;
-//   if ( inFarPenumbra ) fragColor.b = farShadow;
-//   if ( inNearPenumbra ) fragColor.g = nearShadow;
-//   return;
-
-  float shadow = side0Shadow * side1Shadow * farShadow * nearShadow;
+  float shadow = sideShadow * farShadow * nearShadow;
   float totalLight = clamp(0.0, 1.0, 1.0 - shadow);
-
   fragColor = lightEncoding(totalLight);
 `;
 
@@ -855,18 +726,14 @@ in float aThresholdRadius2;
 out vec2 vVertexPosition;
 out vec2 vTerrainTexCoord;
 out vec3 vPenumbra;
-out vec3 vMidPenumbra;
 out vec3 vUmbra;
-out vec3 vSidePenumbra0;
-out vec3 vSidePenumbra1;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
-flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bottom
+flat out vec2 fWallHeights;
 flat out float fWallRatio;
-flat out vec3 fNearRatios;
-flat out vec3 fFarRatios;
-flat out vec2 fWallCornerLinked;
+flat out vec2 fNearRatios;
+flat out float fFarRatio;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -965,18 +832,13 @@ uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
 in vec3 vPenumbra;
-in vec3 vMidPenumbra;
 in vec3 vUmbra;
-in vec3 vSidePenumbra0;
-in vec3 vSidePenumbra1;
 
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
-flat in vec3 fNearRatios;
-flat in vec3 fFarRatios;
-flat in float fWallSenseType;
+flat in vec2 fNearRatios;
+flat in float fFarRatio;
 flat in float fThresholdRadius2;
-flat in vec2 fWallCornerLinked;
 
 out vec4 fragColor;
 
@@ -1082,18 +944,14 @@ in float aThresholdRadius2; // Note: no thresholds for walls apply for direction
 out vec2 vVertexPosition;
 out vec2 vTerrainTexCoord;
 out vec3 vPenumbra;
-out vec3 vMidPenumbra;
 out vec3 vUmbra;
-out vec3 vSidePenumbra0;
-out vec3 vSidePenumbra1;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
-flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bottom
+flat out vec2 fWallHeights;
 flat out float fWallRatio;
-flat out vec3 fNearRatios; // x: penumbra, y: mid-penumbra, z: umbra
-flat out vec3 fFarRatios;  // x: penumbra, y: mid-penumbra, z: umbra
-flat out vec2 fWallCornerLinked;
+flat out vec2 fNearRatios;
+flat out float fFarRatio;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -1117,7 +975,7 @@ ${defineFunction("fromAngle")}
 ${PENUMBRA_VERTEX_FUNCTIONS}
 
 float zChangeForElevationAngle(in float elevationAngle) {
-  // elevationAngle = clamp(elevationAngle, 0.0, PI_1_2); // 0¼ to 90¼
+  // elevationAngle = clamp(elevationAngle, 0.0, PI_1_2); // 0ï¿½ to 90ï¿½
   vec2 pt = fromAngle(vec2(0.0), elevationAngle, 1.0);
 
   // How much z (y) change for every change in x?
@@ -1157,7 +1015,7 @@ ShadowDirections calculateSidePenumbraDirection(in Wall wall, in int idx) {
 
   // Adjust azimuth by the solarAngle.
   // Determine the direction of the outer penumbra rays from light --> wallCorner1 / wallCorner2.
-  // The angle for the penumbra is the azimuth ± the solarAngle.
+  // The angle for the penumbra is the azimuth ï¿½ the solarAngle.
   float solarWallAngle = solarAngle * oWallLight;
   float multiplier = idx == 0 ? 1.0 : -1.0;
   vec2 dirPenumbra = fromAngle(vec2(0.0), uAzimuth + (solarWallAngle * multiplier), 1.0) * -1.0;
@@ -1256,17 +1114,13 @@ uniform vec4 uSceneDims;
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
 in vec3 vPenumbra;
-in vec3 vMidPenumbra;
 in vec3 vUmbra;
-in vec3 vSidePenumbra0;
-in vec3 vSidePenumbra1;
 
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
-flat in vec3 fNearRatios;
-flat in vec3 fFarRatios;
+flat in vec2 fNearRatios;
+flat in float fFarRatio;
 flat in float fWallSenseType;
-flat in vec2 fWallCornerLinked;
 flat in float fThresholdRadius2;
 
 out vec4 fragColor;
@@ -1372,18 +1226,14 @@ in float aThresholdRadius2;
 out vec2 vVertexPosition;
 out vec2 vTerrainTexCoord;
 out vec3 vPenumbra;
-out vec3 vMidPenumbra;
 out vec3 vUmbra;
-out vec3 vSidePenumbra0;
-out vec3 vSidePenumbra1;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
 flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bottom
 flat out float fWallRatio;
-flat out vec3 fNearRatios;
-flat out vec3 fFarRatios;
-flat out vec2 fWallCornerLinked;
+flat out vec2 fNearRatios;
+flat out float fFarRatio;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -1502,18 +1352,14 @@ uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
 in vec3 vPenumbra;
-in vec3 vMidPenumbra;
 in vec3 vUmbra;
-in vec3 vSidePenumbra0;
-in vec3 vSidePenumbra1;
 
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
-flat in vec3 fNearRatios;
-flat in vec3 fFarRatios;
+flat in vec2 fNearRatios;
+flat in float fFarRatio;
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;
-flat in vec2 fWallCornerLinked;
 
 out vec4 fragColor;
 
