@@ -46,8 +46,8 @@ ${defineFunction("lineLineIntersection")}
 
 // Enumerated parts of the shadow.
 #define UMBRA                             0
-#define MIDPENUMBRA                       1
-#define PENUMBRA                          2
+#define MIDPENUMBRA                       2
+#define PENUMBRA                          1
 #define TOP                               0
 #define BOTTOM                            1
 
@@ -100,6 +100,7 @@ Wall calculateWallPositions() {
     vec3[2](aBottom, bBottom),
     normalizedDirection(aWallCorner0.xy, aWallCorner1.xy), // Moving from 0 --> 1.
     float[2](aWallCorner0.w, aWallCorner1.w),
+    aWallSenseType,
     aThresholdRadius2
   );
 }
@@ -335,27 +336,6 @@ vec3 baryForPoint(vec2 pt, vec2[3] tri) {
 }
 
 /**
- * Set the side penumbra variables for the vertex position.
- */
-void setSidePenumbraVars(in vec2 pt, in Wall wall, in vec2[3] penumbraTri, in vec2[3] umbraTri) {
-  vec3[2] vSidePenumbras;
-  for ( int i = 0; i < 2; i += 1 ) {
-    vec2 a = wall.top[i].xy;
-    vec2 b = penumbraTri[i + 1];
-    vec2 c = umbraTri[i + 1];
-
-    // If b and c are equal, there is no side penumbra;
-    // If a/b/c line up, there is no side penumbra.
-    // Set so all points are outside by making the triangle a fixed -1.
-    if ( abs(orient(a, b, c)) < 1.0 )  vSidePenumbras[i] = vec3(-1.0);
-    else vSidePenumbras[i] = barycentric(pt, a, b, c);
-    // vSidePenumbras[i] = barycentric(pt, a, b, c);
-  }
-  vSidePenumbra0 = vSidePenumbras[0];
-  vSidePenumbra1 = vSidePenumbras[1];
-}
-
-/**
  * Calculate the flat variables, including near/far ratios.
  */
 void calculateFlatVariables(
@@ -369,7 +349,6 @@ void calculateFlatVariables(
   vec3 wBottom = wall.bottom[0];
   float canvasElevation = uElevationRes.x;
 
-  fWallCornerLinked = vec2(wall.linkValue[0], wall.linkValue[1]);
   fWallHeights[TOP] = wTop.z;
   fWallHeights[BOTTOM] = wBottom.z;
   #ifndef EV_DIRECTIONAL_LIGHT
@@ -460,8 +439,8 @@ const PENUMBRA_FRAGMENT_FUNCTIONS =
 
 // Enumerated parts of the shadow.
 #define UMBRA                             0
-#define MIDPENUMBRA                       1
-#define PENUMBRA                          2
+#define MIDPENUMBRA                       2
+#define PENUMBRA                          1
 #define TOP                               0
 #define BOTTOM                            1
 
@@ -529,7 +508,7 @@ vec4 lightEncoding(in float light) {
  * Elevate given shadow ratios
  * Use a stored height fraction to avoid repetitive calcs.
  */
-vec3 _elevateShadowRatioUsingHeightFraction(in float ratio, in float wallRatio, in float heightFraction) {
+float _elevateShadowRatioUsingHeightFraction(in float ratio, in float wallRatio, in float heightFraction) {
   return ratio + (heightFraction * (wallRatio - ratio));
 }
 
@@ -579,7 +558,7 @@ float percentSideShadow(in vec3 baryPenumbra, in vec3 baryUmbra) {
   float ratioP = numeratorPenumbra / penumbraSum;
   float percentU = ratioU - 1.0;
   float percentP = 1.0 - ratioP;
-  return percentU / (percentU + percentP);
+  return 1.0 - (percentU / (percentU + percentP));
 }
 
 `;
@@ -630,8 +609,8 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
   if ( inNearPenumbra ) nearShadow = linearConversion(vPenumbra.x, nearPenumbraRatio, nearUmbraRatio, 0.0, 1.0);
 
   // For side penumbra, use the percent ratio between penumbra and umbra to determine percentage.
-  const percentSide = percentSideShadow(vPenumbra, vUmbra);
-  let sideShadow = 1.0;
+  float percentSide = percentSideShadow(vPenumbra, vUmbra);
+  float sideShadow = 1.0;
   if ( percentSide > 0.0 && percentSide < 1.0 ) sideShadow = percentSide;
 
   float shadow = sideShadow * farShadow * nearShadow;
@@ -838,6 +817,7 @@ flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
 flat in vec2 fNearRatios;
 flat in float fFarRatio;
+flat in float fWallSenseType;
 flat in float fThresholdRadius2;
 
 out vec4 fragColor;
