@@ -653,6 +653,19 @@ export class ShadowDirectionsGLSLStruct {
 }
 
 /**
+ * Represent the three directions of a shadow from a wall endpoint.
+ * @prop {vec2} umbra
+ * @prop {vec2} midpenumbra
+ * @prop {vec2} penumbra
+ */
+export class ShadowDirections2dGLSLStruct {
+  constructor({ umbra, midpenumbra, penumbra } = {}) {
+    const args = { umbra, midpenumbra, penumbra };
+    for ( const [key, value] of Object.entries(args) ) this[key] = value;
+  }
+}
+
+/**
  * Represent the three endpoints of a shadow, opposite the wall endpoint.
  * @prop {vec2} umbra
  * @prop {vec2} midpenumbra
