@@ -199,7 +199,7 @@ class ShadowWallVertexShaderTest2 {
   get aWallSenseType() { return this.attributes.aWallSenseType; }
 
   /** @type {float} */
-  get aThresholdRadius2() { return this.attributes.aWallSenseType; }
+  get aThresholdRadius2() { return this.attributes.aThresholdRadius2; }
 
   /* ----- NOTE: Uniforms ----- */
 
@@ -441,8 +441,9 @@ class ShadowWallVertexShaderTest2 {
       const oCorner = orient(wallEndpoints[0].xy, wallEndpoints[1].xy, corner);
       if ( (oCorner * oWallLight) < 0.0 ) {
         const r = Ray2d(corner, wallDir);
-        const testPt = r.project(1.0);
-        if ( !this._rectContains(sceneRect, testPt) ) return corner;
+        // Use a reasonably large projection value b/c using 1.0 risks still being w/in the rect.
+        if ( !(this._rectContains(sceneRect, r.project(100.0))
+            || this._rectContains(sceneRect, r.project(-100.0))) ) return corner;
       }
     }
     return sceneRect[0]; // Should not happen.

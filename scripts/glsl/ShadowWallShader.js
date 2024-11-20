@@ -230,8 +230,9 @@ vec2 _parallelFarCorner(vec3[2] wallEndpoints, vec2 wallDir, vec3 nearFarDir) {
     float oCorner = orient(wallEndpoints[0].xy, wallEndpoints[1].xy, corner);
     if ( (oCorner * oWallLight) < 0.0 ) {
       Ray2d r = Ray2d(corner, wallDir);
-      vec2 testPt = projectRay(r, 1.0);
-      if ( !_rectContains(sceneRect, testPt) ) return corner;
+      // Use a reasonably large projection value b/c using 1.0 risks still being w/in the rect.
+      if ( !(_rectContains(sceneRect, projectRay(r, 100.0))
+          || _rectContains(sceneRect, projectRay(r, -100.0))) ) return corner;
     }
   }
   return sceneRect[0]; // Should not happen.
