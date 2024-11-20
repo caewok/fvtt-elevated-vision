@@ -108,13 +108,14 @@ Wall calculateWallPositions() {
 /**
  * For side penumbra directions, determine if they must be moved to address light leakage
  * from linked endpoints.
+ * @returns True if not blocked.
  */
-void adjustSideShadowDirectionsForLinkedEndpoints(inout ShadowDirections2d shadowDirs, in Wall wall, in int idx) {
+bool adjustSideShadowDirectionsForLinkedEndpoints(inout ShadowDirections2d shadowDirs, in Wall wall, in int idx) {
   vec2 wXY = wall.top[idx].xy; // Wall endpoint from which a penumbra is cast.
 
   // If no linked wall, full penumbra is used.
   float linkAngle = wall.linkValue[idx];
-  if ( linkAngle == EV_ENDPOINT_LINKED_UNBLOCKED ) return;
+  if ( linkAngle == EV_ENDPOINT_LINKED_UNBLOCKED ) return true;
   // return;
 
   // Determine orientation relative to the mid-penumbra.
@@ -144,7 +145,7 @@ void adjustSideShadowDirectionsForLinkedEndpoints(inout ShadowDirections2d shado
 
     shadowDirs.penumbra.x = shadowDirs.midpenumbra.x;
     shadowDirs.penumbra.y = shadowDirs.midpenumbra.y;
-    return;
+    return false;
   }
 
   // 3 & 4: Linked wall between wall and mid
@@ -152,7 +153,7 @@ void adjustSideShadowDirectionsForLinkedEndpoints(inout ShadowDirections2d shado
   float oLinkWall = orient(wXY, linkPt, other);
   float oLinkMid = orient(wXY, linkPt, midPt);
   bool linkBetweenWallAndMid = oLinkWall * oLinkMid < 0.0;
-  if ( !linkBetweenWallAndMid ) return;
+  if ( !linkBetweenWallAndMid ) return true;
 
   // 4. possible block.
   // What side of umbra is the linked wall on? If not on the mid-side, it doesn't block.
@@ -161,7 +162,7 @@ void adjustSideShadowDirectionsForLinkedEndpoints(inout ShadowDirections2d shado
   float oUmbraLink = orient(wXY, umbraPt, linkPt);
   float oUmbraMid = orient(wXY, umbraPt, midPt);
   bool linkAfterUmbra = oUmbraLink * oUmbraMid > 0.0;
-  if ( !linkAfterUmbra ) return;
+  if ( !linkAfterUmbra ) return true;
 
   // Linked wall is after umbra, moving toward mid.
   float oMidUmbra = orient(wXY, midPt, umbraPt);
@@ -172,11 +173,12 @@ void adjustSideShadowDirectionsForLinkedEndpoints(inout ShadowDirections2d shado
   vec2 linkDir = normalizedDirection(wXY, linkPt);
   shadowDirs.umbra.x = linkDir.x;
   shadowDirs.umbra.y = linkDir.y;
-  if ( oMidUmbra * oMidLink > 0.0 ) return;
+  if ( oMidUmbra * oMidLink > 0.0 ) return true;
 
   // Linked wall is after mid; adjust mid as well.
   shadowDirs.midpenumbra.x = linkDir.x;
   shadowDirs.midpenumbra.y = linkDir.y;
+  return true;
 }
 
 /**
@@ -239,6 +241,18 @@ vec2 _parallelFarCorner(vec3[2] wallEndpoints, vec2 wallDir, vec3 nearFarDir) {
 }
 
 /**
+ * For a given point (canvas corner or canvas intersection), determine where the side directions
+ * intersect the line that parallels the wall and goes through that point.
+ */
+vec2[2] _intersectFarParallelLine(in vec2 keyPoint, in ShadowDirections2d[2] sideDirs, in vec3[2] wallEndpoints, in vec2 wallDirection) {
+   Ray2d farParallelRay = Ray2d(keyPoint, wallDirection);
+   vec2[2] ixs;
+   lineLineIntersection(farParallelRay, Ray2d(wallEndpoints[0].xy, sideDirs[0].penumbra), ixs[0]);
+   lineLineIntersection(farParallelRay, Ray2d(wallEndpoints[1].xy, sideDirs[1].penumbra), ixs[1]);
+   return ixs;
+}
+
+/**
  * Determine the point where the near/far penumbra intersects the side penumbra, if any.
  * sideDir: sidePenumbraDirs[idx][shadowType]
  * nearFarDir: farPenumbraDirs[idx][shadowType] or nearPenumbraDirs[idx][shadowType]
@@ -251,7 +265,9 @@ vec2[2] penumbraCanvasIntersections(in vec3 nearFarDir, in ShadowDirections2d[2]
   Plane canvasPlane = Plane(planePoint, planeNormal);
 
   // Wall direction and middle point.
-  vec2 wallDir = normalizedDirection(wallEndpoints[0].xy, wallEndpoints[1].xy);
+  vec2 wall0 = wallEndpoints[0].xy;
+  vec2 wall1 = wallEndpoints[1].xy;
+  vec2 wallDir = normalizedDirection(wall0, wall1);
   vec3 wallMid = (wallEndpoints[0] + wallEndpoints[1]) * 0.5;
 
   // Determine either the canvas intersection or the point at which to cut off an infinite shadow.
@@ -262,15 +278,21 @@ vec2[2] penumbraCanvasIntersections(in vec3 nearFarDir, in ShadowDirections2d[2]
   if ( infiniteShadow || !intersectRayPlane(Ray(wallMid, nearFarDir), canvasPlane, canvasIx) ) {
    keyPoint = _parallelFarCorner(wallEndpoints, wallDir, nearFarDir);
   } else keyPoint = canvasIx.xy;
-  // intersectRayPlane(Ray(wallMid, nearFarDir), canvasPlane, canvasIx);
-  // keyPoint = canvasIx.xy;
 
   // Intersect the penumbra sides with line parallel to the wall that runs through canvas ix.
   // TODO: If the endpoint heights are different, a more nuanced approach would be required.
-  Ray2d farParallelRay = Ray2d(keyPoint, wallDir);
-  vec2[2] ixs;
-  lineLineIntersection(farParallelRay, Ray2d(wallEndpoints[0].xy, sideDirs[0].penumbra), ixs[0]);
-  lineLineIntersection(farParallelRay, Ray2d(wallEndpoints[1].xy, sideDirs[1].penumbra), ixs[1]);
+  vec2[2] ixs = _intersectFarParallelLine(keyPoint, sideDirs, wallEndpoints, wallDir);
+
+  // In rare instances, such as when a directional light is nearly parallel to the wall,
+  // the intersections may be on the wrong side of the wall. Treat as infinite wall then.
+  if ( !infiniteShadow ) {
+    float oLight = orient(wall0, wall1, wall1 - normalize(nearFarDir.xy));
+    if ( ((orient(wall0, wall1, ixs[0]) * oLight) < 0.0)
+      || ((orient(wall0, wall1, ixs[1]) * oLight) < 0.0) ) {
+      keyPoint = _parallelFarCorner(wallEndpoints, wallDir, nearFarDir);
+      ixs = _intersectFarParallelLine(keyPoint, sideDirs, wallEndpoints, wallDir);
+    }
+  }
   return ixs;
 }
 
@@ -392,8 +414,8 @@ int vertexNum = gl_VertexID % 3;
 // - @type {ShadowDirections} nearShadowDirs
 // - @type {ShadowDirections} farShadowDirs
 
-adjustSideShadowDirectionsForLinkedEndpoints(sideShadowDirs[0], wall, 0);
-adjustSideShadowDirectionsForLinkedEndpoints(sideShadowDirs[1], wall, 1);
+bool hasSide0 = adjustSideShadowDirectionsForLinkedEndpoints(sideShadowDirs[0], wall, 0);
+bool hasSide1 = adjustSideShadowDirectionsForLinkedEndpoints(sideShadowDirs[1], wall, 1);
 
 // Vertex Calculations
 // Big triangle ABC is the bounds of the potential shadow.
@@ -411,8 +433,13 @@ vVertexPosition = penumbraTri[vertexNum];
 vPenumbra[vertexNum] = 1.0;
 
 // Define side triangles in relation to the penumbra triangle.
-vSidePenumbra0 = baryForPoint(vVertexPosition, side0Tri);
-vSidePenumbra1 = baryForPoint(vVertexPosition, side1Tri);
+vSidePenumbra0 = vec3(-1.0);
+vSidePenumbra1 = vec3(-1.0);
+
+// If no real side penumbra, set values to -1 to avoid inclusion.
+// Otherwise baryForPoint may return NaN if set to the midpenumbra for linked walls.
+if ( hasSide0 && abs(orient(side0Tri[0], side0Tri[1], side0Tri[2])) > 1.0 ) vSidePenumbra0 = baryForPoint(vVertexPosition, side0Tri);
+if ( hasSide1 && abs(orient(side1Tri[0], side1Tri[1], side1Tri[2])) > 1.0 ) vSidePenumbra1 = baryForPoint(vVertexPosition, side1Tri);
 
 // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
 vTerrainTexCoord = (vVertexPosition - uSceneDims.xy) / uSceneDims.zw;
@@ -969,7 +996,7 @@ ShadowDirections2d calculateSideShadowDirections(in Wall wall, in int idx) {
   vec2 dirMidPenumbra = normalize(fromAngle(vec2(0.0), uAzimuth, 1.0) * -1.0);
 
   // Determine which side of the wall the light is on.
-  float oWallLight = sign(orient(wall.top[0].xy, wall.top[1].xy, wall.top[0].xy - lightDirection2d));
+  float oWallLight = sign(orient(wall.top[0].xy, wall.top[1].xy, wall.top[0].xy - dirMidPenumbra));
 
   // Adjust azimuth by the solarAngle.
   // Determine the direction of the outer penumbra rays from light --> wallCorner1 / wallCorner2.

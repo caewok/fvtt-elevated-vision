@@ -296,6 +296,7 @@ class ShadowWallVertexShaderTest2 {
    * @param {inout ShadowDirections} shadowDirs
    * @param {Wall} wall
    * @param {int} idx
+   * @returns {bool} True if not blocked.
    */
   adjustSideShadowDirectionsForLinkedEndpoints(shadowDirs, wall, idx) {
     const orient = foundry.utils.orient2dFast;
@@ -306,7 +307,7 @@ class ShadowWallVertexShaderTest2 {
     const linkAngle = wall.linkValue[idx];
     if ( linkAngle === this.constructor.EV_ENDPOINT_LINKED_UNBLOCKED ) {
       console.log(`adjustSideShadowDirectionsForLinkedEndpoints|idx ${idx} is unblocked.`);
-      return;
+      return true;
     }
 
     // Determine orientation relative to the mid-penumbra.
@@ -337,7 +338,7 @@ class ShadowWallVertexShaderTest2 {
       shadowDirs.penumbra.x = shadowDirs.midpenumbra.x;
       shadowDirs.penumbra.y = shadowDirs.midpenumbra.y;
       console.log(`adjustSideShadowDirectionsForLinkedEndpoints|idx ${idx} linked wall blocks light fully.`);
-      return;
+      return false;
     }
 
     // 3 & 4: Linked wall between wall and mid
@@ -347,7 +348,7 @@ class ShadowWallVertexShaderTest2 {
     const linkBetweenWallAndMid = oLinkWall * oLinkMid < 0.0;
     if ( !linkBetweenWallAndMid ) {
       console.log(`adjustSideShadowDirectionsForLinkedEndpoints|idx ${idx} not blocking (#3).`);
-      return;
+      return true;
     }
 
     // 4. possible block.
@@ -359,7 +360,7 @@ class ShadowWallVertexShaderTest2 {
     const linkAfterUmbra = oUmbraLink * oUmbraMid > 0.0;
     if ( !linkAfterUmbra ) {
       console.log(`adjustSideShadowDirectionsForLinkedEndpoints|idx ${idx} is unblocked.`);
-      return;
+      return true;
     }
 
     // Linked wall is after umbra, moving toward mid.
@@ -370,13 +371,13 @@ class ShadowWallVertexShaderTest2 {
     shadowDirs.umbra.x = linkDir.x;
     shadowDirs.umbra.y = linkDir.y;
     console.log(`adjustSideShadowDirectionsForLinkedEndpoints|idx ${idx} partially blocked. Adjusting umbra.`);
-    if ( oMidUmbra * oMidLink > 0.0 ) return;
+    if ( oMidUmbra * oMidLink > 0.0 ) return true;
 
     // Linked wall is after mid; adjust mid as well.
     shadowDirs.midpenumbra.x = linkDir.x;
     shadowDirs.midpenumbra.y = linkDir.y;
     console.log(`adjustSideShadowDirectionsForLinkedEndpoints|idx ${idx} partially blocked. Adjusting mid.`);
-
+    return true;
   }
 
   /**
@@ -415,7 +416,7 @@ class ShadowWallVertexShaderTest2 {
 
     // Ensure the shadow extends to the canvas edges.
     // Set the far parallel to intersect a corner.
-    const sceneRect = Array(4); // vec2[4]
+    const sceneRect = Array(4); // @type vec2[4]
     sceneRect[TL] = vec2(0.0, 0.0);
     sceneRect[TR] = vec2((uSceneDims.x * 2.0) + uSceneDims.z, 0.0);
     sceneRect[BR] = vec2((uSceneDims.x * 2.0) + uSceneDims.z, (uSceneDims.y * 2.0) + uSceneDims.w);
@@ -457,8 +458,10 @@ class ShadowWallVertexShaderTest2 {
    * @returns {vec2[2]}
    */
   penumbraCanvasIntersections(nearFarDir, sideDirs, wallEndpoints) {
+    const orient = foundry.utils.orient2d;
     const { uElevationRes } = this;
     const _parallelFarCorner = this._parallelFarCorner.bind(this);
+    const _intersectFarParallelLine = this._intersectFarParallelLine.bind(this);
 
     // Plane at the minimum canvas elevation.
     const canvasElevation = uElevationRes.x;
@@ -467,22 +470,51 @@ class ShadowWallVertexShaderTest2 {
     const canvasPlane = Plane(planePoint, planeNormal);
 
     // Wall direction and middle point.
-    const wallDir = normalizedDirection(wallEndpoints[0].xy, wallEndpoints[1].xy);
+    const wall0 = wallEndpoints[0].xy;
+    const wall1 = wallEndpoints[1].xy;
+    const wallDir = normalizedDirection(wall0, wall1);
     const wallMid = wallEndpoints[0].add(wallEndpoints[1]).multiplyScalar(0.5);
 
     // Determine either the canvas intersection or the point at which to cut off an infinite shadow.
     // Measured from midpoint of the wall.
     let canvasIx = vec3();
     let keyPoint = vec2();
-    const infiniteShadow = nearFarDir.z >= 0.0; // Ray is rising as it moves from light --> wall.
+    let infiniteShadow = nearFarDir.z >= 0.0; // Ray is rising as it moves from light --> wall.
     if ( infiniteShadow || !intersectRayPlane(Ray(wallMid, nearFarDir), canvasPlane, canvasIx) ) {
       keyPoint = _parallelFarCorner(wallEndpoints, wallDir, nearFarDir);
     } else keyPoint = canvasIx.xy;
 
     // Intersect the penumbra sides with line parallel to the wall that runs through canvas ix.
     // TODO: If the endpoint heights are different, a more nuanced approach would be required.
-    const farParallelRay = Ray2d(keyPoint, wallDir);
-    const ixs = [vec2(), vec2()]; // vec2[2]
+    let ixs = _intersectFarParallelLine(keyPoint, sideDirs, wallEndpoints, wallDir);
+
+    // In rare instances, such as when a directional light is nearly parallel to the wall,
+    // the intersections may be on the wrong side of the wall. Treat as infinite wall then.
+    if ( !infiniteShadow ) {
+      const oLight = orient(wall0, wall1,
+        wall1.subtract(nearFarDir.xy.normalize()));
+      if ( ((orient(wall0, wall1, ixs[0]) * oLight) < 0.0)
+        || ((orient(wall0, wall1, ixs[1]) * oLight) < 0.0) ) {
+        keyPoint = _parallelFarCorner(wallEndpoints, wallDir, nearFarDir);
+        ixs = _intersectFarParallelLine(keyPoint, sideDirs, wallEndpoints, wallDir);
+      }
+    }
+
+    return ixs;
+  }
+
+  /**
+   * For a given point (canvas corner or canvas intersection), determine where the side directions
+   * intersect the line that parallels the wall and goes through that point.
+   * @param {vec2} keyPoint
+   * @param {ShadowDirections2d[2]} sideDirs
+   * @param {vec3[2]} wallEndpoints
+   * @param {vec2} wallDirection
+   * @returns {vec2[2]} ixs
+   */
+  _intersectFarParallelLine(keyPoint, sideDirs, wallEndpoints, wallDirection) {
+    const farParallelRay = Ray2d(keyPoint, wallDirection);
+    const ixs = [vec2(), vec2()]; // @type vec2[2]
     lineLineIntersection(farParallelRay, Ray2d(wallEndpoints[0].xy, sideDirs[0].penumbra), ixs[0]);
     lineLineIntersection(farParallelRay, Ray2d(wallEndpoints[1].xy, sideDirs[1].penumbra), ixs[1]);
     return ixs;
@@ -547,7 +579,7 @@ class ShadowWallVertexShaderTest2 {
     wall ??= this.wall;
     const farPenumbraCanvasIntersections = this.farPenumbraCanvasIntersections.bind(this);
 
-    const canvasIxs = farPenumbraCanvasIntersections(farDirs, sideDirs, wall); // vec2[2]
+    const canvasIxs = farPenumbraCanvasIntersections(farDirs, sideDirs, wall); // @type vec2[2]
     const ix = vec2();
     lineLineIntersection(canvasIxs[0], wall.top[0].xy, canvasIxs[1], wall.top[1].xy, ix);
     return [ix, canvasIxs[0], canvasIxs[1]];
@@ -563,7 +595,7 @@ class ShadowWallVertexShaderTest2 {
    * @param {Wall} wall
    * @returns {vec2[3]}
    */
-  sideTriangle(idx = 0, penumbraTri, sideDirs, wall) {
+  sideTriangle(idx = 0, penumbraTri, sideDirs, wall) { // eslint-disable-line default-param-last
     sideDirs ??= this.adjSidePenumbraDirs;
     wall ??= this.wall;
     penumbraTri ??= this.penumbraTriangle(this.farShadowDirs, sideDirs, wall);
@@ -663,7 +695,8 @@ class ShadowWallVertexShaderTest2 {
     */
   vertexCalculations(gl_VertexID = 0) {
     const { uSceneDims, uElevationRes } = this;
-    const sarea = foundry.utils.orient2dFast;
+    const orient = foundry.utils.orient2dFast;
+    const abs = Math.abs;
     const adjustSideShadowDirectionsForLinkedEndpoints = this.adjustSideShadowDirectionsForLinkedEndpoints.bind(this);
     const calculateFlatVariables = this.calculateFlatVariables.bind(this);
     const penumbraTriangle = this.penumbraTriangle.bind(this);
@@ -681,8 +714,8 @@ class ShadowWallVertexShaderTest2 {
     // - @type {ShadowDirections} nearShadowDirs
     // - @type {ShadowDirections} farShadowDirs
     const { wall, light, sideShadowDirs, farShadowDirs, nearShadowDirs } = this;
-    adjustSideShadowDirectionsForLinkedEndpoints(sideShadowDirs[0], wall, 0);
-    adjustSideShadowDirectionsForLinkedEndpoints(sideShadowDirs[1], wall, 1);
+    const hasSide0 = adjustSideShadowDirectionsForLinkedEndpoints(sideShadowDirs[0], wall, 0);
+    const hasSide1 = adjustSideShadowDirectionsForLinkedEndpoints(sideShadowDirs[1], wall, 1);
 
 
     // Vertex Calculations
@@ -705,8 +738,13 @@ class ShadowWallVertexShaderTest2 {
 
     // Define side triangles in relation to the penumbra triangle.
     // @type {vec3} vSidePenumbra0, vSidePenumbra1
-    this.vSidePenumbra0 = baryForPoint(vVertexPosition, ...side0Tri);
-    this.vSidePenumbra1 = baryForPoint(vVertexPosition, ...side1Tri);
+    this.vSidePenumbra0 = vec3(-1.0);
+    this.vSidePenumbra1 = vec3(-1.0);
+
+    // If no real side penumbra, set values to -1 to avoid inclusion.
+    // Otherwise baryForPoint may return NaN if set to the midpenumbra for linked walls.
+    if ( hasSide0 && abs(orient(...side0Tri)) > 1.0 ) this.vSidePenumbra0 = baryForPoint(vVertexPosition, ...side0Tri);
+    if ( hasSide1 && abs(orient(...side1Tri)) > 1.0 ) this.vSidePenumbra1 = baryForPoint(vVertexPosition, ...side1Tri);
 
     // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
     // (vVertexPosition - uSceneDims.xy) / uSceneDims.zw
@@ -966,6 +1004,20 @@ class ShadowWallVertexShaderTest2 {
 
   drawLight() { Draw.point(this.light.center, { radius: this.light.size, color: Draw.COLORS.yellow }); }
 
+  drawFarPenumbraDirection(dist = canvas.dimensions.maxR) {
+    const { farShadowDirs, wall } = this;
+    const midWall = wall.top[0].add(wall.top[1]).multiplyScalar(0.5).xy;
+    const penumbraPt = midWall.add(farShadowDirs.penumbra.xy.normalize().multiplyScalar(dist));
+    Draw.segment({ a: midWall, b: penumbraPt });
+  }
+
+  drawNearPenumbraDirection(dist = canvas.dimensions.maxR) {
+    const { nearShadowDirs, wall } = this;
+    const midWall = wall.bottom[0].add(wall.bottom[1]).multiplyScalar(0.5).xy;
+    const penumbraPt = midWall.add(nearShadowDirs[0].penumbra.xy.normalize().multiplyScalar(dist));
+    Draw.segment({ a: midWall, b: penumbraPt });
+  }
+
   drawSidePenumbraDirections(dist = canvas.dimensions.maxR) {
     const { sideShadowDirs, wall } = this;
     const COLOR_KEYS = {
@@ -982,7 +1034,7 @@ class ShadowWallVertexShaderTest2 {
     }
   }
 
-  drawAdjustedSidePenumbraDirections(dist = canvas.dimensions.maxR) {
+  drawAdjustedSidePenumbraDirection(idx = 0, dist = canvas.dimensions.maxR) {
     const { adjSidePenumbraDirs, wall } = this;
     const COLOR_KEYS = {
       umbra: Draw.COLORS.red,
@@ -990,11 +1042,9 @@ class ShadowWallVertexShaderTest2 {
       penumbra: Draw.COLORS.yellow
     };
     for ( const [key, color] of Object.entries(COLOR_KEYS) ) {
-      for ( let i = 0; i < 2; i += 1 ) {
-        const endpoint = wall.top[i].xy;
-        const penumbraPt = endpoint.add(adjSidePenumbraDirs[i][key].xy.normalize().multiplyScalar(dist));
-        Draw.segment({ a: endpoint, b: penumbraPt }, { color });
-      }
+      const endpoint = wall.top[idx].xy;
+      const penumbraPt = endpoint.add(adjSidePenumbraDirs[idx][key].xy.normalize().multiplyScalar(dist));
+      Draw.segment({ a: endpoint, b: penumbraPt }, { color });
     }
   }
 
@@ -1174,8 +1224,8 @@ export class SizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVerte
     const { light, wall } = this;
 
     let wallEndpoints; // Wall endpoint from which a penumbra is cast. vec3[2]
-    let umbraLight; // vec3
-    let penumbraLight; // vec3
+    let umbraLight; // @type vec3
+    let penumbraLight; // @type vec3
     if ( far ) {
       wallEndpoints = wall.top;
       umbraLight = light.top;
@@ -1283,7 +1333,7 @@ export class DirectionalSourceShadowWallVertexShaderTest2 extends ShadowWallVert
   }
 
   /** @type {ShadowDirections} */
-  get farShadowDirs() { this.calculateFarShadowDirections(0); }
+  get farShadowDirs() { return this.calculateFarShadowDirections(0); }
 
   /** @type {ShadowDirections} */
   get nearShadowDirs() { return this.calculateNearShadowDirections(); }
@@ -1492,36 +1542,15 @@ shader0.drawSideTriangle(0)
 shader0.drawSideTriangle(1)
 shader0.drawAdjustedSidePenumbraDirections()
 
-shader0.drawTriangle(UMBRA)
-shader0.drawTriangle(PENUMBRA)
-
-shader0.drawFarLines()
-shader0.drawNearLines()
-
-shader0.drawFarLines(0)
-shader0.drawNearLines(0)
-
-
-shader2.vertexCalculations(2)
-shader2.drawTriangle(0)
-shader2.drawTriangle(1)
-shader2.drawTriangle(2)
-shader2.drawFar()
-shader2.drawNear()
 
 shader1.vertexCalculations(2)
-shader1.drawTriangle(0)
-shader1.drawTriangle(1)
-shader1.drawTriangle(2)
-shader1.drawFar()
-shader1.drawNear()
+shader1.drawWall()
+shader1.drawLight()
 
-shader3.vertexCalculations(2)
-shader3.drawTriangle(0)
-shader3.drawTriangle(1)
-shader3.drawTriangle(2)
-shader3.drawFar()
-shader3.drawNear()
+shader1.drawPenumbraTriangle()
+shader1.drawSideTriangle(0)
+shader1.drawSideTriangle(1)
+shader1.drawAdjustedSidePenumbraDirections()
 
 pt = _token.center
 elevation = -1000
