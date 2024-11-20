@@ -215,9 +215,9 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
 }
 
 const res = glslVectors({ precision: "highp", type: "float" });
-export const vec2 = res.vec2;
-export const vec3 = res.vec3;
-export const vec4 = res.vec4;
+export const vec2 = (...args) => new res.vec2(...args);
+export const vec3 = (...args) => new res.vec3(...args);
+export const vec4 = (...args) => new res.vec4(...args);
 
 /* Testing
 a = new vec2(1, 2);
@@ -255,7 +255,7 @@ export function barycentric(p, a, b, c) {
   const w = ((d00 * d21) - (d01 * d20)) * denomInv;
   const u = 1.0 - v - w;
 
-  return new vec3(u, v, w);
+  return vec3(u, v, w);
 }
 
 export function invertBarycentric(tri, bary) {
@@ -310,7 +310,7 @@ export function baryFromTriangleData(p, a, triData) {
   const w = ((d00 * d21) - (d01 * d20)) * denomInv;
   const u = 1.0 - v - w;
 
-  return new vec3(u, v, w);
+  return vec3(u, v, w);
 }
 
 /**
@@ -322,7 +322,7 @@ export function baryFromTriangleData(p, a, triData) {
  * @returns {float|vec2|vec3}
  */
 export function interpolateBarycentric(bary, a, b, c) {
-  if ( Number.isNumeric(a) ) return bary.dot(new vec3(a, b, c));
+  if ( Number.isNumeric(a) ) return bary.dot(vec3(a, b, c));
   a = a.multiplyScalar(bary.x);
   b = b.multiplyScalar(bary.y);
   c = c.multiplyScalar(bary.z);
@@ -351,7 +351,7 @@ export function linearConversion(x, oldMin, oldMax, newMin, newMax) {
 export function fromAngle(origin, radians, distance) {
   const dx = Math.cos(radians);
   const dy = Math.sin(radians);
-  return origin.add(new vec2(dx, dy).multiplyScalar(distance));
+  return origin.add(vec2(dx, dy).multiplyScalar(distance));
 }
 
 /**
@@ -375,9 +375,9 @@ export function distanceSquared(a, b) { return a.distanceSquared(b); }
  * Ray defined by a point and a direction from that point.
  */
 export class Ray2dGLSLStruct {
-  origin = new vec2();
+  origin = vec2();
 
-  direction = new vec2();
+  direction = vec2();
 
   constructor(origin, direction) {
     this.origin.set(origin, 0);
@@ -428,19 +428,20 @@ export class Ray2dGLSLStruct {
     const sA = Math.sin(radians);
     return new Ray2dGLSLStruct(
       this.origin,
-      new vec2((this.direction.x * cA) - (this.direction.y * sA),
+      vec2((this.direction.x * cA) - (this.direction.y * sA),
                (this.direction.x * sA) - (this.direction.y * cA)) // eslint-disable-line indent
     );
   }
 }
+export const Ray2d = (...args) => new Ray2dGLSLStruct(...args);
 
 /**
  * Ray defined by a point and a direction from that point.
  */
 export class RayGLSLStruct extends Ray2dGLSLStruct {
-  origin = new vec3();
+  origin = vec3();
 
-  direction = new vec3();
+  direction = vec3();
 
   constructor(origin, direction) {
     super(origin.xy, direction.xy);
@@ -448,6 +449,7 @@ export class RayGLSLStruct extends Ray2dGLSLStruct {
     this.direction.set(direction, 0);
   }
 }
+export const Ray = (...args) => new RayGLSLStruct(...args);
 
 /**
  * Mimic the GLSL projectRay function.
@@ -463,15 +465,16 @@ function projectRay(r, dist) { return r.project(dist); }
  * Normal must be normalized.
  */
 export class PlaneGLSLStruct {
-  point = new vec3();
+  point = vec3();
 
-  normal = new vec3();
+  normal = vec3();
 
   constructor(point, normal) {
     this.point.set(point, 0);
     this.normal.set(normal, 0);
   }
 }
+export const Plane = (...args) => new PlaneGLSLStruct(...args);
 
 /**
  * @param {Ray2dGLSLStruct|RayGLSLStruct} r
@@ -502,7 +505,7 @@ export function wallKeyCoordinates(key) {
 
   const x = Math.floor(key * EV_MAX_TEXTURE_SIZE_INV);
   const y = key - (EV_MAX_TEXTURE_SIZE * x);
-  return new vec2(x, y);
+  return vec2(x, y);
 }
 
 /**
@@ -621,6 +624,7 @@ export class LightGLSLStruct {
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
+export const Light = (...args) => new LightGLSLStruct(...args);
 
 /**
  * GLSL representation of a Foundry wall.
@@ -638,6 +642,7 @@ export class WallGLSLStruct {
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
+export const Wall = (...args) => new WallGLSLStruct(...args);
 
 /**
  * Represent the three directions of a shadow from a wall endpoint.
@@ -651,6 +656,7 @@ export class ShadowDirectionsGLSLStruct {
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
+export const ShadowDirections = (...args) => new ShadowDirectionsGLSLStruct(...args);
 
 /**
  * Represent the three directions of a shadow from a wall endpoint.
@@ -664,6 +670,7 @@ export class ShadowDirections2dGLSLStruct {
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
+export const ShadowDirections2d = (...args) => new ShadowDirections2dGLSLStruct(...args);
 
 /**
  * Represent the three endpoints of a shadow, opposite the wall endpoint.
@@ -677,6 +684,7 @@ export class ShadowPointsGLSLStruct {
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
+export const ShadowPoints = (...args) => new ShadowPointsGLSLStruct(...args);
 
 /**
  * Represent a 2d rectangle.
@@ -691,6 +699,7 @@ export class RectGLSLStruct {
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
+export const Rect = (...args) => new RectGLSLStruct(...args);
 
 /**
  * Does a rectangle contain a 2d point?
