@@ -1551,7 +1551,65 @@ shader1.drawPenumbraTriangle()
 shader1.drawSideTriangle(0)
 shader1.drawSideTriangle(1)
 shader1.drawAdjustedSidePenumbraDirections()
+*/
 
+/* Directional light
+MODULE_ID = "elevatedvision"
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+Draw = CONFIG.GeometryLib.Draw;
+api = game.modules.get("elevatedvision").api
+let { vec2, vec3, vec4 } = api.testing.glsl_mock
+let {
+  SizedPointSourceShadowWallVertexShaderTest2,
+  DirectionalSourceShadowWallVertexShaderTest2 } = api.testing
+
+l = canvas.lighting.placeables[0];
+edge0 = canvas.walls.placeables[0].edge
+edge1 = canvas.walls.placeables[1].edge
+ev = l.lightSource.elevatedvision
+UMBRA = 0;
+MIDPENUMBRA = 2;
+PENUMBRA = 1;
+TOP = 0
+BOTTOM = 1
+
+let [shader0, shader1] = DirectionalSourceShadowWallVertexShaderTest2.fromMesh(ev.shadowMesh)
+let [shader2, shader3] = DirectionalSourceShadowWallVertexShaderTest2.fromMesh(ev.shadowMesh)
+
+// Set alt shaders to elevation 0 to compare with changing ratios
+shader2.uniforms.uElevationRes[0] = 0
+shader3.uniforms.uElevationRes[0] = 0
+
+shader2.uniforms.uElevationRes[0] = -999
+shader4.uniforms.uElevationRes[0] = -998
+
+shader0.vertexCalculations(2)
+shader0.drawWall()
+shader0.drawLight()
+
+shader0.drawPenumbraTriangle()
+shader0.drawSideTriangle(0)
+shader0.drawSideTriangle(1)
+shader0.drawAdjustedSidePenumbraDirections()
+
+shader1.vertexCalculations(2)
+shader1.drawWall()
+shader1.drawLight()
+
+shader1.drawPenumbraTriangle()
+shader1.drawSideTriangle(0)
+shader1.drawSideTriangle(1)
+shader1.drawAdjustedSidePenumbraDirections()
+
+*/
+
+/* Token vision
+
+
+*/
+
+
+/*
 pt = _token.center
 elevation = -1000
 shader0.vertexCalculations(2);

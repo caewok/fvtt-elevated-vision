@@ -111,6 +111,10 @@ Wall calculateWallPositions() {
  * @returns True if not blocked.
  */
 bool adjustSideShadowDirectionsForLinkedEndpoints(inout ShadowDirections2d shadowDirs, in Wall wall, in int idx) {
+  #ifdef VISION_SHADER
+  return false;
+  #endif
+
   vec2 wXY = wall.top[idx].xy; // Wall endpoint from which a penumbra is cast.
 
   // If no linked wall, full penumbra is used.
@@ -704,6 +708,8 @@ export class ShadowWallShader extends AbstractEVShader {
   // eslint-disable-next-line indent
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+#define VISION_SHADER   true
 
 in vec4 aWallCorner0;
 in vec4 aWallCorner1;
