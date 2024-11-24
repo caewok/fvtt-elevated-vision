@@ -166,7 +166,7 @@ function removeRegionWalls(region) {
     ...canvas.effects.lightSources,
     ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
   ] : [];
-  const removedEdges = canvas.edges.filter(edge => edge.object === region);
+  const removedEdges = [...canvas.edges.values()].filter(edge => edge.object === region);
   removedEdges.forEach(edge => {
     canvas.edges.delete(edge.id);
     sources.forEach(src => src[MODULE_ID].edgeRemoved(edge.id));
