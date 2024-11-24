@@ -58,6 +58,7 @@ import {
   DirectionalSourceShadowWallVertexShaderTest } from "./testing/WallShaderTest.js";
 
 import {
+  UnsizedPointSourceShadowWallVertexShaderTest2,
   SizedPointSourceShadowWallVertexShaderTest2,
   DirectionalSourceShadowWallVertexShaderTest2 } from "./testing/WallShaderTest2.js";
 
@@ -147,6 +148,7 @@ Hooks.once("init", function() {
       glsl_mock,
       SizedPointSourceShadowWallVertexShaderTest,
       DirectionalSourceShadowWallVertexShaderTest,
+      UnsizedPointSourceShadowWallVertexShaderTest2,
       SizedPointSourceShadowWallVertexShaderTest2,
       DirectionalSourceShadowWallVertexShaderTest2
     }

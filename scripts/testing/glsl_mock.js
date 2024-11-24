@@ -5,7 +5,6 @@ foundry,
 PIXI
 */
 "use strict";
-/* eslint-disable eqeqeq */
 
 // Replicate the wall shader to extent possible.
 // Can draw shadows, math results, and test simple layouts.
@@ -225,6 +224,10 @@ b = new vec2(3, 4);
 a.add(b)
 */
 
+export function almostEqual(a, b, epsilon) {
+  return Math.abs(a - b) < epsilon;
+}
+
 
 /**
  * Calculate barycentric position within a given triangle
@@ -275,21 +278,50 @@ export function barycentricPointInsideTriangle(bary) {
   return bary.y >= 0.0 && bary.z >= 0.0 && (bary.y + bary.z) <= 1.0;
 }
 
+class BaryTriangleData2dGLSLStruct {
+
+  /** @type {vec2} */
+  v0 = vec2();
+
+  /** @type {vec2} */
+  v1 = vec2();
+
+  /** @type {float} */
+  d00 = 0.0;
+
+  /** @type {float} */
+  d01 = 0.0;
+
+  /** @type {float} */
+  d11 = 0.0;
+
+  /** @type {float} */
+  denomInv = 0.0;
+
+  constructor({ v0, v1, d00, d01, d11, denomInv } = {}) {
+    this.v0.set(v0, 0);
+    this.v1.set(v1, 0);
+    this.d00 = d00;
+    this.d01 = d01;
+    this.d11 = d11;
+    this.denomInv = 1 / ((d00 * d11) - (d01 * d01));
+  }
+}
+
 /**
  * Calculate fixed barycentric data for a given triangle.
- * @param {vec3|vec2} a
- * @param {vec3|vec2} b
- * @param {vec3|vec2} c
- * @returns {BaryTriangleGLSLStruct}
+ * @param {vec2} a
+ * @param {vec2} b
+ * @param {vec2} c
+ * @returns {BaryTriangleData2dGLSLStruct}
  */
 export function baryTriangleData(a, b, c, v0, v1, d) {
-  return new BaryTriangleGLSLStruct({
+  return new BaryTriangleData2dGLSLStruct({
     v0: b.subtract(a),
     v1: c.subtract(a),
     d00: v0.dot(v0),
     d01: v0.dot(v1),
-    d11: v1.dot(v1),
-    denomInv: 1 / ((d00 * d11) - (d01 * d01))
+    d11: v1.dot(v1)
   });
 }
 
@@ -327,6 +359,35 @@ export function interpolateBarycentric(bary, a, b, c) {
   b = b.multiplyScalar(bary.y);
   c = c.multiplyScalar(bary.z);
   return a.add(b).add(c);
+}
+
+/**
+ * Normalize a barycentric area coordinate.
+ * @param {vec3} baryArea
+ * @returns {vec3}
+ */
+export function normalizeBarycentricArea(baryArea) {
+  return baryArea.multiplyScalar(1 / (baryArea.x + baryArea.y + baryArea.z));
+}
+
+/**
+ * Convert a barycentric area to barycentric coordinates of a similar triangle, based on ratio.
+ * @param {vec3} baryArea
+ * @param {float} ratio      The desired side length as a percentage of the original side length
+ *   So if original is 3 and intended is 1, ratio = 1/3
+ * @returns {vec3} The barycentric (normalized) values.
+ */
+export function convertBarycentericAreaSimilarTriangle(baryArea, ratio) {
+  if ( ratio === 0.0 || ratio === 1.0 ) return normalizeBarycentricArea(baryArea);
+
+  const total = baryArea.x + baryArea.y + baryArea.z;
+  const total2 = total * ratio * ratio;
+  const saV2 = baryArea.y * ratio;
+  const saW2 = baryArea.z * ratio;
+  const v2 = saV2 / total2;
+  const w2 = saW2 / total2;
+  const u2 = 1 - v2 - w2;
+  return vec3(u2, v2, w2);
 }
 
 /**
@@ -434,6 +495,16 @@ export class Ray2dGLSLStruct {
   }
 }
 export const Ray2d = (...args) => new Ray2dGLSLStruct(...args);
+
+/**
+ * Construct a ray from two points.
+ * @param {vec2}
+ * @param {vec2}
+ * @returns {Ray2d}
+ */
+export function rayFromPoints(origin, towardsPoint) {
+  return Ray2d(origin, towardsPoint.subtract(origin));
+}
 
 /**
  * Ray defined by a point and a direction from that point.
@@ -559,7 +630,7 @@ export function lineLineIntersectionVector(a, b, c, d, ix) {
 }
 
 export function lineLineIntersection(a, b, c, d, ix) {
-  if ( typeof c === "undefined" ) return lineLineIntersectionT(a, b);
+  if ( typeof c === "undefined" ) return lineLineIntersectionRayT(a, b);
   if ( typeof d === "undefined" ) return lineLineIntersectionRay(a, b, c);
   return lineLineIntersectionVector(a, b, c, d, ix);
 }
@@ -610,6 +681,80 @@ export function elevateShadowRatio(ratio, wallHeight, wallRatio, elevChange) {
 }
 
 /**
+ * Circle defined by center point and radius
+ */
+export class CircleGLSLStruct {
+  center = vec2();
+
+  radius = 0;
+
+  constructor({ center, radius } = {}) {
+    this.center.set(center, 0);
+    this.radius = radius;
+  }
+}
+export const Circle = (...args) => new CircleGLSLStruct(...args);
+
+/**
+ * Locate the tangents to a circle from a point.
+ * https://en.wikipedia.org/wiki/Tangent_lines_to_circles
+ * @param {Circle} circle
+ * @param {vec2} p
+ * @param {out vec2[2]} tangents
+ * @returns {bool} False if no tangents.
+ */
+export function tangentPoints(circle, p, tangents) {
+  const abs = Math.abs;
+  const sqrt = Math.sqrt;
+  const pow = Math.pow;
+
+  const r2 = pow(circle.radius, 2.0); // @type {float}
+
+  // Translate so origin is at circle center.
+  const p0 = p.subtract(circle.center); // @type {vec2}
+  if ( almostEqual(p0.y, 0.0, 1e-08) ) {
+    // Translated point is on the x-axis of the circle.
+    if ( almostEqual(abs(p0.x), circle.radius, 1e-08) ) { // On circle edge.
+      tangents[0] = vec2(p);
+      tangents[1] = vec2(p);
+      return true;
+    }
+    if ( abs(p0.x) < circle.radius ) return false; // Inside the circle.
+
+    const root = sqrt(pow(p0.x, 2.0) - r2); // {p0.x, r}.magnitude()
+    tangents[0] = vec2(r2 / p0.x, circle.radius / p0.x);
+    tangents[1] = vec2(tangents[0]);
+    tangents[0].y *= root;
+    tangents[1].y *= -root;
+  } else {
+    const d0 = p0.magnitude();
+    if ( almostEqual(d0, circle.radius, 1e-08) ) { // On circle edge.
+      tangents[0] = vec2(p);
+      tangents[1] = vec2(p);
+      return true;
+    }
+    if ( d0 < circle.radius ) return false; // Inside the circle.
+    const d2 = pow(d0, 2.0);
+    const root = sqrt(d2 - r2);
+    const r2_d2 = r2 / d2;
+    const r_d2_root = circle.radius / d2 * root;
+    const xAdder = r_d2_root * -p0.y;
+    const yAdder = r_d2_root * p0.x;
+    tangents[0] = vec2(r2_d2 * p0.x, r2_d2 * p0.y);
+    tangents[1] = vec2(tangents[0]);
+    tangents[0].x += xAdder;
+    tangents[0].y += yAdder;
+    tangents[1].x -= xAdder;
+    tangents[1].y -= yAdder;
+  }
+
+  // Translate back.
+  tangents[0] = tangents[0].add(circle.center);
+  tangents[1] = tangents[1].add(circle.center);
+  return true;
+}
+
+/**
  * GLSL representation of a point light.
  * @prop {vec3} center
  * @prop {vec3} lr0       Point closest to wall endpoint 0
@@ -619,8 +764,8 @@ export function elevateShadowRatio(ratio, wallHeight, wallRatio, elevChange) {
  * @prop {float} size
  */
 export class LightGLSLStruct {
-  constructor({ center, lr0, lr1, top, bottom, size } = {}) {
-    const args = { center, lr0, lr1, top, bottom, size };
+  constructor({ center, lr0, lr1, top, bottom, size, penumbra, umbra } = {}) {
+    const args = { center, lr0, lr1, top, bottom, size, penumbra, umbra };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }

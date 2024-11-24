@@ -33,6 +33,22 @@ ${GLSLStructs[struct]}
 
 
 // NOTE: Utility
+GLSLFunctions.almostEqual =
+`
+/**
+ * Is x within epsilon of y?
+ * Typically, epsilon is 1e-08.
+ */
+bool almostEqual(in float a, in float b, in float epsilon) { return abs(a - b) < epsilon; }
+
+bool almostEqual(in vec2 a, in vec2 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
+
+bool almostEqual(in vec3 a, in vec3 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
+
+bool almostEqual(in vec4 a, in vec4 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
+`;
+
+
 GLSLFunctions.between =
 // See https://stackoverflow.com/questions/52958171/glsl-optimization-check-if-variable-is-within-range
 // step is (float, float) or (float, vec) or (vec, vec)
