@@ -42,6 +42,7 @@ import {
   convertBarycentericAreaSimilarTriangle,
   almostEqual,
   rayFromPoints,
+  projectRay,
   normalizedRayFromPoints
 } from "./glsl_mock.js";
 
@@ -750,28 +751,27 @@ class ShadowWallVertexShaderTest2 {
     wall ??= this.wall;
     canvasRay ??= this.infiniteShadowCanvasRay(sideShadowRays.penumbra);
 
-    let w0 = wall.top[0].xy;
-    let w1 = wall.top[1].xy;
-
     // Penumbra triangle: ∆ABC
     // Side triangle 0: ∆DEF
     // Side triangle 1: ∆GHI
     let A = vec2();
+    let D = vec2();
+    let G = vec2();
+    let rAB = Ray2d(vec2(), vec2());
+    let rAC = Ray2d(vec2(), vec2());
+    let rD_umbra = Ray2d(vec2(), vec2());
+    let rG_umbra = Ray2d(vec2(), vec2());
+
     let B = vec2();
     let C = vec2();
-    let D = vec2();
     let E = vec2();
     let F = vec2();
-    let G = vec2();
     let H = vec2();
     let I = vec2();
     let ABC = [A, B, C];
     let DEF = [D, E, F];
     let GHI = [G, H, I];
-    let rAB = Ray2d(vec2(), vec2());
-    let rAC = Ray2d(vec2(), vec2());
-    let rD_umbra = Ray2d(vec2(), vec2());
-    let rG_umbra = Ray2d(vec2(), vec2());
+
 
     const res = this.shadowTriangleKeyValues(sideShadowRays, wall, A, D, G, rAB, rAC, rD_umbra, rG_umbra);
     A = res.A;
@@ -785,8 +785,8 @@ class ShadowWallVertexShaderTest2 {
     // Endpoint closest to the light will be associated with ∆DEF; furthest is ∆GHI.
     // Can determine by comparing distance to the penumbra vertex 0 (A).
     let closestIdx = A.distanceSquared(wall.top[1].xy) < A.distanceSquared(wall.top[0].xy) ? 1 : 0;
-    w0 = wall.top[closestIdx].xy;
-    w1 = wall.top[1 - closestIdx].xy;
+    const w0 = wall.top[closestIdx].xy;
+    const w1 = wall.top[1 - closestIdx].xy;
     const wallDir = normalizedDirection(w0, w1);
 
     const rD_penumbra = rAB;
@@ -800,10 +800,10 @@ class ShadowWallVertexShaderTest2 {
     // May intersect rG_umbra (I) and rG_penumbra (H, B).
     let sideTri0;
     let sideTri1;
-    const tI = lineLineIntersection(rEWall, rG_penumbra);
+    const tI = lineLineIntersection(rEWall, rG_umbra);
     if ( tI !== null && tI > 0.0 ) {
-      I = rEWall.project(tI);
-      lineLineIntersection(rEWall, rD_umbra, F);
+      I.set(projectRay(rEWall, tI), 0); // GLSL: I = projectRay(rEWall, tI)
+      lineLineIntersection(rEWall, rG_penumbra, H);
       B.set(H, 0);
       C.set(E, 0);
       sideTri0 = [w0, C, I]; // Wall endpoint, penumbra point, umbra point.
@@ -817,7 +817,7 @@ class ShadowWallVertexShaderTest2 {
       lineLineIntersection(rIWall, rG_penumbra, H);
       lineLineIntersection(canvasRay2, rD_penumbra, C);
       sideTri0 = [w0, C, I]; // Wall endpoint, penumbra point, umbra point.
-      sideTri1 = [w0, B, F];
+      sideTri1 = [w0, B, F]; // Same as non-collinear but for the endpoint w0.
     }
     return { ABC, DEF, GHI, sideTri0, sideTri1,
       rAB,
@@ -2018,7 +2018,9 @@ lli = api.testing.glsl_mock.lineLineIntersection
 let {
   SizedPointSourceShadowWallVertexShaderTest2,
   DirectionalSourceShadowWallVertexShaderTest2 } = api.testing
-
+function drawRay(ray, { dist = canvas.dimensions.maxR, color = Draw.COLORS.blue } = {}) {
+  Draw.segment({ a: ray.origin, b: ray.origin.add(ray.direction.multiplyScalar(dist))}, { color })
+}
 l = canvas.lighting.placeables[0];
 edge0 = canvas.walls.placeables[0].edge
 ev = l.lightSource.elevatedvision

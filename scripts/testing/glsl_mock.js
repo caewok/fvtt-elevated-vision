@@ -538,7 +538,7 @@ export const Ray = (...args) => new RayGLSLStruct(...args);
  * @param {float} dist
  * @returns {vec2|vec3}
  */
-function projectRay(r, dist) { return r.project(dist); }
+export function projectRay(r, dist) { return r.project(dist); }
 
 /**
  * Plane defined by a point on the plane and its normal.
