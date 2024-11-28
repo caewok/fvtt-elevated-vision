@@ -40,14 +40,10 @@ GLSLFunctions.almostEqual =
  * Typically, epsilon is 1e-08.
  */
 bool almostEqual(in float a, in float b, in float epsilon) { return abs(a - b) < epsilon; }
-
-bool almostEqual(in vec2 a, in vec2 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
-
-bool almostEqual(in vec3 a, in vec3 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
-
-bool almostEqual(in vec4 a, in vec4 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
+// bool almostEqual(in vec2 a, in vec2 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
+// bool almostEqual(in vec3 a, in vec3 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
+// bool almostEqual(in vec4 a, in vec4 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
 `;
-
 
 GLSLFunctions.between =
 // See https://stackoverflow.com/questions/52958171/glsl-optimization-check-if-variable-is-within-range
@@ -544,9 +540,15 @@ vec3 projectRay(in Ray r, in float distanceMultiplier) {
 
 GLSLFunctions.normalizedDirection =
 `
+/**
+ * Construct and normalize a direction vector moving from a --> b.
+ * @param {vec2|vec3|vec4} a
+ * @param {vec2|vec3|vec4} b
+ * @returns {vec2|vec3|vec4}
+ */
 vec2 normalizedDirection(in vec2 a, in vec2 b) { return normalize(b - a); }
-
 vec3 normalizedDirection(in vec3 a, in vec3 b) { return normalize(b - a); }
+vec4 normalizedDirection(in vec4 a, in vec4 b) { return normalize(b - a); }
 
 `;
 
@@ -596,7 +598,7 @@ ${defineFunction("rayFromPoints")}
 ${defineFunction("cross2d")}
 
 bool lineLineIntersection(in Ray2d a, in Ray2d b, out float t) {
-  float denom = (b.direction.y * a.direction.x) - (b.direction.x * a.direction.y);
+  float denom = cross2d(a.direction, b.direction);
 
   // If lines are parallel, no intersection.
   if ( abs(denom) < 0.0001 ) return false;
@@ -618,6 +620,22 @@ bool lineLineIntersection(vec2 a, vec2 b, vec2 c, vec2 d, out vec2 ix) {
   Ray2d rayB = rayFromPoints(c, d);
   return lineLineIntersection(rayA, rayB, ix);
 }`;
+
+GLSLFunctions.lineLineIntersects =
+`
+bool lineLineIntersects(vec2 a, vec2 b, vec2 c, vec2 d) {
+  Ray2d rayA = rayFromPoints(a, b);
+  Ray2d rayB = rayFromPoints(c, d);
+  return lineLineIntersects(rayA, rayB)
+}
+
+bool lineLineIntersects(in Ray2d a, in Ray2d b) {
+  float denom = cross2d(a.direction, b.direction);
+
+  // If lines are parallel, no intersection.
+  return ( abs(denom) >= 0.0001 );
+}
+`;
 
 // NOTE: Plane struct
 GLSLStructs.Plane =
@@ -786,6 +804,75 @@ bool baryIntersectRayQuad(in Ray r, in Quad quad, out vec3 ix) {
   ix = vec3(t, u, v);
   // if ( u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0 ) return vec3(-1.0);
   return true;
+}
+`;
+
+// NOTE: Circle struct
+GLSLStructs.Circle =
+`
+/**
+ * Circle defined by its center and radius.
+ */
+struct Circle  {
+  vec2 center;
+  float radius;
+};`;
+
+GLSLFunctions.tangentPoints =
+`
+${defineStruct("Circle")}
+${defineFunction("almostEqual")}
+
+/*
+ * Locate the tangents to a circle from a point.
+ * https://en.wikipedia.org/wiki/Tangent_lines_to_circles
+ * @param {Circle} circle
+ * @param {vec2} p
+ * @param {out vec2[2]} tangents
+ * @returns {bool} False if no tangents.
+ */
+bool tangentPoints(in Circle circle, in vec2 p, inout vec2[2] tangents) {
+  float r2 = pow(circle.radius, 2.0);
+
+  // Translate so origin is at circle center.
+  vec2 p0 = p - circle.center;
+  if ( almostEqual(p0.y, 0.0, 1.0e-08) ) {
+    // Translated point is on the x-axis of the circle.
+    if ( almostEqual(abs(p0.x), circle.radius, 1.0e-08) ) {
+      // On circle edge.
+      tangents[0] = p;
+      tangents[1] = p;
+      return true;
+    }
+    if ( abs(p0.x) < circle.radius ) return false; // Inside the circle.
+    float root = sqrt(pow(p0.x, 2.0) - r2);
+    tangents[0] = vec2(r2, circle.radius) / p0.x;
+    tangents[1] = tangents[0];
+    tangents[0].y *= root;
+    tangents[1].y *= -root;
+  } else {
+    float d0 = length(p0); // i.e., magnitude
+    if ( almostEqual(d0, circle.radius, 1.0e-08) ) {
+      // On circle edge.
+      tangents[0] = p;
+      tangents[1] = p;
+      return true;
+    }
+    if ( d0 < circle.radius ) return false; // Inside the circle.
+    float d2 = pow(d0, 2.0);
+    float root = sqrt(d2 - r2);
+    float r2_d2 = r2 / d2;
+    float r_d2_root = circle.radius / d2 * root;
+    vec2 adder = r_d2_root * vec2(-p0.y, p0.x);
+    tangents[0] = r2_d2 * p0;
+    tangents[1] = tangents[0];
+    tangents[0] += adder;
+    tangents[1] -= adder;
+  }
+
+  // Translate back.
+  tangents[0] += circle.center;
+  tangents[1] += circle.center;
 }
 `;
 

@@ -26,6 +26,7 @@ import {
   fromAngle,
   normalizedDirection,
   lineLineIntersectionRay,
+  lineLineIntersects,
   intersectRayPlane,
   barycentric,
   barycentricPointInsideTriangle,

@@ -507,6 +507,16 @@ export function rayFromPoints(origin, towardsPoint) {
 }
 
 /**
+ * Construct a ray from two points.
+ * @param {vec2}
+ * @param {vec2}
+ * @returns {Ray2d}
+ */
+export function normalizedRayFromPoints(origin, towardsPoint) {
+  return Ray2d(origin, normalizedDirection(origin, towardsPoint));
+}
+
+/**
  * Ray defined by a point and a direction from that point.
  */
 export class RayGLSLStruct extends Ray2dGLSLStruct {
@@ -636,6 +646,37 @@ export function lineLineIntersection(a, b, c, d, ix) {
 }
 
 /**
+ * @param {vec2} a
+ * @param {vec2} b
+ * @param {vec2} c
+ * @param {vec2} d
+ * @returns {bool}
+ */
+function lineLineIntersectsVector(a, b, c, d) {
+  const rayA = rayFromPoints(a, b);
+  const rayB = rayFromPoints(c, d);
+  return lineLineIntersects(rayA, rayB);
+}
+
+/**
+ * @param {Ray2dGLSLStruct} a
+ * @param {Ray2dGLSLStruct} b
+ * @returns {bool}
+ */
+function lineLineIntersectsRay(a, b) {
+  const denom = cross2d(a.direction, b.direction);
+
+  // If lines are parallel, no intersection.
+  return ( Math.abs(denom) >= 0.0001 );
+}
+
+export function lineLineIntersects(a, b, c, d) {
+  if ( typeof c === "undefined" ) return lineLineIntersectsRay(a, b);
+  return lineLineIntersectsVector(a, b, c, d);
+}
+
+
+/**
  * @param {vec2|vec3} a
  * @param {vec2|vec3} b
  * @returns {vec2|vec3}
@@ -738,14 +779,13 @@ export function tangentPoints(circle, p, tangents) {
     const root = sqrt(d2 - r2);
     const r2_d2 = r2 / d2;
     const r_d2_root = circle.radius / d2 * root;
-    const xAdder = r_d2_root * -p0.y;
-    const yAdder = r_d2_root * p0.x;
+    const adder = vec2(-p0.y, p0.x).multiplyScalar(r_d2_root);
     tangents[0] = vec2(r2_d2 * p0.x, r2_d2 * p0.y);
     tangents[1] = vec2(tangents[0]);
-    tangents[0].x += xAdder;
-    tangents[0].y += yAdder;
-    tangents[1].x -= xAdder;
-    tangents[1].y -= yAdder;
+    tangents[0].x += adder.x;
+    tangents[0].y += adder.y;
+    tangents[1].x -= adder.x;
+    tangents[1].y -= adder.y;
   }
 
   // Translate back.
@@ -764,8 +804,8 @@ export function tangentPoints(circle, p, tangents) {
  * @prop {float} size
  */
 export class LightGLSLStruct {
-  constructor({ center, lr0, lr1, top, bottom, size, penumbra, umbra } = {}) {
-    const args = { center, lr0, lr1, top, bottom, size, penumbra, umbra };
+  constructor({ center, lr0, lr1, top, bottom, size } = {}) {
+    const args = { center, lr0, lr1, top, bottom, size };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
@@ -816,6 +856,23 @@ export class ShadowDirections2dGLSLStruct {
   }
 }
 export const ShadowDirections2d = (...args) => new ShadowDirections2dGLSLStruct(...args);
+
+/**
+ * Represent three rays of a shadow: umbra, penumbra, midumbra.
+ * Each ray goes through a wall endpoint.
+ * Each ray type has two rays. Typically one for each endpoint, but sometimes these are mixed up.
+ * @prop {Ray2d[2]} umbra
+ * @prop {Ray2d[2]} midpenumbra
+ * @prop {Ray2d[2]} penumbra
+ */
+export class ShadowRays2dGLSLStruct {
+  constructor({ umbra, midpenumbra, penumbra } = {}) {
+    const args = { umbra, midpenumbra, penumbra };
+    for ( const [key, value] of Object.entries(args) ) this[key] = value;
+  }
+}
+export const ShadowRays2d = (...args) => new ShadowRays2dGLSLStruct(...args);
+
 
 /**
  * Represent the three endpoints of a shadow, opposite the wall endpoint.
