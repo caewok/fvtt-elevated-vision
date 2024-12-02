@@ -6,6 +6,7 @@ TokenDocument
 */
 "use strict";
 
+import { MODULE_ID } from "./const.js";
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
 export const PATCHES_DetectionMode = {};
