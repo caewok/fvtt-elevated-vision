@@ -27,6 +27,7 @@ import { defineFunction, defineStruct } from "./GLSLFunctions.js";
 // NOTE: PENUMBRA_VERTEX_FUNCTIONS
 const PENUMBRA_VERTEX_FUNCTIONS =
 `
+${defineStruct("Ray2d")}
 ${defineStruct("Plane")}
 
 ${defineFunction("almostEqual")}
@@ -43,6 +44,7 @@ ${defineFunction("fromAngle")}
 ${defineFunction("intersectRayPlane")}
 ${defineFunction("lineLineIntersection")}
 ${defineFunction("normalizeRay")}
+${defineFunction("distanceSquared")}
 
 #define EV_ENDPOINT_LINKED_UNBLOCKED  -10.0
 
@@ -82,6 +84,13 @@ struct ShadowDirections2d {
   vec2 penumbra;
 };
 
+/** Represent the three rays of a shadow from the two wall endpoints in 2d. */
+struct ShadowRays2d {
+  Ray2d[2] umbra;
+  Ray2d[2] midpenumbra;
+  Ray2d[2] penumbra;
+};
+
 /**
  * Determine the four points of the wall and its properties.
  */
@@ -96,6 +105,8 @@ Wall calculateWallPositions() {
   );
 }
 
+
+
 /**
  * Determine the barymetric coordinates of a point for a given triangle.
  */
@@ -107,7 +118,7 @@ vec3 baryForPoint(vec2 pt, vec2[3] tri) {
  * Does this light/wall combination cast a near shadow?
  * True only if the wall is "floating" above the canvas elevation.
  */
-bool hasNearShadows() {
+bool wallIsFloating() {
   float canvasElevation = uElevationRes.x;
   float wallBottomZ = aWallCorner1.z;
   return wallBottomZ > canvasElevation;
@@ -194,10 +205,38 @@ bool adjustSideShadowForLinkedEndpoints(inout ShadowDirections2d shadowDirs, in 
 }
 
 /**
- * Get the corner that can be used to project a far parallel ray to a wall.
- * Used in penumbraEndpoints to determine the infinite shadow parallel ray.
+ * Does this directional ray cast an infinite shadow?
+ * (Ray is rising as it moves from light --> wall.)
+ * @param {vec3} lightDir
+ * @returns {bool}
  */
-vec2 directionalCorner(in vec2 direction) {
+bool isInfiniteShadow(in vec3 lightDir) { return lightDir.z >= 0.0 || almostEqual(lightDir.z, 0.0, 1.0e-06); }
+
+/**
+ * What quadrant does this direction end up in?
+ * @param {vec2} direction
+ * @returns {int 0|1|2|3}
+ */
+int directionalQuadrant(in vec2 direction) {
+  const int TL = 0;
+  const int TR = 1;
+  const int BR = 2;
+  const int BL = 3;
+
+  // Direction is moving into one of 4 quadrants.
+  if ( direction.x > 0.0 ) return direction.y > 0.0 ? BR : TR;
+
+  // Moving left. x <= 0.
+  return direction.y > 0.0 ? BL : TL;
+}
+
+/**
+ * For infinite wall shadow, point outside of canvas that can be the fake floor intersection.
+ * Either a point on the 45¼ line at a scene corner or a scene edge point.
+ * @param {Ray2d[2]} lightRays
+ * @returns {Ray2d}
+ */
+Ray2d infiniteShadowCanvasRay(in Ray2d[2] lightRays) {
   const int TL = 0;
   const int TR = 1;
   const int BR = 2;
@@ -211,94 +250,254 @@ vec2 directionalCorner(in vec2 direction) {
   sceneRect[BR] = vec2((uSceneDims.x * 2.0) + uSceneDims.z, (uSceneDims.y * 2.0) + uSceneDims.w);
   sceneRect[BL] = vec2(0.0, (uSceneDims.y * 2.0) + uSceneDims.w);
 
-  // Direction is moving into one of 4 quadrants.
-  if ( direction.x > 0.0 ) return direction.y > 0.0 ? sceneRect[BR] : sceneRect[TR];
+  // Light rays can intersect closest to the same quadrant (1 point), adjacent quadrants (2 points),
+  // or opposing quadrants (3 points, middle one counts).
+  int quad0 = directionalQuadrant(lightRays[0].direction);
+  int quad1 = directionalQuadrant(lightRays[1].direction);
 
-  // Moving left. x <= 0.
-  return direction.y > 0.0 ? sceneRect[BL] : sceneRect[TL];
+  // Adjacent quadrants; use scene edge.
+  if ( quad0 == ((quad1 + 1) % 4)
+    || quad0 == ((quad1 + 3) % 4) ) { // -1 + 4
+    return Ray2d(sceneRect[quad0], normalizedDirection(sceneRect[quad0], sceneRect[quad1]));
+  }
+
+  // If the same corner, use the corner unless the light rays hit the same edge.
+  int corner;
+  if ( quad0 == quad1 ) {
+    vec2 c = sceneRect[quad0];
+    Ray2d[2] edges = Ray2d[2](
+      Ray2d(c, normalizedDirection(c, sceneRect[(quad0 + 3) % 4])), // -1 + 4
+      Ray2d(c, normalizedDirection(c, sceneRect[(quad0 + 1) % 4]))
+    );
+
+    // Make sure the first edge each ray hits is the same edge.
+    float t00;
+    float t01;
+    float t10;
+    float t11;
+    lineLineIntersection(lightRays[0], edges[0], t00);
+    lineLineIntersection(lightRays[0], edges[1], t01);
+    lineLineIntersection(lightRays[1], edges[0], t10);
+    lineLineIntersection(lightRays[1], edges[1], t11);
+    int ray0Edge = t00 > 0.0 && t00 < t01 ? 0 : 1;
+    int ray1Edge = t10 > 0.0 && t10 < t11 ? 0 : 1;
+    if ( ray0Edge == ray1Edge ) return edges[ray0Edge];
+    corner = quad0;
+  }
+
+  // If in opposing quadrants, must use the corner.
+  if ( quad0 == ((quad1 + 2) % 4) ) corner = (quad0 + 1) % 4; // One apart, e.g., 1 and 3.
+
+  // Use an ray that intersects the corner at a 45¼ angle to the scene rectangle at that corner.
+  vec2 corner45Dir = vec2(0.5, 0.5);
+  if (corner == TL || corner == BL) corner45Dir.y *= -1.0;
+  return Ray2d(sceneRect[corner], corner45Dir);
 }
 
 /**
- * Intersect a 3d vector the canvas.
- * @param {Ray} lightRay
- * @param {out vec2} ix   Intersection or the canvas edge point to use instead.
- * @returns {bool} True if there was an actual canvas intersection.
+ * Locate the canvas intersection for a given direction.
+ * If none, determine the infinite shadow canvas ray.
+ * @param {vec3} nearFarDir           Typically farShadowDirs.penumbra
+ * @param {Ray2d[2]} sidePenumbra      Typically sideShadowRays.penumbra
+ * @param {Wall} wall
+ * @param {out Ray2d} canvasRay
+ * @returns {bool}
  */
-bool canvasIntersection(in Ray lightRay, out vec2 ix) {
-  bool infiniteShadow = lightRay.direction.z >= 0.0 || almostEqual(lightRay.direction.z, 0.0, 1e-06); // Ray is rising as it moves from light --> wall.
-  if ( infiniteShadow ) {
-    ix = directionalCorner(lightRay.direction.xy);
-    return false;
-  }
-
-  // Plane at the minimum canvas elevation.
+bool canvasIntersectionRay(in vec3 nearFarDir, in Ray2d[2] sidePenumbra, in Wall wall, out Ray2d canvasRay) {
   Plane canvasPlane = constructCanvasPlane();
+  vec3 wallTopMid = (wall.top[0] + wall.top[1]) * 0.5;
+  vec2 wallDir2d = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
   vec3 canvasIx;
-  if ( !intersectRayPlane(lightRay, canvasPlane, canvasIx) ) {
-    ix = directionalCorner(lightRay.direction.xy);
+  if ( !isInfiniteShadow(nearFarDir)
+    && intersectRayPlane(Ray(wallTopMid, nearFarDir), canvasPlane, canvasIx) ) {
+    canvasRay.origin = canvasIx.xy;
+    canvasRay.direction = wallDir2d;
+    return true;
+  } else {
+    canvasRay = infiniteShadowCanvasRay(sidePenumbra);
     return false;
   }
-  ix = canvasIx.xy;
-  return true;
 }
 
 /**
- * Ray either parallel to the wall or, for infinite shadow, ray through a scene corner
- * perpendicular to the light direction.
+ * For infinite shadow, construct the different triangles.
+ * @param {ShadowRays2d} sideShadowRays
  * @param {Wall} wall
- * @param {vec3} lightDir
- * @param {int} far
- * @returns {Ray2d}
+ * @param {Ray2d} canvasRay     Either the infinite canvas ray or the far penumbra canvas intersection.
+ * @param {out vec2[3]} ABC
+ * @param {out vec2[3]} DEF
+ * @param {out vec2[3]} GHI
+ * @param {out vec2[3]} sideTri0
+ * @param {out vec2[3]} sideTri1
+ * @returns {bool} True if near-collinear wall, false otherwise.
  */
-Ray2d shadowNearFarRay(in Wall wall, in vec3 lightDir, in int nearFar) {
-  // Wall position.
-  vec3 wall0 = nearFar == FAR ? wall.top[0] : wall.bottom[0];
-  vec3 wall1 = nearFar == FAR ? wall.top[1] : wall.bottom[1];
-  vec3 wallMid = (wall0 + wall1) * 0.5;
+bool shadowTriangles(in ShadowRays2d sideShadowRays, in Wall wall, in Ray2d canvasRay,
+  out vec2 A,
+  out vec2 B,
+  out vec2 C,
+  out vec2 D,
+  out vec2 E,
+  out vec2 F,
+  out vec2 G,
+  out vec2 H,
+  out vec2 I,
+  out vec2 W0,
+  out vec2 W1
+  ) {
+  // Penumbra triangle: ÆABC
+  // near/far triangle 0: ÆDEF
+  // near/far triangle 1: ÆGHI
+  // side triangle 0: ÆwallEndpoint, C, I
+  // side triangle 1: ÆwallEndpoint, B, F
 
-  // Construct a ray from light --> wall and get the canvas intersection.
-  // If this is an infinite light, use the perpendicular to the light ray as the direction.
-  Ray lightRay = Ray(wallMid, lightDir);
-  vec2 ix;
-  vec2 dir = normalizedDirection(wall0.xy, wall1.xy);
-  if ( !canvasIntersection(lightRay, ix) ) dir = normalize(vec2(lightDir.y, -lightDir.x));
-  return Ray2d(ix, dir);
+  // A found by intersecting the two side penumbra lines.
+  lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.penumbra[1], A);
+
+  // Endpoint closest to the light will be associated with ÆDEF; furthest is ÆGHI.
+  // Can determine by comparing distance to the penumbra vertex 0 (A).
+  int closestIdx = distanceSquared(A, wall.top[1].xy) < distanceSquared(A, wall.top[0].xy) ? 1 : 0;
+  W0 = wall.top[closestIdx].xy;
+  W1 = wall.top[1 - closestIdx].xy;
+  vec2 wallDir = normalizedDirection(W0, W1);
+
+   // The AB penumbra ray runs through the closer endpoint.
+  closestIdx = sideShadowRays.penumbra[0].origin.x == W0.x && sideShadowRays.penumbra[0].origin.y == W0.y ? 0 : 1;
+  Ray2d rAB = sideShadowRays.penumbra[closestIdx];
+  Ray2d rAC = sideShadowRays.penumbra[1 - closestIdx];
+
+  // D and G are the intersections of the penumbra with opposite umbra.
+  // E intersects the D penumbra ray with the canvas line.
+  Ray2d rD_penumbra = rAB;
+  Ray2d rG_penumbra = rAC;
+  Ray2d rD_umbra = sideShadowRays.umbra[closestIdx];
+  Ray2d rG_umbra = sideShadowRays.umbra[1 - closestIdx];
+  lineLineIntersection(rD_penumbra, rD_umbra, D);
+  lineLineIntersection(rG_penumbra, rG_umbra, G);
+  lineLineIntersection(rD_penumbra, canvasRay, E);
+
+  // Moving from E along the wall direction, we will intersect rD_umbra at F.
+  Ray2d rEWall = Ray2d(E, wallDir);
+  lineLineIntersection(rEWall, rD_umbra, F);
+
+  // May intersect rG_umbra (I) and rG_penumbra (H, B).
+  float tI;
+  if ( lineLineIntersection(rEWall, rG_umbra, tI) && tI > 0.0 ) {
+    I = projectRay(rEWall, tI);
+    lineLineIntersection(rEWall, rG_penumbra, H);
+    B = H;
+    C = E;
+    return false;
+    // Wall endpoint, penumbra point, umbra point.
+    // sideTri0 = [w0, C, I];
+    // sideTri1 = [w1, B, F];
+
+  } else {
+    Ray2d canvasRay2 = Ray2d(F, canvasRay.direction);
+    lineLineIntersection(canvasRay2, rG_penumbra, B);
+    lineLineIntersection(canvasRay, rG_umbra, I);
+    Ray2d rIWall = Ray2d(I, wallDir);
+    lineLineIntersection(rIWall, rG_penumbra, H);
+    lineLineIntersection(canvasRay2, rD_penumbra, C);
+    return true;
+
+    // sideTri0 = [w0, C, w1];
+    // sideTri1 = [w1, B, F];
+  }
 }
 
 /**
- * Calculate a near or far shadow ratio.
- * @param {Wall} wall
- * @param {vec2[3]} penumbraTri
- * @param {ShadowDirections} shadowDirs
- * @param {int} nearFar
- * @param {int} shadowType
- * @returns {float}
+ * Given ÆABC, make it isoceles by extending the shorter edge of AB or AC.
+ * @param {vec2[3]} tri
+ * @returns {vec2[3]} tri
  */
-float calculateNearFarRatio(in Wall wall, in vec2[3] penumbraTri, in ShadowDirections shadowDirs, in int nearFar, in int shadowType) {
-  vec3 nfDir = shadowType == PENUMBRA ? shadowDirs.penumbra : shadowDirs.umbra;
-  Ray2d nfRay = shadowNearFarRay(wall, nfDir, nearFar);
-  vec2 ix;
-  lineLineIntersection(nfRay, normalizeRay(rayFromPoints(penumbraTri[0], penumbraTri[1])), ix);
-  return baryForPoint(ix, penumbraTri).x;
+vec2[3] makeIsoceles(in vec2[3] tri) {
+  vec2 a = tri[0];
+  vec2 b = tri[1];
+  vec2 c = tri[2];
+  float distAB = distance(a, b);
+  float distBC = distance(a, c);
+  if ( almostEqual(distAB, distBC, 1.0e-08) ) return tri;
+  if ( distAB > distBC ) {
+    return vec2[3](
+      a,
+      b,
+      a + (normalizedDirection(a, c) * distAB)
+    );
+  } else { // BC distance is larger.
+    return vec2[3](
+      a,
+      a + (normalizedDirection(a, b) * distBC),
+      c
+    );
+  }
 }
+
+#ifndef UNSIZED_SOURCE
+
+/**
+ * For a line that intersects a circle, determine the percent area of the circle
+ * on each side of the line.
+ * @param {vec2} a
+ * @param {vec2} b
+ * @param {vec2} center
+ * @param {float} radius
+ * @returns {vec2} The percentage CCW(0) and CW (1), oriented a --> b.
+ */
+vec2 circleBisectorPercentArea(in vec2 a, in vec2 b, in vec2 center, in float radius) {
+  // Use a line perpendicular to AB that goes through center.
+  vec2 dir = normalizedDirection(a, b);
+  vec2 perpDir = vec2(dir.y, -dir.x); // Moves CCW to a --> b
+  Ray2d perpRay = Ray2d(center, perpDir);
+  vec2 edgeCCW = projectRay(perpRay, radius);
+  vec2 edgeCW = projectRay(perpRay, -radius);
+  vec2 ix;
+  lineLineIntersection(perpRay, Ray2d(a, normalizedDirection(a, b)), ix);
+  float totalDist = radius * 2.0;
+  float ccwDist = distance(ix, edgeCCW);
+  float cwDist = distance(ix, edgeCW);
+  if ( ccwDist < totalDist
+    && cwDist < totalDist ) return vec2(ccwDist, cwDist) * (1.0 / totalDist);
+  if ( ccwDist > cwDist ) return vec2(1.0, 0.0);
+  return vec2(0.0, 1.0);
+}
+
+/**
+ * Calculate the ambient light used when the wall is collinear.
+ * @param {vec2} w0   Closest wall endpoint to the light
+ * @param {vec2} w1   Other wall endpoint
+ * @returns {vec2}
+ */
+vec2 ambientLight(vec2 w0, vec2 w1) {
+  return circleBisectorPercentArea(w0, w1, uLightPosition.xy, uLightSize);
+}
+
+#endif
 
 /**
  * Calculate the flat variables, including near/far ratios.
  */
 void calculateFlatVariables(
-  in vec2[3] penumbraTri,
+  in vec2[3] nearFarTri0,
+  in vec2[3] nearFarTri1,
   in Wall wall,
   in ShadowDirections farShadowDirs,
   in ShadowDirections nearShadowDirs,
-  in bvec2 hasUmbraShadows) {
+  in bvec2 hasUmbraShadows,
+  in ShadowRays2d sideShadowRays
+  ) {
 
   vec3 wTop = wall.top[0];
   vec3 wBottom = wall.bottom[0];
+  vec2 wallDir = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
+  vec3 wallTopMid = (wall.top[0] + wall.top[1]) * 0.5;
+  Plane canvasPlane = constructCanvasPlane();
 
+  // @type {vec2} fWallHeights
   // Wall top and bottom in the z direction.
   fWallHeights[TOP] = wTop.z;
   fWallHeights[BOTTOM] = wBottom.z;
 
+  // @type {float} fThresholdRadius
   // Threshold radius and sense type.
   fWallSenseType = aWallSenseType;
   #ifndef EV_DIRECTIONAL_LIGHT
@@ -306,19 +505,77 @@ void calculateFlatVariables(
     ? -1.0 : aThresholdRadius2;
   #endif
 
-  // Location of the wall along the x axis of the barycentric penumbra triangle
-  fWallRatio = baryForPoint(wTop.xy, penumbraTri).x;
+  // @type {vec2} fWallRatios
+  // Location of the wall along the x axis of the two near/far triangles.
+  // The intersect of the wall with DE and GH determine the ratio.
+  Ray2d wallRay = Ray2d(wallTopMid.xy, wallDir);
+  Ray2d rayED = Ray2d(nearFarTri0[1], normalizedDirection(nearFarTri0[1], nearFarTri0[0]));
+  Ray2d rayHG = Ray2d(nearFarTri1[1], normalizedDirection(nearFarTri1[1], nearFarTri1[0]));
+  float distDE = distance(nearFarTri0[0], nearFarTri0[1]);
+  float distGH = distance(nearFarTri1[0], nearFarTri1[1]);
+  lineLineIntersection(rayED, wallRay, fWallRatios[0]); // T value
+  lineLineIntersection(rayHG, wallRay, fWallRatios[1]); // T value
+  fWallRatios[0] /= distDE;
+  fWallRatios[1] /= distGH;
 
-  // Location of the far umbra intersection. Penumbra intersection is 0.0 by definition.
-  fFarRatio = hasUmbraShadows[FAR] ? calculateNearFarRatio(wall, penumbraTri, farShadowDirs, FAR, UMBRA) : 0.0;
 
-  // Location of the near shadow along the x axis of the barycentric penumbra triangle.
-  fNearRatios = vec2(fWallRatio); // Near shadow starts at wall unless the wall is "floating."
+  // @type {vec2} fFarRatios0   UMBRA and PENUMBRA
+  // @type {vec2} fFarRatios1   UMBRA and PENUMBRA
+  // For far shadows, if infinite, use, the infiniteShadowCanvasRay as the ending point.
+  // Otherwise, use the penumbra canvas intersection based on the far direction (through midpoint).
+  fFarRatios0 = vec2(-1.0);
+  fFarRatios1 = vec2(-1.0);
+  vec3 canvasIx;
+  if ( hasUmbraShadows[FAR] && !isInfiniteShadow(farShadowDirs.penumbra)
+    && intersectRayPlane(Ray(wallTopMid, farShadowDirs.penumbra), canvasPlane, canvasIx) ) {
+    fFarRatios0[PENUMBRA] = 0.0;
+    fFarRatios1[PENUMBRA] = 0.0;
+  }
+
+  // For far umbra shadow, redo the shadow triangle to get the new E and H locations.
+  vec3 canvasFarUmbraIx;
+  if ( !isInfiniteShadow(farShadowDirs.umbra)
+    && intersectRayPlane(Ray(wallTopMid, farShadowDirs.umbra), canvasPlane, canvasFarUmbraIx) ) {
+    Ray2d canvasFarUmbraRay = Ray2d(canvasFarUmbraIx.xy, wallDir);
+    vec2 A;
+    vec2 B;
+    vec2 C;
+    vec2 D;
+    vec2 E;
+    vec2 F;
+    vec2 G;
+    vec2 H;
+    vec2 I;
+    vec2 W0;
+    vec2 W1;
+    shadowTriangles(sideShadowRays, wall, canvasFarUmbraRay, A, B, C, D, E, F, G, H, I, W0, W1);
+    fFarRatios0[UMBRA] = (distDE - distance(D, E)) / distDE;
+    fFarRatios1[UMBRA] = (distGH - distance(G, H)) / distGH;
+  }
+
+  // @type {vec2} fNearRatios0   UMBRA and PENUMBRA
+  // @type {vec2} fNearRatios1   UMBRA and PENUMBRA
+  // For near shadows, move the wall at the midpoint.
+  // The intersect of the wall with DE and GH determine the ratio.
+  fNearRatios0 = vec2(-1.0);
+  fNearRatios1 = vec2(-1.0);
   float canvasElevation = uElevationRes.x;
-  if ( hasNearShadows() ) {
-    fNearRatios[PENUMBRA] = calculateNearFarRatio(wall, penumbraTri, nearShadowDirs, NEAR, PENUMBRA );
-    fNearRatios[UMBRA] = hasUmbraShadows[NEAR]
-      ? calculateNearFarRatio(wall, penumbraTri, nearShadowDirs, NEAR, UMBRA) : fNearRatios[PENUMBRA];
+  if ( wallIsFloating() ) {
+    vec3 wallBottomMid = (wall.bottom[0] + wall.bottom[1]) * 0.5;
+    vec3 canvasNearUmbraIx;
+    vec3 canvasNearPenumbraIx;
+    if ( !isInfiniteShadow(nearShadowDirs.umbra)
+      && intersectRayPlane(Ray(wallBottomMid, nearShadowDirs.penumbra), canvasPlane, canvasNearUmbraIx) ) {
+      Ray2d umbraWallRay = Ray2d(canvasNearUmbraIx.xy, wallDir);
+      lineLineIntersection(rayED, umbraWallRay, fNearRatios0[PENUMBRA]);
+      lineLineIntersection(rayHG, umbraWallRay, fNearRatios1[PENUMBRA]);
+    }
+    if ( !isInfiniteShadow(nearShadowDirs.penumbra)
+      && intersectRayPlane(Ray(wallBottomMid, nearShadowDirs.umbra), canvasPlane, canvasNearPenumbraIx) ) {
+      Ray2d penumbraWallRay = Ray2d(canvasNearPenumbraIx.xy, wallDir);
+      lineLineIntersection(rayED, penumbraWallRay, fNearRatios0[UMBRA]);
+      lineLineIntersection(rayHG, penumbraWallRay, fNearRatios1[UMBRA]);
+    }
   }
 }
 
@@ -341,21 +598,44 @@ int vertexNum = gl_VertexID % 3;
 // - @type {vec2[3]} side1Tri
 
 // Side shadows.
-#ifndef UNSIZED_SOURCE
-if ( hasSideShadows[0] ) hasSideShadows[0] = adjustSideShadowForLinkedEndpoints(sideShadowDirs[0], wall, 0);
-if ( hasSideShadows[1] ) hasSideShadows[1] = adjustSideShadowForLinkedEndpoints(sideShadowDirs[1], wall, 1);
-#endif
+// #ifndef UNSIZED_SOURCE
+// if ( hasSideShadows[0] ) hasSideShadows[0] = adjustSideShadowForLinkedEndpoints(sideShadowDirs[0], wall, 0);
+// if ( hasSideShadows[1] ) hasSideShadows[1] = adjustSideShadowForLinkedEndpoints(sideShadowDirs[1], wall, 1);
+// #endif
 
+// #ifndef UNSIZED_SOURCE
+// vec2[3] sideTri0;
+// vec2[3] sideTri1;
+// if ( hasSideShadows[0] ) sideTri0 = calculateSideTriangle(0, penumbraTri, wall, sideShadowDirs, farShadowDirs);
+// if ( hasSideShadows[1] ) sideTri1 = calculateSideTriangle(1, penumbraTri, wall, sideShadowDirs, farShadowDirs);
+// #endif
 
-// Triangle.
-vec2[3] penumbraTri = calculatePenumbraTriangle(wall, sideShadowDirs, farShadowDirs);
-
-#ifndef UNSIZED_SOURCE
-vec2[3] sideTri0;
-vec2[3] sideTri1;
-if ( hasSideShadows[0] ) sideTri0 = calculateSideTriangle(0, penumbraTri, wall, sideShadowDirs, farShadowDirs);
-if ( hasSideShadows[1] ) sideTri1 = calculateSideTriangle(1, penumbraTri, wall, sideShadowDirs, farShadowDirs);
-#endif
+vec2 A;
+vec2 B;
+vec2 C;
+vec2 D;
+vec2 E;
+vec2 F;
+vec2 G;
+vec2 H;
+vec2 I;
+vec2 W0;
+vec2 W1;
+Ray2d farPenumbraCanvasRay;
+bool hasFarPenumbra = canvasIntersectionRay(farShadowDirs.penumbra, sideShadowRays.penumbra, wall, farPenumbraCanvasRay);
+if ( !hasFarPenumbra ) hasPenumbraShadows[FAR] = false;
+bool nearCollinear = shadowTriangles(sideShadowRays, wall, farPenumbraCanvasRay, A, B, C, D, E, F, G, H, I, W0, W1);
+vec2[3] penumbraTri = vec2[3](A, B, C);
+vec2[3] nearFarTri0 = vec2[3](D, E, F);
+vec2[3] nearFarTri1 = vec2[3](G, H, I);
+vec2[3] sideTri0 = vec2[3](W0, C, I);
+vec2[3] sideTri1 = vec2[3](W1, B, F);
+if ( nearCollinear ) {
+  sideTri0 = vec2[3](W0, C, W1);
+  sideTri1 = vec2[3](W0, B, W1);
+}
+sideTri0 = makeIsoceles(sideTri0);
+sideTri1 = makeIsoceles(sideTri1);
 
 // Location of this vertex.
 vVertexPosition = penumbraTri[vertexNum];
@@ -364,15 +644,20 @@ vVertexPosition = penumbraTri[vertexNum];
 vPenumbra[vertexNum] = 1.0;
 
 // Define side triangles in relation to the penumbra triangle.
-vSidePenumbra0 = vec3(-1.0);
-vSidePenumbra1 = vec3(-1.0);
-
 // If no real side penumbra, set values to -1 to avoid inclusion.
 // Otherwise baryForPoint may return NaN if set to the midpenumbra for linked walls.
+vSidePenumbra0 = vec3(-1.0);
+vSidePenumbra1 = vec3(-1.0);
 #ifndef UNSIZED_SOURCE
 if ( hasSideShadows[0] && abs(orient(sideTri0[0], sideTri0[1], sideTri0[2])) > 1.0 ) vSidePenumbra0 = baryForPoint(vVertexPosition, sideTri0);
 if ( hasSideShadows[1] && abs(orient(sideTri1[0], sideTri1[1], sideTri1[2])) > 1.0 ) vSidePenumbra1 = baryForPoint(vVertexPosition, sideTri1);
 #endif
+
+// Define the near/far triangles used to adjust the shadow for elevation.
+vNearFarPenumbra0 = vec3(-1.0);
+vNearFarPenumbra1 = vec3(-1.0);
+if ( abs(orient(nearFarTri0[0], nearFarTri0[1], nearFarTri0[2])) > 1.0 ) vNearFarPenumbra0 = baryForPoint(vVertexPosition, nearFarTri0);
+if ( abs(orient(nearFarTri1[0], nearFarTri1[1], nearFarTri1[2])) > 1.0 ) vNearFarPenumbra1 = baryForPoint(vVertexPosition, nearFarTri1);
 
 // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
 vTerrainTexCoord = (vVertexPosition - uSceneDims.xy) / uSceneDims.zw;
@@ -381,9 +666,13 @@ gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition,
 
 // Finally, set the flat variables when we hit the last vertex for this triangle.
 if ( vertexNum == 2 ) {
+  #ifndef UNSIZED_SOURCE
+  fAmbient = 1.0 - ambientLight(W0, W1);
+  if ( orient(W0, W1, sideTri0[1]) < 0.0 ) fAmbient = fAmbient.yx; // CW
+  #endif
   if ( hasUmbraShadows[FAR] ) hasUmbraShadows[FAR] = farShadowDirs.umbra.z < 0.0;
-  if ( hasNearShadows() && hasUmbraShadows[NEAR] ) hasUmbraShadows[NEAR] = nearShadowDirs.umbra.z < 0.0;
-  calculateFlatVariables(penumbraTri, wall, farShadowDirs, nearShadowDirs, hasUmbraShadows);
+  if ( wallIsFloating() && hasUmbraShadows[NEAR] ) hasUmbraShadows[NEAR] = nearShadowDirs.umbra.z < 0.0;
+  calculateFlatVariables(nearFarTri0, nearFarTri1, wall, farShadowDirs, nearShadowDirs, hasUmbraShadows, sideShadowRays);
 }
 `;
 
@@ -487,7 +776,16 @@ float _elevationHeightFraction(in float elevation, in float wallHeight) {
 /**
  * Is the fragment location in front of the wall?
  */
-bool inFrontOfWall() { return vPenumbra.x > fWallRatio; }
+bool inFrontOfWall() {
+  // If in both triangles, must be in front of wall for both.
+  // If in one triangle, test only one.
+  bool in0 = barycentricPointInsideTriangle(vNearFarPenumbra0);
+  bool in1 = barycentricPointInsideTriangle(vNearFarPenumbra1);
+  bool front0 = vNearFarPenumbra0.x > fWallRatios[0];
+  bool front1 = vNearFarPenumbra1.x > fWallRatios[1];
+  if ( in0 && in1 ) return front0 && front1;
+  return (in0 && front0) || (in1 && front1) || false;
+}
 
 /**
  * Does a threshold apply?
@@ -501,6 +799,38 @@ bool thresholdApplies() {
     && distanceSquared(vVertexPosition, uLightPosition.xy) < fThresholdRadius2;
   #endif
 }
+
+/**
+ * Is the fragment location outside of a defined shadow?
+ * Does not test for in front of wall.
+ * @returns {bool}
+ */
+bool outsideOfShadow() {
+  if ( barycentricPointInsideTriangle(vNearFarPenumbra0)
+    || barycentricPointInsideTriangle(vNearFarPenumbra1) ) return false;
+
+  // If in-between the two near/far triangles, that also counts (umbra).
+  // I.e., y is negative but others are positive.
+  if ( vNearFarPenumbra0.y < 0.0 && vNearFarPenumbra1.y < 0.0
+    && vNearFarPenumbra0.z > 0.0 && vNearFarPenumbra1.z > 0.0
+    && vNearFarPenumbra0.x > 0.0 && vNearFarPenumbra1.x > 0.0 ) return false;
+
+  // Must be outside the penumbras or umbra.
+  return true;
+}
+
+/**
+ * Is fragment inside the side penumbra, without regard to near/far limits.
+ * @returns {bool}
+ */
+bool inSidePenumbra0() { return barycentricPointInsideTriangle(vSidePenumbra0); }
+
+/**
+ * Is fragment inside the side penumbra, without regard to near/far limits.
+ * @returns {bool}
+ */
+bool inSidePenumbra1() { return barycentricPointInsideTriangle(vSidePenumbra1); }
+
 `;
 
 // NOTE: PENUMBRA_FRAGMENT_CALCULATIONS
@@ -509,9 +839,8 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
   // Assume no shadow as the default
   fragColor = noShadow();
 
-
-
-  // If in front of the wall, no shadow.
+  // Tests for within relevant bounds.
+  if ( outsideOfShadow() ) return;
   if ( inFrontOfWall() ) return;
 
   #ifndef EV_DIRECTIONAL_LIGHT
@@ -523,42 +852,66 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
   // fragColor = vec4(1.0, 0.0, 0.0, 0.8);
   // return;
 
-  // The light position is artificially set to the intersection of the outer two penumbra
-  // lines. So all fragment points must be either in a penumbra or in the umbra.
-  // (I.e., not possible to be outside the side penumbras.)
+  // Determine whether in near, far, side0, or side1.
+  float far0Shadow = 1.0;
+  float far1Shadow = 1.0;
+  float near0Shadow = 1.0;
+  float near1Shadow = 1.0;
+  float side0Shadow = 1.0;
+  float side1Shadow = 1.0;
+  bool needsElevation = fFarRatios0[PENUMBRA] != -1.0 || fFarRatios0[UMBRA] != -1.0
+                      || fFarRatios1[PENUMBRA] != -1.0 || fFarRatios1[UMBRA] != -1.0
+                      || fNearRatios0[PENUMBRA] != -1.0 || fNearRatios0[UMBRA] != -1.0
+                      || fNearRatios1[PENUMBRA] != -1.0 || fNearRatios1[UMBRA] != -1.0;
 
-  // Get the elevation at this fragment.
-  float canvasElevation = uElevationRes.x;
-  float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
+  vec2 farRatios0 = vec2(fFarRatios0);
+  vec2 farRatios1 = vec2(fFarRatios1);
+  vec2 nearRatios0 = vec2(fNearRatios0);
+  vec2 nearRatios1 = vec2(fNearRatios1);
+  if ( needsElevation ) {
+    // Get the elevation at this fragment.
+    float canvasElevation = uElevationRes.x;
+    float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
 
-  // Elevate the far penumbra ratio and confirm inclusion.
-  float farElevationHeightFraction = _elevationHeightFraction(elevation, fWallHeights[TOP]);
-  float farPenumbraRatio = _elevateShadowRatioUsingHeightFraction(0.0, fWallRatio, farElevationHeightFraction);
-  if ( vPenumbra.x < farPenumbraRatio ) return;
-
-  // Elevate the near penumbra ratio and confirm inclusion.
-  float nearElevationHeightFraction = _elevationHeightFraction(elevation, fWallHeights[BOTTOM]);
-  float nearPenumbraRatio = _elevateShadowRatioUsingHeightFraction(fNearRatios[PENUMBRA], fWallRatio, nearElevationHeightFraction);
-  if ( vPenumbra.x > nearPenumbraRatio ) return;
-
-  // The point is either in the umbra or in a penumbra.
-  // Elevate the umbra ratios.
-  float farUmbraRatio = _elevateShadowRatioUsingHeightFraction(fFarRatio, fWallRatio, farElevationHeightFraction);
-  float nearUmbraRatio = _elevateShadowRatioUsingHeightFraction(fNearRatios[UMBRA], fWallRatio, nearElevationHeightFraction);
+    if ( elevation != canvasElevation ) {
+      float farF =  _elevationHeightFraction(elevation, fWallHeights[TOP]);
+      float nearF = _elevationHeightFraction(elevation, fWallHeights[BOTTOM]);
+      if ( fFarRatios0[UMBRA] != -1.0 ) farRatios0[UMBRA] = _elevateShadowRatioUsingHeightFraction(fFarRatios0[UMBRA], fWallRatios[0], farF);
+      if ( fFarRatios1[UMBRA] != -1.0 ) farRatios1[UMBRA] = _elevateShadowRatioUsingHeightFraction(fFarRatios1[UMBRA], fWallRatios[1], farF);
+      if ( fFarRatios0[PENUMBRA] != -1.0 ) farRatios0[PENUMBRA] = _elevateShadowRatioUsingHeightFraction(fFarRatios0[PENUMBRA], fWallRatios[0], farF);
+      if ( fFarRatios1[PENUMBRA] != -1.0 ) farRatios1[PENUMBRA] = _elevateShadowRatioUsingHeightFraction(fFarRatios1[PENUMBRA], fWallRatios[1], farF);
+      if ( fNearRatios0[UMBRA] != -1.0 ) nearRatios0[UMBRA] = _elevateShadowRatioUsingHeightFraction(fNearRatios0[UMBRA], fWallRatios[0], nearF);
+      if ( fNearRatios1[UMBRA] != -1.0 ) nearRatios1[UMBRA] = _elevateShadowRatioUsingHeightFraction(fNearRatios1[UMBRA], fWallRatios[1], nearF);
+      if ( fNearRatios0[PENUMBRA] != -1.0 ) nearRatios0[PENUMBRA] = _elevateShadowRatioUsingHeightFraction(fNearRatios0[PENUMBRA], fWallRatios[0], nearF);
+      if ( fNearRatios1[PENUMBRA] != -1.0 ) nearRatios1[PENUMBRA] = _elevateShadowRatioUsingHeightFraction(fNearRatios1[PENUMBRA], fWallRatios[1], nearF);
+    }
+  }
 
   // Determine the near/far penumbra inclusion.
-  bool inFarPenumbra = bool(between(farPenumbraRatio, farUmbraRatio, vPenumbra.x));
-  bool inNearPenumbra = bool(between(nearPenumbraRatio, nearUmbraRatio, vPenumbra.x));
-  float farShadow = 1.0;
-  float nearShadow = 1.0;
-  if ( inFarPenumbra ) farShadow = linearConversion(vPenumbra.x, farPenumbraRatio, farUmbraRatio, 0.0, 1.0);
-  if ( inNearPenumbra ) nearShadow = linearConversion(vPenumbra.x, nearPenumbraRatio, nearUmbraRatio, 0.0, 1.0);
+  bool inNF0 = barycentricPointInsideTriangle(vNearFarPenumbra0);
+  bool inNF1 = barycentricPointInsideTriangle(vNearFarPenumbra1);
+  bool inFarPenumbra0 = inNF0 && between(farRatios0[PENUMBRA], farRatios0[UMBRA], vNearFarPenumbra0.x) == 1.0;
+  bool inFarPenumbra1 = inNF1 && between(farRatios1[PENUMBRA], farRatios1[UMBRA], vNearFarPenumbra1.x) == 1.0;
+  bool inNearPenumbra0 = inNF0 && between(nearRatios0[PENUMBRA], nearRatios0[UMBRA], vNearFarPenumbra0.x) == 1.0;
+  bool inNearPenumbra1 = inNF1 && between(nearRatios1[PENUMBRA], nearRatios1[UMBRA], vNearFarPenumbra1.x) == 1.0;
+
+  if ( inFarPenumbra0 ) far0Shadow = linearConversion(vNearFarPenumbra0.x, farRatios0[PENUMBRA], farRatios0[UMBRA], 0.0, 1.0);
+  if ( inFarPenumbra0 ) far1Shadow = linearConversion(vNearFarPenumbra1.x, farRatios1[PENUMBRA], farRatios1[UMBRA], 0.0, 1.0);
+  if ( inNearPenumbra1 ) near0Shadow = linearConversion(vNearFarPenumbra0.x, nearRatios0[PENUMBRA], nearRatios0[UMBRA], 0.0, 1.0);
+  if ( inNearPenumbra1 ) near1Shadow = linearConversion(vNearFarPenumbra1.x, nearRatios1[PENUMBRA], nearRatios1[UMBRA], 0.0, 1.0);
 
   // Blend the two side penumbras if overlapping by multiplying the light amounts.
-  float side0Shadow = barycentricPointInsideTriangle(vSidePenumbra0) ? vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z) : 1.0;
-  float side1Shadow = barycentricPointInsideTriangle(vSidePenumbra1) ? vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z) : 1.0;
+  if ( inSidePenumbra0() ) side0Shadow = vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z);
+  if ( inSidePenumbra1() ) side1Shadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
 
-  float shadow = side0Shadow * side1Shadow * farShadow * nearShadow;
+  #ifndef UNSIZED_SOURCE
+  if ( fAmbient[0] != 1.0 && fAmbient[1] != 1.0 ) {
+    if ( inSidePenumbra0() ) side0Shadow *= fAmbient[0];
+    if ( inSidePenumbra0() ) side1Shadow *= fAmbient[1];
+  }
+  #endif
+
+  float shadow = side0Shadow * side1Shadow * far0Shadow * far1Shadow * near0Shadow * near1Shadow;
   float totalLight = clamp(0.0, 1.0, 1.0 - shadow);
   fragColor = lightEncoding(totalLight);
 `;
@@ -654,13 +1007,17 @@ out vec2 vTerrainTexCoord;
 out vec3 vPenumbra;
 out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
+out vec3 vNearFarPenumbra0;
+out vec3 vNearFarPenumbra1;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
 flat out vec2 fWallHeights;
-flat out float fWallRatio;
-flat out vec2 fNearRatios;
-flat out float fFarRatio;
+flat out vec2 fWallRatios;
+flat out vec2 fFarRatios0;
+flat out vec2 fFarRatios1;
+flat out vec2 fNearRatios0;
+flat out vec2 fNearRatios1;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -675,16 +1032,19 @@ ${PENUMBRA_VERTEX_FUNCTIONS}
 /**
  * The rays from the wall endpoint along the side.
  * All at midpenumbra b/c no side shadow.
- * @param {int} idx  Which wall endpoint corresponds to this shadow
  * @param {Wall} wall
- * @returns {ShadowDirections2d} Direction from the endpoint away from the light for umbra, mid, and penumbra.
+ * @returns {ShadowRays2d} Direction from the endpoint away from the light for umbra, mid, and penumbra.
  */
-ShadowDirections2d calculateSideShadowDirections(in int idx, in Wall wall) {
-  vec2 dir = normalizedDirection(uLightPosition.xy, wall.top[idx].xy);
-  return ShadowDirections2d(
-    dir, // umbra
-    dir, // midpenumbra
-    dir  // penumbra
+ShadowRays2d calculateSideShadowRays(in Wall wall) {
+  vec2 wall0 = wall.top[0].xy;
+  vec2 wall1 = wall.top[1].xy;
+  Ray2d[2] midpenumbra = Ray2d[2](
+    Ray2d(wall0, normalizedDirection(uLightPosition.xy, wall0)),
+    Ray2d(wall1, normalizedDirection(uLightPosition.xy, wall1)));
+  return ShadowRays2d(
+    midpenumbra,
+    midpenumbra,
+    midpenumbra
   );
 }
 
@@ -724,49 +1084,19 @@ ShadowDirections calculateNearShadowDirections(in Wall wall) {
   );
 }
 
-/**
- * Calculate the penumbra triangle
- * @param {Wall} wall
- * @param {ShadowDirections2d[2]} sideShadowDirs
- * @param {ShadowDirections} farShadowDirs
- * @returns {vec2[3]}
- */
-vec2[3] calculatePenumbraTriangle(in Wall wall, in ShadowDirections2d[2] sideShadowDirs, in ShadowDirections farShadowDirs) {
-  // Intersect the penumbra rays with the line parallel to the wall at the canvas intersection.
-  Ray2d farRay = shadowNearFarRay(wall, farShadowDirs.penumbra, FAR);
-  vec2 ix0;
-  vec2 ix1;
-  lineLineIntersection(farRay, Ray2d(uLightPosition.xy, sideShadowDirs[0].penumbra), ix0);
-  lineLineIntersection(farRay, Ray2d(uLightPosition.xy, sideShadowDirs[1].penumbra), ix1);
-  return vec2[3](
-    uLightPosition.xy,
-    ix0,
-    ix1
-  );
-}
-
 void main() {
-  // Shadow is a trapezoid formed from the intersection of the wall with the
-  // triangle ABC, where
-  // C is the light position.
-  // A is the intersection of the line light --> wall endpointA --> canvas plane
-  // B is the intersection of the line light --> wall endpointB --> canvas plane
   Wall wall = calculateWallPositions();
-  bvec2 hasSideShadows = bvec2(false, false);  // @type bvec2 for endpoint 0, 1
+
+  // Near/far shadows.
   bvec2 hasUmbraShadows = bvec2(false, false); // @type bvec2 for FAR, NEAR.
+  bvec2 hasPenumbraShadows = bvec2(false, false); // @type bvec2 for FAR, NEAR.
+  ShadowDirections farShadowDirs = calculateFarShadowDirections(wall);
+  ShadowDirections nearShadowDirs;
+  if ( wallIsFloating() ) nearShadowDirs = calculateNearShadowDirections(wall);
 
   // Side shadows.
-  ShadowDirections2d[2] sideShadowDirs = ShadowDirections2d[2](
-    calculateSideShadowDirections(0, wall),
-    calculateSideShadowDirections(1, wall)
-  );
-
-  // Far shadows.
-  ShadowDirections farShadowDirs = calculateFarShadowDirections(wall);
-
-  // Near shadows.
-  ShadowDirections nearShadowDirs;
-  if ( hasNearShadows() ) nearShadowDirs = calculateNearShadowDirections(wall);
+  bvec2 hasSideShadows = bvec2(false, false);
+  ShadowRays2d sideShadowRays = calculateSideShadowRays(wall);
 
   ${PENUMBRA_VERTEX_CALCULATIONS}
 }`;
@@ -782,6 +1112,7 @@ void main() {
 `#version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
+#define UNSIZED_SOURCE   true
 // #define SHADOW true
 
 uniform sampler2D uTerrainSampler;
@@ -793,13 +1124,17 @@ in vec2 vTerrainTexCoord;
 in vec3 vPenumbra;
 in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
+in vec3 vNearFarPenumbra0;
+in vec3 vNearFarPenumbra1;
 
-flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
-flat in float fWallRatio;
-flat in vec2 fNearRatios;
-flat in float fFarRatio;
-flat in float fWallSenseType;
 flat in float fThresholdRadius2;
+flat in float fWallSenseType;
+flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
+flat in vec2 fWallRatios;
+flat in vec2 fFarRatios0;
+flat in vec2 fFarRatios1;
+flat in vec2 fNearRatios0;
+flat in vec2 fNearRatios1;
 
 out vec4 fragColor;
 
@@ -914,6 +1249,7 @@ flat out vec2 fWallHeights;
 flat out float fWallRatio;
 flat out vec2 fNearRatios;
 flat out float fFarRatio;
+flat out vec2 fAmbient;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -1093,7 +1429,7 @@ void main() {
   bvec2 hasUmbraShadows = bvec2(true, true); // @type bvec2 for FAR, NEAR.
   ShadowDirections farShadowDirs = calculateFarShadowDirections();
   ShadowDirections nearShadowDirs;
-  if ( hasNearShadows() ) nearShadowDirs = calculateNearShadowDirections();
+  if ( wallIsFloating() ) nearShadowDirs = calculateNearShadowDirections();
 
   ${PENUMBRA_VERTEX_CALCULATIONS}
 }`;
@@ -1128,6 +1464,7 @@ flat in vec2 fNearRatios;
 flat in float fFarRatio;
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;
+flat in vec2 fAmbient;
 
 out vec4 fragColor;
 
@@ -1234,13 +1571,18 @@ out vec2 vTerrainTexCoord;
 out vec3 vPenumbra;
 out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
+out vec3 vNearFarPenumbra0;
+out vec3 vNearFarPenumbra1;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
 flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bottom
-flat out float fWallRatio;
-flat out vec2 fNearRatios;
-flat out float fFarRatio;
+flat out vec2 fWallRatios;
+flat out vec2 fFarRatios0;
+flat out vec2 fFarRatios1;
+flat out vec2 fNearRatios0;
+flat out vec2 fNearRatios1;
+flat out vec2 fAmbient;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -1261,72 +1603,19 @@ struct Light {
   vec3 top;
   vec3 center;
   vec3 bottom;
-  vec2[2] penumbra; // Tangent furthest from endpoint (crosses center)
-  vec2[2] umbra;    // Tangent nearest to endpoint
 };
 
 /**
  * Determine the top, bottom, left, right light positions.
  */
 Light calculateLightPositions(in Wall wall) {
-  // Wall data.
-  vec2 wall0 = wall.top[0].xy;
-  vec2 wall1 = wall.top[1].xy;
-  vec2 wallMid = (wall0 + wall1) * 0.5;
-  vec2 wallDir = normalizedDirection(wall0, wall1);
-
-  // Circle data
-  Circle lightCir = Circle(
-    uLightPosition.xy, // Center.
-    uLightSize // Radius.
-  );
-  vec2 lr0 = lightCir.center - (wallDir * lightCir.radius);
-  vec2 lr1 = lightCir.center + (wallDir * lightCir.radius);
-
-  // For each wall endpoint, determine the tangent points to the circle.
-  vec2[2] tangents0 = vec2[2](lightCir.center, lightCir.center);
-  vec2[2] tangents1 = vec2[2](lightCir.center, lightCir.center);
-  tangentPoints(lightCir, wall0, tangents0);
-  tangentPoints(lightCir, wall1, tangents1);
-
-  // If any tangent point is on the wrong side of the wall, replace with the lr0 or lr1.
-  // Occurs if the light is very close to the wall.
-  /*
-  float oLight = orient(wall0, wall1, uLightPosition.xy);
-  for ( int i = 0; i < 2; i += 1 ) {
-    if ( orient(wall0, wall1, tangents0[i]) * oLight < 0.0 ) continue;
-    tangents0[i] = distanceSquared(tangents0[i], lr0) < distanceSquared(tangents0[i], lr1) ? lr0 : lr1;
-  }
-  for ( int i = 0; i < 2; i += 1 ) {
-    if ( orient(wall0, wall1, tangents1[i]) * oLight < 0.0 ) continue;
-    tangents1[i] = distanceSquared(tangents1[i], lr0) < distanceSquared(tangents1[i], lr1) ? lr0 : lr1;
-  }
-  */
-
-  // Determine which side the tangents are on. Penumbra: cross; umbra: same.
-  // So penumbra should be inset toward the middle of the wall.
-  bool flip0 = orient(lightCir.center, wall0, tangents0[PENUMBRA]) * orient(lightCir.center, wall0, wallMid) < 0.0;
-  bool flip1 = orient(lightCir.center, wall1, tangents1[PENUMBRA]) * orient(lightCir.center, wall.top[1].xy, wallMid) < 0.0;
-  vec2[2] penumbra = vec2[2](tangents0[PENUMBRA], tangents1[PENUMBRA]);
-  vec2[2] umbra = vec2[2](tangents0[UMBRA], tangents1[UMBRA]);
-  if ( flip0 ) {
-    penumbra[0] = tangents0[UMBRA];
-    umbra[0] = tangents0[PENUMBRA];
-  }
-  if ( flip1 ) {
-    penumbra[1] = tangents1[UMBRA];
-    umbra[1] = tangents1[PENUMBRA];
-  }
-
   // Form a cross based on the light center.
   float top = uLightPosition.z + uLightSize;
   float bottom = uLightPosition.z - uLightSize;
   return Light(
-    vec3(lightCir.center, top),     // top
+    vec3(uLightPosition.xy, top),     // top
     uLightPosition,                 // center
-    vec3(lightCir.center, bottom),  // bottom
-    penumbra,   // Tangent furthest from endpoint (crosses center)
-    umbra // Tangent nearest to endpoint
+    vec3(uLightPosition.xy, bottom)  // bottom
   );
 }
 
@@ -1361,92 +1650,75 @@ ShadowDirections calculateNearShadowDirections(in Wall wall, in Light light) {
 }
 
 /**
- * @param {int} idx     Which wall endpoint corresponds to this shadow
+ * Direction from light --> wall endpoint. Origin at the wall endpoint.
  * @param {Wall} wall
  * @param {Light} light
- * @returns {ShadowDirections} Direction from the endpoint away from the light for umbra, mid, and penumbra.
+ * @returns {ShadowRays2d} Rays from the endpoint away from the light for umbra, mid, and penumbra.
  */
-ShadowDirections2d calculateSideShadowDirections(in int idx, in Wall wall, in Light light) {
-  // Direction from light --> wall endpoint.
-  vec2 w = wall.top[idx].xy; // Wall endpoint from which a penumbra is cast.
-  return ShadowDirections2d(
-    normalizedDirection(light.umbra[idx], w), // umbra
-    normalizedDirection(light.center.xy, w), // midpenumbra
-    normalizedDirection(light.penumbra[idx], w) // penumbra
+ShadowRays2d calculateSideShadowRays(in Wall wall, in Light light) {
+  // Wall data.
+  vec2 wall0 = wall.top[0].xy;
+  vec2 wall1 = wall.top[1].xy;
+  vec2 wallMid = (wall0 + wall1) * 0.5;
+  vec2 wallDir = normalizedDirection(wall0, wall1);
+
+  // First determine the tangent points of the circle.
+  Circle lightCir = Circle(
+    light.center.xy, // Center
+    uLightSize       // Radius
   );
-}
+  vec2[2] tangents0 = vec2[2](lightCir.center, lightCir.center);
+  vec2[2] tangents1 = vec2[2](lightCir.center, lightCir.center);
+  tangentPoints(lightCir, wall0, tangents0);
+  tangentPoints(lightCir, wall1, tangents1);
 
-/**
- * Calculate the penumbra triangle.
- * @param {Wall} wall
- * @param {ShadowDirections2d[2]} sideShadowDirs
- * @param {ShadowDirections} farDirs
- * @returns {vec2[3]}
- */
-vec2[3] calculatePenumbraTriangle(in Wall wall, in ShadowDirections2d[2] sideShadowDirs, in ShadowDirections farShadowDirs) {
-  // The penumbra 0 vertex is the point at which the penumbra rays cross.
-  // Between the wall and the light.
-  vec2 v0;
-  lineLineIntersection(
-    Ray2d(wall.top[0].xy, sideShadowDirs[0].penumbra),
-    Ray2d(wall.top[1].xy, sideShadowDirs[1].penumbra),
-    v0);
+  // Build the rays for each tangent to associate them with the correct wall point.
+  Ray2d[2] tangentRays0 = Ray2d[2](
+    Ray2d(wall0, normalizedDirection(tangents0[0], wall0)),
+    Ray2d(wall0, normalizedDirection(tangents0[1], wall0)));
+  Ray2d[2] tangentRays1 = Ray2d[2](
+    Ray2d(wall1, normalizedDirection(tangents1[0], wall1)),
+    Ray2d(wall1, normalizedDirection(tangents1[1], wall1)));
 
-  // Intersect the penumbra rays with the line parallel to the wall at the canvas intersection.
-  Ray2d farRay = shadowNearFarRay(wall, farShadowDirs.penumbra, FAR);
-  vec2 ix0;
-  vec2 ix1;
-  lineLineIntersection(farRay, normalizeRay(rayFromPoints(v0, wall.top[0].xy)), ix0);
-  lineLineIntersection(farRay, normalizeRay(rayFromPoints(v0, wall.top[1].xy)), ix1);
-  return vec2[3](
-    v0,
-    ix0,
-    ix1
-  );
-}
+  // Tangents0 are the points on either side of the circle that are tangent to wall0.
+  // Tangents1 are the points on either side of the circle that are tangent to wall1.
+  // Need the tangents on the same side of the circle. These are close to each other.
+  float dist00 = distanceSquared(tangents0[0], tangents1[0]);
+  float dist01 = distanceSquared(tangents0[0], tangents1[1]);
+  Ray2d[2] tangentGroupA = Ray2d[2](tangentRays0[0], tangentRays1[0]); // A[0] is wall0, A[1] is wall1.
+  Ray2d[2] tangentGroupB = Ray2d[2](tangentRays0[1], tangentRays1[1]);
+  if ( dist00 > dist01 ) {
+    tangentGroupA[1] = tangentRays1[1];
+    tangentGroupB[1] = tangentRays1[0];
+  }
 
-/**
- * Determine where the umbra 0 vertex is (intersection between umbra for sides).
- * @param {int} idx
- * @param {Wall} wall
- * @param {ShadowDirections2d[2]} sideShadowDirs
- * @returns {vec2}
- */
-vec2 umbraIntersectionPoint(in int idx, in Wall wall, in ShadowDirections2d[2] sideShadowDirs) {
-  // Intersect either light.umbra with light.penumbra or light.umbra[0] with light.umbra[1].
-  // Penumbra go from light side to other wall endpoint; umbra go from light side to same wall endpoint.
-  // If the wall is nearly collinear with the light, the vertex may be not at the wall endpoint.
-  Ray2d rUmbra = Ray2d(wall.top[idx].xy, sideShadowDirs[idx].umbra);
-  Ray2d rOtherPenumbra = Ray2d(wall.top[1 - idx].xy, sideShadowDirs[1 - idx].penumbra);
-  float t;
-  vec2 ix;
-  if ( lineLineIntersection(rUmbra, rOtherPenumbra, t) && t > 0.0 ) ix = projectRay(rUmbra, t);
-  else ix = wall.top[idx].xy; // By definition, light.umbra[idx] and light.penumbra[idx] intersect at wall.top[idx].
-  return ix;
-}
-
-/**
- * Calculate the side triangle.
- * @param {int} idx
- * @param {vec2[3]} penumbraTri
- * @param {Wall} wall
- * @param {ShadowDirections2d[2]} sideShadowDirs
- * @param {ShadowDirections} farShadowDirs
- * @returns {vec2[3]}
- */
-vec2[3] calculateSideTriangle(in int idx, in vec2[3] penumbraTri, in Wall wall, in ShadowDirections2d[2] sideShadowDirs, in ShadowDirections farShadowDirs) {
-  // The side 0 vertex is the point at which either the penumbra[idx] or umbra[idx -1] ray
-  // crosses with the umbra[idx] ray. Typically, the wall.top[idx] endpoint.
-  vec2 v0 = umbraIntersectionPoint(idx, wall, sideShadowDirs);
-
-  // Intersect the umbra ray with the line parallel to the wall at the canvas intersection.
-  Ray2d farRay = shadowNearFarRay(wall, farShadowDirs.penumbra, FAR);
-  vec2 ix;
-  lineLineIntersection(farRay, Ray2d(v0, sideShadowDirs[idx].umbra), ix);
-  return vec2[3](
-    v0,
-    ix,
-    penumbraTri[idx + 1] // The penumbra canvas intersection for endpoint 0 or 1.
+  // Determine which side the tangents are on. Penumbra: cross; umbra: same.
+  // Penumbra and umbra switch when the wall is nearly vertical.
+  // Penumbra form the intersection closest to the light
+  Ray2d[2] penumbra;
+  Ray2d[2] umbra;
+  float minD = max(distanceSquared(wall0, light.center.xy), distanceSquared(wall1, light.center.xy));
+  for ( int i = 0; i < 2; i += 1 ) {
+    for ( int j = 0; j < 2; j += 1 ) {
+      vec2 ix;
+      if ( lineLineIntersection(tangentGroupA[i], tangentGroupB[j], ix) ) {
+        float d = distanceSquared(ix, light.center.xy);
+        if ( d > minD ) continue;
+        minD = d;
+        penumbra[0] = tangentGroupA[i];
+        penumbra[1] = tangentGroupB[j];
+        umbra[0] = tangentGroupA[1 - i];
+        umbra[1] = tangentGroupB[1 - j];
+      }
+    }
+  }
+  Ray2d[2] midpenumbra = Ray2d[2](
+    Ray2d(wall0, normalizedDirection(light.center.xy, wall0)),
+    Ray2d(wall1, normalizedDirection(light.center.xy, wall1)));
+  return ShadowRays2d(
+    umbra,
+    midpenumbra,
+    penumbra
   );
 }
 
@@ -1460,18 +1732,20 @@ void main() {
   Wall wall = calculateWallPositions();
   Light light = calculateLightPositions(wall);
 
+  // Near/far shadows.
+  ShadowDirections nearShadowDirs;
+  bvec2 hasUmbraShadows = bvec2(true, true); // @type bvec2 for FAR, NEAR.
+  bvec2 hasPenumbraShadows = bvec2(true, true);
+  if ( !wallIsFloating() ) {
+    hasUmbraShadows[NEAR] = false;
+    hasPenumbraShadows[NEAR] = false;
+  } else nearShadowDirs = calculateNearShadowDirections(wall, light);
+  ShadowDirections farShadowDirs = calculateFarShadowDirections(wall, light);
+
+
   // Side shadows.
   bvec2 hasSideShadows = bvec2(true, true); // @type bvec2 for endpoint 0, 1.
-  ShadowDirections2d[2] sideShadowDirs = ShadowDirections2d[2](
-    calculateSideShadowDirections(0, wall, light),
-    calculateSideShadowDirections(1, wall, light)
-  );
-
-  // Near/far shadows.
-  bvec2 hasUmbraShadows = bvec2(true, true); // @type bvec2 for FAR, NEAR.
-  ShadowDirections farShadowDirs = calculateFarShadowDirections(wall, light);
-  ShadowDirections nearShadowDirs;
-  if ( hasNearShadows() ) nearShadowDirs = calculateNearShadowDirections(wall, light);
+  ShadowRays2d sideShadowRays = calculateSideShadowRays(wall, light);
 
   ${PENUMBRA_VERTEX_CALCULATIONS}
 }`;
@@ -1491,6 +1765,7 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 uniform sampler2D uTerrainSampler;
 uniform vec3 uLightPosition;
+uniform float uLightSize;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 
 in vec2 vVertexPosition;
@@ -1498,13 +1773,18 @@ in vec2 vTerrainTexCoord;
 in vec3 vPenumbra;
 in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
+in vec3 vNearFarPenumbra0;
+in vec3 vNearFarPenumbra1;
 
-flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
-flat in float fWallRatio;
-flat in vec2 fNearRatios;
-flat in float fFarRatio;
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;
+flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
+flat in vec2 fWallRatios;
+flat in vec2 fFarRatios0;
+flat in vec2 fFarRatios1;
+flat in vec2 fNearRatios0;
+flat in vec2 fNearRatios1;
+flat in vec2 fAmbient;
 
 out vec4 fragColor;
 

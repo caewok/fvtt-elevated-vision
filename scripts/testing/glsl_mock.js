@@ -95,62 +95,8 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
   }
 
   const vectorMixin = function(Base) {
-    return class GLSLVector extends Base {
+    class GLSLVector extends Base {
       static SWIZZLE = SWIZZLE;
-
-      get x() { return this[SWIZZLE.x]; }
-
-      get y() { return this[SWIZZLE.y]; }
-
-      get z() { return this[SWIZZLE.z]; }
-
-      get w() { return this[SWIZZLE.q]; }
-
-      get r() { return this[SWIZZLE.r]; }
-
-      get b() { return this[SWIZZLE.b]; }
-
-      get g() { return this[SWIZZLE.g]; }
-
-      get a() { return this[SWIZZLE.a]; }
-
-      get s() { return this[SWIZZLE.s]; }
-
-      get t() { return this[SWIZZLE.t]; }
-
-      get p() { return this[SWIZZLE.p]; }
-
-      get q() { return this[SWIZZLE.q]; }
-
-      get xy() { return new vec2(this.x, this.y); }
-
-      get xyz() { return new vec3(this.x, this.y, this.z); }
-
-      get zw() { return new vec2(this.z, this.w); }
-
-      set x(value) { this[SWIZZLE.x] = value; }
-
-      set y(value) { this[SWIZZLE.y] = value; }
-
-      set z(value) { this[SWIZZLE.z] = value; }
-
-      set w(value) { this[SWIZZLE.q] = value; }
-
-      set r(value) { this[SWIZZLE.r] = value; }
-
-      set b(value) { this[SWIZZLE.b] = value; }
-
-      set g(value) { this[SWIZZLE.g] = value; }
-
-      set a(value) { this[SWIZZLE.a] = value; }
-
-      set s(value) { this[SWIZZLE.s] = value; }
-
-      set t(value) { this[SWIZZLE.t] = value; }
-
-      set p(value) { this[SWIZZLE.p] = value; }
-
-      set q(value) { this[SWIZZLE.q] = value; }
 
       add(other) {
         const out = new this.constructor();
@@ -201,7 +147,23 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
         const delta = other.subtract(this);
         return delta.dot(delta);
       }
-    };
+
+      clamp(minVal, maxVal) {
+        const out = new this.constructor();
+        for ( let i = 0; i < this.length; i += 1 ) out[i] = Math.min(Math.max(this[i], minVal), maxVal);
+        return out;
+      }
+    }
+
+    // Define getters and setters for each single SWIZZLE property
+//     for (const [key, idx] of Object.entries(SWIZZLE) ) {
+//       Object.defineProperty(GLSLVector.prototype, key, {
+//         get: function() { return this[idx]; },
+//         set: function(value) { this[idx] = value; }
+//       });
+//     }
+
+    return GLSLVector;
   };
 
   class vec2 extends vectorMixin(vec2Base) {}
@@ -209,6 +171,63 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
   class vec3 extends vectorMixin(vec3Base) {}
 
   class vec4 extends vectorMixin(vec4Base) {}
+
+  // Add single swizzles
+  for (const [key, idx] of Object.entries(SWIZZLE) ) {
+    Object.defineProperty(vec4.prototype, key, {
+      get: function() { return this[idx]; },
+      set: function(value) { this[idx] = value; }
+    });
+    if ( idx === 3 ) continue; // Keys: w, a, q
+
+    Object.defineProperty(vec3.prototype, key, {
+      get: function() { return this[idx]; },
+      set: function(value) { this[idx] = value; }
+    });
+    if ( idx === 2 ) continue; // Keys: z, b, p
+
+    // Keys: x,y; r,g; s,t
+    Object.defineProperty(vec2.prototype, key, {
+      get: function() { return this[idx]; },
+      set: function(value) { this[idx] = value; }
+    });
+  }
+
+  // Add combination swizzles
+  for ( const a of Object.keys(SWIZZLE) ) {
+    for ( const b of Object.keys(SWIZZLE) ) {
+      const props = { get: function() { return new vec2(this[a], this[b]); } };
+      if ( a !== b ) props.set = function(value) {
+        this[a] = value[0];
+        this[b] = value[1];
+      };
+      Object.defineProperty(vec2.prototype, `${a}${b}`, props);
+      Object.defineProperty(vec3.prototype, `${a}${b}`, props);
+      Object.defineProperty(vec4.prototype, `${a}${b}`, props);
+
+      for ( const c of Object.keys(SWIZZLE) ) {
+        const props = { get: function() { return new vec3(this[a], this[b], this[c]); } };
+        if ( a !== b && a !== c && b !== c ) props.set = function(value) {
+          this[a] = value[0];
+          this[b] = value[1];
+          this[c] = value[2];
+        };
+        Object.defineProperty(vec3.prototype, `${a}${b}${c}`, props);
+        Object.defineProperty(vec4.prototype, `${a}${b}${c}`, props);
+
+        for ( const d of Object.keys(SWIZZLE) ) {
+          const props = { get: function() { return new vec4(this[a], this[b], this[c], this[d]); } };
+          if ( a !== b && a !== c && a !== d && b !== c && b !== d && c !== d ) props.set = function(value) {
+            this[a] = value[0];
+            this[b] = value[1];
+            this[c] = value[2];
+            this[d] = value[3];
+          };
+          Object.defineProperty(vec4.prototype, `${a}${b}${c}${d}`, props);
+        }
+      }
+    }
+  }
 
   return { vec2, vec3, vec4 };
 }
@@ -431,6 +450,47 @@ export function normalize(v) { return v.normalize(); }
 export function distance(a, b) { return a.distance(b); }
 
 export function distanceSquared(a, b) { return a.distanceSquared(b); }
+
+/**
+ * GLSL clamp function
+ * @param {float|vec} x
+ * @param {float} minVal
+ * @param {float} maxVal
+ * @returns {float|vec}
+ */
+export function clamp(x, minVal, maxVal) {
+  if ( Number.isNumeric(x) ) return Math.min(Math.max(x, minVal), maxVal);
+  return x.clamp(minVal, maxVal);
+}
+
+/**
+ * Closest point to a line.
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} dir
+ * @param {out float} u
+ * @returns {vec2}
+ */
+export function closestPointToLine(c, a, dir, uValue = { u: null }) {
+  const denom = dir.dot(dir);
+  if ( denom === 0.0 ) return a;
+
+  const deltaCA = c.subtract(a);
+  const u = uValue.u = deltaCA.dot(dir) / denom;
+  return a.add(dir.multiplyScalar(u));
+}
+
+/**
+ * Distance to the closest point to a line.
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} dir
+ * @returns {float}
+ */
+export function distanceToLine(c, a, dir) {
+  const ix = closestPointToLine(c, a, dir);
+  return c.distance(ix);
+}
 
 /**
  * Ray defined by a point and a direction from that point.
@@ -701,6 +761,9 @@ export function step(a, x) { return x < a ? 0.0 : 1.0; }
 export function between(a, b, x) {
   return step(a, x) * step(x, b);
 }
+
+/**
+ *
 
 /**
  * Shift the front or back border of the shadow, specified as a ratio between 0 and 1.
