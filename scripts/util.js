@@ -44,9 +44,11 @@ export function groundElevationsAtLocation(waypoint) {
   if ( TM.ACTIVE ) {
     // Locate tiles and regions at this location.
     const targetSq = new PIXI.Rectangle(waypoint.x, waypoint.y, 1, 1);
-    const collisionTest = o => o.t[TM.ID].isElevated;
-    const regions = canvas.regions.quadtree.getObjects(targetSq, { collisionTest });
+    const collisionTest = o => o.t[TM.KEY].isElevated;
     const tiles = canvas.tiles.quadtree.getObjects(targetSq, { collisionTest });
+
+    // No quadtree for regions.
+    const regions = canvas.regions.placeables.filter(r => r[TM.KEY].isElevated && r.testPoint(waypoint))
 
     // All elevated tiles count.
     tiles.forEach(t => elevs.add(t.elevation));
@@ -54,14 +56,14 @@ export function groundElevationsAtLocation(waypoint) {
     // If the region extends through the scene elevation, don't treat scene as floor.
     // For ramps, get elevation at that point.
     regions.forEach(r => {
-      const topE = r[TM.ID].elevationUponEntry(waypoint);
+      const topE = r[TM.KEY].elevationUponEntry(waypoint);
       const bottomE = r.elevation.bottom ?? Number.NEGATIVE_INFINITY;
       if ( useSceneE && sceneE.between(topE, bottomE) ) useSceneE = false;
       elevs.add(topE);
     });
   }
 
-  if ( useSceneE ) elevs.push(sceneE);
+  if ( useSceneE ) elevs.add(sceneE);
   return elevs;
 }
 
