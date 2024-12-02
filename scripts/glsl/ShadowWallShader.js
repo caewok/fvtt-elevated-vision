@@ -637,6 +637,13 @@ if ( nearCollinear ) {
 sideTri0 = makeIsoceles(sideTri0);
 sideTri1 = makeIsoceles(sideTri1);
 
+// Umbra triangle for near-collinear.
+vUmbra = vec3(-1.0);
+if ( nearCollinear ) {
+  vec2[3] umbraTri = makeIsoceles(vec2[3](W1, I, F));
+  vUmbra = baryForPoint(vVertexPosition, umbraTri);
+}
+
 // Location of this vertex.
 vVertexPosition = penumbraTri[vertexNum];
 
@@ -904,14 +911,23 @@ const PENUMBRA_FRAGMENT_CALCULATIONS =
   if ( inSidePenumbra0() ) side0Shadow = vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z);
   if ( inSidePenumbra1() ) side1Shadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
 
+  float percentUmbra = 1.0;
   #ifndef UNSIZED_SOURCE
   if ( fAmbient[0] != 1.0 && fAmbient[1] != 1.0 ) {
     if ( inSidePenumbra0() ) side0Shadow *= fAmbient[0];
-    if ( inSidePenumbra0() ) side1Shadow *= fAmbient[1];
+    if ( inSidePenumbra1() ) side1Shadow *= fAmbient[1];
+
+    // Add in umbra shadow if any.
+    if ( barycentricPointInsideTriangle(vUmbra) ) {
+      float percentL = vUmbra.z / (vUmbra.y + vUmbra.z);
+      percentUmbra = (percentL * (1.0 - percentL)) / 0.25; // 0.5 * 0.5 = 0.25; normalize to 1.0.
+      float ambient = mix(fAmbient[0], fAmbient[1], percentL); // Blend b/c wall no longer fully blocks.
+      percentUmbra *= ambient;
+    }
   }
   #endif
 
-  float shadow = side0Shadow * side1Shadow * far0Shadow * far1Shadow * near0Shadow * near1Shadow;
+  float shadow = side0Shadow * side1Shadow * far0Shadow * far1Shadow * near0Shadow * near1Shadow * percentUmbra;
   float totalLight = clamp(0.0, 1.0, 1.0 - shadow);
   fragColor = lightEncoding(totalLight);
 `;
@@ -1009,6 +1025,7 @@ out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
 out vec3 vNearFarPenumbra0;
 out vec3 vNearFarPenumbra1;
+out vec3 vUmbra;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
@@ -1126,6 +1143,7 @@ in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
 in vec3 vNearFarPenumbra0;
 in vec3 vNearFarPenumbra1;
+in vec3 vUmbra;
 
 flat in float fThresholdRadius2;
 flat in float fWallSenseType;
@@ -1242,6 +1260,7 @@ out vec2 vTerrainTexCoord;
 out vec3 vPenumbra;
 out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
+out vec3 vUmbra;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
@@ -1457,6 +1476,7 @@ in vec2 vTerrainTexCoord;
 in vec3 vPenumbra;
 in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
+in vec3 vUmbra;
 
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in float fWallRatio;
@@ -1573,6 +1593,7 @@ out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
 out vec3 vNearFarPenumbra0;
 out vec3 vNearFarPenumbra1;
+out vec3 vUmbra;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
@@ -1775,6 +1796,7 @@ in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
 in vec3 vNearFarPenumbra0;
 in vec3 vNearFarPenumbra1;
+in vec3 vUmbra;
 
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;

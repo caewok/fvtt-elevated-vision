@@ -464,6 +464,19 @@ export function clamp(x, minVal, maxVal) {
 }
 
 /**
+ * GLSL mix function
+ * @param {float|vec} x   Start of the range in which to interpolate
+ * @param {float|vec} y   End of the range in which to interpolate
+ * @param {float|vec} a   Value to use to interpolate between x and y
+ * @returns {float}
+ */
+export function mix(x, y, a) {
+  if ( Number.isNumeric(x) ) return (x * (1 - a)) + (y * a);
+  if ( Number.isNumeric(a) ) return x.multiplyScalar(1 - a).add(y.multiplyScalar(a));
+  return x.multiply((new a.constructor(1.0)).subtract(a)).add(y.multiply(a));
+}
+
+/**
  * Closest point to a line.
  * @param {vec2} c
  * @param {vec2} a

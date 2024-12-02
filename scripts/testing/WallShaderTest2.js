@@ -47,7 +47,8 @@ import {
   normalizedRayFromPoints,
   closestPointToLine,
   distanceToLine,
-  clamp
+  clamp,
+  mix
 } from "./glsl_mock.js";
 
 const UMBRA = 0;
@@ -254,6 +255,7 @@ class ShadowWallVertexShaderTest2 {
       vSidePenumbra1,
       vNearFarPenumbra0,
       vNearFarPenumbra1,
+      vUmbra,
       vDistance,
       vDistance2 } = this;
     return {
@@ -264,6 +266,7 @@ class ShadowWallVertexShaderTest2 {
       vSidePenumbra1,
       vNearFarPenumbra0,
       vNearFarPenumbra1,
+      vUmbra,
       vDistance,
       vDistance2
     };
@@ -524,26 +527,12 @@ class ShadowWallVertexShaderTest2 {
    * @returns {object}
    */
   shadowTriangles(sideShadowRays, wall, canvasRay, A, B, C, D, E, F, G, H, I, W0, W1) {
-//     sideShadowRays ??= this.sideShadowRays;
-//     wall ??= this.wall;
-//     canvasRay ??= this.infiniteShadowCanvasRay(sideShadowRays.penumbra);
-//     A ??= vec2();
-//     B ??= vec2();
-//     C ??= vec2();
-//     D ??= vec2();
-//     E ??= vec2();
-//     F ??= vec2();
-//     G ??= vec2();
-//     H ??= vec2();
-//     I ??= vec2();
-//     W0 ??= vec2();
-//     W1 ??= vec2();
-
     // Penumbra triangle: ∆ABC
     // Near/far triangle 0: ∆DEF
     // Near/far triangle 1: ∆GHI
     // Side triangle 0: ∆W0CI or ∆W0W1B (near-collinear)
     // Side triangle 1: ∆W1BF or ∆W0W1C (near-collinear)
+    // Umbra triangle: ∆W1FI (near-collinear)
 
     // A found by intersecting the two side penumbra lines.
     lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.penumbra[1], A);
@@ -842,6 +831,13 @@ class ShadowWallVertexShaderTest2 {
     sideTri0 = this.makeIsoceles(sideTri0);
     sideTri1 = this.makeIsoceles(sideTri1);
 
+    // Umbra triangle for near-collinear.
+    this.vUmbra = vec3(-1.0);
+    if ( nearCollinear ) {
+      const umbraTri = this.makeIsoceles([W1, I, F]);
+      this.vUmbra = baryForPoint(vVertexPosition, ...umbraTri);
+    }
+
     // Location of this vertex.
     // @type {vec2} vVertexPosition
     const vVertexPosition = this.vVertexPosition = penumbraTri[vertexNum];
@@ -879,15 +875,8 @@ class ShadowWallVertexShaderTest2 {
     // Finally, set the flat variables when we hit the last vertex for this triangle.
     if ( vertexNum === 2 ) {
       // @type {vec2} fAmbient
-      const ambient = this.ambientLight(W0, W1);
-      ambient[0] = 1.0 - ambient[0];
-      ambient[1] = 1.0 - ambient[1];
-      this.fAmbient = vec2(ambient);
-      if ( orient(W0, W1, sideTri0[1]) < 0.0 ) { // CW
-        this.fAmbient[0] = ambient[1];
-        this.fAmbient[1] = ambient[0];
-      }
-
+      this.fAmbient = vec2(1.0).subtract(this.ambientLight(W0, W1));
+      if ( orient(W0, W1, sideTri0[1]) < 0.0 ) this.fAmbient = this.fAmbient.yx; // CW
       if ( hasUmbraShadows[FAR] ) hasUmbraShadows[FAR] = farShadowDirs.umbra.z < 0.0;
       if ( this.wallIsFloating && hasUmbraShadows[NEAR] ) hasUmbraShadows[NEAR] = nearShadowDirs.umbra.z < 0.0;
       this.calculateFlatVariables(nearFarTri0, nearFarTri1, wall,
@@ -1077,11 +1066,12 @@ class ShadowWallVertexShaderTest2 {
     const { side0Shadow, side1Shadow,
       far0Shadow, far1Shadow,
       near0Shadow, near1Shadow,
+      percentUmbra,
       hasShadow } = this.shadowComponents(pt, elevation);
 
     let fragColor = this.noShadow();
     if ( !hasShadow ) return fragColor;
-    const shadow = side0Shadow * side1Shadow * far0Shadow * far1Shadow * near0Shadow * near1Shadow;
+    const shadow = side0Shadow * side1Shadow * far0Shadow * far1Shadow * near0Shadow * near1Shadow * percentUmbra;
     const totalLight = Math.clamp(0.0, 1.0, 1.0 - shadow);
 
     fragColor = this.lightEncoding(totalLight);
@@ -1105,7 +1095,7 @@ class ShadowWallVertexShaderTest2 {
 
     // Retrieve the flat and varying variables.
     let { fWallHeights, fWallRatios, fFarRatios0, fFarRatios1, fNearRatios0, fNearRatios1, fAmbient } = this.flats;
-    const { vPenumbra, vSidePenumbra0, vSidePenumbra1, vNearFarPenumbra0, vNearFarPenumbra1 } = this.varyings;
+    const { vPenumbra, vSidePenumbra0, vSidePenumbra1, vNearFarPenumbra0, vNearFarPenumbra1, vUmbra } = this.varyings;
 
     // GLSL only: let fragColor = this.noShadow();
     if ( this.thresholdApplies() ) return { hasShadow: false }; // GLSL only: return;
@@ -1174,16 +1164,27 @@ class ShadowWallVertexShaderTest2 {
 
     const side0ShadowOrig = side0Shadow; // Debugging.
     const side1ShadowOrig = side1Shadow; // Debugging.
+    let percentUmbra = 1.0;
     if ( fAmbient[0] !== 1.0 && fAmbient[1] !== 1.0 ) {
       if ( this.inSidePenumbra0() ) side0Shadow *= fAmbient[0];
       if ( this.inSidePenumbra1() ) side1Shadow *= fAmbient[1];
+
+      // Add in umbra shadow if any.
+      if ( barycentricPointInsideTriangle(vUmbra) ) {
+        const percentL = vUmbra.z / (vUmbra.y + vUmbra.z);
+        percentUmbra = (percentL * (1.0 - percentL)) / 0.25; // 0.5 * 0.5 = 0.25; normalize to 1.0.
+        const ambient = mix(fAmbient[0], fAmbient[1], percentL); // Blend b/c wall no longer fully blocks.
+        percentUmbra *= ambient;
+      }
     }
 
-    // shadows = shader0.shadowComponents(pt, 0)
-    // shadows.side0Shadow / shader0.fAmbient[0]
-    // shadows.side1Shadow / shader0.fAmbient[1]
-
-    return { side0Shadow, side1Shadow, far0Shadow, far1Shadow, near0Shadow, near1Shadow, side0ShadowOrig, side1ShadowOrig, hasShadow: true };
+    // Debugging.
+    return {
+      side0Shadow, side1Shadow,
+      far0Shadow, far1Shadow,
+      near0Shadow, near1Shadow,
+      side0ShadowOrig, side1ShadowOrig,
+      percentUmbra, hasShadow: true };
   }
 
   // ----- NOTE: Drawing ----- //
@@ -1764,8 +1765,6 @@ Draw.shape(new PIXI.Polygon(...shader0.nearFarTri0), { color: Draw.COLORS.orange
 Draw.shape(new PIXI.Polygon(...shader0.nearFarTri1), { color: Draw.COLORS.red })
 Draw.shape(new PIXI.Polygon(...shader0.sideTri0), { color: Draw.COLORS.lightorange, width: 2 })
 Draw.shape(new PIXI.Polygon(...shader0.sideTri1), { color: Draw.COLORS.lightred, width: 2 })
-
-
 
 function distanceToWall(wall, pt) {
   const distanceToLine = api.testing.glsl_mock.distanceToLine;
