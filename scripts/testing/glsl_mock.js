@@ -98,35 +98,21 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
     class GLSLVector extends Base {
       static SWIZZLE = SWIZZLE;
 
-      add(other) {
+      _componentWise(fn) {
         const out = new this.constructor();
-        for ( let i = 0; i < this.length; i += 1 ) out[i] = this[i] + other[i];
+        for ( let i = 0; i < this.length; i += 1 ) out[i] = fn(this[i], i);
         return out;
       }
 
-      subtract(other) {
-        const out = new this.constructor();
-        for ( let i = 0; i < this.length; i += 1 ) out[i] = this[i] - other[i];
-        return out;
-      }
+      add(other) { return this._componentWise((a, i) => a + other[i]); }
 
-      multiply(other) {
-        const out = new this.constructor();
-        for ( let i = 0; i < this.length; i += 1 ) out[i] = this[i] * other[i];
-        return out;
-      }
+      subtract(other) { return this._componentWise((a, i) => a - other[i]); }
 
-      multiplyScalar(scalar) {
-        const out = new this.constructor();
-        for ( let i = 0; i < this.length; i += 1 ) out[i] = this[i] * scalar;
-        return out;
-      }
+      multiply(other) { return this._componentWise((a, i) => a * other[i]); }
 
-      divide(other) {
-        const out = new this.constructor();
-        for ( let i = 0; i < this.length; i += 1 ) out[i] = this[i] / other[i];
-        return out;
-      }
+      multiplyScalar(scalar) { return this._componentWise(a => a * scalar); }
+
+      divide(other) { return this._componentWise((a, i) => a / other[i]); }
 
       magnitude() { return Math.hypot(...this); }
 
@@ -156,12 +142,12 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
     }
 
     // Define getters and setters for each single SWIZZLE property
-//     for (const [key, idx] of Object.entries(SWIZZLE) ) {
-//       Object.defineProperty(GLSLVector.prototype, key, {
-//         get: function() { return this[idx]; },
-//         set: function(value) { this[idx] = value; }
-//       });
-//     }
+    //     for (const [key, idx] of Object.entries(SWIZZLE) ) {
+    //       Object.defineProperty(GLSLVector.prototype, key, {
+    //         get: function() { return this[idx]; },
+    //         set: function(value) { this[idx] = value; }
+    //       });
+    //     }
 
     return GLSLVector;
   };
@@ -419,7 +405,10 @@ export function convertBarycentericAreaSimilarTriangle(baryArea, ratio) {
  * @returns {float}
  */
 export function linearConversion(x, oldMin, oldMax, newMin, newMax) {
-  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+  // (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin
+  const denomInv = 1.0 / (oldMax - oldMin);
+  if ( Number.isNumeric(x) ) return ((x - oldMin) * (newMax - newMin) * denomInv) + newMin ;
+  return x.subtract(new x.constructor(oldMin)).multiplyScalar((newMax - newMin) * denomInv).add(new x.constructor(newMin));
 }
 
 /**
@@ -474,6 +463,77 @@ export function mix(x, y, a) {
   if ( Number.isNumeric(x) ) return (x * (1 - a)) + (y * a);
   if ( Number.isNumeric(a) ) return x.multiplyScalar(1 - a).add(y.multiplyScalar(a));
   return x.multiply((new a.constructor(1.0)).subtract(a)).add(y.multiply(a));
+}
+
+/**
+ * GLSL fract function. Fractional portion of x.
+ * @param {float|vec} x
+ * @returns {float|vec}
+ */
+export function fract(x) {
+  if ( Number.isNumeric(x) ) return x - Math.floor(x);
+  return x._componentWise(a => a - Math.floor(a));
+}
+
+/**
+ * GLSL dot function.
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {float}
+ */
+export function dot(a, b) { return a.dot(b); }
+
+/**
+ * Hash function used to construct pseudo-random numbers.
+ * See https://www.shadertoy.com/view/4djSRW
+ * @param {float|vec} p
+ * @returns {float|vec} Number between 0 and 1
+ */
+export function hash(p) {
+  if ( Number.isNumeric(p) ) {
+    p = fract(p * 0.1031);
+    p *= p + 33.33;
+    p *= p + p;
+    return fract(p);
+  }
+
+  // 2 --> 2
+  if ( p.length === 2 ) {
+    /* GLSL
+    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx+33.33);
+    return fract((p3.xx+p3.yz)*p3.zy);
+    */
+    p = fract(vec3(p.xy, p.x).multiply(vec3(0.1031, 0.1030, 0.0973)));
+    const dp = dot(p, p.yzx.add(vec3(33.33)));
+    return fract(p.xx.add(p.yz).multiply(p.zy));
+  }
+
+  // 3 --> 3
+  if ( p.length === 3 ) {
+    /* GLSL
+    p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+    p += dot(p, p.yxz+33.33);
+    return fract((p.xxy + p.yxx)*p.zyx);
+    */
+    p = fract(p.multiply(vec3(0.1031, 0.1030, 0.0973)));
+    const dp = dot(p, p.yxz.add(vec3(33.33)));
+    p = p.add(vec3(dp));
+    return fract(p.xxy.add(p.yxx).multiply(p.zyx));
+  }
+
+  // 4 --> 4
+  if ( p.length === 4 ) {
+    /* GLSL
+    p = fract(p  * vec4(0.1031, 0.1030, 0.0973, 0.1099));
+    p += dot(p, p.wzxy+33.33);
+    return fract((p.xxyz+p.yzzw)*p.zywx);
+    */
+    p = fract(p.multiply(vec4(0.1031, 0.1030, 0.0973, 0.1099)));
+    const dp = dot(p, p.wzxy.add(vec3(33.33)));
+    p = p.add(vec3(dp));
+    return fract(p.xxyz.add(p.yzzw).multiply(p.zywx));
+  }
 }
 
 /**
@@ -774,9 +834,6 @@ export function step(a, x) { return x < a ? 0.0 : 1.0; }
 export function between(a, b, x) {
   return step(a, x) * step(x, b);
 }
-
-/**
- *
 
 /**
  * Shift the front or back border of the shadow, specified as a ratio between 0 and 1.

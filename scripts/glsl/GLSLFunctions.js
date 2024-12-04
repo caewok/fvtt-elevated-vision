@@ -65,7 +65,20 @@ GLSLFunctions.linearConversion =
  */
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
   return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
-}`;
+}
+
+vec2 linearConversion(in vec2 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
+  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+}
+
+vec3 linearConversion(in vec3 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
+  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+}
+
+vec4 linearConversion(in vec4 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
+  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+}
+`;
 
 // Name of a built-in function cannot be redeclared as function, so call it cross2d
 GLSLFunctions.cross2d =

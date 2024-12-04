@@ -1829,7 +1829,8 @@ void main() {
     uElevationRes: [0, 1, 256 * 256, 1],
     uTerrainSampler: 0,
     uLightPosition: [0, 0, 0],
-    uLightSize: 1
+    uLightSize: 1,
+    uTime: Date.now()
   };
 
   /**
@@ -1860,6 +1861,8 @@ void main() {
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
     defaultUniforms.uLightSize = source.data.lightSize;
 
+    defaultUniforms.uTime = Date.now();
+
     return super.create(defaultUniforms);
   }
 
@@ -1881,9 +1884,13 @@ void main() {
     const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
     if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     this.uniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
+    this.uniforms.uTime = Date.now();
   }
 
-  updateLightSize(source) { this.uniforms.uLightSize = source.data.lightSize; }
+  updateLightSize(source) {
+    this.uniforms.uLightSize = source.data.lightSize;
+    this.uniforms.uTime = Date.now();
+  }
 }
 
 export class ShadowMesh extends PIXI.Mesh {
