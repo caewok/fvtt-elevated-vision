@@ -60,12 +60,8 @@ import {
 import {
   UnsizedPointSourceShadowWallVertexShaderTest2,
   SizedPointSourceShadowWallVertexShaderTest2,
-  DirectionalSourceShadowWallVertexShaderTest2 } from "./testing/WallShaderTest2.js";
-
-import {
-  UnsizedPointSourceShadowWallVertexShaderTest3,
-  SizedPointSourceShadowWallVertexShaderTest3,
-  DirectionalSourceShadowWallVertexShaderTest3 } from "./testing/WallShaderTest3.js";
+  DirectionalSourceShadowWallVertexShaderTest2,
+  SizedPointSourceShadowWallVertexShaderTest3 } from "./testing/WallShaderTest2.js";
 
 
 // Imported elsewhere: import "./scenes.js";
@@ -157,9 +153,7 @@ Hooks.once("init", function() {
       UnsizedPointSourceShadowWallVertexShaderTest2,
       SizedPointSourceShadowWallVertexShaderTest2,
       DirectionalSourceShadowWallVertexShaderTest2,
-      UnsizedPointSourceShadowWallVertexShaderTest3,
       SizedPointSourceShadowWallVertexShaderTest3,
-      DirectionalSourceShadowWallVertexShaderTest3
     }
   };
 

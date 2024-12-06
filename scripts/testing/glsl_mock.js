@@ -139,6 +139,24 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
         for ( let i = 0; i < this.length; i += 1 ) out[i] = Math.min(Math.max(this[i], minVal), maxVal);
         return out;
       }
+
+      equal(other) { return this._componentWise((a, i) => a[i] === other[i]); }
+
+      lessThan(other) { return this._componentWise((a, i) => a[i] < other[i]); }
+
+      greaterThan(other) { return this._componentWise((a, i) => a[i] > other[i]); }
+
+      lessThanEqual(other) { return this._componentWise((a, i) => a[i] <= other[i]); }
+
+      greaterThanEqual(other) { return this._componentWise((a, i) => a[i] >= other[i]); }
+
+      notEqual(other) { return this._componentWise((a, i) => a[i] !== other[i]); }
+
+      not(other) { return this._componentWise(a => !a); }
+
+      any() { return this.some(a => a); }
+
+      all() { return this.every(a => a); }
     }
 
     // Define getters and setters for each single SWIZZLE property
@@ -564,6 +582,75 @@ export function distanceToLine(c, a, dir) {
   const ix = closestPointToLine(c, a, dir);
   return c.distance(ix);
 }
+
+/**
+ * GLSL any
+ * @param {vec}
+ * @returns {bvec}
+ */
+export function any(v) { return v.any(); }
+
+/**
+ * GLSL all
+ * @param {vec}
+ * @returns {bvec}
+ */
+export function all(v) { return v.all(); }
+
+/**
+ * GLSL not
+ * @param {vec}
+ * @returns {bvec}
+ */
+export function not(v) { return v.not(); }
+
+/**
+ * GLSL equal
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function equal(a, b) { return a.equal(b); }
+
+/**
+ * GLSL lessThan
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function lessThan(a, b) { return a.lessThan(b); }
+
+/**
+ * GLSL greaterThan
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function greaterThan(a, b) { return a.greaterThan(b); }
+
+/**
+ * GLSL lessThanEqual
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function lessThanEqual(a, b) { return a.lessThanEqual(b); }
+
+/**
+ * GLSL greaterThanEqual
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function greaterThanEqual(a, b) { return a.greaterThanEqual(b); }
+
+/**
+ * GLSL notEqual
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function notEqual(a, b) { return a.notEqual(b); }
 
 /**
  * Ray defined by a point and a direction from that point.
