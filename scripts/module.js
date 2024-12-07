@@ -8,6 +8,7 @@ loadTemplates
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+
 import { MODULE_ID, FLAGS, TEMPLATES } from "./const.js";
 import { log } from "./util.js";
 
@@ -52,6 +53,7 @@ import { ElevationTextureHandler } from "./ElevationTextureHandler.js";
 import "./changelog.js";
 
 // Testing shaders
+import { defineFunction, defineStruct } from "./glsl/GLSLFunctions.js";
 import * as glsl_mock from "./testing/glsl_mock.js";
 import {
   SizedPointSourceShadowWallVertexShaderTest,
@@ -62,7 +64,6 @@ import {
   SizedPointSourceShadowWallVertexShaderTest2,
   DirectionalSourceShadowWallVertexShaderTest2,
   SizedPointSourceShadowWallVertexShaderTest3 } from "./testing/WallShaderTest2.js";
-
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -147,6 +148,7 @@ Hooks.once("init", function() {
     },
 
     testing: {
+      defineFunction, defineStruct,
       glsl_mock,
       SizedPointSourceShadowWallVertexShaderTest,
       DirectionalSourceShadowWallVertexShaderTest,

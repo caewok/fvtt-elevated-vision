@@ -659,8 +659,13 @@ class ShadowWallVertexShaderTest2 {
    * @param {vec2[3]} penumbraTri
    * @param {Wall} wall
    */
-  defineBasicVaryings(vVertexPosition) {
+  defineBasicVaryings(wall) {
     const { uSceneDims } = this;
+
+    // Used to determine in front of or behind wall.
+    this.vEdgeDist = distanceToLine(this.vVertexPosition, wall.top[0].xy,
+      normalizedDirection(wall.top[0].xy, wall.top[1].xy));
+    if ( vertexNum === 0 ) this.vEdgeDist *= -1.0;
 
     // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
     // (vVertexPosition - uSceneDims.xy) / uSceneDims.zw
@@ -795,18 +800,7 @@ class ShadowWallVertexShaderTest2 {
    * Is the fragment location in front of the wall?
    * @returns {bool}
    */
-  inFrontOfWall() {
-    const { vNearFarPenumbra0, vNearFarPenumbra1, fWallRatios } = this;
-
-    // If in both triangles, must be in front of wall for both.
-    // If in one triangle, test only one.
-    const in0 = barycentricPointInsideTriangle(vNearFarPenumbra0);
-    const in1 = barycentricPointInsideTriangle(vNearFarPenumbra1);
-    const front0 = vNearFarPenumbra0.x > fWallRatios[0];
-    const front1 = vNearFarPenumbra1.x > fWallRatios[1];
-    if ( in0 && in1 ) return front0 && front1;
-    return (in0 && front0) || (in1 && front1) || false;
-  }
+  inFrontOfWall() { return vEdgeDist < 0.0; }
 
   /**
    * Is the fragment location outside of a defined shadow?
@@ -908,6 +902,7 @@ class ShadowWallVertexShaderTest2 {
 
   /**
    * Determine the shadow percentage.
+   * @returns {float}
    */
   shadowPercentage(pt, elevation = this.canvasElevation) {
     elevation = CONFIG.GeometryLib.utils.gridUnitsToPixels(elevation);
@@ -992,13 +987,17 @@ export class UnsizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVer
 
   static VARYINGS = [
     "vVertexPosition",
-    "vTerrainTexCoord"
+    "vTerrainTexCoord",
+    "vPenumbra"
   ];
 
   static FLATS = [
     "fThresholdRadius2",
     "fWallSenseType",
-    "fWallRatio"
+    "fWallHeights",
+    "fWallRatio",
+    "fFarRatio",
+    "fNearRatio"
   ];
 
   /* ----- NOTE: Uniforms ----- */
@@ -1023,8 +1022,8 @@ export class UnsizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVer
     const B = vec2();
     const C = vec2();
     const lightRays = [
-      Ray(uLightPosition, normalizedDirection(uLightPosition, wall.top[0])),
-      Ray(uLightPosition, normalizedDirection(uLightPosition, wall.top[1]))
+      Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[0].xy)),
+      Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[1].xy))
     ];
     const wallDir2d = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
 
@@ -1037,10 +1036,9 @@ export class UnsizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVer
       // Go from closest endpoint to further endpoint.
       closerIdx = distanceSquared(wall.top[0].xy, uLightPosition.xy) < distanceSquared(wall.top[1].xy, uLightPosition.xy)
         ? 0 : 1;
-      const ixCloser = vec2();
       lineLineIntersection(
         canvasRay,
-        Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[ixCloser].xy)),
+        Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[closerIdx].xy)),
         B);
 
     } else {
@@ -1107,12 +1105,8 @@ export class UnsizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVer
     const vertexNum = gl_VertexID % 3;
 
     const wall = this.wall = this.calculateWallPositions();
-    this.vVertexPosition = uLightPosition;
-    if ( vertexNum === 0 ) return;
-
     this.penumbraTri = this.definePenumbraTriangle(wall);
     this.vVertexPosition = this.penumbraTri[vertexNum];
-
     this.defineBasicVaryings(this.vVertexPosition);
 
     if ( vertexNum === 2) {
@@ -1139,7 +1133,6 @@ export class SizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVerte
     "vSidePenumbra1",
     "vNearFarPenumbra0",
     "vNearFarPenumbra1"
-
   ];
 
   static FLATS = [
@@ -1299,12 +1292,13 @@ export class SizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVerte
    * Calculate the flat variables, including near/far ratios.
    * @param {Light} light
    * @param {Wall} wall
-   * @param {vec2} W0
-   * @param {vec2} W1
    * @param {vec2[3]} sideTri0
    * @param {vec2[3]} nearFarTri0
    * @param {vec2[3]} nearFarTri1
-   * @param {ShadowRays[2]} sideShadowRays
+   * @param {ShadowRays2d} sideShadowRays
+   * @param {ShadowDirections} farShadowDirs
+   * @param {ShadowDirections} nearShadowDirs
+   * @param {bool} hasFarPenumbra
    */
   defineFlats(wall, sideTri0, nearFarTri0, nearFarTri1, sideShadowRays, farShadowDirs, nearShadowDirs, hasFarPenumbra) {
     const baryForPoint = barycentric;

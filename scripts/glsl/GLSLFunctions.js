@@ -605,6 +605,22 @@ vec2 closest2dPointToSegment(in vec2 c, in vec2 a, in vec2 b) {
   return out;
 }`;
 
+GLSLFunctions.distanceToLine(c, a, dir) =
+`
+/**
+ * Distance to the closest point to a line.
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} dir
+ * @returns {float}
+ */
+float distanceToLine(c, a, dir) {
+  vec2 ix = closest2dPointToLine(c, a, dir);
+  return distance(c, ix);
+}
+
+`;
+
 GLSLFunctions.lineLineIntersection =
 `
 ${defineFunction("rayFromPoints")}
