@@ -11,6 +11,8 @@
 #define PENUMBRA                          1
 #define TOP                               0
 #define BOTTOM                            1
+#define FAR                               0
+#define NEAR                              1
 
 ${defineFunction("terrainElevation")}
 ${defineFunction("between")}

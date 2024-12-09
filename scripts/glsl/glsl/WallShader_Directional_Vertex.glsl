@@ -14,6 +14,7 @@ out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
 out vec3 vUmbra;
 out float vEdgeDist;
+out float vWallRatio;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
@@ -22,6 +23,8 @@ flat out float fWallRatio;
 flat out vec2 fNearRatios;
 flat out float fFarRatio;
 flat out vec2 fAmbient;
+flat out vec2 fNearRatios;
+flat out vec2 fFarRatios;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;

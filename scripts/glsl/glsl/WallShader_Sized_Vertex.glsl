@@ -16,6 +16,7 @@ out vec3 vNearFarPenumbra0;
 out vec3 vNearFarPenumbra1;
 out vec3 vUmbra;
 out float vEdgeDist;
+out float vWallRatio;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
@@ -26,6 +27,9 @@ flat out vec2 fFarRatios1;
 flat out vec2 fNearRatios0;
 flat out vec2 fNearRatios1;
 flat out vec2 fAmbient;
+flat out float fWallRatio;
+flat out vec2 fNearRatios;
+flat out vec2 fFarRatios;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -357,7 +361,7 @@ void main() {
   vec2[3] sideTri1; // Gradient shading.
 
   // Varyings
-  defineBasicVaryings();
+  defineBasicVaryings(wall);
   defineVaryings(wall, sideShadowRays, farPenumbraCanvasRay,
     penumbraTri, umbraTri, nearFarTri0, nearFarTri1, sideTri0, sideTri1);
 

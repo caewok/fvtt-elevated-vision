@@ -34,6 +34,19 @@ out vec4 fragColor;
 ${PENUMBRA_FRAGMENT_FUNCTIONS}
 
 /**
+ * Is fragment inside the side penumbra, without regard to near/far limits.
+ * @returns {bool}
+ */
+bool inSidePenumbra0() { return barycentricPointInsideTriangle(vSidePenumbra0); }
+
+/**
+ * Is fragment inside the side penumbra, without regard to near/far limits.
+ * @returns {bool}
+ */
+bool inSidePenumbra1() { return barycentricPointInsideTriangle(vSidePenumbra1); }
+
+
+/**
  * Determine the shadow percentage.
  */
 float shadowPercentage() {

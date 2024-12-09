@@ -582,13 +582,12 @@ float distanceSquared(in vec3 a, in vec3 b) {
 // Note: will fail if passed a 0-length ab segment.
 GLSLFunctions.closest2dPointToLine =
 `
-vec2 closest2dPointToLine(in vec2 c, in vec2 a, in vec2 dir, out float u) {
+float closest2dPointToLine(in vec2 c, in vec2 a, in vec2 dir) {
   float denom = dot(dir, dir);
-  if ( denom == 0.0 ) return a;
+  if ( denom == 0.0 ) return 0.0;
 
   vec2 deltaCA = c - a;
-  u = dot(deltaCA, dir) / denom;
-  return a + (u * dir);
+  return dot(deltaCA, dir) / denom; // Proportion along a --> dir.
 }
 `;
 
@@ -597,16 +596,16 @@ GLSLFunctions.closest2dPointToSegment =
 ${defineFunction("closest2dPointToLine")}
 
 vec2 closest2dPointToSegment(in vec2 c, in vec2 a, in vec2 b) {
-  float u;
-  vec2 out = closest2dPointToLine(c, a, b - a, u);
-
-  if ( u < 0.0 ) return a;
-  if ( u > 1.0 ) return b;
-  return out;
+  float u = closest2dPointToLine(c, a, b - a);
+  if ( u <= 0.0 ) return a;
+  if ( u >= 1.0 ) return b;
+  return a + (u * dir);
 }`;
 
-GLSLFunctions.distanceToLine(c, a, dir) =
+GLSLFunctions.distanceToLine =
 `
+${defineFunction("closest2dPointToLine")}
+
 /**
  * Distance to the closest point to a line.
  * @param {vec2} c
@@ -614,11 +613,11 @@ GLSLFunctions.distanceToLine(c, a, dir) =
  * @param {vec2} dir
  * @returns {float}
  */
-float distanceToLine(c, a, dir) {
-  vec2 ix = closest2dPointToLine(c, a, dir);
+float distanceToLine(in vec2 c, in vec2 a, in vec2 dir) {
+  float u = closest2dPointToLine(c, a, dir);
+  vec2 ix = a + (u * dir);
   return distance(c, ix);
 }
-
 `;
 
 GLSLFunctions.lineLineIntersection =

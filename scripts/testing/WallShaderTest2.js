@@ -661,9 +661,10 @@ class ShadowWallVertexShaderTest2 {
    */
   defineBasicVaryings(wall) {
     const { uSceneDims } = this;
+    const { vVertexPosition } = this;
 
     // Used to determine in front of or behind wall.
-    this.vEdgeDist = distanceToLine(this.vVertexPosition, wall.top[0].xy,
+    this.vEdgeDist = distanceToLine(vVertexPosition, wall.top[0].xy,
       normalizedDirection(wall.top[0].xy, wall.top[1].xy));
     if ( vertexNum === 0 ) this.vEdgeDist *= -1.0;
 
@@ -801,38 +802,6 @@ class ShadowWallVertexShaderTest2 {
    * @returns {bool}
    */
   inFrontOfWall() { return vEdgeDist < 0.0; }
-
-  /**
-   * Is the fragment location outside of a defined shadow?
-   * Does not test for in front of wall.
-   * @returns {bool}
-   */
-  outsideOfShadow() {
-    const { vNearFarPenumbra0, vNearFarPenumbra1 } = this.varyings;
-    if ( barycentricPointInsideTriangle(vNearFarPenumbra0)
-      || barycentricPointInsideTriangle(vNearFarPenumbra1) ) return false;
-
-    // If in-between the two near/far triangles, that also counts (umbra).
-    // I.e., y is negative but others are positive.
-    if ( vNearFarPenumbra0.y < 0.0 && vNearFarPenumbra1.y < 0.0
-      && vNearFarPenumbra0.z > 0.0 && vNearFarPenumbra1.z > 0.0
-      && vNearFarPenumbra0.x > 0.0 && vNearFarPenumbra1.x > 0.0 ) return false;
-
-    // Must be outside the penumbras or umbra.
-    return true;
-  }
-
-  /**
-   * Is fragment inside the side penumbra, without regard to near/far limits.
-   * @returns {bool}
-   */
-  inSidePenumbra0() { return barycentricPointInsideTriangle(this.vSidePenumbra0); }
-
-  /**
-   * Is fragment inside the side penumbra, without regard to near/far limits.
-   * @returns {bool}
-   */
-  inSidePenumbra1() { return barycentricPointInsideTriangle(this.vSidePenumbra1); }
 
   /**
    * Calculate the varying variables based on a vVertexPosition value.
@@ -1021,17 +990,18 @@ export class UnsizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVer
     const A = uLightPosition.xy;
     const B = vec2();
     const C = vec2();
-    const lightRays = [
-      Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[0].xy)),
-      Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[1].xy))
-    ];
+    const lightRay = Ray(uLightPosition, normalizedDirection(uLightPosition, wall.top[0]));
     const wallDir2d = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
 
     // TODO: If ramp, could be infinite only from one endpoint.
     let closerIdx = 0;
     let r1 = Ray2d(vec2(), vec2());
-    if ( this.isInfiniteShadow(lightRays[0].direction) ) {
-      const canvasRay = this.infiniteShadowCanvasRay(lightRays); // @type Ray2d.
+    if ( this.isInfiniteShadow(lightRay.direction) ) {
+      const lightRays2d = [
+        Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[0].xy)),
+        Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[1].xy))
+      ];
+      const canvasRay = this.infiniteShadowCanvasRay(lightRays2d); // @type Ray2d.
 
       // Go from closest endpoint to further endpoint.
       closerIdx = distanceSquared(wall.top[0].xy, uLightPosition.xy) < distanceSquared(wall.top[1].xy, uLightPosition.xy)
@@ -1044,7 +1014,7 @@ export class UnsizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVer
     } else {
       // Use the canvas intersection.
       const canvasIx = vec3();
-      intersectRayPlane(lightRays[0], this.canvasPlane, canvasIx);
+      intersectRayPlane(lightRay, this.canvasPlane, canvasIx);
       // Could do r1 = lightRays[1].to2d() which would do Ray2d(r1.origin, r1.direction.xy.normalize());
       // or could retrieve closest endpoint every time. Maybe even when defining the wall.
 
@@ -1107,11 +1077,11 @@ export class UnsizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVer
     const wall = this.wall = this.calculateWallPositions();
     this.penumbraTri = this.definePenumbraTriangle(wall);
     this.vVertexPosition = this.penumbraTri[vertexNum];
-    this.defineBasicVaryings(this.vVertexPosition);
+    this.defineBasicVaryings(wall);
 
     if ( vertexNum === 2) {
       this.defineBasicFlats();
-      this.defineFlats();
+      this.defineFlats(penumbraTri, wall);
     }
   }
 }
@@ -1485,7 +1455,7 @@ export class SizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVerte
     // Varyings
     this.defineVaryings(gl_VertexID, wall, sideShadowRays, farPenumbraCanvasRay,
       penumbraTri, umbraTri, nearFarTri0, nearFarTri1, sideTri0, sideTri1);
-    this.defineBasicVaryings(this.vVertexPosition);
+    this.defineBasicVaryings(wall);
 
     // Flats
     if ( vertexNum === 2) {
@@ -1496,6 +1466,20 @@ export class SizedPointSourceShadowWallVertexShaderTest2 extends ShadowWallVerte
         sideShadowRays, farShadowDirs, this.nearShadowDirs, hasFarPenumbra);
     }
   }
+
+  /* ----- NOTE: Fragment calculations ----- */
+
+  /**
+   * Is fragment inside the side penumbra, without regard to near/far limits.
+   * @returns {bool}
+   */
+  inSidePenumbra0() { return barycentricPointInsideTriangle(this.vSidePenumbra0); }
+
+  /**
+   * Is fragment inside the side penumbra, without regard to near/far limits.
+   * @returns {bool}
+   */
+  inSidePenumbra1() { return barycentricPointInsideTriangle(this.vSidePenumbra1); }
 
   /**
    * Mimic the fragment calculations at a specific point.
@@ -1882,7 +1866,7 @@ export class SizedPointSourceShadowWallVertexShaderTest3 extends SizedPointSourc
       normalizedDirection(wall.top[0].xy, wall.top[1].xy));
     if ( vertexNum === 0 ) this.vEdgeDist *= -1.0;
 
-    this.defineBasicVaryings(this.vVertexPosition);
+    this.defineBasicVaryings(wall);
 
     if ( vertexNum === 2) {
       this.defineBasicFlats();
@@ -2398,7 +2382,6 @@ let {
   DirectionalSourceShadowWallVertexShaderTest2 } = api.testing
 
 edge0 = canvas.walls.placeables[0].edge
-edge1 = canvas.walls.placeables[1].edge
 ev = _token.vision.elevatedvision
 UMBRA = 0;
 MIDPENUMBRA = 2;
@@ -2409,7 +2392,6 @@ FAR = 0
 NEAR = 1
 
 let [shader0, shader1] = UnsizedPointSourceShadowWallVertexShaderTest2.fromMesh(ev.shadowMesh)
-let [shader2, shader3] = UnsizedPointSourceShadowWallVertexShaderTest2.fromMesh(ev.shadowMesh)
 
 // Set alt shaders to elevation 0 to compare with changing ratios
 shader2.uniforms.uElevationRes[0] = 0

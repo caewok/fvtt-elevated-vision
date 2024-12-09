@@ -1,4 +1,4 @@
-/* ----- NOTE: Penumbra Vertex Functions ----- */
+/* ----- NOTE: Shadow Vertex Functions ----- */
 
 ${defineStruct("Ray2d")}
 ${defineStruct("Plane")}
@@ -78,8 +78,6 @@ Wall calculateWallPositions() {
     vec3[2](aBottom, bBottom)
   );
 }
-
-
 
 /**
  * Determine the barymetric coordinates of a point for a given triangle.
@@ -293,6 +291,7 @@ bool canvasIntersectionRay(in vec3 nearFarDir, in Ray2d[2] sidePenumbra, in Wall
   }
 }
 
+
 /**
  * For infinite shadow, construct the different points of the triangle.
  * @param {ShadowRays2d} sideShadowRays
@@ -491,8 +490,6 @@ vec2 ambientLight(vec2 w0, vec2 w1) {
 
 #endif
 
-
-
 // ----- NEW ----- //
 
 /**
@@ -524,3 +521,122 @@ void defineBasicFlats() {
     ? -1.0 : aThresholdRadius2;
 }
 
+/**
+ * Define the varying wall ratio.
+ * How far the vertex is along the line running from vertex 0 through mid-wall.
+ * @param {Wall} wall
+ * @param {vec2[3]} penumbraTri
+ * @returns {float}
+ */
+float varyingWallRatio(in Wall wall, in vec2[3] penumbraTri) {
+  int vertexNum = gl_VertexID % 3;
+
+  // Define the wall ratio as 1 at the first vertex and 0 at the shorter of the two edges.
+  // For the third, it is the value at the wall direction intersection with the line
+  // from first vertex through the wall midpoint.
+  if ( vertexNum == 0 ) return 1.0;
+
+  // The closer vertex to the wall gets assigned 0.0.
+  float dist01 = distanceSquared(penumbraTri[0], penumbraTri[1]);
+  float dist02 = distanceSquared(penumbraTri[0], penumbraTri[2]);
+  int closerIdx = dist02 < dist01 ? 2 : 1;
+  if ( vertexNum == closerIdx ) return 0.0;
+
+  // If the ray from further index along the wall direction intersects the nearer index,
+  // it will also get assigned 0.0. Otherwise, it is some value smaller than 0.
+  int furtherIdx = (1 - closerIdx) + 2; // Either 2 or 1.
+  vec2 wallDir = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
+  vec2 wallMid = (wall.top[0].xy + wall.top[1].xy) * 0.5;
+  Ray2d lightRay = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wallMid));
+  vec2 closerIx;
+  lineLineIntersection(lightRay, Ray2d(penumbraTri[closerIdx], wallDir), closerIx);
+
+  // Could use distance(closerIx, wallMid) / distance(closerIx, penumbraTri[0]).
+  // That has a square root but is simpler.
+  Ray2d wallRatioRay = Ray2d(closerIx, penumbraTri[0] - closerIx);
+  float furtherT;
+  lineLineIntersection(wallRatioRay, Ray2d(penumbraTri[vertexNum], wallDir), furtherT);
+
+  // Often will be near zero (if penumbra triangle uses wall direction); round to zero.
+  return almostEqual(furtherT, 0.0, 1.0e-06) ? 0.0 : furtherT;
+}
+
+/**
+ * Define the flat wall ratio.
+ * How far the wall along the line running from vertex 0 through mid-wall,
+ * where 1.0 would be at vertex 0 and 0.0 would be at the closer of vertices 2 or 3.
+ * @param {Wall} wall
+ * @param {vec2[3]} penumbraTri
+ * @returns {float}
+ */
+float flatWallRatio(in Wall wall, in vec2[3] penumbraTri) {
+  float dist01 = distanceSquared(penumbraTri[0], penumbraTri[1]);
+  float dist02 = distanceSquared(penumbraTri[0], penumbraTri[2]);
+  int closerIdx = dist02 < dist01 ? 2 : 1;
+  vec2 wallDir = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
+  vec2 wallMid = (wall.top[0].xy + wall.top[1].xy) * 0.5;
+  Ray2d lightRay = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wallMid));
+  vec2 closerIx;
+  lineLineIntersection(lightRay, Ray2d(penumbraTri[closerIdx], wallDir), closerIx);
+
+  // Could use distance(closerIx, wallMid) / distance(closerIx, penumbraTri[0]).
+  // That has a square root but is simpler.
+  Ray2d wallRatioRay = Ray2d(closerIx, penumbraTri[0] - closerIx);
+  float furtherT;
+  lineLineIntersection(wallRatioRay, Ray2d(wall.top[0].xy, wallDir), furtherT);
+  return furtherT;
+}
+
+/**
+ * Calculate varying variables.
+ * @param {Wall} wall
+ * @param {vec2[3]} penumbraTri
+ */
+void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
+  int vertexNum = gl_VertexID % 3;
+
+  /** @type {vec2} vVertexPosition */
+  vVertexPosition = penumbraTri[vertexNum];
+
+  // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
+  // (vVertexPosition - uSceneDims.xy) / uSceneDims.zw
+  // @type {vec2} vTerrainTexCoord
+  vTerrainTexCoord = (vVertexPosition - uSceneDims.xy) / uSceneDims.zw;
+  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
+
+  // @type {float} vEdgeDist
+  // Used to determine in front of or behind wall.
+  // Simpler than wall ratio, but may want to use that instead.
+  vEdgeDist = distanceToLine(vVertexPosition, wall.top[0].xy,
+    normalizedDirection(wall.top[0].xy, wall.top[1].xy));
+  if ( vertexNum == 0 ) vEdgeDist *= -1.0;
+
+  // @type {float} vWallRatio
+  vWallRatio = varyingWallRatio(wall, penumbraTri);
+}
+
+/**
+ * Basic flats used by all shaders to limit shadow.
+ * @param {Wall} wall
+ * @param {vec2[3]} penumbraTri
+ */
+void defineSharedFlats(Wall wall, vec2[3] penumbraTri) {
+  // @type {float} fWallSenseType
+  fWallSenseType = aWallSenseType;
+
+  // @type {float} fThresholdRadius
+  fThresholdRadius2 = !(aWallSenseType == DISTANCE_WALL || aWallSenseType == PROXIMATE_WALL)
+    ? -1.0 : aThresholdRadius2;
+
+  // @type {float} fWallRatio
+  fWallRatio = flatWallRatio(wall, penumbraTri);
+
+  // @type {vec2} fWallHeights
+  fWallHeights[TOP] = wall.top[0].z;
+  fWallHeights[BOTTOM] = wall.bottom[0].z;
+
+  // @type {vec2} fFarRatio, fNearRatio, using UMBRA, PENUMBRA.
+  // Uses -1.0 to indicate no shadow.
+  fFarRatios = vec2(-1.0, -1.0);
+  fNearRatios = vec2(-1.0, -1.0);
+}
