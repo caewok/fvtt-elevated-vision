@@ -509,6 +509,24 @@ class ShadowWallVertexShaderTest2 {
     // Side triangle 0: ∆W0CI or ∆W0W1B (near-collinear)
     // Side triangle 1: ∆W1BF or ∆W0W1C (near-collinear)
     // Umbra triangle: ∆W1FI (near-collinear)
+    /* Point Construction
+    Formed using directional rays from the light.
+    A->B, A->C: penumbra dirs
+    D->E, G->H: umbra dirs
+
+    A: Intersection of the two penumbra lines (furthest extent of shadow on either side of wall).
+       - A->B (penumbra dir) intersect A->C (penumbra dir)
+    W0: Closest endpoint to A.
+    W1: Furthest endpoint from A.
+    D: The point of intersection for the penumbra and umbra formed from the closest endpoint.
+    G: The point of intersection for the penumbra and umbra formed from the furthest endpoint.
+    E: Intersection of the closer penumbra line with the canvas ray.
+    F: Intersection of the closer umbra line with the canvas ray.
+    H: Intersection of the further penumbra line with the canvas ray.
+    I: Intersection of the further umbra line with the canvas ray.
+    B: Intersection of penumbra line with canvas ray.
+    C: Intersection of penumbra line with canvas ray.
+    */
 
     // A found by intersecting the two side penumbra lines.
     lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.penumbra[1], A);

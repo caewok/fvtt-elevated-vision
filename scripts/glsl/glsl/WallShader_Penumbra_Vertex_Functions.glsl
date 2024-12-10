@@ -291,206 +291,25 @@ bool canvasIntersectionRay(in vec3 nearFarDir, in Ray2d[2] sidePenumbra, in Wall
   }
 }
 
-
 /**
- * For infinite shadow, construct the different points of the triangle.
- * @param {ShadowRays2d} sideShadowRays
+ * Line A-->wallMid, reversed such that it starts at the closest point on that line
+ * to B of penumbra ∆ABC.
+ * Used to calculate near/far shadows based on elevation (and in front/behind wall).
  * @param {Wall} wall
- * @param {Ray2d} canvasRay     Either the infinite canvas ray or the far penumbra canvas intersection.
- * @param {out vec2} A...I, W0, W1
- * @returns {bool} True if nearly collinear wall to the light.
+ * @param {vec2[3]} penumbraTri
+ * @returns {Ray2d}
  */
-bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in Ray2d canvasRay,
-  out vec2 A,
-  out vec2 B,
-  out vec2 C,
-  out vec2 D,
-  out vec2 E,
-  out vec2 F,
-  out vec2 G,
-  out vec2 H,
-  out vec2 I,
-  out vec2 W0,
-  out vec2 W1) {
-
-  // Penumbra triangle: ∆ABC
-  // Near/far triangle 0: ∆DEF
-  // Near/far triangle 1: ∆GHI
-  // Side triangle 0: ∆W0CI or ∆W0W1B (near-collinear)
-  // Side triangle 1: ∆W1BF or ∆W0W1C (near-collinear)
-  // Umbra triangle: ∆W1FI (near-collinear)
-
-  // A found by intersecting the two side penumbra lines.
-  lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.penumbra[1], A);
-
-  // Endpoint closest to the light will be associated with ∆DEF; furthest is ∆GHI.
-  // Can determine by comparing distance to the penumbra vertex 0 (A).
-  int closestIdx = distanceSquared(A, wall.top[1].xy) < distanceSquared(A, wall.top[0].xy) ? 1 : 0;
-  W0 = wall.top[closestIdx].xy;
-  W1 = wall.top[1 - closestIdx].xy;
-  vec2 wallDir = normalizedDirection(W0, W1);
-
-  // The AB penumbra ray runs through the closer endpoint.
-  closestIdx = sideShadowRays.penumbra[0].origin.x == W0.x && sideShadowRays.penumbra[0].origin.y == W0.y ? 0 : 1;
-  Ray2d rAB = sideShadowRays.penumbra[closestIdx];
-  Ray2d rAC = sideShadowRays.penumbra[1 - closestIdx];
-
-  // D and G are the intersections of the penumbra with opposite umbra.
-  // E intersects the D penumbra ray with the canvas line.
-  Ray2d rD_penumbra = rAB;
-  Ray2d rG_penumbra = rAC;
-  Ray2d rD_umbra = sideShadowRays.umbra[closestIdx];
-  Ray2d rG_umbra = sideShadowRays.umbra[1 - closestIdx];
-  lineLineIntersection(rD_penumbra, rD_umbra, D);
-  lineLineIntersection(rG_penumbra, rG_umbra, G);
-  lineLineIntersection(rD_penumbra, canvasRay, E);
-
-  // Moving from E along the wall direction, we will intersect rD_umbra at F.
-  Ray2d rEWall = Ray2d(E, wallDir);
-  lineLineIntersection(rEWall, rD_umbra, F);
-
-  // May intersect rG_umbra (I) and rG_penumbra (H, B).
-  float tI;
-  if ( lineLineIntersection(rEWall, rG_umbra, tI) && tI > 0.0 ) {
-    I = projectRay(rEWall, tI); // GLSL: I = projectRay(rEWall, tI)
-    lineLineIntersection(rEWall, rG_penumbra, H);
-    B = H;
-    C = E;
-    return false;
-  } else {
-    Ray2d canvasRay2 = Ray2d(F, canvasRay.direction);
-    lineLineIntersection(canvasRay2, rG_penumbra, B);
-    lineLineIntersection(canvasRay, rG_umbra, I);
-    Ray2d rIWall = Ray2d(I, wallDir);
-    lineLineIntersection(rIWall, rG_penumbra, H);
-    lineLineIntersection(canvasRay2, rD_penumbra, C);
-    return true;
-  }
+Ray2d nearFarMidRay(in Wall wall, in vec2[3] penumbraTri) {
+  float dist01 = distanceSquared(penumbraTri[0], penumbraTri[1]);
+  float dist02 = distanceSquared(penumbraTri[0], penumbraTri[2]);
+  int closerIdx = dist02 < dist01 ? 2 : 1;
+  vec2 wallDir2d = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
+  vec2 wallMid2d = (wall.top[0].xy + wall.top[1].xy) * 0.5;
+  Ray2d lightRay2d = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wallMid2d));
+  vec2 closerIx;
+  lineLineIntersection(lightRay2d, Ray2d(penumbraTri[closerIdx], wallDir2d), closerIx);
+  return Ray2d(closerIx, penumbraTri[0] - closerIx);
 }
-
-/**
- * Given ∆ABC, make it isoceles by extending the shorter edge of AB or AC.
- * @param {vec2[3]} tri
- * @returns {vec2[3]} tri
- */
-vec2[3] makeIsoceles(in vec2[3] tri) {
-  vec2 a = tri[0];
-  vec2 b = tri[1];
-  vec2 c = tri[2];
-  float distAB = distance(a, b);
-  float distBC = distance(a, c);
-  if ( almostEqual(distAB, distBC, 1.0e-08) ) return tri;
-  if ( distAB > distBC ) {
-    return vec2[3](
-      a,
-      b,
-      a + (normalizedDirection(a, c) * distAB)
-    );
-  } else { // BC distance is larger.
-    return vec2[3](
-      a,
-      a + (normalizedDirection(a, b) * distBC),
-      c
-    );
-  }
-}
-
-/**
- * Define the different shadow triangles.
- * @param {ShadowRays2d} sideShadowRays
- * @param {Wall} wall
- * @param {Ray2d} canvasRay     Either the infinite canvas ray or the far penumbra canvas intersection.
- * @param {out vec2[3]} penumbraTri, umbraTri, nearFarTri0, nearFarTri1, sideTri0, sideTri1
- * @returns {bool} True if the wall is nearly collinear.
- */
-bool shadowTriangles(in ShadowRays2d sideShadowRays, in Wall wall, in Ray2d canvasRay,
-  out vec2[3] penumbraTri,
-  out vec2[3] umbraTri,
-  out vec2[3] nearFarTri0,
-  out vec2[3] nearFarTri1,
-  out vec2[3] sideTri0,
-  out vec2[3] sideTri1) {
-
-  vec2 A;
-  vec2 B;
-  vec2 C;
-  vec2 D;
-  vec2 E;
-  vec2 F;
-  vec2 G;
-  vec2 H;
-  vec2 I;
-  vec2 J;
-  vec2 W0;
-  vec2 W1;
-  bool nearCollinear = shadowPoints(sideShadowRays, wall, canvasRay,
-    A, B, C, D, E, F, G, H, I, W0, W1);
-
-  // Define the triangles.
-  penumbraTri = vec2[3](A, B, C);
-  nearFarTri0 = vec2[3](D, E, F);
-  nearFarTri1 = vec2[3](G, H, I);
-  sideTri0 = vec2[3](W0, C, I);
-  sideTri1 = vec2[3](W1, B, F);
-
-  // Side triangles used for gradient shading. Vary based on wall location relative to light.
-  if ( nearCollinear ) {
-    sideTri0 = vec2[3](W0, C, W1);
-    sideTri1 = vec2[3](W0, B, W1);
-
-    // Used to shade the portion unblocked by the wall, after the endpoints.
-    umbraTri = makeIsoceles(vec2[3](W1, I, F));
-  }
-
-  // Change the side triangles to isoceles so gradient shading works.
-  sideTri0 = makeIsoceles(sideTri0);
-  sideTri1 = makeIsoceles(sideTri1);
-
-  return nearCollinear;
-}
-
-#ifndef UNSIZED_SOURCE
-
-/**
- * For a line that intersects a circle, determine the percent area of the circle
- * on each side of the line.
- * @param {vec2} a
- * @param {vec2} b
- * @param {vec2} center
- * @param {float} radius
- * @returns {vec2} The percentage CCW(0) and CW (1), oriented a --> b.
- */
-vec2 circleBisectorPercentArea(in vec2 a, in vec2 b, in vec2 center, in float radius) {
-  // Use a line perpendicular to AB that goes through center.
-  vec2 dir = normalizedDirection(a, b);
-  vec2 perpDir = vec2(dir.y, -dir.x); // Moves CCW to a --> b
-  Ray2d perpRay = Ray2d(center, perpDir);
-  vec2 edgeCCW = projectRay(perpRay, radius);
-  vec2 edgeCW = projectRay(perpRay, -radius);
-  vec2 ix;
-  lineLineIntersection(perpRay, Ray2d(a, normalizedDirection(a, b)), ix);
-  float totalDist = radius * 2.0;
-  float ccwDist = distance(ix, edgeCCW);
-  float cwDist = distance(ix, edgeCW);
-  if ( ccwDist < totalDist
-    && cwDist < totalDist ) return vec2(ccwDist, cwDist) * (1.0 / totalDist);
-  if ( ccwDist > cwDist ) return vec2(1.0, 0.0);
-  return vec2(0.0, 1.0);
-}
-
-/**
- * Calculate the ambient light used when the wall is collinear.
- * @param {vec2} w0   Closest wall endpoint to the light
- * @param {vec2} w1   Other wall endpoint
- * @returns {vec2}
- */
-vec2 ambientLight(vec2 w0, vec2 w1) {
-  return circleBisectorPercentArea(w0, w1, uLightPosition.xy, uLightSize);
-}
-
-#endif
-
-// ----- NEW ----- //
 
 /**
  * Calculate varying variables.

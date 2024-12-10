@@ -55,7 +55,7 @@ struct Light {
 /**
  * Determine the top, bottom, left, right light positions.
  */
-Light calculateLightPositions(in Wall wall) {
+Light calculateLightPositions() {
   // Form a cross based on the light center.
   float top = uLightPosition.z + uLightSize;
   float bottom = uLightPosition.z - uLightSize;
@@ -335,7 +335,7 @@ void main() {
   int vertexNum = gl_VertexID % 3;
 
   Wall wall = calculateWallPositions();
-  Light light = calculateLightPositions(wall);
+  Light light = calculateLightPositions();
 
   // @type {vec3} vPenumbra
   vPenumbra = vec3(0.0);

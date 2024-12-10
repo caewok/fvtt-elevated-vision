@@ -14,8 +14,6 @@ in vec2 vTerrainTexCoord;
 in vec3 vPenumbra;
 in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
-in vec3 vNearFarPenumbra0;
-in vec3 vNearFarPenumbra1;
 in vec3 vUmbra;
 out float vEdgeDist;
 
@@ -42,8 +40,7 @@ float shadowPercentage() {
   float far1Shadow = 1.0;
   float near0Shadow = 1.0;
   float near1Shadow = 1.0;
-  float side0Shadow = 1.0;
-  float side1Shadow = 1.0;
+
   vec2 farRatios0 = vec2(fFarRatios0);
   vec2 farRatios1 = vec2(fFarRatios1);
   vec2 nearRatios0 = vec2(fNearRatios0);
@@ -58,17 +55,17 @@ float shadowPercentage() {
     float canvasElevation = uElevationRes.x;
     float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
     if ( elevation != canvasElevation ) {
-      float farF = _elevationHeightFraction(elevation, fWallHeights[TOP]);
-      float nearF = _elevationHeightFraction(elevation, fWallHeights[BOTTOM]);
+      float farF = elevationHeightFraction(elevation, fWallHeights[TOP]);
+      float nearF = elevationHeightFraction(elevation, fWallHeights[BOTTOM]);
 
-      if ( fFarRatios0[UMBRA] != -1.0 ) farRatios0[UMBRA] = _elevateShadowRatioUsingHeightFraction(fFarRatios0[UMBRA], fWallRatios[0], farF);
-      if ( fFarRatios1[UMBRA] != -1.0 ) farRatios1[UMBRA] = _elevateShadowRatioUsingHeightFraction(fFarRatios1[UMBRA], fWallRatios[1], farF);
-      if ( fFarRatios0[PENUMBRA] != -1.0 ) farRatios0[PENUMBRA] = _elevateShadowRatioUsingHeightFraction(fFarRatios0[PENUMBRA], fWallRatios[0], farF);
-      if ( fFarRatios1[PENUMBRA] != -1.0 ) farRatios1[PENUMBRA] = _elevateShadowRatioUsingHeightFraction(fFarRatios1[PENUMBRA], fWallRatios[1], farF);
-      if ( fNearRatios0[UMBRA] != -1.0 ) nearRatios0[UMBRA] = _elevateShadowRatioUsingHeightFraction(fNearRatios0[UMBRA], fWallRatios[0], nearF);
-      if ( fNearRatios1[UMBRA] != -1.0 ) nearRatios1[UMBRA] = _elevateShadowRatioUsingHeightFraction(fNearRatios1[UMBRA], fWallRatios[1], nearF);
-      if ( fNearRatios0[PENUMBRA] != -1.0 ) nearRatios0[PENUMBRA] = _elevateShadowRatioUsingHeightFraction(fNearRatios0[PENUMBRA], fWallRatios[0], nearF);
-      if ( fNearRatios1[PENUMBRA] != -1.0 ) nearRatios1[PENUMBRA] = _elevateShadowRatioUsingHeightFraction(fNearRatios1[PENUMBRA], fWallRatios[1], nearF);
+      if ( fFarRatios0[UMBRA] != -1.0 ) farRatios0[UMBRA] = elevateShadowRatios(fFarRatios0[UMBRA], fWallRatios[0], farF);
+      if ( fFarRatios1[UMBRA] != -1.0 ) farRatios1[UMBRA] = elevateShadowRatios(fFarRatios1[UMBRA], fWallRatios[1], farF);
+      if ( fFarRatios0[PENUMBRA] != -1.0 ) farRatios0[PENUMBRA] = elevateShadowRatios(fFarRatios0[PENUMBRA], fWallRatios[0], farF);
+      if ( fFarRatios1[PENUMBRA] != -1.0 ) farRatios1[PENUMBRA] = elevateShadowRatios(fFarRatios1[PENUMBRA], fWallRatios[1], farF);
+      if ( fNearRatios0[UMBRA] != -1.0 ) nearRatios0[UMBRA] = elevateShadowRatios(fNearRatios0[UMBRA], fWallRatios[0], nearF);
+      if ( fNearRatios1[UMBRA] != -1.0 ) nearRatios1[UMBRA] = elevateShadowRatios(fNearRatios1[UMBRA], fWallRatios[1], nearF);
+      if ( fNearRatios0[PENUMBRA] != -1.0 ) nearRatios0[PENUMBRA] = elevateShadowRatios(fNearRatios0[PENUMBRA], fWallRatios[0], nearF);
+      if ( fNearRatios1[PENUMBRA] != -1.0 ) nearRatios1[PENUMBRA] = elevateShadowRatios(fNearRatios1[PENUMBRA], fWallRatios[1], nearF);
     }
   }
 

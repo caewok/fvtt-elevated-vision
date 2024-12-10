@@ -75,17 +75,9 @@ vec4 lightEncoding(in float light) {
 }
 
 /**
- * Elevate given shadow ratios
- * Use a stored height fraction to avoid repetitive calcs.
- */
-float _elevateShadowRatioUsingHeightFraction(in float ratio, in float wallRatio, in float heightFraction) {
-  return ratio + (heightFraction * (wallRatio - ratio));
-}
-
-/**
  * Calculate the height fraction for elevating shadow ratios.
  */
-float _elevationHeightFraction(in float elevation, in float wallHeight) {
+float elevationHeightFraction(in float elevation, in float wallHeight) {
   float canvasElevation = uElevationRes.x;
   if ( elevation <= canvasElevation ) return 0.0;
 
@@ -94,6 +86,49 @@ float _elevationHeightFraction(in float elevation, in float wallHeight) {
 
   float elevationChange = elevation - canvasElevation;
   return elevationChange / wallHeight;
+}
+
+/**
+ * Elevate given shadow ratios
+ * Use a stored height fraction to avoid repetitive calcs.
+ */
+float elevateShadowRatio(in float ratio, in float wallRatio, in float heightFraction) {
+  return ratio + (heightFraction * (wallRatio - ratio));
+}
+
+/**
+ * Elevate the near ratios.
+ * @returns {vec2[2]}
+ */
+vec2[2] elevateNearFarRatios() {
+
+  vec2 farRatios = vec2(fFarRatios);
+  vec2 nearRatios = vec2(fNearRatios);
+
+  bool hasFar = any(notEqual(fFarRatios, vec2(-1.0)));
+  bool hasNear = any(notEqual(fNearRatios, vec2(-1.0)));
+  if ( hasFar || hasNear ) {
+    farRatios = vec2(0.0);
+    nearRatios = vec2(1.0);
+    float canvasElevation = uElevationRes.x;
+    float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
+    if ( elevation != canvasElevation ) {
+      if ( hasFar ) {
+        float farF = elevationHeightFraction(elevation, fWallHeights[TOP]);
+        if ( fFarRatios[UMBRA] != -1.0 ) farRatios[UMBRA] = elevateShadowRatio(farRatios[UMBRA], fWallRatio, farF);
+        if ( fFarRatios[PENUMBRA] != -1.0 ) farRatios[PENUMBRA] = elevateShadowRatio(farRatios[PENUMBRA], fWallRatio, farF);
+      }
+      if ( hasNear ) {
+        float nearF = elevationHeightFraction(elevation, fWallHeights[BOTTOM]);
+        if ( fNearRatios[UMBRA] != -1.0 ) nearRatios[UMBRA] = elevateShadowRatio(nearRatios[UMBRA], fWallRatio, nearF);
+        if ( fNearRatios[PENUMBRA] != -1.0 ) nearRatios[PENUMBRA] = elevateShadowRatio(nearRatios[PENUMBRA], fWallRatio, nearF);
+      }
+    }
+  }
+  vec2[2] res;
+  res[NEAR] = nearRatios;
+  res[FAR] = farRatios;
+  return res;
 }
 
 /**
