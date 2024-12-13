@@ -40,13 +40,13 @@ float shadowPercentage() {
     if ( elevation != canvasElevation ) {
       if ( hasFar ) {
         float farF = elevationHeightFraction(elevation, fWallHeights[TOP]);
-        if ( fFarRatios[UMBRA] != -1.0 ) farRatios[UMBRA] = elevateShadowRatios(farRatios[UMBRA], fWallRatio, farF);
-        if ( fFarRatios[PENUMBRA] != -1.0 ) farRatios[PENUMBRA] = elevateShadowRatios(farRatios[PENUMBRA], fWallRatio, farF);
+        if ( fFarRatios[UMBRA] != -1.0 ) farRatios[UMBRA] = elevateShadowRatio(farRatios[UMBRA], fWallRatio, farF);
+        if ( fFarRatios[PENUMBRA] != -1.0 ) farRatios[PENUMBRA] = elevateShadowRatio(farRatios[PENUMBRA], fWallRatio, farF);
       }
       if ( hasNear ) {
         float nearF = elevationHeightFraction(elevation, fWallHeights[BOTTOM]);
-        if ( fNearRatios[UMBRA] != -1.0 ) nearRatios[UMBRA] = elevateShadowRatios(fNearRatios[UMBRA], fWallRatio, nearF);
-        if ( fNearRatios[PENUMBRA] != -1.0 ) nearRatios[PENUMBRA] = elevateShadowRatios(fNearRatios[PENUMBRA], fWallRatio, nearF);
+        if ( fNearRatios[UMBRA] != -1.0 ) nearRatios[UMBRA] = elevateShadowRatio(fNearRatios[UMBRA], fWallRatio, nearF);
+        if ( fNearRatios[PENUMBRA] != -1.0 ) nearRatios[PENUMBRA] = elevateShadowRatio(fNearRatios[PENUMBRA], fWallRatio, nearF);
       }
     }
     if ( vWallRatio < farRatios[UMBRA] ) return 0.0;

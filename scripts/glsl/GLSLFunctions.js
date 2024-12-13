@@ -287,6 +287,7 @@ mat3 toLocalRectangle(in vec2[4] rect) {
 // NOTE: Random
 // Pass a value and get a random normalized value between 0 and 1.
 // https://github.com/patriciogonzalezvivo/lygia/blob/main/generative/random.glsl
+// UV from From FoundryVTT base-shader-mixin.js.
 GLSLFunctions.random =
 `
 #define RANDOM_SCALE vec4(443.897, 441.423, .0973, .1099)
@@ -298,14 +299,91 @@ float random(in float x) {
   return fract(x);
 }
 
+float random(in vec2 uv) {
+  uv = mod(uv, 1000.0);
+  return fract( dot(uv, vec2(5.23, 2.89)
+                    * fract((2.41 * uv.x + 2.27 * uv.y)
+                             * 251.19)) * 551.83);
+}
+
+vec2 random2(in vec2 uv) {
+  vec2 uvf = fract(uv * vec2(0.1031, 0.1030));
+  uvf += dot(uvf, uvf.yx + 19.19);
+  return fract((uvf.x + uvf.y) * uvf);
+}
+
 vec2 random2(vec3 p3) {
   p3 = fract(p3 * RANDOM_SCALE.xyz);
   p3 += dot(p3, p3.yzx + 19.19);
   return fract((p3.xx + p3.yz) * p3.zy);
 }
-
-vec2 random2(vec2 p) { return random2(p.xyx); }
 `;
+
+
+GLSLFunctions.noise =
+`
+${defineFunction("random")}
+/**
+ * Conventional noise generator
+ * From FoundryVTT base-shader-mixin.js.
+ * @param {vec2} uv
+ * @returns {float}
+ */
+float noise(in vec2 uv) {
+  const vec2 d = vec2(0.0, 1.0);
+  vec2 b = floor(uv);
+  vec2 f = smoothstep(vec2(0.), vec2(1.0), fract(uv));
+  return mix(
+    mix(random(b), random(b + d.yx), f.x),
+    mix(random(b + d.xy), random(b + d.yy), f.x),
+    f.y
+  );
+}
+
+vec2 noiseV2(in vec2 uv) {
+  const vec2 d = vec2(0.0, 1.0);
+  vec2 b = floor(uv);
+  vec2 f = smoothstep(vec2(0.), vec2(1.0), fract(uv));
+  return mix(
+    mix(random2(b), random2(b + d.yx), f.x),
+    mix(random2(b + d.xy), random2(b + d.yy), f.x),
+    f.y
+  );
+}
+`;
+
+GLSLFunctions.hash =
+`
+/**
+ * Hash function used to construct pseudo-random numbers.
+ * See https://www.shadertoy.com/view/4djSRW
+ * @param {float|vec} p
+ * @returns {float|vec} Number between 0 and 1
+ */
+float hash(in float p) {
+  p = fract(p * 0.1031);
+  p *= p + 33.33;
+  p *= p + p;
+  return fract(p);
+}
+
+vec2 hash(in vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+vec3 hash(in vec3 p) {
+  p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+  p += dot(p, p.yxz + 33.33);
+  return fract((p.xxy + p.yxx) * p.zyx);
+}
+
+vec4 hash(in vec4 p) {
+  p = fract(p  * vec4(0.1031, 0.1030, 0.0973, 0.1099));
+  p += dot(p, p.wzxy+33.33);
+  return fract((p.xxyz+p.yzzw)*p.zywx);
+}`;
 
 // NOTE: Canvas elevation
 GLSLFunctions.decodeElevationChannels =

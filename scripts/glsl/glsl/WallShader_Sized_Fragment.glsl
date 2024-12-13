@@ -52,8 +52,11 @@ float shadowPercentage() {
   float nearShadow = 1.0;
   float side0Shadow = 1.0;
   float side1Shadow = 1.0;
+  float umbraShadow = 1.0;
+
 
   // If in the far or near shadow, blend between 0 (penumbra) and 1 (umbra).
+
   vec2[2] nfRatios = elevateNearFarRatios();
   vec2 farRatios = nfRatios[FAR];
   vec2 nearRatios = nfRatios[NEAR];
@@ -67,11 +70,20 @@ float shadowPercentage() {
     nearShadow = linearConversion(vWallRatio, nearRatios[PENUMBRA], nearRatios[UMBRA], 0.0, 1.0);
   }
 
+
   // Blend the two side penumbras if overlapping by multiplying the light amounts.
   if ( inSidePenumbra0() ) side0Shadow = vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z);
   if ( inSidePenumbra1() ) side1Shadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
 
-  float percentUmbra = 1.0;
+  /*
+  1.0 * 0.0 = 0.0  / 0.25 = 0       (1 - x) = 1.0
+  0.9 * 0.1 = 0.09 / 0.25 = 0.0225  (1 - x) = 0.9775
+  0.6 * 0.4 = 0.24 / 0.25 = 0.96    (1 - x) = 0.04
+  0.5 * 0.5 = 0.25 / 0.25 = 1.0     (1 - x) = 0.0
+  0.4 * 0.6 = 0.24 / 0.25 = 0.96    (1 - x) = 0.04
+  0.1 * 0.9 = 0.09 / 0.25 = 0.0225  (1 - x) = 0.9775
+  0.0 * 1.0 = 0.0  / 0.25 = 0       (1 - x) = 1.0
+  */
   if ( fAmbient[0] != 1.0 && fAmbient[1] != 1.0 ) {
     if ( inSidePenumbra0() ) side0Shadow *= fAmbient[0];
     if ( inSidePenumbra1() ) side1Shadow *= fAmbient[1];
@@ -79,13 +91,14 @@ float shadowPercentage() {
     // Add in umbra shadow if any.
     if ( barycentricPointInsideTriangle(vUmbra) ) {
       float percentL = vUmbra.z / (vUmbra.y + vUmbra.z);
-      percentUmbra = (percentL * (1.0 - percentL)) / 0.25; // 0.5 * 0.5 = 0.25; normalize to 1.0.
-      float ambient = mix(fAmbient[0], fAmbient[1], percentL); // Blend b/c wall no longer fully blocks.
-      percentUmbra *= ambient;
+      float percentR = 1.0 - percentL;
+      umbraShadow = 1.0 - (percentL * percentR / 0.25); // 0.5 * 0.5 = 0.25; normalize to 1.0.
+      float ambient = mix(fAmbient[0], fAmbient[1], percentL); // Blend b/c wall no longer fully blocks at umbra.
+      // umbraShadow *= ambient;
     }
   }
 
-  return side0Shadow * side1Shadow * farShadow * nearShadow * percentUmbra;
+  return side0Shadow * side1Shadow * farShadow * nearShadow * umbraShadow;
 }
 
 void main() {

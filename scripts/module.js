@@ -68,7 +68,9 @@ import {
 import {
   ShaderTest,
   PenumbraBasicTest,
-  UnsizedShadowsTest } from "./testing/WallShaderTest3.js";
+  UnsizedShadowsTest,
+  SizedShadowsTest,
+  SizedRandomShadowsTest } from "./testing/WallShaderTest3.js";
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -163,7 +165,9 @@ Hooks.once("init", function() {
       SizedPointSourceShadowWallVertexShaderTest3,
       ShaderTest,
       PenumbraBasicTest,
-      UnsizedShadowsTest
+      UnsizedShadowsTest,
+      SizedShadowsTest,
+      SizedRandomShadowsTest
     }
   };
 

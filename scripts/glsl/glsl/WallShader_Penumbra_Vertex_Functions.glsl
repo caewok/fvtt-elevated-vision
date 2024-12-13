@@ -262,8 +262,56 @@ Ray2d infiniteShadowCanvasRay(in Ray2d[2] lightRays) {
 
   // Use an ray that intersects the corner at a 45º angle to the scene rectangle at that corner.
   vec2 corner45Dir = vec2(0.5, 0.5);
-  if (corner == TL || corner == BL) corner45Dir.y *= -1.0;
+  if (corner == TL || corner == BR) corner45Dir.y *= -1.0;
   return Ray2d(sceneRect[corner], corner45Dir);
+}
+
+/**
+ * Given a triangle ∆ABC, construct a similar triangle such that B and C
+ * fall on or outside the canvas edge, and BC is entirely on or outside the canvas edge.
+ * @param {vec2[3]} tri
+ * @returns {vec2[3]} tri
+ */
+vec2[3] extendTriangleToCanvasEdge(in vec2[3] tri) {
+  // Edges A->B and A->C can intersect closest to the:
+  // • same quadrant (1 point),
+  // • adjacent quadrants (2 points), or
+  // • opposing quadrants (3 points, middle one counts).
+  vec2 A = tri[0];
+  vec2 B = tri[1];
+  vec2 C = tri[2];
+  Ray2d AB = Ray2d(A, normalizedDirection(A, B));
+  Ray2d AC = Ray2d(A, normalizedDirection(A, C));
+  Ray2d canvasEdge = infiniteShadowCanvasRay(Ray2d[2](AB, AC));
+
+  // Use the smaller triangle edge to intersect the canvas edge.
+  float dist2AB = distanceSquared(A, B);
+  float dist2AC = distanceSquared(A, C);
+
+  // Cannot use ternary with structs.
+  Ray2d smallerEdge;
+  Ray2d largerEdge;
+  bool smallerAB;
+  if ( dist2AB < dist2AC ) {
+    smallerAB = true;
+    smallerEdge = AB;
+    largerEdge = AC;
+  } else {
+    smallerAB = false;
+    smallerEdge = AC;
+    largerEdge = AB;
+  }
+
+  vec2 ixSmaller;
+  lineLineIntersection(smallerEdge, canvasEdge, ixSmaller);
+
+  // Then connect using the B->C (or C->B) direction to the other triangle edge.
+  Ray2d newBC = Ray2d(ixSmaller, normalizedDirection(B, C));
+  vec2 ixLarger;
+  lineLineIntersection(largerEdge, newBC, ixLarger);
+
+  if ( smallerAB ) return vec2[3](A, ixSmaller, ixLarger);
+  else return vec2[3](A, ixLarger, ixSmaller);
 }
 
 /**

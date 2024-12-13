@@ -140,6 +140,8 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
         return out;
       }
 
+      floor() { return this._componentWise(a => Math.floor(a)); }
+
       equal(other) { return this._componentWise((a, i) => a[i] === other[i]); }
 
       lessThan(other) { return this._componentWise((a, i) => a[i] < other[i]); }
@@ -425,8 +427,11 @@ export function convertBarycentericAreaSimilarTriangle(baryArea, ratio) {
 export function linearConversion(x, oldMin, oldMax, newMin, newMax) {
   // (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin
   const denomInv = 1.0 / (oldMax - oldMin);
-  if ( Number.isNumeric(x) ) return ((x - oldMin) * (newMax - newMin) * denomInv) + newMin ;
-  return x.subtract(new x.constructor(oldMin)).multiplyScalar((newMax - newMin) * denomInv).add(new x.constructor(newMin));
+  if ( Number.isNumeric(x) ) return ((x - oldMin) * (newMax - newMin) * denomInv) + newMin;
+  return x
+    .subtract(new x.constructor(oldMin))
+    .multiplyScalar((newMax - newMin) * denomInv)
+    .add(new x.constructor(newMin));
 }
 
 /**
@@ -500,6 +505,141 @@ export function fract(x) {
  * @returns {float}
  */
 export function dot(a, b) { return a.dot(b); }
+
+/**
+ * GLSL mod function.
+ * @param {float|vec} x
+ * @param {float|vec} y
+ * @returns {float|vec}
+ */
+export function mod(x, y) {
+  if ( Number.isNumeric(x) ) return x - (y * Math.floor(x/y));
+  if ( Number.isNumeric(y) ) y = new x.constructor(y);
+  return x.subtract(y.multiply(floor(x.divide(y))));
+}
+
+/**
+ * GLSL floor function.
+ * @param {float|vec}
+ * @returns {float|vec}
+ */
+export function floor(a) {
+  if ( Number.isNumeric(a) ) return Math.floor(a);
+  return a.floor();
+}
+
+/**
+ * GLSL smoothstep function.
+ * @param {float|vec} edge0
+ * @param {float|vec} edge1
+ * @param {float|vec} x
+ * @returns {float|vec}
+ */
+export function smoothstep(edge0, edge1, x) {
+  if ( Number.isNumeric(x) ) {
+    // Edge0 and edge1 must be floats.
+    const t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+    return t * t * (3.0 - (2.0 * t));
+  }
+  // X is vec.
+  if ( Number.isNumeric(edge0) ) {
+    // Edge0 and edge1 must be floats.
+    edge0 = new x.constructor(edge0);
+    edge1 = new x.constructor(edge1);
+  }
+  const t = clamp(x.subtract(edge0).divide(edge1.subtract(edge0)), 0.0, 1.0);
+  // GLSL: t * t * (3.0 - (2.0 * t));
+  const v3 = new x.constructor(3.0);
+  return t.multiply(t).multiply(v3.subtract(t.multiplyScalar(2.0)));
+}
+
+/**
+ * Pseudo-random generator based on uv position.
+ * Does not rely on cos/sin.
+ * From FoundryVTT base-shader-mixin.js.
+ * @param {vec2} uv     Should be between 0 and 1.
+ * @returns {float}
+ */
+export function random(uv) {
+  /* GLSL
+  uv = mod(uv, 1000.0);
+      return fract( dot(uv, vec2(5.23, 2.89)
+                        * fract((2.41 * uv.x + 2.27 * uv.y)
+                                 * 251.19)) * 551.83);
+  */
+  uv = mod(uv, 1000.0);
+  const f0 = fract(((2.41 * uv.x) + (2.27 * uv.y)) * 251.19);
+  const d = dot(uv, vec2(5.23, 2.89).multiplyScalar(f0))
+  return fract(d * 551.83);
+}
+
+/**
+ * Pseudo-random vec2 generator based on uv position.
+ * Does not rely on cos/sin.
+ * From FoundryVTT base-shader-mixin.js.
+ * @param {vec2} uv     Should be between 0 and 1.
+ * @returns {vec2}
+ */
+export function random2(uv) {
+  /* GLSL
+  vec2 uvf = fract(uv * vec2(0.1031, 0.1030));
+  uvf += dot(uvf, uvf.yx + 19.19);
+  return fract((uvf.x + uvf.y) * uvf);
+  */
+  let uvf = fract(uv.multiply(vec2(0.1031, 0.1030)));
+  const d = dot(uvf, uvf.yx.add(vec2(19.19)))
+  uvf = uvf.add(vec2(d));
+  return fract(uvf.multiplyScalar(uvf.x + uvf.y));
+}
+
+/**
+ * Conventional noise generator
+ * From FoundryVTT base-shader-mixin.js.
+ * @param {vec2} uv
+ * @returns {float}
+ */
+export function noise(uv) {
+  const d = vec2(0.0, 1.0); // GLSL: const vec2 d = vec2(0.0, 1.0);
+  const b = floor(uv);
+  const f = smoothstep(vec2(0.), vec2(1.0), fract(uv));
+  return mix(
+    mix(random(b), random(b.add(d.yx)), f.x),
+    mix(random(b.add(d.xy)), random(b.add(d.yy)), f.x),
+    f.y
+  );
+  /* GLSL
+  return mix(
+    mix(random(b), random(b + d.yx), f.x),
+    mix(random(b + d.xy), random(b + d.yy), f.x),
+    f.y
+  );
+  */
+}
+
+/**
+ * Conventional noise generator
+ * From FoundryVTT base-shader-mixin.js.
+ * @param {vec2} uv
+ * @returns {vec2}
+ */
+export function noise2(uv) {
+  const d = vec2(0.0, 1.0); // GLSL: const vec2 d = vec2(0.0, 1.0);
+  const b = floor(uv);
+  const f = smoothstep(vec2(0.), vec2(1.0), fract(uv));
+  return mix(
+    mix(random2(b), random2(b.add(d.yx)), f.x),
+    mix(random2(b.add(d.xy)), random2(b.add(d.yy)), f.x),
+    f.y
+  );
+  /* GLSL
+  return mix(
+    mix(random(b), random(b + d.yx), f.x),
+    mix(random(b + d.xy), random(b + d.yy), f.x),
+    f.y
+  );
+  */
+}
+
 
 /**
  * Hash function used to construct pseudo-random numbers.
@@ -1042,8 +1182,8 @@ export const Light = (...args) => new LightGLSLStruct(...args);
  * @prop {float} thresholdRadius2
  */
 export class WallGLSLStruct {
-  constructor({ top, bottom, direction, linkValue, type, thresholdRadius2 } = {}) {
-    const args = { top, bottom, direction, linkValue, type, thresholdRadius2 };
+  constructor({ top, bottom, mid, direction, direction2d, linkValue, type, thresholdRadius2 } = {}) {
+    const args = { top, bottom, mid, direction, direction2d, linkValue, type, thresholdRadius2 };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }

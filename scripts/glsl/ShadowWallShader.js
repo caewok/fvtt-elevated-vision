@@ -394,7 +394,7 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
     uTerrainSampler: 0,
     uLightPosition: [0, 0, 0],
     uLightSize: 1,
-    uTime: Date.now()
+    uTime: Date.now() * 1e-12
   };
 
   /**
@@ -425,7 +425,7 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
     defaultUniforms.uLightSize = source.data.lightSize;
 
-    defaultUniforms.uTime = Date.now();
+    defaultUniforms.uTime = Date.now() * 1e-12;
 
     return super.create(defaultUniforms);
   }
@@ -448,12 +448,12 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
     const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
     if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     this.uniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
-    this.uniforms.uTime = Date.now();
+    this.uniforms.uTime = Date.now() * 1e-12;
   }
 
   updateLightSize(source) {
     this.uniforms.uLightSize = source.data.lightSize;
-    this.uniforms.uTime = Date.now();
+    this.uniforms.uTime = Date.now() * 1e-12;
   }
 }
 
@@ -494,7 +494,7 @@ export class SizedPointSourceShadowWallShader2 extends AbstractEVShader {
     uTerrainSampler: 0,
     uLightPosition: [0, 0, 0],
     uLightSize: 1,
-    uTime: Date.now()
+    uTime: Date.now() * 1e-12
   };
 
   /**

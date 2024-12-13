@@ -4,107 +4,218 @@ precision ${PRECISION_VERTEX} float;
 
 // #define SHADOW true
 
+#define TOTAL_COLLISIONS    10
+
 uniform sampler2D uTerrainSampler;
 uniform vec3 uLightPosition;
 uniform float uLightSize;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
+uniform float uTime;
+uniform vec4 uSceneDims;
 
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
-in vec3 vPenumbra;
-in vec3 vSidePenumbra0;
-in vec3 vSidePenumbra1;
-in vec3 vUmbra;
-out float vEdgeDist;
+in float vEdgeDist;
+in float vWallRatio;
 
-flat in float fWallSenseType;
 flat in float fThresholdRadius2;
+flat in float fWallSenseType;
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
-flat in vec2 fWallRatios;
-flat in vec2 fFarRatios0;
-flat in vec2 fFarRatios1;
-flat in vec2 fNearRatios0;
-flat in vec2 fNearRatios1;
-flat in vec2 fAmbient;
+flat in float fWallRatio;
+flat in vec2 fNearRatios;
+flat in vec2 fFarRatios;
+flat in vec3 fWallTop0;
+flat in vec3 fWallTop1;
+flat in vec3 fWallBottom0;
+flat in vec3 fWallBottom1;
 
 out vec4 fragColor;
 
 ${PENUMBRA_FRAGMENT_FUNCTIONS}
 
+${defineFunction("orient")}
+${defineFunction("linearConversion")}
+${defineFunction("hash")}
+${defineFunction("distanceToLine")}
+${defineFunction("normalizedDirection")}
+${defineFunction("noise")}
+
+/**
+ * Select a position on the sphere given vec3 between -1 and 1.
+ * 0 would be dead center.
+ * @param {vec3} dir
+ * @returns {vec3}
+ */
+vec3 spherePosition(in vec3 dir) { return uLightPosition + (dir * uLightSize); }
+
+/**
+ * Determine whether there is a collision with the wall at a given direction from the fragment.
+ * @param {vec3} dir
+ * @param {float} elevation
+ * @returns {int}
+ */
+int wallCollision(in vec3 dir, in float elevation) {
+  vec2 hWall0 = fWallTop0.xy;
+  vec2 hWall1 = fWallTop1.xy;
+  vec2 vWall0 = vec2(0.0, fWallTop0.z);
+  vec2 vWall1 = vec2(0.0, fWallBottom0.z);
+
+  // Move 1 pixel toward the light, to measure orientation w/r/t the light ray.
+  vec3 b3d = vec3(vVertexPosition, elevation) + dir;
+
+  // Test for horizontal collision. Wall endpoints are opposite sides of the light ray.
+  bool hCollision = orient(vVertexPosition, b3d.xy, hWall0) * orient(vVertexPosition, b3d.xy, hWall1) < 0.0;
+  if ( !hCollision ) return 0;
+
+  // Test for vertical collision. Transform coordinates based on direction to wall.
+  vec2 vA = vec2(vEdgeDist, elevation);
+  float distB = distanceToLine(b3d.xy, hWall0, normalizedDirection(hWall0, hWall1));
+  vec2 vB = vec2(distB, b3d.z);
+  bool vCollision = orient(vA, vB, vWall0) * orient(vA, vB, vWall1) < 0.0;
+  if ( !vCollision ) return 0;
+  return 1;
+}
+
 /**
  * Determine the shadow percentage.
  */
 float shadowPercentage() {
-  // Determine whether in near, far, side0, or side1.
-  float far0Shadow = 1.0;
-  float far1Shadow = 1.0;
-  float near0Shadow = 1.0;
-  float near1Shadow = 1.0;
+  // For each direction, test intersection with the wall.
+  // TODO: If the wall has different heights for each endpoint, adjust to match the point
+  // at which the light ray intersects the wall.
+  // TODO: skip tests if certain horizontals or verticals are blocked?
+  //       skip tests based on inclusion in umbra triangle?
+  // TODO: Use tangents?
+  int numCollisions = 0;
+  float totalCollisions = float(TOTAL_COLLISIONS);
+  float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
+  vec3 a = vec3(vVertexPosition, elevation);
+  /*
+  for ( int i = 0; i < TOTAL_COLLISIONS; i += 1 ) {
+    vec3 pos = randomSpherePosition(float(i) + elevation);
+    vec3 dir = normalizedDirection(a, pos);
+    numCollisions += wallCollision(dir, elevation);
+  }
+  */
+  /*
+  vec3[7] pts = vec3[7](
+    vec3(0.0),
+    vec3(1.0, 0.0, 0.0),
+    vec3(-1.0, 0.0, 0.0),
+    vec3(0.0, 1.0, 0.0),
+    vec3(0.0, -1.0, 0.0),
+    vec3(0.0, 0.0, 1.0),
+    vec3(0.0, 0.0, -1.0)
+  );
 
-  vec2 farRatios0 = vec2(fFarRatios0);
-  vec2 farRatios1 = vec2(fFarRatios1);
-  vec2 nearRatios0 = vec2(fNearRatios0);
-  vec2 nearRatios1 = vec2(fNearRatios1);
-  bool needsElevation = fFarRatios0[PENUMBRA] != -1.0 || fFarRatios0[UMBRA] != -1.0
-                      || fFarRatios1[PENUMBRA] != -1.0 || fFarRatios1[UMBRA] != -1.0
-                      || fNearRatios0[PENUMBRA] != -1.0 || fNearRatios0[UMBRA] != -1.0
-                      || fNearRatios1[PENUMBRA] != -1.0 || fNearRatios1[UMBRA] != -1.0;
-
-  if ( needsElevation ) {
-    // Get the elevation at this fragment.
-    float canvasElevation = uElevationRes.x;
-    float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
-    if ( elevation != canvasElevation ) {
-      float farF = elevationHeightFraction(elevation, fWallHeights[TOP]);
-      float nearF = elevationHeightFraction(elevation, fWallHeights[BOTTOM]);
-
-      if ( fFarRatios0[UMBRA] != -1.0 ) farRatios0[UMBRA] = elevateShadowRatios(fFarRatios0[UMBRA], fWallRatios[0], farF);
-      if ( fFarRatios1[UMBRA] != -1.0 ) farRatios1[UMBRA] = elevateShadowRatios(fFarRatios1[UMBRA], fWallRatios[1], farF);
-      if ( fFarRatios0[PENUMBRA] != -1.0 ) farRatios0[PENUMBRA] = elevateShadowRatios(fFarRatios0[PENUMBRA], fWallRatios[0], farF);
-      if ( fFarRatios1[PENUMBRA] != -1.0 ) farRatios1[PENUMBRA] = elevateShadowRatios(fFarRatios1[PENUMBRA], fWallRatios[1], farF);
-      if ( fNearRatios0[UMBRA] != -1.0 ) nearRatios0[UMBRA] = elevateShadowRatios(fNearRatios0[UMBRA], fWallRatios[0], nearF);
-      if ( fNearRatios1[UMBRA] != -1.0 ) nearRatios1[UMBRA] = elevateShadowRatios(fNearRatios1[UMBRA], fWallRatios[1], nearF);
-      if ( fNearRatios0[PENUMBRA] != -1.0 ) nearRatios0[PENUMBRA] = elevateShadowRatios(fNearRatios0[PENUMBRA], fWallRatios[0], nearF);
-      if ( fNearRatios1[PENUMBRA] != -1.0 ) nearRatios1[PENUMBRA] = elevateShadowRatios(fNearRatios1[PENUMBRA], fWallRatios[1], nearF);
-    }
+  totalCollisions = 7.0;
+  for ( int i = 0; i < 7; i += 1 ) {
+    vec3 pos = spherePosition(pts[i]);
+    vec3 dir = normalizedDirection(a, pos);
+    numCollisions += wallCollision(dir, elevation);
   }
 
-  // Determine the near/far penumbra inclusion.
-  bool inNF0 = barycentricPointInsideTriangle(vNearFarPenumbra0);
-  bool inNF1 = barycentricPointInsideTriangle(vNearFarPenumbra1);
-  bool inFarPenumbra0 = inNF0 && between(farRatios0[PENUMBRA], farRatios0[UMBRA], vNearFarPenumbra0.x) == 1.0;
-  bool inFarPenumbra1 = inNF1 && between(farRatios1[PENUMBRA], farRatios1[UMBRA], vNearFarPenumbra1.x) == 1.0;
-  bool inNearPenumbra0 = inNF0 && between(nearRatios0[PENUMBRA], nearRatios0[UMBRA], vNearFarPenumbra0.x) == 1.0;
-  bool inNearPenumbra1 = inNF1 && between(nearRatios1[PENUMBRA], nearRatios1[UMBRA], vNearFarPenumbra1.x) == 1.0;
-
-  if ( inFarPenumbra0 ) far0Shadow = linearConversion(vNearFarPenumbra0.x, farRatios0[PENUMBRA], farRatios0[UMBRA], 0.0, 1.0);
-  if ( inFarPenumbra0 ) far1Shadow = linearConversion(vNearFarPenumbra1.x, farRatios1[PENUMBRA], farRatios1[UMBRA], 0.0, 1.0);
-  if ( inNearPenumbra1 ) near0Shadow = linearConversion(vNearFarPenumbra0.x, nearRatios0[PENUMBRA], nearRatios0[UMBRA], 0.0, 1.0);
-  if ( inNearPenumbra1 ) near1Shadow = linearConversion(vNearFarPenumbra1.x, nearRatios1[PENUMBRA], nearRatios1[UMBRA], 0.0, 1.0);
-
-  // Blend the two side penumbras if overlapping by multiplying the light amounts.
-  if ( inSidePenumbra0() ) side0Shadow = vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z);
-  if ( inSidePenumbra1() ) side1Shadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
-
-  float percentUmbra = 1.0;
-  if ( fAmbient[0] != 1.0 && fAmbient[1] != 1.0 ) {
-    if ( inSidePenumbra0() ) side0Shadow *= fAmbient[0];
-    if ( inSidePenumbra1() ) side1Shadow *= fAmbient[1];
-
-    // Add in umbra shadow if any.
-    if ( barycentricPointInsideTriangle(vUmbra) ) {
-      float percentL = vUmbra.z / (vUmbra.y + vUmbra.z);
-      percentUmbra = (percentL * (1.0 - percentL)) / 0.25; // 0.5 * 0.5 = 0.25; normalize to 1.0.
-      float ambient = mix(fAmbient[0], fAmbient[1], percentL); // Blend b/c wall no longer fully blocks.
-      percentUmbra *= ambient;
-    }
+  totalCollisions += 6.0;
+  for ( int i = 1; i < 7; i += 1 ) {
+    vec3 pos = spherePosition(pts[i] * vec3(0.5));
+    vec3 dir = normalizedDirection(a, pos);
+    numCollisions += wallCollision(dir, elevation);
   }
 
-  return side0Shadow * side1Shadow *
-    far0Shadow * far1Shadow *
-    near0Shadow * near1Shadow *
-    percentUmbra;
+  totalCollisions += 6.0;
+  for ( int i = 1; i < 7; i += 1 ) {
+    vec3 pos = spherePosition(pts[i] * vec3(0.75));
+    vec3 dir = normalizedDirection(a, pos);
+    numCollisions += wallCollision(dir, elevation);
+  }
+
+  totalCollisions += 6.0;
+  for ( int i = 1; i < 7; i += 1 ) {
+    vec3 pos = spherePosition(pts[i] * vec3(0.25));
+    vec3 dir = normalizedDirection(a, pos);
+    numCollisions += wallCollision(dir, elevation);
+  }
+  */
+
+
+  /*
+  vec2 uv = vVertexPosition / uSceneDims.zw;
+  for ( int i = 0; i < TOTAL_COLLISIONS; i += 1 ) {
+    vec2 seed1 = uv + fract(uTime * (float(i) / totalCollisions));
+    vec2 seed2 = uv - fract(uTime * (float(i) / totalCollisions));
+    vec2 seed3 = uv;
+    float rand1 = noise(seed1);
+    float rand2 = noise(seed2);
+    float rand3 = noise(seed3);
+
+    vec3 diff = uLightSize * linearConversion(vec3(rand1, rand2, rand3), 0.0, 1.0, -1.0, 1.0);
+
+    // Forms a cube.
+    vec3 pos = uLightPosition + diff;
+    vec3 dir = normalizedDirection(a, pos);
+    numCollisions += wallCollision(dir, elevation);
+  }
+  */
+  /*
+  vec2 uv = vVertexPosition / uSceneDims.zw;
+  for ( int i = 0; i < TOTAL_COLLISIONS; i += 1 ) {
+    vec2 seed1 = uv + fract(uTime * (float(i) / totalCollisions));
+    vec2 seed2 = uv - fract(uTime * (float(i) / totalCollisions));
+    vec2 rand1 = noiseV2(seed1);
+    float rand2 = noise(seed2);
+    vec3 diff = uLightSize * linearConversion(vec3(rand1.x, rand1.y, rand2), 0.0, 1.0, -1.0, 1.0);
+
+    // Forms a cube.
+    vec3 pos = uLightPosition + diff;
+    vec3 dir = normalizedDirection(a, pos);
+    numCollisions += wallCollision(dir, elevation);
+  }
+  */
+  // float vx = vVertexPosition.x / uElevationRes.z;
+  // float vy = vVertexPosition.y / uElevationRes.w;
+  // float vv = dot(vVertexPosition, vVertexPosition) / dot(uElevationRes.zw, uElevationRes.zw);
+
+  /*
+  totalCollisions += 20.0;
+  for ( int i = 0; i < 20; i += 1 ) {
+    float j = float(i) + 1.0;
+    float rand0 = hash(uTime + j);
+    float rand1 = hash(uTime + (j * totalCollisions));
+    float rand2 = hash(uTime + (j * totalCollisions * totalCollisions));
+
+    float x = linearConversion(rand0, 0.0, 1.0, -1.0, 1.0);
+    float y = linearConversion(rand1, 0.0, 1.0, -1.0, 1.0);
+    float z = linearConversion(rand2, 0.0, 1.0, -1.0, 1.0);
+
+    vec3 pos = spherePosition(vec3(x, y, z));
+    vec3 dir = normalizedDirection(a, pos);
+    numCollisions += wallCollision(dir, elevation);
+  }
+  */
+
+  totalCollisions = 20.0;
+  for ( int i = 0; i < 20; i += 1 ) {
+    float j = float(i) + 1.0;
+    float x = hash(uTime + j);
+    float y = hash(uTime + (j * totalCollisions));
+    float z = hash(uTime + (j * totalCollisions * totalCollisions));
+
+    // Pseudo-Gaussian 3d distribution.
+    vec3 rndDir = (x * y * z == 0.0) ? vec3(0.0) : normalize(vec3(x, y, z));
+    vec3 pos = spherePosition(linearConversion(rndDir, 0.0, 1.0, -1.0, 1.0));
+    vec3 dir = normalizedDirection(a, pos);
+    numCollisions += wallCollision(dir, elevation);
+  }
+
+
+  // TODO: Add in adjacent pixel values as part of the average here.
+  return float(numCollisions) / totalCollisions;
 }
+
+
+
+
+
 
 void main() {
   ${PENUMBRA_FRAGMENT_CALCULATIONS}
