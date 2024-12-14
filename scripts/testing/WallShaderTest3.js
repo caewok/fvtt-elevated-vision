@@ -338,8 +338,14 @@ export class PenumbraBasicTest extends ShaderTest {
 
   /** @type {float} */
   get maxR() {
-    const uSceneDims = this.uniforms.uSceneDims;
+    const uSceneDims = this.uSceneDims;
     return Math.sqrt((uSceneDims.z * uSceneDims.z) + (uSceneDims.w * uSceneDims.w)) * 2.0;
+    // x2 b/c technically we want the canvas dimensions, which we don't have.
+  }
+
+  maxR2() {
+    const uSceneDims = this.uSceneDims;
+    return (uSceneDims.z * uSceneDims.z) + (uSceneDims.w * uSceneDims.w); // Don't really need the 2x.
   }
 
   /* ----- NOTE: Vertex calculations ----- */
@@ -980,22 +986,75 @@ export class SizedShadowsTest extends PenumbraBasicTest {
   }
 
   /**
+   * Offset the circle center from the wall by some distance.
+   * If collinear with the wall, move in the direction of the wall but keep collinearity.
+   * If non-collinear with the wall, move away from wall.
+   * @param {Light} light
+   * @param {Wall} wall
+   * @param {float} d
+   * @returns {vec2} New circle center
+   */
+  offsetLightFromWall(light, wall, d) {
+    const { projectRay, Ray2d } = glsl;
+    return projectRay(Ray2d(light.center.xy, vec2(wall.direction.y, -wall.direction.x)), d);
+  }
+
+  /**
+   * Swap two indices in the tangent array.
+   * @param {inout Ray2d[4]} tangentRays
+   * @param {inout vec2[4]} projectedPoints
+   * @param {int} idx0
+   * @param {int} idx1
+   */
+  _cmpSwapTangentRays(tangentRays, projectedPoints, idx0, idx1) {
+    const orient = foundry.utils.orient2dFast;
+
+    if ( orient(tangentRays[idx0].origin, projectedPoints[idx0], projectedPoints[idx1]) > 0.0 ) {
+      const tmpRay = tangentRays[idx0];
+      tangentRays[idx0] = tangentRays[idx1];
+      tangentRays[idx1] = tmpRay;
+      const tmpVec = projectedPoints[idx0];
+      projectedPoints[idx0] = projectedPoints[idx1];
+      projectedPoints[idx1] = tmpVec;
+    }
+  }
+
+  /**
    * Direction from light --> wall endpoint. Origin at the wall endpoint.
    * @param {Wall} wall
    * @param {Light} light
    * @returns {ShadowRays2d} Rays from the endpoint away from the light for umbra, mid, and penumbra.
    */
   calculateSideShadowRays(wall) {
+    const orient = foundry.utils.orient2dFast;
     const max = Math.max;
     const { uLightSize } = this;
-    const { normalizedDirection, tangentPoints, Ray2d,
-      distanceSquared, lineLineIntersection, ShadowRays2d, Circle } = glsl;
+    const {
+      almostEqual,
+      normalizedDirection,
+      tangentPoints,
+      Ray2d,
+      sameSide,
+      closest2dPointToSegment,
+      distanceToSegment,
+      distanceSquared,
+      lineLineIntersection,
+      ShadowRays2d,
+      Circle,
+      distanceToLine,
+      distanceSquaredToLine,
+      projectRay } = glsl;
 
     const light = this.light = this.calculateLightPositions();
 
     // Wall data.
     const wall0 = wall.top[0].xy;
     const wall1 = wall.top[1].xy;
+
+    const midpenumbra = [
+      Ray2d(wall0, normalizedDirection(light.center.xy, wall0)),
+      Ray2d(wall1, normalizedDirection(light.center.xy, wall1)),
+    ];
 
     // First determine the tangent points of the circle.
     const lightCir = Circle({
@@ -1007,53 +1066,86 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     tangentPoints(lightCir, wall0, tangents0);
     tangentPoints(lightCir, wall1, tangents1);
 
+    // If the light overlaps the wall, the penumbra shoot straight out along the wall.
+    // Redo the penumbra tangents by shrinking the light to be just smaller than distance to wall.
+    const distToWall = distanceToSegment(light.center.xy, wall0, wall1);
+    if ( distToWall <= uLightSize ) {
+      const lightCirSmall = Circle({
+        center: light.center.xy,
+        radius: max(distToWall - 1.0, 0.0)
+      });
+
+      // If light center is on the wall, offset.
+      if ( almostEqual(distToWall, 0.0, 1.0e-06) ) {
+        lightCirSmall.center = this.offsetLightFromWall(light, wall, 0.5);
+        midpenumbra[0].direction = normalizedDirection(lightCirSmall.center, wall0);
+        midpenumbra[1].direction = normalizedDirection(lightCirSmall.center, wall1);
+      }
+
+      const tangents0sm = [lightCir.center, lightCir.center];
+      const tangents1sm = [lightCir.center, lightCir.center];
+      tangentPoints(lightCirSmall, wall0, tangents0sm);
+      tangentPoints(lightCirSmall, wall1, tangents1sm);
+
+      // Umbra are on the light center side.
+      const oLight = orient(wall.top[0].xy, wall.top[1].xy, light.center.xy);
+      const idxU0 = sameSide(wall.top[0].xy, wall.top[1].xy, oLight, tangents0[0]) ? 0 : 1;
+      const idxU1 = sameSide(wall.top[0].xy, wall.top[1].xy, oLight, tangents1[0]) ? 0 : 1;
+
+      // Penumbra are closest to the wall.
+      const distToWall2_00 = distanceSquaredToLine(tangents0sm[0], wall0, wall.direction);
+      const distToWall2_01 = distanceSquaredToLine(tangents0sm[1], wall0, wall.direction);
+      const distToWall2_10 = distanceSquaredToLine(tangents1sm[0], wall0, wall.direction);
+      const distToWall2_11 = distanceSquaredToLine(tangents1sm[1], wall0, wall.direction);
+      const idxP0 = distToWall2_00 < distToWall2_01 ? 0 : 1;
+      const idxP1 = distToWall2_10 < distToWall2_11 ? 0 : 1;
+      tangents0[1] = tangents0[idxU0];
+      tangents1[1] = tangents1[idxU1];
+      tangents0[0] = tangents0sm[idxP0];
+      tangents1[0] = tangents1sm[idxP1];
+    }
+
     // Build the rays for each tangent to associate them with the correct wall point.
-    const tangentRays0 = [
+    const tangentRays = [
       Ray2d(wall0, normalizedDirection(tangents0[0], wall0)),
       Ray2d(wall0, normalizedDirection(tangents0[1], wall0)),
-    ];
-    const tangentRays1 = [
       Ray2d(wall1, normalizedDirection(tangents1[0], wall1)),
-      Ray2d(wall1, normalizedDirection(tangents1[1], wall1)),
+      Ray2d(wall1, normalizedDirection(tangents1[1], wall1))
     ];
 
-    // Tangents0 are the points on either side of the circle that are tangent to wall0.
-    // Tangents1 are the points on either side of the circle that are tangent to wall1.
-    // Need the tangents on the same side of the circle. These are close to each other.
-    const dist00 = distanceSquared(tangents0[0], tangents1[0]);
-    const dist01 = distanceSquared(tangents0[0], tangents1[1]);
-    const tangentGroupA = [tangentRays0[0], tangentRays1[0]]; // A[0] is wall0, A[1] is wall1.
-    const tangentGroupB = [tangentRays0[1], tangentRays1[1]];
-    if ( dist00 > dist01 ) {
-      tangentGroupA[1] = tangentRays1[1];
-      tangentGroupB[1] = tangentRays1[0];
-    }
-
-    // Determine which side the tangents are on. Penumbra: cross; umbra: same.
-    // Penumbra and umbra switch when the wall is nearly vertical.
-    // Penumbra form the intersection closest to the light
-    const penumbra = Array(2);
-    const umbra = Array(2);
-    let minD = max(distanceSquared(wall0, light.center.xy), distanceSquared(wall1, light.center.xy));
-    for ( let i = 0; i < 2; i += 1 ) {
-      for ( let j = 0; j < 2; j += 1 ) {
-        const ix = vec2();
-        if ( lineLineIntersection(tangentGroupA[i], tangentGroupB[j], ix) ) {
-          const d = distanceSquared(ix, light.center.xy);
-          if ( d > minD ) continue;
-          minD = d;
-          penumbra[0] = tangentGroupA[i];
-          penumbra[1] = tangentGroupB[j];
-          umbra[0] = tangentGroupA[1 - i];
-          umbra[1] = tangentGroupB[1 - j];
-        }
-      }
-    }
-
-    const midpenumbra = [
-      Ray2d(wall0, normalizedDirection(light.center.xy, wall0)),
-      Ray2d(wall1, normalizedDirection(light.center.xy, wall1)),
+    // Penumbra are on the outside, umbra are on the inside.
+    // Sort so the rays are oriented accordingly.
+    // Rays may cross near wall so extend accordingly.
+    const maxR2 = this.maxR2();
+    const projectedPoints = [
+      projectRay(tangentRays[0], maxR2),
+      projectRay(tangentRays[1], maxR2),
+      projectRay(tangentRays[2], maxR2),
+      projectRay(tangentRays[3], maxR2)
     ];
+
+    // Bubble sort
+    this._cmpSwapTangentRays(tangentRays, projectedPoints, 0, 1);
+    this._cmpSwapTangentRays(tangentRays, projectedPoints, 0, 2);
+    this._cmpSwapTangentRays(tangentRays, projectedPoints, 0, 3);
+    this._cmpSwapTangentRays(tangentRays, projectedPoints, 1, 2);
+    this._cmpSwapTangentRays(tangentRays, projectedPoints, 1, 3);
+    this._cmpSwapTangentRays(tangentRays, projectedPoints, 2, 3);
+
+    /* Example scenario
+    [4, 2, 1, 3]
+
+    [2, 4, 1, 3] 0, 1
+    [1, 4, 2, 3] 0, 2
+    [1, 4, 2, 3] 0, 3
+
+    [1, 2, 4, 3] 1, 2
+    [1, 2, 4, 3] 1, 3
+
+    [1, 2, 3, 4] 2, 3
+    */
+    const umbra = [tangentRays[1], tangentRays[2]];
+    const penumbra = [tangentRays[0], tangentRays[3]];
     return ShadowRays2d({
       umbra,
       midpenumbra,
@@ -1095,6 +1187,20 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     C: Intersection of penumbra line with canvas ray.
     */
 
+    /*
+    A = vec2();
+    B = vec2();
+    C = vec2();
+    D = vec2();
+    E = vec2();
+    F = vec2();
+    G = vec2();
+    H = vec2();
+    I = vec2();
+    W0 = vec2();
+    W1 = vec2();
+    */
+
     const {
       lineLineIntersection,
       distanceSquared,
@@ -1115,27 +1221,30 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     W1.set(wall.top[1 - closestIdx].xy);
 
     // If W0 === A, then the wall is nearly collinear with the light (line from wall intersects light circle).
-    const nearCollinear = almostEqual(W0.x, A.x, 1.0e-08) && almostEqual(W0.y, A.y, 1.0e-08);
+    const nearCollinear = almostEqual(W0, A, 1.0e-08);
     if ( nearCollinear ) {
       A.x = W0.x;
       A.y = W0.y;
     }
 
-    // The AB penumbra ray runs through the closer endpoint.
-    closestIdx = sideShadowRays.penumbra[0].origin.x === W0.x && sideShadowRays.penumbra[0].origin.y === W0.y ? 0 : 1;
-    const rAB = sideShadowRays.penumbra[closestIdx];
-    const rAC = sideShadowRays.penumbra[1 - closestIdx];
-
-    // D and G are the intersections of the penumbra with opposite umbra.
+    // The DE penumbra ray runs through the closer endpoint.
+    const closerIdx = sideShadowRays.penumbra[0].origin.x === W0.x && sideShadowRays.penumbra[0].origin.y === W0.y ? 0 : 1;
+    const rAB = sideShadowRays.penumbra[closerIdx];
+    const rAC = sideShadowRays.penumbra[1 - closerIdx];
     const rD_penumbra = rAB;
     const rG_penumbra = rAC;
-    const rD_umbra = sideShadowRays.umbra[closestIdx];
-    const rG_umbra = sideShadowRays.umbra[1 - closestIdx];
+
+    // The DF umbra ray runs through the further endpoint.
+    const furtherIdx = sideShadowRays.umbra[0].origin.x === W1.x && sideShadowRays.umbra[0].origin.y === W1.y ? 0 : 1;
+    const rD_umbra = sideShadowRays.umbra[furtherIdx];
+    const rG_umbra = sideShadowRays.umbra[1 - furtherIdx];
+
+    // D and G are the intersections of the penumbra with opposite umbra.
     lineLineIntersection(rD_penumbra, rD_umbra, D);
     lineLineIntersection(rG_penumbra, rG_umbra, G);
 
     // E intersects the D penumbra ray with the canvas line.
-    //let canvasEdge;
+    // let canvasEdge;
     // let canvasEdge2;
     const infiniteShadow = this.isInfiniteShadow(farShadowDirs.penumbra);
     if ( infiniteShadow ) {
@@ -1181,8 +1290,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
 //     // Mirror for ∆GHI. Use I b/c it is on the W0 line.
 //     const rIWall = Ray2d(I, wall.direction);
 //     lineLineIntersection(rIWall, rG_penumbra, H);
-
-
 
     if ( nearCollinear && !infiniteShadow ) {
       // B and C are on the I and F line.
@@ -1327,6 +1434,8 @@ export class SizedShadowsTest extends PenumbraBasicTest {
    */
   ambientLight(w0, w1) {
     const { uLightSize, uLightPosition } = this;
+    const distToWall = distanceToSegment(uLightPosition.xy, w0, w1);
+    if ( distToWall <= uLightSize ) return vec2(1.0, 0.0);
     return this.circleBisectorPercentArea(w0, w1, uLightPosition.xy, uLightSize);
   }
 

@@ -40,6 +40,8 @@ ${defineFunction("normalizedDirection")}
 ${defineFunction("normalizeRay")}
 ${defineStruct("Circle")}
 ${defineFunction("tangentPoints")}
+${defineFunction("sameSide")}
+${defineFunction("closest2dPointToSegment")}
 
 ${PENUMBRA_VERTEX_FUNCTIONS}
 
@@ -95,6 +97,38 @@ ShadowDirections calculateNearShadowDirections(in Wall wall, in Light light) {
 }
 
 /**
+ * Offset the circle center from the wall by some distance.
+ * If collinear with the wall, move in the direction of the wall but keep collinearity.
+ * If non-collinear with the wall, move away from wall.
+ * @param {Light} light
+ * @param {Wall} wall
+ * @param {float} d
+ * @returns {vec2} New circle center
+ */
+vec2 offsetLightFromWall(in Light light, in Wall wall, in float d) {
+  vec2 wallDir = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
+  return projectRay(Ray2d(light.center.xy, vec2(wallDir.y, -wallDir.x)), d);
+}
+
+/**
+ * Swap two indices in the tangent array.
+ * @param {inout Ray2d[4]} tangentRays
+ * @param {inout vec2[4]} projectedPoints
+ * @param {int} idx0
+ * @param {int} idx1
+ */
+void _cmpSwapTangentRays(inout Ray2d[4] tangentRays, inout vec2[4] projectedPoints, int idx0, int idx1) {
+  if ( orient(tangentRays[idx0].origin, projectedPoints[idx0], projectedPoints[idx1]) > 0.0 ) {
+    Ray2d tmpRay = tangentRays[idx0];
+    tangentRays[idx0] = tangentRays[idx1];
+    tangentRays[idx1] = tmpRay;
+    vec2 tmpVec = projectedPoints[idx0];
+    projectedPoints[idx0] = projectedPoints[idx1];
+    projectedPoints[idx1] = tmpVec;
+  }
+}
+
+/**
  * Direction from light --> wall endpoint. Origin at the wall endpoint.
  * @param {Wall} wall
  * @param {Light} light
@@ -107,6 +141,14 @@ ShadowRays2d calculateSideShadowRays(in Wall wall, in Light light) {
   vec2 wallMid = (wall0 + wall1) * 0.5;
   vec2 wallDir = normalizedDirection(wall0, wall1);
 
+  // Determine which side the tangents are on. Penumbra: cross; umbra: same.
+  // Penumbra and umbra switch when the wall is nearly vertical.
+  // Penumbra form the intersection closest to the light
+  Ray2d[2] midpenumbra = Ray2d[2](
+    Ray2d(wall0, normalizedDirection(light.center.xy, wall0)),
+    Ray2d(wall1, normalizedDirection(light.center.xy, wall1))
+  );
+
   // First determine the tangent points of the circle.
   Circle lightCir = Circle(
     light.center.xy, // Center
@@ -117,49 +159,88 @@ ShadowRays2d calculateSideShadowRays(in Wall wall, in Light light) {
   tangentPoints(lightCir, wall0, tangents0);
   tangentPoints(lightCir, wall1, tangents1);
 
-  // Build the rays for each tangent to associate them with the correct wall point.
-  Ray2d[2] tangentRays0 = Ray2d[2](
-    Ray2d(wall0, normalizedDirection(tangents0[0], wall0)),
-    Ray2d(wall0, normalizedDirection(tangents0[1], wall0)));
-  Ray2d[2] tangentRays1 = Ray2d[2](
-    Ray2d(wall1, normalizedDirection(tangents1[0], wall1)),
-    Ray2d(wall1, normalizedDirection(tangents1[1], wall1)));
+  // If the light overlaps the wall, the penumbra shoot straight out along the wall.
+  // Redo the penumbra tangents by shrinking the light to be just smaller than distance to wall.
+  float distToWall = distanceToSegment(light.center.xy, wall0, wall1);
+  if ( distToWall <= uLightSize ) {
+    Circle lightCirSmall = Circle(
+      light.center.xy,              // Center
+      max(distToWall - 1.0, 0.0)    // Radius
+    );
 
-  // Tangents0 are the points on either side of the circle that are tangent to wall0.
-  // Tangents1 are the points on either side of the circle that are tangent to wall1.
-  // Need the tangents on the same side of the circle. These are close to each other.
-  float dist00 = distanceSquared(tangents0[0], tangents1[0]);
-  float dist01 = distanceSquared(tangents0[0], tangents1[1]);
-  Ray2d[2] tangentGroupA = Ray2d[2](tangentRays0[0], tangentRays1[0]); // A[0] is wall0, A[1] is wall1.
-  Ray2d[2] tangentGroupB = Ray2d[2](tangentRays0[1], tangentRays1[1]);
-  if ( dist00 > dist01 ) {
-    tangentGroupA[1] = tangentRays1[1];
-    tangentGroupB[1] = tangentRays1[0];
-  }
-
-  // Determine which side the tangents are on. Penumbra: cross; umbra: same.
-  // Penumbra and umbra switch when the wall is nearly vertical.
-  // Penumbra form the intersection closest to the light
-  Ray2d[2] penumbra;
-  Ray2d[2] umbra;
-  float minD = max(distanceSquared(wall0, light.center.xy), distanceSquared(wall1, light.center.xy));
-  for ( int i = 0; i < 2; i += 1 ) {
-    for ( int j = 0; j < 2; j += 1 ) {
-      vec2 ix;
-      if ( lineLineIntersection(tangentGroupA[i], tangentGroupB[j], ix) ) {
-        float d = distanceSquared(ix, light.center.xy);
-        if ( d > minD ) continue;
-        minD = d;
-        penumbra[0] = tangentGroupA[i];
-        penumbra[1] = tangentGroupB[j];
-        umbra[0] = tangentGroupA[1 - i];
-        umbra[1] = tangentGroupB[1 - j];
-      }
+    // If light center is on the wall, offset.
+    if ( almostEqual(distToWall, 0.0, 1.0e-06) ) {
+      lightCirSmall.center = offsetLightFromWall(light, wall, 0.5);
+      midpenumbra[0].direction = normalizedDirection(lightCirSmall.center, wall0);
+      midpenumbra[1].direction = normalizedDirection(lightCirSmall.center, wall1);
     }
+
+    vec2[2] tangents0sm = vec2[2](lightCir.center, lightCir.center);
+    vec2[2] tangents1sm = vec2[2](lightCir.center, lightCir.center);
+    tangentPoints(lightCirSmall, wall0, tangents0sm);
+    tangentPoints(lightCirSmall, wall1, tangents1sm);
+
+    // Umbra are on the light center side.
+    float oLight = orient(wall.top[0].xy, wall.top[1].xy, light.center.xy);
+    int idxU0 = sameSide(wall.top[0].xy, wall.top[1].xy, oLight, tangents0[0]) ? 0 : 1;
+    int idxU1 = sameSide(wall.top[0].xy, wall.top[1].xy, oLight, tangents1[0]) ? 0 : 1;
+
+    // Penumbra are closest to the wall.
+    float distToWall2_00 = distanceSquaredToLine(tangents0sm[0], wall0, wallDir);
+    float distToWall2_01 = distanceSquaredToLine(tangents0sm[1], wall0, wallDir);
+    float distToWall2_10 = distanceSquaredToLine(tangents1sm[0], wall0, wallDir);
+    float distToWall2_11 = distanceSquaredToLine(tangents1sm[1], wall0, wallDir);
+    int idxP0 = distToWall2_00 < distToWall2_01 ? 0 : 1;
+    int idxP1 = distToWall2_10 < distToWall2_11 ? 0 : 1;
+
+    // Use the original umbra tangents and the new penumbra tangents from the smaller circle.
+    tangents0[1] = tangents0[idxU0];
+    tangents1[1] = tangents1[idxU1];
+    tangents0[0] = tangents0sm[idxP0];
+    tangents1[0] = tangents1sm[idxP1];
   }
-  Ray2d[2] midpenumbra = Ray2d[2](
-    Ray2d(wall0, normalizedDirection(light.center.xy, wall0)),
-    Ray2d(wall1, normalizedDirection(light.center.xy, wall1)));
+
+  // Build the rays for each tangent to associate them with the correct wall point.
+  Ray2d[4] tangentRays = Ray2d[4](
+    Ray2d(wall0, normalizedDirection(tangents0[0], wall0)),
+    Ray2d(wall0, normalizedDirection(tangents0[1], wall0)),
+    Ray2d(wall1, normalizedDirection(tangents1[0], wall1)),
+    Ray2d(wall1, normalizedDirection(tangents1[1], wall1))
+  );
+
+  // Penumbra are on the outside, umbra are on the inside.
+  // Sort so the rays are oriented accordingly.
+  // Rays may cross near wall so extend accordingly.
+  float maxR2 = maxR2();
+  vec2[4] projectedPoints = vec2[4](
+    projectRay(tangentRays[0], maxR2),
+    projectRay(tangentRays[1], maxR2),
+    projectRay(tangentRays[2], maxR2),
+    projectRay(tangentRays[3], maxR2)
+  );
+
+  // Bubble sort
+  _cmpSwapTangentRays(tangentRays, projectedPoints, 0, 1);
+  _cmpSwapTangentRays(tangentRays, projectedPoints, 0, 2);
+  _cmpSwapTangentRays(tangentRays, projectedPoints, 0, 3);
+  _cmpSwapTangentRays(tangentRays, projectedPoints, 1, 2);
+  _cmpSwapTangentRays(tangentRays, projectedPoints, 1, 3);
+  _cmpSwapTangentRays(tangentRays, projectedPoints, 2, 3);
+
+  /* Example scenario
+  [4, 2, 1, 3]
+
+  [2, 4, 1, 3] 0, 1
+  [1, 4, 2, 3] 0, 2
+  [1, 4, 2, 3] 0, 3
+
+  [1, 2, 4, 3] 1, 2
+  [1, 2, 4, 3] 1, 3
+
+  [1, 2, 3, 4] 2, 3
+  */
+  Ray2d[2] umbra = Ray2d[2](tangentRays[1], tangentRays[2]);
+  Ray2d[2] penumbra = Ray2d[2](tangentRays[0], tangentRays[3]);
   return ShadowRays2d(
     umbra,
     midpenumbra,
@@ -234,19 +315,22 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   vec2 wallMid = (W0 + W1) * 0.5;
 
   // If W0 == A, then the wall is nearly collinear with the light (line from wall intersects light circle).
-  bool nearCollinear = almostEqual(W0.x, A.x, 1.0e-08) && almostEqual(W0.y, A.y, 1.0e-08);
+  bool nearCollinear = almostEqual(W0, A, 1.0e-08);
   if ( nearCollinear ) A = W0;
 
-  // The AB penumbra ray runs through the closer endpoint.
-  closestIdx = sideShadowRays.penumbra[0].origin.x == W0.x && sideShadowRays.penumbra[0].origin.y == W0.y ? 0 : 1;
-  Ray2d rAB = sideShadowRays.penumbra[closestIdx];
-  Ray2d rAC = sideShadowRays.penumbra[1 - closestIdx];
-
-  // D and G are the intersections of the penumbra with opposite umbra.
+  // The DE penumbra ray runs through the closer endpoint.
+  int closerIdx = sideShadowRays.penumbra[0].origin.x == W0.x && sideShadowRays.penumbra[0].origin.y == W0.y ? 0 : 1;
+  Ray2d rAB = sideShadowRays.penumbra[closerIdx];
+  Ray2d rAC = sideShadowRays.penumbra[1 - closerIdx];
   Ray2d rD_penumbra = rAB;
   Ray2d rG_penumbra = rAC;
-  Ray2d rD_umbra = sideShadowRays.umbra[closestIdx];
-  Ray2d rG_umbra = sideShadowRays.umbra[1 - closestIdx];
+
+  // The DF umbra ray runs through the further endpoint.
+  int furtherIdx = sideShadowRays.umbra[0].origin.x == W1.x && sideShadowRays.umbra[0].origin.y == W1.y ? 0 : 1;
+  Ray2d rD_umbra = sideShadowRays.umbra[furtherIdx];
+  Ray2d rG_umbra = sideShadowRays.umbra[1 - furtherIdx];
+
+  // D and G are the intersections of the penumbra with opposite umbra.
   lineLineIntersection(rD_penumbra, rD_umbra, D);
   lineLineIntersection(rG_penumbra, rG_umbra, G);
 
@@ -411,6 +495,8 @@ vec2 circleBisectorPercentArea(in vec2 a, in vec2 b, in vec2 center, in float ra
  * @returns {vec2}
  */
 vec2 ambientLight(vec2 w0, vec2 w1) {
+  float distToWall = distanceToSegment(uLightPosition.xy, w0, w1);
+  if ( distToWall <= uLightSize ) return vec2(1.0, 0.0);
   return circleBisectorPercentArea(w0, w1, uLightPosition.xy, uLightSize);
 }
 

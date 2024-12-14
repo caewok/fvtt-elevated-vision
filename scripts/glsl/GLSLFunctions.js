@@ -40,9 +40,9 @@ GLSLFunctions.almostEqual =
  * Typically, epsilon is 1e-08.
  */
 bool almostEqual(in float a, in float b, in float epsilon) { return abs(a - b) < epsilon; }
-// bool almostEqual(in vec2 a, in vec2 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
-// bool almostEqual(in vec3 a, in vec3 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
-// bool almostEqual(in vec4 a, in vec4 b, in float epsilon) { return all(lessThan(abs(a - b), epsilon)); }
+bool almostEqual(in vec2 a, in vec2 b, in float epsilon) { return all(lessThan(abs(a - b), vec2(epsilon))); }
+bool almostEqual(in vec3 a, in vec3 b, in float epsilon) { return all(lessThan(abs(a - b), vec3(epsilon))); }
+bool almostEqual(in vec4 a, in vec4 b, in float epsilon) { return all(lessThan(abs(a - b), vec4(epsilon))); }
 `;
 
 GLSLFunctions.between =
@@ -472,6 +472,21 @@ float orient(in vec2 a, in vec2 b, in vec2 c) {
 }
 `;
 
+GLSLFunctions.sameSide =
+`
+${defineFunction("orient")}
+/**
+ * Are two points on the same side with relation to a line?
+ */
+bool sameSide(in vec2 a, in vec2 b, in vec2 p0, in vec2 p1) {
+  return orient(a, b, p0) * orient(a, b, p1) > 0.0;
+}
+
+bool sameSide(in vec2 a, in vec2 b, in float o, in vec2 p1) {
+  return o * orient(a, b, p1) > 0.0;
+}
+`;
+
 GLSLFunctions.pointBetweenRays =
 `
 ${defineFunction("orient")}
@@ -660,12 +675,13 @@ float distanceSquared(in vec3 a, in vec3 b) {
 // Note: will fail if passed a 0-length ab segment.
 GLSLFunctions.closest2dPointToLine =
 `
-float closest2dPointToLine(in vec2 c, in vec2 a, in vec2 dir) {
+vec2 closest2dPointToLine(in vec2 c, in vec2 a, in vec2 dir) {
   float denom = dot(dir, dir);
-  if ( denom == 0.0 ) return 0.0;
+  if ( denom == 0.0 ) return c;
 
   vec2 deltaCA = c - a;
-  return dot(deltaCA, dir) / denom; // Proportion along a --> dir.
+  float u =  dot(deltaCA, dir) / denom;  // Proportion along a --> dir.
+  return a + (dir * u);
 }
 `;
 
@@ -674,15 +690,19 @@ GLSLFunctions.closest2dPointToSegment =
 ${defineFunction("closest2dPointToLine")}
 
 vec2 closest2dPointToSegment(in vec2 c, in vec2 a, in vec2 b) {
-  float u = closest2dPointToLine(c, a, b - a);
-  if ( u <= 0.0 ) return a;
-  if ( u >= 1.0 ) return b;
-  return a + (u * dir);
+  vec2 dir = b - a;
+  vec2 deltaCA = c - a;
+  float u = dot(deltaCA, dir) / dot(dir, dir);
+  if ( u < 0.0 ) return a;
+  if ( u > 1.0 ) return b;
+  return a + (dir * u);
 }`;
 
 GLSLFunctions.distanceToLine =
 `
 ${defineFunction("closest2dPointToLine")}
+${defineFunction("closest2dPointToSegment")}
+${defineFunction("distanceSquared")}
 
 /**
  * Distance to the closest point to a line.
@@ -692,10 +712,25 @@ ${defineFunction("closest2dPointToLine")}
  * @returns {float}
  */
 float distanceToLine(in vec2 c, in vec2 a, in vec2 dir) {
-  float u = closest2dPointToLine(c, a, dir);
-  vec2 ix = a + (u * dir);
+  vec2 ix = closest2dPointToLine(c, a, dir);
   return distance(c, ix);
 }
+
+float distanceSquaredToLine(in vec2 c, in vec2 a, in vec2 dir) {
+  vec2 ix = closest2dPointToLine(c, a, dir);
+  return distanceSquared(c, ix);
+}
+
+float distanceToSegment(in vec2 c, in vec2 a, in vec2 b) {
+  vec2 ix = closest2dPointToSegment(c, a, b);
+  return distance(c, ix);
+}
+
+float distanceSquaredToSegment(in vec2 c, in vec2 a, in vec2 b) {
+  vec2 ix = closest2dPointToSegment(c, a, b);
+  return distanceSquared(c, ix);
+}
+
 `;
 
 GLSLFunctions.lineLineIntersection =

@@ -45,7 +45,6 @@ import {
   rayFromPoints,
   projectRay,
   normalizedRayFromPoints,
-  closestPointToLine,
   distanceToLine,
   clamp,
   mix,

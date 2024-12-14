@@ -80,6 +80,13 @@ Wall calculateWallPositions() {
 }
 
 /**
+ * Maximum diagonal of the canvas, squared.
+ */
+float maxR2() {
+  return (uSceneDims.z * uSceneDims.z) + (uSceneDims.w * uSceneDims.w); // Don't really need the 2x.
+}
+
+/**
  * Determine the barymetric coordinates of a point for a given triangle.
  */
 vec3 baryForPoint(vec2 pt, vec2[3] tri) {

@@ -159,6 +159,8 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
       any() { return this.some(a => a); }
 
       all() { return this.every(a => a); }
+
+      abs() { return this._componentWise(a => Math.abs(a)); }
     }
 
     // Define getters and setters for each single SWIZZLE property
@@ -250,9 +252,9 @@ a.add(b)
 */
 
 export function almostEqual(a, b, epsilon) {
-  return Math.abs(a - b) < epsilon;
+  if ( Number.isNumeric(a) ) return Math.abs(a - b) < epsilon;
+  return all(lessThan(abs(a.subtract(b)), new a.constructor(epsilon)));
 }
-
 
 /**
  * Calculate barycentric position within a given triangle
@@ -695,6 +697,23 @@ export function hash(p) {
 }
 
 /**
+ * Closest point to a line segment.
+ * See foundry.utils.closestPointToSegment
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} b
+ * @returns {vec2}
+ */
+export function closest2dPointToSegment(c, a, b) {
+  const dir = b.subtract(a);
+  const deltaCA = c.subtract(a);
+  const u = dot(deltaCA, dir) / dot(dir, dir);
+  if ( u < 0.0 ) return a;
+  if ( u > 1.0 ) return b;
+  return a.add(dir.multiplyScalar(u));
+}
+
+/**
  * Closest point to a line.
  * @param {vec2} c
  * @param {vec2} a
@@ -702,12 +721,12 @@ export function hash(p) {
  * @param {out float} u
  * @returns {vec2}
  */
-export function closestPointToLine(c, a, dir, uValue = { u: null }) {
+export function closest2dPointToLine(c, a, dir) {
   const denom = dir.dot(dir);
-  if ( denom === 0.0 ) return a;
+  if ( denom === 0.0 ) return c;
 
   const deltaCA = c.subtract(a);
-  const u = uValue.u = deltaCA.dot(dir) / denom;
+  const u = deltaCA.dot(dir) / denom;
   return a.add(dir.multiplyScalar(u));
 }
 
@@ -719,9 +738,39 @@ export function closestPointToLine(c, a, dir, uValue = { u: null }) {
  * @returns {float}
  */
 export function distanceToLine(c, a, dir) {
-  const ix = closestPointToLine(c, a, dir);
+  const ix = closest2dPointToLine(c, a, dir);
   return c.distance(ix);
 }
+
+/**
+ * Distance squared to the closest point to a line.
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} dir
+ * @returns {float}
+ */
+export function distanceSquaredToLine(c, a, dir) {
+  const ix = closest2dPointToLine(c, a, dir);
+  return c.distanceSquared(ix);
+}
+
+/**
+ * Distance to the closest point to a line segment.
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} b
+ * @returns {float}
+ */
+export function distanceToSegment(c, a, b) {
+  const ix = closest2dPointToSegment(c, a, b);
+  return c.distance(ix);
+}
+
+export function distanceSquaredToSegment(c, a, b) {
+  const ix = closest2dPointToSegment(c, a, b);
+  return c.distanceSquared(ix);
+}
+
 
 /**
  * GLSL any
@@ -791,6 +840,8 @@ export function greaterThanEqual(a, b) { return a.greaterThanEqual(b); }
  * @returns {bvec}
  */
 export function notEqual(a, b) { return a.notEqual(b); }
+
+export function abs(a) { return a.abs(); }
 
 /**
  * Ray defined by a point and a direction from that point.
@@ -1035,13 +1086,32 @@ export function lineLineIntersects(a, b, c, d) {
   return lineLineIntersectsVector(a, b, c, d);
 }
 
-
 /**
  * @param {vec2|vec3} a
  * @param {vec2|vec3} b
  * @returns {vec2|vec3}
  */
 export function normalizedDirection(a, b) { return b.subtract(a).normalize(); }
+
+/**
+ * Are two points on the same side with relation to a line?
+ * @param {vec2} a
+ * @param {vec2} b
+ * @param {vec2} p0
+ * @param {vec2} p1
+ * @returns {bool}
+ *
+ * Or:
+ * @param {vec2} a
+ * @param {vec2} b
+ * @param {float} o   Orientation of a -> b -> p0
+ * @param {vec2} p1
+ */
+export function sameSide(a, b, p0, p1) {
+  const orient = foundry.utils.orient2dFast;
+  if ( Number.isNumeric(p0) ) return p0 * orient(a, b, p1) > 0.0;
+  return orient(a, b, p0) * orient(a, b, p1) > 0.0;
+}
 
 /**
  * Returns 0.0 if x < a, otherwise 1.0
