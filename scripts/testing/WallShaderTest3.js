@@ -1181,26 +1181,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     [1, 2, 3, 4] 2, 3
     */
 
-    // If two tangent rays are collinear, the penumbra should be the nearer wall endpoint.
-    //     if ( orient(tangentRays[0].origin, projectedPoints[0], projectedPoints[1]) === 0.0 ) {
-    //       const closestIdx = distanceSquared(lightCir.center, wall.top[1].xy) < distanceSquared(lightCir.center, wall.top[0].xy) ? 1 : 0;
-    //       const W0 = wall.top[closestIdx].xy;
-    //       if ( tangentRays[1].origin.x === W0.x && tangentRays[1].origin.y === W0.y ) {
-    //         const t0 = tangentRays[0];
-    //         tangentRays[0] = tangentRays[1];
-    //         tangentRays[1] = t0;
-    //       }
-    //     }
-    //     if ( orient(tangentRays[3].origin, projectedPoints[3], projectedPoints[2]) === 0.0 ) {
-    //       const closestIdx = distanceSquared(lightCir.center, wall.top[1].xy) < distanceSquared(lightCir.center, wall.top[0].xy) ? 1 : 0;
-    //       const W0 = wall.top[closestIdx].xy;
-    //       if ( tangentRays[2].origin.x === W0.x && tangentRays[2].origin.y === W0.y ) {
-    //         const t0 = tangentRays[3];
-    //         tangentRays[3] = tangentRays[2];
-    //         tangentRays[2] = t0;
-    //       }
-    //     }
-
     const umbra = [tangentRays[1], tangentRays[2]];
     const penumbra = [tangentRays[0], tangentRays[3]];
     return ShadowRays2d({
@@ -1338,8 +1318,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       const canvasIx = vec3();
       intersectRayPlane(Ray(vec3(wall.mid, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
       const canvasEdge = Ray2d(canvasIx.xy, wall.direction);
-      // canvasEdge2 = canvasEdge;
-
       lineLineIntersection(rD_penumbra, canvasEdge, E);
       lineLineIntersection(rG_umbra, canvasEdge, I);  // Mirror for ∆GHI
 
@@ -1353,17 +1331,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       const hasIxH = lineLineIntersection(rIWall, rG_penumbra, H);
       if ( !hasIxH ) H.set(this.canvasEdgeIntersection(rG_penumbra));
     }
-    // lineLineIntersection(rD_penumbra, canvasEdge, E);
-    // lineLineIntersection(rG_umbra, canvasEdge2, I)
-    // lineLineIntersection(rG_penumbra, canvasEdge2, H); // Mirror for ∆GHI
-
-    // Moving from E along the wall direction, we will intersect rD_umbra at F.
-//     const rEWall = Ray2d(E, wall.direction);
-//     lineLineIntersection(rEWall, rD_umbra, F);
-//
-//     // Mirror for ∆GHI. Use I b/c it is on the W0 line.
-//     const rIWall = Ray2d(I, wall.direction);
-//     lineLineIntersection(rIWall, rG_penumbra, H);
 
     if ( nearCollinear && !infiniteShadow ) {
       // B and C are on the I and F line.
@@ -1371,11 +1338,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       lineLineIntersection(rD_penumbra, rIF, B);
       lineLineIntersection(rG_penumbra, rIF, C);
     } else {
-      // For not near-collinear, B and C will equal E and H, respectively.
-      // For near-collinear for infinite shadow, E and H will already be at the canvas edge.
-      // B.set(E, 0);
-      // C.set(H, 0);
-
       const newABC = this.extendTriangleToCanvasEdge([A, E, H]);
       B.set(newABC[1], 0);
       C.set(newABC[2], 0);
@@ -1424,7 +1386,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     nearFarTri0, nearFarTri1, sideTri0, sideTri1) {
     const { distanceSquared, lineLineIntersection, Ray2d, normalizedDirection } = glsl;
 
-    /*
+    /* For debugging.
     let penumbraTri = [vec2(), vec2(), vec2()];
     let umbraTri = [vec2(), vec2(), vec2()]; // Gradient shading.
     let nearFarTri0 = [vec2(), vec2(), vec2()]; // Defining near and far shadows.
@@ -1639,7 +1601,15 @@ export class SizedShadowsTest extends PenumbraBasicTest {
    */
   vertexCalculations(id) {
     super.vertexCalculations(id);
-    const { Ray2d, ShadowDirections, lineLineIntersection, quadraticIntersection, distanceToSegment, circleContainsPoint, projectRay, normalizedDirection } = glsl;
+    const {
+      Ray2d,
+      ShadowDirections,
+      lineLineIntersection,
+      quadraticIntersection,
+      distanceToSegment,
+      circleContainsPoint,
+      projectRay,
+      normalizedDirection } = glsl;
     const { uLightSize } = this;
     const vertexNum = this.gl_VertexID % 3;
     const wall = this.wall = this.calculateWallPositions();
