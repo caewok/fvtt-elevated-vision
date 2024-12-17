@@ -5,7 +5,6 @@ foundry,
 PIXI
 */
 "use strict";
-/* eslint-disable eqeqeq */
 
 // Replicate the wall shader to extent possible.
 // Can draw shadows, math results, and test simple layouts.
@@ -96,92 +95,24 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
   }
 
   const vectorMixin = function(Base) {
-    return class GLSLVector extends Base {
+    class GLSLVector extends Base {
       static SWIZZLE = SWIZZLE;
 
-      get x() { return this[SWIZZLE.x]; }
-
-      get y() { return this[SWIZZLE.y]; }
-
-      get z() { return this[SWIZZLE.z]; }
-
-      get w() { return this[SWIZZLE.q]; }
-
-      get r() { return this[SWIZZLE.r]; }
-
-      get b() { return this[SWIZZLE.b]; }
-
-      get g() { return this[SWIZZLE.g]; }
-
-      get a() { return this[SWIZZLE.a]; }
-
-      get s() { return this[SWIZZLE.s]; }
-
-      get t() { return this[SWIZZLE.t]; }
-
-      get p() { return this[SWIZZLE.p]; }
-
-      get q() { return this[SWIZZLE.q]; }
-
-      get xy() { return new vec2(this.x, this.y); }
-
-      get xyz() { return new vec3(this.x, this.y, this.z); }
-
-      get zw() { return new vec2(this.z, this.w); }
-
-      set x(value) { this[SWIZZLE.x] = value; }
-
-      set y(value) { this[SWIZZLE.y] = value; }
-
-      set z(value) { this[SWIZZLE.z] = value; }
-
-      set w(value) { this[SWIZZLE.q] = value; }
-
-      set r(value) { this[SWIZZLE.r] = value; }
-
-      set b(value) { this[SWIZZLE.b] = value; }
-
-      set g(value) { this[SWIZZLE.g] = value; }
-
-      set a(value) { this[SWIZZLE.a] = value; }
-
-      set s(value) { this[SWIZZLE.s] = value; }
-
-      set t(value) { this[SWIZZLE.t] = value; }
-
-      set p(value) { this[SWIZZLE.p] = value; }
-
-      set q(value) { this[SWIZZLE.q] = value; }
-
-      add(other) {
+      _componentWise(fn) {
         const out = new this.constructor();
-        for ( let i = 0; i < this.length; i += 1 ) out[i] = this[i] + other[i];
+        for ( let i = 0; i < this.length; i += 1 ) out[i] = fn(this[i], i);
         return out;
       }
 
-      subtract(other) {
-        const out = new this.constructor();
-        for ( let i = 0; i < this.length; i += 1 ) out[i] = this[i] - other[i];
-        return out;
-      }
+      add(other) { return this._componentWise((a, i) => a + other[i]); }
 
-      multiply(other) {
-        const out = new this.constructor();
-        for ( let i = 0; i < this.length; i += 1 ) out[i] = this[i] * other[i];
-        return out;
-      }
+      subtract(other) { return this._componentWise((a, i) => a - other[i]); }
 
-      multiplyScalar(scalar) {
-        const out = new this.constructor();
-        for ( let i = 0; i < this.length; i += 1 ) out[i] = this[i] * scalar;
-        return out;
-      }
+      multiply(other) { return this._componentWise((a, i) => a * other[i]); }
 
-      divide(other) {
-        const out = new this.constructor();
-        for ( let i = 0; i < this.length; i += 1 ) out[i] = this[i] / other[i];
-        return out;
-      }
+      multiplyScalar(scalar) { return this._componentWise(a => a * scalar); }
+
+      divide(other) { return this._componentWise((a, i) => a / other[i]); }
 
       magnitude() { return Math.hypot(...this); }
 
@@ -189,7 +120,7 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
 
       dot(other) {
         let sum = 0;
-        for ( let i = 0; i < this.length; i += 1 ) sum += (this[i] * other[i]);
+        this._componentWise((a, i) => { sum += (a * other[i]); });
         return sum;
       }
 
@@ -202,7 +133,47 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
         const delta = other.subtract(this);
         return delta.dot(delta);
       }
-    };
+
+      clamp(minVal, maxVal) {
+        const out = new this.constructor();
+        this._componentWise((a, i) => { out[i] = Math.min(Math.max(a, minVal), maxVal); });
+        return out;
+      }
+
+      floor() { return this._componentWise(a => Math.floor(a)); }
+
+      equal(other) { return this._componentWise((a, i) => a === other[i]); }
+
+      lessThan(other) { return this._componentWise((a, i) => a < other[i]); }
+
+      greaterThan(other) { return this._componentWise((a, i) => a > other[i]); }
+
+      lessThanEqual(other) { return this._componentWise((a, i) => a <= other[i]); }
+
+      greaterThanEqual(other) { return this._componentWise((a, i) => a >= other[i]); }
+
+      notEqual(other) { return this._componentWise((a, i) => a !== other[i]); }
+
+      not(other) { return this._componentWise(a => !a); }
+
+      any() { return this.some(a => a); }
+
+      all() { return this.every(a => a); }
+
+      abs() { return this._componentWise(a => Math.abs(a)); }
+
+      pow(x) { return this._componentWise((a, i) => Math.pow(a, x[i])); }
+    }
+
+    // Define getters and setters for each single SWIZZLE property
+    //     for (const [key, idx] of Object.entries(SWIZZLE) ) {
+    //       Object.defineProperty(GLSLVector.prototype, key, {
+    //         get: function() { return this[idx]; },
+    //         set: function(value) { this[idx] = value; }
+    //       });
+    //     }
+
+    return GLSLVector;
   };
 
   class vec2 extends vectorMixin(vec2Base) {}
@@ -211,13 +182,70 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
 
   class vec4 extends vectorMixin(vec4Base) {}
 
+  // Add single swizzles
+  for (const [key, idx] of Object.entries(SWIZZLE) ) {
+    Object.defineProperty(vec4.prototype, key, {
+      get: function() { return this[idx]; },
+      set: function(value) { this[idx] = value; }
+    });
+    if ( idx === 3 ) continue; // Keys: w, a, q
+
+    Object.defineProperty(vec3.prototype, key, {
+      get: function() { return this[idx]; },
+      set: function(value) { this[idx] = value; }
+    });
+    if ( idx === 2 ) continue; // Keys: z, b, p
+
+    // Keys: x,y; r,g; s,t
+    Object.defineProperty(vec2.prototype, key, {
+      get: function() { return this[idx]; },
+      set: function(value) { this[idx] = value; }
+    });
+  }
+
+  // Add combination swizzles
+  for ( const a of Object.keys(SWIZZLE) ) {
+    for ( const b of Object.keys(SWIZZLE) ) {
+      const props = { get: function() { return new vec2(this[a], this[b]); } };
+      if ( a !== b ) props.set = function(value) {
+        this[a] = value[0];
+        this[b] = value[1];
+      };
+      Object.defineProperty(vec2.prototype, `${a}${b}`, props);
+      Object.defineProperty(vec3.prototype, `${a}${b}`, props);
+      Object.defineProperty(vec4.prototype, `${a}${b}`, props);
+
+      for ( const c of Object.keys(SWIZZLE) ) {
+        const props = { get: function() { return new vec3(this[a], this[b], this[c]); } };
+        if ( a !== b && a !== c && b !== c ) props.set = function(value) {
+          this[a] = value[0];
+          this[b] = value[1];
+          this[c] = value[2];
+        };
+        Object.defineProperty(vec3.prototype, `${a}${b}${c}`, props);
+        Object.defineProperty(vec4.prototype, `${a}${b}${c}`, props);
+
+        for ( const d of Object.keys(SWIZZLE) ) {
+          const props = { get: function() { return new vec4(this[a], this[b], this[c], this[d]); } };
+          if ( a !== b && a !== c && a !== d && b !== c && b !== d && c !== d ) props.set = function(value) {
+            this[a] = value[0];
+            this[b] = value[1];
+            this[c] = value[2];
+            this[d] = value[3];
+          };
+          Object.defineProperty(vec4.prototype, `${a}${b}${c}${d}`, props);
+        }
+      }
+    }
+  }
+
   return { vec2, vec3, vec4 };
 }
 
 const res = glslVectors({ precision: "highp", type: "float" });
-export const vec2 = res.vec2;
-export const vec3 = res.vec3;
-export const vec4 = res.vec4;
+export const vec2 = (...args) => new res.vec2(...args);
+export const vec3 = (...args) => new res.vec3(...args);
+export const vec4 = (...args) => new res.vec4(...args);
 
 /* Testing
 a = new vec2(1, 2);
@@ -225,6 +253,10 @@ b = new vec2(3, 4);
 a.add(b)
 */
 
+export function almostEqual(a, b, epsilon) {
+  if ( Number.isNumeric(a) ) return Math.abs(a - b) < epsilon;
+  return all(lessThan(abs(a.subtract(b)), new a.constructor(epsilon)));
+}
 
 /**
  * Calculate barycentric position within a given triangle
@@ -255,7 +287,7 @@ export function barycentric(p, a, b, c) {
   const w = ((d00 * d21) - (d01 * d20)) * denomInv;
   const u = 1.0 - v - w;
 
-  return new vec3(u, v, w);
+  return vec3(u, v, w);
 }
 
 export function invertBarycentric(tri, bary) {
@@ -275,21 +307,50 @@ export function barycentricPointInsideTriangle(bary) {
   return bary.y >= 0.0 && bary.z >= 0.0 && (bary.y + bary.z) <= 1.0;
 }
 
+class BaryTriangleData2dGLSLStruct {
+
+  /** @type {vec2} */
+  v0 = vec2();
+
+  /** @type {vec2} */
+  v1 = vec2();
+
+  /** @type {float} */
+  d00 = 0.0;
+
+  /** @type {float} */
+  d01 = 0.0;
+
+  /** @type {float} */
+  d11 = 0.0;
+
+  /** @type {float} */
+  denomInv = 0.0;
+
+  constructor({ v0, v1, d00, d01, d11, denomInv } = {}) {
+    this.v0.set(v0, 0);
+    this.v1.set(v1, 0);
+    this.d00 = d00;
+    this.d01 = d01;
+    this.d11 = d11;
+    this.denomInv = 1 / ((d00 * d11) - (d01 * d01));
+  }
+}
+
 /**
  * Calculate fixed barycentric data for a given triangle.
- * @param {vec3|vec2} a
- * @param {vec3|vec2} b
- * @param {vec3|vec2} c
- * @returns {BaryTriangleGLSLStruct}
+ * @param {vec2} a
+ * @param {vec2} b
+ * @param {vec2} c
+ * @returns {BaryTriangleData2dGLSLStruct}
  */
 export function baryTriangleData(a, b, c, v0, v1, d) {
-  return new BaryTriangleGLSLStruct({
+  return new BaryTriangleData2dGLSLStruct({
     v0: b.subtract(a),
     v1: c.subtract(a),
     d00: v0.dot(v0),
     d01: v0.dot(v1),
-    d11: v1.dot(v1),
-    denomInv: 1 / ((d00 * d11) - (d01 * d01))
+    d11: v1.dot(v1)
   });
 }
 
@@ -310,7 +371,7 @@ export function baryFromTriangleData(p, a, triData) {
   const w = ((d00 * d21) - (d01 * d20)) * denomInv;
   const u = 1.0 - v - w;
 
-  return new vec3(u, v, w);
+  return vec3(u, v, w);
 }
 
 /**
@@ -322,11 +383,40 @@ export function baryFromTriangleData(p, a, triData) {
  * @returns {float|vec2|vec3}
  */
 export function interpolateBarycentric(bary, a, b, c) {
-  if ( Number.isNumeric(a) ) return bary.dot(new vec3(a, b, c));
+  if ( Number.isNumeric(a) ) return bary.dot(vec3(a, b, c));
   a = a.multiplyScalar(bary.x);
   b = b.multiplyScalar(bary.y);
   c = c.multiplyScalar(bary.z);
   return a.add(b).add(c);
+}
+
+/**
+ * Normalize a barycentric area coordinate.
+ * @param {vec3} baryArea
+ * @returns {vec3}
+ */
+export function normalizeBarycentricArea(baryArea) {
+  return baryArea.multiplyScalar(1 / (baryArea.x + baryArea.y + baryArea.z));
+}
+
+/**
+ * Convert a barycentric area to barycentric coordinates of a similar triangle, based on ratio.
+ * @param {vec3} baryArea
+ * @param {float} ratio      The desired side length as a percentage of the original side length
+ *   So if original is 3 and intended is 1, ratio = 1/3
+ * @returns {vec3} The barycentric (normalized) values.
+ */
+export function convertBarycentericAreaSimilarTriangle(baryArea, ratio) {
+  if ( ratio === 0.0 || ratio === 1.0 ) return normalizeBarycentricArea(baryArea);
+
+  const total = baryArea.x + baryArea.y + baryArea.z;
+  const total2 = total * ratio * ratio;
+  const saV2 = baryArea.y * ratio;
+  const saW2 = baryArea.z * ratio;
+  const v2 = saV2 / total2;
+  const w2 = saW2 / total2;
+  const u2 = 1 - v2 - w2;
+  return vec3(u2, v2, w2);
 }
 
 /**
@@ -339,7 +429,13 @@ export function interpolateBarycentric(bary, a, b, c) {
  * @returns {float}
  */
 export function linearConversion(x, oldMin, oldMax, newMin, newMax) {
-  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+  // (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin
+  const denomInv = 1.0 / (oldMax - oldMin);
+  if ( Number.isNumeric(x) ) return ((x - oldMin) * (newMax - newMin) * denomInv) + newMin;
+  return x
+    .subtract(new x.constructor(oldMin))
+    .multiplyScalar((newMax - newMin) * denomInv)
+    .add(new x.constructor(newMin));
 }
 
 /**
@@ -351,7 +447,7 @@ export function linearConversion(x, oldMin, oldMax, newMin, newMax) {
 export function fromAngle(origin, radians, distance) {
   const dx = Math.cos(radians);
   const dy = Math.sin(radians);
-  return origin.add(new vec2(dx, dy).multiplyScalar(distance));
+  return origin.add(vec2(dx, dy).multiplyScalar(distance));
 }
 
 /**
@@ -372,12 +468,426 @@ export function distance(a, b) { return a.distance(b); }
 export function distanceSquared(a, b) { return a.distanceSquared(b); }
 
 /**
+ * GLSL clamp function
+ * @param {float|vec} x
+ * @param {float} minVal
+ * @param {float} maxVal
+ * @returns {float|vec}
+ */
+export function clamp(x, minVal, maxVal) {
+  if ( Number.isNumeric(x) ) return Math.min(Math.max(x, minVal), maxVal);
+  return x.clamp(minVal, maxVal);
+}
+
+/**
+ * GLSL mix function
+ * @param {float|vec} x   Start of the range in which to interpolate
+ * @param {float|vec} y   End of the range in which to interpolate
+ * @param {float|vec} a   Value to use to interpolate between x and y
+ * @returns {float}
+ */
+export function mix(x, y, a) {
+  if ( Number.isNumeric(x) ) return (x * (1 - a)) + (y * a);
+  if ( Number.isNumeric(a) ) return x.multiplyScalar(1 - a).add(y.multiplyScalar(a));
+  return x.multiply((new a.constructor(1.0)).subtract(a)).add(y.multiply(a));
+}
+
+/**
+ * GLSL fract function. Fractional portion of x.
+ * @param {float|vec} x
+ * @returns {float|vec}
+ */
+export function fract(x) {
+  if ( Number.isNumeric(x) ) return x - Math.floor(x);
+  return x._componentWise(a => a - Math.floor(a));
+}
+
+/**
+ * GLSL dot function.
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {float}
+ */
+export function dot(a, b) { return a.dot(b); }
+
+/**
+ * GLSL mod function.
+ * @param {float|vec} x
+ * @param {float|vec} y
+ * @returns {float|vec}
+ */
+export function mod(x, y) {
+  if ( Number.isNumeric(x) ) return x - (y * Math.floor(x/y));
+  if ( Number.isNumeric(y) ) y = new x.constructor(y);
+  return x.subtract(y.multiply(floor(x.divide(y))));
+}
+
+/**
+ * GLSL floor function.
+ * @param {float|vec}
+ * @returns {float|vec}
+ */
+export function floor(a) {
+  if ( Number.isNumeric(a) ) return Math.floor(a);
+  return a.floor();
+}
+
+/**
+ * GLSL smoothstep function.
+ * @param {float|vec} edge0
+ * @param {float|vec} edge1
+ * @param {float|vec} x
+ * @returns {float|vec}
+ */
+export function smoothstep(edge0, edge1, x) {
+  if ( Number.isNumeric(x) ) {
+    // Edge0 and edge1 must be floats.
+    const t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+    return t * t * (3.0 - (2.0 * t));
+  }
+  // X is vec.
+  if ( Number.isNumeric(edge0) ) {
+    // Edge0 and edge1 must be floats.
+    edge0 = new x.constructor(edge0);
+    edge1 = new x.constructor(edge1);
+  }
+  const t = clamp(x.subtract(edge0).divide(edge1.subtract(edge0)), 0.0, 1.0);
+  // GLSL: t * t * (3.0 - (2.0 * t));
+  const v3 = new x.constructor(3.0);
+  return t.multiply(t).multiply(v3.subtract(t.multiplyScalar(2.0)));
+}
+
+/**
+ * Pseudo-random generator based on uv position.
+ * Does not rely on cos/sin.
+ * From FoundryVTT base-shader-mixin.js.
+ * @param {vec2} uv     Should be between 0 and 1.
+ * @returns {float}
+ */
+export function random(uv) {
+  /* GLSL
+  uv = mod(uv, 1000.0);
+      return fract( dot(uv, vec2(5.23, 2.89)
+                        * fract((2.41 * uv.x + 2.27 * uv.y)
+                                 * 251.19)) * 551.83);
+  */
+  uv = mod(uv, 1000.0);
+  const f0 = fract(((2.41 * uv.x) + (2.27 * uv.y)) * 251.19);
+  const d = dot(uv, vec2(5.23, 2.89).multiplyScalar(f0));
+  return fract(d * 551.83);
+}
+
+/**
+ * Pseudo-random vec2 generator based on uv position.
+ * Does not rely on cos/sin.
+ * From FoundryVTT base-shader-mixin.js.
+ * @param {vec2} uv     Should be between 0 and 1.
+ * @returns {vec2}
+ */
+export function random2(uv) {
+  /* GLSL
+  vec2 uvf = fract(uv * vec2(0.1031, 0.1030));
+  uvf += dot(uvf, uvf.yx + 19.19);
+  return fract((uvf.x + uvf.y) * uvf);
+  */
+  let uvf = fract(uv.multiply(vec2(0.1031, 0.1030)));
+  const d = dot(uvf, uvf.yx.add(vec2(19.19)));
+  uvf = uvf.add(vec2(d));
+  return fract(uvf.multiplyScalar(uvf.x + uvf.y));
+}
+
+/**
+ * Conventional noise generator
+ * From FoundryVTT base-shader-mixin.js.
+ * @param {vec2} uv
+ * @returns {float}
+ */
+export function noise(uv) {
+  const d = vec2(0.0, 1.0); // GLSL: const vec2 d = vec2(0.0, 1.0);
+  const b = floor(uv);
+  const f = smoothstep(vec2(0.), vec2(1.0), fract(uv));
+  return mix(
+    mix(random(b), random(b.add(d.yx)), f.x),
+    mix(random(b.add(d.xy)), random(b.add(d.yy)), f.x),
+    f.y
+  );
+  /* GLSL
+  return mix(
+    mix(random(b), random(b + d.yx), f.x),
+    mix(random(b + d.xy), random(b + d.yy), f.x),
+    f.y
+  );
+  */
+}
+
+/**
+ * Conventional noise generator
+ * From FoundryVTT base-shader-mixin.js.
+ * @param {vec2} uv
+ * @returns {vec2}
+ */
+export function noise2(uv) {
+  const d = vec2(0.0, 1.0); // GLSL: const vec2 d = vec2(0.0, 1.0);
+  const b = floor(uv);
+  const f = smoothstep(vec2(0.), vec2(1.0), fract(uv));
+  return mix(
+    mix(random2(b), random2(b.add(d.yx)), f.x),
+    mix(random2(b.add(d.xy)), random2(b.add(d.yy)), f.x),
+    f.y
+  );
+  /* GLSL
+  return mix(
+    mix(random(b), random(b + d.yx), f.x),
+    mix(random(b + d.xy), random(b + d.yy), f.x),
+    f.y
+  );
+  */
+}
+
+
+/**
+ * Hash function used to construct pseudo-random numbers.
+ * See https://www.shadertoy.com/view/4djSRW
+ * @param {float|vec} p
+ * @returns {float|vec} Number between 0 and 1
+ */
+export function hash(p) {
+  if ( Number.isNumeric(p) ) {
+    p = fract(p * 0.1031);
+    p *= p + 33.33;
+    p *= p + p;
+    return fract(p);
+  }
+
+  // 2 --> 2
+  if ( p.length === 2 ) {
+    /* GLSL
+    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx+33.33);
+    return fract((p3.xx+p3.yz)*p3.zy);
+    */
+    p = fract(vec3(p.xy, p.x).multiply(vec3(0.1031, 0.1030, 0.0973)));
+    const dp = dot(p, p.yzx.add(vec3(33.33)));
+    return fract(p.xx.add(p.yz).multiply(p.zy));
+  }
+
+  // 3 --> 3
+  if ( p.length === 3 ) {
+    /* GLSL
+    p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+    p += dot(p, p.yxz+33.33);
+    return fract((p.xxy + p.yxx)*p.zyx);
+    */
+    p = fract(p.multiply(vec3(0.1031, 0.1030, 0.0973)));
+    const dp = dot(p, p.yxz.add(vec3(33.33)));
+    p = p.add(vec3(dp));
+    return fract(p.xxy.add(p.yxx).multiply(p.zyx));
+  }
+
+  // 4 --> 4
+  if ( p.length === 4 ) {
+    /* GLSL
+    p = fract(p  * vec4(0.1031, 0.1030, 0.0973, 0.1099));
+    p += dot(p, p.wzxy+33.33);
+    return fract((p.xxyz+p.yzzw)*p.zywx);
+    */
+    p = fract(p.multiply(vec4(0.1031, 0.1030, 0.0973, 0.1099)));
+    const dp = dot(p, p.wzxy.add(vec3(33.33)));
+    p = p.add(vec3(dp));
+    return fract(p.xxyz.add(p.yzzw).multiply(p.zywx));
+  }
+}
+
+/**
+ * Closest point to a line segment.
+ * See foundry.utils.closestPointToSegment
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} b
+ * @returns {vec2}
+ */
+export function closest2dPointToSegment(c, a, b) {
+  const dir = b.subtract(a);
+  const deltaCA = c.subtract(a);
+  const u = dot(deltaCA, dir) / dot(dir, dir);
+  if ( u < 0.0 ) return a;
+  if ( u > 1.0 ) return b;
+  return a.add(dir.multiplyScalar(u));
+}
+
+/**
+ * Closest point to a line.
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} dir
+ * @param {out float} u
+ * @returns {vec2}
+ */
+export function closest2dPointToLine(c, a, dir) {
+  const denom = dir.dot(dir);
+  if ( denom === 0.0 ) return c;
+
+  const deltaCA = c.subtract(a);
+  const u = deltaCA.dot(dir) / denom;
+  return a.add(dir.multiplyScalar(u));
+}
+
+/**
+ * Distance to the closest point to a line.
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} dir
+ * @returns {float}
+ */
+export function distanceToLine(c, a, dir) {
+  const ix = closest2dPointToLine(c, a, dir);
+  return c.distance(ix);
+}
+
+/**
+ * Distance squared to the closest point to a line.
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} dir
+ * @returns {float}
+ */
+export function distanceSquaredToLine(c, a, dir) {
+  const ix = closest2dPointToLine(c, a, dir);
+  return c.distanceSquared(ix);
+}
+
+/**
+ * Distance to the closest point to a line segment.
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} b
+ * @returns {float}
+ */
+export function distanceToSegment(c, a, b) {
+  const ix = closest2dPointToSegment(c, a, b);
+  return c.distance(ix);
+}
+
+export function distanceSquaredToSegment(c, a, b) {
+  const ix = closest2dPointToSegment(c, a, b);
+  return c.distanceSquared(ix);
+}
+
+
+/**
+ * GLSL any
+ * @param {vec}
+ * @returns {bvec}
+ */
+export function any(v) {
+  if ( Number.isNumeric(v) ) return Boolean(v);
+  return v.any();
+}
+
+/**
+ * GLSL all
+ * @param {vec}
+ * @returns {bvec}
+ */
+export function all(v) {
+  if ( Number.isNumeric(v) ) return Boolean(v);
+  return v.all();
+}
+
+/**
+ * GLSL not
+ * @param {vec}
+ * @returns {bvec}
+ */
+export function not(v) {
+  if ( Number.isNumeric(v) ) return !v;
+  return v.not();
+}
+
+/**
+ * GLSL equal
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function equal(a, b) {
+  if ( Number.isNumeric(a) ) return a === b;
+  return a.equal(b);
+}
+
+/**
+ * GLSL lessThan
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function lessThan(a, b) {
+  if ( Number.isNumeric(a) ) return a < b;
+  return a.lessThan(b);
+}
+
+/**
+ * GLSL greaterThan
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function greaterThan(a, b) {
+  if ( Number.isNumeric(a) ) return a > b;
+  return a.greaterThan(b);
+}
+
+/**
+ * GLSL lessThanEqual
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function lessThanEqual(a, b) {
+  if ( Number.isNumeric(a) ) return a <= b;
+  return a.lessThanEqual(b);
+}
+
+/**
+ * GLSL greaterThanEqual
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function greaterThanEqual(a, b) {
+  if ( Number.isNumeric(a) ) return a >= b;
+  return a.greaterThanEqual(b);
+}
+
+/**
+ * GLSL notEqual
+ * @param {vec} a
+ * @param {vec} b
+ * @returns {bvec}
+ */
+export function notEqual(a, b) {
+  if ( Number.isNumeric(a) ) return a !== b;
+  return a.notEqual(b);
+}
+
+export function abs(a) {
+  if ( Number.isNumeric(a) ) return Math.abs(a);
+  return a.abs();
+}
+
+export function pow(a, x) {
+  if ( Number.isNumeric(a) ) return Math.pow(a, x);
+  return a.pow(x);
+}
+
+
+/**
  * Ray defined by a point and a direction from that point.
  */
 export class Ray2dGLSLStruct {
-  origin = new vec2();
+  origin = vec2();
 
-  direction = new vec2();
+  direction = vec2();
 
   constructor(origin, direction) {
     this.origin.set(origin, 0);
@@ -428,19 +938,40 @@ export class Ray2dGLSLStruct {
     const sA = Math.sin(radians);
     return new Ray2dGLSLStruct(
       this.origin,
-      new vec2((this.direction.x * cA) - (this.direction.y * sA),
+      vec2((this.direction.x * cA) - (this.direction.y * sA),
                (this.direction.x * sA) - (this.direction.y * cA)) // eslint-disable-line indent
     );
   }
+}
+export const Ray2d = (...args) => new Ray2dGLSLStruct(...args);
+
+/**
+ * Construct a ray from two points.
+ * @param {vec2}
+ * @param {vec2}
+ * @returns {Ray2d}
+ */
+export function rayFromPoints(origin, towardsPoint) {
+  return Ray2d(origin, towardsPoint.subtract(origin));
+}
+
+/**
+ * Construct a ray from two points.
+ * @param {vec2}
+ * @param {vec2}
+ * @returns {Ray2d}
+ */
+export function normalizedRayFromPoints(origin, towardsPoint) {
+  return Ray2d(origin, normalizedDirection(origin, towardsPoint));
 }
 
 /**
  * Ray defined by a point and a direction from that point.
  */
 export class RayGLSLStruct extends Ray2dGLSLStruct {
-  origin = new vec3();
+  origin = vec3();
 
-  direction = new vec3();
+  direction = vec3();
 
   constructor(origin, direction) {
     super(origin.xy, direction.xy);
@@ -448,6 +979,7 @@ export class RayGLSLStruct extends Ray2dGLSLStruct {
     this.direction.set(direction, 0);
   }
 }
+export const Ray = (...args) => new RayGLSLStruct(...args);
 
 /**
  * Mimic the GLSL projectRay function.
@@ -455,7 +987,7 @@ export class RayGLSLStruct extends Ray2dGLSLStruct {
  * @param {float} dist
  * @returns {vec2|vec3}
  */
-function projectRay(r, dist) { return r.project(dist); }
+export function projectRay(r, dist) { return r.project(dist); }
 
 /**
  * Plane defined by a point on the plane and its normal.
@@ -463,15 +995,16 @@ function projectRay(r, dist) { return r.project(dist); }
  * Normal must be normalized.
  */
 export class PlaneGLSLStruct {
-  point = new vec3();
+  point = vec3();
 
-  normal = new vec3();
+  normal = vec3();
 
   constructor(point, normal) {
     this.point.set(point, 0);
     this.normal.set(normal, 0);
   }
 }
+export const Plane = (...args) => new PlaneGLSLStruct(...args);
 
 /**
  * @param {Ray2dGLSLStruct|RayGLSLStruct} r
@@ -502,7 +1035,7 @@ export function wallKeyCoordinates(key) {
 
   const x = Math.floor(key * EV_MAX_TEXTURE_SIZE_INV);
   const y = key - (EV_MAX_TEXTURE_SIZE * x);
-  return new vec2(x, y);
+  return vec2(x, y);
 }
 
 /**
@@ -556,9 +1089,110 @@ export function lineLineIntersectionVector(a, b, c, d, ix) {
 }
 
 export function lineLineIntersection(a, b, c, d, ix) {
-  if ( typeof c === "undefined" ) return lineLineIntersectionT(a, b);
+  if ( typeof c === "undefined" ) return lineLineIntersectionRayT(a, b);
   if ( typeof d === "undefined" ) return lineLineIntersectionRay(a, b, c);
   return lineLineIntersectionVector(a, b, c, d, ix);
+}
+
+/**
+ * @param {vec2} a
+ * @param {vec2} b
+ * @param {vec2} c
+ * @param {vec2} d
+ * @returns {bool}
+ */
+function lineLineIntersectsVector(a, b, c, d) {
+  const rayA = rayFromPoints(a, b);
+  const rayB = rayFromPoints(c, d);
+  return lineLineIntersects(rayA, rayB);
+}
+
+/**
+ * @param {Ray2dGLSLStruct} a
+ * @param {Ray2dGLSLStruct} b
+ * @returns {bool}
+ */
+function lineLineIntersectsRay(a, b) {
+  const denom = cross2d(a.direction, b.direction);
+
+  // If lines are parallel, no intersection.
+  return ( Math.abs(denom) >= 0.0001 );
+}
+
+export function lineLineIntersects(a, b, c, d) {
+  if ( typeof c === "undefined" ) return lineLineIntersectsRay(a, b);
+  return lineLineIntersectsVector(a, b, c, d);
+}
+
+/**
+ * Does the circle contain the point?
+ * @param {vec2} center
+ * @param {float} radius
+ * @param {vec2} p
+ * @returns bool
+ */
+export function circleContainsPoint(center, radius, p) {
+  const r2 = pow(radius, 2.0);
+  let d = center.subtract(p);
+  d = d.multiply(d); // GLSL: d *= d;
+  return (d.x + d.y) <= r2;
+}
+
+/**
+ * Determine the points of intersection between a line segment (p0,p1) and a circle.
+ * There will be zero, one, or two intersections
+ * See https://math.stackexchange.com/a/311956.
+ * @param {vec2} p0             Initial point of the line segment
+ * @param {vec2} p1             Terminal point of the line segment
+ * @param {vec2} center         Center of the circle
+ * @param {float} radius        Radius of the circle
+ * @param {float} epsilon       Small tolerance for floating point precision
+ * @param {out vec2[2]} ixs     Placeholder to store intersections found.
+ * @returns {int} Number of intersections.
+ */
+export function quadraticIntersection(p0, p1, center, radius, epsilon, ixs) {
+  const sqrt = Math.sqrt;
+  const d = p1.subtract(p0);
+
+  // Quadratic terms where at^2 + bt + c = 0
+  // a = Math.pow(dx, 2) + Math.pow(dy, 2);
+  const aV = pow(d, vec2(2.0));
+  const a = aV.x + aV.y;
+
+  // b = (2 * dx * (p0.x - center.x)) + (2 * dy * (p0.y - center.y));
+  const bV = p0.subtract(center).multiply(d).multiplyScalar(2.0);
+  const b = bV.x + bV.y;
+
+  // c = Math.pow(p0.x - center.x, 2) + Math.pow(p0.y - center.y, 2) - Math.pow(radius, 2);
+  const cV = pow(p0.subtract(center), vec2(2.0));
+  const c = cV.x + cV.y - pow(radius, 2.0);
+
+  // Discriminant
+  let disc2 = pow(b, 2.0) - (4.0 * a * c);
+  if ( almostEqual(disc2, 0.0, 1.0e-06) ) disc2 = 0.0;// segment endpoint touches the circle; 1 intersection
+  else if ( disc2 < 0.0 ) return 0; // no intersections
+
+  // Roots
+  const disc = sqrt(disc2);
+  const t1 = (-b - disc) / (2.0 * a);
+
+  // If t1 hits (between 0 and 1) it indicates an "entry"
+  let numIxs = 0;
+  if ( between(0.0 - epsilon, 1.0 + epsilon, t1) === 1.0 ) {
+    ixs[numIxs].x = p0.x + (d.x * t1);
+    ixs[numIxs].y = p0.y + (d.y * t1);
+    numIxs += 1;
+  }
+  if ( disc2 === 0.0 ) return numIxs; // 1 intersection
+
+  // If t2 hits (between 0 and 1) it indicates an "exit"
+  const t2 = (-b + disc) / (2.0 * a);
+  if ( between(0.0 - epsilon, 1.0 + epsilon, t2) === 1.0 ) {
+    ixs[numIxs].x = p0.x + (d.x * t2);
+    ixs[numIxs].y = p0.y + (d.y * t2);
+    numIxs += 1;
+  }
+  return numIxs;
 }
 
 /**
@@ -567,6 +1201,26 @@ export function lineLineIntersection(a, b, c, d, ix) {
  * @returns {vec2|vec3}
  */
 export function normalizedDirection(a, b) { return b.subtract(a).normalize(); }
+
+/**
+ * Are two points on the same side with relation to a line?
+ * @param {vec2} a
+ * @param {vec2} b
+ * @param {vec2} p0
+ * @param {vec2} p1
+ * @returns {bool}
+ *
+ * Or:
+ * @param {vec2} a
+ * @param {vec2} b
+ * @param {float} o   Orientation of a -> b -> p0
+ * @param {vec2} p1
+ */
+export function sameSide(a, b, p0, p1) {
+  const orient = foundry.utils.orient2dFast;
+  if ( Number.isNumeric(p0) ) return p0 * orient(a, b, p1) > 0.0;
+  return orient(a, b, p0) * orient(a, b, p1) > 0.0;
+}
 
 /**
  * Returns 0.0 if x < a, otherwise 1.0
@@ -607,6 +1261,79 @@ export function elevateShadowRatio(ratio, wallHeight, wallRatio, elevChange) {
 }
 
 /**
+ * Circle defined by center point and radius
+ */
+export class CircleGLSLStruct {
+  center = vec2();
+
+  radius = 0;
+
+  constructor({ center, radius } = {}) {
+    this.center.set(center, 0);
+    this.radius = radius;
+  }
+}
+export const Circle = (...args) => new CircleGLSLStruct(...args);
+
+/**
+ * Locate the tangents to a circle from a point.
+ * https://en.wikipedia.org/wiki/Tangent_lines_to_circles
+ * @param {Circle} circle
+ * @param {vec2} p
+ * @param {out vec2[2]} tangents
+ * @returns {bool} False if no tangents.
+ */
+export function tangentPoints(circle, p, tangents) {
+  const abs = Math.abs;
+  const sqrt = Math.sqrt;
+  const pow = Math.pow;
+
+  const r2 = pow(circle.radius, 2.0); // @type {float}
+
+  // Translate so origin is at circle center.
+  const p0 = p.subtract(circle.center); // @type {vec2}
+  if ( almostEqual(p0.y, 0.0, 1e-08) ) {
+    // Translated point is on the x-axis of the circle.
+    if ( almostEqual(abs(p0.x), circle.radius, 1e-08) ) { // On circle edge.
+      tangents[0] = vec2(p);
+      tangents[1] = vec2(p);
+      return true;
+    }
+    if ( abs(p0.x) < circle.radius ) return false; // Inside the circle.
+
+    const root = sqrt(pow(p0.x, 2.0) - r2); // {p0.x, r}.magnitude()
+    tangents[0] = vec2(r2 / p0.x, circle.radius / p0.x);
+    tangents[1] = vec2(tangents[0]);
+    tangents[0].y *= root;
+    tangents[1].y *= -root;
+  } else {
+    const d0 = p0.magnitude();
+    if ( almostEqual(d0, circle.radius, 1e-08) ) { // On circle edge.
+      tangents[0] = vec2(p);
+      tangents[1] = vec2(p);
+      return true;
+    }
+    if ( d0 < circle.radius ) return false; // Inside the circle.
+    const d2 = pow(d0, 2.0);
+    const root = sqrt(d2 - r2);
+    const r2_d2 = r2 / d2;
+    const r_d2_root = circle.radius / d2 * root;
+    const adder = vec2(-p0.y, p0.x).multiplyScalar(r_d2_root);
+    tangents[0] = vec2(r2_d2 * p0.x, r2_d2 * p0.y);
+    tangents[1] = vec2(tangents[0]);
+    tangents[0].x += adder.x;
+    tangents[0].y += adder.y;
+    tangents[1].x -= adder.x;
+    tangents[1].y -= adder.y;
+  }
+
+  // Translate back.
+  tangents[0] = tangents[0].add(circle.center);
+  tangents[1] = tangents[1].add(circle.center);
+  return true;
+}
+
+/**
  * GLSL representation of a point light.
  * @prop {vec3} center
  * @prop {vec3} lr0       Point closest to wall endpoint 0
@@ -621,6 +1348,7 @@ export class LightGLSLStruct {
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
+export const Light = (...args) => new LightGLSLStruct(...args);
 
 /**
  * GLSL representation of a Foundry wall.
@@ -633,11 +1361,12 @@ export class LightGLSLStruct {
  * @prop {float} thresholdRadius2
  */
 export class WallGLSLStruct {
-  constructor({ top, bottom, direction, linkValue, type, thresholdRadius2 } = {}) {
-    const args = { top, bottom, direction, linkValue, type, thresholdRadius2 };
+  constructor({ top, bottom, mid, direction, direction2d, linkValue, type, thresholdRadius2 } = {}) {
+    const args = { top, bottom, mid, direction, direction2d, linkValue, type, thresholdRadius2 };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
+export const Wall = (...args) => new WallGLSLStruct(...args);
 
 /**
  * Represent the three directions of a shadow from a wall endpoint.
@@ -651,6 +1380,38 @@ export class ShadowDirectionsGLSLStruct {
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
+export const ShadowDirections = (...args) => new ShadowDirectionsGLSLStruct(...args);
+
+/**
+ * Represent the three directions of a shadow from a wall endpoint.
+ * @prop {vec2} umbra
+ * @prop {vec2} midpenumbra
+ * @prop {vec2} penumbra
+ */
+export class ShadowDirections2dGLSLStruct {
+  constructor({ umbra, midpenumbra, penumbra } = {}) {
+    const args = { umbra, midpenumbra, penumbra };
+    for ( const [key, value] of Object.entries(args) ) this[key] = value;
+  }
+}
+export const ShadowDirections2d = (...args) => new ShadowDirections2dGLSLStruct(...args);
+
+/**
+ * Represent three rays of a shadow: umbra, penumbra, midumbra.
+ * Each ray goes through a wall endpoint.
+ * Each ray type has two rays. Typically one for each endpoint, but sometimes these are mixed up.
+ * @prop {Ray2d[2]} umbra
+ * @prop {Ray2d[2]} midpenumbra
+ * @prop {Ray2d[2]} penumbra
+ */
+export class ShadowRays2dGLSLStruct {
+  constructor({ umbra, midpenumbra, penumbra } = {}) {
+    const args = { umbra, midpenumbra, penumbra };
+    for ( const [key, value] of Object.entries(args) ) this[key] = value;
+  }
+}
+export const ShadowRays2d = (...args) => new ShadowRays2dGLSLStruct(...args);
+
 
 /**
  * Represent the three endpoints of a shadow, opposite the wall endpoint.
@@ -664,6 +1425,7 @@ export class ShadowPointsGLSLStruct {
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
+export const ShadowPoints = (...args) => new ShadowPointsGLSLStruct(...args);
 
 /**
  * Represent a 2d rectangle.
@@ -678,6 +1440,7 @@ export class RectGLSLStruct {
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
+export const Rect = (...args) => new RectGLSLStruct(...args);
 
 /**
  * Does a rectangle contain a 2d point?

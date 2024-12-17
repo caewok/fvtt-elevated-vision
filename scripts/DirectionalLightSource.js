@@ -208,11 +208,17 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
     };
   }
 
+  destroy() {
+    console.log('destroying directional light source.');
+    this.elevationAngleGrid?.destroy(true);
+    super.destroy();
+  }
+
   /**
    * Draw a set of rectangles displaying the elevation angles at 10º spaces along the canvas.
    */
   static _refreshElevationAngleGuidelines() {
-    this._elevationAngleGrid.removeChildren();
+    this._elevationAngleGrid.removeChildren().forEach(c => c.destroy(true));;
 
     const draw = new Draw(this._elevationAngleGrid);
     draw.clearDrawings();

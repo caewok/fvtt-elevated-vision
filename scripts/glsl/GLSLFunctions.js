@@ -33,6 +33,18 @@ ${GLSLStructs[struct]}
 
 
 // NOTE: Utility
+GLSLFunctions.almostEqual =
+`
+/**
+ * Is x within epsilon of y?
+ * Typically, epsilon is 1e-08.
+ */
+bool almostEqual(in float a, in float b, in float epsilon) { return abs(a - b) < epsilon; }
+bool almostEqual(in vec2 a, in vec2 b, in float epsilon) { return all(lessThan(abs(a - b), vec2(epsilon))); }
+bool almostEqual(in vec3 a, in vec3 b, in float epsilon) { return all(lessThan(abs(a - b), vec3(epsilon))); }
+bool almostEqual(in vec4 a, in vec4 b, in float epsilon) { return all(lessThan(abs(a - b), vec4(epsilon))); }
+`;
+
 GLSLFunctions.between =
 // See https://stackoverflow.com/questions/52958171/glsl-optimization-check-if-variable-is-within-range
 // step is (float, float) or (float, vec) or (vec, vec)
@@ -53,7 +65,20 @@ GLSLFunctions.linearConversion =
  */
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
   return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
-}`;
+}
+
+vec2 linearConversion(in vec2 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
+  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+}
+
+vec3 linearConversion(in vec3 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
+  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+}
+
+vec4 linearConversion(in vec4 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
+  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+}
+`;
 
 // Name of a built-in function cannot be redeclared as function, so call it cross2d
 GLSLFunctions.cross2d =
@@ -262,6 +287,7 @@ mat3 toLocalRectangle(in vec2[4] rect) {
 // NOTE: Random
 // Pass a value and get a random normalized value between 0 and 1.
 // https://github.com/patriciogonzalezvivo/lygia/blob/main/generative/random.glsl
+// UV from From FoundryVTT base-shader-mixin.js.
 GLSLFunctions.random =
 `
 #define RANDOM_SCALE vec4(443.897, 441.423, .0973, .1099)
@@ -273,14 +299,91 @@ float random(in float x) {
   return fract(x);
 }
 
+float random(in vec2 uv) {
+  uv = mod(uv, 1000.0);
+  return fract( dot(uv, vec2(5.23, 2.89)
+                    * fract((2.41 * uv.x + 2.27 * uv.y)
+                             * 251.19)) * 551.83);
+}
+
+vec2 random2(in vec2 uv) {
+  vec2 uvf = fract(uv * vec2(0.1031, 0.1030));
+  uvf += dot(uvf, uvf.yx + 19.19);
+  return fract((uvf.x + uvf.y) * uvf);
+}
+
 vec2 random2(vec3 p3) {
   p3 = fract(p3 * RANDOM_SCALE.xyz);
   p3 += dot(p3, p3.yzx + 19.19);
   return fract((p3.xx + p3.yz) * p3.zy);
 }
-
-vec2 random2(vec2 p) { return random2(p.xyx); }
 `;
+
+
+GLSLFunctions.noise =
+`
+${defineFunction("random")}
+/**
+ * Conventional noise generator
+ * From FoundryVTT base-shader-mixin.js.
+ * @param {vec2} uv
+ * @returns {float}
+ */
+float noise(in vec2 uv) {
+  const vec2 d = vec2(0.0, 1.0);
+  vec2 b = floor(uv);
+  vec2 f = smoothstep(vec2(0.), vec2(1.0), fract(uv));
+  return mix(
+    mix(random(b), random(b + d.yx), f.x),
+    mix(random(b + d.xy), random(b + d.yy), f.x),
+    f.y
+  );
+}
+
+vec2 noiseV2(in vec2 uv) {
+  const vec2 d = vec2(0.0, 1.0);
+  vec2 b = floor(uv);
+  vec2 f = smoothstep(vec2(0.), vec2(1.0), fract(uv));
+  return mix(
+    mix(random2(b), random2(b + d.yx), f.x),
+    mix(random2(b + d.xy), random2(b + d.yy), f.x),
+    f.y
+  );
+}
+`;
+
+GLSLFunctions.hash =
+`
+/**
+ * Hash function used to construct pseudo-random numbers.
+ * See https://www.shadertoy.com/view/4djSRW
+ * @param {float|vec} p
+ * @returns {float|vec} Number between 0 and 1
+ */
+float hash(in float p) {
+  p = fract(p * 0.1031);
+  p *= p + 33.33;
+  p *= p + p;
+  return fract(p);
+}
+
+vec2 hash(in vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+vec3 hash(in vec3 p) {
+  p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+  p += dot(p, p.yxz + 33.33);
+  return fract((p.xxy + p.yxx) * p.zyx);
+}
+
+vec4 hash(in vec4 p) {
+  p = fract(p  * vec4(0.1031, 0.1030, 0.0973, 0.1099));
+  p += dot(p, p.wzxy+33.33);
+  return fract((p.xxyz+p.yzzw)*p.zywx);
+}`;
 
 // NOTE: Canvas elevation
 GLSLFunctions.decodeElevationChannels =
@@ -366,6 +469,21 @@ GLSLFunctions.orient =
 `
 float orient(in vec2 a, in vec2 b, in vec2 c) {
   return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
+}
+`;
+
+GLSLFunctions.sameSide =
+`
+${defineFunction("orient")}
+/**
+ * Are two points on the same side with relation to a line?
+ */
+bool sameSide(in vec2 a, in vec2 b, in vec2 p0, in vec2 p1) {
+  return orient(a, b, p0) * orient(a, b, p1) > 0.0;
+}
+
+bool sameSide(in vec2 a, in vec2 b, in float o, in vec2 p1) {
+  return o * orient(a, b, p1) > 0.0;
 }
 `;
 
@@ -528,9 +646,15 @@ vec3 projectRay(in Ray r, in float distanceMultiplier) {
 
 GLSLFunctions.normalizedDirection =
 `
+/**
+ * Construct and normalize a direction vector moving from a --> b.
+ * @param {vec2|vec3|vec4} a
+ * @param {vec2|vec3|vec4} b
+ * @returns {vec2|vec3|vec4}
+ */
 vec2 normalizedDirection(in vec2 a, in vec2 b) { return normalize(b - a); }
-
 vec3 normalizedDirection(in vec3 a, in vec3 b) { return normalize(b - a); }
+vec4 normalizedDirection(in vec4 a, in vec4 b) { return normalize(b - a); }
 
 `;
 
@@ -545,19 +669,24 @@ float distanceSquared(in vec3 a, in vec3 b) {
   vec3 diff = b - a;
   return dot(diff, diff);
 }
+
+float distanceSquared(in vec4 a, in vec4 b) {
+  vec4 diff = b - a;
+  return dot(diff, diff);
+}
 `;
 
 // Identify closest point on a 2d line to another point, just like foundry.utils.closestPointToSegment.
 // Note: will fail if passed a 0-length ab segment.
 GLSLFunctions.closest2dPointToLine =
 `
-vec2 closest2dPointToLine(in vec2 c, in vec2 a, in vec2 dir, out float u) {
+vec2 closest2dPointToLine(in vec2 c, in vec2 a, in vec2 dir) {
   float denom = dot(dir, dir);
-  if ( denom == 0.0 ) return a;
+  if ( denom == 0.0 ) return c;
 
   vec2 deltaCA = c - a;
-  u = dot(deltaCA, dir) / denom;
-  return a + (u * dir);
+  float u =  dot(deltaCA, dir) / denom;  // Proportion along a --> dir.
+  return a + (dir * u);
 }
 `;
 
@@ -566,13 +695,48 @@ GLSLFunctions.closest2dPointToSegment =
 ${defineFunction("closest2dPointToLine")}
 
 vec2 closest2dPointToSegment(in vec2 c, in vec2 a, in vec2 b) {
-  float u;
-  vec2 out = closest2dPointToLine(c, a, b - a, u);
-
+  vec2 dir = b - a;
+  vec2 deltaCA = c - a;
+  float u = dot(deltaCA, dir) / dot(dir, dir);
   if ( u < 0.0 ) return a;
   if ( u > 1.0 ) return b;
-  return out;
+  return a + (dir * u);
 }`;
+
+GLSLFunctions.distanceToLine =
+`
+${defineFunction("closest2dPointToLine")}
+${defineFunction("closest2dPointToSegment")}
+${defineFunction("distanceSquared")}
+
+/**
+ * Distance to the closest point to a line.
+ * @param {vec2} c
+ * @param {vec2} a
+ * @param {vec2} dir
+ * @returns {float}
+ */
+float distanceToLine(in vec2 c, in vec2 a, in vec2 dir) {
+  vec2 ix = closest2dPointToLine(c, a, dir);
+  return distance(c, ix);
+}
+
+float distanceSquaredToLine(in vec2 c, in vec2 a, in vec2 dir) {
+  vec2 ix = closest2dPointToLine(c, a, dir);
+  return distanceSquared(c, ix);
+}
+
+float distanceToSegment(in vec2 c, in vec2 a, in vec2 b) {
+  vec2 ix = closest2dPointToSegment(c, a, b);
+  return distance(c, ix);
+}
+
+float distanceSquaredToSegment(in vec2 c, in vec2 a, in vec2 b) {
+  vec2 ix = closest2dPointToSegment(c, a, b);
+  return distanceSquared(c, ix);
+}
+
+`;
 
 GLSLFunctions.lineLineIntersection =
 `
@@ -580,7 +744,7 @@ ${defineFunction("rayFromPoints")}
 ${defineFunction("cross2d")}
 
 bool lineLineIntersection(in Ray2d a, in Ray2d b, out float t) {
-  float denom = (b.direction.y * a.direction.x) - (b.direction.x * a.direction.y);
+  float denom = cross2d(a.direction, b.direction);
 
   // If lines are parallel, no intersection.
   if ( abs(denom) < 0.0001 ) return false;
@@ -602,6 +766,97 @@ bool lineLineIntersection(vec2 a, vec2 b, vec2 c, vec2 d, out vec2 ix) {
   Ray2d rayB = rayFromPoints(c, d);
   return lineLineIntersection(rayA, rayB, ix);
 }`;
+
+GLSLFunctions.lineLineIntersects =
+`
+bool lineLineIntersects(vec2 a, vec2 b, vec2 c, vec2 d) {
+  Ray2d rayA = rayFromPoints(a, b);
+  Ray2d rayB = rayFromPoints(c, d);
+  return lineLineIntersects(rayA, rayB)
+}
+
+bool lineLineIntersects(in Ray2d a, in Ray2d b) {
+  float denom = cross2d(a.direction, b.direction);
+
+  // If lines are parallel, no intersection.
+  return ( abs(denom) >= 0.0001 );
+}
+`;
+
+GLSLFunctions.circleContainsPoint =
+`
+/**
+ * Does the circle contain the point?
+ * @param {vec2} center
+ * @param {float} radius
+ * @param {vec2} p
+ * @returns bool
+ */
+bool circleContainsPoint(in vec2 center, in float radius, in vec2 p) {
+  float r2 = pow(radius, 2.0);
+  vec2 d = center - p;
+  d *= d;
+  return (d.x + d.y) <= r2;
+}
+`;
+
+GLSLFunctions.quadraticIntersection =
+`
+${defineFunction("between")}
+/**
+ * Determine the points of intersection between a line segment (p0,p1) and a circle.
+ * There will be zero, one, or two intersections
+ * See https://math.stackexchange.com/a/311956.
+ * @param {vec2} p0             Initial point of the line segment
+ * @param {vec2} p1             Terminal point of the line segment
+ * @param {vec2} center         Center of the circle
+ * @param {float} radius        Radius of the circle
+ * @param {float} epsilon       Small tolerance for floating point precision
+ * @param {out vec2[2]} ixs     Placeholder to store intersections found.
+ * @returns {int} Number of intersections.
+ */
+int quadraticIntersection(in vec2 p0, in vec2 p1, in vec2 center, in float radius, in float epsilon, out vec2[2] ixs) {
+  vec2 d = p1 - p0;
+
+  // Quadratic terms where at^2 + bt + c = 0
+  // a = Math.pow(dx, 2) + Math.pow(dy, 2);
+  vec2 aV = pow(d, vec2(2.0));
+  float a = aV.x + aV.y;
+
+  // b = (2 * dx * (p0.x - center.x)) + (2 * dy * (p0.y - center.y));
+  vec2 bV = (p0 - center) * d * 2.0;
+  float b = bV.x + bV.y;
+
+  // c = Math.pow(p0.x - center.x, 2) + Math.pow(p0.y - center.y, 2) - Math.pow(radius, 2);
+  vec2 cV = pow((p0 - center), vec2(2.0));
+  float c = cV.x + cV.y - pow(radius, 2.0);
+
+  // Discriminant
+  float disc2 = pow(b, 2.0) - (4.0 * a * c);
+  if ( almostEqual(disc2, 0.0, 1.0e-06) ) disc2 = 0.0;// segment endpoint touches the circle; 1 intersection
+  else if ( disc2 < 0.0 ) return 0; // no intersections
+
+  // Roots
+  float disc = sqrt(disc2);
+  float t1 = (-b - disc) / (2.0 * a);
+
+  // If t1 hits (between 0 and 1) it indicates an "entry"
+  int numIxs = 0;
+  if ( between(0.0 - epsilon, 1.0 + epsilon, t1) == 1.0 ) {
+    ixs[numIxs] = p0 + (d * t1);
+    numIxs += 1;
+  }
+  if ( disc2 == 0.0 ) return numIxs; // 1 intersection
+
+  // If t2 hits (between 0 and 1) it indicates an "exit"
+  float t2 = (-b + disc) / (2.0 * a);
+  if ( between(0.0 - epsilon, 1.0 + epsilon, t2) == 1.0 ) {
+    ixs[numIxs] = p0 + (d * t2);
+    numIxs += 1;
+  }
+  return numIxs;
+}
+`;
 
 // NOTE: Plane struct
 GLSLStructs.Plane =
@@ -770,6 +1025,75 @@ bool baryIntersectRayQuad(in Ray r, in Quad quad, out vec3 ix) {
   ix = vec3(t, u, v);
   // if ( u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0 ) return vec3(-1.0);
   return true;
+}
+`;
+
+// NOTE: Circle struct
+GLSLStructs.Circle =
+`
+/**
+ * Circle defined by its center and radius.
+ */
+struct Circle  {
+  vec2 center;
+  float radius;
+};`;
+
+GLSLFunctions.tangentPoints =
+`
+${defineStruct("Circle")}
+${defineFunction("almostEqual")}
+
+/*
+ * Locate the tangents to a circle from a point.
+ * https://en.wikipedia.org/wiki/Tangent_lines_to_circles
+ * @param {Circle} circle
+ * @param {vec2} p
+ * @param {out vec2[2]} tangents
+ * @returns {bool} False if no tangents.
+ */
+bool tangentPoints(in Circle circle, in vec2 p, inout vec2[2] tangents) {
+  float r2 = pow(circle.radius, 2.0);
+
+  // Translate so origin is at circle center.
+  vec2 p0 = p - circle.center;
+  if ( almostEqual(p0.y, 0.0, 1.0e-08) ) {
+    // Translated point is on the x-axis of the circle.
+    if ( almostEqual(abs(p0.x), circle.radius, 1.0e-08) ) {
+      // On circle edge.
+      tangents[0] = p;
+      tangents[1] = p;
+      return true;
+    }
+    if ( abs(p0.x) < circle.radius ) return false; // Inside the circle.
+    float root = sqrt(pow(p0.x, 2.0) - r2);
+    tangents[0] = vec2(r2, circle.radius) / p0.x;
+    tangents[1] = tangents[0];
+    tangents[0].y *= root;
+    tangents[1].y *= -root;
+  } else {
+    float d0 = length(p0); // i.e., magnitude
+    if ( almostEqual(d0, circle.radius, 1.0e-08) ) {
+      // On circle edge.
+      tangents[0] = p;
+      tangents[1] = p;
+      return true;
+    }
+    if ( d0 < circle.radius ) return false; // Inside the circle.
+    float d2 = pow(d0, 2.0);
+    float root = sqrt(d2 - r2);
+    float r2_d2 = r2 / d2;
+    float r_d2_root = circle.radius / d2 * root;
+    vec2 adder = r_d2_root * vec2(-p0.y, p0.x);
+    tangents[0] = r2_d2 * p0;
+    tangents[1] = tangents[0];
+    tangents[0] += adder;
+    tangents[1] -= adder;
+  }
+
+  // Translate back.
+  tangents[0] += circle.center;
+  tangents[1] += circle.center;
 }
 `;
 
