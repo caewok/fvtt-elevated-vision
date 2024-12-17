@@ -120,7 +120,7 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
 
       dot(other) {
         let sum = 0;
-        for ( let i = 0; i < this.length; i += 1 ) sum += (this[i] * other[i]);
+        this._componentWise((a, i) => { sum += (a * other[i]); });
         return sum;
       }
 
@@ -136,23 +136,23 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
 
       clamp(minVal, maxVal) {
         const out = new this.constructor();
-        for ( let i = 0; i < this.length; i += 1 ) out[i] = Math.min(Math.max(this[i], minVal), maxVal);
+        this._componentWise((a, i) => { out[i] = Math.min(Math.max(a, minVal), maxVal); });
         return out;
       }
 
       floor() { return this._componentWise(a => Math.floor(a)); }
 
-      equal(other) { return this._componentWise((a, i) => a[i] === other[i]); }
+      equal(other) { return this._componentWise((a, i) => a === other[i]); }
 
-      lessThan(other) { return this._componentWise((a, i) => a[i] < other[i]); }
+      lessThan(other) { return this._componentWise((a, i) => a < other[i]); }
 
-      greaterThan(other) { return this._componentWise((a, i) => a[i] > other[i]); }
+      greaterThan(other) { return this._componentWise((a, i) => a > other[i]); }
 
-      lessThanEqual(other) { return this._componentWise((a, i) => a[i] <= other[i]); }
+      lessThanEqual(other) { return this._componentWise((a, i) => a <= other[i]); }
 
-      greaterThanEqual(other) { return this._componentWise((a, i) => a[i] >= other[i]); }
+      greaterThanEqual(other) { return this._componentWise((a, i) => a >= other[i]); }
 
-      notEqual(other) { return this._componentWise((a, i) => a[i] !== other[i]); }
+      notEqual(other) { return this._componentWise((a, i) => a !== other[i]); }
 
       not(other) { return this._componentWise(a => !a); }
 
@@ -161,6 +161,8 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
       all() { return this.every(a => a); }
 
       abs() { return this._componentWise(a => Math.abs(a)); }
+
+      pow(x) { return this._componentWise((a, i) => Math.pow(a, x[i])); }
     }
 
     // Define getters and setters for each single SWIZZLE property
@@ -571,7 +573,7 @@ export function random(uv) {
   */
   uv = mod(uv, 1000.0);
   const f0 = fract(((2.41 * uv.x) + (2.27 * uv.y)) * 251.19);
-  const d = dot(uv, vec2(5.23, 2.89).multiplyScalar(f0))
+  const d = dot(uv, vec2(5.23, 2.89).multiplyScalar(f0));
   return fract(d * 551.83);
 }
 
@@ -589,7 +591,7 @@ export function random2(uv) {
   return fract((uvf.x + uvf.y) * uvf);
   */
   let uvf = fract(uv.multiply(vec2(0.1031, 0.1030)));
-  const d = dot(uvf, uvf.yx.add(vec2(19.19)))
+  const d = dot(uvf, uvf.yx.add(vec2(19.19)));
   uvf = uvf.add(vec2(d));
   return fract(uvf.multiplyScalar(uvf.x + uvf.y));
 }
@@ -777,21 +779,30 @@ export function distanceSquaredToSegment(c, a, b) {
  * @param {vec}
  * @returns {bvec}
  */
-export function any(v) { return v.any(); }
+export function any(v) {
+  if ( Number.isNumeric(v) ) return Boolean(v);
+  return v.any();
+}
 
 /**
  * GLSL all
  * @param {vec}
  * @returns {bvec}
  */
-export function all(v) { return v.all(); }
+export function all(v) {
+  if ( Number.isNumeric(v) ) return Boolean(v);
+  return v.all();
+}
 
 /**
  * GLSL not
  * @param {vec}
  * @returns {bvec}
  */
-export function not(v) { return v.not(); }
+export function not(v) {
+  if ( Number.isNumeric(v) ) return !v;
+  return v.not();
+}
 
 /**
  * GLSL equal
@@ -799,7 +810,10 @@ export function not(v) { return v.not(); }
  * @param {vec} b
  * @returns {bvec}
  */
-export function equal(a, b) { return a.equal(b); }
+export function equal(a, b) {
+  if ( Number.isNumeric(a) ) return a === b;
+  return a.equal(b);
+}
 
 /**
  * GLSL lessThan
@@ -807,7 +821,10 @@ export function equal(a, b) { return a.equal(b); }
  * @param {vec} b
  * @returns {bvec}
  */
-export function lessThan(a, b) { return a.lessThan(b); }
+export function lessThan(a, b) {
+  if ( Number.isNumeric(a) ) return a < b;
+  return a.lessThan(b);
+}
 
 /**
  * GLSL greaterThan
@@ -815,7 +832,10 @@ export function lessThan(a, b) { return a.lessThan(b); }
  * @param {vec} b
  * @returns {bvec}
  */
-export function greaterThan(a, b) { return a.greaterThan(b); }
+export function greaterThan(a, b) {
+  if ( Number.isNumeric(a) ) return a > b;
+  return a.greaterThan(b);
+}
 
 /**
  * GLSL lessThanEqual
@@ -823,7 +843,10 @@ export function greaterThan(a, b) { return a.greaterThan(b); }
  * @param {vec} b
  * @returns {bvec}
  */
-export function lessThanEqual(a, b) { return a.lessThanEqual(b); }
+export function lessThanEqual(a, b) {
+  if ( Number.isNumeric(a) ) return a <= b;
+  return a.lessThanEqual(b);
+}
 
 /**
  * GLSL greaterThanEqual
@@ -831,7 +854,10 @@ export function lessThanEqual(a, b) { return a.lessThanEqual(b); }
  * @param {vec} b
  * @returns {bvec}
  */
-export function greaterThanEqual(a, b) { return a.greaterThanEqual(b); }
+export function greaterThanEqual(a, b) {
+  if ( Number.isNumeric(a) ) return a >= b;
+  return a.greaterThanEqual(b);
+}
 
 /**
  * GLSL notEqual
@@ -839,9 +865,21 @@ export function greaterThanEqual(a, b) { return a.greaterThanEqual(b); }
  * @param {vec} b
  * @returns {bvec}
  */
-export function notEqual(a, b) { return a.notEqual(b); }
+export function notEqual(a, b) {
+  if ( Number.isNumeric(a) ) return a !== b;
+  return a.notEqual(b);
+}
 
-export function abs(a) { return a.abs(); }
+export function abs(a) {
+  if ( Number.isNumeric(a) ) return Math.abs(a);
+  return a.abs();
+}
+
+export function pow(a, x) {
+  if ( Number.isNumeric(a) ) return Math.pow(a, x);
+  return a.pow(x);
+}
+
 
 /**
  * Ray defined by a point and a direction from that point.
@@ -1084,6 +1122,77 @@ function lineLineIntersectsRay(a, b) {
 export function lineLineIntersects(a, b, c, d) {
   if ( typeof c === "undefined" ) return lineLineIntersectsRay(a, b);
   return lineLineIntersectsVector(a, b, c, d);
+}
+
+/**
+ * Does the circle contain the point?
+ * @param {vec2} center
+ * @param {float} radius
+ * @param {vec2} p
+ * @returns bool
+ */
+export function circleContainsPoint(center, radius, p) {
+  const r2 = pow(radius, 2.0);
+  let d = center.subtract(p);
+  d = d.multiply(d); // GLSL: d *= d;
+  return (d.x + d.y) <= r2;
+}
+
+/**
+ * Determine the points of intersection between a line segment (p0,p1) and a circle.
+ * There will be zero, one, or two intersections
+ * See https://math.stackexchange.com/a/311956.
+ * @param {vec2} p0             Initial point of the line segment
+ * @param {vec2} p1             Terminal point of the line segment
+ * @param {vec2} center         Center of the circle
+ * @param {float} radius        Radius of the circle
+ * @param {float} epsilon       Small tolerance for floating point precision
+ * @param {out vec2[2]} ixs     Placeholder to store intersections found.
+ * @returns {int} Number of intersections.
+ */
+export function quadraticIntersection(p0, p1, center, radius, epsilon, ixs) {
+  const sqrt = Math.sqrt;
+  const d = p1.subtract(p0);
+
+  // Quadratic terms where at^2 + bt + c = 0
+  // a = Math.pow(dx, 2) + Math.pow(dy, 2);
+  const aV = pow(d, vec2(2.0));
+  const a = aV.x + aV.y;
+
+  // b = (2 * dx * (p0.x - center.x)) + (2 * dy * (p0.y - center.y));
+  const bV = p0.subtract(center).multiply(d).multiplyScalar(2.0);
+  const b = bV.x + bV.y;
+
+  // c = Math.pow(p0.x - center.x, 2) + Math.pow(p0.y - center.y, 2) - Math.pow(radius, 2);
+  const cV = pow(p0.subtract(center), vec2(2.0));
+  const c = cV.x + cV.y - pow(radius, 2.0);
+
+  // Discriminant
+  let disc2 = pow(b, 2.0) - (4.0 * a * c);
+  if ( almostEqual(disc2, 0.0, 1.0e-06) ) disc2 = 0.0;// segment endpoint touches the circle; 1 intersection
+  else if ( disc2 < 0.0 ) return 0; // no intersections
+
+  // Roots
+  const disc = sqrt(disc2);
+  const t1 = (-b - disc) / (2.0 * a);
+
+  // If t1 hits (between 0 and 1) it indicates an "entry"
+  let numIxs = 0;
+  if ( between(0.0 - epsilon, 1.0 + epsilon, t1) === 1.0 ) {
+    ixs[numIxs].x = p0.x + (d.x * t1);
+    ixs[numIxs].y = p0.y + (d.y * t1);
+    numIxs += 1;
+  }
+  if ( disc2 === 0.0 ) return numIxs; // 1 intersection
+
+  // If t2 hits (between 0 and 1) it indicates an "exit"
+  const t2 = (-b + disc) / (2.0 * a);
+  if ( between(0.0 - epsilon, 1.0 + epsilon, t2) === 1.0 ) {
+    ixs[numIxs].x = p0.x + (d.x * t2);
+    ixs[numIxs].y = p0.y + (d.y * t2);
+    numIxs += 1;
+  }
+  return numIxs;
 }
 
 /**

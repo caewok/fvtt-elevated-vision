@@ -42,6 +42,8 @@ ${defineStruct("Circle")}
 ${defineFunction("tangentPoints")}
 ${defineFunction("sameSide")}
 ${defineFunction("closest2dPointToSegment")}
+${defineFunction("circleContainsPoint")}
+${defineFunction("quadraticIntersection")}
 
 ${PENUMBRA_VERTEX_FUNCTIONS}
 
@@ -331,8 +333,13 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   Ray2d rG_umbra = sideShadowRays.umbra[1 - furtherIdx];
 
   // D and G are the intersections of the penumbra with opposite umbra.
-  lineLineIntersection(rD_penumbra, rD_umbra, D);
-  lineLineIntersection(rG_penumbra, rG_umbra, G);
+  bool hasIxD = lineLineIntersection(rD_penumbra, rD_umbra, D);
+  bool hasIxG = lineLineIntersection(rG_penumbra, rG_umbra, G);
+
+  // No intersections if the penumbra and umbra are collinear.
+  // Can happen if the circle edge lines up with the wall.
+  if ( !hasIxD ) D = W0;
+  else if ( !hasIxG ) G = W0;
 
   // E intersects the D penumbra ray with the canvas line.
   //Ray2d canvasEdge;
@@ -340,17 +347,28 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   bool infiniteShadow = isInfiniteShadow(farShadowDirs.penumbra);
   if ( infiniteShadow ) {
     // Set E and H such that it is outside the canvas.
-     // Construct ∆DW0W1, ∆GW1W0 and then extend
-    vec2[3] newDW0W1 = extendTriangleToCanvasEdge(vec2[3](D, W0, W1));
-    vec2[3] newGW0W1 = extendTriangleToCanvasEdge(vec2[3](G, W0, W1));
-    int idxH = nearCollinear ? 1 : 2;
-    E = newDW0W1[1];
-    F = newDW0W1[2];
-    H = newGW0W1[idxH]; // Collinear ? 1 : 2
-    I = newGW0W1[3 - idxH]; // Collinear ? 2 : 1
-    // canvasEdge = infiniteShadowCanvasRay(Ray2d[2](rD_penumbra, rD_umbra));
-    // canvasEdge2 = infiniteShadowCanvasRay(Ray2d[2](rG_penumbra, rG_umbra));
-  } else {
+    // Construct ∆DW0W1, ∆GW1W0 and then extend
+    if ( hasIxD ) {
+      vec2[3] newDW0W1 = extendTriangleToCanvasEdge(vec2[3](D, W0, W1));
+      E = newDW0W1[1];
+      F = newDW0W1[2];
+    } else {
+      vec2 ix = canvasEdgeIntersection(rD_penumbra);
+      E = ix;
+      F = ix;
+    }
+
+    if ( hasIxG ) {
+      vec2[3] newGW0W1 = extendTriangleToCanvasEdge(vec2[3](G, W0, W1));
+      int idxH = nearCollinear ? 1 : 2;
+      H = newGW0W1[idxH]; // Collinear ? 1 : 2
+      I = newGW0W1[3 - idxH]; // Collinear ? 2 : 1
+    } else {
+      vec2 ix = canvasEdgeIntersection(rG_penumbra);
+      H = ix;
+      I = ix;
+    }
+   } else {
     // Locate the canvas intersection.
     Plane canvasPlane = constructCanvasPlane();
     vec3 canvasIx;
@@ -390,8 +408,11 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   } else {
     // For not near-collinear, B and C will equal E and H, respectively.
     // For near-collinear for infinite shadow, E and H will already be at the canvas edge.
-    B = E;
-    C = H;
+    // B = E;
+    // C = H;
+    vec2[3] newABC = extendTriangleToCanvasEdge(vec2[3](A, E, H));
+    B = newABC[1];
+    C = newABC[2];
   }
   return nearCollinear;
 }
@@ -593,11 +614,46 @@ void defineFlats(in Wall wall,
   }
 }
 
+/**
+ * Test if the point is within the wall endpoints, meaning drawing lines perpendicular
+ * to the wall would contain the point.
+ * @param {Wall} wall
+ * @param {vec2} pt
+ * @returns {bool}
+ */
+bool pointBetweenWallEndpoints(in Wall wall, in vec2 pt) {
+  vec2 wallDir = (wall.top[0].xy - wall.top[1].xy) * 0.5;
+  vec2 perpDir = vec2(wallDir.y, -wallDir.x);
+  vec2 p0 = projectRay(Ray2d(wall.top[0].xy, perpDir), 1.0);
+  vec2 p1 = projectRay(Ray2d(wall.top[1].xy, perpDir), 1.0);
+  return orient(wall.top[0].xy, p0, pt) * orient(wall.top[1].xy, p1, pt) < 0.0;
+}
+
 void main() {
   // Defined constants.
   int vertexNum = gl_VertexID % 3;
   Wall wall = calculateWallPositions();
   Light light = calculateLightPositions();
+
+  // If a wall endpoint is within the light and the light center is not between the
+  // endpoints, shrink the wall so it is just outside the light.
+  // This avoids the light failing to display if overlapping the wall to the right/left.
+  // If between the endpoints, calculateSideShadowRays will move the light accordingly.
+  vec2[2] ixs;
+  int numIxs = quadraticIntersection(wall.top[0].xy, wall.top[1].xy, light.center.xy, uLightSize, 1.0e-06, ixs);
+  if ( numIxs == 1 ) {
+    // If 1 intersection, one endpoint is in the middle of the circle. Shrink wall accordingly.
+    // Determine where the intersection is on the wall.
+    int containedIdx = circleContainsPoint(light.center.xy, uLightSize, wall.top[0].xy) ? 0 : 1;
+
+    // Move pixel away to be outside the circle.
+    vec2 newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], wall.top[1 - containedIdx].xy)), 1.0);
+
+    // Update wall data.
+    wall.top[containedIdx].xy = newIx.xy;
+    wall.bottom[containedIdx].xy = newIx.xy;
+    // wall.mid = wall.top[0].xy.add(wall.top[1].xy).multiplyScalar(0.5);
+  }
 
   // Side shadows.
   ShadowRays2d sideShadowRays = calculateSideShadowRays(wall, light);

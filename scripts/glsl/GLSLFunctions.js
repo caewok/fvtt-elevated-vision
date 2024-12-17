@@ -669,6 +669,11 @@ float distanceSquared(in vec3 a, in vec3 b) {
   vec3 diff = b - a;
   return dot(diff, diff);
 }
+
+float distanceSquared(in vec4 a, in vec4 b) {
+  vec4 diff = b - a;
+  return dot(diff, diff);
+}
 `;
 
 // Identify closest point on a 2d line to another point, just like foundry.utils.closestPointToSegment.
@@ -775,6 +780,81 @@ bool lineLineIntersects(in Ray2d a, in Ray2d b) {
 
   // If lines are parallel, no intersection.
   return ( abs(denom) >= 0.0001 );
+}
+`;
+
+GLSLFunctions.circleContainsPoint =
+`
+/**
+ * Does the circle contain the point?
+ * @param {vec2} center
+ * @param {float} radius
+ * @param {vec2} p
+ * @returns bool
+ */
+bool circleContainsPoint(in vec2 center, in float radius, in vec2 p) {
+  float r2 = pow(radius, 2.0);
+  vec2 d = center - p;
+  d *= d;
+  return (d.x + d.y) <= r2;
+}
+`;
+
+GLSLFunctions.quadraticIntersection =
+`
+${defineFunction("between")}
+/**
+ * Determine the points of intersection between a line segment (p0,p1) and a circle.
+ * There will be zero, one, or two intersections
+ * See https://math.stackexchange.com/a/311956.
+ * @param {vec2} p0             Initial point of the line segment
+ * @param {vec2} p1             Terminal point of the line segment
+ * @param {vec2} center         Center of the circle
+ * @param {float} radius        Radius of the circle
+ * @param {float} epsilon       Small tolerance for floating point precision
+ * @param {out vec2[2]} ixs     Placeholder to store intersections found.
+ * @returns {int} Number of intersections.
+ */
+int quadraticIntersection(in vec2 p0, in vec2 p1, in vec2 center, in float radius, in float epsilon, out vec2[2] ixs) {
+  vec2 d = p1 - p0;
+
+  // Quadratic terms where at^2 + bt + c = 0
+  // a = Math.pow(dx, 2) + Math.pow(dy, 2);
+  vec2 aV = pow(d, vec2(2.0));
+  float a = aV.x + aV.y;
+
+  // b = (2 * dx * (p0.x - center.x)) + (2 * dy * (p0.y - center.y));
+  vec2 bV = (p0 - center) * d * 2.0;
+  float b = bV.x + bV.y;
+
+  // c = Math.pow(p0.x - center.x, 2) + Math.pow(p0.y - center.y, 2) - Math.pow(radius, 2);
+  vec2 cV = pow((p0 - center), vec2(2.0));
+  float c = cV.x + cV.y - pow(radius, 2.0);
+
+  // Discriminant
+  float disc2 = pow(b, 2.0) - (4.0 * a * c);
+  if ( almostEqual(disc2, 0.0, 1.0e-06) ) disc2 = 0.0;// segment endpoint touches the circle; 1 intersection
+  else if ( disc2 < 0.0 ) return 0; // no intersections
+
+  // Roots
+  float disc = sqrt(disc2);
+  float t1 = (-b - disc) / (2.0 * a);
+
+  // If t1 hits (between 0 and 1) it indicates an "entry"
+  int numIxs = 0;
+  if ( between(0.0 - epsilon, 1.0 + epsilon, t1) == 1.0 ) {
+    ixs[numIxs] = p0 + (d * t1);
+    numIxs += 1;
+  }
+  if ( disc2 == 0.0 ) return numIxs; // 1 intersection
+
+  // If t2 hits (between 0 and 1) it indicates an "exit"
+  float t2 = (-b + disc) / (2.0 * a);
+  if ( between(0.0 - epsilon, 1.0 + epsilon, t2) == 1.0 ) {
+    ixs[numIxs] = p0 + (d * t2);
+    numIxs += 1;
+  }
+  return numIxs;
 }
 `;
 

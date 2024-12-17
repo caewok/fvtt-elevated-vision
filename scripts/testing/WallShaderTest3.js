@@ -340,12 +340,28 @@ export class PenumbraBasicTest extends ShaderTest {
   get maxR() {
     const uSceneDims = this.uSceneDims;
     return Math.sqrt((uSceneDims.z * uSceneDims.z) + (uSceneDims.w * uSceneDims.w)) * 2.0;
-    // x2 b/c technically we want the canvas dimensions, which we don't have.
+    // Times 2 b/c technically we want the canvas dimensions, which we don't have.
   }
 
   maxR2() {
     const uSceneDims = this.uSceneDims;
     return (uSceneDims.z * uSceneDims.z) + (uSceneDims.w * uSceneDims.w); // Don't really need the 2x.
+  }
+
+  /* @type {vec2[4]} */
+  constructSceneRect() {
+    const uSceneDims = this.uSceneDims;
+    const TL = 0;
+    const TR = 1;
+    const BR = 2;
+    const BL = 3;
+
+    const sceneRect = Array(4); // @type vec2[4]
+    sceneRect[TL] = vec2(0.0, 0.0);
+    sceneRect[TR] = vec2((uSceneDims.x * 2.0) + uSceneDims.z, 0.0);
+    sceneRect[BR] = vec2((uSceneDims.x * 2.0) + uSceneDims.z, (uSceneDims.y * 2.0) + uSceneDims.w);
+    sceneRect[BL] = vec2(0.0, (uSceneDims.y * 2.0) + uSceneDims.w);
+    return sceneRect;
   }
 
   /* ----- NOTE: Vertex calculations ----- */
@@ -509,67 +525,87 @@ export class PenumbraBasicTest extends ShaderTest {
   }
 
   /**
+   * Determine where a ray intersects the canvas edge.
+   * @param {Ray2d} r
+   * @returns {vec2}
+   */
+  canvasEdgeIntersection(r) {
+    const { Ray2d, lineLineIntersection, projectRay } = glsl;
+
+    const sceneRect = this.constructSceneRect(); // @type vec2[4]
+    for ( let i = 0; i < 4; i += 1 ) {
+      const j = (i + 1) % 4;
+      const edge = Ray2d(sceneRect[i], sceneRect[j].subtract(sceneRect[i]));
+      const t = lineLineIntersection(r, edge);
+      if ( t !== null && t >= 0.0 ) return projectRay(r, t);
+    }
+    // Should always find one unless the ray origin is outside the canvas.
+    return r.origin;
+  }
+
+  /**
+   * Determine what canvas edge a ray intersects.
+   * @param {Ray2d} r
+   * @returns {Ray2d}
+   */
+  whichCanvasEdge(r) {
+    const { Ray2d, lineLineIntersection, projectRay, normalizedDirection } = glsl;
+
+    // Correct edge is the shortest distance to the ray origin in the direction of the ray.
+    const sceneRect = this.constructSceneRect(); // @type vec2[4]
+    let minEdge = Ray2d(vec2(), vec2());
+    let minT = this.maxR2();
+    for ( let i = 0; i < 4; i += 1 ) {
+      const j = (i + 1) % 4;
+      const edge = Ray2d(sceneRect[i], normalizedDirection(sceneRect[i], sceneRect[j]));
+      const t = lineLineIntersection(r, edge);
+      if ( t !== null && t >= 0.0 && t < minT ) {
+        minEdge = edge;
+        minT = t;
+      }
+    }
+    return minEdge;
+  }
+
+  /**
    * For infinite wall shadow, point outside of canvas that can be the fake floor intersection.
    * Either a point on the 45º line at a scene corner or a scene edge point.
    * @param {Ray2d[2]}
    * @returns {Ray2d}
    */
   infiniteShadowCanvasRay(lightRays) {
-    const orient = foundry.utils.orient2dFast;
-    const { uSceneDims } = this;
-    const { Ray2d, normalizedDirection, lineLineIntersection } = glsl;
+    const { Ray2d, lineLineIntersection, all, equal } = glsl;
 
-    const TL = 0;
-    const TR = 1;
-    const BR = 2;
-    const BL = 3;
+    // What edge does each ray hit?
+    const edge0 = this.whichCanvasEdge(lightRays[0]);
+    const edge1 = this.whichCanvasEdge(lightRays[1]);
+    if ( all(equal(edge0.origin, edge1.origin)) ) return edge0; // For scene edges, origin is distinct (1 of 4 corners).
 
-    // Ensure the shadow extends to the canvas edges.
-    // Set the far parallel to intersect a corner.
-    const sceneRect = Array(4); // @type vec2[4]
-    sceneRect[TL] = vec2(0.0, 0.0);
-    sceneRect[TR] = vec2((uSceneDims.x * 2.0) + uSceneDims.z, 0.0);
-    sceneRect[BR] = vec2((uSceneDims.x * 2.0) + uSceneDims.z, (uSceneDims.y * 2.0) + uSceneDims.w);
-    sceneRect[BL] = vec2(0.0, (uSceneDims.y * 2.0) + uSceneDims.w);
+    // Rays hit two distinct edges.
+    const corner = vec2();
+    const hasIx = lineLineIntersection(edge0, edge1, corner);
+    const midDir = lightRays[0].direction.add(lightRays[1].direction).multiplyScalar(0.5);
+    if ( hasIx ) {
+      // Use an ray that intersects the corner perpendicular to the midpoint of the two rays.
+      // (This prevents the connecting ray from hitting the canvas or intersecting at the
+      // wrong side of the light rays.)
+      const cornerDir = vec2(midDir.y, -midDir.x);
+      return Ray2d(corner, cornerDir);
+    }
 
-    // Light rays can intersect closest to the same quadrant (1 point), adjacent quadrants (2 points),
-    // or opposing quadrants (3 points, middle one counts).
+    // The rays are striking parallel edges. Test quadrants to determine edge vs corner.
     const quad0 = this.directionalQuadrant(lightRays[0].direction);
     const quad1 = this.directionalQuadrant(lightRays[1].direction);
 
-    // Adjacent quadrants; use scene edge.
-    if ( quad0 === ((quad1 + 1) % 4)
-      || quad0 === ((quad1 + 3) % 4) ) { // -1 + 4
-      return Ray2d(sceneRect[quad0], normalizedDirection(sceneRect[quad0], sceneRect[quad1]));
-    }
+    // If adjacent quadrants, use scene edge.
+    if ( quad0 === ((quad1 + 1) % 4) // +3 equivalent to -1 + 4
+     || quad0 === ((quad1 + 3) % 4) ) return this.whichCanvasEdge(Ray2d(lightRays[0].origin, midDir));
 
-    // If the same corner, use the corner unless the light rays hit the same edge.
-    let corner;
-    if ( quad0 === quad1 ) {
-      const c = sceneRect[quad0];
-      const edges = [
-        Ray2d(c, normalizedDirection(c, sceneRect[(quad0 + 3) % 4])), // -1 + 4
-        Ray2d(c, normalizedDirection(c, sceneRect[(quad0 + 1) % 4]))
-      ];
-
-      // Make sure the first edge each ray hits is the same edge.
-      const t00 = lineLineIntersection(lightRays[0], edges[0]);
-      const t01 = lineLineIntersection(lightRays[0], edges[1]);
-      const t10 = lineLineIntersection(lightRays[1], edges[0]);
-      const t11 = lineLineIntersection(lightRays[1], edges[1]);
-      const ray0Edge = t00 > 0.0 && t00 < t01 ? 0 : 1;
-      const ray1Edge = t10 > 0.0 && t10 < t11 ? 0 : 1;
-      if ( ray0Edge === ray1Edge ) return edges[ray0Edge];
-      corner = quad0;
-    }
-
-    // If in opposing quadrants, must use the corner.
-    if ( quad0 === ((quad1 + 2) % 4) ) corner = (quad0 + 1) % 4; // One apart, e.g., 1 and 3.
-
-    // Use an ray that intersects the corner at a 45º angle to the scene rectangle at that corner.
-    const corner45Dir = vec2(0.5, 0.5);
-    if (corner === TL || corner === BR) corner45Dir.y *= -1.0;
-    return Ray2d(sceneRect[corner], corner45Dir);
+    // Opposing quadrants; must use the corner.
+    // if ( quad0 === ((quad1 + 2) % 4) ) corner = (quad0 + 1) % 4;
+    const cornerIdx = this.directionalQuadrant(midDir);
+    const cornerDir = vec2(midDir.y, -midDir.x);
+    return Ray2d(this.constructSceneRect()[cornerIdx], cornerDir);
   }
 
   /**
@@ -1144,6 +1180,27 @@ export class SizedShadowsTest extends PenumbraBasicTest {
 
     [1, 2, 3, 4] 2, 3
     */
+
+    // If two tangent rays are collinear, the penumbra should be the nearer wall endpoint.
+    //     if ( orient(tangentRays[0].origin, projectedPoints[0], projectedPoints[1]) === 0.0 ) {
+    //       const closestIdx = distanceSquared(lightCir.center, wall.top[1].xy) < distanceSquared(lightCir.center, wall.top[0].xy) ? 1 : 0;
+    //       const W0 = wall.top[closestIdx].xy;
+    //       if ( tangentRays[1].origin.x === W0.x && tangentRays[1].origin.y === W0.y ) {
+    //         const t0 = tangentRays[0];
+    //         tangentRays[0] = tangentRays[1];
+    //         tangentRays[1] = t0;
+    //       }
+    //     }
+    //     if ( orient(tangentRays[3].origin, projectedPoints[3], projectedPoints[2]) === 0.0 ) {
+    //       const closestIdx = distanceSquared(lightCir.center, wall.top[1].xy) < distanceSquared(lightCir.center, wall.top[0].xy) ? 1 : 0;
+    //       const W0 = wall.top[closestIdx].xy;
+    //       if ( tangentRays[2].origin.x === W0.x && tangentRays[2].origin.y === W0.y ) {
+    //         const t0 = tangentRays[3];
+    //         tangentRays[3] = tangentRays[2];
+    //         tangentRays[2] = t0;
+    //       }
+    //     }
+
     const umbra = [tangentRays[1], tangentRays[2]];
     const penumbra = [tangentRays[0], tangentRays[3]];
     return ShadowRays2d({
@@ -1200,16 +1257,18 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     W0 = vec2();
     W1 = vec2();
     */
-
+    const orient = foundry.utils.orient2dFast;
     const {
       lineLineIntersection,
+      Ray,
       distanceSquared,
       projectRay,
-      Ray,
       Ray2d,
       normalizedDirection,
       almostEqual,
-      intersectRayPlane } = glsl;
+      intersectRayPlane,
+      all,
+      equal } = glsl;
 
     // A found by intersecting the two side penumbra lines.
     lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.penumbra[1], A);
@@ -1228,20 +1287,22 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     }
 
     // The DE penumbra ray runs through the closer endpoint.
-    const closerIdx = sideShadowRays.penumbra[0].origin.x === W0.x && sideShadowRays.penumbra[0].origin.y === W0.y ? 0 : 1;
+    const closerIdx = sideShadowRays.penumbra[0].origin.x === W0.x
+      && sideShadowRays.penumbra[0].origin.y === W0.y ? 0 : 1;
     const rAB = sideShadowRays.penumbra[closerIdx];
     const rAC = sideShadowRays.penumbra[1 - closerIdx];
     const rD_penumbra = rAB;
     const rG_penumbra = rAC;
 
     // The DF umbra ray runs through the further endpoint.
-    const furtherIdx = sideShadowRays.umbra[0].origin.x === W1.x && sideShadowRays.umbra[0].origin.y === W1.y ? 0 : 1;
+    const furtherIdx = sideShadowRays.umbra[0].origin.x === W1.x
+      && sideShadowRays.umbra[0].origin.y === W1.y ? 0 : 1;
     const rD_umbra = sideShadowRays.umbra[furtherIdx];
     const rG_umbra = sideShadowRays.umbra[1 - furtherIdx];
 
     // D and G are the intersections of the penumbra with opposite umbra.
-    lineLineIntersection(rD_penumbra, rD_umbra, D);
-    lineLineIntersection(rG_penumbra, rG_umbra, G);
+    const hasIxD = lineLineIntersection(rD_penumbra, rD_umbra, D);
+    const hasIxG = lineLineIntersection(rG_penumbra, rG_umbra, G);
 
     // E intersects the D penumbra ray with the canvas line.
     // let canvasEdge;
@@ -1250,16 +1311,27 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     if ( infiniteShadow ) {
       // Set E and H such that it is outside the canvas.
       // Construct ∆DW0W1, ∆GW1W0 and then extend
-      const newDW0W1 = this.extendTriangleToCanvasEdge([D, W0, W1]);
-      const newGW0W1 = this.extendTriangleToCanvasEdge([G, W0, W1]);
-      const idxH = nearCollinear ? 1 : 2;
-      E.set(newDW0W1[1]);
-      F.set(newDW0W1[2]);
-      H.set(newGW0W1[idxH]);  // Collinear ? 1 : 2
-      I.set(newGW0W1[3 - idxH]); // Collinear ? 2 : 1
+      if ( hasIxD ) {
+        const newDW0W1 = this.extendTriangleToCanvasEdge([D, W0, W1]);
+        E.set(newDW0W1[1]);
+        F.set(newDW0W1[2]);
+      } else {
+        const canvasIx = this.canvasEdgeIntersection(rD_penumbra);
+        E.set(canvasIx);
+        F.set(canvasIx);
+      }
 
-      // canvasEdge = this.infiniteShadowCanvasRay([rD_penumbra, rD_umbra]);
-      // canvasEdge2 = this.infiniteShadowCanvasRay([rG_penumbra, rG_umbra]);
+      if ( hasIxG ) {
+        const newGW0W1 = this.extendTriangleToCanvasEdge([G, W0, W1]);
+        const idxH = nearCollinear ? 1 : 2;
+        H.set(newGW0W1[idxH]);  // Collinear ? 1 : 2
+        I.set(newGW0W1[3 - idxH]); // Collinear ? 2 : 1
+      } else {
+        const canvasIx = this.canvasEdgeIntersection(rG_penumbra);
+        H.set(canvasIx);
+        I.set(canvasIx);
+      }
+
     } else {
       // Locate the canvas intersection.
       const canvasPlane = this.constructCanvasPlane();
@@ -1273,11 +1345,13 @@ export class SizedShadowsTest extends PenumbraBasicTest {
 
       // Moving from E along the wall direction, we will intersect rD_umbra at F.
       const rEWall = Ray2d(E, wall.direction);
-      lineLineIntersection(rEWall, rD_umbra, F);
+      const hasIxF = lineLineIntersection(rEWall, rD_umbra, F);
+      if ( !hasIxF ) F.set(this.canvasEdgeIntersection(rD_umbra));
 
       // Mirror for ∆GHI. Use I b/c it is on the W0 line.
       const rIWall = Ray2d(I, wall.direction);
-      lineLineIntersection(rIWall, rG_penumbra, H);
+      const hasIxH = lineLineIntersection(rIWall, rG_penumbra, H);
+      if ( !hasIxH ) H.set(this.canvasEdgeIntersection(rG_penumbra));
     }
     // lineLineIntersection(rD_penumbra, canvasEdge, E);
     // lineLineIntersection(rG_umbra, canvasEdge2, I)
@@ -1299,8 +1373,12 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     } else {
       // For not near-collinear, B and C will equal E and H, respectively.
       // For near-collinear for infinite shadow, E and H will already be at the canvas edge.
-      B.set(E, 0);
-      C.set(H, 0);
+      // B.set(E, 0);
+      // C.set(H, 0);
+
+      const newABC = this.extendTriangleToCanvasEdge([A, E, H]);
+      B.set(newABC[1], 0);
+      C.set(newABC[2], 0);
     }
     return nearCollinear;
   }
@@ -1346,18 +1424,27 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     nearFarTri0, nearFarTri1, sideTri0, sideTri1) {
     const { distanceSquared, lineLineIntersection, Ray2d, normalizedDirection } = glsl;
 
-    const A = vec2();
-    const B = vec2();
-    const C = vec2();
-    const D = vec2();
-    const E = vec2();
-    const F = vec2();
-    const G = vec2();
-    const H = vec2();
-    const I = vec2();
-    const J = vec2();
-    const W0 = vec2();
-    const W1 = vec2();
+    /*
+    let penumbraTri = [vec2(), vec2(), vec2()];
+    let umbraTri = [vec2(), vec2(), vec2()]; // Gradient shading.
+    let nearFarTri0 = [vec2(), vec2(), vec2()]; // Defining near and far shadows.
+    let nearFarTri1 = [vec2(), vec2(), vec2()]; // Defining near and far shadows.
+    let sideTri0 = [vec2(), vec2(), vec2()]; // Gradient shading.
+    let sideTri1 = [vec2(), vec2(), vec2()]; // Triangles defining parts of the shadow.
+    */
+
+    let A = vec2();
+    let B = vec2();
+    let C = vec2();
+    let D = vec2();
+    let E = vec2();
+    let F = vec2();
+    let G = vec2();
+    let H = vec2();
+    let I = vec2();
+    let J = vec2();
+    let W0 = vec2();
+    let W1 = vec2();
     const nearCollinear = this.shadowPoints(sideShadowRays, farShadowDirs, wall,
       A, B, C, D, E, F, G, H, I, W0, W1);
 
@@ -1434,7 +1521,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
    */
   ambientLight(w0, w1) {
     const { uLightSize, uLightPosition } = this;
-    const distToWall = distanceToSegment(uLightPosition.xy, w0, w1);
+    const distToWall = glsl.distanceToSegment(uLightPosition.xy, w0, w1);
     if ( distToWall <= uLightSize ) return vec2(1.0, 0.0);
     return this.circleBisectorPercentArea(w0, w1, uLightPosition.xy, uLightSize);
   }
@@ -1531,14 +1618,51 @@ export class SizedShadowsTest extends PenumbraBasicTest {
   }
 
   /**
+   * Test if the point is within the wall endpoints, meaning drawing lines perpendicular
+   * to the wall would contain the point.
+   * @param {Wall} wall
+   * @param {vec2} pt
+   * @returns {bool}
+   */
+  pointBetweenWallEndpoints(wall, pt) {
+    const orient = foundry.utils.orient2dFast;
+    const { projectRay, Ray2d } = glsl;
+
+    const perpDir = vec2(wall.direction.y, -wall.direction.x);
+    const p0 = projectRay(Ray2d(wall.top[0].xy, perpDir), 1.0);
+    const p1 = projectRay(Ray2d(wall.top[1].xy, perpDir), 1.0);
+    return orient(wall.top[0].xy, p0, pt) * orient(wall.top[1].xy, p1, pt) < 0.0;
+  }
+
+  /**
    * Mimic calculations done in the vertex shader.
    */
   vertexCalculations(id) {
     super.vertexCalculations(id);
-    const { Ray2d, ShadowDirections } = glsl;
+    const { Ray2d, ShadowDirections, lineLineIntersection, quadraticIntersection, distanceToSegment, circleContainsPoint, projectRay, normalizedDirection } = glsl;
+    const { uLightSize } = this;
     const vertexNum = this.gl_VertexID % 3;
     const wall = this.wall = this.calculateWallPositions();
     const light = this.light = this.calculateLightPositions();
+
+    // If a wall endpoint is within the light and the light center is not between the
+    // endpoints, shrink the wall so it is just outside the light.
+    // This avoids the light failing to display if overlapping the wall to the right/left.
+    // If between the endpoints, calculateSideShadowRays will move the light accordingly.
+    const ixs = [vec2(), vec2()]; // GLSL: vec2[2] ixs;
+    const numIxs = quadraticIntersection(wall.top[0].xy, wall.top[1].xy, light.center.xy, uLightSize, 1.0e-06, ixs);
+    if ( numIxs === 1 ) {
+      // Determine where the intersection is on the wall.
+      const containedIdx = circleContainsPoint(light.center.xy, uLightSize, wall.top[0].xy) ? 0 : 1;
+
+      // Move pixel away to be outside the circle.
+      const newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], wall.top[1 - containedIdx].xy)), 1.0);
+
+      // Update wall data.
+      wall.top[containedIdx].xy = newIx.xy;
+      wall.bottom[containedIdx].xy = newIx.xy;
+      wall.mid = wall.top[0].xy.add(wall.top[1].xy).multiplyScalar(0.5);
+    }
 
     // Side shadows.
     const sideShadowRays = this.sideShadowRays = this.calculateSideShadowRays(wall, light);
@@ -1639,7 +1763,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
   }
 
   /* ----- NOTE: Debugging ----- */
-  drawLight() { Draw.point(this.light.center, { radius: this.uLightSize, color: Draw.COLORS.yellow }); }
+  drawLight() { Draw.point(this.light.center, { radius: this.uLightSize, color: Draw.COLORS.yellow, fillAlpha: 0.5 }); }
 
   drawUmbraTriangle() {
     const tri = this.umbraTri;
@@ -1982,6 +2106,11 @@ shader0.drawSideTriangle(1)
 shader0.drawNearFarTri(0)
 shader0.drawNearFarTri(1)
 
+sideShadowRays = shader0.sideShadowRays
+drawRay(sideShadowRays.penumbra[0])
+drawRay(sideShadowRays.penumbra[1])
+drawRay(sideShadowRays.umbra[0], { color: Draw.COLORS.red })
+drawRay(sideShadowRays.umbra[1], { color: Draw.COLORS.red })
 
 W0 = shader0.sideTri0[0]
 W1 = shader0.sideTri1[0]
