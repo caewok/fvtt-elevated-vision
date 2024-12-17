@@ -70,7 +70,9 @@ import {
   PenumbraBasicTest,
   UnsizedShadowsTest,
   SizedShadowsTest,
-  SizedRandomShadowsTest } from "./testing/WallShaderTest3.js";
+  SizedRandomShadowsTest,
+  DirectionalShadowsTest,
+  DirectionalRandomShadowsTest } from "./testing/WallShaderTest3.js";
 
 // Imported elsewhere: import "./scenes.js";
 

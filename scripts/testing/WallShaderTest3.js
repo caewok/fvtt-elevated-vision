@@ -1768,6 +1768,217 @@ SizedShadowsTest.FLATS.push(
   "fAmbient"
 );
 
+export class DirectionalShadowsTest extends SizedShadowsTest {
+  /* ----- NOTE: Uniforms ----- */
+
+  /** @type {float<radians>} */
+  get uAzimuth() { return this.uniforms.uAzimuth ?? 0; }
+
+  /** @type {float<radians>} */
+  get uSolarAngle() { return this.uniforms.uSolarAngle ?? 0; }
+
+  // ----- NOTE: Getters ----- //
+
+  /** @type {float} */
+  // TODO: Cannot currently go all the way to 0.
+  get solarAngle() { return Math.max(0.1, this.uSolarAngle); }
+
+
+  calculateLightPositions() {
+    console.error("No calculateLightPositions for Directional shadows.");
+    return null;
+  }
+
+  /**
+   * The rays from the wall endpoint along the side.
+   * @param {int} idx     Which wall endpoint corresponds to this shadow
+   * @param {Wall} wall
+   * @returns {ShadowDirections2d} Direction from the endpoint away from the light for umbra, mid, and penumbra.
+   */
+  calculateSideShadowDirections(idx, wall) {
+    const orient = foundry.utils.orient2dFast;
+    const sign = Math.sign;
+    const { uAzimuth, uElevationAngle } = this;
+    const { solarAngle } = this;
+    const { fromAngle, ShadowDirections2d, normalizedDirection, distanceSquared } = glsl;
+
+    // Direction from light to endpoint.
+    const dirMidPenumbra = fromAngle(vec2(0.0), uAzimuth, 1.0).multiplyScalar(-1.0).normalize();
+
+    // Determine which side of the wall the light is on.
+    const oWallLight = sign(orient(wall.top[0].xy, wall.top[1].xy, wall.top[0].xy.subtract(dirMidPenumbra)));
+
+    // Adjust azimuth by the solarAngle.
+    // Determine the direction of the outer penumbra rays from light --> wallCorner1 / wallCorner2.
+    // The angle for the penumbra is the azimuth ± the solarAngle.
+    const solarWallAngle = solarAngle * oWallLight;
+    const multiplier = idx === 0 ? 1.0 : -1.0;
+    let dirPenumbra = fromAngle(vec2(0.0), uAzimuth + (solarWallAngle * multiplier), 1.0)
+      .multiplyScalar(-1.0).normalize();
+    const dirUmbra = fromAngle(vec2(0.0), uAzimuth - (solarWallAngle * multiplier), 1.0)
+      .multiplyScalar(-1.0).normalize();
+
+    // If the penumbra is on the opposite side from the mid penumbra, change the penumbra to be at the wall.
+//     const oWallPenumbra = orient(wall.top[0].xy, wall.top[1].xy, wall.top[0].xy.subtract(dirPenumbra));
+//     if ( oWallPenumbra * oWallLight < 0.0 ) {
+//       // Which endpoint is closest to the light?
+//       const distWall = distanceSquared(wall.top[0].xy, wall.top[1].xy);
+//       const distLight = distanceSquared(wall.top[0].xy, wall.top[0].xy.add(dirMidPenumbra));
+//       const closestIdx = distWall < distLight ? 1 : 0;
+//       dirPenumbra = normalizedDirection(wall.top[closestIdx].xy, wall.top[1 - closestIdx].xy);
+//     }
+
+    return ShadowDirections2d({
+      umbra: dirUmbra,
+      midpenumbra: dirMidPenumbra,
+      penumbra: dirPenumbra
+    });
+  }
+
+  /**
+   * Calculate the side shadow rays.
+   * @param {Wall} wall
+   * @param {ShadowRays2d}
+   */
+  calculateSideShadowRays(wall) {
+    const { ShadowRays2d, Ray2d } = glsl;
+
+    const sideShadowDirs0 = this.calculateSideShadowDirections(0, wall);
+    const sideShadowDirs1 = this.calculateSideShadowDirections(1, wall);
+    const wall0 = wall.top[0].xy;
+    const wall1 = wall.top[1].xy;
+    return ShadowRays2d({
+      umbra: [
+        Ray2d(wall0, sideShadowDirs0.umbra),
+        Ray2d(wall1, sideShadowDirs1.umbra)
+      ],
+      midpenumbra: [
+        Ray2d(wall0, sideShadowDirs0.midpenumbra),
+        Ray2d(wall1, sideShadowDirs1.midpenumbra)
+      ],
+      penumbra: [
+        Ray2d(wall0, sideShadowDirs0.penumbra),
+        Ray2d(wall1, sideShadowDirs1.penumbra)
+      ]
+    });
+  }
+
+  /**
+   * Direction toward the wall middle, used to measure far umbra line.
+   * @param {Wall} wall
+   * @param {Light} light
+   * @returns {ShadowDirections}
+   */
+  calculateFarShadowDirections(wall) {
+    const { ShadowDirections, fromAngle } = glsl;
+    const { uAzimuth } = this;
+
+    const zDelta = this._calculateZChangeRays();
+    const dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0).multiplyScalar(-1.0);
+    return ShadowDirections({
+      umbra: vec3(dirMid, zDelta[UMBRA]).normalize(),
+      midpenumbra: vec3(dirMid, zDelta[MIDPENUMBRA]).normalize(),
+      penumbra: vec3(dirMid, zDelta[PENUMBRA]).normalize()
+    });
+  }
+
+  /**
+   * Direction toward the wall middle, used to measure near umbra line.
+   * @returns {ShadowDirections}
+   */
+  calculateNearShadowDirections() {
+    const { uAzimuth } = this;
+    const { ShadowDirections, fromAngle } = glsl;
+
+    const zDelta = this._calculateZChangeRays();
+    const dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0).multiplyScalar(-1.0);
+    return ShadowDirections({
+      umbra: vec3(dirMid, zDelta[PENUMBRA]).normalize(),
+      midpenumbra: vec3(dirMid, zDelta[MIDPENUMBRA]).normalize(),
+      penumbra: vec3(dirMid, zDelta[UMBRA]).normalize()
+    });
+  }
+
+  /**
+   * Determine the change in z for the directional rays.
+   * @returns {float[3]}
+   */
+  _calculateZChangeRays() {
+    const { uElevationAngle } = this;
+    const { solarAngle } = this;
+
+    // Calculate the change in z for the light direction based on differing solar angles.
+    const zDelta = new Array(3);
+    zDelta[UMBRA] = this.zChangeForElevationAngle(uElevationAngle + solarAngle); // Light top
+    zDelta[MIDPENUMBRA] = this.zChangeForElevationAngle(uElevationAngle); // Light middle
+    zDelta[PENUMBRA] = this.zChangeForElevationAngle(uElevationAngle - solarAngle); // Light bottom
+    return zDelta;
+  }
+
+  /**
+   * Amount of z (y) change for every change in x.
+   * @param {float} elevationAngle
+   * @returns {float}
+   */
+  zChangeForElevationAngle(elevationAngle) {
+    const { fromAngle } = glsl;
+
+    const pt = fromAngle(vec2(0.0), elevationAngle, 1.0);
+
+    // How much z (y) change for every change in x?
+    const z = pt.x === 0.0 ? 1e06 : pt.y / pt.x;
+    return -z;
+    // Don't let z go to 0?
+    // return max(z, 1e-06);
+  }
+
+  /**
+   * Mimic calculations done in the vertex shader.
+   */
+  vertexCalculations(id) {
+    super.vertexCalculations(id);
+    const {
+      Ray2d,
+      ShadowDirections,
+      lineLineIntersection,
+      quadraticIntersection,
+      distanceToSegment,
+      circleContainsPoint,
+      projectRay,
+      normalizedDirection } = glsl;
+    const vertexNum = this.gl_VertexID % 3;
+    const wall = this.wall = this.calculateWallPositions();
+
+    // Side shadows.
+    const sideShadowRays = this.sideShadowRays = this.calculateSideShadowRays(wall);
+
+    // Far direction.
+    const farShadowDirs = this.farShadowDirs = this.calculateFarShadowDirections(wall);
+
+    // Triangles defining parts of the shadow.
+    const penumbraTri = this.penumbraTri = [vec2(), vec2(), vec2()];
+    const umbraTri = this.umbraTri = [vec2(), vec2(), vec2()]; // Gradient shading.
+    const nearFarTri0 = this.nearFarTri0 = [vec2(), vec2(), vec2()]; // Defining near and far shadows.
+    const nearFarTri1 = this.nearFarTri1 = [vec2(), vec2(), vec2()]; // Defining near and far shadows.
+    const sideTri0 = this.sideTri0 = [vec2(), vec2(), vec2()]; // Gradient shading.
+    const sideTri1 = this.sideTri1 = [vec2(), vec2(), vec2()]; // Triangles defining parts of the shadow.
+    const nearCollinear = this.nearCollinear = this.shadowTriangles(sideShadowRays, farShadowDirs, wall,
+      penumbraTri, umbraTri, nearFarTri0, nearFarTri1, sideTri0, sideTri1);
+
+    this.defineSharedVaryings(wall, penumbraTri);
+    this.defineVaryings(nearCollinear, penumbraTri, umbraTri, nearFarTri0, nearFarTri1, sideTri0, sideTri1);
+    if ( vertexNum === 2 ) {
+      this.defineSharedFlats(wall, penumbraTri);
+      this.nearShadowDirs = ShadowDirections();
+      if ( this.wallIsFloating ) this.nearShadowDirs = this.calculateNearShadowDirections(wall);
+      this.defineFlats(wall, penumbraTri, sideTri0, farShadowDirs, this.nearShadowDirs);
+    }
+  }
+
+
+}
+
+
 /**
  * Extends the penumbra shader for unsized point source shadows.
  */
@@ -1810,11 +2021,6 @@ export class SizedRandomShadowsTest extends SizedShadowsTest {
     // Far direction.
     const farShadowDirs = this.farShadowDirs = this.calculateFarShadowDirections(wall, light);
 
-    // Far canvas ray, representing the canvas intersection.
-    const farPenumbraCanvasRay = Ray2d(vec2(), vec2());
-    const hasFarPenumbra = this.canvasIntersectionRay(farShadowDirs.penumbra, sideShadowRays.penumbra,
-      wall, farPenumbraCanvasRay);
-
     // Triangles defining parts of the shadow.
     const penumbraTri = this.penumbraTri = [vec2(), vec2(), vec2()];
     const umbraTri = this.umbraTri = [vec2(), vec2(), vec2()]; // Gradient shading.
@@ -1822,7 +2028,7 @@ export class SizedRandomShadowsTest extends SizedShadowsTest {
     const nearFarTri1 = this.nearFarTri1 = [vec2(), vec2(), vec2()]; // Defining near and far shadows.
     const sideTri0 = this.sideTri0 = [vec2(), vec2(), vec2()]; // Gradient shading.
     const sideTri1 = this.sideTri1 = [vec2(), vec2(), vec2()]; // Triangles defining parts of the shadow.
-    const nearCollinear = this.shadowTriangles(sideShadowRays, wall, farPenumbraCanvasRay,
+    const nearCollinear = this.shadowTriangles(sideShadowRays, farShadowDirs, wall,
       penumbraTri, umbraTri, nearFarTri0, nearFarTri1, sideTri0, sideTri1);
 
     this.defineSharedVaryings(wall, penumbraTri);
@@ -1923,6 +2129,224 @@ export class SizedRandomShadowsTest extends SizedShadowsTest {
     for ( let i = 0; i < 7; i += 1 ) {
       const pos = pts[i];
       const dir = normalizedDirection(a, pos);
+      numCollisions += this.wallCollision(dir, elevation);
+    }
+
+    // TODO: Add in adjacent pixel values as part of the average here.
+    const percentShadow = numCollisions / this.constructor.TOTAL_COLLISIONS;
+    console.log(`shadowComponents|${numCollisions} collisions, ${percentShadow * 100}% shadow.`);
+    return percentShadow;
+  }
+
+  /* ----- NOTE: Debugging ----- */
+  drawCollisionRays() {
+    for ( let i = 0; i < this.collisionRays.length; i += 1 ) this.drawCollisionRay(i);
+  }
+
+  drawCollisionRay(idx = 0) {
+    const wall = this.wall;
+    const hWall0 = wall.top[0].xy;
+    const hWall1 = wall.top[1].xy;
+    const vWall0 = vec2(0.0, wall.top[0].z);
+    const vWall1 = vec2(0.0, wall.bottom[0].z);
+    const r = this.collisionRays[idx];
+    const hasCollision = this.wallCollision(r.direction, r.origin.z, hWall0, hWall1, vWall0, vWall1);
+    const color = hasCollision ? Draw.COLORS.lightred : Draw.COLORS.yellow;
+    Draw.segment({
+      a: r.origin,
+      b: r.origin.add(r.direction.xy.normalize().multiplyScalar(1000))
+    }, { color });
+  }
+}
+
+SizedRandomShadowsTest.FLATS.push(
+  "fWallTop0",
+  "fWallTop1",
+  "fWallBottom0",
+  "fWallBottom1"
+);
+
+/**
+ * Extends the penumbra shader for unsized point source shadows.
+ */
+export class DirectionalRandomShadowsTest extends DirectionalShadowsTest {
+  /* ----- NOTE: Vertex functions ----- */
+
+  static TOTAL_COLLISIONS = 10;
+
+  /**
+   * Calculate the flat variables
+   * @param {Wall} wall
+   */
+  defineFlats(wall) {
+    const { barycentric } = glsl;
+    const baryForPoint = (pt, tri) => barycentric(pt, ...tri);
+    wall ??= this.wall;
+
+    // @type {vec3} Wall data
+    this.fWallTop0 = wall.top[0];
+    this.fWallTop1 = wall.top[1];
+    this.fWallBottom0 = wall.bottom[0];
+    this.fWallBottom1 = wall.bottom[1];
+
+    // Can retrieve for debugging using this.flats.
+  }
+
+  /**
+   * Mimic calculations done in the vertex shader.
+   */
+  vertexCalculations(id) {
+    super.vertexCalculations(id);
+    const { Ray2d, ShadowDirections } = glsl;
+    const vertexNum = this.gl_VertexID % 3;
+    const wall = this.wall = this.calculateWallPositions();
+
+    // Side shadows.
+    const sideShadowRays = this.sideShadowRays = this.calculateSideShadowRays(wall);
+
+    // Far direction.
+    const farShadowDirs = this.farShadowDirs = this.calculateFarShadowDirections(wall);
+
+    // Triangles defining parts of the shadow.
+    const penumbraTri = this.penumbraTri = [vec2(), vec2(), vec2()];
+    const umbraTri = this.umbraTri = [vec2(), vec2(), vec2()]; // Gradient shading.
+    const nearFarTri0 = this.nearFarTri0 = [vec2(), vec2(), vec2()]; // Defining near and far shadows.
+    const nearFarTri1 = this.nearFarTri1 = [vec2(), vec2(), vec2()]; // Defining near and far shadows.
+    const sideTri0 = this.sideTri0 = [vec2(), vec2(), vec2()]; // Gradient shading.
+    const sideTri1 = this.sideTri1 = [vec2(), vec2(), vec2()]; // Triangles defining parts of the shadow.
+    const nearCollinear = this.shadowTriangles(sideShadowRays, farShadowDirs, wall,
+      penumbraTri, umbraTri, nearFarTri0, nearFarTri1, sideTri0, sideTri1);
+
+    this.defineSharedVaryings(wall, penumbraTri);
+    if ( vertexNum === 2 ) {
+      this.defineSharedFlats(wall, penumbraTri);
+      this.defineFlats(wall);
+    }
+  }
+
+  /* ----- NOTE: Fragment calculations ----- */
+
+  /**
+   * Create a random position within the 3d light sphere.
+   * @param {float} seed    Number used to vary the pseudo-random value.
+   * @returns {vec3}
+   */
+  randomSpherePosition(seed = 0) {
+    const { uLightPosition, uLightSize, uTime, vVertexPosition } = this;
+    const { hash, linearConversion } = glsl;
+
+    // Get a 3d direction in which to move from the center.
+    // uTime is much too large for hash.
+    const t = (uTime * 1.0e-8) + seed;
+    const rnd = hash(vec3(t).subtract(vec3(vVertexPosition, seed)));
+    const rndDir = linearConversion(rnd, 0.0, 1.0, -1.0, 1.0);
+    return uLightPosition.add(rndDir.multiplyScalar(uLightSize));
+  }
+
+  /**
+   * Determine whether there is a collision with the wall at a given direction from the fragment.
+   * @param {vec3} dir
+   * @param {vec2} hWall0
+   * @param {vec2} hWall1
+   * @param {vec2} vWall0
+   * @param {vec2} vWall1
+   * @returns {int}
+   */
+  wallCollision(dir, elevation) {
+    const orient = foundry.utils.orient2dFast;
+    const { vVertexPosition, vEdgeDist } = this.varyings;
+    const { fWallTop0, fWallTop1, fWallBottom0, fWallBottom1 } = this.flats;
+    const { normalizedDirection, distanceToLine } = glsl;
+
+    const hWall0 = fWallTop0.xy;
+    const hWall1 = fWallTop1.xy;
+    const vWall0 = vec2(0.0, fWallTop0.z);
+    const vWall1 = vec2(0.0, fWallBottom0.z);
+
+    // Move 1 pixel toward the light, to measure orientation w/r/t the light ray.
+    const b3d = vec3(vVertexPosition, elevation).add(dir);
+
+    // Test for horizontal collision. Wall endpoints are opposite sides of the light ray.
+    const hCollision = orient(vVertexPosition, b3d.xy, hWall0) * orient(vVertexPosition, b3d.xy, hWall1) < 0.0;
+    if ( !hCollision ) return 0;
+
+    // Test for vertical collision. Transform coordinates based on direction to wall.
+    const vA = vec2(vEdgeDist, elevation);
+    const distB = distanceToLine(b3d.xy, hWall0, normalizedDirection(hWall0, hWall1));
+    const vB = vec2(distB, b3d.z);
+    const vCollision = orient(vA, vB, vWall0) * orient(vA, vB, vWall1) < 0.0;
+    if ( !vCollision ) return 0;
+    return 1;
+  }
+
+  shadowPercentage(pt, elevation = this.canvasElevation) {
+    elevation = CONFIG.GeometryLib.utils.gridUnitsToPixels(elevation);
+    const orient = foundry.utils.orient2dFast;
+    const sign = Math.sign;
+    const { uElevationRes, uAzimuth, uElevationAngle } = this;
+    const { normalizedDirection, Ray, fromAngle } = glsl;
+    const solarAngle = this.solarAngle;
+
+    // Debugging: ensure the flats and varyings are set up.
+    this.setVaryings(pt);
+    if ( this.thresholdApplies() ) return 0.0;
+    if ( this.inFrontOfWall() ) return 0.0;
+
+    // Retrieve the flat and varying variables.
+    const { vVertexPosition } = this.varyings;
+    const { fWallTop0, fWallTop1, fWallBottom0, fWallBottom1 } = this.flats;
+
+    // Direction from light to endpoint.
+    const dirMidPenumbra = fromAngle(vec2(0.0), uAzimuth, 1.0).multiplyScalar(-1.0).normalize();
+
+    // Determine which side of the wall the light is on.
+    const oWallLight = sign(orient(fWallTop0.xy, fWallTop1.xy, fWallTop0.xy.subtract(dirMidPenumbra)));
+
+    // Sample from range of solar angle and azimuth.
+    // The angle for the penumbra is the azimuth ± the solarAngle.
+    const solarWallAngle = solarAngle * oWallLight;
+    const hMinDir = fromAngle(vec2(0.0, 0.0), uAzimuth - solarWallAngle);
+    const hMaxDir = fromAngle(vec2(0.0, 0.0), uAzimuth + solarWallAngle);
+    const hMidDir = hMinDir.add(hMaxDir).multiplyScalar(0.5);
+
+    // Vertical angle is elevation angle ± solar angle.
+    let vMinZ = fromAngle(vec2(0.0, 0.0), uElevationAngle - solarAngle);
+    let vMaxZ = fromAngle(vec2(0.0, 0.0), uElevationAngle + solarAngle);
+    vMinZ = vMinZ.x === 0.0 ? 1e06 : vMinZ.y / vMinZ.x;
+    vMaxZ = vMaxZ.x === 0.0 ? 1e06 : vMaxZ.y / vMaxZ.x;
+    const vMidZ = (vMinZ + vMaxZ) * 0.5;
+
+    const dirs = Array(13);
+    dirs[0] = vec3(hMidDir, vMidZ).normalize();
+
+    dirs[1] = vec3(hMinDir, vMidZ).normalize();
+    dirs[2] = vec3(hMaxDir, vMidZ).normalize();
+
+    dirs[3] = vec3(hMidDir, vMinZ).normalize();
+    dirs[4] = vec3(hMidDir, vMaxZ).normalize();
+
+    dirs[5] = vec3(hMaxDir, vMinZ).normalize();
+    dirs[6] = vec3(hMaxDir, vMinZ).normalize();
+
+    dirs[7] = vec3(hMaxDir, vMaxZ).normalize();
+    dirs[8] = vec3(hMaxDir, vMaxZ).normalize();
+
+    dirs[9] = dirs[0].add(dirs[1]).multiplyScalar(0.5);
+    dirs[10] = dirs[0].add(dirs[2]).multiplyScalar(0.5);
+    dirs[11] = dirs[0].add(dirs[3]).multiplyScalar(0.5);
+    dirs[12] = dirs[0].add(dirs[4]).multiplyScalar(0.5);
+
+    // For each direction, test intersection with the wall.
+    // TODO: If the wall has different heights for each endpoint, adjust to match the point
+    // at which the light ray intersects the wall.
+    // TODO: skip tests if certain horizontals or verticals are blocked?
+    //       skip tests based on inclusion in umbra triangle?
+    // TODO: Use tangents?
+    let numCollisions = 0;
+    this.collisionRays = [];
+    const a = vec3(vVertexPosition, elevation);
+    for ( let i = 0; i < dirs.length; i += 1 ) {
+      const dir = dirs[i];
       numCollisions += this.wallCollision(dir, elevation);
     }
 
@@ -2065,6 +2489,60 @@ BOTTOM = 1
 FAR = 0
 NEAR = 1
 let [shader0] = SizedShadowsTest.fromMesh(ev.shadowMesh)
+shader0.vertexCalculations(2)
+
+shader0.drawWall();
+shader0.drawLight();
+shader0.drawPenumbraTriangle();
+shader0.drawUmbraTriangle()
+shader0.drawSideTriangle(0)
+shader0.drawSideTriangle(1)
+shader0.drawNearFarTri(0)
+shader0.drawNearFarTri(1)
+
+sideShadowRays = shader0.sideShadowRays
+drawRay(sideShadowRays.penumbra[0])
+drawRay(sideShadowRays.penumbra[1])
+drawRay(sideShadowRays.umbra[0], { color: Draw.COLORS.red })
+drawRay(sideShadowRays.umbra[1], { color: Draw.COLORS.red })
+
+W0 = shader0.sideTri0[0]
+W1 = shader0.sideTri1[0]
+if ( shader0.nearCollinear ) [W0, W1] = [shader0.sideTri0[0], shader0.sideTri0[2]]
+shader0.ambientLight(W0, W1)
+
+shader0.setVaryings(pt)
+shader0.fragmentCalculations(pt, 0)
+shader0.shadowPercentage(pt, 0)
+
+
+*/
+
+/* Testing directional light
+MODULE_ID = "elevatedvision"
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+Draw = CONFIG.GeometryLib.Draw;
+api = game.modules.get("elevatedvision").api
+let { vec2, vec3, vec4 } = api.testing.glsl_mock
+glsl = api.testing.glsl_mock
+
+let {
+  DirectionalShadowsTest } = api.testing
+function drawRay(ray, { dist = canvas.dimensions.maxR, color = Draw.COLORS.blue } = {}) {
+  Draw.segment({ a: ray.origin, b: ray.origin.add(ray.direction.multiplyScalar(dist))}, { color })
+}
+l = canvas.lighting.placeables[0];
+edge0 = canvas.walls.placeables[0].edge
+ev = l.lightSource.elevatedvision
+
+UMBRA = 0;
+MIDPENUMBRA = 2;
+PENUMBRA = 1;
+TOP = 0
+BOTTOM = 1
+FAR = 0
+NEAR = 1
+let [shader0] = DirectionalShadowsTest.fromMesh(ev.shadowMesh)
 shader0.vertexCalculations(2)
 
 shader0.drawWall();

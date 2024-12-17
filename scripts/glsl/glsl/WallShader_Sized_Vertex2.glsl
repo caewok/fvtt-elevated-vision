@@ -330,11 +330,6 @@ void main() {
   // Far direction.
   ShadowDirections farShadowDirs = calculateFarShadowDirections(wall, light);
 
-  // Far canvas ray, representing the canvas intersection.
-  Ray2d farPenumbraCanvasRay;
-  bool hasFarPenumbra = canvasIntersectionRay(farShadowDirs.penumbra, sideShadowRays.penumbra,
-    wall, farPenumbraCanvasRay);
-
   // Triangles defining parts of the shadow.
   vec2[3] penumbraTri;
   vec2[3] umbraTri; // Gradient shading.
@@ -342,7 +337,7 @@ void main() {
   vec2[3] nearFarTri1; // Defining near and far shadows.
   vec2[3] sideTri0; // Gradient shading.
   vec2[3] sideTri1; // Gradient shading.
-  bool nearCollinear = shadowTriangles(sideShadowRays, wall, farPenumbraCanvasRay,
+  bool nearCollinear = shadowTriangles(sideShadowRays, farShadowDirs, wall,
     penumbraTri, umbraTri, nearFarTri0, nearFarTri1, sideTri0, sideTri1);
 
   // Varyings
