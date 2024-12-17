@@ -42,6 +42,8 @@ ${defineFunction("distanceToLine")}
 struct Wall {
   vec3[2] top;
   vec3[2] bottom;
+  vec2 mid;
+  vec2 direction;
 };
 
 /** Represent the three directions of a shadow from a wall endpoint. */
@@ -74,8 +76,10 @@ Wall calculateWallPositions() {
   vec3 aBottom = vec3(aWallCorner0.x, aWallCorner0.y, aWallCorner1.z);
   vec3 bBottom = vec3(aWallCorner1.x, aWallCorner1.y, aWallCorner1.z);
   return Wall(
-    vec3[2](aTop, bTop),
-    vec3[2](aBottom, bBottom)
+    vec3[2](aTop, bTop),                    // top
+    vec3[2](aBottom, bBottom),              // bottom
+    (aTop.xy + bTop.xy) * 0.5,              // mid
+    normalizedDirection(aTop.xy, bTop.xy)   // direction
   );
 }
 
@@ -357,13 +361,12 @@ vec2[3] extendTriangleToCanvasEdge(in vec2[3] tri) {
  */
 bool canvasIntersectionRay(in vec3 nearFarDir, in Ray2d[2] sidePenumbra, in Wall wall, out Ray2d canvasRay) {
   Plane canvasPlane = constructCanvasPlane();
-  vec3 wallTopMid = (wall.top[0] + wall.top[1]) * 0.5;
-  vec2 wallDir2d = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
+  vec3 wallTopMid = vec3(wall.mid, wall.top[0].z);
   vec3 canvasIx;
   if ( !isInfiniteShadow(nearFarDir)
     && intersectRayPlane(Ray(wallTopMid, nearFarDir), canvasPlane, canvasIx) ) {
     canvasRay.origin = canvasIx.xy;
-    canvasRay.direction = wallDir2d;
+    canvasRay.direction = wall.direction;
     return true;
   } else {
     canvasRay = infiniteShadowCanvasRay(sidePenumbra);
@@ -383,11 +386,9 @@ Ray2d nearFarMidRay(in Wall wall, in vec2[3] penumbraTri) {
   float dist01 = distanceSquared(penumbraTri[0], penumbraTri[1]);
   float dist02 = distanceSquared(penumbraTri[0], penumbraTri[2]);
   int closerIdx = dist02 < dist01 ? 2 : 1;
-  vec2 wallDir2d = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
-  vec2 wallMid2d = (wall.top[0].xy + wall.top[1].xy) * 0.5;
-  Ray2d lightRay2d = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wallMid2d));
+  Ray2d lightRay2d = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wall.mid));
   vec2 closerIx;
-  lineLineIntersection(lightRay2d, Ray2d(penumbraTri[closerIdx], wallDir2d), closerIx);
+  lineLineIntersection(lightRay2d, Ray2d(penumbraTri[closerIdx], wall.direction), closerIx);
   return Ray2d(closerIx, penumbraTri[0] - closerIx);
 }
 
@@ -444,17 +445,15 @@ float varyingWallRatio(in Wall wall, in vec2[3] penumbraTri) {
   // If the ray from further index along the wall direction intersects the nearer index,
   // it will also get assigned 0.0. Otherwise, it is some value smaller than 0.
   int furtherIdx = (1 - closerIdx) + 2; // Either 2 or 1.
-  vec2 wallDir = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
-  vec2 wallMid = (wall.top[0].xy + wall.top[1].xy) * 0.5;
-  Ray2d lightRay = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wallMid));
+  Ray2d lightRay = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wall.mid));
   vec2 closerIx;
-  lineLineIntersection(lightRay, Ray2d(penumbraTri[closerIdx], wallDir), closerIx);
+  lineLineIntersection(lightRay, Ray2d(penumbraTri[closerIdx], wall.direction), closerIx);
 
   // Could use distance(closerIx, wallMid) / distance(closerIx, penumbraTri[0]).
   // That has a square root but is simpler.
   Ray2d wallRatioRay = Ray2d(closerIx, penumbraTri[0] - closerIx);
   float furtherT;
-  lineLineIntersection(wallRatioRay, Ray2d(penumbraTri[vertexNum], wallDir), furtherT);
+  lineLineIntersection(wallRatioRay, Ray2d(penumbraTri[vertexNum], wall.direction), furtherT);
 
   // Often will be near zero (if penumbra triangle uses wall direction); round to zero.
   return almostEqual(furtherT, 0.0, 1.0e-06) ? 0.0 : furtherT;
@@ -472,17 +471,15 @@ float flatWallRatio(in Wall wall, in vec2[3] penumbraTri) {
   float dist01 = distanceSquared(penumbraTri[0], penumbraTri[1]);
   float dist02 = distanceSquared(penumbraTri[0], penumbraTri[2]);
   int closerIdx = dist02 < dist01 ? 2 : 1;
-  vec2 wallDir = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
-  vec2 wallMid = (wall.top[0].xy + wall.top[1].xy) * 0.5;
-  Ray2d lightRay = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wallMid));
+  Ray2d lightRay = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wall.mid));
   vec2 closerIx;
-  lineLineIntersection(lightRay, Ray2d(penumbraTri[closerIdx], wallDir), closerIx);
+  lineLineIntersection(lightRay, Ray2d(penumbraTri[closerIdx], wall.direction), closerIx);
 
   // Could use distance(closerIx, wallMid) / distance(closerIx, penumbraTri[0]).
   // That has a square root but is simpler.
   Ray2d wallRatioRay = Ray2d(closerIx, penumbraTri[0] - closerIx);
   float furtherT;
-  lineLineIntersection(wallRatioRay, Ray2d(wall.top[0].xy, wallDir), furtherT);
+  lineLineIntersection(wallRatioRay, Ray2d(wall.top[0].xy, wall.direction), furtherT);
   return furtherT;
 }
 

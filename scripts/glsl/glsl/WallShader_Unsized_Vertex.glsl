@@ -43,7 +43,6 @@ vec2[3] definePenumbraTriangle(in Wall wall) {
   vec2 B;
   vec2 C;
   Ray lightRay = Ray(uLightPosition, normalizedDirection(uLightPosition, wall.top[0]));
-  vec2 wallDir2d = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
 
   // TODO: If ramp, could be infinite only from one endpoint.
   int closerIdx = 0;
@@ -75,7 +74,7 @@ vec2[3] definePenumbraTriangle(in Wall wall) {
     B = canvasIx.xy;
   }
 
-  Ray2d canvasWallRay = Ray2d(B, wallDir2d);
+  Ray2d canvasWallRay = Ray2d(B, wall.direction);
   int furtherIdx = 1 - closerIdx;
   r1 = Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[furtherIdx].xy));
   lineLineIntersection(canvasWallRay, r1, C);
@@ -107,13 +106,11 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
     float dist01 = distanceSquared(penumbraTri[0], penumbraTri[1]);
     float dist02 = distanceSquared(penumbraTri[0], penumbraTri[2]);
     int closerIdx = dist02 < dist01 ? 2 : 1;
-    vec2 wallDir2d = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
-    vec2 wallMid2d = (wall.top[0].xy + wall.top[1].xy) * 0.5;
-    Ray2d lightRay2d = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wallMid2d));
+    Ray2d lightRay2d = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wall.mid));
     vec2 closerIx;
-    lineLineIntersection(lightRay2d, Ray2d(penumbraTri[closerIdx], wallDir2d), closerIx);
+    lineLineIntersection(lightRay2d, Ray2d(penumbraTri[closerIdx], wall.direction), closerIx);
 
-    vec3 wallBottomMid = (wall.bottom[0] + wall.bottom[1]) * 0.5;
+    vec3 wallBottomMid = vec3(wall.mid, wall.bottom[0].z);
     Ray lightRay = Ray(uLightPosition, normalizedDirection(uLightPosition, wallBottomMid));
     vec3 canvasIx;
     Plane canvasPlane = constructCanvasPlane();
@@ -123,7 +120,7 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
     // That has a square root but is simpler. Might need negative distance though.
     Ray2d wallRatioRay = Ray2d(closerIx, penumbraTri[0] - closerIx);
     float furtherT;
-    lineLineIntersection(wallRatioRay, Ray2d(canvasIx.xy, wallDir2d), furtherT);
+    lineLineIntersection(wallRatioRay, Ray2d(canvasIx.xy, wall.direction), furtherT);
     fNearRatios = vec2(furtherT);
   }
 }
