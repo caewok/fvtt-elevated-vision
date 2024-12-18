@@ -81,6 +81,7 @@ const GLSL_UNSIZED_FRAGMENT = interpolate(
   await fetchGLSLCode("WallShader_Unsized_Fragment"),
   { PENUMBRA_FRAGMENT_FUNCTIONS, PENUMBRA_FRAGMENT_CALCULATIONS }
 );
+
 const GLSL_DIRECTIONAL_VERTEX = interpolate(
   await fetchGLSLCode("WallShader_Directional_Vertex"),
   { PENUMBRA_VERTEX_FUNCTIONS, PENUMBRA_VERTEX_CALCULATIONS }
@@ -88,6 +89,16 @@ const GLSL_DIRECTIONAL_VERTEX = interpolate(
 
 const GLSL_DIRECTIONAL_FRAGMENT = interpolate(
   await fetchGLSLCode("WallShader_Directional_Fragment"),
+  { PENUMBRA_FRAGMENT_FUNCTIONS, PENUMBRA_FRAGMENT_CALCULATIONS }
+);
+
+const GLSL_DIRECTIONAL_VERTEX2 = interpolate(
+  await fetchGLSLCode("WallShader_Directional_Vertex2"),
+  { PENUMBRA_VERTEX_FUNCTIONS, PENUMBRA_VERTEX_CALCULATIONS }
+);
+
+const GLSL_DIRECTIONAL_FRAGMENT2 = interpolate(
+  await fetchGLSLCode("WallShader_Directional_Fragment2"),
   { PENUMBRA_FRAGMENT_FUNCTIONS, PENUMBRA_FRAGMENT_CALCULATIONS }
 );
 
@@ -278,7 +289,7 @@ export class DirectionalShadowWallShader extends AbstractEVShader {
    * No consideration of penumbra---just light --> corner --> canvas.
    * @type {string}
    */
-  static vertexShader = GLSL_DIRECTIONAL_VERTEX;
+  static vertexShader = GLSL_DIRECTIONAL_VERTEX2;
 
   // NOTE: DirectionalShadowWallShader.fragmentShader
   /**
@@ -286,7 +297,7 @@ export class DirectionalShadowWallShader extends AbstractEVShader {
    * See lightEncoding.
    * This mask shader is binary: encodes either full light or no light.
    */
-  static fragmentShader = GLSL_DIRECTIONAL_FRAGMENT;
+  static fragmentShader = GLSL_DIRECTIONAL_FRAGMENT2;
 
   /**
    * Set the basic uniform structures.

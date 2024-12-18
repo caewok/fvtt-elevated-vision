@@ -238,8 +238,17 @@ ShadowRays2d calculateSideShadowRays(in Wall wall, in Light light) {
 
   [1, 2, 3, 4] 2, 3
   */
-  Ray2d[2] umbra = Ray2d[2](tangentRays[1], tangentRays[2]);
-  Ray2d[2] penumbra = Ray2d[2](tangentRays[0], tangentRays[3]);
+  // Penumbra are 0, 3; umbra are 1, 2.
+  int idx0 = all(equal(tangentRays[0].origin, wall0)) ? 0 : 1;
+  Ray2d[2] penumbra;
+  penumbra[idx0] = tangentRays[0];
+  penumbra[1 - idx0] = tangentRays[3];
+
+  idx0 = all(equal(tangentRays[1].origin, wall0)) ? 0 : 1;
+  Ray2d[2] umbra;
+  umbra[idx0] = tangentRays[1];
+  umbra[1 - idx0] = tangentRays[2];
+
   return ShadowRays2d(
     umbra,
     midpenumbra,

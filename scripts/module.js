@@ -169,7 +169,9 @@ Hooks.once("init", function() {
       PenumbraBasicTest,
       UnsizedShadowsTest,
       SizedShadowsTest,
-      SizedRandomShadowsTest
+      SizedRandomShadowsTest,
+      DirectionalShadowsTest,
+      DirectionalRandomShadowsTest
     }
   };
 
