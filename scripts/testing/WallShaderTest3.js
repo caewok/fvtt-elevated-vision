@@ -1840,14 +1840,14 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
       .multiplyScalar(-1.0).normalize();
 
     // If the penumbra is on the opposite side from the mid penumbra, change the penumbra to be at the wall.
-//     const oWallPenumbra = orient(wall.top[0].xy, wall.top[1].xy, wall.top[0].xy.subtract(dirPenumbra));
-//     if ( oWallPenumbra * oWallLight < 0.0 ) {
-//       // Which endpoint is closest to the light?
-//       const distWall = distanceSquared(wall.top[0].xy, wall.top[1].xy);
-//       const distLight = distanceSquared(wall.top[0].xy, wall.top[0].xy.add(dirMidPenumbra));
-//       const closestIdx = distWall < distLight ? 1 : 0;
-//       dirPenumbra = normalizedDirection(wall.top[closestIdx].xy, wall.top[1 - closestIdx].xy);
-//     }
+    //     const oWallPenumbra = orient(wall.top[0].xy, wall.top[1].xy, wall.top[0].xy.subtract(dirPenumbra));
+    //     if ( oWallPenumbra * oWallLight < 0.0 ) {
+    //       // Which endpoint is closest to the light?
+    //       const distWall = distanceSquared(wall.top[0].xy, wall.top[1].xy);
+    //       const distLight = distanceSquared(wall.top[0].xy, wall.top[0].xy.add(dirMidPenumbra));
+    //       const closestIdx = distWall < distLight ? 1 : 0;
+    //       dirPenumbra = normalizedDirection(wall.top[closestIdx].xy, wall.top[1 - closestIdx].xy);
+    //     }
 
     return ShadowDirections2d({
       umbra: dirUmbra,
@@ -1884,13 +1884,6 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
       projectRay(tangentRays[2], maxR2),
       projectRay(tangentRays[3], maxR2)
     ];
-
-//     const projectedPoints = [
-//       this.canvasEdgeIntersection(tangentRays[0]),
-//       this.canvasEdgeIntersection(tangentRays[1]),
-//       this.canvasEdgeIntersection(tangentRays[2]),
-//       this.canvasEdgeIntersection(tangentRays[3])
-//     ];
 
     // Bubble sort
     this._cmpSwapTangentRays(tangentRays, projectedPoints, 0, 1);
@@ -2028,12 +2021,11 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
     W0.set(wall.top[closestIdx].xy);
     W1.set(wall.top[1 - closestIdx].xy);
 
-    // If W0 === A, then the wall is nearly collinear with the light (line from wall intersects light circle).
-    const nearCollinear = almostEqual(W0, A, 1.0e-08);
-    if ( nearCollinear ) {
-      A.x = W0.x;
-      A.y = W0.y;
-    }
+    // Two sets of penumbra/umbra rays. Each set:
+    // - One ray through each endpoint.
+    // - For directional, the rays are parallel unless modified by linked wall.
+    // - Intersect at the canvas such that a line connects them that is parallel to the wall.
+    // These form the ∆DEF / []DEFG and ∆GHI / []GHID shapes.
 
     // The DE penumbra ray runs through the closer endpoint.
     const closerIdx = sideShadowRays.penumbra[0].origin.x === W0.x
@@ -2049,71 +2041,120 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
     const rD_umbra = sideShadowRays.umbra[furtherIdx];
     const rG_umbra = sideShadowRays.umbra[1 - furtherIdx];
 
-    // D and G are the intersections of the penumbra with opposite umbra.
-    const hasIxD = lineLineIntersection(rD_penumbra, rD_umbra, D);
-    const hasIxG = lineLineIntersection(rG_penumbra, rG_umbra, G);
+    // For directional, D is the closer endpoint, G is the further.
+    D.set(W0);
+    G.set(W1);
 
-    // E intersects the D penumbra ray with the canvas line.
-    // let canvasEdge;
-    // let canvasEdge2;
+    // Adjust for infinite shadows and near-collinear walls.
     const infiniteShadow = this.isInfiniteShadow(farShadowDirs.penumbra);
-    if ( infiniteShadow ) {
-      // Set E and H such that it is outside the canvas.
-      // Construct ∆DW0W1, ∆GW1W0 and then extend
-      if ( hasIxD ) {
-        const newDW0W1 = this.extendTriangleToCanvasEdge([D, W0, W1]);
-        E.set(newDW0W1[1]);
-        F.set(newDW0W1[2]);
-      } else {
-        const canvasIx = this.canvasEdgeIntersection(rD_penumbra);
-        E.set(canvasIx);
-        F.set(canvasIx);
-      }
+    const nearCollinear = almostEqual(W0, A, 1.0e-08);
+    if ( nearCollinear ) {
+      A.set(W0); // Ensure this is exactly equal.
+      G.set(D);  // D and G are both at W0.
+    }
 
-      if ( hasIxG ) {
-        const newGW0W1 = this.extendTriangleToCanvasEdge([G, W0, W1]);
-        const idxH = nearCollinear ? 1 : 2;
-        H.set(newGW0W1[idxH]);  // Collinear ? 1 : 2
-        I.set(newGW0W1[3 - idxH]); // Collinear ? 2 : 1
-      } else {
-        const canvasIx = this.canvasEdgeIntersection(rG_penumbra);
-        H.set(canvasIx);
-        I.set(canvasIx);
-      }
+    // E and H are where the penumbra lines intersects the canvas.
+    let canvasEdgeD;
+    let canvasEdgeG;
+    if ( infiniteShadow ) {
+      canvasEdgeD = this.infiniteShadowCanvasRay([rD_penumbra, rD_umbra]);
+      canvasEdgeG = this.infiniteShadowCanvasRay([rG_penumbra, rG_umbra]);
 
     } else {
-      // Locate the canvas intersection.
+      // Determine where the shadow hits the plane by examining the wall midpoint.
+      // (Could use D and G but requires intersecting the plane twice.)
       const canvasPlane = this.constructCanvasPlane();
       const canvasIx = vec3();
+      // intersectRayPlane(Ray(vec3(D, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
+      // intersectRayPlane(Ray(vec3(G, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
       intersectRayPlane(Ray(vec3(wall.mid, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
-      const canvasEdge = Ray2d(canvasIx.xy, wall.direction);
-      lineLineIntersection(rD_penumbra, canvasEdge, E);
-      lineLineIntersection(rG_umbra, canvasEdge, I);  // Mirror for ∆GHI
-
-      // Moving from E along the wall direction, we will intersect rD_umbra at F.
-      const rEWall = Ray2d(E, wall.direction);
-      const hasIxF = lineLineIntersection(rEWall, rD_umbra, F);
-      if ( !hasIxF ) F.set(this.canvasEdgeIntersection(rD_umbra));
-
-      // Mirror for ∆GHI. Use I b/c it is on the W0 line.
-      const rIWall = Ray2d(I, wall.direction);
-      const hasIxH = lineLineIntersection(rIWall, rG_penumbra, H);
-      if ( !hasIxH ) H.set(this.canvasEdgeIntersection(rG_penumbra));
+      const rCanvasWall = Ray2d(canvasIx.xy, wall.direction);
+      canvasEdgeD = rCanvasWall;
+      canvasEdgeG = rCanvasWall;
     }
+    lineLineIntersection(canvasEdgeD, rD_penumbra, E);
+    lineLineIntersection(canvasEdgeG, rG_penumbra, H);
 
-    if ( nearCollinear && !infiniteShadow ) {
-      // B and C are on the I and F line.
-      const rIF = Ray2d(I, normalizedDirection(I, F));
-      lineLineIntersection(rD_penumbra, rIF, B);
-      lineLineIntersection(rG_penumbra, rIF, C);
-    } else {
-      const newABC = this.extendTriangleToCanvasEdge([A, E, H]);
-      B.set(newABC[1], 0);
-      C.set(newABC[2], 0);
-    }
+    // F and I are on the line parallel to the wall that intersects E and H, accordingly.
+    const rEWall = Ray2d(E, wall.direction);
+    const rHWall = Ray2d(H, wall.direction);
+    lineLineIntersection(rEWall, rD_umbra, F);
+    lineLineIntersection(rHWall, rG_umbra, I);
+
+    // Penumbra intersect the FI line to form ∆ABC.
+    const rFI = Ray2d(F, I.subtract(F));
+    lineLineIntersection(rD_penumbra, rFI, B);
+    lineLineIntersection(rG_penumbra, rFI, C);
+
     return nearCollinear;
   }
 
+  /**
+   * Define the different shadow triangles.
+   * @param {ShadowRays2d} sideShadowRays
+   * @param {ShadowDirections} farShadowDirs
+   * @param {Wall} wall
+   * @param {out vec2[3]} penumbraTri, umbraTri, nearFarTri0, nearFarTri1, sideTri0, sideTri1
+   * @returns {bool} True if the wall is nearly collinear.
+   */
+  shadowTriangles(sideShadowRays, farShadowDirs, wall, penumbraTri, umbraTri, nearFarTri0, nearFarTri1,
+    sideTri0, sideTri1) {
+    const { distanceSquared, lineLineIntersection, Ray2d, normalizedDirection } = glsl;
+
+    /* For debugging.
+    let penumbraTri = [vec2(), vec2(), vec2()];
+    let umbraTri = [vec2(), vec2(), vec2()]; // Gradient shading.
+    let nearFarTri0 = [vec2(), vec2(), vec2()]; // Defining near and far shadows.
+    let nearFarTri1 = [vec2(), vec2(), vec2()]; // Defining near and far shadows.
+    let sideTri0 = [vec2(), vec2(), vec2()]; // Gradient shading.
+    let sideTri1 = [vec2(), vec2(), vec2()]; // Triangles defining parts of the shadow.
+    */
+
+    let A = vec2();
+    let B = vec2();
+    let C = vec2();
+    let D = vec2();
+    let E = vec2();
+    let F = vec2();
+    let G = vec2();
+    let H = vec2();
+    let I = vec2();
+    let J = vec2();
+    let W0 = vec2();
+    let W1 = vec2();
+    const nearCollinear = this.shadowPoints(sideShadowRays, farShadowDirs, wall,
+      A, B, C, D, E, F, G, H, I, W0, W1);
+
+    // For debugging.
+    this._points = { A, B, C, D, E, F, G, H, I, W0, W1 };
+
+    // Use function to mimic setting out values for the triangles.
+    const setTri = function(tri, values) { tri.splice(0, values.length, ...values); };
+
+    setTri(penumbraTri, [A, B, C]);
+
+    // Side triangles used for gradient shading.
+    setTri(sideTri0, [D, E, I]);
+    setTri(sideTri1, [G, H, F]);
+
+    // Umbra triangle used for shading.
+    setTri(umbraTri, [D, G, I])
+
+    // For debugging:
+    // The polygon that encompasses the wall shadow.
+    setTri(nearFarTri0, [D, E, F, G]);
+    setTri(nearFarTri1, [G, H, I, D]);
+
+    if ( nearCollinear ) {
+      this.nearFarTri0[3] = W1;
+      this.nearFarTri1[3] = W1;
+
+      setTri(sideTri0, [A, B, C]);
+      setTri(sideTri1, [A, C, B]);
+      setTri(umbraTri, [G, F, I]);
+    }
+    return nearCollinear;
+  }
 
   /**
    * Determine the change in z for the directional rays.
@@ -2148,8 +2189,6 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
     // return max(z, 1e-06);
   }
 
-
-
   /**
    * Calculate the flat variables, including near/far ratios.
    * @param {Light} light
@@ -2169,7 +2208,7 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
     // @type {vec2} fAmbient
     const W0 = sideTri0[0];
     const W1 = all(equal(wall.top[0].xy, W0)) ? wall.top[0].xy : wall.top[1].xy;
-    this.fAmbient = vec2(1.0, 0.0); // vec2(1.0).subtract(this.ambientLight(W0, W1));
+    this.fAmbient = vec2(1.0, 0.0); // Sized Light: vec2(1.0).subtract(this.ambientLight(W0, W1));
     if ( orient(W0, W1, sideTri0[1]) < 0.0 ) this.fAmbient = this.fAmbient.yx; // CW
 
     // Similar to unsized defineFlats.

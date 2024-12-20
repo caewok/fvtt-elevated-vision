@@ -278,12 +278,15 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   W0 = wall.top[closestIdx].xy;
   W1 = wall.top[1 - closestIdx].xy;
 
-  // If W0 == A, then the wall is nearly collinear with the light (line from wall intersects light circle).
-  bool nearCollinear = almostEqual(W0, A, 1.0e-08);
-  if ( nearCollinear ) A = W0;
+  // Two sets of penumbra/umbra rays. Each set:
+  // - One ray through each endpoint.
+  // - For directional, the rays are parallel unless modified by linked wall.
+  // - Intersect at the canvas such that a line connects them that is parallel to the wall.
+  // These form the ∆DEF / []DEFG and ∆GHI / []GHID shapes.
 
   // The DE penumbra ray runs through the closer endpoint.
-  int closerIdx = sideShadowRays.penumbra[0].origin.x == W0.x && sideShadowRays.penumbra[0].origin.y == W0.y ? 0 : 1;
+  int closerIdx = sideShadowRays.penumbra[0].origin.x == W0.x
+    && sideShadowRays.penumbra[0].origin.y == W0.y ? 0 : 1;
   Ray2d rAB = sideShadowRays.penumbra[closerIdx];
   Ray2d rAC = sideShadowRays.penumbra[1 - closerIdx];
   Ray2d rD_penumbra = rAB;
@@ -294,76 +297,50 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   Ray2d rD_umbra = sideShadowRays.umbra[furtherIdx];
   Ray2d rG_umbra = sideShadowRays.umbra[1 - furtherIdx];
 
-  // D and G are the intersections of the penumbra with opposite umbra.
-  bool hasIxD = lineLineIntersection(rD_penumbra, rD_umbra, D);
-  bool hasIxG = lineLineIntersection(rG_penumbra, rG_umbra, G);
+  // For directional, D is the closer endpoint, G is the further.
+  D = W0;
+  G = W1;
 
-  // No intersections if the penumbra and umbra are collinear.
-  // Can happen if the circle edge lines up with the wall.
-  if ( !hasIxD ) D = W0;
-  else if ( !hasIxG ) G = W0;
-
-  // E intersects the D penumbra ray with the canvas line.
-  //Ray2d canvasEdge;
-  //Ray2d canvasEdge2;
+  // Adjust for infinite shadows and near-collinear walls.
   bool infiniteShadow = isInfiniteShadow(farShadowDirs.penumbra);
-  if ( infiniteShadow ) {
-    // Set E and H such that it is outside the canvas.
-    // Construct ∆DW0W1, ∆GW1W0 and then extend
-    if ( hasIxD ) {
-      vec2[3] newDW0W1 = extendTriangleToCanvasEdge(vec2[3](D, W0, W1));
-      E = newDW0W1[1];
-      F = newDW0W1[2];
-    } else {
-      vec2 ix = canvasEdgeIntersection(rD_penumbra);
-      E = ix;
-      F = ix;
-    }
+  bool nearCollinear = almostEqual(W0, A, 1.0e-08);
+  if ( nearCollinear ) {
+    A = W0; // Ensure this is exactly equal.
+    G = D;  // D and G are both at W0.
+  }
 
-    if ( hasIxG ) {
-      vec2[3] newGW0W1 = extendTriangleToCanvasEdge(vec2[3](G, W0, W1));
-      int idxH = nearCollinear ? 1 : 2;
-      H = newGW0W1[idxH]; // Collinear ? 1 : 2
-      I = newGW0W1[3 - idxH]; // Collinear ? 2 : 1
-    } else {
-      vec2 ix = canvasEdgeIntersection(rG_penumbra);
-      H = ix;
-      I = ix;
-    }
-   } else {
-    // Locate the canvas intersection.
+  // E and H are where the penumbra lines intersects the canvas.
+  Ray2d canvasEdgeD;
+  Ray2d canvasEdgeG;
+  if ( infiniteShadow ) {
+    canvasEdgeD = infiniteShadowCanvasRay(Ray2d[2](rD_penumbra, rD_umbra));
+    canvasEdgeG = infiniteShadowCanvasRay(Ray2d[2](rG_penumbra, rG_umbra));
+  } else {
+    // Determine where the shadow hits the plane by examining the wall midpoint.
     Plane canvasPlane = constructCanvasPlane();
     vec3 canvasIx;
+    // (Could use D and G but requires intersecting the plane twice.)
+    // intersectRayPlane(Ray(vec3(D, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
+    // intersectRayPlane(Ray(vec3(G, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
     intersectRayPlane(Ray(vec3(wall.mid, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
-    Ray2d canvasEdge = Ray2d(canvasIx.xy, wall.direction);
-    // canvasEdge2 = canvasEdge;
-
-    lineLineIntersection(rD_penumbra, canvasEdge, E);
-    lineLineIntersection(rG_umbra, canvasEdge, I); // Mirror for ∆GHI
-
-    // Moving from E along the wall direction, we will intersect rD_umbra at F.
-    Ray2d rEWall = Ray2d(E, wall.direction);
-    lineLineIntersection(rEWall, rD_umbra, F);
-
-    // Mirror for ∆GHI
-    Ray2d rIWall = Ray2d(I, wall.direction);
-    lineLineIntersection(rIWall, rG_penumbra, H);
+    Ray2d rCanvasWall = Ray2d(canvasIx.xy, wall.direction);
+    canvasEdgeD = rCanvasWall;
+    canvasEdgeG = rCanvasWall;
   }
+  lineLineIntersection(canvasEdgeD, rD_penumbra, E);
+  lineLineIntersection(canvasEdgeG, rG_penumbra, H);
 
-  if ( nearCollinear && !infiniteShadow ) {
-    // B and C are on the I and F line.
-    Ray2d rIF = Ray2d(I, normalizedDirection(I, F));
-    lineLineIntersection(rD_penumbra, rIF, B);
-    lineLineIntersection(rG_penumbra, rIF, C);
-  } else {
-    // For not near-collinear, B and C will equal E and H, respectively.
-    // For near-collinear for infinite shadow, E and H will already be at the canvas edge.
-    // B = E;
-    // C = H;
-    vec2[3] newABC = extendTriangleToCanvasEdge(vec2[3](A, E, H));
-    B = newABC[1];
-    C = newABC[2];
-  }
+  // F and I are on the line parallel to the wall that intersects E and H, accordingly.
+  Ray2d rEWall = Ray2d(E, wall.direction);
+  Ray2d rHWall = Ray2d(H, wall.direction);
+  lineLineIntersection(rEWall, rD_umbra, F);
+  lineLineIntersection(rHWall, rG_umbra, I);
+
+  // Penumbra intersect the FI line to form ∆ABC.
+  Ray2d rFI = Ray2d(F, I - F);
+  lineLineIntersection(rD_penumbra, rFI, B);
+  lineLineIntersection(rG_penumbra, rFI, C);
+
   return nearCollinear;
 }
 
@@ -378,8 +355,6 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
 bool shadowTriangles(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowDirs, in Wall wall,
   out vec2[3] penumbraTri,
   out vec2[3] umbraTri,
-  out vec2[3] nearFarTri0,
-  out vec2[3] nearFarTri1,
   out vec2[3] sideTri0,
   out vec2[3] sideTri1) {
 
@@ -400,34 +375,18 @@ bool shadowTriangles(in ShadowRays2d sideShadowRays, in ShadowDirections farShad
 
   // Define the triangles.
   penumbraTri = vec2[3](A, B, C);
-  nearFarTri0 = vec2[3](D, E, F);
-  nearFarTri1 = vec2[3](G, H, I);
 
   // Side triangles used for gradient shading. Vary based on wall location relative to light.
-  sideTri0 = vec2[3](W0, B, I);
-  sideTri1 = vec2[3](W1, C, F);
+  sideTri0 = vec2[3](D, E, I);
+  sideTri1 = vec2[3](G, H, F);
+
+  // Umbra triangle used for shading.
+  umbraTri = vec2[3](D, G, I);
   if ( nearCollinear ) {
-    sideTri0 = vec2[3](W0, B, W1);
-    sideTri1 = vec2[3](W0, C, W1);
-
-    // Used to shade the portion unblocked by the wall, after the endpoints.
-    // Lightest along the line of the wall. To replicate, connect the umbra triangle using
-    // edge perpendicular to the wall.
-    vec2 perpDir = vec2(wall.direction.y, -wall.direction.x);
-    if ( distanceSquared(W1, I) < distanceSquared(W1, F) ) {
-      vec2 newF;
-      lineLineIntersection(Ray2d(W1, normalizedDirection(W1, F)), Ray2d(I, perpDir), newF);
-      umbraTri = vec2[3](W1, I, newF);
-    } else {
-      vec2 newI;
-      lineLineIntersection(Ray2d(W1, normalizedDirection(W1, I)), Ray2d(F, perpDir), newI);
-      umbraTri = vec2[3](W1, newI, F);
-    }
+    sideTri0 = vec2[3](A, B, C);
+    sideTri1 = vec2[3](A, C, B);
+    umbraTri = vec2[3](G, F, I);
   }
-
-  // Change the side triangles to isoceles so gradient shading works.
-  sideTri0 = makeIsoceles(sideTri0);
-  sideTri1 = makeIsoceles(sideTri1);
   return nearCollinear;
 }
 
@@ -469,12 +428,10 @@ void main() {
   // Triangles defining parts of the shadow.
   vec2[3] penumbraTri;
   vec2[3] umbraTri; // Gradient shading.
-  vec2[3] nearFarTri0; // Defining near and far shadows.
-  vec2[3] nearFarTri1; // Defining near and far shadows.
   vec2[3] sideTri0; // Gradient shading.
   vec2[3] sideTri1; // Gradient shading.
   bool nearCollinear = shadowTriangles(sideShadowRays, farShadowDirs, wall,
-    penumbraTri, umbraTri, nearFarTri0, nearFarTri1, sideTri0, sideTri1);
+    penumbraTri, umbraTri, sideTri0, sideTri1);
 
   // Varyings
   defineSharedVaryings(wall, penumbraTri);
