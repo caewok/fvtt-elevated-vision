@@ -70,10 +70,14 @@ int wallCollision(in vec3 dir, in float elevation) {
   return 1;
 }
 
+
+
 /**
  * Determine the shadow percentage.
  */
 float shadowPercentage() {
+  // Debugging: return 1.0;
+
   // For each direction, test intersection with the wall.
   // TODO: If the wall has different heights for each endpoint, adjust to match the point
   // at which the light ray intersects the wall.
@@ -90,6 +94,8 @@ float shadowPercentage() {
   // The angle for the penumbra is the azimuth ± the solarAngle.
   float solarAngle = max(0.1, uSolarAngle); // TODO: Cannot currently go all the way to 0.
   float solarWallAngle = solarAngle * oWallLight;
+
+  /*
   vec2 hMinDir = fromAngle(vec2(0.0, 0.0), uAzimuth - solarWallAngle, 1.0);
   vec2 hMaxDir = fromAngle(vec2(0.0, 0.0), uAzimuth + solarWallAngle, 1.0);
   vec2 hMidDir = (hMinDir + hMaxDir) * 0.5;
@@ -120,12 +126,33 @@ float shadowPercentage() {
   dirs[10] = (dirs[0] + dirs[2]) * 0.5;
   dirs[11] = (dirs[0] + dirs[3]) * 0.5;
   dirs[12] = (dirs[0] + dirs[4]) * 0.5;
+  */
+
+  // Cube
+  // 101 * 101 = 1010
+  #define NUM_SAMPLES   5
+  const int NUM_DIRS = NUM_SAMPLES * 2;
+  const int DIVISOR = NUM_SAMPLES - 1;
+
+  vec3[NUM_DIRS] dirs;
+  for ( int i = 0; i < NUM_SAMPLES; i += 1 ) {
+    float percentI = float(i) / float(DIVISOR);
+    float azimuth = uAzimuth - solarWallAngle + (solarWallAngle * 2.0 * percentI);
+    vec2 hDir = fromAngle(vec2(0.0, 0.0), azimuth, 1.0);
+    for ( int j = 0; j < NUM_SAMPLES; j += 1 ) {
+      float percentJ = float(j) / float(DIVISOR);
+      float elevationAngle = uElevationAngle - solarAngle + (solarAngle * 2.0 * percentJ);
+      vec2 vDir = fromAngle(vec2(0.0, 0.0), elevationAngle, 1.0);
+      float z = vDir.x == 0.0 ? 1e06 : vDir.y / vDir.x;
+      dirs[(i * NUM_SAMPLES) + j] = normalize(vec3(hDir, z));
+    }
+  }
 
   int numCollisions = 0;
-  float totalCollisions = float(TOTAL_COLLISIONS);
+  float totalCollisions = float(NUM_DIRS);
   float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
   vec3 a = vec3(vVertexPosition, elevation);
-  for ( int i = 0; i < TOTAL_COLLISIONS; i += 1 ) {
+  for ( int i = 0; i < NUM_DIRS; i += 1 ) {
     vec3 dir = dirs[i];
     numCollisions += wallCollision(dir, elevation);
   }

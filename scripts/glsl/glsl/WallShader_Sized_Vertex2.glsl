@@ -300,8 +300,8 @@ bool shadowTriangles(in ShadowRays2d sideShadowRays, in Wall wall, in Ray2d canv
   }
 
   // Change the side triangles to isoceles so gradient shading works.
-  sideTri0 = makeIsoceles(sideTri0);
-  sideTri1 = makeIsoceles(sideTri1);
+  // sideTri0 = makeIsoceles(sideTri0); // Need to set sideTri to inout if using
+  // sideTri1 = makeIsoceles(sideTri1); // Need to set sideTri to inout if using
 
   return nearCollinear;
 }
