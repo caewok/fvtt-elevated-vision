@@ -381,7 +381,7 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
    * 3 vertices: light, ix for corner 1, ix for corner 2
    * @type {string}
    */
-  static vertexShader = GLSL_SIZED_VERTEX;
+  static vertexShader = GLSL_SIZED_VERTEX2;
 
   // NOTE: SizedPointSourceShadowWallShader.fragmentShader
   /**
@@ -389,7 +389,7 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
    * See lightEncoding.
    * This mask shader is binary: encodes either full light or no light.
    */
-  static fragmentShader = GLSL_SIZED_FRAGMENT;
+  static fragmentShader = GLSL_SIZED_FRAGMENT2;
 
   /**
    * Set the basic uniform structures.
@@ -468,105 +468,6 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
   }
 }
 
-/**
- * Draw shadow from a sized source for wall using light rays in the fragment shader to estimate shadow percentage.
- * https://www.researchgate.net/publication/266204563_Calculation_of_the_shadow-penumbra_relation_and_its_application_on_efficient_architectural_design
- */
-export class SizedPointSourceShadowWallShader2 extends AbstractEVShader {
-  // NOTE: SizedPointSourceShadowWallShader.vertexShader
-  /**
-   * Wall shadow with side, near, and far penumbra.
-   * Vertices are light --> wall corner to intersection on surface.
-   * If the light has a size, the intersection is extended based on the size.
-   * 3 vertices: light, ix for corner 1, ix for corner 2
-   * @type {string}
-   */
-  static vertexShader = GLSL_SIZED_VERTEX2;
-
-  // NOTE: SizedPointSourceShadowWallShader.fragmentShader
-  /**
-   * Shadow shaders use an encoding for the percentage of light present at the fragment.
-   * See lightEncoding.
-   * This mask shader is binary: encodes either full light or no light.
-   */
-  static fragmentShader = GLSL_SIZED_FRAGMENT2;
-
-  /**
-   * Set the basic uniform structures.
-   * uSceneDims: [sceneX, sceneY, sceneWidth, sceneHeight]
-   * uElevationRes: [minElevation, elevationStep, maxElevation, gridScale]
-   * uTerrainSampler: elevation texture
-   * uLightPosition: [x, y, elevation] for the light
-   */
-
-  static defaultUniforms = {
-    uSceneDims: [0, 0, 1, 1],
-    uElevationRes: [0, 1, 256 * 256, 1],
-    uTerrainSampler: 0,
-    uLightPosition: [0, 0, 0],
-    uLightSize: 1,
-    uTime: Date.now() * 1e-12
-  };
-
-  /**
-   * Factory function.
-   * @param {object} defaultUniforms    Changes from the default uniforms set here.
-   * @returns {ShadowMaskWallShader}
-   */
-  static create(source, defaultUniforms = {}) {
-    const { sceneRect, distancePixels } = canvas.dimensions;
-    defaultUniforms.uSceneDims ??= [
-      sceneRect.x,
-      sceneRect.y,
-      sceneRect.width,
-      sceneRect.height
-    ];
-
-    const ev = canvas.scene[MODULE_ID];
-    defaultUniforms.uElevationRes ??= [
-      ev.elevationMin,
-      ev.elevationStep,
-      ev.elevationMax,
-      distancePixels
-    ];
-    defaultUniforms.uTerrainSampler = ev._elevationTexture;
-
-    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
-    if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
-    defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
-    defaultUniforms.uLightSize = source.data.lightSize;
-
-    defaultUniforms.uTime = Date.now();
-
-    return super.create(defaultUniforms);
-  }
-
-  /**
-   * Update based on indicated changes to the source.
-   * @param {RenderedSourcePoint} source
-   * @param {object} [changes]    Object indicating which properties of the source changed
-   * @param {boolean} [changes.changedPosition]   True if the source changed position
-   * @param {boolean} [changes.changedElevation]  True if the source changed elevation
-   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
-   */
-  sourceUpdated(source, { changedPosition, changedElevation, changedLightSize } = {}) {
-    if ( changedPosition || changedElevation ) this.updateLightPosition(source);
-    if ( changedLightSize ) this.updateLightSize(source);
-    return changedPosition || changedElevation || changedLightSize;
-  }
-
-  updateLightPosition(source) {
-    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
-    if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
-    this.uniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
-    this.uniforms.uTime = Date.now();
-  }
-
-  updateLightSize(source) {
-    this.uniforms.uLightSize = source.data.lightSize;
-    this.uniforms.uTime = Date.now();
-  }
-}
 
 export class ShadowMesh extends PIXI.Mesh {
   constructor(...args) {
