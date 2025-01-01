@@ -116,10 +116,18 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
 
       magnitude() { return Math.hypot(...this); }
 
+      magnitudeSquared() {
+        let sum = 0;
+        // Math.pow(x, 2) + Math.pow(y, 2) + ...
+        this._componentWise((a, i) => { sum += Math.pow(a, 2); });
+        return sum;
+      }
+
       normalize() { return this.multiplyScalar(1 / this.magnitude()); }
 
       dot(other) {
         let sum = 0;
+        // (this.x * other.x) + (this.y * other.y) + ...
         this._componentWise((a, i) => { sum += (a * other[i]); });
         return sum;
       }
@@ -911,13 +919,35 @@ export class Ray2dGLSLStruct {
   }
 
   /**
-   * Project the ray a given distance multiplier of the ray length.
+   * Project the ray by multiplier of the ray length.
    * If ray is normalized, this will project the ray the given distance.
    * @param {float} distanceMultiplier
    * @returns {vec2} A newly constructed vector.
    */
   project(distanceMultiplier) {
     return this.origin.add(this.direction.multiplyScalar(distanceMultiplier));
+  }
+
+  /**
+   * Project ray by distance.
+   * If ray is normalized, use project as it is faster.
+   * @param {float} distance
+   * @returns {vec2} A newly constructed vector.
+   */
+  projectDistance(distance) {
+    const t = distance / this.direction.magnitude();
+    return this.project(t);
+  }
+
+  /**
+   * Project the ray a given distance squared. Ray should be normalized.
+   * @param {float} distance2
+   * @returns {vec2} A newly constructed vector
+   */
+  projectDistanceSquared(distance2) {
+    const sign = Math.sign(distance2);
+    const t = sign * Math.sqrt(Math.abs(distance2) / this.direction.magnitudeSquared());
+    return this.project(t);
   }
 
   /**
@@ -988,6 +1018,10 @@ export const Ray = (...args) => new RayGLSLStruct(...args);
  * @returns {vec2|vec3}
  */
 export function projectRay(r, dist) { return r.project(dist); }
+
+export function projectRayDistance(r, dist) { return r.projectDistance(dist); }
+
+export function projectRayDistanceSquared(r, dist2) { return r.projectDistanceSquared(dist2); }
 
 /**
  * Plane defined by a point on the plane and its normal.
@@ -1332,6 +1366,104 @@ export function tangentPoints(circle, p, tangents) {
   tangents[1] = tangents[1].add(circle.center);
   return true;
 }
+
+/**
+ * For a given 3d point and a sphere, determine the vertical tangent points.
+ * @param {vec3} pt
+ * @param {vec3} center
+ * @param {float} radius
+ * @param {out vec3[2]} tangents3d
+ * @returns {bool}
+ */
+export function verticalTangentPoints(pt, center, radius, tangents3d) {
+  const { Circle, distance, tangentPoints, projectRay, Ray2d } = glsl;
+
+  // Treat center of sphere as 0,0.
+  const pt2d = to2dCutaway(pt, center, pt);
+  const lightCir = Circle({
+    center: vec2(0.0, center.z), // Or to2dCutaway(center, center, pt)
+    radius
+  });
+  const tangents = [lightCir.center, lightCir.center];
+  const hasTangents = tangentPoints(lightCir, pt2d, tangents);
+  if ( !hasTangents ) return false;
+
+  tangents3d[0] = from2dCutaway(tangents[0], center, pt);
+  tangents3d[1] = from2dCutaway(tangents[1], center, pt);
+  return true;
+}
+
+// Cannot used squared for this b/c the points appear warped. Likely b/c circle is not a circle.
+// export function verticalTangentPointsSquared(pt, center, radius, tangents3d) {
+//   const { Circle, distance, tangentPoints, projectRay, Ray2d } = glsl;
+//
+//   // Treat center of sphere as 0,0.
+//   const pt2d = to2dCutawaySquared(pt, center, pt);
+//   const lightCir = Circle({
+//     center: vec2(0.0, center.z), // Or to2dCutaway(center, center, pt)
+//     radius
+//   });
+//   const tangents = [lightCir.center, lightCir.center];
+//   const hasTangents = tangentPoints(lightCir, pt2d, tangents);
+//   if ( !hasTangents ) return false;
+//
+//   tangents3d[0] = from2dCutawaySquared(tangents[0], center, pt);
+//   tangents3d[1] = from2dCutawaySquared(tangents[1], center, pt);
+//   return true;
+// }
+
+/**
+ * @param {vec3} currPt   A point on the line start|end
+ * @param {vec3} start    Beginning endpoint of the line segment
+ * @param {vec3} end      End of the line segment
+ * @returns {vec2}
+ */
+export function to2dCutaway(currPt, start, end) {
+  const { distance } = glsl;
+  const distCS = distance(currPt, start);
+  const pt = vec2(distCS, currPt.z);
+  const distCE = distance(currPt, end);
+  const distSE = distance(start, end);
+  if ( distCS < distCE && distCE > distSE ) pt.x *= -1;
+  return pt;
+}
+
+/**
+ * @param {vec2} cutawayPt   2d cutaway point created from to2dCutaway
+ * @param {vec3} start    Beginning endpoint of the line segment
+ * @param {vec3} end      End of the line segment
+ * @returns {vec3}
+ */
+export function from2dCutaway(cutawayPt, start, end) {
+  const { Ray2d, projectRay } = glsl;
+  const r2d = Ray2d(start.xy, normalize(end.xy.subtract(start.xy)));
+  const xy = projectRay(r2d, cutawayPt.x);
+  return vec3(xy, cutawayPt.y);
+}
+
+export function to2dCutawaySquared(currPt, start, end) {
+  const { distanceSquared } = glsl;
+  const distCS = distanceSquared(currPt, start);
+  const pt = vec2(distCS, currPt.z);
+  const distCE = distanceSquared(currPt, end);
+  const distSE = distanceSquared(start, end);
+  if ( distCS < distCE && distCE > distSE ) pt.x *= -1;
+  return pt;
+}
+
+/**
+ * @param {vec2} cutawayPt   2d cutaway point created from to2dCutaway
+ * @param {vec3} start    Beginning endpoint of the line segment
+ * @param {vec3} end      End of the line segment
+ * @returns {vec3}
+ */
+export function from2dCutawaySquared(cutawayPt, start, end) {
+  const { Ray2d, projectRayDistanceSquared } = glsl;
+  const r2d = Ray2d(start.xy, normalize(end.xy.subtract(start.xy)));
+  const xy = projectRayDistanceSquared(r2d, cutawayPt.x);
+  return vec3(xy, cutawayPt.y);
+}
+
 
 /**
  * GLSL representation of a point light.
