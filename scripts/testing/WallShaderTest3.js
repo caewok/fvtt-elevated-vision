@@ -1261,6 +1261,17 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     sideShadowRays = shader0.sideShadowRays
     farShadowDirs = shader0.farShadowDirs
     wall = shader0.wall
+    orient = foundry.utils.orient2dFast;
+    let {
+      distanceSquared,
+      projectRay,
+      Ray2d,
+      normalizedDirection,
+      almostEqual,
+      intersectRayPlane,
+      all,
+      equal,
+      normalize } = glsl;
     */
     const orient = foundry.utils.orient2dFast;
     const {
@@ -1463,17 +1474,13 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     // I.set(ixGu.xy);
 
     // Can determine F and I using wall direction.
-    // Note the flipped umbra.
     glsl.lineLineIntersection(Ray2d(E, wall.direction), rG_umbra, F);
     glsl.lineLineIntersection(Ray2d(H, wall.direction), rD_umbra, I);
 
-    // Intersect H and I with the E->F line.
-    const rEF = Ray2d(E, F.subtract(E));
-    glsl.lineLineIntersection(rG_penumbra, rEF, H);
-    glsl.lineLineIntersection(rG_umbra, rEF, I);
-
-    B.set(E);
-    C.set(H);
+    // Intersect the penumbra with F->I line.
+    const rFI = Ray2d(F, I.subtract(F));
+    glsl.lineLineIntersection(rD_penumbra, rFI, B);
+    glsl.lineLineIntersection(rG_penumbra, rFI, C);
   }
 
   /**
