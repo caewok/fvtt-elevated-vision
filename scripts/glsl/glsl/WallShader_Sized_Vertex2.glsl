@@ -277,9 +277,8 @@ void _shadowPoints(in ShadowRays2d sideShadowRays, in Light light, in Wall wall,
   float wallTopZ = wall.top[0].z;
   vec3 mid3d = vec3(wall.mid, wallTopZ);
   vec3[2] tangents3d;
-  bool hasTangents = verticalTangentPoints(mid3d, light.center, uLightSize, tangents3d);
   Ray rP;
-  if ( hasTangents ) {
+  if ( verticalTangentPoints(mid3d, light.center, uLightSize, tangents3d) ) {
     // Should always have tangents.
     int idx = int(tangents3d[0].z > tangents3d[1].z);
     vec3 penumbraTangent = tangents3d[idx]; // Lower point
@@ -291,7 +290,6 @@ void _shadowPoints(in ShadowRays2d sideShadowRays, in Light light, in Wall wall,
 
   vec3 ixP;
   intersectRayPlane(rP, canvasPlane, ixP);
-
 
   // Can determine F and I (furthest points) using wall direction.
   Ray2d rPWallDir = Ray2d(ixP.xy, wall.direction);
@@ -353,16 +351,24 @@ void _shadowPointsCollinear(in ShadowRays2d sideShadowRays, in Light light, in W
   lineLineIntersection(rG_penumbra, rD_umbra, G);
 
   // Locate the canvas intersection.
-  float wallTopZ = wall.top[0].z;
-  vec3 mid3d = vec3(W1, wallTopZ); // Use W1 instead of wall mid.
-  vec3[2] tangents3d;
-  verticalTangentPoints(mid3d, light.center, uLightSize, tangents3d);
-  int idx = int(tangents3d[0].z > tangents3d[1].z);
-  vec3 penumbraTangent = tangents3d[idx]; // Lower point
-
   // Intersection with the canvas gives us the furthest and nearest penumbra/umbra points.
   Plane canvasPlane = constructCanvasPlane();
-  Ray rP = Ray(penumbraTangent, mid3d - penumbraTangent);
+  float wallTopZ = wall.top[0].z;
+  vec3 mid3d = vec3(wall.mid, wallTopZ);
+  vec3[2] tangents3d;
+  Ray rP;
+
+  if ( verticalTangentPoints(mid3d, light.center, uLightSize, tangents3d) ) {
+    // Should always have tangents.
+    int idx = int(tangents3d[0].z > tangents3d[1].z);
+    vec3 penumbraTangent = tangents3d[idx]; // Lower point
+    rP = Ray(penumbraTangent, mid3d - penumbraTangent);
+  } else {
+
+    // Just in case; use the light mid point --> wall mid.
+    rP = Ray(light.center, vec3(wall.mid, wall.top[0].z) - light.center);
+  }
+
   vec3 ixP;
   intersectRayPlane(rP, canvasPlane, ixP);
 

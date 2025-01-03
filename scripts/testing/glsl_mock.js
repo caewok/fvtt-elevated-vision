@@ -1342,7 +1342,7 @@ export function tangentPoints(circle, p, tangents) {
     tangents[1].y *= -root;
   } else {
     const d0 = p0.magnitude();
-    if ( almostEqual(d0, circle.radius, 1e-08) ) { // On circle edge.
+    if ( almostEqual(d0, circle.radius, 1.0e-08) ) { // On circle edge.
       tangents[0] = vec2(p);
       tangents[1] = vec2(p);
       return true;

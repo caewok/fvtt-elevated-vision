@@ -1328,18 +1328,23 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     // - Center light --> mid wall may extend further but not enough. Pretty close though.
     // - Measuring using light cube is better, but goes too far. But only approach that is far enough.
     // - Vertical tangents for middle of wall. Very accurate, a bit calc intensive.
+    const canvasPlane = this.constructCanvasPlane();
     const wallTopZ = wall.top[0].z;
     const mid3d = vec3(wall.mid, wallTopZ);
     const tangents3d = [vec3(), vec3()];
-    glsl.verticalTangentPoints(mid3d, light.center, uLightSize, tangents3d);
-    const idx = Number(tangents3d[0].z > tangents3d[1].z);
-    const penumbraTangent = tangents3d[idx]; // Lower point
-    // const umbraTangent = tangents3d[Number(1 - idx)]; // Higher point.
+    let rP;
+    if ( glsl.verticalTangentPoints(mid3d, light.center, uLightSize, tangents3d) ) {
+      // Should always have tangents.
+      const idx = Number(tangents3d[0].z > tangents3d[1].z);
+      const penumbraTangent = tangents3d[idx]; // Lower point
+      // const umbraTangent = tangents3d[Number(1 - idx)]; // Higher point.
+      rP = glsl.Ray(penumbraTangent, mid3d.subtract(penumbraTangent));
+      // const rU = glsl.Ray(umbraTangent, mid3d.subtract(umbraTangent));
+    } else {
+      // Just in case; use the light mid point --> wall mid.
+      rP = Ray(light.center, vec3(wall.mid, wall.top[0].z).subtract(light.center));
+    }
 
-    // Intersection with the canvas gives us the furthest and nearest penumbra/umbra points.
-    const canvasPlane = this.constructCanvasPlane();
-    const rP = glsl.Ray(penumbraTangent, mid3d.subtract(penumbraTangent));
-    // const rU = glsl.Ray(umbraTangent, mid3d.subtract(umbraTangent));
     const ixP = vec3();
     // const ixU = vec3();
     intersectRayPlane(rP, canvasPlane, ixP);
@@ -1387,6 +1392,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       intersectRayPlane,
       all,
       equal } = glsl;
+    const uLightSize = this.uLightSize;
 
     A.set(W0);
 
@@ -1425,19 +1431,23 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     // - Center light --> mid wall may extend further but not enough. Pretty close though.
     // - Measuring using light cube is better, but goes too far. But only approach that is far enough.
     // - Vertical tangents for middle of wall. Very accurate, a bit calc intensive.
-    const wallTopZ = wall.top[0].z;
-    const uLightSize = this.uLightSize;
-    const mid3d = vec3(W1, wallTopZ);  // Use W1 instead of wall mid.
-    const tangents3d = [vec3(), vec3()];
-    glsl.verticalTangentPoints(mid3d, light.center, uLightSize, tangents3d);
-    const idx = tangents3d[0].z > tangents3d[1].z;
-    const penumbraTangent = tangents3d[Number(idx)]; // Lower point
-    // const umbraTangent = tangents3d[Number(1 - idx)]; // Higher point.
-
-    // Intersection with the canvas gives us the furthest and nearest penumbra/umbra points.
     const canvasPlane = this.constructCanvasPlane();
-    const rP = glsl.Ray(penumbraTangent, mid3d.subtract(penumbraTangent));
-    // const rU = glsl.Ray(umbraTangent, mid3d.subtract(umbraTangent));
+    const wallTopZ = wall.top[0].z;
+    const mid3d = vec3(wall.mid, wallTopZ);
+    const tangents3d = [vec3(), vec3()];
+    let rP;
+    if ( glsl.verticalTangentPoints(mid3d, light.center, uLightSize, tangents3d) ) {
+      // Should always have tangents.
+      const idx = Number(tangents3d[0].z > tangents3d[1].z);
+      const penumbraTangent = tangents3d[idx]; // Lower point
+      // const umbraTangent = tangents3d[Number(1 - idx)]; // Higher point.
+      rP = glsl.Ray(penumbraTangent, mid3d.subtract(penumbraTangent));
+      // const rU = glsl.Ray(umbraTangent, mid3d.subtract(umbraTangent));
+    } else {
+      // Just in case; use the light mid point --> wall mid.
+      rP = Ray(light.center, vec3(wall.mid, wall.top[0].z).subtract(light.center));
+    }
+
     const ixP = vec3();
     // const ixU = vec3();
     intersectRayPlane(rP, canvasPlane, ixP);
