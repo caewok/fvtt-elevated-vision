@@ -1043,6 +1043,8 @@ GLSLFunctions.tangentPoints =
 `
 ${defineStruct("Circle")}
 ${defineFunction("almostEqual")}
+${defineFunction("projectRay")}
+${defineStruct("Ray2d")}
 
 /*
  * Locate the tangents to a circle from a point.
@@ -1072,6 +1074,7 @@ bool tangentPoints(in Circle circle, in vec2 p, inout vec2[2] tangents) {
     tangents[0].y *= root;
     tangents[1].y *= -root;
   } else {
+    // float d0 = sqrt(pow(p0.x, 2.0) + pow(p0.y, 2.0));
     float d0 = length(p0); // i.e., magnitude
     if ( almostEqual(d0, circle.radius, 1.0e-08) ) {
       // On circle edge.
@@ -1094,6 +1097,58 @@ bool tangentPoints(in Circle circle, in vec2 p, inout vec2[2] tangents) {
   // Translate back.
   tangents[0] += circle.center;
   tangents[1] += circle.center;
+  return true;
+}
+
+/**
+ * @param {vec3} currPt   A point on the line start|end
+ * @param {vec3} start    Beginning endpoint of the line segment
+ * @param {vec3} end      End of the line segment
+ * @returns {vec2}
+ */
+vec2 to2dCutaway(in vec3 currPt, in vec3 start, in vec3 end) {
+  float distCS = distance(currPt, start);
+  vec2 pt = vec2(distCS, currPt.z);
+  float distCE = distance(currPt, end);
+  float distSE = distance(start, end);
+  if ( distCS < distCE && distCE > distSE ) pt.x *= -1.0;
+  return pt;
+}
+
+/**
+ * @param {vec2} cutawayPt   2d cutaway point created from to2dCutaway
+ * @param {vec3} start    Beginning endpoint of the line segment
+ * @param {vec3} end      End of the line segment
+ * @returns {vec3}
+ */
+vec3 from2dCutaway(in vec2 cutawayPt, in vec3 start, in vec3 end) {
+  Ray2d r2d = Ray2d(start.xy, normalize(end.xy - start.xy));
+  vec2 xy = projectRay(r2d, cutawayPt.x);
+  return vec3(xy, cutawayPt.y);
+}
+
+/**
+ * For a given 3d point and a sphere, determine the vertical tangent points.
+ * @param {vec3} pt
+ * @param {vec3} center
+ * @param {float} radius
+ * @param {out vec3[2]} tangents3d
+ * @returns {bool}
+ */
+bool verticalTangentPoints(in vec3 pt, in vec3 center, in float radius, out vec3[2] tangents3d) {
+  // Treat center of sphere as 0,0.
+  vec2 pt2d = to2dCutaway(pt, center, pt);
+  Circle lightCir = Circle(
+    vec2(0.0, center.z), // Or to2dCutaway(center, center, pt)
+    radius
+  );
+  vec2[2] tangents = vec2[2](lightCir.center, lightCir.center);
+  bool hasTangents = tangentPoints(lightCir, pt2d, tangents);
+  if ( !hasTangents ) return false;
+
+  tangents3d[0] = from2dCutaway(tangents[0], center, pt);
+  tangents3d[1] = from2dCutaway(tangents[1], center, pt);
+  return true;
 }
 `;
 
