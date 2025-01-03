@@ -299,8 +299,8 @@ Ray2d infiniteShadowCanvasRay(in Ray2d[2] lightRays) {
   // Use an ray that intersects the corner perpendicular to the midpoint of the two rays.
   // (This prevents the connecting ray from hitting the canvas or intersecting at the
   // wrong side of the light rays.)
-  vec2 midDir = (lightRays[0].direction + lightRays[1].direction) * 0.5;
   vec2 corner;
+  vec2 midDir = (lightRays[0].direction + lightRays[1].direction) * 0.5;
   if ( lineLineIntersection(edge0, edge1, corner) ) return Ray2d(corner, vec2(midDir.y, -midDir.x));
 
    // The rays are striking parallel edges. Test quadrants to determine edge vs corner.
@@ -342,13 +342,11 @@ vec2[3] extendTriangleToCanvasEdge(in vec2[3] tri) {
   // Cannot use ternary with structs.
   Ray2d smallerEdge;
   Ray2d largerEdge;
-  bool smallerAB;
-  if ( dist2AB < dist2AC ) {
-    smallerAB = true;
+  bool smallerAB = dist2AB < dist2AC;
+  if ( smallerAB ) {
     smallerEdge = AB;
     largerEdge = AC;
   } else {
-    smallerAB = false;
     smallerEdge = AC;
     largerEdge = AB;
   }

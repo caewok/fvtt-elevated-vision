@@ -1424,7 +1424,7 @@ export function to2dCutaway(currPt, start, end) {
   const pt = vec2(distCS, currPt.z);
   const distCE = distance(currPt, end);
   const distSE = distance(start, end);
-  if ( distCS < distCE && distCE > distSE ) pt.x *= -1;
+  if ( distCS < distCE && distCE > distSE ) pt.x *= -1.0;
   return pt;
 }
 
@@ -1447,7 +1447,7 @@ export function to2dCutawaySquared(currPt, start, end) {
   const pt = vec2(distCS, currPt.z);
   const distCE = distanceSquared(currPt, end);
   const distSE = distanceSquared(start, end);
-  if ( distCS < distCE && distCE > distSE ) pt.x *= -1;
+  if ( distCS < distCE && distCE > distSE ) pt.x *= -1.0;
   return pt;
 }
 
