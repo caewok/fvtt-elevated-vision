@@ -539,7 +539,7 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   // If W0 == A, then the wall is nearly collinear with the light (line from wall intersects light circle).
   bool nearCollinear = almostEqual(W0, A, 1.0e-08);
   bool infiniteShadow = isInfiniteShadow(farShadowDirs.penumbra);
-  /*
+
   if ( nearCollinear && infiniteShadow ) {
     _shadowPointsInfiniteCollinear(sideShadowRays, A, B, C, D, E, F, G, H, I, W0, W1);
   } else if ( nearCollinear ) {
@@ -549,8 +549,8 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   } else {
     _shadowPoints(sideShadowRays, light, wall, A, B, C, D, E, F, G, H, I, W0, W1);
   }
-  */
-  _shadowPoints(sideShadowRays, light, wall, A, B, C, D, E, F, G, H, I, W0, W1);
+
+ //  _shadowPoints(sideShadowRays, light, wall, A, B, C, D, E, F, G, H, I, W0, W1);
 
   /*
   switch ( (int(infiniteShadow) * 2) + int(nearCollinear) ) {
@@ -569,9 +569,11 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   B = projectRay(r0, 2000.0);
   C = projectRay(r1, 2000.0);
   */
+  /*
   A = G;
   B = H;
   C = I;
+  */
 
 
   /* Debugging
