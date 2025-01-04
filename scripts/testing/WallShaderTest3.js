@@ -1518,7 +1518,10 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     I.set(triGW1W0[2]);
 
     // Intersect the penumbra with F->I line.
-    const rFI = Ray2d(F, I.subtract(F));
+    // To ensure ∆ABC is always facing the correct direction when light overlaps wall, use the penumbraMidDir instead.
+    const penumbraMidDir = rD_penumbra.direction.add(rG_penumbra.direction).multiplyScalar(0.5);
+    // const rFI = Ray2d(F, I.subtract(F));
+    const rFI = Ray2d(I, vec2(-penumbraMidDir.y, penumbraMidDir.x));
     glsl.lineLineIntersection(rD_penumbra, rFI, B);
     glsl.lineLineIntersection(rG_penumbra, rFI, C);
 

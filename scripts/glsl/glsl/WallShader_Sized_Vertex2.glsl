@@ -494,7 +494,11 @@ void _shadowPointsInfiniteCollinear(in ShadowRays2d sideShadowRays,
   I = triGW1W0[2];
 
   // Intersect the penumbra with F->I line.
-  Ray2d rFI = Ray2d(F, I - F);
+  // To ensure ∆ABC is always facing the correct direction when light overlaps wall, use the penumbraMidDir instead.
+  // const rFI = Ray2d(F, I.subtract(F));
+  // Ray2d rFI = Ray2d(F, I - F);
+  vec2 penumbraMidDir = (rD_penumbra.direction + rG_penumbra.direction) * 0.5;
+  Ray2d rFI = Ray2d(I, vec2(-penumbraMidDir.y, penumbraMidDir.x));
   lineLineIntersection(rD_penumbra, rFI, B);
   lineLineIntersection(rG_penumbra, rFI, C);
 
