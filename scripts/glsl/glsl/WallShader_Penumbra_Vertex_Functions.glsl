@@ -68,26 +68,10 @@ struct ShadowRays2d {
 };
 
 /**
- * Determine the four points of the wall and its properties.
- */
-Wall calculateWallPositions() {
-  vec3 aTop = vec3(aWallCorner0.x, aWallCorner0.y, aWallCorner0.z);
-  vec3 bTop = vec3(aWallCorner1.x, aWallCorner1.y, aWallCorner0.z);
-  vec3 aBottom = vec3(aWallCorner0.x, aWallCorner0.y, aWallCorner1.z);
-  vec3 bBottom = vec3(aWallCorner1.x, aWallCorner1.y, aWallCorner1.z);
-  return Wall(
-    vec3[2](aTop, bTop),                    // top
-    vec3[2](aBottom, bBottom),              // bottom
-    (aTop.xy + bTop.xy) * 0.5,              // mid
-    normalizedDirection(aTop.xy, bTop.xy)   // direction
-  );
-}
-
-/**
  * Maximum diagonal of the canvas, squared.
  */
 float maxR2() {
-  return (uSceneDims.z * uSceneDims.z) + (uSceneDims.w * uSceneDims.w); // Don't really need the 2x.
+  return (uSceneDims.z * uSceneDims.z) + (uSceneDims.w * uSceneDims.w);
 }
 
 /* @type {vec2[4]} */
@@ -234,15 +218,25 @@ int directionalQuadrant(in vec2 direction) {
  * @returns {vec2}
  */
 vec2 canvasEdgeIntersection(in Ray2d r) {
+  // A ray of a given direction only has two edges that it could conceivably hit.
+  // (Assuming it starts inside the rectangle.)
+  const int TL = 0;
+  const int TR = 1;
+  const int BR = 2;
+  const int BL = 3;
   vec2[4] sceneRect = constructSceneRect();
-  for ( int i = 0; i < 4; i += 1 ) {
-    int j = (i + 1) % 4;
-    Ray2d edge = Ray2d(sceneRect[i], sceneRect[j] - sceneRect[i]);
-    float t;
-    if ( lineLineIntersection(r, edge, t) && t >= 0.0 ) return projectRay(r, t);
-  }
-  // Should always find one unless the ray origin is outside the canvas.
-  return r.origin;
+  int quad = directionalQuadrant(r.direction);
+  int idx0 = (quad == TL || quad == TR) ? TL : BR;
+  int idx1 = (quad == TL || quad == BL) ? TL : TR;
+  Ray2d edge0 = Ray2d(sceneRect[idx0], normalizedDirection(sceneRect[idx0], sceneRect[idx0 + 1]));
+  Ray2d edge1 = Ray2d(sceneRect[idx1], normalizedDirection(sceneRect[idx1], sceneRect[idx1 + 1]));
+
+  float t0;
+  float t1;
+  bool hasIx0 = lineLineIntersection(r, edge0, t0);
+  bool hasIx1 = lineLineIntersection(r, edge1, t1);
+  if ( hasIx0 && (!hasIx1 || t0 < t1) ) return projectRay(r, t0);
+  return projectRay(r, t1);
 }
 
 /**
@@ -251,20 +245,26 @@ vec2 canvasEdgeIntersection(in Ray2d r) {
  * @returns {Ray2d}
  */
 Ray2d whichCanvasEdge(in Ray2d r) {
-  // Correct edge is the shortest distance to the ray origin in the direction of the ray.
+  // A ray of a given direction only has two edges that it could conceivably hit.
+  // (Assuming it starts inside the rectangle.)
+  const int TL = 0;
+  const int TR = 1;
+  const int BR = 2;
+  const int BL = 3;
   vec2[4] sceneRect = constructSceneRect();
-  Ray2d minEdge;
-  float minT = maxR2();
-  for ( int i = 0; i < 4; i += 1 ) {
-    int j = (i + 1) % 4;
-    Ray2d edge = Ray2d(sceneRect[i], normalizedDirection(sceneRect[i], sceneRect[j]));
-    float t;
-    if ( lineLineIntersection(r, edge, t) && t >= 0.0 && t < minT ) {
-      minEdge = edge;
-      minT = t;
-    }
-  }
-  return minEdge;
+  int quad = directionalQuadrant(r.direction);
+  int idx0 = (quad + 4 - 1) % 4;
+  int idx1 = quad;
+  int idx2 = (quad + 1) % 4;
+  Ray2d edge0 = Ray2d(sceneRect[idx0], normalizedDirection(sceneRect[idx0], sceneRect[idx1]));
+  Ray2d edge1 = Ray2d(sceneRect[idx1], normalizedDirection(sceneRect[idx1], sceneRect[idx2]));
+
+  float t0;
+  float t1;
+  bool hasIx0 = lineLineIntersection(r, edge0, t0);
+  bool hasIx1 = lineLineIntersection(r, edge1, t1);
+  if ( hasIx0 && (!hasIx1 || t0 < t1) ) return edge0;
+  return edge1;
 }
 
 /**
@@ -284,8 +284,8 @@ Ray2d infiniteShadowCanvasRay(in Ray2d[2] lightRays) {
   // Use an ray that intersects the corner perpendicular to the midpoint of the two rays.
   // (This prevents the connecting ray from hitting the canvas or intersecting at the
   // wrong side of the light rays.)
-  vec2 midDir = (lightRays[0].direction + lightRays[1].direction) * 0.5;
   vec2 corner;
+  vec2 midDir = (lightRays[0].direction + lightRays[1].direction) * 0.5;
   if ( lineLineIntersection(edge0, edge1, corner) ) return Ray2d(corner, vec2(midDir.y, -midDir.x));
 
    // The rays are striking parallel edges. Test quadrants to determine edge vs corner.
@@ -297,7 +297,7 @@ Ray2d infiniteShadowCanvasRay(in Ray2d[2] lightRays) {
      || quad0 == ((quad1 + 3) % 4) ) return whichCanvasEdge(Ray2d(lightRays[0].origin, midDir));
 
    // Opposing quadrants; must use the corner.
-   // if ( quad0 === ((quad1 + 2) % 4) ) corner = (quad0 + 1) % 4;
+   // if ( quad0 == ((quad1 + 2) % 4) ) corner = (quad0 + 1) % 4;
    int cornerIdx = directionalQuadrant(midDir);
    return Ray2d(constructSceneRect()[cornerIdx], vec2(midDir.y, -midDir.x));
 }
@@ -327,13 +327,11 @@ vec2[3] extendTriangleToCanvasEdge(in vec2[3] tri) {
   // Cannot use ternary with structs.
   Ray2d smallerEdge;
   Ray2d largerEdge;
-  bool smallerAB;
-  if ( dist2AB < dist2AC ) {
-    smallerAB = true;
+  bool smallerAB = dist2AB < dist2AC;
+  if ( smallerAB ) {
     smallerEdge = AB;
     largerEdge = AC;
   } else {
-    smallerAB = false;
     smallerEdge = AC;
     largerEdge = AB;
   }

@@ -80,6 +80,8 @@ int wallCollision(in vec3 dir, in float elevation) {
  * Determine the shadow percentage.
  */
 float shadowPercentage() {
+  // Debugging: return 1.0;
+
   // For each direction, test intersection with the wall.
   // TODO: If the wall has different heights for each endpoint, adjust to match the point
   // at which the light ray intersects the wall.

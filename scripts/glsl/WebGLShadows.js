@@ -729,6 +729,45 @@ export class PointLightWebGLShadows extends WebGLShadows {
 }
 
 export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
+   /**
+   * Comparable to PointSourcePolygon.prototype._testWallInclusion
+   * Test for whether a given wall interacts with this source.
+   * Used to filter walls in the quadtree in _getWalls
+   * @param {Edge} edge
+   * @param {PIXI.Point} origin
+   * @returns {boolean}
+   */
+  _testEdgeInclusion(edge, origin) {
+    const src = this.source;
+
+    // Ignore walls that are non-blocking for this type.
+    const type = src.constructor.sourceType;
+    if ( !edge[type] || edge.isOpen ) return false;
+
+    // TODO: Handle elevation for ramps where walls are not equal
+    const { topZ, bottomZ } = edgeElevationZ(edge);
+
+    // If edge is entirely above the light, do not keep.
+    const elevationZ = src.elevationZ;
+    if ( bottomZ > elevationZ ) return false;
+
+    // If wall is entirely below the canvas and source is above, do not keep.
+    const minCanvasE = canvas.scene[MODULE_ID]?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
+    if ( topZ <= minCanvasE && elevationZ > minCanvasE ) return false;
+
+    // Ignore collinear walls
+    const side = edge.orientPoint(origin);
+ //   if ( !side ) return false;
+
+    // Ignore one-directional walls facing away from the origin.
+    if ( side === edge.dir ) return false;
+
+    // Ignore non-attenuated threshold walls where the threshold applies.
+    if ( !edge.threshold?.attenuation && this.thresholdApplies(edge) ) return false;
+
+    return true;
+  }
+
   /**
    * Build the shadow geometry (edge/wall geometry) for this source.
    */
@@ -878,7 +917,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     const dir = DirectionalLightSource.lightDirection(azimuth, elevationAngle);
     const origin = PIXI.Point.fromObject(edge.b).add(dir.multiplyScalar(canvas.dimensions.maxR));
     const side = edge.orientPoint(origin);
-    if ( !side ) return false;
+    // if ( !side ) return false; // If ignoring collinear walls.
 
     // Ignore one-directional walls facing away from the origin.
     if ( side === edge.dir ) return false;

@@ -70,7 +70,9 @@ import {
   PenumbraBasicTest,
   UnsizedShadowsTest,
   SizedShadowsTest,
-  SizedRandomShadowsTest } from "./testing/WallShaderTest3.js";
+  SizedRandomShadowsTest,
+  DirectionalShadowsTest,
+  DirectionalRandomShadowsTest } from "./testing/WallShaderTest3.js";
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -118,7 +120,7 @@ Hooks.once("init", function() {
      * So -2000 (min) + 0.1 (step) * 65556 (max normalized) = 4555
      * @type {number}
      */
-    elevationMin: -1000,
+    elevationMin: 0, // -1000,
 
     /**
      * WebGL region elevations.
@@ -167,7 +169,9 @@ Hooks.once("init", function() {
       PenumbraBasicTest,
       UnsizedShadowsTest,
       SizedShadowsTest,
-      SizedRandomShadowsTest
+      SizedRandomShadowsTest,
+      DirectionalShadowsTest,
+      DirectionalRandomShadowsTest
     }
   };
 
