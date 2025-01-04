@@ -962,6 +962,46 @@ export class SizedShadowsTest extends PenumbraBasicTest {
   /* ----- NOTE: Vertex functions ----- */
 
   /**
+   * @returns {Wall}
+   */
+  calculateWallPositions() {
+    const { Wall, normalizedDirection, quadraticIntersection, circleContainsPoint, projectRay, Ray2d } = glsl;
+    const { aWallCorner0, aWallCorner1, uLightPosition, uLightSize } = this;
+
+    const endpointsXY = [aWallCorner0.xy, aWallCorner1.xy];
+
+    // If a wall endpoint is within the light and the light center is not between the
+    // endpoints, shrink the wall so it is just outside the light.
+    // This avoids the light failing to display if overlapping the wall to the right/left.
+    // If between the endpoints, calculateSideShadowRays will move the light accordingly.
+    const ixs = [vec2(), vec2()]; // @type {vec2[2]};
+    const numIxs = quadraticIntersection(endpointsXY[0], endpointsXY[1], uLightPosition.xy, uLightSize, 1.0e-06, ixs);
+    if ( numIxs === 1 ) {
+      // Determine where the intersection is on the wall.
+      const containedIdx = circleContainsPoint(uLightPosition.xy, uLightSize, endpointsXY[0]) ? 0 : 1;
+
+      // Move pixel away to be outside the circle.
+      const newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], endpointsXY[0][1 - containedIdx])), 1.0);
+
+      // Update wall data.
+      endpointsXY[containedIdx].xy = newIx.xy;
+    }
+
+    const closerIdx = this.closerEndpoint(endpointsXY);
+    const xyCloser = endpointsXY[closerIdx];
+    const xyFurther = endpointsXY[1 - closerIdx];
+    const direction = normalizedDirection(xyCloser, xyFurther);
+    const topZ = aWallCorner0.z;
+    const bottomZ = aWallCorner1.z;
+    return Wall({
+      top: [vec3(xyCloser, topZ), vec3(xyFurther, topZ)],
+      bottom: [vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)],
+      mid: xyCloser.add(xyFurther).multiplyScalar(0.5),
+      direction
+    });
+  }
+
+  /**
    * Determine the closer and further endpoints.
    * @param {vec2[2]} pts
    * @returns {int} Index for the closer endpoint.
@@ -1355,7 +1395,9 @@ export class SizedShadowsTest extends PenumbraBasicTest {
   _shadowPointsCollinear(sideShadowRays, wall, A, B, C, D, E, F, G, H, I, W0, W1) {
     const {
       lineLineIntersection,
-      Ray2d } = glsl;
+      Ray2d,
+      projectRay,
+      normalizedDirection } = glsl;
 
     const rD_penumbra = sideShadowRays.penumbra[0];
     const rG_penumbra = sideShadowRays.penumbra[1];
@@ -1747,26 +1789,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const vertexNum = this.gl_VertexID % 3;
     const wall = this.wall = this.calculateWallPositions();
     const light = this.light = this.calculateLightPositions();
-
-
-    // If a wall endpoint is within the light and the light center is not between the
-    // endpoints, shrink the wall so it is just outside the light.
-    // This avoids the light failing to display if overlapping the wall to the right/left.
-    // If between the endpoints, calculateSideShadowRays will move the light accordingly.
-    const ixs = [vec2(), vec2()]; // GLSL: vec2[2] ixs;
-    const numIxs = quadraticIntersection(wall.top[0].xy, wall.top[1].xy, light.center.xy, uLightSize, 1.0e-06, ixs);
-    if ( numIxs === 1 ) {
-      // Determine where the intersection is on the wall.
-      const containedIdx = circleContainsPoint(light.center.xy, uLightSize, wall.top[0].xy) ? 0 : 1;
-
-      // Move pixel away to be outside the circle.
-      const newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], wall.top[1 - containedIdx].xy)), 1.0);
-
-      // Update wall data.
-      wall.top[containedIdx].xy = newIx.xy;
-      wall.bottom[containedIdx].xy = newIx.xy;
-      wall.mid = wall.top[0].xy.add(wall.top[1].xy).multiplyScalar(0.5);
-    }
 
     // Side shadows.
     const sideShadowRays = this.sideShadowRays = this.calculateSideShadowRays(wall);

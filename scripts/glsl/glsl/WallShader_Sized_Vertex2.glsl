@@ -80,6 +80,24 @@ int closerEndpoint(vec2[2] pts) {
  */
 Wall calculateWallPositions() {
   vec2[2] endpointsXY = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
+
+  // If a wall endpoint is within the light and the light center is not between the
+  // endpoints, shrink the wall so it is just outside the light.
+  // This avoids the light failing to display if overlapping the wall to the right/left.
+  // If between the endpoints, calculateSideShadowRays will move the light accordingly.
+  vec2[2] ixs;
+  int numIxs = quadraticIntersection(endpointsXY[0], endpointsXY[1], uLightPosition.xy, uLightSize, 1.0e-06, ixs);
+  if ( numIxs == 1 ) {
+    // Determine where the intersection is on the wall.
+    int containedIdx = circleContainsPoint(uLightPosition.xy, uLightSize, endpointsXY[0]) ? 0 : 1;
+
+    // Move pixel away to be outside the circle.
+    vec2 newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], endpointsXY[0][1 - containedIdx])), 1.0);
+
+    // Update wall data.
+    endpointsXY[containedIdx].xy = newIx.xy;
+  }
+
   int closerIdx = closerEndpoint(endpointsXY);
   vec2 xyCloser = endpointsXY[closerIdx];
   vec2 xyFurther = endpointsXY[1 - closerIdx];
