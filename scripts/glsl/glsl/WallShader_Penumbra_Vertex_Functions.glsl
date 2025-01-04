@@ -68,22 +68,6 @@ struct ShadowRays2d {
 };
 
 /**
- * Determine the four points of the wall and its properties.
- */
-Wall calculateWallPositions() {
-  vec3 aTop = vec3(aWallCorner0.x, aWallCorner0.y, aWallCorner0.z);
-  vec3 bTop = vec3(aWallCorner1.x, aWallCorner1.y, aWallCorner0.z);
-  vec3 aBottom = vec3(aWallCorner0.x, aWallCorner0.y, aWallCorner1.z);
-  vec3 bBottom = vec3(aWallCorner1.x, aWallCorner1.y, aWallCorner1.z);
-  return Wall(
-    vec3[2](aTop, bTop),                    // top
-    vec3[2](aBottom, bBottom),              // bottom
-    (aTop.xy + bTop.xy) * 0.5,              // mid
-    normalizedDirection(aTop.xy, bTop.xy)   // direction
-  );
-}
-
-/**
  * Maximum diagonal of the canvas, squared.
  */
 float maxR2() {
@@ -269,10 +253,11 @@ Ray2d whichCanvasEdge(in Ray2d r) {
   const int BL = 3;
   vec2[4] sceneRect = constructSceneRect();
   int quad = directionalQuadrant(r.direction);
-  int idx0 = (quad == TL || quad == TR) ? TL : BR;
-  int idx1 = (quad == TL || quad == BL) ? TL : TR;
-  Ray2d edge0 = Ray2d(sceneRect[idx0], normalizedDirection(sceneRect[idx0], sceneRect[idx0 + 1]));
-  Ray2d edge1 = Ray2d(sceneRect[idx1], normalizedDirection(sceneRect[idx1], sceneRect[idx1 + 1]));
+  int idx0 = (quad + 4 - 1) % 4;
+  int idx1 = quad;
+  int idx2 = (quad + 1) % 4;
+  Ray2d edge0 = Ray2d(sceneRect[idx0], normalizedDirection(sceneRect[idx0], sceneRect[idx1]));
+  Ray2d edge1 = Ray2d(sceneRect[idx1], normalizedDirection(sceneRect[idx1], sceneRect[idx2]));
 
   float t0;
   float t1;

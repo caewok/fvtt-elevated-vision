@@ -32,6 +32,26 @@ ${defineFunction("normalizedDirection")}
 ${PENUMBRA_VERTEX_FUNCTIONS}
 
 /**
+ * @returns {Wall}
+ */
+Wall calculateWallPositions() {
+  vec2[2] endpointsXY = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
+  // int closerIdx = closerEndpoint(endpointsXY);
+  int closerIdx = 0;
+  vec2 xyCloser = endpointsXY[closerIdx];
+  vec2 xyFurther = endpointsXY[1 - closerIdx];
+  vec2 direction = normalizedDirection(xyCloser, xyFurther);
+  float topZ = aWallCorner0.z;
+  float bottomZ = aWallCorner1.z;
+  return Wall(
+    vec3[2](vec3(xyCloser, topZ), vec3(xyFurther, topZ)),
+    vec3[2](vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)),
+    (xyCloser + xyFurther) * 0.5,
+    direction
+  );
+}
+
+/**
  * Define the triangle for the unsized source.
  * Defined as the lines from the source through each endpoint.
  * Either intersecting the canvas or infinite, which is set off at the canvas edge.
