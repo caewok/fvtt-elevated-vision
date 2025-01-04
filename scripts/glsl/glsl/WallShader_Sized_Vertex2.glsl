@@ -37,6 +37,7 @@ ${defineStruct("Circle")}
 ${defineFunction("tangentPoints")}
 ${defineFunction("sameSide")}
 ${defineFunction("distanceSquared")}
+${defineFunction("quadraticIntersection")}
 
 ${PENUMBRA_VERTEX_FUNCTIONS}
 
@@ -80,6 +81,9 @@ int closerEndpoint(vec2[2] pts) {
  */
 Wall calculateWallPositions() {
   vec2[2] endpointsXY = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
+  int closerIdx = closerEndpoint(endpointsXY);
+  vec2 xyCloser = endpointsXY[closerIdx];
+  vec2 xyFurther = endpointsXY[1 - closerIdx];
 
   // If a wall endpoint is within the light and the light center is not between the
   // endpoints, shrink the wall so it is just outside the light.
@@ -88,19 +92,16 @@ Wall calculateWallPositions() {
   vec2[2] ixs;
   int numIxs = quadraticIntersection(endpointsXY[0], endpointsXY[1], uLightPosition.xy, uLightSize, 1.0e-06, ixs);
   if ( numIxs == 1 ) {
-    // Determine where the intersection is on the wall.
-    int containedIdx = circleContainsPoint(uLightPosition.xy, uLightSize, endpointsXY[0]) ? 0 : 1;
+    // Determine where the intersection is on the wall. By definition, it is the closer endpoint.
+    // int containedIdx = circleContainsPoint(uLightPosition.xy, uLightSize, endpointsXY[0]) ? 0 : 1;
 
     // Move pixel away to be outside the circle.
-    vec2 newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], endpointsXY[0][1 - containedIdx])), 1.0);
+    vec2 newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], xyFurther)), 1.0);
 
     // Update wall data.
-    endpointsXY[containedIdx].xy = newIx.xy;
+    xyCloser = newIx.xy;
   }
 
-  int closerIdx = closerEndpoint(endpointsXY);
-  vec2 xyCloser = endpointsXY[closerIdx];
-  vec2 xyFurther = endpointsXY[1 - closerIdx];
   vec2 direction = normalizedDirection(xyCloser, xyFurther);
   float topZ = aWallCorner0.z;
   float bottomZ = aWallCorner1.z;
@@ -377,10 +378,14 @@ void _shadowPointsCollinear(in ShadowRays2d sideShadowRays, in Wall wall,
   */
 
   // E and H are where the penumbra lines hit the canvas.
-  // For collinear, use the perpendicular wall direction.
-  Ray2d rPWallDir = Ray2d(ixP.xy, vec2(-wall.direction.y, wall.direction.x));
-  lineLineIntersection(rPWallDir, rD_penumbra, E);
-  lineLineIntersection(rPWallDir, rG_penumbra, H);
+  // For collinear, use the direction between the two penumbra origins, which is
+  // nearly the perpendicular wall direction.
+  // Ray2d rPWallDir = Ray2d(ixP.xy, vec2(-wall.direction.y, wall.direction.x));
+  // Ray2d rPDir = Ray2d(ixP.xy, rG_penumbra.origin - rD_penumbra.origin);
+  vec2 penumbraMidDir = (rD_penumbra.direction + rG_penumbra.direction) * 0.5;
+  Ray2d rPDir = Ray2d(ixP.xy, vec2(-penumbraMidDir.y, penumbraMidDir.x));
+  lineLineIntersection(rPDir, rD_penumbra, E);
+  lineLineIntersection(rPDir, rG_penumbra, H);
 
   // Determine F and I (furthest points) using wall direction.
   // For collinear, need the rays from E and H.
@@ -396,7 +401,10 @@ void _shadowPointsCollinear(in ShadowRays2d sideShadowRays, in Wall wall,
   if ( !hasI ) I = projectRay(Ray2d(G, normalizedDirection(G, H)), maxR2());
 
   // Intersect the penumbra with F->I line to get B and C.
-  Ray2d rFI = Ray2d(F, I - F);
+  // To ensure ∆ABC is always facing the correct direction when light overlaps wall, use the penumbraMidDir instead.
+  // const rFI = Ray2d(F, I.subtract(F));
+  // Ray2d rFI = Ray2d(F, I - F);
+  Ray2d rFI = Ray2d(I, vec2(-penumbraMidDir.y, penumbraMidDir.x));
   lineLineIntersection(rD_penumbra, rFI, B);
   lineLineIntersection(rG_penumbra, rFI, C);
 }
@@ -538,7 +546,7 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   vec2 tmpIx;
   bool infiniteShadow = isInfiniteShadow(farShadowDirs.penumbra);// || !farCanvasPoint(wall, tmpIx);
 
-
+  /*
   if ( nearCollinear && infiniteShadow ) {
     _shadowPointsInfiniteCollinear(sideShadowRays, A, B, C, D, E, F, G, H, I, W0, W1);
   } else if ( nearCollinear ) {
@@ -548,17 +556,18 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   } else {
     _shadowPoints(sideShadowRays, wall, A, B, C, D, E, F, G, H, I, W0, W1);
   }
+  */
 
  //  _shadowPoints(sideShadowRays, light, wall, A, B, C, D, E, F, G, H, I, W0, W1);
 
-  /*
+
   switch ( (int(infiniteShadow) * 2) + int(nearCollinear) ) {
     case 0: _shadowPoints(sideShadowRays, wall, A, B, C, D, E, F, G, H, I, W0, W1); break;
     case 1: _shadowPointsCollinear(sideShadowRays, wall, A, B, C, D, E, F, G, H, I, W0, W1); break;
     case 2: _shadowPointsInfinite(sideShadowRays, A, B, C, D, E, F, G, H, I, W0, W1); break;
     case 3: _shadowPointsInfiniteCollinear(sideShadowRays, A, B, C, D, E, F, G, H, I, W0, W1); break;
   }
-  */
+
 
   // For debugging, test side shadows
   /*

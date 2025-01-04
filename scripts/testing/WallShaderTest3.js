@@ -969,6 +969,9 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const { aWallCorner0, aWallCorner1, uLightPosition, uLightSize } = this;
 
     const endpointsXY = [aWallCorner0.xy, aWallCorner1.xy];
+    const closerIdx = this.closerEndpoint(endpointsXY);
+    let xyCloser = endpointsXY[closerIdx];
+    const xyFurther = endpointsXY[1 - closerIdx];
 
     // If a wall endpoint is within the light and the light center is not between the
     // endpoints, shrink the wall so it is just outside the light.
@@ -977,19 +980,16 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const ixs = [vec2(), vec2()]; // @type {vec2[2]};
     const numIxs = quadraticIntersection(endpointsXY[0], endpointsXY[1], uLightPosition.xy, uLightSize, 1.0e-06, ixs);
     if ( numIxs === 1 ) {
-      // Determine where the intersection is on the wall.
-      const containedIdx = circleContainsPoint(uLightPosition.xy, uLightSize, endpointsXY[0]) ? 0 : 1;
+      // Determine where the intersection is on the wall. By definition, it is the closer endpoint.
+      // const containedIdx = circleContainsPoint(uLightPosition.xy, uLightSize, endpointsXY[0]) ? 0 : 1;
 
       // Move pixel away to be outside the circle.
-      const newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], endpointsXY[0][1 - containedIdx])), 1.0);
+      const newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], xyFurther)), 1.0);
 
       // Update wall data.
-      endpointsXY[containedIdx].xy = newIx.xy;
+      xyCloser = newIx.xy;
     }
 
-    const closerIdx = this.closerEndpoint(endpointsXY);
-    const xyCloser = endpointsXY[closerIdx];
-    const xyFurther = endpointsXY[1 - closerIdx];
     const direction = normalizedDirection(xyCloser, xyFurther);
     const topZ = aWallCorner0.z;
     const bottomZ = aWallCorner1.z;
@@ -1106,7 +1106,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const distToWall = distanceToSegment(uLightPosition.xy, wall.top[0].xy, wall.top[1].xy);
     if ( distToWall <= uLightSize ) {
       lightCir.radius = max(distToWall - 1.0, 0.0);
-      if ( almostEqual(distToWall, 0.0, 1.0e-06) ) lightCir.center = this.offsetLightFromWall(wall, 0.5);
+      if ( almostEqual(distToWall, 0.0, 1.0e-06) ) lightCir.center = this.offsetLightFromWall(wall, 10.0);
     }
     return tangentPoints(lightCir, pt, tangents);
   }
@@ -1201,7 +1201,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
 
     // If light center is on the wall, offset.
     const distToWall = distanceToSegment(uLightPosition.xy, W[0], W[1]);
-    const lightCenter = almostEqual(distToWall, 0.0, 1.0e-06) ? vec3(this.offsetLightFromWall(wall, 0.5), uLightPosition.z) : uLightPosition;
+    const lightCenter = almostEqual(distToWall, 0.0, 1.0e-06) ? vec3(this.offsetLightFromWall(wall, 10.0), uLightPosition.z) : uLightPosition;
     const midpenumbra = [
       Ray2d(W[0], normalizedDirection(lightCenter.xy, W[0])),
       Ray2d(W[1], normalizedDirection(lightCenter.xy, W[1]))
@@ -1417,10 +1417,14 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     */
 
     // E and H are where the penumbra lines hit the canvas.
-    // For collinear, use the perpendicular wall direction.
-    const rPWallDir = Ray2d(ixP.xy, vec2(-wall.direction.y, wall.direction.x));
-    glsl.lineLineIntersection(rPWallDir, rD_penumbra, E);
-    glsl.lineLineIntersection(rPWallDir, rG_penumbra, H);
+    // For collinear, use the direction between the two penumbra origins, which is
+    // nearly the perpendicular wall direction.
+    // const rPWallDir = Ray2d(ixP.xy, vec2(-wall.direction.y, wall.direction.x));
+    // const rPDir = Ray2d(ixP.xy, rG_penumbra.origin.subtract(rD_penumbra.origin));
+    const penumbraMidDir = rD_penumbra.direction.add(rG_penumbra.direction).multiplyScalar(0.5);
+    const rPDir = Ray2d(ixP.xy, vec2(-penumbraMidDir.y, penumbraMidDir.x));
+    glsl.lineLineIntersection(rPDir, rD_penumbra, E);
+    glsl.lineLineIntersection(rPDir, rG_penumbra, H);
 
     // Determine F and I (furthest points) using wall direction.
     // For collinear, need the rays from E and H.
@@ -1436,7 +1440,9 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     if ( !hasI ) I.set(projectRay(Ray2d(G, normalizedDirection(G, H)), this.maxR2()));
 
     // Intersect the penumbra with F->I line to get B and C.
-    const rFI = Ray2d(F, I.subtract(F));
+    // To ensure ∆ABC is always facing the correct direction when light overlaps wall, use the penumbraMidDir instead.
+    // const rFI = Ray2d(F, I.subtract(F));
+    const rFI = Ray2d(I, vec2(-penumbraMidDir.y, penumbraMidDir.x));
     glsl.lineLineIntersection(rD_penumbra, rFI, B);
     glsl.lineLineIntersection(rG_penumbra, rFI, C);
   }
