@@ -74,6 +74,12 @@ import {
   DirectionalShadowsTest,
   DirectionalRandomShadowsTest } from "./testing/WallShaderTest3.js";
 
+import {
+  SourceShadowWallGeometry2,
+  SizedSourceShadowWallGeometry2
+} from "./glsl/SourceShadowWallGeometry2.js";
+
+
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
@@ -171,7 +177,9 @@ Hooks.once("init", function() {
       SizedShadowsTest,
       SizedRandomShadowsTest,
       DirectionalShadowsTest,
-      DirectionalRandomShadowsTest
+      DirectionalRandomShadowsTest,
+      SourceShadowWallGeometry2,
+      SizedSourceShadowWallGeometry2
     }
   };
 

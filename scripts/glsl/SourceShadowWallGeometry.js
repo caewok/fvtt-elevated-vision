@@ -71,7 +71,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   /** @type {PointSource} */
   source;
 
-  /** @type {sourceType} */
+  /** @type {string} */
   sourceType = "light";
 
   constructor(source, edges) {
