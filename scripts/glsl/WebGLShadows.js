@@ -375,7 +375,8 @@ export class WebGLShadows {
       ? RegionMovementWaypoint3d.fromLocationWithElevation(target.center, target.elevationE)
       : target;
     if ( !Object.hasOwn(testPoint, "z") ) {
-      testPoint = RegionMovementWaypoint3d.fromLocationWithElevation(testPoint, canvas.scene[MODULE_ID].elevationAt(testPoint));
+      testPoint = RegionMovementWaypoint3d
+        .fromLocationWithElevation(testPoint, canvas.scene[MODULE_ID].elevationAt(testPoint));
     }
 
     const shadowRenderer = this.shadowRenderer;
@@ -457,7 +458,7 @@ export class WebGLShadows {
 
     // Ignore collinear walls
     const side = edge.orientPoint(origin);
- //   if ( !side ) return false;
+    // Keep collinear. if ( !side ) return false;
 
     // Ignore one-directional walls facing away from the origin.
     if ( side === edge.dir ) return false;
@@ -481,7 +482,7 @@ export class WebGLShadows {
     this.wallGeometry.destroy();
     this.shadowMesh.destroy();
     this.shadowTerrainMesh.destroy();
-    // this.graphicsFOV.destroy();
+    // Unneeded? this.graphicsFOV.destroy();
     this.shadowRenderer.destroy();
     this.shadowVisionMask.destroy();
   }
@@ -642,7 +643,8 @@ export class PointVisionWebGLShadows extends WebGLShadows {
       ? RegionMovementWaypoint3d.fromLocationWithElevation(target.center, target.elevationE)
       : target;
     if ( !Object.hasOwn(testPoint, "z") ) {
-      testPoint = RegionMovementWaypoint3d.fromLocationWithElevation(testPoint, canvas.scene[MODULE_ID].elevationAt(testPoint));
+      testPoint = RegionMovementWaypoint3d
+        .fromLocationWithElevation(testPoint, canvas.scene[MODULE_ID].elevationAt(testPoint));
     }
     return this.elevatedPointInShadow(testPoint);
   }
@@ -724,50 +726,9 @@ export class PointLightWebGLShadows extends WebGLShadows {
     u.uEVShadows = true;
     u.uEVDirectional = false;
   }
-
-
 }
 
 export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
-   /**
-   * Comparable to PointSourcePolygon.prototype._testWallInclusion
-   * Test for whether a given wall interacts with this source.
-   * Used to filter walls in the quadtree in _getWalls
-   * @param {Edge} edge
-   * @param {PIXI.Point} origin
-   * @returns {boolean}
-   */
-  _testEdgeInclusion(edge, origin) {
-    const src = this.source;
-
-    // Ignore walls that are non-blocking for this type.
-    const type = src.constructor.sourceType;
-    if ( !edge[type] || edge.isOpen ) return false;
-
-    // TODO: Handle elevation for ramps where walls are not equal
-    const { topZ, bottomZ } = edgeElevationZ(edge);
-
-    // If edge is entirely above the light, do not keep.
-    const elevationZ = src.elevationZ;
-    if ( bottomZ > elevationZ ) return false;
-
-    // If wall is entirely below the canvas and source is above, do not keep.
-    const minCanvasE = canvas.scene[MODULE_ID]?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
-    if ( topZ <= minCanvasE && elevationZ > minCanvasE ) return false;
-
-    // Ignore collinear walls
-    const side = edge.orientPoint(origin);
- //   if ( !side ) return false;
-
-    // Ignore one-directional walls facing away from the origin.
-    if ( side === edge.dir ) return false;
-
-    // Ignore non-attenuated threshold walls where the threshold applies.
-    if ( !edge.threshold?.attenuation && this.thresholdApplies(edge) ) return false;
-
-    return true;
-  }
-
   /**
    * Build the shadow geometry (edge/wall geometry) for this source.
    */
@@ -836,63 +797,6 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
   }
 
   /**
-   * Detect whether a point is in partial or full shadow based on testing wall collisions.
-   * @param {RegionMovementWaypoint3d} elevatedPoint
-   * @returns {number} Approximate shadow value between 0 (no shadow) and 1 (full shadow).
-   */
-  elevatedPointInShadow(elevatedPoint) {
-    /* Testing
-    Point3d = CONFIG.GeometryLib.threeD.Point3d
-    Plane = CONFIG.GeometryLib.threeD.Plane
-    Draw = CONFIG.GeometryLib.Draw
-    let [l] = canvas.lighting.placeables
-    source = l.source
-    x = _token.center.x
-    y = _token.center.y
-    z = _token.elevationZ
-
-    // Or
-    pt = Point3d.fromToken(_token).bottom
-    let { x, y, z } = pt
-    */
-
-
-    // Project a point out beyond the canvas to stand in for the light position.
-    const { azimuth, elevationAngle, solarAngle } = this;
-    const midCollision = this.hasEdgeCollision(elevatedPoint, azimuth, elevationAngle);
-
-    /* Draw.point(origin, { color: Draw.COLORS.yellow }) */
-    if ( !solarAngle ) return Number(midCollision);
-
-    // Test the top/bottom/left/right points of the light for penumbra shadow.
-    const topCollision = this.hasEdgeCollision(elevatedPoint, azimuth, elevationAngle + solarAngle);
-    const bottomCollision = this.hasEdgeCollision(elevatedPoint, elevatedPoint, azimuth, elevationAngle - solarAngle);
-    const side0Collision = this.hasEdgeCollision(elevatedPoint, elevatedPoint, azimuth + solarAngle, elevationAngle);
-    const side1Collision = this.hasEdgeCollision(elevatedPoint, elevatedPoint, azimuth - solarAngle, elevationAngle);
-
-    // Shadows: side0/mid/side1 = 100%; side0/mid = 50%; mid/side1 = 50%; any one = 25%
-    const sideSum = side0Collision + side1Collision + midCollision;
-    let sideShadowPercentage;
-    switch ( sideSum ) {
-      case 0: sideShadowPercentage = 0; break;
-      case 1: sideShadowPercentage = 0.25; break;
-      case 2: sideShadowPercentage = 0.50; break;
-      case 3: sideShadowPercentage = 1; break;
-    }
-
-    const heightSum = topCollision + bottomCollision + midCollision;
-    let heightShadowPercentage;
-    switch ( heightSum ) {
-      case 0: heightShadowPercentage = 0; break;
-      case 1: heightShadowPercentage = 0.25; break;
-      case 2: heightShadowPercentage = 0.50; break;
-      case 3: heightShadowPercentage = 1; break;
-    }
-
-    return heightShadowPercentage * sideShadowPercentage;
-  }
-
-  /**
    * Comparable to PointSourcePolygon.prototype._testWallInclusion
    * Test for whether a given wall interacts with this source.
    * Used to filter walls in the quadtree in _getWalls
@@ -917,7 +821,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     const dir = DirectionalLightSource.lightDirection(azimuth, elevationAngle);
     const origin = PIXI.Point.fromObject(edge.b).add(dir.multiplyScalar(canvas.dimensions.maxR));
     const side = edge.orientPoint(origin);
-    // if ( !side ) return false; // If ignoring collinear walls.
+    // Keep collinear. if ( !side ) return false; // If ignoring collinear walls.
 
     // Ignore one-directional walls facing away from the origin.
     if ( side === edge.dir ) return false;
@@ -971,7 +875,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     });
   }
 
-/**
+  /**
    * Detect whether a point is in partial or full shadow based on testing wall collisions.
    * @param {RegionMovementWaypoint3d} elevatedPoint
    * @returns {number} Approximate shadow value between 0 (no shadow) and 1 (full shadow).
