@@ -71,6 +71,9 @@ vec4 lightEncoding(in float light) {
   vec4 c = vec4((light * ltdInv) + ltd, 1.0 - (0.5 * ltd), (light * ltd) + ltdInv, 1.0);
   #endif
 
+  // Limited wall: ltd = 1, ltdInv = 0; vec4(1.0, 0.5, light, 1.0)
+  // Normal wall: ltd = 0, ltdInv = 1;  vec4(light, 1.0, 1.0, 1.0)
+
   return c;
 }
 

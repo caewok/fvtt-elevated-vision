@@ -27,7 +27,7 @@ const TR = 1;
 const BR = 2;
 const BL = 3;
 
-export class SourceShadowWallGeometry2 extends PIXI.Geometry {
+export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
 
   /**
    * Maximum number of samples.
@@ -116,8 +116,17 @@ export class SourceShadowWallGeometry2 extends PIXI.Geometry {
     this.addIndex([0, 1, 2]);
     this.addAttribute("aShadowTri", [A.x, A.y, B.x, B.y, C.x, C.y], 2);
 
-    const wallRatio = barycentric(this.edge.a, A, B, C);
-    this.addAttribute("aWallRatio", Array(3).fill(wallRatio), 1);
+    const {a, b} = this.edge;
+    const l = Ray2d.normalized(a, b);
+    const edgeDist = [
+      -distanceToLine(A, l),
+      distanceToLine(B, l),
+      distanceToLine(C, l)
+    ];
+    this.addAttribute("aEdgeDist", edgeDist);
+
+    // const wallRatio = barycentric(this.edge.a, A, B, C);
+    // this.addAttribute("aWallRatio", Array(3).fill(wallRatio), 1);
   }
 
   /**
@@ -295,7 +304,7 @@ export class SourceShadowWallGeometry2 extends PIXI.Geometry {
 
 }
 
-export class SizedSourceShadowWallGeometry2 extends SourceShadowWallGeometry2 {
+export class SizedSourceShadowSingleWallGeometry extends SourceShadowWallGeometry2 {
   // ----- NOTE: Getters / Setters ----- //
 
   /** @type {number} */
@@ -311,19 +320,27 @@ export class SizedSourceShadowWallGeometry2 extends SourceShadowWallGeometry2 {
     const samples = this.lightSamplePoints();
     const nSamples = samples.length;
     const shadowTris = Array(nSamples * 3 * 2);
-    const wallRatios = Array(nSamples * 3);
+    const edgeDist = Array(nSamples * 3);
+    const {a, b} = this.edge;
+    const l = Ray2d.normalized(a, b);
+    // const wallRatios = Array(nSamples * 3);
     for ( let i = 0; i < nSamples; i += 1 ) {
       const j = i * 3;
       const k = i * 3 * 2;
       const [A, B, C] = this.shadowTriangle(samples[i]);
-      const wallRatio = barycentric(this.edge.a, A, B, C);
-      for ( let n = 0; n < 3; n += 1 ) wallRatios[j + n] = wallRatio.x;
+      edgeDist[j] = -distanceToLine(A, l);
+      edgeDist[j + 1] = distanceToLine(B, l);
+      edgeDist[j + 2] = distanceToLine(C, l);
+
+      // const wallRatio = barycentric(this.edge.a, A, B, C);
+      // for ( let n = 0; n < 3; n += 1 ) wallRatios[j + n] = wallRatio.x;
       const coords = [A.x, A.y, B.x, B.y, C.x, C.y];
       for ( let n = 0; n < 6; n += 1 ) shadowTris[k + n] = coords[n];
     }
     this.addIndex(Array.fromRange(nSamples * 3));
     this.addAttribute("aShadowTri", shadowTris, 2);
-    this.addAttribute("aWallRatio", wallRatios, 1);
+    this.addAttribute("aEdgeDist", edgeDist, 1);
+    // this.addAttribute("aWallRatio", wallRatios, 1);
   }
 
   /**
@@ -496,6 +513,33 @@ function barycentric(p, a, b, c) {
   return new CONFIG.GeometryLib.threeD.Point3d(u, v, w);
 }
 
+/**
+ * Closest point to a line.
+ * @param {PIXI.Point} c
+ * @param {Ray2d} l
+ * @returns {PIXI.Point}
+ */
+function closest2dPointToLine(c, l) {
+  const denom = dir.dot(l.direction);
+  if ( denom === 0.0 ) return c;
+
+  const deltaCA = c.subtract(l.origin);
+  const u = deltaCA.dot(l.direction) / denom;
+  return l.origin.add(dir.multiplyScalar(u));
+}
+
+/**
+ * Distance to the closest point to a line.
+ * @param {PIXI.Point} c
+ * @param {Ray2d} l
+ * @returns {number}
+ */
+function distanceToLine(c, l) {
+  const ix = closest2dPointToLine(c, l);
+  return c.distance(ix);
+}
+
+
 
 /**
  * Represent a two-dimensional ray.
@@ -600,7 +644,7 @@ l = canvas.lighting.placeables[0];
 edge0 = canvas.walls.placeables[0].edge
 geom = new SizedSourceShadowWallGeometry2(l.lightSource, edge0)
 geom.drawLight()
-geom.drawShadowTriangles()
+geom.drawShadowTriangles({ width: 0})
 geom.drawEdge()
 
 */
