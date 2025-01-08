@@ -237,7 +237,7 @@ export class ShadowSingleWallShader extends AbstractEVShader {
  * Draw directional shadow for wall with shading for penumbra and with the outer penumbra.
  * https://www.researchgate.net/publication/266204563_Calculation_of_the_shadow-penumbra_relation_and_its_application_on_efficient_architectural_design
  */
-export class DirectionalShadowSingleWallShader extends ShadowSingleWallShader {
+export class DirectionalSourceShadowSingleWallShader extends ShadowSingleWallShader {
   // NOTE: DirectionalShadowWallShader.vertexShader
   /**
    * Vertices are light --> wall corner to intersection on surface.
@@ -271,7 +271,7 @@ export class DirectionalShadowSingleWallShader extends ShadowSingleWallShader {
  * Draw shadow from a sized source for wall with shading for penumbra and with the outer penumbra
  * https://www.researchgate.net/publication/266204563_Calculation_of_the_shadow-penumbra_relation_and_its_application_on_efficient_architectural_design
  */
-export class SizedPointSourceShadowSingleWallShader extends ShadowSingleWallShader {
+export class PointSourceShadowSingleWallShader extends ShadowSingleWallShader {
   // NOTE: SizedPointSourceShadowWallShader.vertexShader
   /**
    * Wall shadow with side, near, and far penumbra.

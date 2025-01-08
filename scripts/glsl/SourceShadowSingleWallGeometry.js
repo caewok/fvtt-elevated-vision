@@ -318,7 +318,7 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
   }
 
 }
-export class SizedSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
+export class PointSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
   // ----- NOTE: Getters / Setters ----- //
 
   /** @type {number} */
@@ -364,6 +364,11 @@ export class SizedSourceShadowSingleWallGeometry extends SourceShadowSingleWallG
   }
 
 }
+
+export class DirectionalSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
+
+}
+
 
 
 // ----- NOTE: Helper functions ----- //
@@ -611,13 +616,7 @@ class Ray2d {
   }
 }
 
-export class PointSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
 
-}
-
-export class DirectionalSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
-
-}
 
 
 /** Testing single shadow

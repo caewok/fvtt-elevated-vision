@@ -23,15 +23,14 @@ import { DirectionalLightSource } from "../DirectionalLightSource.js";
 
 import {
   SourceShadowSingleWallGeometry,
-  SizedSourceShadowSingleWallGeometry,
   PointSourceShadowSingleWallGeometry,
-  DirectionalSourceShadowSingleWallGeometry
+  DirectionalSourceShadowSingleWallGeometry,
 } from "./SourceShadowSingleWallGeometry.js";
 
 import {
   ShadowSingleWallShader,
-  SizedPointSourceShadowSingleWallShader,
-  DirectionalShadowSingleWallShader
+  PointSourceShadowSingleWallShader,
+  DirectionalSourceShadowSingleWallShader
 } from "./ShadowSingleWallShader.js";
 
 const PIXEL_INV = 1 / 255;
@@ -135,9 +134,6 @@ export class WebGLShadowsSingleWall {
    */
   get shadowTexture() { return this.shadowRenderer.renderTexture; }
 
-  /** @type {ShadowWallShader} */
-  get wallShader() { return this.shadowMesh.shader; }
-
   /** @type {ShadowTerrainShader} */
   get terrainShader() { return this.shadowTerrainMesh.shader; }
 
@@ -218,7 +214,8 @@ export class WebGLShadowsSingleWall {
    * Render the wall shadows.
    */
   _initializeShadowRenderer() {
-    this.shadowRenderer = new this.constructor.shadowRendererClass(this.source, this.shadowMesh, this.shadowTerrainMesh);
+    const { source, shadowMesh, shadowTerrainMesh } = this;
+    this.shadowRenderer = new this.constructor.shadowRendererClass(source, shadowMesh, shadowTerrainMesh);
   }
 
   /**
@@ -250,7 +247,7 @@ export class WebGLShadowsSingleWall {
 
     // Shadow geometry and mesh
     if ( changeObj.changedPosition ) shadowsChanged = this.wallGeometry.updateSourcePosition();
-    if ( this.wallShader.sourceUpdated(this.source, changeObj) ) shadowsChanged ||= true;
+    // TODO: if ( this.wallShader.sourceUpdated(this.source, changeObj) ) shadowsChanged ||= true;
 
     // Terrain shadow geometry and mesh
     if ( changeObj.changedPosition || changeObj.changedRadius ) this.shadowTerrainMesh.updateGeometry(this.bounds);
@@ -743,7 +740,7 @@ export class PointLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
   static geometryClass = PointSourceShadowSingleWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = SizedPointSourceShadowSingleWallShader;
+  static shaderClass = PointSourceShadowSingleWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -792,7 +789,7 @@ export class DirectionalLightWebGLShadowsSingleWall extends PointLightWebGLShado
   static geometryClass = DirectionalSourceShadowSingleWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = DirectionalShadowSingleWallShader;
+  static shaderClass = DirectionalSourceShadowSingleWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;
@@ -998,3 +995,22 @@ export class DirectionalLightWebGLShadowsSingleWall extends PointLightWebGLShado
     return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
   }
 }
+
+/* Testing point light
+MODULE_ID = "elevatedvision"
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+api = game.modules.get("elevatedvision").api
+
+let [l] = canvas.lighting.placeables;
+ev = l.lightSource.elevatedvision
+
+ev = _token.vision.elevatedvision
+
+geom = ev.shadowMesh.children[0].geometry
+shader = ev.shadowMesh.children[0].shader
+
+
+shadowMesh = ev.shadowMesh
+canvas.stage.addChild(shadowMesh.children[0])
+
+*/

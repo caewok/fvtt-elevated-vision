@@ -75,12 +75,15 @@ import {
 
 import {
   SourceShadowSingleWallGeometry,
-  SizedSourceShadowSingleWallGeometry
+  PointSourceShadowSingleWallGeometry,
+  DirectionalSourceShadowSingleWallGeometry,
 } from "./glsl/SourceShadowSingleWallGeometry.js";
 
 import {
   ShadowSingleWallShader,
-  SizedPointSourceShadowSingleWallShader
+  PointSourceShadowSingleWallShader,
+  DirectionalSourceShadowSingleWallShader
+
 } from "./glsl/ShadowSingleWallShader.js";
 
 import {
@@ -192,9 +195,13 @@ Hooks.once("init", function() {
       DirectionalRandomShadowsTest,
 
       SourceShadowSingleWallGeometry,
-      SizedSourceShadowSingleWallGeometry,
+      PointSourceShadowSingleWallGeometry,
+      DirectionalSourceShadowSingleWallGeometry,
+
       ShadowSingleWallShader,
-      SizedPointSourceShadowSingleWallShader,
+      PointSourceShadowSingleWallShader,
+      DirectionalSourceShadowSingleWallShader,
+
       WebGLShadowsSingleWall
     }
   };
