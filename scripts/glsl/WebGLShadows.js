@@ -693,10 +693,10 @@ export class PointVisionWebGLShadows extends WebGLShadows {
 
 export class PointLightWebGLShadows extends WebGLShadows {
   /** @type {PIXI.Geometry} */
-  static geometryClass = SizedPointSourceShadowWallShader;
+  static geometryClass = PointSourceShadowWallGeometry;
 
   /** @type {AbstractEVShader} */
-  static shaderClass = ShadowWallShader;
+  static shaderClass = SizedPointSourceShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
