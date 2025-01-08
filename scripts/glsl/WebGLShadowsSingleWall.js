@@ -24,6 +24,7 @@ import { DirectionalLightSource } from "../DirectionalLightSource.js";
 import {
   SourceShadowSingleWallGeometry,
   SizedSourceShadowSingleWallGeometry,
+  PointSourceShadowSingleWallGeometry,
   DirectionalSourceShadowSingleWallGeometry
 } from "./SourceShadowSingleWallGeometry.js";
 
@@ -127,7 +128,7 @@ export class WebGLShadowsSingleWall {
    */
   _includeEdge(edge) {
     if ( edge.type !== "wall" && edge.type !== "regionWall" ) return false;
-    return this.source[MODULE_ID]._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
+    return this._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
   }
 
   /**
@@ -742,7 +743,7 @@ export class PointVisionWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 export class PointLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 
   /** @type {PIXI.Geometry} */
-  static geometryClass = SourceShadowSingleWallGeometry;
+  static geometryClass = PointSourceShadowSingleWallGeometry;
 
   /** @type {PIXI.Shader} */
   static shaderClass = SizedPointSourceShadowSingleWallShader;

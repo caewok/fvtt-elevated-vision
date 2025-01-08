@@ -623,7 +623,7 @@ class Ray2d {
   }
 }
 
-export class PointSourceShadowWallGeometry extends SourceShadowSingleWallGeometry {
+export class PointSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
 
 }
 
