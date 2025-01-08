@@ -51,9 +51,6 @@ export class WebGLShadows {
   /** @type {RenderedPointSource} */
   source;
 
-  /** @type {SourceShadowWallGeometry} */
-  wallGeometry;
-
   /** @type {} */
   // graphicsFOV;
 
@@ -130,7 +127,6 @@ export class WebGLShadows {
 
   initializeShadows() {
     if ( this.#initialized ) return;
-    this._initializeShadowGeometry();
     this._initializeShadowMesh();
     this._initializeTerrainShadowMesh();
     this._initializeShadowRenderer();
@@ -138,10 +134,8 @@ export class WebGLShadows {
     this.#initialized = true;
   }
 
-  /**
-   * Build the shadow geometry (edge/wall geometry) for this source.
-   */
-  _initializeShadowGeometry() { this.wallGeometry = new this.constructor.geometryClass(this.source); }
+  /** @type {SourceShadowWallGeometry} */
+  get wallGeometry() { return this.shadowMesh?.geometry; }
 
   /**
    * Build the shadow mesh for this source.
@@ -150,8 +144,9 @@ export class WebGLShadows {
    * Shadows for walls coded to handle terrain walls.
    */
   _initializeShadowMesh() {
+    const geometry = new this.constructor.geometryClass(this.source);
     const shader = this.constructor.shaderClass.create(this.source);
-    this.shadowMesh = new ShadowMesh(this.wallGeometry, shader);
+    this.shadowMesh = new ShadowMesh(geometry, shader);
   }
 
   /**
@@ -496,7 +491,6 @@ export class WebGLShadows {
    */
   destroy() {
     if ( this.#destroyed ) return;
-    this.wallGeometry?.destroy();
     this.shadowMesh?.destroy();
     this.shadowTerrainMesh?.destroy();
     // Unneeded? this.graphicsFOV.destroy();
