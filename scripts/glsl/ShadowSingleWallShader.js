@@ -1,6 +1,11 @@
 /* globals
 canvas,
 CONFIG,
+<<<<<<< Updated upstream
+=======
+CONST,
+foundry,
+>>>>>>> Stashed changes
 PIXI
 */
 "use strict";
@@ -44,7 +49,11 @@ async function fetchGLSLCode(fileName) {
  */
 function interpolate(str, params = {}) {
   // Add in some params that are always used.
+<<<<<<< Updated upstream
   params["PRECISION_VERTEX"] = PIXI.settings.PRECISION_VERTEX;
+=======
+  params.PRECISION_VERTEX = PIXI.settings.PRECISION_VERTEX;
+>>>>>>> Stashed changes
   params.defineStruct = defineStruct;
   params.defineFunction = defineFunction;
 
@@ -73,7 +82,11 @@ const PENUMBRA_FRAGMENT_CALCULATIONS = interpolate(
 
 // NOTE: GLSL code for each class.
 const GLSL_UNSIZED_VERTEX = interpolate(
+<<<<<<< Updated upstream
   await fetchGLSLCode("SingleWallShader_Unsized_Vertex"))
+=======
+  await fetchGLSLCode("SingleWallShader_Unsized_Vertex")
+>>>>>>> Stashed changes
 );
 
 const GLSL_UNSIZED_FRAGMENT = interpolate(

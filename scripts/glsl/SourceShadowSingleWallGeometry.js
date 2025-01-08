@@ -18,14 +18,13 @@ Creates geometry used by the shader.
 Randomly samples points in the light sphere to create the shadow.
 */
 
-import { MODULE_ID } from "../const.js";
 import { Draw } from "../geometry/Draw.js";
 
 /** @type {enum} CORNERS */
-const TL = 0;
-const TR = 1;
-const BR = 2;
-const BL = 3;
+// const TL = 0;
+// const TR = 1;
+// const BR = 2;
+// const BL = 3;
 
 export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
 
@@ -116,6 +115,13 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     this.addIndex([0, 1, 2]);
     this.addAttribute("aShadowTri", [A.x, A.y, B.x, B.y, C.x, C.y], 2);
 
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowSingleWallGeometry.js
+=======
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowWallGeometry2.js
+    const wallRatio = barycentric(this.edge.a, A, B, C);
+    this.addAttribute("aWallRatio", Array(3).fill(wallRatio), 1);
+=======
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowWallGeometry2.js
     const {a, b} = this.edge;
     const l = Ray2d.normalized(a, b);
     const edgeDist = [
@@ -125,8 +131,15 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     ];
     this.addAttribute("aEdgeDist", edgeDist);
 
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowSingleWallGeometry.js
     // const wallRatio = barycentric(this.edge.a, A, B, C);
     // this.addAttribute("aWallRatio", Array(3).fill(wallRatio), 1);
+=======
+    // Unneeded?
+    // const wallRatio = barycentric(this.edge.a, A, B, C);
+    // this.addAttribute("aWallRatio", Array(3).fill(wallRatio), 1);
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowSingleWallGeometry.js
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowWallGeometry2.js
   }
 
   /**
@@ -304,7 +317,15 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
 
 }
 
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowSingleWallGeometry.js
 export class SizedSourceShadowSingleWallGeometry extends SourceShadowWallGeometry2 {
+=======
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowWallGeometry2.js
+export class SizedSourceShadowWallGeometry2 extends SourceShadowWallGeometry2 {
+=======
+export class SizedSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowSingleWallGeometry.js
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowWallGeometry2.js
   // ----- NOTE: Getters / Setters ----- //
 
   /** @type {number} */
@@ -320,27 +341,61 @@ export class SizedSourceShadowSingleWallGeometry extends SourceShadowWallGeometr
     const samples = this.lightSamplePoints();
     const nSamples = samples.length;
     const shadowTris = Array(nSamples * 3 * 2);
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowSingleWallGeometry.js
     const edgeDist = Array(nSamples * 3);
     const {a, b} = this.edge;
     const l = Ray2d.normalized(a, b);
     // const wallRatios = Array(nSamples * 3);
+=======
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowWallGeometry2.js
+    const wallRatios = Array(nSamples * 3);
+=======
+    const edgeDist = Array(nSamples * 3);
+    const {a, b} = this.edge;
+    const l = Ray2d.normalized(a, b);
+    // Unneeded? const wallRatios = Array(nSamples * 3);
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowSingleWallGeometry.js
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowWallGeometry2.js
     for ( let i = 0; i < nSamples; i += 1 ) {
       const j = i * 3;
       const k = i * 3 * 2;
       const [A, B, C] = this.shadowTriangle(samples[i]);
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowSingleWallGeometry.js
+=======
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowWallGeometry2.js
+      const wallRatio = barycentric(this.edge.a, A, B, C);
+      for ( let n = 0; n < 3; n += 1 ) wallRatios[j + n] = wallRatio.x;
+=======
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowWallGeometry2.js
       edgeDist[j] = -distanceToLine(A, l);
       edgeDist[j + 1] = distanceToLine(B, l);
       edgeDist[j + 2] = distanceToLine(C, l);
 
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowSingleWallGeometry.js
       // const wallRatio = barycentric(this.edge.a, A, B, C);
       // for ( let n = 0; n < 3; n += 1 ) wallRatios[j + n] = wallRatio.x;
+=======
+      // Unneeded?
+      // const wallRatio = barycentric(this.edge.a, A, B, C);
+      // for ( let n = 0; n < 3; n += 1 ) wallRatios[j + n] = wallRatio.x;
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowSingleWallGeometry.js
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowWallGeometry2.js
       const coords = [A.x, A.y, B.x, B.y, C.x, C.y];
       for ( let n = 0; n < 6; n += 1 ) shadowTris[k + n] = coords[n];
     }
     this.addIndex(Array.fromRange(nSamples * 3));
     this.addAttribute("aShadowTri", shadowTris, 2);
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowSingleWallGeometry.js
     this.addAttribute("aEdgeDist", edgeDist, 1);
     // this.addAttribute("aWallRatio", wallRatios, 1);
+=======
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowWallGeometry2.js
+    this.addAttribute("aWallRatio", wallRatios, 1);
+=======
+    this.addAttribute("aEdgeDist", edgeDist, 1);
+    // Unneeded? this.addAttribute("aWallRatio", wallRatios, 1);
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowSingleWallGeometry.js
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowWallGeometry2.js
   }
 
   /**
@@ -513,6 +568,11 @@ function barycentric(p, a, b, c) {
   return new CONFIG.GeometryLib.threeD.Point3d(u, v, w);
 }
 
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowSingleWallGeometry.js
+=======
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowWallGeometry2.js
+=======
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowWallGeometry2.js
 /**
  * Closest point to a line.
  * @param {PIXI.Point} c
@@ -520,12 +580,20 @@ function barycentric(p, a, b, c) {
  * @returns {PIXI.Point}
  */
 function closest2dPointToLine(c, l) {
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowSingleWallGeometry.js
   const denom = dir.dot(l.direction);
+=======
+  const denom = l.direction.dot(l.direction);
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowWallGeometry2.js
   if ( denom === 0.0 ) return c;
 
   const deltaCA = c.subtract(l.origin);
   const u = deltaCA.dot(l.direction) / denom;
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowSingleWallGeometry.js
   return l.origin.add(dir.multiplyScalar(u));
+=======
+  return l.origin.add(l.direction.multiplyScalar(u));
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowWallGeometry2.js
 }
 
 /**
@@ -538,8 +606,12 @@ function distanceToLine(c, l) {
   const ix = closest2dPointToLine(c, l);
   return c.distance(ix);
 }
+<<<<<<< Updated upstream:scripts/glsl/SourceShadowSingleWallGeometry.js
 
 
+=======
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowSingleWallGeometry.js
+>>>>>>> Stashed changes:scripts/glsl/SourceShadowWallGeometry2.js
 
 /**
  * Represent a two-dimensional ray.
@@ -620,6 +692,14 @@ class Ray2d {
     outPoint ??= new PIXI.Point();
     return this.origin.add(this.direction.multiplyScalar(t, outPoint), outPoint);
   }
+}
+
+export class PointSourceShadowWallGeometry extends SourceShadowSingleWallGeometry {
+
+}
+
+export class DirectionalSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
+
 }
 
 
