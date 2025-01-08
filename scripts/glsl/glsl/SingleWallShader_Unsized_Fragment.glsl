@@ -2,13 +2,25 @@
 precision ${PRECISION_VERTEX} float;
 /* ----- NOTE: Unsized Fragment ----- */
 
+/* ----- NOTE: In Variables ----- */
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
 in float vEdgeDist;
 
+/* ----- NOTE: Uniform Variables ----- */
 uniform sampler2D uTerrainSampler;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 uniform vec3 uLightPosition;
+uniform float uNumSamples;
+uniform float uThresholdRadius2;
+
+/* ----- NOTE: Out Variable ----- */
+out vec4 fragColor;
+
+/* ------ NOTE: Common functions ----- */
+${defineFunction("distanceSquared")}
+
+/* ------ NOTE: Fragment functions ----- */
 
 /**
  * Fragment color when no shadow present.
@@ -32,13 +44,13 @@ vec4 lightEncoding(in float light) {
 
   // For testing, return the amount of shadow, which can be directly rendered to the canvas.
   #if defined SHADOW
-  return vec4(vec3(0.0), (1.0 - light) * 0.7)
+  return vec4(vec3(0.0), (1.0 - light) * 0.7 / uNumSamples);
 
   #elif defined LIMITED_WALL
-  return vec4(1.0, 0.5, light, 1.0);
+  return vec4(1.0, 0.5, light, 1.0 / uNumSamples);
 
   #else
-  return vec4(light, 1.0, 1.0, 1.0);
+  return vec4(light, 1.0, 1.0, 1.0 / uNumSamples);
   #endif
 }
 
@@ -56,11 +68,11 @@ bool thresholdApplies() {
   #ifdef EV_DIRECTIONAL_LIGHT
   return false;
   #else
-  return uThresholdRadius2 != 0.0
-    && distanceSquared(vVertexPosition, uLightPosition.xy) < fThresholdRadius2;
+  return distanceSquared(vVertexPosition, uLightPosition.xy) < uThresholdRadius2;
   #endif
 }
 
+/* ------ NOTE: Fragment Main ----- */
 void main() {
   // Assume no shadow as the default
   fragColor = noShadow();
@@ -68,6 +80,8 @@ void main() {
   // Tests for within relevant bounds.
   if ( inFrontOfWall() ) return;
   if ( thresholdApplies() ) return;
+
+  // TODO: Vary based on elevation of terrain.
 
   float shadow = 1.0;
 

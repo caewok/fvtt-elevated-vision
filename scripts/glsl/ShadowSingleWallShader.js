@@ -57,21 +57,7 @@ function interpolate(str, params = {}) {
 }
 
 // NOTE: GLSL Shared functions and calculations.
-const PENUMBRA_VERTEX_FUNCTIONS = interpolate(
-  await fetchGLSLCode("WallShader_Penumbra_Vertex_Functions")
-);
 
-const PENUMBRA_VERTEX_CALCULATIONS = interpolate(
-  await fetchGLSLCode("WallShader_Penumbra_Vertex")
-);
-
-const PENUMBRA_FRAGMENT_FUNCTIONS = interpolate(
-  await fetchGLSLCode("WallShader_Penumbra_Fragment_Functions")
-);
-
-const PENUMBRA_FRAGMENT_CALCULATIONS = interpolate(
-  await fetchGLSLCode("WallShader_Penumbra_Fragment")
-);
 
 // NOTE: GLSL code for each class.
 const GLSL_UNSIZED_VERTEX = interpolate(
@@ -81,47 +67,6 @@ const GLSL_UNSIZED_VERTEX = interpolate(
 const GLSL_UNSIZED_FRAGMENT = interpolate(
   await fetchGLSLCode("SingleWallShader_Unsized_Fragment")
 );
-
-const GLSL_DIRECTIONAL_VERTEX = interpolate(
-  await fetchGLSLCode("WallShader_Directional_Vertex"),
-  { PENUMBRA_VERTEX_FUNCTIONS, PENUMBRA_VERTEX_CALCULATIONS }
-);
-
-const GLSL_DIRECTIONAL_FRAGMENT = interpolate(
-  await fetchGLSLCode("WallShader_Directional_Fragment"),
-  { PENUMBRA_FRAGMENT_FUNCTIONS, PENUMBRA_FRAGMENT_CALCULATIONS }
-);
-
-const GLSL_DIRECTIONAL_VERTEX2 = interpolate(
-  await fetchGLSLCode("WallShader_Directional_Vertex2"),
-  { PENUMBRA_VERTEX_FUNCTIONS, PENUMBRA_VERTEX_CALCULATIONS }
-);
-
-const GLSL_DIRECTIONAL_FRAGMENT2 = interpolate(
-  await fetchGLSLCode("WallShader_Directional_Fragment2"),
-  { PENUMBRA_FRAGMENT_FUNCTIONS, PENUMBRA_FRAGMENT_CALCULATIONS }
-);
-
-const GLSL_SIZED_VERTEX = interpolate(
-  await fetchGLSLCode("WallShader_Sized_Vertex"),
-  { PENUMBRA_VERTEX_FUNCTIONS, PENUMBRA_VERTEX_CALCULATIONS }
-);
-
-const GLSL_SIZED_FRAGMENT = interpolate(
-  await fetchGLSLCode("WallShader_Sized_Fragment"),
-  { PENUMBRA_FRAGMENT_FUNCTIONS, PENUMBRA_FRAGMENT_CALCULATIONS }
-);
-
-const GLSL_SIZED_VERTEX2 = interpolate(
-  await fetchGLSLCode("WallShader_Sized_Vertex2"),
-  { PENUMBRA_VERTEX_FUNCTIONS, PENUMBRA_VERTEX_CALCULATIONS }
-);
-
-const GLSL_SIZED_FRAGMENT2 = interpolate(
-  await fetchGLSLCode("WallShader_Sized_Fragment2"),
-  { PENUMBRA_FRAGMENT_FUNCTIONS, PENUMBRA_FRAGMENT_CALCULATIONS }
-);
-
 
 /**
  * Draw shadow for wall without shading for penumbra and without the outer penumbra.
@@ -158,7 +103,8 @@ export class ShadowSingleWallShader extends AbstractEVShader {
     uElevationRes: [0, 1, 256 * 256, 1],
     uTerrainSampler: 0,
     uThresholdRadius2: 0,
-    uLightPosition: [0, 0, 0]
+    uLightPosition: [0, 0, 0],
+    uNumSamples: 1
   };
 
   /**
@@ -299,7 +245,7 @@ export class DirectionalShadowSingleWallShader extends ShadowSingleWallShader {
    * No consideration of penumbra---just light --> corner --> canvas.
    * @type {string}
    */
-  static vertexShader = GLSL_DIRECTIONAL_VERTEX2;
+  static vertexShader = GLSL_UNSIZED_VERTEX;
 
   // NOTE: DirectionalShadowWallShader.fragmentShader
   /**
@@ -307,7 +253,7 @@ export class DirectionalShadowSingleWallShader extends ShadowSingleWallShader {
    * See lightEncoding.
    * This mask shader is binary: encodes either full light or no light.
    */
-  static fragmentShader = GLSL_DIRECTIONAL_FRAGMENT2;
+  static fragmentShader = GLSL_UNSIZED_FRAGMENT;
 
   /**
    * Factory function.
@@ -316,7 +262,7 @@ export class DirectionalShadowSingleWallShader extends ShadowSingleWallShader {
    * @returns {ShadowMaskWallShader}
    */
   static create(source, edge, defaultUniforms = {}) {
-    defaultUniforms.uNumSamples = 10; // TODO: Link to config.
+    defaultUniforms.uNumSamples = CONFIG[MODULE_ID].singleWallSamples;
     return super.create(source, edge, defaultUniforms);
   }
 }
@@ -334,7 +280,7 @@ export class SizedPointSourceShadowSingleWallShader extends ShadowSingleWallShad
    * 3 vertices: light, ix for corner 1, ix for corner 2
    * @type {string}
    */
-  static vertexShader = GLSL_SIZED_VERTEX2;
+  static vertexShader = GLSL_UNSIZED_VERTEX;
 
   // NOTE: SizedPointSourceShadowWallShader.fragmentShader
   /**
@@ -342,7 +288,7 @@ export class SizedPointSourceShadowSingleWallShader extends ShadowSingleWallShad
    * See lightEncoding.
    * This mask shader is binary: encodes either full light or no light.
    */
-  static fragmentShader = GLSL_SIZED_FRAGMENT2;
+  static fragmentShader = GLSL_UNSIZED_FRAGMENT;
 
   /**
    * Factory function.
@@ -351,7 +297,7 @@ export class SizedPointSourceShadowSingleWallShader extends ShadowSingleWallShad
    * @returns {ShadowMaskWallShader}
    */
   static create(source, edge, defaultUniforms = {}) {
-    defaultUniforms.uNumSamples = 10; // TODO: Link to config.
+    defaultUniforms.uNumSamples = CONFIG[MODULE_ID].singleWallSamples;
     return super.create(source, edge, defaultUniforms);
   }
 }

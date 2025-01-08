@@ -104,6 +104,8 @@ Hooks.once("init", function() {
 
     useSingleWallShader: true,
 
+    singleWallSamples: 10,
+
     /**
      * ElevationLayer.
      * Maximum texture size used to represent elevation values.

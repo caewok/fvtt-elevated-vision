@@ -63,9 +63,6 @@ export class WebGLShadowsSingleWall {
   /** @type {RenderedPointSource} */
   source;
 
-  /** @type {Map<Edge, SourceShadowSingleWallGeometry>} */
-  wallGeometry = new Map();
-
   /** @type {Set<Edge>} */
   edges = new Set();
 
@@ -535,18 +532,18 @@ export class WebGLShadowsSingleWall {
   }
 
 
-  /**
-   * Destroy meshes, geometry, textures.
-   */
+  /** @type {boolean} */
   #destroyed = false;
 
   get destroyed() { return this.#destroyed; }
 
+  /**
+   * Destroy meshes, geometry, textures.
+   */
   destroy() {
     if ( this.#destroyed ) return;
 
     this.shadowMesh.destroy(true); // Destroys shaders and geometries.
-    this.wallGeometry.clear();
     this.meshes.clear();
     this.edges.clear();
 
@@ -834,13 +831,21 @@ export class DirectionalLightWebGLShadowsSingleWall extends PointLightWebGLShado
     shader.uniforms.uEVDirectional = true;
   }
 
+  /** @type {boolean} */
+  #destroyed = false;
+
+  get destroyed() { return this.#destroyed; }
+
   /**
    * Destroy meshes, geometry, textures.
    */
   _destroy() {
+    if ( this.#destroyed ) return;
+
     // Prevent the grid from getting stuck "on".
     canvas.lighting.removeChild(DirectionalLightSource._elevationAngleGrid);
     super._destroy();
+    this.#destroyed = true;
   }
 
   /**

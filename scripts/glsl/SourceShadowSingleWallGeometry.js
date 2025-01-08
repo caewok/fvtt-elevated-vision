@@ -18,6 +18,7 @@ Creates geometry used by the shader.
 Randomly samples points in the light sphere to create the shadow.
 */
 
+import { MODULE_ID } from "../const.js";
 import { Draw } from "../geometry/Draw.js";
 
 /** @type {enum} CORNERS */
@@ -110,22 +111,37 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    * Calculate the wall geometry for this source.
    * The base assumes a single shadow from the light center.
    */
-  constructWallGeometry() {
-    const [A, B, C] = this.shadowTriangle(this.sourceOrigin);
-    this.addIndex([0, 1, 2]);
-    this.addAttribute("aShadowTri", [A.x, A.y, B.x, B.y, C.x, C.y], 2);
+  constructWallGeometry(samples = [this.sourceOrigin]) {
+    const nSamples = samples.length;
+
+    // Add index.
+    this.addIndex(Array.fromRange(nSamples * 3)); // nSample triangles with 3 vertices each.
+
+    // Build a shadow triangle using sampled points within the light sphere.
+    const vertices = Array(nSamples * 3 * 2); // For each vertex: x,y
+    const edgeDist = Array(nSamples * 3);
     const {a, b} = this.edge;
     const l = Ray2d.normalized(a, b);
-    const edgeDist = [
-      -distanceToLine(A, l),
-      distanceToLine(B, l),
-      distanceToLine(C, l)
-    ];
-    this.addAttribute("aEdgeDist", edgeDist);
+    for ( let i = 0; i < nSamples; i += 1 ) {
+      const vIdx = i * 3 * 2;
+      const eIdx = i * 3;
+      const [A, B, C] = this.shadowTriangle(samples[i]);
 
-    // Unneeded?
-    // const wallRatio = barycentric(this.edge.a, A, B, C);
-    // this.addAttribute("aWallRatio", Array(3).fill(wallRatio), 1);
+      // Determine the ∆ABC vertices
+      vertices[vIdx] = A.x;
+      vertices[vIdx + 1] = A.y;
+      vertices[vIdx + 2] = B.x;
+      vertices[vIdx + 3] = B.y;
+      vertices[vIdx + 4] = C.x;
+      vertices[vIdx + 5] = C.y;
+
+      // Determine distance from the wall for each vertex.
+      edgeDist[eIdx] = -distanceToLine(A, l);
+      edgeDist[eIdx + 1] = distanceToLine(B, l);
+      edgeDist[eIdx + 2] = distanceToLine(C, l);
+    }
+    this.addAttribute("aVertex", vertices, 2);
+    this.addAttribute("aEdgeDist", edgeDist, 1);
   }
 
   /**
@@ -298,7 +314,7 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     opts.fillAlpha ??= 0.5;
     const buffer = this.getBuffer("aShadowTri").data;
     const poly = new PIXI.Polygon(...buffer.slice(idx * 6, (idx * 6) + 6));
-    Draw.shape(poly, opts)
+    Draw.shape(poly, opts);
   }
 
 }
@@ -316,42 +332,14 @@ export class SizedSourceShadowSingleWallGeometry extends SourceShadowSingleWallG
    */
   constructWallGeometry() {
     const samples = this.lightSamplePoints();
-    const nSamples = samples.length;
-    const shadowTris = Array(nSamples * 3 * 2);
-    const wallRatios = Array(nSamples * 3);
-    const edgeDist = Array(nSamples * 3);
-    const {a, b} = this.edge;
-    const l = Ray2d.normalized(a, b);
-    // Unneeded? const wallRatios = Array(nSamples * 3);
-    for ( let i = 0; i < nSamples; i += 1 ) {
-      const j = i * 3;
-      const k = i * 3 * 2;
-      const [A, B, C] = this.shadowTriangle(samples[i]);
-      const wallRatio = barycentric(this.edge.a, A, B, C);
-      for ( let n = 0; n < 3; n += 1 ) wallRatios[j + n] = wallRatio.x;
-      edgeDist[j] = -distanceToLine(A, l);
-      edgeDist[j + 1] = distanceToLine(B, l);
-      edgeDist[j + 2] = distanceToLine(C, l);
-
-      // Unneeded?
-      // const wallRatio = barycentric(this.edge.a, A, B, C);
-      // for ( let n = 0; n < 3; n += 1 ) wallRatios[j + n] = wallRatio.x;
-      const coords = [A.x, A.y, B.x, B.y, C.x, C.y];
-      for ( let n = 0; n < 6; n += 1 ) shadowTris[k + n] = coords[n];
-    }
-    this.addIndex(Array.fromRange(nSamples * 3));
-    this.addAttribute("aShadowTri", shadowTris, 2);
-    this.addAttribute("aEdgeDist", edgeDist, 1);
-    // Unneeded? this.addAttribute("aWallRatio", wallRatios, 1);
-
+    super.constructWallGeometry(samples);
   }
 
   /**
    * Random points on the light sphere used for sampling the shadow triangles.
    * @returns {Point3d[]}
    */
-  lightSamplePoints() {
-    const nSamples = this.constructor.MAXIMUM_SAMPLES;
+  lightSamplePoints(nSamples = CONFIG[MODULE_ID].singleWallSamples) {
     const samples = Array(nSamples);
     for ( let i = 0; i < nSamples; i += 1 ) samples[i] = this.randomPointOnLight();
     return samples;
