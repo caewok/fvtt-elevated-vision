@@ -708,17 +708,6 @@ export class PointLightWebGLShadows extends WebGLShadows {
   static shadowMaskClass = ShadowVisionMaskShader;
 
   /**
-   * Initialize the mask used by CanvasVisibility and EVVisionMask.
-   * Mask that colors red areas that are lit / are viewable.
-   * For point lights, use the penumbra shader
-   */
-
-  _initializeShadowMesh() {
-    const shader = SizedPointSourceShadowWallShader.create(this.source);
-    this.shadowMesh = new ShadowMesh(this.wallGeometry, shader);
-  }
-
-  /**
    * Update the shadow mesh, geometry, render, given changes.
    * @param {object} changes      Object of change data corresponding to source.data properties.
    * @param {object} [changeObj]  Keys for changed items to override the changes object
