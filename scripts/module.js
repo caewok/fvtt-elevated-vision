@@ -83,6 +83,10 @@ import {
   SizedPointSourceShadowSingleWallShader
 } from "./glsl/ShadowSingleWallShader.js";
 
+import {
+  WebGLShadowsSingleWall
+} from "./glsl/WebGLShadowsSingleWall.js";
+
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -98,8 +102,16 @@ Hooks.once("init", function() {
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
 
+<<<<<<< Updated upstream
     useSingleWallShader: true,
 
+=======
+<<<<<<< Updated upstream
+=======
+    useSingleWallShader: false,
+
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
     /**
      * ElevationLayer.
      * Maximum texture size used to represent elevation values.
@@ -184,11 +196,24 @@ Hooks.once("init", function() {
       SizedRandomShadowsTest,
       DirectionalShadowsTest,
       DirectionalRandomShadowsTest,
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+      SourceShadowWallGeometry2,
+      SizedSourceShadowWallGeometry2
+=======
+>>>>>>> Stashed changes
 
       SourceShadowSingleWallGeometry,
       SizedSourceShadowSingleWallGeometry,
       ShadowSingleWallShader,
+<<<<<<< Updated upstream
       SizedPointSourceShadowSingleWallShader
+=======
+      SizedPointSourceShadowSingleWallShader,
+      WebGLShadowsSingleWall
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
     }
   };
 
