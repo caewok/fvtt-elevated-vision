@@ -742,14 +742,10 @@ sourceOrigin = geom.sourceOrigin;
 
 
 export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
-
   _includeEdge(edge) {
-    if ( !super._includeEdge(edge) ) return false;
-
     // Wall must be within the light radius.
     if ( !this.source[MODULE_ID].bounds.lineSegmentIntersects(edge.a, edge.b, { inside: true }) ) return false;
-
-    return true;
+    return super._includeEdge(edge);
   }
 }
 
