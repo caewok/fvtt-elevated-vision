@@ -12,7 +12,7 @@ Wall
 "use strict";
 
 import { MODULE_ID } from "../const.js";
-import { tokenIsOnGround, waypointIsOnGround } from "../util.js";
+import { tokenIsOnGround, waypointIsOnGround, edgeElevationZ } from "../util.js";
 import { Draw } from "../geometry/Draw.js";
 import { ShadowWallShader, SizedPointSourceShadowWallShader, DirectionalShadowWallShader, ShadowMesh } from "./ShadowWallShader.js";
 import { ShadowTerrainShader } from "./ShadowTerrainShader.js";
@@ -945,36 +945,4 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     const collisionTest = o => this._testEdgeInclusion(o.t, azimuth, elevationAngle);
     return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
   }
-}
-
-/**
- * Return the top and bottom elevation for an edge.
- * @param {Edge} edge
- * @returns {object}
- *   - @prop {number} topE      Elevation in grid units
- *   - @prop {number} bottomE   Elevation in grid units
- */
-export function edgeElevationE(edge) {
-  // TODO: Handle elevation for ramps where walls are not equal
-  const { a, b } = edge.elevationLibGeometry;
-  const topE = Math.max(
-    a.top ?? Number.POSITIVE_INFINITY,
-    b.top ?? Number.POSITIVE_INFINITY);
-  const bottomE = Math.min(
-    a.bottom ?? Number.NEGATIVE_INFINITY,
-    b.bottom ?? Number.NEGATIVE_INFINITY);
-  return { topE, bottomE };
-}
-
-/**
- * Return the top and bottom elevation for an edge.
- * @param {Edge} edge
- * @returns {object}
- *   - @prop {number} topZ      Elevation in base units
- *   - @prop {number} bottomZ   Elevation in base units
- */
-export function edgeElevationZ(edge) {
-  const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
-  const { topE, bottomE } = edgeElevationE(edge);
-  return { topZ: gridUnitsToPixels(topE), bottomZ: gridUnitsToPixels(bottomE) };
 }

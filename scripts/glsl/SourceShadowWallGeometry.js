@@ -10,8 +10,7 @@ Wall
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "../const.js";
-import { pointVTest, tangentToV } from "../util.js";
-import { edgeElevationZ } from "./WebGLShadows.js";
+import { pointVTest, tangentToV, edgeElevationZ } from "../util.js";
 
 const flipEdgeLabel = {
   a: "b",
