@@ -539,7 +539,7 @@ function closest2dPointToLine(c, l) {
  */
 function distanceToLine(c, l) {
   const ix = closest2dPointToLine(c, l);
-  return c.distance(ix);
+  return PIXI.Point.distanceBetween(c, ix);
 }
 
 /**

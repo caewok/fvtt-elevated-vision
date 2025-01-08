@@ -198,7 +198,7 @@ export class ShadowSingleWallShader extends AbstractEVShader {
    * @param {Edge} edge
    * @returns {boolean} True if the threshold applies.
    */
-  thresholdApplies(source, edge) {
+  static thresholdApplies(source, edge) {
     const sourceType = source.constructor.sourceType;
     return edge.applyThreshold(sourceType, source, source.data.externalRadius);
   }
@@ -208,7 +208,7 @@ export class ShadowSingleWallShader extends AbstractEVShader {
    * @param {Edge} edge
    * @returns {number}  Distance of the threshold in pixel units, or 0 if none.
    */
-  threshold2Attribute(source, edge) {
+  static threshold2Attribute(source, edge) {
     if ( !this.thresholdApplies(source, edge) ) return 0;
     const { inside, outside } = this.calculateThresholdAttenuation(source, edge);
     return Math.min(Number.MAX_SAFE_INTEGER, Math.pow(inside + outside, 2)); // Avoid infinity.
@@ -221,7 +221,7 @@ export class ShadowSingleWallShader extends AbstractEVShader {
    * @param {Edge} edge
    * @returns {{inside: number, outside: number}} The inside and outside portions of the radius
    */
-  calculateThresholdAttenuation(source, edge) {
+  static calculateThresholdAttenuation(source, edge) {
     const sourceType = source.constructor.sourceType;
     const externalRadius = 0;
     const radius = source.radius;
