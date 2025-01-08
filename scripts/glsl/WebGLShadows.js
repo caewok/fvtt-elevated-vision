@@ -33,6 +33,21 @@ export class WebGLShadows {
 
   static maskColor = 0xFF0000;
 
+  /** @type {PIXI.Geometry} */
+  static geometryClass = PointSourceShadowWallGeometry;
+
+  /** @type {AbstractEVShader} */
+  static shaderClass = ShadowWallShader;
+
+  /** @type {PIXI.Mesh} */
+  static quadMeshClass = EVUpdatingQuadMesh;
+
+  /** @type {ShadowTextureRenderer} */
+  static shadowRendererClass = ShadowTextureRenderer;
+
+  /** @type {AbstractEVShader} */
+  static shadowMaskClass = ShadowVisionMaskShader;
+
   /** @type {RenderedPointSource} */
   source;
 
@@ -126,7 +141,7 @@ export class WebGLShadows {
   /**
    * Build the shadow geometry (edge/wall geometry) for this source.
    */
-  _initializeShadowGeometry() { this.wallGeometry = new PointSourceShadowWallGeometry(this.source); }
+  _initializeShadowGeometry() { this.wallGeometry = new this.constructor.geometryClass(this.source); }
 
   /**
    * Build the shadow mesh for this source.
@@ -135,7 +150,7 @@ export class WebGLShadows {
    * Shadows for walls coded to handle terrain walls.
    */
   _initializeShadowMesh() {
-    const shader = ShadowWallShader.create(this.source);
+    const shader = this.constructor.shaderClass.create(this.source);
     this.shadowMesh = new ShadowMesh(this.wallGeometry, shader);
   }
 
@@ -146,7 +161,7 @@ export class WebGLShadows {
    */
   _initializeTerrainShadowMesh() {
     const shader = ShadowTerrainShader.create(this.source);
-    this.shadowTerrainMesh = new EVUpdatingQuadMesh(this.bounds, shader);
+    this.shadowTerrainMesh = new this.constructor.quadMeshClass(this.bounds, shader);
   }
 
   /**
@@ -156,7 +171,8 @@ export class WebGLShadows {
    * Render the wall shadows.
    */
   _initializeShadowRenderer() {
-    this.shadowRenderer = new ShadowTextureRenderer(this.source, this.shadowMesh, this.shadowTerrainMesh);
+    const { source, shadowMesh, shadowTerrainMesh } = this;
+    this.shadowRenderer = new this.constructor.shadowRendererClass(source, shadowMesh, shadowTerrainMesh);
   }
 
   /**
@@ -164,8 +180,8 @@ export class WebGLShadows {
    * Mask that colors red areas that are lit / are viewable.
    */
   _initializeShadowMask() {
-    const shader = ShadowVisionMaskShader.create(this.source);
-    this.shadowVisionMask = new EVUpdatingQuadMesh(this.bounds, shader);
+    const shader = this.constructor.shadowMaskClass.create(this.source);
+    this.shadowVisionMask = new this.constructor.quadMeshClass(this.bounds, shader);
   }
 
   /**
@@ -470,21 +486,23 @@ export class WebGLShadows {
   }
 
 
-  /**
-   * Destroy meshes, geometry, textures.
-   */
+  /** @type {boolean} */
   #destroyed = false;
 
   get destroyed() { return this.#destroyed; }
 
+  /**
+   * Destroy meshes, geometry, textures.
+   */
   destroy() {
     if ( this.#destroyed ) return;
-    this.wallGeometry.destroy();
-    this.shadowMesh.destroy();
-    this.shadowTerrainMesh.destroy();
+    this.wallGeometry?.destroy();
+    this.shadowMesh?.destroy();
+    this.shadowTerrainMesh?.destroy();
     // Unneeded? this.graphicsFOV.destroy();
-    this.shadowRenderer.destroy();
-    this.shadowVisionMask.destroy();
+    this.shadowRenderer?.destroy();
+    this.shadowVisionMask?.destroy();
+    this.#destroyed = true;
   }
 
   /**
@@ -546,9 +564,20 @@ export class GlobalLightWebGLShadows extends WebGLShadows {
     draw.shape(this.source.shape, { fill: this.source.constructor.maskColor });
   }
 
+
+  /** @type {boolean} */
+  #destroyed = false;
+
+  get destroyed() { return this.#destroyed; }
+
+  /**
+   * Destroy meshes, geometry, textures.
+   */
   destroy() {
+    if ( this.#destroyed ) return;
     this.shadowVisionMask.destroy();
-    // Rest never created so no need to destroy.
+    super.destroy();
+    this.#destroyed = true;
   }
 
   /**
@@ -574,6 +603,20 @@ export class GlobalLightWebGLShadows extends WebGLShadows {
 
 
 export class PointVisionWebGLShadows extends WebGLShadows {
+  /** @type {PIXI.Geometry} */
+  static geometryClass = SourceShadowWallGeometry;
+
+  /** @type {AbstractEVShader} */
+  static shaderClass = ShadowWallShader;
+
+  /** @type {PIXI.Mesh} */
+  static quadMeshClass = EVQuadMesh;
+
+  /** @type {ShadowTextureRenderer} */
+  static shadowRendererClass = ShadowVisionLOSTextureRenderer;
+
+  /** @type {AbstractEVShader} */
+  static shadowMaskClass = ShadowVisionMaskTokenLOSShader;
 
   /** @type {PIXI.Rectangle} */
   get bounds() { return canvas.dimensions.rect; }
@@ -595,40 +638,6 @@ export class PointVisionWebGLShadows extends WebGLShadows {
     const radius = data.radius || data.externalRadius;
     const circle = new PIXI.Circle(data.x, data.y, radius);
     draw.shape(circle, { width, fill });
-  }
-
-  /**
-   * Build the shadow geometry (edge/wall geometry) for this source.
-   */
-  _initializeShadowGeometry() { this.wallGeometry = new SourceShadowWallGeometry(this.source); }
-
-  /**
-   * Shadow terrain when source is below.
-   * Build terrain shadow + limited angle
-   * Uses a quad sized to the source.
-   */
-  _initializeTerrainShadowMesh() {
-    const shader = ShadowTerrainShader.create(this.source);
-    this.shadowTerrainMesh = new EVQuadMesh(canvas.dimensions.rect, shader);
-  }
-
-  /**
-   * Set up the renderer for this source.
-   * Render the shadow mesh to a texture.
-   * Render to the entire canvas to represent LOS.
-   * Render the wall shadows.
-   */
-  _initializeShadowRenderer() {
-    this.shadowRenderer = new ShadowVisionLOSTextureRenderer(this.source, this.shadowMesh, this.shadowTerrainMesh);
-  }
-
-  /**
-   * Initialize the mask used by CanvasVisibility and EVVisionMask.
-   * Mask that colors red areas that are lit / are viewable.
-   */
-  _initializeShadowMask() {
-    const shader = ShadowVisionMaskTokenLOSShader.create(this.source);
-    this.shadowVisionMask = new EVQuadMesh(canvas.dimensions.rect, shader);
   }
 
   /**
@@ -683,6 +692,20 @@ export class PointVisionWebGLShadows extends WebGLShadows {
 }
 
 export class PointLightWebGLShadows extends WebGLShadows {
+  /** @type {PIXI.Geometry} */
+  static geometryClass = SizedPointSourceShadowWallShader;
+
+  /** @type {AbstractEVShader} */
+  static shaderClass = ShadowWallShader;
+
+  /** @type {PIXI.Mesh} */
+  static quadMeshClass = EVUpdatingQuadMesh;
+
+  /** @type {ShadowTextureRenderer} */
+  static shadowRendererClass = ShadowTextureRenderer;
+
+  /** @type {AbstractEVShader} */
+  static shadowMaskClass = ShadowVisionMaskShader;
 
   /**
    * Initialize the mask used by CanvasVisibility and EVVisionMask.
@@ -729,40 +752,20 @@ export class PointLightWebGLShadows extends WebGLShadows {
 }
 
 export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
-  /**
-   * Build the shadow geometry (edge/wall geometry) for this source.
-   */
-  _initializeShadowGeometry() { this.wallGeometry = new DirectionalSourceShadowWallGeometry(this.source); }
+  /** @type {PIXI.Geometry} */
+  static geometryClass = DirectionalSourceShadowWallGeometry;
 
-  /**
-   * Build the shadow mesh for this source.
-   * Build terrain shadow + limited angle
-   * Uses a quad sized to the canvas.
-   * Shadows for walls coded to handle terrain walls.
-   */
-  _initializeShadowMesh() {
-    const shader = DirectionalShadowWallShader.create(this.source);
-    this.shadowMesh = new ShadowMesh(this.wallGeometry, shader);
-  }
+  /** @type {AbstractEVShader} */
+  static shaderClass = DirectionalShadowWallShader;
 
-  /**
-   * Set up the renderer for this source.
-   * Render the shadow mesh to a texture.
-   * Render to the entire canvas to represent LOS.
-   * Render the wall shadows.
-   */
-  _initializeShadowRenderer() {
-    this.shadowRenderer = new ShadowDirectionalTextureRenderer(this.source, this.shadowMesh, this.shadowTerrainMesh);
-  }
+  /** @type {PIXI.Mesh} */
+  static quadMeshClass = EVQuadMesh;
 
-  /**
-   * Initialize the mask used by CanvasVisibility and EVVisionMask.
-   * Mask that colors red areas that are lit / are viewable.
-   */
-  _initializeShadowMask() {
-    const shader = ShadowVisionMaskTokenLOSShader.create(this.source);
-    this.shadowVisionMask = new EVQuadMesh(canvas.dimensions.rect, shader);
-  }
+  /** @type {ShadowTextureRenderer} */
+  static shadowRendererClass = ShadowDirectionalTextureRenderer;
+
+  /** @type {AbstractEVShader} */
+  static shadowMaskClass = ShadowVisionMaskTokenLOSShader;
 
   /**
    * Update the shadow mesh, geometry, render, given changes.
@@ -787,13 +790,20 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     shader.uniforms.uEVDirectional = true;
   }
 
+  /** @type {boolean} */
+  #destroyed = false;
+
+  get destroyed() { return this.#destroyed; }
+
   /**
    * Destroy meshes, geometry, textures.
    */
   _destroy() {
+    if ( this.#destroyed ) return;
     // Prevent the grid from getting stuck "on".
     canvas.lighting.removeChild(DirectionalLightSource._elevationAngleGrid);
     super._destroy();
+    this.#destroyed = true;
   }
 
   /**
