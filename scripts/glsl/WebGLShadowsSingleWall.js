@@ -188,21 +188,17 @@ export class WebGLShadowsSingleWall {
    * Shadows for walls coded to handle terrain walls.
    */
   _initializeShadowMesh() {
-    //     for ( const edge of this.edges ) {
-    // For testing, use only 1 edge.
-      const edge = this.edges.first();
-      if ( !edge ) return;
+    for ( const edge of this.edges ) {
+      // For testing, use only 1 edge.
+      //  const edge = this.edges.first();
+      //  if ( !edge ) return;
       const geometry = new this.constructor.geometryClass(this.source, edge);
       const shader = this.constructor.shaderClass.create(this.source, edge);
       const mesh = new ShadowMesh(geometry, shader);
       this.meshes.set(edge, mesh);
-
-      this.shadowMesh = mesh;
-      // this.shadowMesh.addChild(mesh);
-    //     }
-
-
-
+      this.shadowMesh.addChild(mesh);
+      // this.shadowMesh = mesh;
+    }
   }
 
   /**
