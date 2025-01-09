@@ -188,13 +188,21 @@ export class WebGLShadowsSingleWall {
    * Shadows for walls coded to handle terrain walls.
    */
   _initializeShadowMesh() {
-    for ( const edge of this.edges ) {
+    //     for ( const edge of this.edges ) {
+    // For testing, use only 1 edge.
+      const edge = this.edges.first();
+      if ( !edge ) return;
       const geometry = new this.constructor.geometryClass(this.source, edge);
       const shader = this.constructor.shaderClass.create(this.source, edge);
       const mesh = new ShadowMesh(geometry, shader);
       this.meshes.set(edge, mesh);
-      this.shadowMesh.addChild(mesh);
-    }
+
+      this.shadowMesh = mesh;
+      // this.shadowMesh.addChild(mesh);
+    //     }
+
+
+
   }
 
   /**
@@ -801,11 +809,6 @@ export class DirectionalLightWebGLShadowsSingleWall extends PointLightWebGLShado
   static shadowMaskClass = ShadowVisionMaskTokenLOSShader;
 
   /**
-   * Build the shadow geometry (edge/wall geometry) for this source.
-   */
-  _initializeShadowGeometry() { this.wallGeometry = new DirectionalSourceShadowSingleWallGeometry(this.source); }
-
-  /**
    * Update the shadow mesh, geometry, render, given changes.
    * @param {object} changes      Object of change data corresponding to source.data properties.
    * @param {object} [changeObj]  Keys for changed items to override the changes object
@@ -999,12 +1002,16 @@ export class DirectionalLightWebGLShadowsSingleWall extends PointLightWebGLShado
 /* Testing point light
 MODULE_ID = "elevatedvision"
 Point3d = CONFIG.GeometryLib.threeD.Point3d
+Draw = CONFIG.GeometryLib.Draw;
 api = game.modules.get("elevatedvision").api
 
 let [l] = canvas.lighting.placeables;
 ev = l.lightSource.elevatedvision
 
 ev = _token.vision.elevatedvision
+
+geom = ev.shadowMesh.geometry
+shader = ev.shadowMesh.shader
 
 geom = ev.shadowMesh.children[0].geometry
 shader = ev.shadowMesh.children[0].shader

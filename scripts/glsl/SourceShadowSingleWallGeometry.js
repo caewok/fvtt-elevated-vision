@@ -312,7 +312,7 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     opts.color ??= Draw.COLORS.gray;
     opts.fill ??= Draw.COLORS.gray;
     opts.fillAlpha ??= 0.5;
-    const buffer = this.getBuffer("aShadowTri").data;
+    const buffer = this.getBuffer("aVertex").data;
     const poly = new PIXI.Polygon(...buffer.slice(idx * 6, (idx * 6) + 6));
     Draw.shape(poly, opts);
   }

@@ -83,7 +83,6 @@ import {
   ShadowSingleWallShader,
   PointSourceShadowSingleWallShader,
   DirectionalSourceShadowSingleWallShader
-
 } from "./glsl/ShadowSingleWallShader.js";
 
 import {

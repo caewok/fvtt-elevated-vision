@@ -28,10 +28,10 @@ ${defineFunction("distanceSquared")}
  */
 vec4 noShadow() {
   // If not in shadow, need to treat limited wall as non-limited
-  //#ifdef SHADOW
-  //return vec4(0.0);
-  //#endif
-  return vec4(1.0);
+  #ifdef SHADOW
+  return vec4(0.0, 1.0 / uNumSamples);
+  #endif
+  return vec4(1.0, 1.0, 1.0, 1.0 / uNumSamples);
 }
 
 /**
@@ -43,19 +43,19 @@ vec4 lightEncoding(in float light) {
   if ( light == 1.0 ) return noShadow();
 
   // For testing, return the amount of shadow, which can be directly rendered to the canvas.
-  //#if defined SHADOW
-  //return vec4(vec3(0.0), (1.0 - light) * 0.7);
+  #if defined SHADOW
+  return vec4(vec3(0.0), (1.0 - light) * 0.7 / uNumSamples);
 
-  //#elif defined LIMITED_WALL
-  //return vec4(1.0, 0.5, light, 1.0);
+  #elif defined LIMITED_WALL
+  return vec4(1.0, 0.5, light, 1.0 / uNumSamples);
 
-  //#else
-  // return vec4(light, 1.0, 1.0, 1.0);
-  //#endif
+  #else
+  return vec4(light, 1.0, 1.0, 1.0 / uNumSamples);
+  #endif
 
-  float ltd = 0.0;
-  float ltdInv = 1.0 - ltd;
-  return vec4((light * ltdInv) + ltd, 1.0 - (0.5 * ltd), (light * ltd) + ltdInv, 1.0);
+  // float ltd = 0.0;
+  // float ltdInv = 1.0 - ltd;
+  // return vec4((light * ltdInv) + ltd, 1.0 - (0.5 * ltd), (light * ltd) + ltdInv, 1.0);
 }
 
 /**
@@ -78,6 +78,10 @@ bool thresholdApplies() {
 
 /* ------ NOTE: Fragment Main ----- */
 void main() {
+  // Debugging.
+  // fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  // return;
+
   // Assume no shadow as the default
   fragColor = noShadow();
 

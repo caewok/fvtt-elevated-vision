@@ -1,4 +1,7 @@
 /* ----- NOTE: Penumbra Fragment ----- */
+// Debugging:
+// fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+// return;
 
 // Assume no shadow as the default
 fragColor = noShadow();

@@ -102,7 +102,7 @@ export class ShadowSingleWallShader extends AbstractEVShader {
     uSceneDims: [0, 0, 1, 1],
     uElevationRes: [0, 1, 256 * 256, 1],
     uTerrainSampler: 0,
-    uThresholdRadius2: 0,
+    uThresholdRadius2: -1,
     uLightPosition: [0, 0, 0],
     uNumSamples: 1
   };
@@ -152,10 +152,10 @@ export class ShadowSingleWallShader extends AbstractEVShader {
   /**
    * For threshold edge, get the threshold distance
    * @param {Edge} edge
-   * @returns {number}  Distance of the threshold in pixel units, or 0 if none.
+   * @returns {number}  Distance of the threshold in pixel units, or -1 if none.
    */
   static threshold2Attribute(source, edge) {
-    if ( !this.thresholdApplies(source, edge) ) return 0;
+    if ( !this.thresholdApplies(source, edge) ) return -1;
     const { inside, outside } = this.calculateThresholdAttenuation(source, edge);
     return Math.min(Number.MAX_SAFE_INTEGER, Math.pow(inside + outside, 2)); // Avoid infinity.
   }
