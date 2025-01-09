@@ -246,6 +246,18 @@ export class WebGLShadows {
   edgeRemoved(edgeId) { this._handleEdgeChange(this, edgeId, "removeEdge"); }
 
   /**
+   * Utility function to handle variety of edge changes to a source.
+   * @param {RenderedEffectSource} source
+   * @param {Edge} edge
+   * @param {string} updateFn   Name of the update method for the wall geometry.
+   * @param {object} opts       Options passed to updateFn
+   */
+  _handleEdgeChange(source, edge, updateFn, opts = {}) {
+    // At this point, the wall caused a change to the geometry. Update accordingly.
+    if ( this.wallGeometry[updateFn](edge, opts) ) this.shadowRenderer.update();
+  }
+
+  /**
    * Detect whether a point is in partial or full shadow based on testing wall collisions.
    * @param {RegionMovementWaypoint3d} elevatedPoint
    * @returns {number} Approximate shadow value between 0 (no shadow) and 1 (full shadow).
@@ -403,18 +415,6 @@ export class WebGLShadows {
   static #shadowPercentageFromCache(pixelCache, x, y) {
     const lightAmount = pixelCache.pixelAtCanvas(x, y);
     return 1 - (lightAmount * PIXEL_INV);
-  }
-
-  /**
-   * Utility function to handle variety of edge changes to a source.
-   * @param {RenderedEffectSource} source
-   * @param {Edge} edge
-   * @param {string} updateFn   Name of the update method for the wall geometry.
-   * @param {object} opts       Options passed to updateFn
-   */
-  _handleEdgeChange(source, edge, updateFn, opts = {}) {
-    // At this point, the wall caused a change to the geometry. Update accordingly.
-    if ( this.wallGeometry[updateFn](edge, opts) ) this.shadowRenderer.update();
   }
 
   /**
