@@ -62,11 +62,8 @@ export class WebGLShadowsSingleWall {
   /** @type {RenderedPointSource} */
   source;
 
-  /** @type {Set<Edge>} */
-  edges = new Set();
-
   /** @type {Map<Edge, PIXI.Mesh>} */
-  meshes = new Map();
+  meshEdgeMap = new Map();
 
   /** @type {ShadowTextureRenderer} */
   shadowRenderer;
@@ -89,32 +86,25 @@ export class WebGLShadowsSingleWall {
    */
   constructor(source) {
     this.source = source;
-    this.initializeEdges();
   }
 
-  /**
-   * Add the edges that may shadow this source.
-   */
-  initializeEdges() {
-    this.edges.clear();
-    canvas.edges.forEach(e => { if ( this._includeEdge(e) ) this.edges.add(e); });
-  }
 
   /**
    * Update the edges that may shadow this source.
    */
   updateEdges() {
-    const edges = this.edges;
+    const edges = new Set(this.meshEdgeMap.values());
 
     // Split into edges to be tested for addition and those tested for removal.
     const allEdges = new Set([...canvas.edges]);
     const toRemove = edges.filter(e => !allEdges.has(e) || !this._includeEdge(e));
     const toAdd = allEdges.filter(e => !edges.has(e) && this._includeEdge(e));
 
-    // TODO: Do something with the additions and removals.
-
-    edges.forEach(e => { if ( toRemove.has(e) ) edges.delete(e); });
-    toAdd.forEach(e => edges.add(e));
+    // Remove and add each in turn.
+    const removeRes = toRemove.map(e => this.edgeRemoved(e, { render: false }));
+    const addRes = toAdd.map(e => this.edgeAdded(e, { render: false }));
+    if ( removeRes.some(elem => Boolean(elem))
+      || addRes.some(elem => Boolean(elem)) ) this.shadowRenderer.update();
   }
 
   /**
@@ -174,11 +164,22 @@ export class WebGLShadowsSingleWall {
 
   initializeShadows() {
     if ( this.#initialized ) return;
+    this._initializeEdges();
     this._initializeShadowMesh();
     this._initializeTerrainShadowMesh();
     this._initializeShadowRenderer();
     this._initializeShadowMask();
     this.#initialized = true;
+  }
+
+  /**
+   * Add edges that may shadow this source.
+   */
+  _initializeEdges() {
+    canvas.edges.forEach(e => {
+      if ( !this._includeEdge(e) ) return;
+      this.meshEdgeMap.set(e, null);
+    });
   }
 
   /**
@@ -188,17 +189,28 @@ export class WebGLShadowsSingleWall {
    * Shadows for walls coded to handle terrain walls.
    */
   _initializeShadowMesh() {
-    for ( const edge of this.edges ) {
-      // For testing, use only 1 edge.
-      //  const edge = this.edges.first();
-      //  if ( !edge ) return;
-      const geometry = new this.constructor.geometryClass(this.source, edge);
-      const shader = this.constructor.shaderClass.create(this.source, edge);
-      const mesh = new ShadowMesh(geometry, shader);
-      this.meshes.set(edge, mesh);
-      this.shadowMesh.addChild(mesh);
-      // this.shadowMesh = mesh;
+    for ( const edge of this.meshEdgeMap.keys() ) {
+      // TODO: This check for a mesh should be unnecessary.
+      let mesh = this.meshEdgeMap.get(edge);
+      if ( mesh ) {
+        this.shadowMesh.removeChild(mesh);
+        mesh.destroy(true);
+      }
+      this.#initializeEdge(edge);
     }
+  }
+
+  /**
+   * Initialize a single edge for this source.
+   * Assumes without checking that the edge does not have a mesh already defined.
+   * @param {Edge} edge
+   */
+  #initializeEdge(edge) {
+    const geometry = new this.constructor.geometryClass(this.source, edge);
+    const shader = this.constructor.shaderClass.create(this.source, edge);
+    const mesh = new ShadowMesh(geometry, shader);
+    this.meshEdgeMap.set(edge, mesh);
+    this.shadowMesh.addChild(mesh);
   }
 
   /**
@@ -285,17 +297,13 @@ export class WebGLShadowsSingleWall {
    * @returns {boolean} True if the added edge resulted in a change.
    */
   edgeAdded(edge, { render = true } = {}) {
-    if ( this.edges.has(edge) ) return false;
+    if ( this.meshEdgeMap.has(edge) ) return false;
     if ( !this._includeEdge(edge) ) return false;
-    this.edges.add(edge);
-    const geometry = new this.constructor.geometryClass(this.source, edge);
-    const shader = this.constructor.shaderClass.create(this.source, edge);
-    const mesh = new ShadowMesh(geometry, shader);
-    this.meshes.set(edge, mesh);
-    this.shadowMesh.addChild(mesh);
+    this.#initializeEdge(edge);
 
     // Re-render.
-    this.shadowRenderer.update();
+    if ( render ) this.shadowRenderer.update();
+    return true;
   }
 
   /**
@@ -306,13 +314,21 @@ export class WebGLShadowsSingleWall {
   edgeUpdated(edge, changes) { this._handleEdgeChange(this, edge, "updateEdge", { changes }); }
 
   /**
-   * New method: RenderedEffectSource.prototype.edgeRemoved
    * Update shadow data based on the removed edge, as necessary.
-   * @param {Edge} edgeId     Edge id that was removed from the scene.
+   * @param {object} [opts]
+   * @param {boolean} [opts.render=true]    Trigger a re-render.
+   * @returns {boolean} True if the added edge resulted in a change.
    */
-  edgeRemoved(edgeId) {
+  edgeRemoved(edge, { render = true } = {}) {
+    if ( !this.meshEdgeMap.has(edge) ) return false;
+    const mesh = this.meshEdgeMap.get(edge);
+    this.meshEdgeMap.delete(edge);
+    this.shadowMesh.removeChild(mesh);
+    mesh.destroy(true);
 
-
+    // Re-render.
+    if ( render ) this.shadowRenderer.update();
+    return true;
   }
 
   /**
@@ -563,8 +579,7 @@ export class WebGLShadowsSingleWall {
     if ( this.#destroyed ) return;
 
     this.shadowMesh.destroy(true); // Destroys shaders and geometries.
-    this.meshes.clear();
-    this.edges.clear();
+    this.meshEdgeMap.clear();
 
     this.shadowTerrainMesh?.destroy();
     this.shadowRenderer?.destroy();
