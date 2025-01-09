@@ -164,22 +164,11 @@ export class WebGLShadowsSingleWall {
 
   initializeShadows() {
     if ( this.#initialized ) return;
-    this._initializeEdges();
     this._initializeShadowMesh();
     this._initializeTerrainShadowMesh();
     this._initializeShadowRenderer();
     this._initializeShadowMask();
     this.#initialized = true;
-  }
-
-  /**
-   * Add edges that may shadow this source.
-   */
-  _initializeEdges() {
-    canvas.edges.forEach(e => {
-      if ( !this._includeEdge(e) ) return;
-      this.meshEdgeMap.set(e, null);
-    });
   }
 
   /**
@@ -189,15 +178,11 @@ export class WebGLShadowsSingleWall {
    * Shadows for walls coded to handle terrain walls.
    */
   _initializeShadowMesh() {
-    for ( const edge of this.meshEdgeMap.keys() ) {
-      // TODO: This check for a mesh should be unnecessary.
-      let mesh = this.meshEdgeMap.get(edge);
-      if ( mesh ) {
-        this.shadowMesh.removeChild(mesh);
-        mesh.destroy(true);
-      }
+    // Canvas edges has forEach but no filter and no iterator to use in for/each
+    canvas.edges.forEach(edge => {
+      if ( !this._includeEdge(edge) ) return;
       this.#initializeEdge(edge);
-    }
+    });
   }
 
   /**
