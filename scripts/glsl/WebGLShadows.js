@@ -241,9 +241,9 @@ export class WebGLShadows {
   /**
    * New method: RenderedEffectSource.prototype.edgeRemoved
    * Update shadow data based on the removed edge, as necessary.
-   * @param {Edge} edgeId     Edge id that was removed from the scene.
+   * @param {Edge} edge     Edge id that was removed from the scene.
    */
-  edgeRemoved(edgeId) { this._handleEdgeChange(this, edgeId, "removeEdge"); }
+  edgeRemoved(edge) { this._handleEdgeChange(this, edge, "removeEdge"); }
 
   /**
    * Utility function to handle variety of edge changes to a source.
