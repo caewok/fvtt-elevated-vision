@@ -74,7 +74,7 @@ function destroyWall(wall) {
     ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
   ];
 
-  for ( const src of sources ) src[MODULE_ID].edgeRemoved(wallD.edge);
+  for ( const src of sources ) src[MODULE_ID].edgeRemoved(wall.edge);
 }
 
 
