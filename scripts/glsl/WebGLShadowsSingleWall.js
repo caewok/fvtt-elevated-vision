@@ -280,8 +280,23 @@ export class WebGLShadowsSingleWall {
   /**
    * Update shadow data based on the added edge, as necessary.
    * @param {Edge} edge     Edge that was added to the scene.
+   * @param {object} [opts]
+   * @param {boolean} [opts.render=true]    Trigger a re-render.
+   * @returns {boolean} True if the added edge resulted in a change.
    */
-  edgeAdded(edge) { this._handleEdgeChange(this, edge, "addEdge"); }
+  edgeAdded(edge, { render = true } = {}) {
+    if ( this.edges.has(edge) ) return false;
+    if ( !this._includeEdge(edge) ) return false;
+    this.edges.add(edge);
+    const geometry = new this.constructor.geometryClass(this.source, edge);
+    const shader = this.constructor.shaderClass.create(this.source, edge);
+    const mesh = new ShadowMesh(geometry, shader);
+    this.meshes.set(edge, mesh);
+    this.shadowMesh.addChild(mesh);
+
+    // Re-render.
+    this.shadowRenderer.update();
+  }
 
   /**
    * New method: RenderedEffectSource.prototype.edgeUpdated
@@ -295,7 +310,22 @@ export class WebGLShadowsSingleWall {
    * Update shadow data based on the removed edge, as necessary.
    * @param {Edge} edgeId     Edge id that was removed from the scene.
    */
-  edgeRemoved(edgeId) { this._handleEdgeChange(this, edgeId, "removeEdge"); }
+  edgeRemoved(edgeId) {
+
+
+  }
+
+  /**
+   * Utility function to handle variety of edge changes to a source.
+   * @param {RenderedEffectSource} source
+   * @param {Edge} edge
+   * @param {string} updateFn   Name of the update method for the wall geometry.
+   * @param {object} opts       Options passed to updateFn
+   */
+  _handleEdgeChange(source, edge, updateFn, opts = {}) {
+    // At this point, the wall caused a change to the geometry. Update accordingly.
+    if ( this.wallGeometry[updateFn](edge, opts) ) this.shadowRenderer.update();
+  }
 
   /**
    * Detect whether a point is in partial or full shadow based on testing wall collisions.
@@ -455,18 +485,6 @@ export class WebGLShadowsSingleWall {
   static #shadowPercentageFromCache(pixelCache, x, y) {
     const lightAmount = pixelCache.pixelAtCanvas(x, y);
     return 1 - (lightAmount * PIXEL_INV);
-  }
-
-  /**
-   * Utility function to handle variety of edge changes to a source.
-   * @param {RenderedEffectSource} source
-   * @param {Edge} edge
-   * @param {string} updateFn   Name of the update method for the wall geometry.
-   * @param {object} opts       Options passed to updateFn
-   */
-  _handleEdgeChange(source, edge, updateFn, opts = {}) {
-    // At this point, the wall caused a change to the geometry. Update accordingly.
-    if ( this.wallGeometry[updateFn](edge, opts) ) this.shadowRenderer.update();
   }
 
   /**
