@@ -62,8 +62,8 @@ export class WebGLShadowsSingleWall {
   /** @type {RenderedPointSource} */
   source;
 
-  /** @type {Map<Edge, PIXI.Mesh>} */
-  meshEdgeMap = new Map();
+  /** @type {Map<string, PIXI.Mesh>} */
+  meshEdgeMap = new Map(); // Uses edge.id b/c edge not guaranteed to be the same.
 
   /** @type {ShadowTextureRenderer} */
   shadowRenderer;
@@ -93,12 +93,18 @@ export class WebGLShadowsSingleWall {
    * Update the edges that may shadow this source.
    */
   updateEdges() {
-    const edges = new Set(this.meshEdgeMap.values());
+    const edgeIds = new Set(this.meshEdgeMap.values());
 
     // Split into edges to be tested for addition and those tested for removal.
-    const allEdges = new Set([...canvas.edges]);
-    const toRemove = edges.filter(e => !allEdges.has(e) || !this._includeEdge(e));
-    const toAdd = allEdges.filter(e => !edges.has(e) && this._includeEdge(e));
+    const allEdgeIds = new Set([...canvas.edges.keys()]);
+    const toRemove = allEdgeIds
+      .filter(id => !edgeIds.has(id))
+      .map(id => canvas.edges.get(id))
+      .filter(e => !this._includeEdge(e));
+    const toAdd = allEdgeIds
+      .filter(id => !edgeIds.has(id))
+      .map(id => canvas.edges.get(id))
+      .filter(e => this._includeEdge(e));
 
     // Remove and add each in turn.
     const removeRes = toRemove.map(e => this.edgeRemoved(e, { render: false }));
@@ -194,7 +200,7 @@ export class WebGLShadowsSingleWall {
     const geometry = new this.constructor.geometryClass(this.source, edge);
     const shader = this.constructor.shaderClass.create(this.source, edge);
     const mesh = new ShadowMesh(geometry, shader);
-    this.meshEdgeMap.set(edge, mesh);
+    this.meshEdgeMap.set(edge.id, mesh);
     this.shadowMesh.addChild(mesh);
   }
 
@@ -276,7 +282,7 @@ export class WebGLShadowsSingleWall {
    * @returns {boolean} True if the added edge resulted in a change.
    */
   edgeAdded(edge, { render = true } = {}) {
-    if ( this.meshEdgeMap.has(edge) ) return false;
+    if ( this.meshEdgeMap.has(edge.id) ) return false;
     if ( !this._includeEdge(edge) ) return false;
     this.#initializeEdge(edge);
 
@@ -294,11 +300,11 @@ export class WebGLShadowsSingleWall {
    */
   edgeUpdated(edge, changes, { render = true } = {}) {
     const includeEdge = this._includeEdge(edge);
-    if ( includeEdge && !this.meshEdgeMap.has(edge) ) return this.edgeAdded(edge, { render });
+    if ( includeEdge && !this.meshEdgeMap.has(edge.id) ) return this.edgeAdded(edge, { render });
     if ( !includeEdge ) return this.edgeRemoved(edge, { render });
 
     // Edge already in the map.
-    const mesh = this.meshMap.get(edge);
+    const mesh = this.meshMap.get(edge.id);
     const shaderChanged = mesh.shader.edgeUpdated(changes);
     const geomChanged = mesh.geometry.edgeUpdated(changes);
     if ( !(shaderChanged || geomChanged) ) return false;
@@ -315,9 +321,9 @@ export class WebGLShadowsSingleWall {
    * @returns {boolean} True if the added edge resulted in a change.
    */
   edgeRemoved(edge, { render = true } = {}) {
-    if ( !this.meshEdgeMap.has(edge) ) return false;
-    const mesh = this.meshEdgeMap.get(edge);
-    this.meshEdgeMap.delete(edge);
+    if ( !this.meshEdgeMap.has(edge.id) ) return false;
+    const mesh = this.meshEdgeMap.get(edge.id);
+    this.meshEdgeMap.delete(edge.id);
     this.shadowMesh.removeChild(mesh);
     mesh.destroy(true);
 
