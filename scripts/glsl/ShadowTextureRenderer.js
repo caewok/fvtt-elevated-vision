@@ -149,7 +149,7 @@ export class ShadowTextureRenderer {
   sourceUpdated(changes) {
     const changedRadius = changes.has("dim");
     if ( changedRadius ) this.updateSourceRadius();
-    // else this.update();
+    else this.update(); // TODO: This seems needed to recenter the texture but why?
     return changedRadius;
   }
 
@@ -196,7 +196,7 @@ export class ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer {
 
   sourceUpdated() {
     // TODO: Is  this needed?
-    //this.update();
+    this.update();
   }
 
   // Disable updating source radius b/c not needed.
@@ -218,7 +218,7 @@ export class ShadowDirectionalTextureRenderer extends ShadowTextureRenderer {
 
   sourceUpdated() {
     // TODO: Is  this needed?
-    //this.update();
+    this.update();
   }
 
   // Disable updating source radius b/c not needed.
