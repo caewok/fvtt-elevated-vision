@@ -104,7 +104,7 @@ Hooks.once("init", function() {
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
 
-    useSingleWallShader: false,
+    useSingleWallShader: true,
 
     singleWallSamples: 10,
 

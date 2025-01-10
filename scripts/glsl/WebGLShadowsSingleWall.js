@@ -88,7 +88,6 @@ export class WebGLShadowsSingleWall {
     this.source = source;
   }
 
-
   /**
    * Update the edges that may shadow this source.
    */
@@ -553,7 +552,6 @@ export class WebGLShadowsSingleWall {
     return true;
   }
 
-
   /** @type {boolean} */
   #destroyed = false;
 
@@ -567,7 +565,6 @@ export class WebGLShadowsSingleWall {
 
     this.shadowMesh.destroy(true); // Destroys shaders and geometries.
     this.meshEdgeMap.clear();
-
     this.shadowTerrainMesh?.destroy();
     this.shadowRenderer?.destroy();
     this.shadowVisionMask?.destroy();
@@ -733,7 +730,6 @@ export class PointVisionWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
    */
   _handleEdgeChange(source, edge, updateFn, opts = {}) {
     // TODO: Fix b/c this method is no longer getting called.
-
     super._handleEdgeChange(source, edge, updateFn, opts);
 
     // For vision sources, update the LOS geometry.
