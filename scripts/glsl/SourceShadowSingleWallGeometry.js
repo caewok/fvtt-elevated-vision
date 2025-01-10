@@ -36,30 +36,6 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    */
   static MAXIMUM_SAMPLES = 10;
 
-  /**
-   * Changes to monitor in the edge data that indicate a relevant change.
-   */
-  static CHANGE_FLAGS = [
-    // Wall location
-    "c",
-    "flags.wall-height.top",
-    "flags.wall-height.bottom",
-    "flags.elevatedvision.elevation.top",
-    "flags.elevatedvision.elevation.bottom",
-
-    // Wall direction and door state
-    "dir",
-    "ds",
-
-    // Wall sense types
-    "sight",
-    "light",
-
-    // Wall threshold data
-    "threshold.sight",
-    "threshold.light",
-    "threshold.attenuation"
-  ];
 
   /** @type {PointSource} */
   source;
@@ -110,18 +86,34 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
   /**
    * Calculate the wall geometry for this source.
    * The base assumes a single shadow from the light center.
+   * @param {Point3d[]} [samples = this.sourceOrigin]     The points within the light to use
    */
   constructWallGeometry(samples = [this.sourceOrigin]) {
     const nSamples = samples.length;
 
     // Add index.
-    this.addIndex(Array.fromRange(nSamples * 3)); // nSample triangles with 3 vertices each.
+    this.addIndex(Array.fromRange(nSamples * 3)); // Number of sample triangles; 3 vertices each.
 
     // Build a shadow triangle using sampled points within the light sphere.
     const vertices = Array(nSamples * 3 * 2); // For each vertex: x,y
     const edgeDist = Array(nSamples * 3);
+    this.#updateVertices(samples, vertices, edgeDist);
+
+    // Add the data to the buffer.
+    this.addAttribute("aVertex", vertices, 2);
+    this.addAttribute("aEdgeDist", edgeDist, 1);
+  }
+
+  /**
+   * Resample and update the vertices and associated distances from the edge.
+   * @param {Point3d[]} samples     The points within the light to use
+   * @param {number[]} vertices     Array or buffer array of vertices
+   * @param {number[]} edgeDist     Array or buffer array of edge distance
+   */
+  #updateVertices(samples, vertices, edgeDist) {
     const {a, b} = this.edge;
     const l = Ray2d.normalized(a, b);
+    const nSamples = edgeDist.length / 3;
     for ( let i = 0; i < nSamples; i += 1 ) {
       const vIdx = i * 3 * 2;
       const eIdx = i * 3;
@@ -140,8 +132,6 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
       edgeDist[eIdx + 1] = distanceToLine(B, l);
       edgeDist[eIdx + 2] = distanceToLine(C, l);
     }
-    this.addAttribute("aVertex", vertices, 2);
-    this.addAttribute("aEdgeDist", edgeDist, 1);
   }
 
   /**
@@ -174,6 +164,47 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     const B = rWallIx.intersectRay(rAa);
     const C = rWallIx.intersectRay(rAb);
     return [A2d, B, C];
+  }
+
+  // ----- NOTE: Updates to geometry ----- //
+
+  /**
+   * Update based on indicated changes to the source.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
+   */
+  sourceUpdated(changes) {
+    const changed2dPosition = changes.has("x") || changes.has("y");
+    const changedElevation = changes.has("elevation");
+    const changedLightSize = changes.has("flags.elevatedvision.lightSize");
+    if ( changed2dPosition || changedElevation || changedLightSize ) this._updateGeometry();
+    return changed2dPosition || changedElevation;
+  }
+
+  /**
+   * Update based on indicated changes to the edge.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
+   */
+  edgeUpdated(changes) {
+    const changedPosition = changes.has("c");
+    const changedElevation = [
+      "flags.wall-height.top",
+      "flags.wall-height.bottom",
+      "flags.elevatedvision.elevation.top",
+      "flags.elevatedvision.elevation.bottom"].some(prop => changes.has(prop));
+    if ( changedPosition || changedElevation ) this._updateGeometry();
+    return changedPosition || changedElevation;
+  }
+
+  /**
+   * Update the geometry for this source-edge relationship.
+   * @param {Point3d[]} samples     Points within the light to use for the center point of ∆ABC
+   */
+  _updateGeometry(samples = [this.sourceOrigin]) {
+    const vertices = this.getBuffer("aVertex").data;
+    const edgeDist = this.getBuffer("aEdgeDist").data;
+    this.#updateVertices(samples, vertices, edgeDist);
   }
 
   // ----- NOTE: Utility methods ----- //
@@ -298,6 +329,17 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     return new Ray2d(origin, direction);
   }
 
+  // ----- NOTE: Cleanup ----- //
+
+  /**
+   * Remove links to large objects.
+   */
+  destroy() {
+    this.source = null;
+    this.edge = null;
+    super.destroy();
+  }
+
   // ----- NOTE: Debugging ----- //
 
   drawEdge() { Draw.segment(this.edge, { width: 2 }); }
@@ -353,6 +395,16 @@ export class PointSourceShadowSingleWallGeometry extends SourceShadowSingleWallG
     return randomSphereCoordinate().multiplyScalar(this.sourceSize).add(this.sourceOrigin);
   }
 
+  // ----- NOTE: Updates to geometry ----- //
+
+  /**
+   * Update the geometry for this source-edge relationship.
+   */
+  _updateGeometry() {
+    const samples = this.lightSamplePoints();
+    super._updateGeometry(samples);
+  }
+
   // ----- NOTE: Debugging ----- //
 
   /**
@@ -368,8 +420,6 @@ export class PointSourceShadowSingleWallGeometry extends SourceShadowSingleWallG
 export class DirectionalSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
 
 }
-
-
 
 // ----- NOTE: Helper functions ----- //
 
@@ -615,9 +665,6 @@ class Ray2d {
     return this.origin.add(this.direction.multiplyScalar(t, outPoint), outPoint);
   }
 }
-
-
-
 
 /** Testing single shadow
 MODULE_ID = "elevatedvision"

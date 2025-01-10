@@ -231,33 +231,27 @@ export class WebGLShadowsSingleWall {
   /**
    * Update the shadow mesh, geometry, render, given changes.
    * @param {object} changes      Object of change data corresponding to source.data properties.
-   * @param {object} [changeObj]  Keys for changed items to override the changes object
    */
-  _updateShadowData(changes, changeObj = {}) {
-    changeObj.changedPosition ??= Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
-    changeObj.changedRadius ??= Object.hasOwn(changes, "radius");
-    changeObj.changedElevation ??= Object.hasOwn(changes, "elevation");
-    changeObj.changedRotation ??= Object.hasOwn(changes, "rotation");
-    changeObj.changedEmissionAngle ??= Object.hasOwn(changes, "angle");
+  sourceUpdated(changes) {
+    const changedPosition = changes.has("x") || changes.has("y");
+    const changedRadius = changes.has("dim");
 
-    if ( !Object.values(changeObj).some(x => x) ) return;
-    // Shadow renderer must be updated after updates to
-    // wallGeometry, shadowMesh, terrainShadowMesh.
-
+    // Run through each edge to see if any changed.
     let shadowsChanged = false;
+    for ( const mesh of this.meshEdgeMap.values() ) {
+      const shaderChanged = mesh.shader.sourceUpdated(changes);
+      const geomChanged = mesh.geometry.sourceUpdated(changes);
+      shadowsChanged ||= (shaderChanged || geomChanged);
+    }
 
-    // Shadow geometry and mesh
-    if ( changeObj.changedPosition ) shadowsChanged = this.wallGeometry.updateSourcePosition();
-    // TODO: if ( this.wallShader.sourceUpdated(this.source, changeObj) ) shadowsChanged ||= true;
+    if ( changedPosition || changedRadius ) this.shadowTerrainMesh.updateGeometry(this.bounds);
+    if ( this.terrainShader.sourceUpdated(changes) ) shadowsChanged ||= true;
 
-    // Terrain shadow geometry and mesh
-    if ( changeObj.changedPosition || changeObj.changedRadius ) this.shadowTerrainMesh.updateGeometry(this.bounds);
-    if ( this.terrainShader.sourceUpdated(this.source, changeObj) ) shadowsChanged ||= true;
+    if ( shadowsChanged ) this.shadowRenderer.sourceUpdated(changes);
 
-    // Renderer and mask
-    if ( shadowsChanged ) this.shadowRenderer.updatedSource(changeObj); // TODO: Do we need a separate check for changedRadius here?
-    if ( changeObj.changedPosition || changeObj.changedRadius ) this.shadowVisionMask.updateGeometry(this.bounds);
-    this.visionShader.updatedSource(this.source, changeObj);
+    // TODO: Can this bounds check be moved to the above?
+    if ( changedPosition || changedRadius ) this.shadowVisionMask.updateGeometry(this.bounds);
+    this.visionShader.sourceUpdated(changes);
   }
 
   /**
@@ -294,9 +288,25 @@ export class WebGLShadowsSingleWall {
   /**
    * New method: RenderedEffectSource.prototype.edgeUpdated
    * Update shadow data based on the updated edge, as necessary.
-   * @param {Edge} edge     Edge that was updated in the scene.
+   * @param {Edge} edge             Edge that was updated in the scene.
+   * @param {Set<string>} changes   Changes to that edge; see WALL_CHANGE_FLAGS in const.js.
+   * @returns {boolean} True if the updated edge resulted in a change.
    */
-  edgeUpdated(edge, changes) { this._handleEdgeChange(this, edge, "updateEdge", { changes }); }
+  edgeUpdated(edge, changes, { render = true } = {}) {
+    const includeEdge = this._includeEdge(edge);
+    if ( includeEdge && !this.meshEdgeMap.has(edge) ) return this.edgeAdded(edge, { render });
+    if ( !includeEdge ) return this.edgeRemoved(edge, { render });
+
+    // Edge already in the map.
+    const mesh = this.meshMap.get(edge);
+    const shaderChanged = mesh.shader.edgeUpdated(changes);
+    const geomChanged = mesh.geometry.edgeUpdated(changes);
+    if ( !(shaderChanged || geomChanged) ) return false;
+
+    // Rerender.
+    if ( render ) this.shadowRenderer.update();
+    return true;
+  }
 
   /**
    * Update shadow data based on the removed edge, as necessary.
@@ -655,15 +665,13 @@ export class GlobalLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
     u.uEVDirectional = false;
   }
 
-  /**
-   * Utility function to handle variety of edge changes to a source.
-   * For global light source, ignore.
-   * @param {RenderedEffectSource} source
-   * @param {Edge} edge
-   * @param {string} updateFn   Name of the update method for the wall geometry.
-   * @param {object} opts       Options passed to updateFn
-   */
-  _handleEdgeChange(_source, _edge, _updateFn, _opts = {}) {}
+  // NOTE: No edges for global light.
+
+  edgeAdded() { return false; }
+
+  edgeUpdated() { return false; }
+
+  edgeRemoved() { return false; }
 }
 
 
@@ -732,6 +740,8 @@ export class PointVisionWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
    * @param {object} opts       Options passed to updateFn
    */
   _handleEdgeChange(source, edge, updateFn, opts = {}) {
+    // TODO: Fix b/c this method is no longer getting called.
+
     super._handleEdgeChange(source, edge, updateFn, opts);
 
     // For vision sources, update the LOS geometry.
@@ -745,6 +755,7 @@ export class PointVisionWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
    * @returns {Set<Wall>}
    */
   _getEdges(bounds) {
+    // TODO: Fix b/c this method is no longer getting called.
     const edges = super._getEdges(bounds);
 
     // Issue #81: Perceptive compatibility.

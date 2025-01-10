@@ -150,55 +150,61 @@ void main() {
     }
     defaultUniforms.uEmissionAngle = angle;
 
-    return super.create(defaultUniforms);
+    const shader = super.create(defaultUniforms);
+    shader.source = source;
+    return shader;
   }
 
   /**
    * Update based on indicated changes to the source.
-   * @param {RenderedSourcePoint} source
-   * @param {object} [changes]    Object indicating which properties of the source changed
-   * @param {boolean} [changes.changedPosition]   True if the source changed position
-   * @param {boolean} [changes.changedRadius]     True if the source changed radius
-   * @param {boolean} [changes.changedRotation]   True if the source changed rotation
-   * @param {boolean} [changes.changedEmissionAngle]  True if the source changed emission angle
+   * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  sourceUpdated(source, {
-    changedPosition,
-    changedElevation,
-    changedRadius,
-    changedRotation,
-    changedEmissionAngle } = {}) {
-    if ( changedPosition || changedElevation ) this.updateSourcePosition(source);
-    if ( changedRadius ) this.updateSourceRadius(source);
-    if ( changedRotation ) this.updateSourceRotation(source);
-    if ( changedEmissionAngle ) this.updateSourceEmissionAngle(source);
+  sourceUpdated(changes) {
+    const changedPosition = changes.has("x") || changes.has("y");
+    const changedElevation = changes.has("elevation");
+    const changedRadius = changes.has("dim");
+    const changedRotation = changes.has("rotation");
+    const changedEmissionAngle = changes.has("angle");
+
+    if ( changedPosition || changedElevation ) this.updateSourcePosition();
+    if ( changedRadius ) this.updateSourceRadius();
+    if ( changedRotation ) this.updateSourceRotation();
+    if ( changedEmissionAngle ) this.updateSourceEmissionAngle();
     return changedPosition || changedElevation || changedRadius || changedRotation || changedEmissionAngle;
   }
 
-  updateSourcePosition(source) {
-    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
+  updateSourcePosition() {
+    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(this.source);
     if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     this.uniforms.uSourcePosition = [lightPosition.x, lightPosition.y, lightPosition.z];
   }
 
-  updateSourceRadius(source) {
-    const radius = source.radius || source.data.externalRadius;
+  updateSourceRadius() {
+    const radius = this.source.radius || this.source.data.externalRadius;
     this.uniforms.uSourceRadius2 = Math.pow(radius, 2);
   }
 
-  updateSourceRotation(source) {
-    const rot = source.data.rotation || 360;
+  updateSourceRotation() {
+    const rot = this.source.data.rotation || 360;
     this.uniforms.uRotation = Math.normalizeRadians(Math.toRadians(rot + 90));
   }
 
-  updateSourceEmissionAngle(source) {
-    let angle = source.data.angle || 360;
+  updateSourceEmissionAngle() {
+    let angle = this.source.data.angle || 360;
     if ( angle < 180
-      && !source.isDirectional
-      && source.object.document.getFlag(MODULE_ID, FLAGS.LIGHT_SIZE) ) {
+      && !this.source.isDirectional
+      && this.source.object.document.getFlag(MODULE_ID, FLAGS.LIGHT_SIZE) ) {
       angle = 180;
     }
     this.uniforms.uEmissionAngle = angle;
+  }
+
+  /**
+   * Remove links to large objects.
+   */
+  destroy() {
+    this.source = null;
+    super.destroy();
   }
 }

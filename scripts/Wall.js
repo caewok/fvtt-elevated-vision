@@ -5,8 +5,7 @@ foundry
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
-import { SourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, WALL_CHANGE_FLAGS } from "./const.js";
 
 // Methods related to Wall
 
@@ -51,7 +50,7 @@ function updateWall(wallD, data, _options, _userId) {
   const changes = new Set(Object.keys(foundry.utils.flattenObject(data)));
   // TODO: Will eventually need to monitor changes for sounds and sight, possibly move.
   // TODO: Need to deal with threshold as well
-  if ( !(SourceShadowWallGeometry.CHANGE_FLAGS.some(f => changes.has(f))) ) return;
+  if ( !(WALL_CHANGE_FLAGS.some(f => changes.has(f))) ) return;
 
   const sources = [
     ...canvas.effects.lightSources,

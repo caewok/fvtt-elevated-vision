@@ -37,31 +37,6 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   static EV_ENDPOINT_LINK_BLOCKED = -20.0;
 
   /**
-   * Changes to monitor in the edge data that indicate a relevant change.
-   */
-  static CHANGE_FLAGS = [
-    // Wall location
-    "c",
-    "flags.wall-height.top",
-    "flags.wall-height.bottom",
-    "flags.elevatedvision.elevation.top",
-    "flags.elevatedvision.elevation.bottom",
-
-    // Wall direction and door state
-    "dir",
-    "ds",
-
-    // Wall sense types
-    "sight",
-    "light",
-
-    // Wall threshold data
-    "threshold.sight",
-    "threshold.light",
-    "threshold.attenuation"
-  ];
-
-  /**
    * Track the triangle index for each wall used by this source.
    * @type {Map<string, number>} Wall id and the index
    */
@@ -737,6 +712,15 @@ sourceOrigin = geom.sourceOrigin;
 
     if ( updated ) this.update();
     return updated;
+  }
+
+  /**
+   * Remove links to large objects.
+   */
+  destroy() {
+    this.source = null;
+    this._triEdgeMap.clear();
+    super.destroy();
   }
 }
 

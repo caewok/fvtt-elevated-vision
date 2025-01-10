@@ -141,16 +141,23 @@ export class ShadowTextureRenderer {
     };
   }
 
-  updatedSource({ changedRadius } = {}) {
-    if ( changedRadius ) this.updatedSourceRadius();
-    else this.update();
+  /**
+   * Update based on indicated changes to the source.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
+   */
+  sourceUpdated(changes) {
+    const changedRadius = changes.has("dim");
+    if ( changedRadius ) this.updateSourceRadius();
+    // else this.update();
+    return changedRadius;
   }
 
   /**
    * Adjust the texture size based on change to source radius.
    * @returns {PIXI.RenderTexture} Updated render texture.
    */
-  updatedSourceRadius() {
+  updateSourceRadius() {
     this.renderTexture.setResolution(this.resolution);
     this.renderTexture.resize(this.width, this.height, true);
     this.update();
@@ -170,6 +177,7 @@ export class ShadowTextureRenderer {
   destroy() {
     this.meshContainer.destroy(); // Leave the children mesh alone.
     this.renderTexture.destroy();
+    this.source = null; // Make the GC happy.
   }
 }
 
@@ -186,7 +194,10 @@ export class ShadowVisionLOSTextureRenderer extends ShadowTextureRenderer {
    */
   get meshPosition() { return new PIXI.Point(0, 0); }
 
-  updatedSource() { this.update(); }
+  sourceUpdated() {
+    // TODO: Is  this needed?
+    //this.update();
+  }
 
   // Disable updating source radius b/c not needed.
   updateSourceRadius() { return; } // eslint-disable-line no-useless-return
@@ -205,7 +216,10 @@ export class ShadowDirectionalTextureRenderer extends ShadowTextureRenderer {
    */
   get meshPosition() { return new PIXI.Point(0, 0); }
 
-  updatedSource() { this.update(); }
+  sourceUpdated() {
+    // TODO: Is  this needed?
+    //this.update();
+  }
 
   // Disable updating source radius b/c not needed.
   updateSourceRadius() { return; } // eslint-disable-line no-useless-return

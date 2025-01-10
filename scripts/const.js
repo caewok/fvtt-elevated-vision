@@ -45,3 +45,48 @@ export const OTHER_MODULES = {
 Hooks.once("init", function() {
   for ( const obj of Object.values(OTHER_MODULES) ) obj.ACTIVE = game.modules.get(obj.KEY)?.active;
 });
+
+/**
+ * Changes to monitor in the source properties that indicate a relevant change.
+ */
+export const SOURCE_CHANGE_FLAGS = [
+  // Source location
+  "x",
+  "y",
+  "elevation",
+
+  // Source orientation
+  "rotation",
+
+  // Source size
+  "dim",
+  "elevatedvision.lightSize",
+
+  // Directional
+  "elevatedvision.solarAngle",
+];
+
+/**
+ * Changes to monitor in the wall edge data that indicate a relevant change.
+ */
+export const WALL_CHANGE_FLAGS = [
+  // Wall location
+  "c",
+  "flags.wall-height.top",
+  "flags.wall-height.bottom",
+  "flags.elevatedvision.elevation.top",
+  "flags.elevatedvision.elevation.bottom",
+
+  // Wall direction and door state
+  "dir",
+  "ds",
+
+  // Wall sense types
+  "sight",
+  "light",
+
+  // Wall threshold data
+  "threshold.sight",
+  "threshold.light",
+  "threshold.attenuation"
+];

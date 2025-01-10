@@ -184,7 +184,7 @@ export class WebGLShadows {
    * @param {object} changes      Object of change data corresponding to source.data properties.
    * @param {object} [changeObj]  Keys for changed items to override the changes object
    */
-  _updateShadowData(changes, changeObj = {}) {
+  sourceUpdated(changes) {
     changeObj.changedPosition ??= Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
     changeObj.changedRadius ??= Object.hasOwn(changes, "radius");
     changeObj.changedElevation ??= Object.hasOwn(changes, "elevation");

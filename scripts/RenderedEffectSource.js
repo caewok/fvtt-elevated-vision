@@ -121,8 +121,10 @@ PATCHES.BASIC = {};
  *   Note: will only contain source.data properties.
  */
 function _configure(wrapped, changes) {
+  // Store flat changes before in case the wrap modifies them in a problematic way.
+  const flatChanges = new Set(Object.keys(foundry.utils.flattenObject(changes)));
   wrapped(changes);
-  this[MODULE_ID]._updateShadowData(changes);
+  this[MODULE_ID].sourceUpdated(flatChanges);
 }
 
 /**

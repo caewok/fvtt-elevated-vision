@@ -74,6 +74,12 @@ const GLSL_UNSIZED_FRAGMENT = interpolate(
 export class ShadowSingleWallShader extends AbstractEVShader {
   // NOTE: ShadowWallShader.vertexShader
 
+  /** @type {RenderedSource} */
+  source;
+
+  /** @type {Edge} */
+  edge;
+
   /**
    * Vertices are light --> wall corner to intersection on surface.
    * 3 vertices: light, ix for corner 1, ix for corner 2
@@ -136,7 +142,10 @@ export class ShadowSingleWallShader extends AbstractEVShader {
     if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     defaultUniforms.uLightPosition = [...lightPosition];
 
-    return super.create(defaultUniforms);
+    const shader = super.create(defaultUniforms);
+    shader.source = source;
+    shader.edge = edge;
+    return shader;
   }
 
   /**
@@ -195,41 +204,53 @@ export class ShadowSingleWallShader extends AbstractEVShader {
 
   /**
    * Update based on indicated changes to the source.
-   * @param {RenderedSourcePoint} source
-   * @param {object} [changes]    Object indicating which properties of the source changed
-   * @param {boolean} [changes.changedPosition]   True if the source changed position
-   * @param {boolean} [changes.changedElevation]  True if the source changed elevation
+   * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  sourceUpdated(source, { changedPosition, changedElevation } = {}) {
-    if ( changedPosition || changedElevation ) this.updateLightPosition(source);
+  sourceUpdated(changes) {
+    const changedPosition = changes.has("x") || changes.has("y");
+    const changedElevation = changes.has("elevation");
+    if ( changedPosition || changedElevation ) this.updateLightPosition();
+    if ( changedPosition ) this.updateEdgeThreshold();
     return changedPosition || changedElevation;
   }
 
   /**
    * Update based on indicated changes to the edge.
-   * @param {Edge} edge
+   * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  edgeUpdated(edge) {
-
+  edgeUpdated(changes) {
+    const changedThreshold = changes.has("threshold.sight", "threshold.light", "threshold.attenuation");
+    if ( changedThreshold ) this.updateEdgeThreshold();
+    return changedThreshold;
   }
-
 
   /**
    * Update the wall threshold.
-   * @param {number}
+   * @param {Edge} edge
+   */
+  updateEdgeThreshold() {
+    this.uniforms.uThresholdRadius2 = this.threshold2Attribute(this.source, this.edge);
+  }
 
   /**
    * Update the light position.
-   * @param {number} x
-   * @param {number} y
-   * @param {number} z
+   * @param {RenderedSource} source
    */
-  updateLightPosition(source) {
-    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
+  updateLightPosition() {
+    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(this.source);
     if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     this.uniforms.uLightPosition = [...lightPosition];
+  }
+
+  /**
+   * Remove links to large objects.
+   */
+  destroy() {
+    this.source = null;
+    this.edge = null;
+    super.destroy();
   }
 }
 
@@ -265,6 +286,7 @@ export class DirectionalSourceShadowSingleWallShader extends ShadowSingleWallSha
     defaultUniforms.uNumSamples = CONFIG[MODULE_ID].singleWallSamples;
     return super.create(source, edge, defaultUniforms);
   }
+
 }
 
 /**
