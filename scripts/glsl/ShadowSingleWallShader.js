@@ -231,7 +231,7 @@ export class ShadowSingleWallShader extends AbstractEVShader {
    * @param {Edge} edge
    */
   updateEdgeThreshold() {
-    this.uniforms.uThresholdRadius2 = this.threshold2Attribute(this.source, this.edge);
+    this.uniforms.uThresholdRadius2 = this.constructor.threshold2Attribute(this.source, this.edge);
   }
 
   /**
