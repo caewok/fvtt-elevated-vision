@@ -261,20 +261,6 @@ export class WebGLShadowsSingleWall {
   }
 
   /**
-   * Update all the meshes, shaders, geometries.
-   */
-  updateAll() {
-    const changeObj = {
-      changedPosition: true,
-      changedRadius: true,
-      changedElevation: true,
-      changedRotation: true,
-      changedEmissionAngle: true
-    };
-    return this._updateShadowData(undefined, changeObj);
-  }
-
-  /**
    * Update shadow data based on the added edge, as necessary.
    * @param {Edge} edge     Edge that was added to the scene.
    * @param {object} [opts]

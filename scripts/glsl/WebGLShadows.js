@@ -180,49 +180,31 @@ export class WebGLShadows {
   }
 
   /**
-   * Update the shadow mesh, geometry, render, given changes.
-   * @param {object} changes      Object of change data corresponding to source.data properties.
-   * @param {object} [changeObj]  Keys for changed items to override the changes object
+   * Update based on indicated changes to the source.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
   sourceUpdated(changes) {
-    changeObj.changedPosition ??= Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y");
-    changeObj.changedRadius ??= Object.hasOwn(changes, "radius");
-    changeObj.changedElevation ??= Object.hasOwn(changes, "elevation");
-    changeObj.changedRotation ??= Object.hasOwn(changes, "rotation");
-    changeObj.changedEmissionAngle ??= Object.hasOwn(changes, "angle");
-
-    if ( !Object.values(changeObj).some(x => x) ) return;
-    // Shadow renderer must be updated after updates to
-    // wallGeometry, shadowMesh, terrainShadowMesh.
+    const changedPosition = changes.has("x") || changes.has("y");
+    const changedElevation = changes.has("elevation");
+    const changedRadius = changes.has("dim");
+    const changedRotation = changes.has("rotation");
+    const changedEmissionAngle = changes.has("angle");
 
     let shadowsChanged = false;
 
     // Shadow geometry and mesh
-    if ( changeObj.changedPosition ) shadowsChanged = this.wallGeometry.updateSourcePosition();
-    if ( this.wallShader.sourceUpdated(this.source, changeObj) ) shadowsChanged ||= true;
+    if ( changedPosition ) shadowsChanged = this.wallGeometry.updateSourcePosition();
+    if ( this.wallShader.sourceUpdated(changes) ) shadowsChanged ||= true;
 
     // Terrain shadow geometry and mesh
-    if ( changeObj.changedPosition || changeObj.changedRadius ) this.shadowTerrainMesh.updateGeometry(this.bounds);
-    if ( this.terrainShader.sourceUpdated(this.source, changeObj) ) shadowsChanged ||= true;
+    if ( changedPosition || changedRadius ) this.shadowTerrainMesh.updateGeometry(this.bounds);
+    if ( this.terrainShader.sourceUpdated(changes) ) shadowsChanged ||= true;
 
     // Renderer and mask
-    if ( shadowsChanged ) this.shadowRenderer.updatedSource(changeObj); // TODO: Do we need a separate check for changedRadius here?
-    if ( changeObj.changedPosition || changeObj.changedRadius ) this.shadowVisionMask.updateGeometry(this.bounds);
-    this.visionShader.updatedSource(this.source, changeObj);
-  }
-
-  /**
-   * Update all the meshes, shaders, geometries.
-   */
-  updateAll() {
-    const changeObj = {
-      changedPosition: true,
-      changedRadius: true,
-      changedElevation: true,
-      changedRotation: true,
-      changedEmissionAngle: true
-    };
-    return this._updateShadowData(undefined, changeObj);
+    if ( shadowsChanged ) this.shadowRenderer.sourceUpdated(changes); // TODO: Do we need a separate check for changedRadius here?
+    if ( changedPosition || changedRadius ) this.shadowVisionMask.updateGeometry(this.bounds);
+    this.visionShader.sourceUpdated(changes);
   }
 
   /**
