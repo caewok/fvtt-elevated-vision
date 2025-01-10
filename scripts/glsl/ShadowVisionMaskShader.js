@@ -96,25 +96,33 @@ void main() {
 
   /**
    * Update based on indicated changes to the source.
-   * @param {RenderedSourcePoint} source
-   * @param {object} [changes]    Object indicating which properties of the source changed
-   * @param {boolean} [changes.changedPosition]   True if the source changed position
-   * @param {boolean} [changes.changedElevation]  True if the source changed elevation
-   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
    */
-  updatedSource(source, { changedPosition, changedRadius } = {}) {
-    if ( changedPosition ) this.updateSourcePosition(source);
-    if ( changedRadius ) this.updateSourceRadius(source);
+
+  sourceUpdated(changes) {
+    const changedRadius = changes.has("dim");
+    const changedPosition = changes.has("x") || changes.has("y");
+    if ( changedPosition ) this.updateSourcePosition();
+    if ( changedRadius ) this.updateSourceRadius();
     return changedPosition || changedRadius;
   }
 
-  updateSourcePosition(source) {
-    this.uniforms.uSourcePosition = [source.x, source.y];
+  updateSourcePosition() {
+    this.uniforms.uSourcePosition = [this.source.x, this.source.y];
   }
 
-  updateSourceRadius(source) {
-    const radius = source.radius || source.data.externalRadius;
+  updateSourceRadius() {
+    const radius = this.source.radius || this.source.data.externalRadius;
     this.uniforms.uSourceRadius2 = Math.pow(radius, 2);
+  }
+
+  /**
+   * Remove links to large objects.
+   */
+  destroy() {
+    this.source = null;
+    super.destroy();
   }
 }
 

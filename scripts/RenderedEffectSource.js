@@ -5,6 +5,7 @@
 
 import { MODULE_ID } from "./const.js";
 import { WebGLShadows } from "./glsl/WebGLShadows.js";
+import { WebGLShadowsSingleWall } from "./glsl/WebGLShadowsSingleWall.js";
 
 /* Methods related to RenderedEffectSource
 • RenderedEffectSource extends BaseEffectSource
@@ -120,8 +121,10 @@ PATCHES.BASIC = {};
  *   Note: will only contain source.data properties.
  */
 function _configure(wrapped, changes) {
+  // Store flat changes before in case the wrap modifies them in a problematic way.
+  const flatChanges = new Set(Object.keys(foundry.utils.flattenObject(changes)));
   wrapped(changes);
-  this[MODULE_ID]._updateShadowData(changes);
+  this[MODULE_ID].sourceUpdated(flatChanges);
 }
 
 /**
@@ -150,7 +153,8 @@ PATCHES.BASIC.WRAPS = {
  */
 function webGLShadowsGetter() {
   if ( this._elevatedvision && !this._elevatedvision.destroyed ) return this._elevatedvision;
-  const ev = this._elevatedvision = WebGLShadows.fromSource(this);
+  const cl = CONFIG[MODULE_ID].useSingleWallShader ? WebGLShadowsSingleWall : WebGLShadows;
+  const ev = this._elevatedvision = cl.fromSource(this);
   ev.initializeShadows();
   return ev;
 }

@@ -248,32 +248,38 @@ export class ShadowWallShader extends AbstractEVShader {
     const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
     if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
-    return super.create(defaultUniforms);
+    const shader = super.create(defaultUniforms);
+    shader.source = source;
+    return shader;
   }
 
   /**
    * Update based on indicated changes to the source.
-   * @param {RenderedSourcePoint} source
-   * @param {object} [changes]    Object indicating which properties of the source changed
-   * @param {boolean} [changes.changedPosition]   True if the source changed position
-   * @param {boolean} [changes.changedElevation]  True if the source changed elevation
+   * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  sourceUpdated(source, { changedPosition, changedElevation } = {}) {
-    if ( changedPosition || changedElevation ) this.updateLightPosition(source);
+  sourceUpdated(changes) {
+    const changedPosition = changes.has("x") || changes.has("y");
+    const changedElevation = changes.has("elevation");
+    if ( changedPosition || changedElevation ) this.updateLightPosition();
     return changedPosition || changedElevation;
   }
 
   /**
    * Update the light position.
-   * @param {number} x
-   * @param {number} y
-   * @param {number} z
    */
-  updateLightPosition(source) {
-    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
+  updateLightPosition() {
+    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(this.source);
     if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     this.uniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
+  }
+
+  /**
+   * Remove links to large objects.
+   */
+  destroy() {
+    this.source = null;
+    super.destroy();
   }
 }
 
@@ -343,29 +349,32 @@ export class DirectionalShadowWallShader extends AbstractEVShader {
     defaultUniforms.uElevationAngle = source.elevationAngle;
     defaultUniforms.uSolarAngle = source.solarAngle;
 
-    return super.create(defaultUniforms);
+    const shader = super.create(defaultUniforms);
+    shader.source = source;
+    return shader;
   }
 
   /**
    * Update based on indicated changes to the source.
-   * @param {RenderedSourcePoint} source
-   * @param {object} [changes]    Object indicating which properties of the source changed
-   * @param {boolean} [changes.changedPosition]   True if the source changed position
-   * @param {boolean} [changes.changedElevation]  True if the source changed elevation
+   * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  sourceUpdated(source, { changedAzimuth, changedElevationAngle, changedSolarAngle } = {}) {
-    if ( changedAzimuth ) this.updateAzimuth(source);
-    if ( changedElevationAngle ) this.updateElevationAngle(source);
-    if ( changedSolarAngle ) this.updateSolarAngle(source);
+  sourceUpdated(changes) {
+    const changedAzimuth = changes.has("x") || changes.has("y");
+    const changedElevationAngle = changes.has("x") || changes.has("y");
+    const changedSolarAngle = changes.has("flags.elevatedvision.solarAngle");
+
+    if ( changedAzimuth ) this.updateAzimuth();
+    if ( changedElevationAngle ) this.updateElevationAngle();
+    if ( changedSolarAngle ) this.updateSolarAngle();
     return changedAzimuth || changedElevationAngle || changedSolarAngle;
   }
 
-  updateAzimuth(source) { this.uniforms.uAzimuth = source.azimuth; }
+  updateAzimuth() { this.uniforms.uAzimuth = this.source.azimuth; }
 
-  updateElevationAngle(source) { this.uniforms.uElevationAngle = source.elevationAngle; }
+  updateElevationAngle() { this.uniforms.uElevationAngle = this.source.elevationAngle; }
 
-  updateSolarAngle(source) { this.uniforms.uSolarAngle = source.solarAngle; }
+  updateSolarAngle() { this.uniforms.uSolarAngle = this.source.solarAngle; }
 }
 
 /**
@@ -438,32 +447,35 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
 
     defaultUniforms.uTime = Date.now() * 1e-12;
 
-    return super.create(defaultUniforms);
+    const shader = super.create(defaultUniforms);
+    shader.source = source;
+    return shader;
   }
 
   /**
    * Update based on indicated changes to the source.
-   * @param {RenderedSourcePoint} source
-   * @param {object} [changes]    Object indicating which properties of the source changed
-   * @param {boolean} [changes.changedPosition]   True if the source changed position
-   * @param {boolean} [changes.changedElevation]  True if the source changed elevation
+   * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  sourceUpdated(source, { changedPosition, changedElevation, changedLightSize } = {}) {
-    if ( changedPosition || changedElevation ) this.updateLightPosition(source);
+  sourceUpdated(changes) {
+    const changedPosition = changes.has("x") || changes.has("y");
+    const changedElevation = changes.has("elevation");
+    const changedLightSize = changes.has("lightSize");
+
+    if ( changedPosition || changedElevation ) this.updateLightPosition();
     if ( changedLightSize ) this.updateLightSize(source);
     return changedPosition || changedElevation || changedLightSize;
   }
 
-  updateLightPosition(source) {
-    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
+  updateLightPosition() {
+    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(this.source);
     if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     this.uniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
     this.uniforms.uTime = Date.now() * 1e-12;
   }
 
-  updateLightSize(source) {
-    this.uniforms.uLightSize = source.data.lightSize;
+  updateLightSize() {
+    this.uniforms.uLightSize = this.source.data.lightSize;
     this.uniforms.uTime = Date.now() * 1e-12;
   }
 }

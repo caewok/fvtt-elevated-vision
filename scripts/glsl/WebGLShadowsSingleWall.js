@@ -14,13 +14,24 @@ Wall
 import { MODULE_ID } from "../const.js";
 import { tokenIsOnGround, waypointIsOnGround, edgeElevationZ } from "../util.js";
 import { Draw } from "../geometry/Draw.js";
-import { ShadowWallShader, SizedPointSourceShadowWallShader, DirectionalShadowWallShader, ShadowMesh } from "./ShadowWallShader.js";
+import { ShadowMesh } from "./ShadowWallShader.js";
 import { ShadowTerrainShader } from "./ShadowTerrainShader.js";
 import { EVUpdatingQuadMesh, EVQuadMesh } from "./EVQuadMesh.js";
 import { ShadowTextureRenderer, ShadowVisionLOSTextureRenderer, ShadowDirectionalTextureRenderer } from "./ShadowTextureRenderer.js";
 import { ShadowVisionMaskShader, ShadowVisionMaskTokenLOSShader } from "./ShadowVisionMaskShader.js";
 import { DirectionalLightSource } from "../DirectionalLightSource.js";
-import { DirectionalSourceShadowWallGeometry, PointSourceShadowWallGeometry, SourceShadowWallGeometry } from "./SourceShadowWallGeometry.js";
+
+import {
+  SourceShadowSingleWallGeometry,
+  PointSourceShadowSingleWallGeometry,
+  DirectionalSourceShadowSingleWallGeometry,
+} from "./SourceShadowSingleWallGeometry.js";
+
+import {
+  ShadowSingleWallShader,
+  PointSourceShadowSingleWallShader,
+  DirectionalSourceShadowSingleWallShader
+} from "./ShadowSingleWallShader.js";
 
 const PIXEL_INV = 1 / 255;
 
@@ -29,15 +40,15 @@ const PIXEL_INV = 1 / 255;
  * Expected to be set at source.elevatedvision
  * The base class is set up for GlobalLightSource.
  */
-export class WebGLShadows {
+export class WebGLShadowsSingleWall {
 
   static maskColor = 0xFF0000;
 
   /** @type {PIXI.Geometry} */
-  static geometryClass = PointSourceShadowWallGeometry;
+  static geometryClass = SourceShadowSingleWallGeometry;
 
   /** @type {AbstractEVShader} */
-  static shaderClass = ShadowWallShader;
+  static shaderClass = ShadowSingleWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -51,14 +62,14 @@ export class WebGLShadows {
   /** @type {RenderedPointSource} */
   source;
 
-  /** @type {} */
-  // graphicsFOV;
+  /** @type {Map<string, PIXI.Mesh>} */
+  meshEdgeMap = new Map(); // Uses edge.id b/c edge not guaranteed to be the same.
 
   /** @type {ShadowTextureRenderer} */
   shadowRenderer;
 
   /** @type {ShadowMesh} */
-  shadowMesh;
+  shadowMesh = new PIXI.Container();
 
   /** @type {EVUpdatingQuadMesh} */
   shadowTerrainMesh;
@@ -78,14 +89,45 @@ export class WebGLShadows {
   }
 
   /**
+   * Update the edges that may shadow this source.
+   */
+  updateEdges() {
+    const edgeIds = new Set(this.meshEdgeMap.values());
+
+    // Split into edges to be tested for addition and those tested for removal.
+    const allEdgeIds = new Set([...canvas.edges.keys()]);
+    const toRemove = allEdgeIds
+      .filter(id => !edgeIds.has(id))
+      .map(id => canvas.edges.get(id))
+      .filter(e => !this._includeEdge(e));
+    const toAdd = allEdgeIds
+      .filter(id => !edgeIds.has(id))
+      .map(id => canvas.edges.get(id))
+      .filter(e => this._includeEdge(e));
+
+    // Remove and add each in turn.
+    const removeRes = toRemove.map(e => this.edgeRemoved(e, { render: false }));
+    const addRes = toAdd.map(e => this.edgeAdded(e, { render: false }));
+    if ( removeRes.some(elem => Boolean(elem))
+      || addRes.some(elem => Boolean(elem)) ) this.shadowRenderer.update();
+  }
+
+  /**
+   * Should this edge be included in the geometry for this source shadow?
+   * @param {Edge} edge
+   * @returns {boolean}   True if edge should be included
+   */
+  _includeEdge(edge) {
+    if ( edge.type !== "wall" && edge.type !== "regionWall" ) return false;
+    return this._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
+  }
+
+  /**
    * Retrieve the shadow texture corresponding to this source.
    * Used for lighting shaders and vision masking.
    * @type {PIXI.RenderTexture}
    */
   get shadowTexture() { return this.shadowRenderer.renderTexture; }
-
-  /** @type {ShadowWallShader} */
-  get wallShader() { return this.shadowMesh.shader; }
 
   /** @type {ShadowTerrainShader} */
   get terrainShader() { return this.shadowTerrainMesh.shader; }
@@ -101,10 +143,10 @@ export class WebGLShadows {
   static fromSource(source) {
     const srcs = foundry.canvas.sources;
     let cl;
-    if ( source instanceof DirectionalLightSource ) cl = DirectionalLightWebGLShadows;
-    else if ( source instanceof srcs.PointVisionSource ) cl = PointVisionWebGLShadows;
-    else if ( source instanceof srcs.GlobalLightSource ) cl = GlobalLightWebGLShadows;
-    else if ( source instanceof srcs.PointLightSource ) cl = PointLightWebGLShadows;
+    if ( source instanceof DirectionalLightSource ) cl = DirectionalLightWebGLShadowsSingleWall;
+    else if ( source instanceof srcs.PointVisionSource ) cl = PointVisionWebGLShadowsSingleWall;
+    else if ( source instanceof srcs.GlobalLightSource ) cl = GlobalLightWebGLShadowsSingleWall;
+    else if ( source instanceof srcs.PointLightSource ) cl = PointLightWebGLShadowsSingleWall;
     return new cl(source);
   }
 
@@ -134,9 +176,6 @@ export class WebGLShadows {
     this.#initialized = true;
   }
 
-  /** @type {SourceShadowWallGeometry} */
-  get wallGeometry() { return this.shadowMesh?.geometry; }
-
   /**
    * Build the shadow mesh for this source.
    * Build terrain shadow + limited angle
@@ -144,9 +183,24 @@ export class WebGLShadows {
    * Shadows for walls coded to handle terrain walls.
    */
   _initializeShadowMesh() {
-    const geometry = new this.constructor.geometryClass(this.source);
-    const shader = this.constructor.shaderClass.create(this.source);
-    this.shadowMesh = new ShadowMesh(geometry, shader);
+    // Canvas edges has forEach but no filter and no iterator to use in for/each
+    canvas.edges.forEach(edge => {
+      if ( !this._includeEdge(edge) ) return;
+      this.#initializeEdge(edge);
+    });
+  }
+
+  /**
+   * Initialize a single edge for this source.
+   * Assumes without checking that the edge does not have a mesh already defined.
+   * @param {Edge} edge
+   */
+  #initializeEdge(edge) {
+    const geometry = new this.constructor.geometryClass(this.source, edge);
+    const shader = this.constructor.shaderClass.create(this.source, edge);
+    const mesh = new ShadowMesh(geometry, shader);
+    this.meshEdgeMap.set(edge.id, mesh);
+    this.shadowMesh.addChild(mesh);
   }
 
   /**
@@ -175,34 +229,32 @@ export class WebGLShadows {
    * Mask that colors red areas that are lit / are viewable.
    */
   _initializeShadowMask() {
-    const shader = this.constructor.shadowMaskClass.create(this.source);
+    const shader = ShadowVisionMaskShader.create(this.source);
     this.shadowVisionMask = new this.constructor.quadMeshClass(this.bounds, shader);
   }
 
   /**
-   * Update based on indicated changes to the source.
-   * @param {Set<string>} changes         Change keys for the source.
-   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   * Update the shadow mesh, geometry, render, given changes.
+   * @param {object} changes      Object of change data corresponding to source.data properties.
    */
   sourceUpdated(changes) {
     const changedPosition = changes.has("x") || changes.has("y");
-    const changedElevation = changes.has("elevation");
     const changedRadius = changes.has("dim");
-    const changedRotation = changes.has("rotation");
-    const changedEmissionAngle = changes.has("angle");
 
+    // Run through each edge to see if any changed.
     let shadowsChanged = false;
+    for ( const mesh of this.meshEdgeMap.values() ) {
+      const shaderChanged = mesh.shader.sourceUpdated(changes);
+      const geomChanged = mesh.geometry.sourceUpdated(changes);
+      shadowsChanged ||= (shaderChanged || geomChanged);
+    }
 
-    // Shadow geometry and mesh
-    if ( changedPosition ) shadowsChanged = this.wallGeometry.updateSourcePosition();
-    if ( this.wallShader.sourceUpdated(changes) ) shadowsChanged ||= true;
-
-    // Terrain shadow geometry and mesh
     if ( changedPosition || changedRadius ) this.shadowTerrainMesh.updateGeometry(this.bounds);
     if ( this.terrainShader.sourceUpdated(changes) ) shadowsChanged ||= true;
 
-    // Renderer and mask
-    if ( shadowsChanged ) this.shadowRenderer.sourceUpdated(changes); // TODO: Do we need a separate check for changedRadius here?
+    if ( shadowsChanged ) this.shadowRenderer.sourceUpdated(changes);
+
+    // TODO: Can this bounds check be moved to the above?
     if ( changedPosition || changedRadius ) this.shadowVisionMask.updateGeometry(this.bounds);
     this.visionShader.sourceUpdated(changes);
   }
@@ -210,22 +262,60 @@ export class WebGLShadows {
   /**
    * Update shadow data based on the added edge, as necessary.
    * @param {Edge} edge     Edge that was added to the scene.
+   * @param {object} [opts]
+   * @param {boolean} [opts.render=true]    Trigger a re-render.
+   * @returns {boolean} True if the added edge resulted in a change.
    */
-  edgeAdded(edge) { this._handleEdgeChange(this, edge, "addEdge"); }
+  edgeAdded(edge, { render = true } = {}) {
+    if ( this.meshEdgeMap.has(edge.id) ) return false;
+    if ( !this._includeEdge(edge) ) return false;
+    this.#initializeEdge(edge);
+
+    // Re-render.
+    if ( render ) this.shadowRenderer.update();
+    return true;
+  }
 
   /**
    * New method: RenderedEffectSource.prototype.edgeUpdated
    * Update shadow data based on the updated edge, as necessary.
-   * @param {Edge} edge     Edge that was updated in the scene.
+   * @param {Edge} edge             Edge that was updated in the scene.
+   * @param {Set<string>} changes   Changes to that edge; see WALL_CHANGE_FLAGS in const.js.
+   * @returns {boolean} True if the updated edge resulted in a change.
    */
-  edgeUpdated(edge, changes) { this._handleEdgeChange(this, edge, "updateEdge", { changes }); }
+  edgeUpdated(edge, changes, { render = true } = {}) {
+    const includeEdge = this._includeEdge(edge);
+    if ( includeEdge && !this.meshEdgeMap.has(edge.id) ) return this.edgeAdded(edge, { render });
+    if ( !includeEdge ) return this.edgeRemoved(edge, { render });
+
+    // Edge already in the map.
+    const mesh = this.meshMap.get(edge.id);
+    const shaderChanged = mesh.shader.edgeUpdated(changes);
+    const geomChanged = mesh.geometry.edgeUpdated(changes);
+    if ( !(shaderChanged || geomChanged) ) return false;
+
+    // Rerender.
+    if ( render ) this.shadowRenderer.update();
+    return true;
+  }
 
   /**
-   * New method: RenderedEffectSource.prototype.edgeRemoved
    * Update shadow data based on the removed edge, as necessary.
-   * @param {Edge} edge     Edge id that was removed from the scene.
+   * @param {object} [opts]
+   * @param {boolean} [opts.render=true]    Trigger a re-render.
+   * @returns {boolean} True if the added edge resulted in a change.
    */
-  edgeRemoved(edge) { this._handleEdgeChange(this, edge, "removeEdge"); }
+  edgeRemoved(edge, { render = true } = {}) {
+    if ( !this.meshEdgeMap.has(edge.id) ) return false;
+    const mesh = this.meshEdgeMap.get(edge.id);
+    this.meshEdgeMap.delete(edge.id);
+    this.shadowMesh.removeChild(mesh);
+    mesh.destroy(true);
+
+    // Re-render.
+    if ( render ) this.shadowRenderer.update();
+    return true;
+  }
 
   /**
    * Utility function to handle variety of edge changes to a source.
@@ -462,7 +552,6 @@ export class WebGLShadows {
     return true;
   }
 
-
   /** @type {boolean} */
   #destroyed = false;
 
@@ -473,11 +562,13 @@ export class WebGLShadows {
    */
   destroy() {
     if ( this.#destroyed ) return;
-    this.shadowMesh?.destroy();
+
+    this.shadowMesh.destroy(true); // Destroys shaders and geometries.
+    this.meshEdgeMap.clear();
     this.shadowTerrainMesh?.destroy();
-    // Unneeded? this.graphicsFOV.destroy();
     this.shadowRenderer?.destroy();
     this.shadowVisionMask?.destroy();
+
     this.#destroyed = true;
   }
 
@@ -522,8 +613,7 @@ export class WebGLShadows {
 
 }
 
-export class GlobalLightWebGLShadows extends WebGLShadows {
-
+export class GlobalLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
   constructor(source) {
     super(source);
     this.#initializeVisionMask();
@@ -540,15 +630,13 @@ export class GlobalLightWebGLShadows extends WebGLShadows {
     draw.shape(this.source.shape, { fill: this.source.constructor.maskColor });
   }
 
-
-  /** @type {boolean} */
+  /**
+   * Destroy meshes, geometry, textures.
+   */
   #destroyed = false;
 
   get destroyed() { return this.#destroyed; }
 
-  /**
-   * Destroy meshes, geometry, textures.
-   */
   destroy() {
     if ( this.#destroyed ) return;
     this.shadowVisionMask.destroy();
@@ -566,24 +654,23 @@ export class GlobalLightWebGLShadows extends WebGLShadows {
     u.uEVDirectional = false;
   }
 
-  /**
-   * Utility function to handle variety of edge changes to a source.
-   * For global light source, ignore.
-   * @param {RenderedEffectSource} source
-   * @param {Edge} edge
-   * @param {string} updateFn   Name of the update method for the wall geometry.
-   * @param {object} opts       Options passed to updateFn
-   */
-  _handleEdgeChange(_source, _edge, _updateFn, _opts = {}) {}
+  // NOTE: No edges for global light.
+
+  edgeAdded() { return false; }
+
+  edgeUpdated() { return false; }
+
+  edgeRemoved() { return false; }
 }
 
 
-export class PointVisionWebGLShadows extends WebGLShadows {
-  /** @type {PIXI.Geometry} */
-  static geometryClass = SourceShadowWallGeometry;
+export class PointVisionWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 
-  /** @type {AbstractEVShader} */
-  static shaderClass = ShadowWallShader;
+  /** @type {PIXI.Geometry} */
+  static geometryClass = SourceShadowSingleWallGeometry;
+
+  /** @type {PIXI.Shader} */
+  static shaderClass = ShadowSingleWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;
@@ -642,6 +729,7 @@ export class PointVisionWebGLShadows extends WebGLShadows {
    * @param {object} opts       Options passed to updateFn
    */
   _handleEdgeChange(source, edge, updateFn, opts = {}) {
+    // TODO: Fix b/c this method is no longer getting called.
     super._handleEdgeChange(source, edge, updateFn, opts);
 
     // For vision sources, update the LOS geometry.
@@ -655,6 +743,7 @@ export class PointVisionWebGLShadows extends WebGLShadows {
    * @returns {Set<Wall>}
    */
   _getEdges(bounds) {
+    // TODO: Fix b/c this method is no longer getting called.
     const edges = super._getEdges(bounds);
 
     // Issue #81: Perceptive compatibility.
@@ -664,15 +753,15 @@ export class PointVisionWebGLShadows extends WebGLShadows {
       || !IgnoreWall(e.source.document, token.document));
     return edges;
   }
-
 }
 
-export class PointLightWebGLShadows extends WebGLShadows {
-  /** @type {PIXI.Geometry} */
-  static geometryClass = PointSourceShadowWallGeometry;
+export class PointLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 
-  /** @type {AbstractEVShader} */
-  static shaderClass = SizedPointSourceShadowWallShader;
+  /** @type {PIXI.Geometry} */
+  static geometryClass = PointSourceShadowSingleWallGeometry;
+
+  /** @type {PIXI.Shader} */
+  static shaderClass = PointSourceShadowSingleWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -716,12 +805,12 @@ export class PointLightWebGLShadows extends WebGLShadows {
   }
 }
 
-export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
+export class DirectionalLightWebGLShadowsSingleWall extends PointLightWebGLShadowsSingleWall {
   /** @type {PIXI.Geometry} */
-  static geometryClass = DirectionalSourceShadowWallGeometry;
+  static geometryClass = DirectionalSourceShadowSingleWallGeometry;
 
-  /** @type {AbstractEVShader} */
-  static shaderClass = DirectionalShadowWallShader;
+  /** @type {PIXI.Shader} */
+  static shaderClass = DirectionalSourceShadowSingleWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;
@@ -765,6 +854,7 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
    */
   _destroy() {
     if ( this.#destroyed ) return;
+
     // Prevent the grid from getting stuck "on".
     canvas.lighting.removeChild(DirectionalLightSource._elevationAngleGrid);
     super._destroy();
@@ -921,3 +1011,26 @@ export class DirectionalLightWebGLShadows extends PointLightWebGLShadows {
     return canvas.walls.quadtree.getObjects(bounds, { collisionTest });
   }
 }
+
+/* Testing point light
+MODULE_ID = "elevatedvision"
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+Draw = CONFIG.GeometryLib.Draw;
+api = game.modules.get("elevatedvision").api
+
+let [l] = canvas.lighting.placeables;
+ev = l.lightSource.elevatedvision
+
+ev = _token.vision.elevatedvision
+
+geom = ev.shadowMesh.geometry
+shader = ev.shadowMesh.shader
+
+geom = ev.shadowMesh.children[0].geometry
+shader = ev.shadowMesh.children[0].shader
+
+
+shadowMesh = ev.shadowMesh
+canvas.stage.addChild(shadowMesh.children[0])
+
+*/

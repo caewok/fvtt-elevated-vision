@@ -1,4 +1,5 @@
 import globals from "globals";
+import unusedImports from "eslint-plugin-unused-imports";
 
 export default [{
   languageOptions: {
@@ -7,7 +8,13 @@ export default [{
     }
   },
 
+  plugins: {
+    "unused-imports": unusedImports,
+  },
+
   rules: {
+    "unused-imports/no-unused-imports": "warn",
+
     "array-bracket-spacing": ["warn", "never"],
     "array-callback-return": "warn",
     "arrow-spacing": "warn",

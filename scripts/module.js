@@ -35,7 +35,6 @@ import {
   Ray3d,
   Barycentric } from "./glsl/SourceEdgeShadows.js";
 
-
 import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
@@ -74,6 +73,23 @@ import {
   DirectionalShadowsTest,
   DirectionalRandomShadowsTest } from "./testing/WallShaderTest3.js";
 
+import {
+  SourceShadowSingleWallGeometry,
+  PointSourceShadowSingleWallGeometry,
+  DirectionalSourceShadowSingleWallGeometry,
+} from "./glsl/SourceShadowSingleWallGeometry.js";
+
+import {
+  ShadowSingleWallShader,
+  PointSourceShadowSingleWallShader,
+  DirectionalSourceShadowSingleWallShader
+} from "./glsl/ShadowSingleWallShader.js";
+
+import {
+  WebGLShadowsSingleWall
+} from "./glsl/WebGLShadowsSingleWall.js";
+
+
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
@@ -87,6 +103,10 @@ Hooks.once("init", function() {
 
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
+
+    useSingleWallShader: true,
+
+    singleWallSamples: 10,
 
     /**
      * ElevationLayer.
@@ -171,7 +191,17 @@ Hooks.once("init", function() {
       SizedShadowsTest,
       SizedRandomShadowsTest,
       DirectionalShadowsTest,
-      DirectionalRandomShadowsTest
+      DirectionalRandomShadowsTest,
+
+      SourceShadowSingleWallGeometry,
+      PointSourceShadowSingleWallGeometry,
+      DirectionalSourceShadowSingleWallGeometry,
+
+      ShadowSingleWallShader,
+      PointSourceShadowSingleWallShader,
+      DirectionalSourceShadowSingleWallShader,
+
+      WebGLShadowsSingleWall
     }
   };
 

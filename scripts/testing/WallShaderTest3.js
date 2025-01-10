@@ -348,16 +348,27 @@ export class PenumbraBasicTest extends ShaderTest {
    * @returns {int 0|1|2|3}
    */
   directionalQuadrant(direction) {
-    const TL = 0;
-    const TR = 1;
-    const BR = 2;
-    const BL = 3;
+    /*
+    Treat as centered: tl --> tr --> 0 <-- br <-- bl
+    tl: -1 * 2 + -1 * -.5 = -1.5 + 1.5 = 0
+    tr: -1 * 1 + -1 * -.5 = -.5 + 1.5 = 1
+    br: 1 * 1 + 1 * -.5 = .5 + 1.5 = 2
+    bl: 1 * 2 + 1 * -.5 = 1.5 + 1.5 = 3
+    t|b * l|r + t|b * -.5
+    t = -1
+    b = 1
+    l = 2
+    r = 1
+    */
 
-    // Direction is moving into one of 4 quadrants.
-    if ( direction.x > 0.0 ) return direction.y > 0.0 ? BR : TR;
+    const tb = ((direction.y < 0.0) * -2) + 1; // t = 1 * -2 + 1; b = 0 * -2 + 1
+    const lr = (direction.x < 0.0) + 1; // l = 1 + 1; r = 0 + 1
+    return (tb * lr) + (tb * -0.5) + 1.5;
 
-    // Moving left. x <= 0.
-    return direction.y > 0.0 ? BL : TL;
+    // Original approach:
+    // if ( direction.x > 0.0 ) return direction.y > 0.0 ? BR : TR;
+    // Moving left. x <= 0.0.
+    // return direction.y > 0.0 ? BL : TL;
   }
 
   /* ----- NOTE: Getters ---- */

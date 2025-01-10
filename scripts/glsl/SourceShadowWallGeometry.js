@@ -10,8 +10,7 @@ Wall
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { MODULE_ID } from "../const.js";
-import { pointVTest, tangentToV } from "../util.js";
-import { edgeElevationZ } from "./WebGLShadows.js";
+import { pointVTest, tangentToV, edgeElevationZ } from "../util.js";
 
 const flipEdgeLabel = {
   a: "b",
@@ -38,31 +37,6 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   static EV_ENDPOINT_LINK_BLOCKED = -20.0;
 
   /**
-   * Changes to monitor in the edge data that indicate a relevant change.
-   */
-  static CHANGE_FLAGS = [
-    // Wall location
-    "c",
-    "flags.wall-height.top",
-    "flags.wall-height.bottom",
-    "flags.elevatedvision.elevation.top",
-    "flags.elevatedvision.elevation.bottom",
-
-    // Wall direction and door state
-    "dir",
-    "ds",
-
-    // Wall sense types
-    "sight",
-    "light",
-
-    // Wall threshold data
-    "threshold.sight",
-    "threshold.light",
-    "threshold.attenuation"
-  ];
-
-  /**
    * Track the triangle index for each wall used by this source.
    * @type {Map<string, number>} Wall id and the index
    */
@@ -71,7 +45,7 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   /** @type {PointSource} */
   source;
 
-  /** @type {sourceType} */
+  /** @type {string} */
   sourceType = "light";
 
   constructor(source, edges) {
@@ -739,18 +713,23 @@ sourceOrigin = geom.sourceOrigin;
     if ( updated ) this.update();
     return updated;
   }
+
+  /**
+   * Remove links to large objects.
+   */
+  destroy() {
+    this.source = null;
+    this._triEdgeMap.clear();
+    super.destroy();
+  }
 }
 
 
 export class PointSourceShadowWallGeometry extends SourceShadowWallGeometry {
-
   _includeEdge(edge) {
-    if ( !super._includeEdge(edge) ) return false;
-
     // Wall must be within the light radius.
     if ( !this.source[MODULE_ID].bounds.lineSegmentIntersects(edge.a, edge.b, { inside: true }) ) return false;
-
-    return true;
+    return super._includeEdge(edge);
   }
 }
 

@@ -200,16 +200,34 @@ bool isInfiniteShadow(in vec3 lightDir) { return lightDir.z >= 0.0 || almostEqua
  * @returns {int 0|1|2|3}
  */
 int directionalQuadrant(in vec2 direction) {
+  /*
   const int TL = 0;
   const int TR = 1;
   const int BR = 2;
   const int BL = 3;
+  */
 
-  // Direction is moving into one of 4 quadrants.
-  if ( direction.x > 0.0 ) return direction.y > 0.0 ? BR : TR;
+  /*
+  Treat as centered: tl --> tr --> 0 <-- br <-- bl
+  tl: -1 * 2 + -1 * -.5 = -1.5 + 1.5 = 0
+  tr: -1 * 1 + -1 * -.5 = -.5 + 1.5 = 1
+  br: 1 * 1 + 1 * -.5 = .5 + 1.5 = 2
+  bl: 1 * 2 + 1 * -.5 = 1.5 + 1.5 = 3
+  t|b * l|r + t|b * -.5
+  t = -1
+  b = 1
+  l = 2
+  r = 1
+  */
 
-  // Moving left. x <= 0.
-  return direction.y > 0.0 ? BL : TL;
+  float tb = float(direction.y < 0.0) * -2.0 + 1.0; // t = 1 * -2 + 1; b = 0 * -2 + 1
+  float lr = float(direction.x < 0.0) + 1.0; // l = 1 + 1; r = 0 + 1
+  return int((tb * lr) + (tb * -0.5) + 1.5);
+
+  // Original approach:
+  // if ( direction.x > 0.0 ) return direction.y > 0.0 ? BR : TR;
+  // Moving left. x <= 0.0.
+  // return direction.y > 0.0 ? BL : TL;
 }
 
 /**

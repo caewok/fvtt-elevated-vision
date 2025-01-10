@@ -12,6 +12,7 @@ import { Matrix } from "../geometry/Matrix.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
 import { Plane} from "../geometry/3d/Plane.js";
+import { edgeElevationE } from "../util.js";
 import {
   vec2,
   vec3,
@@ -1682,38 +1683,6 @@ export class DirectionalSourceShadowWallVertexShaderTest extends ShadowWallVerte
   fragmentCalculations(pt) {
     return super.fragmentCalculations(pt);
   }
-}
-
-/**
- * Return the top and bottom elevation for an edge.
- * @param {Edge} edge
- * @returns {object}
- *   - @prop {number} topE      Elevation in grid units
- *   - @prop {number} bottomE   Elevation in grid units
- */
-function edgeElevationE(edge) {
-  // TODO: Handle elevation for ramps where walls are not equal
-  const { a, b } = edge.elevationLibGeometry;
-  const topE = Math.max(
-    a.top ?? Number.POSITIVE_INFINITY,
-    b.top ?? Number.POSITIVE_INFINITY);
-  const bottomE = Math.min(
-    a.bottom ?? Number.NEGATIVE_INFINITY,
-    b.bottom ?? Number.NEGATIVE_INFINITY);
-  return { topE, bottomE };
-}
-
-/**
- * Return the top and bottom elevation for an edge.
- * @param {Edge} edge
- * @returns {object}
- *   - @prop {number} topZ      Elevation in base units
- *   - @prop {number} bottomZ   Elevation in base units
- */
-function edgeElevationZ(edge) {
-  const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
-  const { topE, bottomE } = edgeElevationE(edge);
-  return { topZ: gridUnitsToPixels(topE), bottomZ: gridUnitsToPixels(bottomE) };
 }
 
 /* Testing

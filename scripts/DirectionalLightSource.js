@@ -1,21 +1,13 @@
 /* globals
-AmbientLight,
 canvas,
 CONFIG,
-CONST,
 foundry,
-LightSource,
 PIXI,
 PreciseText
 */
 "use strict";
 
 import { MODULE_ID, FLAGS } from "./const.js";
-import { DirectionalSourceShadowWallGeometry } from "./glsl/SourceShadowWallGeometry.js";
-import { DirectionalShadowWallShader, ShadowMesh } from "./glsl/ShadowWallShader.js";
-import { ShadowVisionMaskTokenLOSShader } from "./glsl/ShadowVisionMaskShader.js";
-import { ShadowDirectionalTextureRenderer } from "./glsl/ShadowTextureRenderer.js";
-import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 import { Draw } from "./geometry/Draw.js";
 import { pointCircleCoord } from "./util.js";
 
@@ -209,7 +201,7 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
   }
 
   destroy() {
-    console.log('destroying directional light source.');
+    console.debug("destroying directional light source.");
     this.elevationAngleGrid?.destroy(true);
     super.destroy();
   }
@@ -218,8 +210,7 @@ export class DirectionalLightSource extends foundry.canvas.sources.PointLightSou
    * Draw a set of rectangles displaying the elevation angles at 10º spaces along the canvas.
    */
   static _refreshElevationAngleGuidelines() {
-    this._elevationAngleGrid.removeChildren().forEach(c => c.destroy(true));;
-
+    this._elevationAngleGrid.removeChildren().forEach(c => c.destroy(true));
     const draw = new Draw(this._elevationAngleGrid);
     draw.clearDrawings();
     const center = canvas.dimensions.rect.center;
