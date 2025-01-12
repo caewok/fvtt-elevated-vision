@@ -7,28 +7,13 @@ PIXI
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
-/* Wall Geometry version 2
-Track relationship between a single edge and a light source.
-Also tracks connected edges used to determine shape of the penumbra.
-Creates geometry used by the shader.
-- Vertices of the penumbra triangle.
-- Wall ratio to determine if fragment is in front of wall.
-- Wall threshold information to determine if fragment is shaded.
-
-Randomly samples points in the light sphere to create the shadow.
-*/
-
 import { MODULE_ID } from "../const.js";
 import { Draw } from "../geometry/Draw.js";
+import { edgeElevationZ } from "../util.js";
+import { CombinedGeometry, SubGeometry } from "./CombinedGeometry.js";
+import { Ray2d, distanceToLine, normalizedDirection, randomSphereCoordinate } from "./SourceShadowSingleWallGeometry.js";
 
-/** @type {enum} CORNERS */
-// const TL = 0;
-// const TR = 1;
-// const BR = 2;
-// const BL = 3;
-
-export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
-
+export class SourceShadowMultiWallGeometry extends CombinedGeometry {
   /**
    * Maximum number of samples.
    * TODO: Move this to a CONFIG.
@@ -36,6 +21,214 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    */
   static MAXIMUM_SAMPLES = 10;
 
+  /** @type {PointSource} */
+  source;
+
+  /** @type {Map<string, SubGeometry>} */
+  geomEdgeMap = new Map(); // Uses edge.id b/c edge not guaranteed to be the same.
+
+  // ----- NOTE: Instantiation and initialization ----- //
+
+  /**
+   * Create a new combined geometry representing a source and edges it may shadow.
+   * @param {RenderedSource}
+   * @returns {CombinedGeometry}
+   */
+  static create(source) {
+    const geom = super.create(SourceShadowMultiWallSubGeometry);
+    geom.source = source;
+    return geom;
+  }
+
+  /** @type {boolean} */
+  #initialized = false;
+
+  get initialized() { return this.initialized; }
+
+  /**
+   * Initialize this geometry with zero values for index and attributes.
+   */
+  initialize(edges) {
+    if ( this.#initialized ) return;
+    this.#initializeEdges(edges);
+    this.#initializeIndex();
+    this.#initializeAttribute("aVertex", 2, PIXI.TYPES.FLOAT);
+    this.#initializeAttribute("aEdgeDist", 1, PIXI.TYPES.FLOAT);
+    this.#initializeAttribute("aThresholdRadius2", 1, PIXI.TYPES.FLOAT);
+    this.#initializeAttribute("aLimitedWall", 1, PIXI.TYPES.FLOAT); // TODO: Change to UNSIGNED_BYTE?
+    this.subgeometries.forEach(sg => sg._updateGeometry());
+    this.#initialized = true;
+  }
+
+  /**
+   * Initialize the edges for this source.
+   * Does not create index or attributes.
+   * @param {Edge[]} edges
+   */
+  #initializeEdges(edges) {
+    edges ??= canvas.edges.values();
+    edges = [...edges].filter(edge => this._includeEdge(edge));
+    const nEdges = edges.length;
+    this.subgeometries.length = nEdges;
+    for ( let i = 0; i < nEdges; i += 1 ) {
+      const edge = edges[i];
+      const subgeom = new this.subclass(this.source, edge);
+      this.geomEdgeMap.set(edge.id, subgeom);
+      this.subgeometries[i] = subgeom;
+    }
+  }
+
+  /**
+   * Initialize index and attributes for this source.
+   */
+  #initializeIndex() {
+    const bufferSize = this.subgeometries.length * this.subclassSize;
+    this.addIndex(new Uint16Array(bufferSize));
+  }
+
+  /**
+   * Initialize attributes for this source.
+   * @param {string} id         The name of the attribute
+   * @param {number} [size=1]   How many values makes up a single entry; e.g., {x, y} would be 2
+   * @param {PIXI.TYPES} [type = PIXI.TYPES.FLOAT]  The type of value stored
+   */
+  #initializeAttribute(id, size = 1, type = PIXI.TYPES.FLOAT) {
+    // TODO: Use other buffer types?
+    const bufferSize = this.subgeometries.length * this.subclassSize * size;
+    const buffer = new Float32Array(bufferSize);
+    const normalized = false;
+    this.addAttribute(id, buffer, size, normalized, type);
+  }
+
+  // ----- NOTE: Updates to geometry ----- //
+
+  /**
+   * Update based on indicated changes to the source.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
+   */
+  sourceUpdated(changes) {
+    let updated = false;
+    this.geomEdgeMap.forEach(geom => {
+      const hadUpdate = geom.sourceUpdated(changes);
+      updated ||= hadUpdate;
+    });
+    return updated;
+  }
+
+  /**
+   * Update based on indicated changes to the edge.
+   * @param {Edge} edge                   The edge that was updated.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
+   */
+  edgeUpdated(edge, changes) {
+    return this.geomEdgeMap.get(edge)?.edgeUpdated(changes);
+  }
+
+  /**
+   * Update shadow data based on the added edge, as necessary.
+   * @param {Edge} edge     Edge that was added to the scene.
+   * @returns {boolean} True if the added edge resulted in a change.
+   */
+  edgeAdded(edge) {
+    if ( this.geomEdgeMap.has(edge.id) ) return false;
+    if ( !this._includeEdge(edge) ) return false;
+    const subgeom = this.addSubGeometry();
+    subgeom.source = this.source;
+    subgeom.edge = edge;
+    this.geomEdgeMap.set(edge.id, subgeom);
+    this.subgeometries.push(subgeom);
+    subgeom._updateGeometry();
+    return true;
+  }
+
+  /**
+   * Update shadow data based on the removed edge, as necessary.
+   * @param {Edge} edge             Edge that was removed
+   * @returns {boolean} True if the added edge resulted in a change.
+   */
+  edgeRemoved(edge) {
+    if ( !this.geomEdgeMap.has(edge.id) ) return false;
+    const subgeom = this.geomEdgeMap.get(edge.id);
+    this.geomEdgeMap.delete(edge.id);
+    const idxToRemove = this.subgeometries.indexOf(subgeom);
+    return Boolean(this.removeSubGeometry(idxToRemove));
+  }
+
+  // ----- NOTE: Edge testing ----- //
+
+  /**
+   * Should this edge be included in the geometry for this source shadow?
+   * @param {Edge} edge
+   * @returns {boolean}   True if edge should be included
+   */
+  _includeEdge(edge) {
+    if ( edge.type !== "wall" && edge.type !== "regionWall" ) return false;
+    return this._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
+  }
+
+  /**
+   * Comparable to PointSourcePolygon.prototype._testWallInclusion
+   * Test for whether a given wall interacts with this source.
+   * Used to filter walls in the quadtree in _getWalls
+   * @param {Edge} edge
+   * @param {PIXI.Point} origin
+   * @returns {boolean}
+   */
+  _testEdgeInclusion(edge, origin) {
+    const src = this.source;
+
+    // Ignore walls that are non-blocking for this type.
+    const type = src.constructor.sourceType;
+    if ( !edge[type] || edge.isOpen ) return false;
+
+    // TODO: Handle elevation for ramps where walls are not equal
+    const { topZ, bottomZ } = edgeElevationZ(edge);
+
+    // If edge is entirely above the light, do not keep.
+    const elevationZ = src.elevationZ;
+    if ( bottomZ > elevationZ ) return false;
+
+    // If wall is entirely below the canvas and source is above, do not keep.
+    const minCanvasE = canvas.scene[MODULE_ID]?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
+    if ( topZ <= minCanvasE && elevationZ > minCanvasE ) return false;
+
+    // Ignore collinear walls
+    const side = edge.orientPoint(origin);
+    // Keep collinear. if ( !side ) return false;
+
+    // Ignore one-directional walls facing away from the origin.
+    if ( side === edge.dir ) return false;
+
+    // Ignore non-attenuated threshold walls where the threshold applies.
+    if ( !edge.threshold?.attenuation && this.thresholdApplies(edge) ) return false;
+
+    return true;
+  }
+
+  /**
+   * For threshold edges, determine if threshold applies.
+   * @param {Edge} edge
+   * @returns {boolean} True if the threshold applies.
+   */
+  thresholdApplies(edge) {
+    const src = this.source;
+    return edge.applyThreshold(src.constructor.sourceType, src, src.data.externalRadius);
+  }
+}
+
+export class PointSourceShadowMultiWallGeometry extends SourceShadowMultiWallGeometry {
+
+}
+
+
+export class DirectionalSourceShadowMultiWallGeometry extends SourceShadowMultiWallGeometry {
+
+}
+
+
+export class SourceShadowMultiWallSubGeometry extends SubGeometry {
 
   /** @type {PointSource} */
   source;
@@ -49,8 +242,6 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    */
   linkedEdges = { a: new Set(), b: new Set() };
 
-  // ----- NOTE: Instantiation ----- //
-
   /**
    * @type {PointSource}
    * @type {Edge}
@@ -59,7 +250,6 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     super();
     this.source = source;
     this.edge = edge;
-    this.constructWallGeometry();
   }
 
   // ----- NOTE: Getters / Setters ----- //
@@ -82,27 +272,6 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
   }
 
   // ----- NOTE: Geometry ----- //
-
-  /**
-   * Calculate the wall geometry for this source.
-   * The base assumes a single shadow from the light center.
-   * @param {Point3d[]} [samples = this.sourceOrigin]     The points within the light to use
-   */
-  constructWallGeometry(samples = [this.sourceOrigin]) {
-    const nSamples = samples.length;
-
-    // Add index.
-    this.addIndex(Array.fromRange(nSamples * 3)); // Number of sample triangles; 3 vertices each.
-
-    // Build a shadow triangle using sampled points within the light sphere.
-    const vertices = Array(nSamples * 3 * 2); // For each vertex: x,y
-    const edgeDist = Array(nSamples * 3);
-    this.#updateVertices(samples, vertices, edgeDist);
-
-    // Add the data to the buffer.
-    this.addAttribute("aVertex", vertices, 2);
-    this.addAttribute("aEdgeDist", edgeDist, 1);
-  }
 
   /**
    * Resample and update the vertices and associated distances from the edge.
@@ -174,11 +343,11 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
    */
   sourceUpdated(changes) {
-    const changed2dPosition = changes.has("x") || changes.has("y");
+    const changedPosition = changes.has("x") || changes.has("y");
     const changedElevation = changes.has("elevation");
     const changedLightSize = changes.has("flags.elevatedvision.lightSize");
-    if ( changed2dPosition || changedElevation || changedLightSize ) this._updateGeometry();
-    return changed2dPosition || changedElevation;
+    if ( changedPosition || changedElevation || changedLightSize ) this._updateGeometry();
+    return changedPosition || changedElevation;
   }
 
   /**
@@ -201,7 +370,8 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    * Update the geometry for this source-edge relationship.
    * @param {Point3d[]} samples     Points within the light to use for the center point of ∆ABC
    */
-  _updateGeometry(samples = [this.sourceOrigin]) {
+  _updateGeometry(samples) {
+    samples ??= [this.sourceOrigin];
     const vertices = this.getBuffer("aVertex").data;
     const edgeDist = this.getBuffer("aEdgeDist").data;
     this.#updateVertices(samples, vertices, edgeDist);
@@ -358,11 +528,9 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     const poly = new PIXI.Polygon(...buffer.slice(idx * 6, (idx * 6) + 6));
     Draw.shape(poly, opts);
   }
-
 }
-export class PointSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
-  // ----- NOTE: Getters / Setters ----- //
 
+export class PointSourceShadowMultiWallSubGeometry extends SourceShadowMultiWallSubGeometry {
   /** @type {number} */
   get sourceSize() { return this.source.data.lightSize; }
 
@@ -414,280 +582,26 @@ export class PointSourceShadowSingleWallGeometry extends SourceShadowSingleWallG
     const light = new PIXI.Circle(this.sourceOrigin.x, this.sourceOrigin.y, this.sourceSize);
     Draw.shape(light, { color: Draw.COLORS.yellow, fillColor: Draw.COLORS.yellow, fillAlpha: 0.5 });
   }
+}
+
+export class DirectionalSourceShadowMultiWallSubGeometry extends SourceShadowMultiWallSubGeometry {
 
 }
 
-export class DirectionalSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
+/* Testing point light
 
-}
-
-// ----- NOTE: Helper functions ----- //
-
-/**
- * Volume of a sphere
- * @param {number} radius
- * @returns {number}
- */
-function sphereVolume(radius) { return (4/3) * Math.PI * Math.pow(radius, 3); }
-
-/**
- * Normal distribution with mean 0 and standard deviation 1.
- * See https://stackoverflow.com/questions/25582882/javascript-math-random-normal-distribution-gaussian-bell-curve
- * Use Box-Muller transform with resampling of values outside 0/1.
- * @returns {number[2]} Number between ~ -4 to 4, concentrated in -3 to 3.
- */
-function randNormal() {
-  // Use cartesian coordinate version.
-  // https://en.wikipedia.org/wiki/Box–Muller_transform
-  const u1 = 1 - Math.random(); // Converting [0,1) to (0,1]
-  const u2 = 1 - Math.random();
-  const mult = Math.sqrt(-2 * Math.log(u1));
-  const u2Pi = Math.PI * 2 * u2;
-  return mult * Math.cos(u2Pi);
-}
-
-function randNormalDual() {
-  // Use cartesian coordinate version.
-  // https://en.wikipedia.org/wiki/Box–Muller_transform
-  const u1 = 1 - Math.random(); // Converting [0,1) to (0,1]
-  const u2 = 1 - Math.random();
-  const mult = Math.sqrt(-2 * Math.log(u1));
-  const u2Pi = Math.PI * 2 * u2;
-  return [
-    mult * Math.cos(u2Pi),
-    mult * Math.sin(u2Pi)
-  ];
-}
-
-function randNormalPolarDual() {
-  // Use polar coordinate version.
-  // https://en.wikipedia.org/wiki/Box–Muller_transform
-  let s;
-  let u;
-  let v;
-  do {
-    u = (Math.random() * 2) - 1; // Change to [-1, 1]
-    v = (Math.random() * 2) - 1;
-    s = Math.pow(u, 2) + Math.pow(v, 2);
-  } while ( s > 1 );
-
-  const mult = Math.sqrt((-2 * Math.log(s)) / s);
-  return [u * mult, v * mult];
-}
-
-
-/* Nearly equivalent in speed, surprisingly.
-N = 100000
-await foundry.utils.benchmark(randNormal, N)
-await foundry.utils.benchmark(randNormalDual, N)
-await foundry.utils.benchmark(randNormalPolarDual, N)
-await foundry.utils.benchmark(randNormal, N)
-await foundry.utils.benchmark(randNormalDual, N)
-await foundry.utils.benchmark(randNormalPolarDual, N)
-await foundry.utils.benchmark(randNormal, N)
-await foundry.utils.benchmark(randNormalDual, N)
-await foundry.utils.benchmark(randNormalPolarDual, N)
-*/
-
-/**
- * Random point on the unit sphere.
- * See https://karthikkaranth.me/blog/generating-random-points-in-a-sphere/
- * @returns {Point3d}
- */
-export function randomSphereCoordinate() {
-  // Pick three normally distributed numbers and normalize the vector resulting from these numbers.
-  // Then scale by the cube root of a uniformly chosen random number for the radius.
-  const radius = Math.random();
-  let [x1, x2] = randNormalDual();
-  let x3 = randNormal();
-  const mag = Math.hypot(x1, x2, x3); // Equals Math.sqrt((x1 * x1) + (x2 * x2)+ (x3 * x3));
-  x1 /= mag;
-  x2 /= mag;
-  x3 /= mag;
-  const c = Math.cbrt(radius);
-  return new CONFIG.GeometryLib.threeD.Point3d(x1 * c, x2 * c, x3 * c);
-}
-
-/**
- * Normalized direction for points A->B
- * @param {PIXI.Point|Point3d} a
- * @param {PIXI.Point|Point3d} b
- * @param {PIXI.Point|Point3d} outPoint
- * @returns {PIXI.Point|Point3d} The outPoint, modified to be the normalized direction.
- */
-export function normalizedDirection(a, b, outPoint) {
-  outPoint ??= new a.constructor();
-  b.subtract(a, outPoint).normalize(outPoint);
-  return outPoint;
-}
-
-/**
- * Cross x and y parameters.
- * @param {PIXI.Point} a  First vector
- * @param {PIXI.Point} b  Second vector
- * @returns {float} The cross product
- */
-function cross2d(a, b) { return (a.x * b.y) - (a.y * b.x); }
-
-/**
- * Calculate barycentric position within a given triangle
- * For point p and triangle abc, return the barycentric point.
- * @param {Point3d|PIXI.Point} p
- * @param {Point3d|PIXI.Point} a
- * @param {Point3d|PIXI.Point} b
- * @param {Point3d|PIXI.Point} c
- * @returns {Point3d}
- */
-function barycentric(p, a, b, c) {
-  const v0 = b.subtract(a); // Fixed for given triangle.
-  const v1 = c.subtract(a); // Fixed for given triangle.
-  const v2 = p.subtract(a);
-
-  const d00 = v0.dot(v0); // Fixed for given triangle
-  const d01 = v0.dot(v1); // Fixed for given triangle
-  const d11 = v1.dot(v1); // Fixed for given triangle
-  const d20 = v2.dot(v0);
-  const d21 = v2.dot(v1);
-
-  const denom = ((d00 * d11) - (d01 * d01));
-  if ( !denom ) return new CONFIG.GeometryLib.threeD.Point3d(-1.0, -1.0, -1.0);
-
-  const denomInv = 1.0 / denom; // Fixed for given triangle
-  const v = ((d11 * d20) - (d01 * d21)) * denomInv;
-  const w = ((d00 * d21) - (d01 * d20)) * denomInv;
-  const u = 1.0 - v - w;
-  return new CONFIG.GeometryLib.threeD.Point3d(u, v, w);
-}
-
-/**
- * Closest point to a line.
- * @param {PIXI.Point} c
- * @param {Ray2d} l
- * @returns {PIXI.Point}
- */
-function closest2dPointToLine(c, l) {
-  const denom = l.direction.dot(l.direction);
-  if ( denom === 0.0 ) return c;
-
-  const deltaCA = c.subtract(l.origin);
-  const u = deltaCA.dot(l.direction) / denom;
-  return l.origin.add(l.direction.multiplyScalar(u));
-}
-
-/**
- * Distance to the closest point to a line.
- * @param {PIXI.Point} c
- * @param {Ray2d} l
- * @returns {number}
- */
-export function distanceToLine(c, l) {
-  const ix = closest2dPointToLine(c, l);
-  return PIXI.Point.distanceBetween(c, ix);
-}
-
-/**
- * Represent a two-dimensional ray.
- */
-export class Ray2d {
-  /** @type {PIXI.Point} */
-  origin = new PIXI.Point();
-
-  /** @type {PIXI.Point} */
-  direction = new PIXI.Point();
-
-  /**
-   * @param {Point} origin
-   * @param {Point} direction
-   */
-  constructor(origin, direction) {
-    this.origin.copyFrom(origin);
-    this.direction.copyFrom(direction);
-  }
-
-  /**
-   * @param {PIXI.Point} a
-   * @param {PIXI.Point} b
-   * @returns {Ray2d}
-   */
-  static normalized(a, b) {
-    const dir = PIXI.Point._tmp3;
-    normalizedDirection(a, b, dir);
-    return new this(a, dir);
-  }
-
-  /**
-   * Intersect this ray with another.
-   * @param {Ray2d} other
-   * @returns {number|null} T value along this ray or null if no intersection.
-   */
-  intersectRayT(other) {
-    const denom = cross2d(this.direction, other.direction);
-
-    // If lines are parallel, no intersection.
-    if ( denom.almostEqual(0) ) return null;
-    const diff = this.origin.subtract(other.origin);
-    return cross2d(other.direction, diff) / denom;
-  }
-
-  /**
-   * Intersect this ray with another.
-   * @param {Ray2d} other
-   * @param {PIXI.Point} [ix]     Where to store the intersection
-   * @returns {PIXI.Point|null}     The intersection t or null if none.
-   */
-  intersectRay(other, ix) {
-    ix ??= new PIXI.Point();
-    const t = this.intersectRayT(other);
-    if ( t !== null ) return this.origin.add(this.direction.multiplyScalar(t, ix), ix);
-    return null;
-  }
-
-  /**
-   * Intersect this ray with a line represented by two points.
-   * @param {PIXI.Point} a
-   * @param {PIXI.Point} b
-   * @param {PIXI.Point} [ix]     Where to store the intersection
-   * @returns {PIXI.Point|null}
-   */
-  intersectPoints(a, b, ix) {
-    const rAB = new this.constructor(a, b.subtract(a, PIXI.Point._tmp3));
-    return this.intersectRay(rAB, ix);
-  }
-
-  /**
-   * Project the ray.
-   * @param {number} t
-   * @param {PIXI.Point} outPoint
-   * @returns {PIXI.Point} outPoint, for convenience
-   */
-  project(t, outPoint) {
-    outPoint ??= new PIXI.Point();
-    return this.origin.add(this.direction.multiplyScalar(t, outPoint), outPoint);
-  }
-}
-
-/** Testing single shadow
 MODULE_ID = "elevatedvision"
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 Draw = CONFIG.GeometryLib.Draw;
 api = game.modules.get("elevatedvision").api
-SourceShadowWallGeometry2 = api.testing.SourceShadowWallGeometry2
-l = canvas.lighting.placeables[0];
-edge0 = canvas.walls.placeables[0].edge
-geom = new SourceShadowWallGeometry2(l.lightSource, edge0)
-*/
+SourceShadowMultiWallGeometry = api.testing.SourceShadowMultiWallGeometry
+SourceShadowMultiWallSubGeometry = api.testing.SourceShadowMultiWallSubGeometry
 
-/** Testing sized shadow
-MODULE_ID = "elevatedvision"
-Point3d = CONFIG.GeometryLib.threeD.Point3d
-Draw = CONFIG.GeometryLib.Draw;
-api = game.modules.get("elevatedvision").api
-SizedSourceShadowWallGeometry2 = api.testing.SizedSourceShadowWallGeometry2
-l = canvas.lighting.placeables[0];
-edge0 = canvas.walls.placeables[0].edge
-geom = new SizedSourceShadowWallGeometry2(l.lightSource, edge0)
-geom.drawLight()
-geom.drawShadowTriangles({ width: 0})
-geom.drawEdge()
+
+let [l] = canvas.lighting.placeables;
+
+geom = SourceShadowMultiWallGeometry.create(l.lightSource)
+geom.initialize()
+
 
 */

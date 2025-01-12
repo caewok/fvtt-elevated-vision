@@ -89,6 +89,14 @@ import {
   WebGLShadowsSingleWall
 } from "./glsl/WebGLShadowsSingleWall.js";
 
+import {
+  SourceShadowMultiWallGeometry,
+  PointSourceShadowMultiWallGeometry,
+  DirectionalSourceShadowMultiWallGeometry,
+  SourceShadowMultiWallSubGeometry,
+  PointSourceShadowMultiWallSubGeometry,
+  DirectionalSourceShadowMultiWallSubGeometry
+} from "./glsl/SourceShadowMultiWallGeometry.js";
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -201,7 +209,14 @@ Hooks.once("init", function() {
       PointSourceShadowSingleWallShader,
       DirectionalSourceShadowSingleWallShader,
 
-      WebGLShadowsSingleWall
+      WebGLShadowsSingleWall,
+
+      SourceShadowMultiWallGeometry,
+      PointSourceShadowMultiWallGeometry,
+      DirectionalSourceShadowMultiWallGeometry,
+      SourceShadowMultiWallSubGeometry,
+      PointSourceShadowMultiWallSubGeometry,
+      DirectionalSourceShadowMultiWallSubGeometry
     }
   };
 

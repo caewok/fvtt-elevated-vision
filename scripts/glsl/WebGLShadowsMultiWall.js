@@ -40,7 +40,7 @@ const PIXEL_INV = 1 / 255;
  * Expected to be set at source.elevatedvision
  * The base class is set up for GlobalLightSource.
  */
-export class WebGLShadowsSingleWall {
+export class WebGLShadowsMultiWall {
 
   static maskColor = 0xFF0000;
 
@@ -62,7 +62,7 @@ export class WebGLShadowsSingleWall {
   /** @type {RenderedPointSource} */
   source;
 
-  /** @type {Map<string, PIXI.Mesh>} */
+  /** @type {Map<string, PIXI.Geometry>} */
   meshEdgeMap = new Map(); // Uses edge.id b/c edge not guaranteed to be the same.
 
   /** @type {ShadowTextureRenderer} */
@@ -301,7 +301,6 @@ export class WebGLShadowsSingleWall {
 
   /**
    * Update shadow data based on the removed edge, as necessary.
-   * @param {Edge} edge                     Edge that was removed
    * @param {object} [opts]
    * @param {boolean} [opts.render=true]    Trigger a re-render.
    * @returns {boolean} True if the added edge resulted in a change.
@@ -614,7 +613,7 @@ export class WebGLShadowsSingleWall {
 
 }
 
-export class GlobalLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
+export class GlobalLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
   constructor(source) {
     super(source);
     this.#initializeVisionMask();
@@ -665,7 +664,7 @@ export class GlobalLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 }
 
 
-export class PointVisionWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
+export class PointVisionWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   /** @type {PIXI.Geometry} */
   static geometryClass = SourceShadowSingleWallGeometry;
@@ -756,7 +755,7 @@ export class PointVisionWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
   }
 }
 
-export class PointLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
+export class PointLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   /** @type {PIXI.Geometry} */
   static geometryClass = PointSourceShadowSingleWallGeometry;
@@ -806,7 +805,7 @@ export class PointLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
   }
 }
 
-export class DirectionalLightWebGLShadowsSingleWall extends PointLightWebGLShadowsSingleWall {
+export class DirectionalLightWebGLShadowsMultiWall extends PointLightWebGLShadowsMultiWall {
   /** @type {PIXI.Geometry} */
   static geometryClass = DirectionalSourceShadowSingleWallGeometry;
 
