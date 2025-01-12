@@ -63,7 +63,7 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     if ( this.#initialized ) return;
     this.source = source;
     this.edge = edge;
-    this.constructWallGeometry(edges);
+    this.constructWallGeometry();
     this.#initialized = true;
   }
 
