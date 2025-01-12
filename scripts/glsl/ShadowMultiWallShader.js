@@ -151,7 +151,6 @@ export class ShadowMultiWallShader extends AbstractEVShader {
     const changedPosition = changes.has("x") || changes.has("y");
     const changedElevation = changes.has("elevation");
     if ( changedPosition || changedElevation ) this.updateLightPosition();
-    if ( changedPosition ) this.updateEdgeThreshold();
     return changedPosition || changedElevation;
   }
 
