@@ -40,8 +40,6 @@ vec4 noShadow() {
  * @returns {vec4}
  */
 vec4 lightEncoding(in float light) {
-  if ( light == 1.0 ) return noShadow();
-
   // For testing, return the amount of shadow, which can be directly rendered to the canvas.
   #if defined SHADOW
   return vec4(vec3(0.0), (1.0 - light) * 0.7);

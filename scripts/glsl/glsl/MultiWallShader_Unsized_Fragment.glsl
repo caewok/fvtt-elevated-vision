@@ -27,27 +27,11 @@ ${defineFunction("distanceSquared")}
 #define LIMITED_WALL        10.0
 
 /**
- * Fragment color when no shadow present.
- * @returns {vec4}
- */
-vec4 noShadow() {
-  // If not in shadow, need to treat limited wall as non-limited
-  #ifdef SHADOW
-  return vec4(0.0, 1.0);
-  #endif
-
-  const light = 1.0 / uNumSamples;
-  return vec4(light, 1.0, 1.0, 1.0);
-}
-
-/**
  * Fragment color to encode percentage of light.
  * @param {float} light   Percent light present, between 0.0 and 1.0.
  * @returns {vec4}
  */
 vec4 lightEncoding(in float light) {
-  if ( light == 1.0 ) return noShadow();
-
   // For testing, return the amount of shadow, which can be directly rendered to the canvas.
   #if defined SHADOW
   return vec4(vec3(0.0), (1.0 - light) * 0.7);
