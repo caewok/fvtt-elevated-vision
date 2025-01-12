@@ -633,6 +633,14 @@ export class GlobalLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
     draw.shape(this.source.shape, { fill: this.source.constructor.maskColor });
   }
 
+  sourceUpdated() { return false; }
+
+  edgeAdded() { return false; }
+
+  edgeUpdated() { return false; }
+
+  edgeRemoved() { return false; }
+
   /**
    * Destroy meshes, geometry, textures.
    */

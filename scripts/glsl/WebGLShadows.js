@@ -541,6 +541,13 @@ export class GlobalLightWebGLShadows extends WebGLShadows {
     draw.shape(this.source.shape, { fill: this.source.constructor.maskColor });
   }
 
+  sourceUpdated() { return false; }
+
+  edgeAdded() { return false; }
+
+  edgeUpdated() { return false; }
+
+  edgeRemoved() { return false; }
 
   /** @type {boolean} */
   #destroyed = false;
@@ -566,16 +573,6 @@ export class GlobalLightWebGLShadows extends WebGLShadows {
     u.uEVShadows = false;
     u.uEVDirectional = false;
   }
-
-  /**
-   * Utility function to handle variety of edge changes to a source.
-   * For global light source, ignore.
-   * @param {RenderedEffectSource} source
-   * @param {Edge} edge
-   * @param {string} updateFn   Name of the update method for the wall geometry.
-   * @param {object} opts       Options passed to updateFn
-   */
-  _handleEdgeChange(_source, _edge, _updateFn, _opts = {}) {}
 }
 
 
