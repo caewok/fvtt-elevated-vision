@@ -144,7 +144,7 @@ export class WebGLShadows {
    * Shadows for walls coded to handle terrain walls.
    */
   _initializeShadowMesh() {
-    const geometry = new this.constructor.geometryClass(this.source);
+    const geometry = new this.constructor.geometryClass();
     const shader = this.constructor.shaderClass.create(this.source);
     geometry.initialize(this.source);
     this.shadowMesh = new ShadowMesh(geometry, shader);
