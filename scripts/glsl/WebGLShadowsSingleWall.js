@@ -197,7 +197,7 @@ export class WebGLShadowsSingleWall {
    * @param {Edge} edge
    */
   #initializeEdge(edge) {
-    const geometry = new this.constructor.geometryClass(this.source, edge);
+    const geometry = new this.constructor.geometryClass();
     const shader = this.constructor.shaderClass.create(this.source, edge);
     geometry.initialize(this.source, edge);
     const mesh = new ShadowMesh(geometry, shader);
