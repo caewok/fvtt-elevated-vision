@@ -14,13 +14,6 @@ import { CombinedGeometry, SubGeometry } from "./CombinedGeometry.js";
 import { Ray2d, distanceToLine, normalizedDirection, randomSphereCoordinate } from "./SourceShadowSingleWallGeometry.js";
 
 export class SourceShadowMultiWallGeometry extends CombinedGeometry {
-  /**
-   * Maximum number of samples.
-   * TODO: Move this to a CONFIG.
-   * @type {number}
-   */
-  static MAXIMUM_SAMPLES = 10;
-
   /** @type {PointSource} */
   source;
 

@@ -29,14 +29,6 @@ import { Draw } from "../geometry/Draw.js";
 
 export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
 
-  /**
-   * Maximum number of samples.
-   * TODO: Move this to a CONFIG.
-   * @type {number}
-   */
-  static MAXIMUM_SAMPLES = 10;
-
-
   /** @type {PointSource} */
   source;
 
