@@ -19,8 +19,8 @@ export const FLAGS = {
     SOLAR_ANGLE: "solarAngle"
   },
   SHADOWS: {
-    LIGHTING: "useShadowLighting",
-    VISION: "useShadowVision"
+    LIGHTING: "use-shadow-lighting",
+    VISION: "use-shadow-vision"
   }
 };
 
