@@ -33,9 +33,11 @@ ${defineFunction("distanceSquared")}
 vec4 noShadow() {
   // If not in shadow, need to treat limited wall as non-limited
   #ifdef SHADOW
-  return vec4(0.0, 1.0 / uNumSamples);
+  return vec4(0.0, 1.0);
   #endif
-  return vec4(1.0, 1.0, 1.0, 1.0 / uNumSamples);
+
+  const light = 1.0 / uNumSamples;
+  return vec4(light, 1.0, 1.0, 1.0);
 }
 
 /**
@@ -47,13 +49,18 @@ vec4 lightEncoding(in float light) {
   if ( light == 1.0 ) return noShadow();
 
   // For testing, return the amount of shadow, which can be directly rendered to the canvas.
-  if ( fWallType == LIMITED_WALL ) return vec4(1.0, 0.5, light, 1.0 / uNumSamples);
-  else return vec4(light, 1.0, 1.0, 1.0 / uNumSamples);
+  #if defined SHADOW
+  return vec4(vec3(0.0), (1.0 - light) * 0.7);
+  #endif
+
+  if ( fWallType == LIMITED_WALL ) return vec4(1.0, 0.5, light, 1.0);
+  else return vec4(light, 1.0, 1.0, 1.0);
 
   // float ltd = 0.0;
   // float ltdInv = 1.0 - ltd;
   // return vec4((light * ltdInv) + ltd, 1.0 - (0.5 * ltd), (light * ltd) + ltdInv, 1.0);
 }
+
 
 /**
  * Is the fragment location in front of the wall?
@@ -80,7 +87,7 @@ void main() {
   // return;
 
   // Assume no shadow as the default
-  fragColor = noShadow();
+  fragColor = lightEncoding(1.0);
 
   // Tests for within relevant bounds.
   if ( inFrontOfWall() ) return;
@@ -88,7 +95,7 @@ void main() {
 
   // TODO: Vary based on elevation of terrain.
 
-  float shadow = 1.0;
+  float shadow = 1.0 / uNumSamples;
 
   // Light is simply the absence of shadow.
   float totalLight = clamp(0.0, 1.0, 1.0 - shadow);
