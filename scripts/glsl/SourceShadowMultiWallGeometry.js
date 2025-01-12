@@ -208,6 +208,14 @@ export class PointSourceShadowMultiWallGeometry extends SourceShadowMultiWallGeo
   /** @type {SubGeometry|PIXI.Geometry} */
   subclass = PointSourceShadowMultiWallSubGeometry;
 
+  /** @type {number} */
+  subclassSize = 3 * CONFIG[MODULE_ID].webGLShadowSamples;
+
+//   initialize(source, edge) {
+//     this.subClassSize = CONFIG[MODULE_ID].webGLShadowSamples * 3; // webGLShadowSamples triangles
+//     super.initialize(source, edge);
+//   }
+
 }
 
 
@@ -215,6 +223,8 @@ export class DirectionalSourceShadowMultiWallGeometry extends SourceShadowMultiW
   /** @type {SubGeometry|PIXI.Geometry} */
   subclass = DirectionalSourceShadowMultiWallSubGeometry;
 
+  /** @type {number} */
+  subclassSize = 3 * CONFIG[MODULE_ID].webGLShadowSamples;
 }
 
 
