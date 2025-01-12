@@ -160,13 +160,14 @@ export class WebGLShadowsSingleWall {
     return new PIXI.Rectangle(x - r, y - r, d, d);
   }
 
-  /**
-   * Initialize the shadow properties for this source.
-   */
+  /** @type {boolean} */
   #initialized = false;
 
   get initialized() { return this.#initialized; }
 
+  /**
+   * Initialize the shadow properties for this source.
+   */
   initializeShadows() {
     if ( this.#initialized ) return;
     this._initializeShadowMesh();
@@ -198,6 +199,7 @@ export class WebGLShadowsSingleWall {
   #initializeEdge(edge) {
     const geometry = new this.constructor.geometryClass(this.source, edge);
     const shader = this.constructor.shaderClass.create(this.source, edge);
+    geometry.initialize(this.source, edge);
     const mesh = new ShadowMesh(geometry, shader);
     this.meshEdgeMap.set(edge.id, mesh);
     this.shadowMesh.addChild(mesh);

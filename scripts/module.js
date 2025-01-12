@@ -86,10 +86,6 @@ import {
 } from "./glsl/ShadowSingleWallShader.js";
 
 import {
-  WebGLShadowsSingleWall
-} from "./glsl/WebGLShadowsSingleWall.js";
-
-import {
   SourceShadowMultiWallGeometry,
   PointSourceShadowMultiWallGeometry,
   DirectionalSourceShadowMultiWallGeometry,
@@ -97,6 +93,30 @@ import {
   PointSourceShadowMultiWallSubGeometry,
   DirectionalSourceShadowMultiWallSubGeometry
 } from "./glsl/SourceShadowMultiWallGeometry.js";
+
+import {
+  WebGLShadows,
+  GlobalLightWebGLShadows,
+  PointVisionWebGLShadows,
+  PointLightWebGLShadows,
+  DirectionalLightWebGLShadows
+} from "./glsl/WebGLShadows.js";
+
+import {
+  WebGLShadowsSingleWall,
+  GlobalLightWebGLShadowsSingleWall,
+  PointVisionWebGLShadowsSingleWall,
+  PointLightWebGLShadowsSingleWall,
+  DirectionalLightWebGLShadowsSingleWall
+} from "./glsl/WebGLShadowsSingleWall.js";
+
+import {
+  WebGLShadowsMultiWall,
+  GlobalLightWebGLShadowsMultiWall,
+  PointVisionWebGLShadowsMultiWall,
+  PointLightWebGLShadowsMultiWall,
+  DirectionalLightWebGLShadowsMultiWall
+} from "./glsl/WebGLShadowsMultiWall.js";
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -112,9 +132,20 @@ Hooks.once("init", function() {
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
 
-    useSingleWallShader: true,
+    /**
+     * Options in api:
+     *   - WebGLShadows
+     *   - WebGLShadowsSingleWall
+     *   - WebGLShadowsMultiWall
+     * @type {class}
+     */
+    webGLShadowClass: WebGLShadowsMultiWall,
 
-    singleWallSamples: 10,
+    /**
+     * For WebGLShadowsSingleWall and WebGLShadowsMultiWall, how many shadow triangles per edge.
+     * @type {number} (
+     */
+    webGLShadowSamples: 10,
 
     /**
      * ElevationLayer.
@@ -164,6 +195,10 @@ Hooks.once("init", function() {
     extract,
     DirectionalLightSource,
     PATCHER,
+
+    WebGLShadows,
+    WebGLShadowsSingleWall,
+    WebGLShadowsMultiWall,
 
     glsl: {
       SourceShadowWallGeometry,

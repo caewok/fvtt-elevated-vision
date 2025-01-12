@@ -27,35 +27,28 @@ export class SourceShadowMultiWallGeometry extends CombinedGeometry {
   /** @type {Map<string, SubGeometry>} */
   geomEdgeMap = new Map(); // Uses edge.id b/c edge not guaranteed to be the same.
 
-  // ----- NOTE: Instantiation and initialization ----- //
+  /** @type {SubGeometry|PIXI.Geometry} */
+  subclass = SourceShadowMultiWallSubGeometry;
 
-  /**
-   * Create a new combined geometry representing a source and edges it may shadow.
-   * @param {RenderedSource}
-   * @returns {CombinedGeometry}
-   */
-  static create(source) {
-    const geom = super.create(SourceShadowMultiWallSubGeometry);
-    geom.source = source;
-    return geom;
-  }
+  // ----- NOTE: Instantiation and initialization ----- //
 
   /** @type {boolean} */
   #initialized = false;
 
-  get initialized() { return this.initialized; }
+  get initialized() { return this.#initialized; }
 
   /**
    * Initialize this geometry with zero values for index and attributes.
    */
-  initialize(edges) {
+  initialize(source, edges) {
     if ( this.#initialized ) return;
+    this.source = source;
     this.#initializeEdges(edges);
     this.#initializeIndex();
     this.#initializeAttribute("aVertex", 2, PIXI.TYPES.FLOAT);
     this.#initializeAttribute("aEdgeDist", 1, PIXI.TYPES.FLOAT);
     this.#initializeAttribute("aThresholdRadius2", 1, PIXI.TYPES.FLOAT);
-    this.#initializeAttribute("aLimitedWall", 1, PIXI.TYPES.FLOAT); // TODO: Change to UNSIGNED_BYTE?
+    this.#initializeAttribute("aWallType", 1, PIXI.TYPES.FLOAT); // TODO: Change to UNSIGNED_BYTE?
     this.subgeometries.forEach(sg => sg._updateGeometry());
     this.#initialized = true;
   }
@@ -219,11 +212,15 @@ export class SourceShadowMultiWallGeometry extends CombinedGeometry {
 }
 
 export class PointSourceShadowMultiWallGeometry extends SourceShadowMultiWallGeometry {
+  /** @type {SubGeometry|PIXI.Geometry} */
+  subclass = PointSourceShadowMultiWallSubGeometry;
 
 }
 
 
 export class DirectionalSourceShadowMultiWallGeometry extends SourceShadowMultiWallGeometry {
+  /** @type {SubGeometry|PIXI.Geometry} */
+  subclass = DirectionalSourceShadowMultiWallSubGeometry;
 
 }
 
@@ -549,7 +546,7 @@ export class PointSourceShadowMultiWallSubGeometry extends SourceShadowMultiWall
    * Random points on the light sphere used for sampling the shadow triangles.
    * @returns {Point3d[]}
    */
-  lightSamplePoints(nSamples = CONFIG[MODULE_ID].singleWallSamples) {
+  lightSamplePoints(nSamples = CONFIG[MODULE_ID].webGLShadowSamples) {
     const samples = Array(nSamples);
     for ( let i = 0; i < nSamples; i += 1 ) samples[i] = this.randomPointOnLight();
     return samples;

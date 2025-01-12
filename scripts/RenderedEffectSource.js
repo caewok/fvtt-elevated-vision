@@ -153,8 +153,7 @@ PATCHES.BASIC.WRAPS = {
  */
 function webGLShadowsGetter() {
   if ( this._elevatedvision && !this._elevatedvision.destroyed ) return this._elevatedvision;
-  const cl = CONFIG[MODULE_ID].useSingleWallShader ? WebGLShadowsSingleWall : WebGLShadows;
-  const ev = this._elevatedvision = cl.fromSource(this);
+  const ev = this._elevatedvision = CONFIG[MODULE_ID].webGLShadowClass.fromSource(this);
   ev.initializeShadows();
   return ev;
 }

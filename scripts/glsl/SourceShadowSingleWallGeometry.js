@@ -51,15 +51,20 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
 
   // ----- NOTE: Instantiation ----- //
 
+  /** @type {boolean} */
+  #initialized = false;
+
+  get initialized() { return this.#initialized; }
+
   /**
-   * @type {PointSource}
-   * @type {Edge}
+   * Initialize the shadow properties for this source.
    */
-  constructor(source, edge) {
-    super();
+  initialize(source, edge) {
+    if ( this.#initialized ) return;
     this.source = source;
     this.edge = edge;
-    this.constructWallGeometry();
+    this.constructWallGeometry(edges);
+    this.#initialized = true;
   }
 
   // ----- NOTE: Getters / Setters ----- //
@@ -381,7 +386,7 @@ export class PointSourceShadowSingleWallGeometry extends SourceShadowSingleWallG
    * Random points on the light sphere used for sampling the shadow triangles.
    * @returns {Point3d[]}
    */
-  lightSamplePoints(nSamples = CONFIG[MODULE_ID].singleWallSamples) {
+  lightSamplePoints(nSamples = CONFIG[MODULE_ID].webGLShadowSamples) {
     const samples = Array(nSamples);
     for ( let i = 0; i < nSamples; i += 1 ) samples[i] = this.randomPointOnLight();
     return samples;

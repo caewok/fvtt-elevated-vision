@@ -16,27 +16,13 @@ import { MODULE_ID } from "../const.js";
 export class CombinedGeometry extends PIXI.Geometry {
 
   /** @type {SubGeometry|PIXI.Geometry} */
-  subclass;
+  subclass = SubGeometry;
 
   /** @type {number} */
   subclassSize = 3;
 
   /** @type {SubGeometry|PIXI.Geometry[]} */
   subgeometries = [];
-
-  /**
-   * Create a new combined geometry.
-   * The subclass can represent a single point, triangle, or multiple triangles, defined by size.
-   * @param {SubGeometry} subclass    The class to use when creating sub-geometries
-   * @param {number} [subclassSize=3]    How many indices represent a single sub-geometry
-   * @returns {CombinedGeometry}
-   */
-  static create(subclass, subclassSize = 3) {
-    const geom = new this();
-    geom.subclass = subclass;
-    geom.subclassSize = subclassSize;
-    return geom;
-  }
 
   /**
    * Add single element (chunk) of data to a buffer and return a new buffer.

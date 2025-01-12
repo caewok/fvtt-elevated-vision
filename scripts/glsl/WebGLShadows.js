@@ -146,6 +146,7 @@ export class WebGLShadows {
   _initializeShadowMesh() {
     const geometry = new this.constructor.geometryClass(this.source);
     const shader = this.constructor.shaderClass.create(this.source);
+    geometry.initialize(this.source);
     this.shadowMesh = new ShadowMesh(geometry, shader);
   }
 

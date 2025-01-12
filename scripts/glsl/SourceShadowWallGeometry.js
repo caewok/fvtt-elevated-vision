@@ -45,17 +45,25 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
   /** @type {PointSource} */
   source;
 
-  /** @type {string} */
-  sourceType = "light";
+  /** @type {boolean} */
+  #initialized = false;
 
-  constructor(source, edges) {
-    super();
+  get initialized() { return this.#initialized; }
+
+  /**
+   * Initialize the shadow properties for this source.
+   */
+  initialize(source, edges) {
+    if ( this.#initialized ) return;
     this.source = source;
-    this.sourceType = source.constructor.sourceType;
-
     edges ??= canvas.edges;
     this.constructWallGeometry(edges);
+    this.#initialized = true;
   }
+
+  /** @type {string} */
+  get sourceType() { return this.source.constructor.sourceType; }
+
 
   // TODO: Should this be a stored value? Makes it more complicated, but...
   get hasLimitedWalls() {
