@@ -76,7 +76,7 @@ export class SourceShadowMultiWallGeometry extends CombinedGeometry {
    */
   #initializeIndex() {
     const bufferSize = this.subgeometries.length * this.subclassSize;
-    this.addIndex(new Uint16Array(bufferSize));
+    this.addIndex(Array.fromRange(bufferSize));
   }
 
   /**
