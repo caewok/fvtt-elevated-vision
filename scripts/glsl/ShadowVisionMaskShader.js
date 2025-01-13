@@ -99,7 +99,6 @@ void main() {
    * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
    */
-
   sourceUpdated(changes) {
     const changedRadius = changes.has("dim");
     const changedPosition = changes.has("x") || changes.has("y");
@@ -204,11 +203,11 @@ void main() {
 
   // Disable unused methods.
 
-  updatedSource(_source) { return; } // eslint-disable-line no-useless-return
+  sourceUpdated() { return false; } // eslint-disable-line no-useless-return
 
-  updateSourcePosition(_source) { return; } // eslint-disable-line no-useless-return
+  updateSourcePosition() { return false; } // eslint-disable-line no-useless-return
 
-  updateSourceRadius(_source) { return; } // eslint-disable-line no-useless-return
+  updateSourceRadius() { return false; } // eslint-disable-line no-useless-return
 
 }
 
