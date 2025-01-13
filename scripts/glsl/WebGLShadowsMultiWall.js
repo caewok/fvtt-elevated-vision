@@ -192,7 +192,7 @@ export class WebGLShadowsMultiWall {
 
     const shaderChanged = this.shadowMesh.shader.sourceUpdated(changes);
     const geomChanged = this.shadowMesh.geometry.sourceUpdated(changes);
-    const shadowsChanged = (shaderChanged || geomChanged);
+    let shadowsChanged = (shaderChanged || geomChanged);
 
     if ( changedPosition || changedRadius ) this.shadowTerrainMesh.updateGeometry(this.bounds);
     if ( this.terrainShader.sourceUpdated(changes) ) shadowsChanged ||= true;
