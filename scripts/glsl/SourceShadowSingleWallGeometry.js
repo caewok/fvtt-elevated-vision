@@ -146,7 +146,7 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
 
     // For infinite shadow, extend triangle formed by light point and wall to the edge of the canvas.
     const top = this.edge.elevationLibGeometry.a.top; // Currently, a and b are same.
-    const isInfinite = A.z > top;
+    const isInfinite = A.z <= top;
     if ( isInfinite ) return this.extendTriangleToCanvasEdge([A2d, a, b]);
 
     // For non-infinite, intersect the canvas plane to determine extension point.
@@ -156,8 +156,8 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     const wallMid = CONFIG.GeometryLib.threeD.Point3d._tmp.set(wallMid2d.x, wallMid2d.y, top);
     const ix = canvasPlane.rayIntersection(A, wallMid.subtract(A));
     const rWallIx = new Ray2d(ix, b.subtract(a));
-    const rAa = new Ray2d(A2d, a);
-    const rAb = new Ray2d(A2d, b);
+    const rAa = new Ray2d(A2d, a.subtract(A2d));
+    const rAb = new Ray2d(A2d, b.subtract(A2d));
     const B = rWallIx.intersectRay(rAa);
     const C = rWallIx.intersectRay(rAb);
     return [A2d, B, C];
