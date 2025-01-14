@@ -312,8 +312,8 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
 
   // ∆DEF and ∆GHI represent the furtherest extent of the shadow because D and G are
   // near-tangent points.
-  vec2[3] DEF = shadowTriangle(vec3(D, 0.0), wall); // Z axis not used for this.
-  vec2[3] GHI = shadowTriangle(vec3(G, 0.0), wall); // Z axis not used for this.
+  vec2[3] DEF = shadowTriangle(vec3(D, uLightPosition.z), wall); // Z axis not used for this.
+  vec2[3] GHI = shadowTriangle(vec3(G, uLightPosition.z), wall); // Z axis not used for this.
   E = DEF[1];
   F = DEF[2];
   H = GHI[1];

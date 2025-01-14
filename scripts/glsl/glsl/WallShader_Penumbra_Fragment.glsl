@@ -7,8 +7,8 @@
 fragColor = noShadow();
 
 // Tests for within relevant bounds.
-// if ( inFrontOfWall() ) return;
-// if ( thresholdApplies() ) return;
+if ( inFrontOfWall() ) return;
+if ( thresholdApplies() ) return;
 
 // Classes must define shadowPercentage() function.
 float shadow = shadowPercentage();
