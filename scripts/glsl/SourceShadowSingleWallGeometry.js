@@ -78,6 +78,45 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     return new Plane(planePoint, planeNormal);
   }
 
+  /** @type {number} */
+  get edgeTopZ() { return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.edge.elevationLibGeometry.a.top ?? 1e08); }
+
+  /** @type {number} */
+  get edgeBottomZ() { return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.edge.elevationLibGeometry.a.bottom ?? 1e08); }
+
+  /** @type {PIXI.Point} */
+  get edgeMid() { this.edge.a.add(this.edge.b).multiplyScalar(0.5); }
+
+  /** @type {WallStruct} */
+  get wall() {
+    const endpointsXY = [this.edge.a, this.edge.b];
+    const closerIdx = this.closerEndpoint(endpointsXY);
+    const xyCloser = endpointsXY[closerIdx];
+    const xyFurther = endpointsXY[1 - closerIdx];
+    const direction = normalizedDirection(xyCloser, xyFurther);
+    const topZ = this.edgeTopZ;
+    const bottomZ = this.edgeBottomZ;
+    return {
+      top: [new Point3d(xyCloser.x, xyCloser.y, topZ), new Point3d(xyFurther.x, xyFurther.y, topZ)],
+      bottom: [new Point3d(xyCloser.x, xyCloser.y, bottomZ), new Point3d(xyFurther.x, xyFurther.y, bottomZ)],
+      mid: xyCloser.add(xyFurther).multiplyScalar(0.5),
+      direction
+    };
+  }
+
+  /**
+   * Determine the closer and further endpoints.
+   * @param {PIXI.Point[2]} pts
+   * @returns {number} Index for the closer endpoint.
+   */
+  closerEndpoint(pts) {
+    // Closer endpoint can be determined with relation to the light center.
+    const d0 = PIXI.Point.distanceSquared(pts[0], this.source);
+    const d1 = PIXI.Point.distanceSquared(pts[1], this.source);
+    return Number(d1 < d0);
+  }
+
+
   // ----- NOTE: Geometry ----- //
 
   /**
@@ -137,30 +176,67 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    * @returns {PIXI.Point[3]}  Triangle, from center through endpoint a and then endpoint b.
    */
   shadowTriangle(A) {
-    const A2d = A.to2d();
     const { a, b } = this.edge;
-    if ( !foundry.utils.orient2dFast(A2d, a, b) ) return [A2d, a, b]; // No real triangle to use.
-
-    // TODO: Adjust penumbra for linked walls.a
-    // Align with the linked edge if it falls between penumbra and umbra of full light.
+    const topZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(this.edge.elevationLibGeometry.a.top ?? 1e08);
+    const A2d = A.to2d();
+    if ( !foundry.utils.orient2dFast(A2d, a, b).almostEqual(0) ) {
+      // The triangle is a line.
+      if ( this.isInfiniteShadow(A) ) {
+        // Where A --> wall intersects the canvas edge.
+        const rWall = Ray2d(A2d, a.subtract(A2d));
+        const edge = this.whichCanvasEdge(rWall);
+        const ix = new PIXI.Point();
+        rWall.intersectPoints(edge.A, edge.B, ix);
+        return [A2d, ix, ix];
+      }
+      // Where A --> further wall endpoint intersects the canvas plane.
+      const furthestPoint = this.closerEndpoint([a, b]);
+      const furthestPoint3d = new Point3d(furthestPoint.x, furthestPoint.y, this.edgeTopZ);
+      const ixP = new Point3d();
+      const hasFurthestPoint = this._furthestShadowPoint(A, furthestPoint3d, ixP); // Wall 1 is further.
+      if ( !hasFurthestPoint ) new Error(`${MODULE_ID}|shadowTriangle|No furthest point found!`);
+      return [A.xy, ixP.xy, ixP.xy];
+    }
 
     // For infinite shadow, extend triangle formed by light point and wall to the edge of the canvas.
-    const top = this.edge.elevationLibGeometry.a.top; // Currently, a and b are same.
-    const isInfinite = A.z <= top;
-    if ( isInfinite ) return this.extendTriangleToCanvasEdge([A2d, a, b]);
+    if ( this.isInfiniteShadow(A) ) return this.extendTriangleToCanvasEdge([A2d, a, b]);
 
     // For non-infinite, intersect the canvas plane to determine extension point.
-    const canvasPlane = this.canvasPlane;
-    const wallMid2d = PIXI.Point._tmp;
-    a.add(b, wallMid2d).multiplyScalar(0.5, wallMid2d);
-    const wallMid = CONFIG.GeometryLib.threeD.Point3d._tmp.set(wallMid2d.x, wallMid2d.y, top);
-    const ix = canvasPlane.rayIntersection(A, wallMid.subtract(A));
-    const rWallIx = new Ray2d(ix, b.subtract(a));
-    const rAa = new Ray2d(A2d, a.subtract(A2d));
-    const rAb = new Ray2d(A2d, b.subtract(A2d));
+    const ixP = new CONFIG.GeometryLib.threeD.Point3d();
+    const edgeMid = this.edgeMid;
+    if ( !this._furthestShadowPoint(A, new Point3d(edgeMid.x, edgeMid.y, this.edgeTopZ), ixP) ) {
+      return this.extendTriangleToCanvasEdge([A, a, b]);
+    }
+    const rWallIx = new Ray2d(ixP, b.subtract(a));
+    const rAa = new Ray2d(A, a.subtract(A));
+    const rAb = new Ray2d(A, b.subtract(A));
     const B = rWallIx.intersectRay(rAa);
     const C = rWallIx.intersectRay(rAb);
-    return [A2d, B, C];
+    return [A, B, C];
+  }
+
+  /**
+   * Does this source cast an infinite shadow?
+   * (Ray is rising as it moves from light --> wall.)
+   * @param {vec3} samplePt   The sample point or direction
+   * @returns {bool}
+   */
+  isInfiniteShadow(samplePt) { return samplePt.z <= this.edgeTopZ; }
+
+  /**
+   * The furthest point of the shadow when running a ray from the light through the
+   * top midpoint of the wall.
+   * @param {Point3d} samplePt      The sample point or direction
+   * @param {Point3d} wallPt        Location on the wall to test
+   * @param {out Point3d} ixP
+   * @returns {bool};
+   */
+  _furthestShadowPoint(samplePt, wallPt, ixP) {
+    const canvasPlane = this.canvasPlane;
+    const ix = canvasPlane.rayIntersection(samplePt, wallPt.subtract(samplePt));
+    if ( ix == null ) return false;
+    ixP.copyFrom(ix);
+    return true;
   }
 
   // ----- NOTE: Updates to geometry ----- //
@@ -362,6 +438,41 @@ export class PointSourceShadowSingleWallGeometry extends SourceShadowSingleWallG
 
   /** @type {number} */
   get sourceSize() { return this.source.data.lightSize; }
+
+  /** @type {WallStruct} */
+  get wall() {
+    const wall = super.wall;
+    // TODO: Implement shrinking overlapping wall.
+    // return this.#shrinkOverlappingWall(wall);
+  }
+
+  /**
+   * Shrink wall to avoid overlap with light.
+   * If a wall endpoint is within the light and the light center is not between the
+   * endpoints, shrink the wall so it is just outside the light.
+   * This avoids the light failing to display if overlapping the wall to the right/left.
+   * If between the endpoints, calculateSideShadowRays will move the light accordingly.
+   * @param {Wall} wall
+   * @returns {Wall}
+   */
+//   #shrinkOverlappingWall(wall) {
+//     const ixs = [vec2(), vec2()]; // @type {vec2[2]};
+//     const numIxs = quadraticIntersection(wall.top[0].xy, wall.top[1].xy, uLightPosition.xy, uLightSize, 1.0e-06, ixs);
+//     if ( numIxs === 1 ) {
+//       // Determine where the intersection is on the wall. By definition, it is the closer endpoint.
+//       // const containedIdx = circleContainsPoint(uLightPosition.xy, uLightSize, endpointsXY[0]) ? 0 : 1;
+//
+//       // Move pixel away to be outside the circle.
+//       const newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], xyFurther)), 1.0);
+//
+//       // Update wall data.
+//       wall.top[0].xy = newIx.xy;
+//       wall.bottom[0].xy = newIx.xy;
+//       wall.mid = wall.top[0].xy.add(wall.top[1].xy).multiplyScalar(0.5),
+//       // wall.direction = normalizedDirection(wall.top[0].xy, wall.top[1].xy); // Should not change.
+//     }
+//     return wall;
+//   }
 
   // ----- NOTE: Geometry ----- //
 

@@ -30,6 +30,7 @@ ${PENUMBRA_FRAGMENT_FUNCTIONS}
  * @returns {float}
  */
 float shadowPercentage() {
+  return 1.0;
   bool hasFar = any(notEqual(fFarRatios, vec2(-1.0)));
   bool hasNear = any(notEqual(fNearRatios, vec2(-1.0)));
   if ( hasFar || hasNear ) {

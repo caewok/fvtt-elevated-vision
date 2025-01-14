@@ -335,14 +335,6 @@ export class PenumbraBasicTest extends ShaderTest {
   }
 
   /**
-   * Does this directional vector cast an infinite shadow?
-   * (Ray is rising as it moves from light --> wall.)
-   * @param {vec3} lightDir
-   * @returns {bool}
-   */
-  isInfiniteShadow(lightDir) { return lightDir.z >= 0.0 || glsl.almostEqual(lightDir.z, 0.0, 1.0e-06); }
-
-  /**
    * What quadrant does this direction end up in?
    * @param {vec2} direction
    * @returns {int 0|1|2|3}
@@ -689,30 +681,68 @@ export class PenumbraBasicTest extends ShaderTest {
    */
   shadowTriangle(A, wall) {
     const orient = foundry.utils.orient2dFast;
-    const { Ray, Ray2d, normalizedDirection, distanceSquared, lineLineIntersection, intersectRayPlane } = glsl;
-    const A2d = A.xy;
+    const { Ray, Ray2d, normalizedDirection, distanceSquared, lineLineIntersection, intersectRayPlane, almostEqual } = glsl;
     const a = wall.top[0].xy;
     const b = wall.top[1].xy;
-    if ( !orient(A2d, a, b) ) return [A2d, a, b]; // No real triangle to use.
+    if ( almostEqual(orient(A.xy, a, b), 0.0, 1e-06) ) {
+      // The triangle is a line.
+      if ( this.isInfiniteShadow(A) ) {
+        // Where A --> wall intersects the canvas edge.
+        const rWall = Ray2d(A.xy, a.subtract(A.xy));
+        const edge = this.whichCanvasEdge(rWall);
+        const ix = vec2();
+        lineLineIntersection(rWall, edge, ix);
+        return [A.xy, ix, ix];
+      }
+      // Where A --> further wall endpoint intersects the canvas plane.
+      const ixP = vec3();
+      const hasFurthestPoint = this._furthestShadowPoint(A, wall.top[1], ixP); // Wall 1 is further.
+      if ( !hasFurthestPoint ) new Error(`${MODULE_ID}|shadowTriangle|No furthest point found!`);
+      return [A.xy, ixP.xy, ixP.xy];
+    }
 
     // For infinite shadow, extend triangle formed by light point and wall to the edge of the canvas.
-    const topZ = wall.top[0].z; // Currently, a and b are same.
-    const isInfinite = A.z <= topZ;
-    if ( isInfinite ) return this.extendTriangleToCanvasEdge([A2d, a, b]);
+    if ( this.isInfiniteShadow(A) ) return this.extendTriangleToCanvasEdge([A.xy, a, b]);
 
     // For non-infinite, intersect the canvas plane to determine extension point.
-    const canvasPlane = this.constructCanvasPlane();
     const ixP = vec3();
-    const rAWallMid = Ray(A, vec3(wall.mid, topZ).subtract(A));
-    intersectRayPlane(rAWallMid, canvasPlane, ixP);
+    if ( !this._furthestShadowPoint(A, vec3(wall.mid, wall.top[0].z), ixP) ) return this.extendTriangleToCanvasEdge([A.xy, a, b]);
     const rWallIx = Ray2d(ixP.xy, b.subtract(a));
-    const rAa = Ray2d(A2d, a.subtract(A2d));
-    const rAb = Ray2d(A2d, b.subtract(A2d));
+    const rAa = Ray2d(A.xy, a.subtract(A.xy));
+    const rAb = Ray2d(A.xy, b.subtract(A.xy));
     const B = vec2();
     const C = vec2();
     glsl.lineLineIntersection(rWallIx, rAa, B);
     glsl.lineLineIntersection(rWallIx, rAb, C);
-    return [A2d, B, C];
+    return [A.xy, B, C];
+  }
+
+  /**
+   * Does this source cast an infinite shadow?
+   * (Ray is rising as it moves from light --> wall.)
+   * @param {vec3} samplePt   The sample point or direction
+   * @returns {bool}
+   */
+  isInfiniteShadow(samplePt) {
+    const { aWallCorner0 }  = this;
+    const topZ = aWallCorner0.z;
+    return samplePt.z <= topZ;
+  }
+
+  /**
+   * The furthest point of the shadow when running a ray from the light through the
+   * top midpoint of the wall.
+   * @param {vec3} samplePt   The sample point or direction
+   * @param {vec3} wallPt     Location on the wall to test
+   * @param {out vec3} ixP
+   * @returns {bool};
+   */
+  _furthestShadowPoint(samplePt, wallPt, ixP) {
+    const { Ray, intersectRayPlane } = glsl;
+
+    const canvasPlane = this.constructCanvasPlane();
+    const rAWall = Ray(samplePt, wallPt.subtract(samplePt));
+    return intersectRayPlane(rAWall, canvasPlane, ixP);
   }
 
   // ----- NOTE: Fragment calculations ----- //
@@ -906,6 +936,21 @@ export class UnsizedShadowsTest extends PenumbraBasicTest {
   /* ----- NOTE: Vertex functions ----- */
 
   /**
+   * Determine the closer and further endpoints.
+   * @param {vec2[2]} pts
+   * @returns {int} Index for the closer endpoint.
+   */
+  closerEndpoint(pts) {
+    const { uLightPosition } = this;
+    const { distanceSquared } = glsl;
+
+    // Closer endpoint can be determined with relation to the light center.
+    const d0 = distanceSquared(pts[0], uLightPosition.xy);
+    const d1 = distanceSquared(pts[1], uLightPosition.xy);
+    return Number(d1 < d0);
+  }
+
+  /**
    * Define the triangle for the unsized source.
    * Defined as the lines from the source through each endpoint.
    * Either intersecting the canvas or infinite, which is set off at the canvas edge.
@@ -970,46 +1015,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
   /* ----- NOTE: Vertex functions ----- */
 
   /**
-   * @returns {Wall}
-   */
-  calculateWallPositions() {
-    const { Wall, normalizedDirection, quadraticIntersection, circleContainsPoint, projectRay, Ray2d } = glsl;
-    const { aWallCorner0, aWallCorner1, uLightPosition, uLightSize } = this;
-
-    const endpointsXY = [aWallCorner0.xy, aWallCorner1.xy];
-    const closerIdx = this.closerEndpoint(endpointsXY);
-    let xyCloser = endpointsXY[closerIdx];
-    const xyFurther = endpointsXY[1 - closerIdx];
-
-    // If a wall endpoint is within the light and the light center is not between the
-    // endpoints, shrink the wall so it is just outside the light.
-    // This avoids the light failing to display if overlapping the wall to the right/left.
-    // If between the endpoints, calculateSideShadowRays will move the light accordingly.
-    const ixs = [vec2(), vec2()]; // @type {vec2[2]};
-    const numIxs = quadraticIntersection(endpointsXY[0], endpointsXY[1], uLightPosition.xy, uLightSize, 1.0e-06, ixs);
-    if ( numIxs === 1 ) {
-      // Determine where the intersection is on the wall. By definition, it is the closer endpoint.
-      // const containedIdx = circleContainsPoint(uLightPosition.xy, uLightSize, endpointsXY[0]) ? 0 : 1;
-
-      // Move pixel away to be outside the circle.
-      const newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], xyFurther)), 1.0);
-
-      // Update wall data.
-      xyCloser = newIx.xy;
-    }
-
-    const direction = normalizedDirection(xyCloser, xyFurther);
-    const topZ = aWallCorner0.z;
-    const bottomZ = aWallCorner1.z;
-    return Wall({
-      top: [vec3(xyCloser, topZ), vec3(xyFurther, topZ)],
-      bottom: [vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)],
-      mid: xyCloser.add(xyFurther).multiplyScalar(0.5),
-      direction
-    });
-  }
-
-  /**
    * Determine the closer and further endpoints.
    * @param {vec2[2]} pts
    * @returns {int} Index for the closer endpoint.
@@ -1023,6 +1028,36 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const d1 = distanceSquared(pts[1], uLightPosition.xy);
     return Number(d1 < d0);
   }
+
+  /**
+   * Shrink wall to avoid overlap with light.
+   * If a wall endpoint is within the light and the light center is not between the
+   * endpoints, shrink the wall so it is just outside the light.
+   * This avoids the light failing to display if overlapping the wall to the right/left.
+   * If between the endpoints, calculateSideShadowRays will move the light accordingly.
+   * @param {Wall} wall
+   */
+  shrinkOverlappingWall(wall) {
+    const { uLightPosition, uLightSize } = this;
+    const { quadraticIntersection, projectRay, Ray2d, normalizedDirection } = glsl;
+
+    const ixs = [vec2(), vec2()]; // @type {vec2[2]};
+    const numIxs = quadraticIntersection(wall.top[0].xy, wall.top[1].xy, uLightPosition.xy, uLightSize, 1.0e-06, ixs);
+    if ( numIxs === 1 ) {
+      // Determine where the intersection is on the wall. By definition, it is the closer endpoint.
+      // const containedIdx = circleContainsPoint(uLightPosition.xy, uLightSize, endpointsXY[0]) ? 0 : 1;
+
+      // Move pixel away to be outside the circle.
+      const newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], wall.top[1].xy)), 1.0);
+
+      // Update wall data.
+      wall.top[0].xy = newIx.xy;
+      wall.bottom[0].xy = newIx.xy;
+      wall.mid = wall.top[0].xy.add(wall.top[1].xy).multiplyScalar(0.5);
+      wall.direction = normalizedDirection(wall.top[0].xy, wall.top[1].xy);
+    }
+  }
+
 
   /**
    * Build a light struct defining the key points of the light.
@@ -1130,7 +1165,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const { uLightPosition, uLightSize } = this;
     return verticalTangentPoints(pt, uLightPosition, uLightSize, tangents);
   }
-
 
   /**
    * Direction from light --> wall endpoint. Origin at the wall endpoint.
@@ -1302,19 +1336,29 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     glsl.lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[0], D);
     glsl.lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[1], G);
 
-    // ∆DEF and ∆GHI represent the furtherest extent of the shadow because D and G are
+    // ∆DEF and ∆GHI represent the furthest left/right extent of the shadow  because D and G are
     // near-tangent points.
-    const DEF = this.shadowTriangle(vec3(D, uLightPosition.z + uLightSize), wall);
-    const GHI = this.shadowTraingle(vec3(G, uLightPosition.z + uLightSize), wall);
+    const DEF = this.shadowTriangle(vec3(D, uLightPosition.z), wall);
+    const GHI = this.shadowTriangle(vec3(G, uLightPosition.z), wall);
     E.set(DEF[1]);
     F.set(DEF[2]);
     H.set(GHI[1]);
     I.set(GHI[2]);
 
-    // Determine B and C by connecting H->I to the penumbra lines.
-    const rHI = Ray2d(H, I.subtract(H));
-    glsl.lineLineIntersection(sideShadowRays.penumbra[0], rHI, B);
-    glsl.lineLineIntersection(sideShadowRays.penumbra[1], rHI, C);
+    // Use the lower tangent to determine the furthest extent of the shadow from the wall.
+    const wallMid3d = vec3(wall.mid, wall.top[0].z);
+    const vTangents = [vec3(0.0), vec3(0.0)];
+    const hasTangents = this.verticalTangents(wallMid3d, vTangents);
+    if ( !hasTangents ) new Error(`${MODULE_ID}|shadowPoints|No vertical tangents found!`);
+    const idx = Number(vTangents[0].z > vTangents[1].z); // Pick the lower in z direction.
+    const triVerticalTangent = this.shadowTriangle(vTangents[idx], wall);
+
+    // Determine B and C by connecting to the penumbra lines.
+    // Connect using the F and I points, but from the further triVerticalTangent line.
+    const furthestPoint = triVerticalTangent[2];
+    const rFurthest = Ray2d(furthestPoint, I.subtract(F));
+    glsl.lineLineIntersection(sideShadowRays.penumbra[0], rFurthest, B);
+    glsl.lineLineIntersection(sideShadowRays.penumbra[1], rFurthest, C);
 
     // If W0 === A, then the wall is nearly collinear with the light (line from wall intersects light circle).
     const nearCollinear = almostEqual(W0, A, 1.0e-08);
@@ -1368,190 +1412,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     ix2d.set(ixP.xy);
     return true;
   }
-
-  /**
-   * For non-infinite shadow, non-collinear.
-   * @param {ShadowRays2d} sideShadowRays
-   * @param {ShadowDirections} farShadowDirs
-   * @param {Wall} wall
-   * @param {out vec2} A...I, W0, W1
-   * @returns {bool} True if nearly collinear wall to the light.
-   */
-  _shadowPoints(sideShadowRays, wall, A, B, C, D, E, F, G, H, I, W0, W1) {
-    const {
-      lineLineIntersection,
-      Ray2d,
-      intersectRayPlane } = glsl;
-
-    const rD_penumbra = sideShadowRays.penumbra[0];
-    const rG_penumbra = sideShadowRays.penumbra[1];
-    const rD_umbra = sideShadowRays.umbra[0];
-    const rG_umbra = sideShadowRays.umbra[1];
-
-    const ixP = vec2();
-    this.farCanvasPoint(wall, ixP);
-
-    // E and H are where the penumbra lines hit the canvas.
-    // For non-collinear, use the wall direction.
-    const rPWallDir = Ray2d(ixP.xy, wall.direction);
-    glsl.lineLineIntersection(rPWallDir, rD_penumbra, E);
-    glsl.lineLineIntersection(rPWallDir, rG_penumbra, H);
-
-    // Determine F and I (furthest points) using wall direction.
-    // For non-collinear, this is the same ray as above.
-    glsl.lineLineIntersection(rPWallDir, rD_umbra, F);
-    glsl.lineLineIntersection(rPWallDir, rG_umbra, I);
-
-    // Intersect penumbra with F->I line to get B and C.
-    // For non-collinear, this will equal E and H
-    B.set(E);
-    C.set(H);
-  }
-
-  /**
-   * For infinite shadow, construct the different points of the triangle.
-   * @param {ShadowRays2d} sideShadowRays
-   * @param {ShadowDirections} farShadowDirs
-   * @param {Wall} wall
-   * @param {out vec2} A...I, W0, W1
-   * @returns {bool} True if nearly collinear wall to the light.
-   */
-  _shadowPointsCollinear(sideShadowRays, wall, A, B, C, D, E, F, G, H, I, W0, W1) {
-    const {
-      lineLineIntersection,
-      Ray2d,
-      projectRay,
-      normalizedDirection } = glsl;
-
-    const rD_penumbra = sideShadowRays.penumbra[0];
-    const rG_penumbra = sideShadowRays.penumbra[1];
-    const rD_umbra = sideShadowRays.umbra[0];
-    const rG_umbra = sideShadowRays.umbra[1];
-
-    const ixP = vec2();
-    this.farCanvasPoint(wall, ixP);
-
-    // D1 and G1 are the intersections of the penumbra with opposite umbra. (From collinear.)
-    // These are not currently used.
-    /*
-    const D1 = vec2();
-    const G1 = vec2();
-    glsl.lineLineIntersection(rD_penumbra, rD_umbra, D1);
-    glsl.lineLineIntersection(rG_penumbra, rG_umbra, G1);
-    */
-
-    // E and H are where the penumbra lines hit the canvas.
-    // For collinear, use the direction between the two penumbra origins, which is
-    // nearly the perpendicular wall direction.
-    // const rPWallDir = Ray2d(ixP.xy, vec2(-wall.direction.y, wall.direction.x));
-    // const rPDir = Ray2d(ixP.xy, rG_penumbra.origin.subtract(rD_penumbra.origin));
-    const penumbraMidDir = rD_penumbra.direction.add(rG_penumbra.direction).multiplyScalar(0.5);
-    const rPDir = Ray2d(ixP.xy, vec2(-penumbraMidDir.y, penumbraMidDir.x));
-    glsl.lineLineIntersection(rPDir, rD_penumbra, E);
-    glsl.lineLineIntersection(rPDir, rG_penumbra, H);
-
-    // Determine F and I (furthest points) using wall direction.
-    // For collinear, need the rays from E and H.
-    const rEWallDir = Ray2d(E, wall.direction);
-    const rHWallDir = Ray2d(H, wall.direction);
-    const hasF = glsl.lineLineIntersection(rEWallDir, rD_umbra, F);
-    const hasI = glsl.lineLineIntersection(rHWallDir, rG_umbra, I);
-
-    // If no F/I intersection, likely because the wall direction is the same as the penumbra.
-    // Happens when the edge of the light is aligned with the wall.
-    // Treat the point as infinite.
-    if ( !hasF ) F.set(projectRay(Ray2d(D, normalizedDirection(D, E)), this.maxR2()));
-    if ( !hasI ) I.set(projectRay(Ray2d(G, normalizedDirection(G, H)), this.maxR2()));
-
-    // Intersect the penumbra with F->I line to get B and C.
-    // To ensure ∆ABC is always facing the correct direction when light overlaps wall, use the penumbraMidDir instead.
-    // const rFI = Ray2d(F, I.subtract(F));
-    const rFI = Ray2d(I, vec2(-penumbraMidDir.y, penumbraMidDir.x));
-    glsl.lineLineIntersection(rD_penumbra, rFI, B);
-    glsl.lineLineIntersection(rG_penumbra, rFI, C);
-  }
-
-  /**
-   * For infinite shadow, construct the different points of the triangle.
-   * @param {ShadowRays2d} sideShadowRays
-   * @param {ShadowDirections} farShadowDirs
-   * @param {Wall} wall
-   * @param {out vec2} A...I, W0, W1
-   * @returns {bool} True if nearly collinear wall to the light.
-   */
-  _shadowPointsInfinite(sideShadowRays, A, B, C, D, E, F, G, H, I, W0, W1) {
-    const {
-      lineLineIntersection,
-      Ray2d,
-      intersectRayPlane } = glsl;
-
-    const rD_penumbra = sideShadowRays.penumbra[0];
-    const rG_penumbra = sideShadowRays.penumbra[1];
-    const rD_umbra = sideShadowRays.umbra[0];
-    const rG_umbra = sideShadowRays.umbra[1];
-
-    // Extend ∆DEF outside the canvas.
-    // Construct ∆DW0W1, then extend.
-    const triDW0W1 = this.extendTriangleToCanvasEdge([D, W0, W1]);
-    E.set(triDW0W1[1]);
-    F.set(triDW0W1[2]);
-
-    // Extend ∆GHI outside the canvas.
-    // Construct ∆GW1W0, then extend.
-    const triGW1W0 = this.extendTriangleToCanvasEdge([G, W1, W0]);
-    H.set(triGW1W0[1]);
-    I.set(triGW1W0[2]);
-
-    // Intersect penumbra with F->I line to get B and C.
-    // For non-collinear, this will equal E and H
-    B.set(E);
-    C.set(H);
-
-    // Extend ∆ABC outside the canvas if not already? Apparently unneeded?
-  }
-
-  /**
-   * For infinite shadow, construct the different points of the triangle.
-   * @param {ShadowRays2d} sideShadowRays
-   * @param {ShadowDirections} farShadowDirs
-   * @param {Wall} wall
-   * @param {out vec2} A...I, W0, W1
-   * @returns {bool} True if nearly collinear wall to the light.
-   */
-  _shadowPointsInfiniteCollinear(sideShadowRays, A, B, C, D, E, F, G, H, I, W0, W1) {
-    const {
-      lineLineIntersection,
-      Ray2d,
-      intersectRayPlane } = glsl;
-
-    const rD_penumbra = sideShadowRays.penumbra[0];
-    const rG_penumbra = sideShadowRays.penumbra[1];
-    const rD_umbra = sideShadowRays.umbra[0];
-    const rG_umbra = sideShadowRays.umbra[1];
-
-    // Extend ∆DEF outside the canvas.
-    // Construct ∆DW0W1, then extend.
-    const triDW0W1 = this.extendTriangleToCanvasEdge([D, W0, W1]);
-    E.set(triDW0W1[1]);
-    F.set(triDW0W1[2]);
-
-    // Extend ∆GHI outside the canvas.
-    // Construct ∆GW1W0, then extend.
-    const triGW1W0 = this.extendTriangleToCanvasEdge([G, W1, W0]);
-    H.set(triGW1W0[1]);
-    I.set(triGW1W0[2]);
-
-    // Intersect the penumbra with F->I line.
-    // To ensure ∆ABC is always facing the correct direction when light overlaps wall, use the penumbraMidDir instead.
-    const penumbraMidDir = rD_penumbra.direction.add(rG_penumbra.direction).multiplyScalar(0.5);
-    // const rFI = Ray2d(F, I.subtract(F));
-    const rFI = Ray2d(I, vec2(-penumbraMidDir.y, penumbraMidDir.x));
-    glsl.lineLineIntersection(rD_penumbra, rFI, B);
-    glsl.lineLineIntersection(rG_penumbra, rFI, C);
-
-    // Extend ∆ABC outside the canvas if not already. Apparently unneeded?
-  }
-
 
   /**
    * Given a triangle ABC, make it isoceles by extending the shorter edge of AB or AC.
@@ -1822,6 +1682,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const vertexNum = this.gl_VertexID % 3;
     const wall = this.wall = this.calculateWallPositions();
     const light = this.light = this.calculateLightPositions();
+    this.shrinkOverlappingWall(wall);
 
     // Side shadows.
     const sideShadowRays = this.sideShadowRays = this.calculateSideShadowRays(wall);
@@ -1976,6 +1837,23 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
   calculateLightPositions() {
     console.error("No calculateLightPositions for Directional shadows.");
     return null;
+  }
+
+  /**
+   * Determine the closer and further endpoints.
+   * @param {vec2[2]} pts
+   * @returns {int} Index for the closer endpoint.
+   */
+  closerEndpoint(pts) {
+    const { uAzimuth } = this;
+    const { distanceSquared, fromAngle, Ray2d, projectRay } = glsl;
+    const orient = foundry.utils.orient2dFast;
+
+    const dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0).multiplyScalar(-1.0);
+    const perpDir = vec2(dirMid.y, -dirMid.x);
+    const r01 = Ray2d(pts[0], perpDir);
+    const b = projectRay(r01, 1.0);
+    return Number(orient(pts[0], b, pts[1]) > 0.0); // TODO: Confirm.
   }
 
   /**

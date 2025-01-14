@@ -27,29 +27,28 @@ uniform vec3 uLightPosition;
 uniform vec4 uSceneDims;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 
+${defineStruct("Plane")}
 ${defineFunction("normalizedDirection")}
+${defineFunction("intersectRayPlane")}
+${defineFunction("distanceSquared")}
+
+/* ----- NOTE: Functions used by Penumbra Vertex Functions ----- */
+
+/**
+ * Determine the closer and further endpoints.
+ * @param {vec2[2]} pts
+ * @returns {int} Index for the closer endpoint.
+ */
+int closerEndpoint(vec2[2] pts) {
+  // Closer endpoint can be determined with relation to the light center.
+  float d0 = distanceSquared(pts[0], uLightPosition.xy);
+  float d1 = distanceSquared(pts[1], uLightPosition.xy);
+  return int(d1 < d0);
+}
 
 ${PENUMBRA_VERTEX_FUNCTIONS}
 
-/**
- * @returns {Wall}
- */
-Wall calculateWallPositions() {
-  vec2[2] endpointsXY = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
-  // int closerIdx = closerEndpoint(endpointsXY);
-  int closerIdx = 0;
-  vec2 xyCloser = endpointsXY[closerIdx];
-  vec2 xyFurther = endpointsXY[1 - closerIdx];
-  vec2 direction = normalizedDirection(xyCloser, xyFurther);
-  float topZ = aWallCorner0.z;
-  float bottomZ = aWallCorner1.z;
-  return Wall(
-    vec3[2](vec3(xyCloser, topZ), vec3(xyFurther, topZ)),
-    vec3[2](vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)),
-    (xyCloser + xyFurther) * 0.5,
-    direction
-  );
-}
+/* ----- NOTE: Functions dependent on by Penumbra Vertex Functions ----- */
 
 /**
  * Define the triangle for the unsized source.
@@ -59,46 +58,9 @@ Wall calculateWallPositions() {
  * @returns {vec2[3]}
  */
 vec2[3] definePenumbraTriangle(in Wall wall) {
-  vec2 A = uLightPosition.xy;
-  vec2 B;
-  vec2 C;
-  Ray lightRay = Ray(uLightPosition, normalizedDirection(uLightPosition, wall.top[0]));
+  return vec2[3](uLightPosition.xy, aWallCorner0.xy, aWallCorner0.xy);
 
-  // TODO: If ramp, could be infinite only from one endpoint.
-  int closerIdx = 0;
-  Ray2d r1;
-  if ( isInfiniteShadow(lightRay.direction) ) {
-    Ray2d[2] lightRays2d = Ray2d[2](
-      Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[0].xy)),
-      Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[1].xy))
-    );
-    Ray2d canvasRay = infiniteShadowCanvasRay(lightRays2d); // @type Ray2d.
-
-    // Go from closest endpoint to further endpoint.
-    closerIdx = distanceSquared(wall.top[0].xy, uLightPosition.xy) < distanceSquared(wall.top[1].xy, uLightPosition.xy)
-      ? 0 : 1;
-    lineLineIntersection(
-      canvasRay,
-      Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[closerIdx].xy)),
-      B);
-
-  } else {
-    // Use the canvas intersection.
-    Plane canvasPlane = constructCanvasPlane();
-    vec3 canvasIx;
-    intersectRayPlane(lightRay, canvasPlane, canvasIx);
-    // Could do r1 = lightRays[1].to2d() which would do Ray2d(r1.origin, r1.direction.xy.normalize());
-    // or could retrieve closest endpoint every time. Maybe even when defining the wall.
-
-    r1 = Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[1].xy));
-    B = canvasIx.xy;
-  }
-
-  Ray2d canvasWallRay = Ray2d(B, wall.direction);
-  int furtherIdx = 1 - closerIdx;
-  r1 = Ray2d(uLightPosition.xy, normalizedDirection(uLightPosition.xy, wall.top[furtherIdx].xy));
-  lineLineIntersection(canvasWallRay, r1, C);
-  return vec2[3](A, B, C);
+  // return shadowTriangle(uLightPosition, wall);
 }
 
 /**

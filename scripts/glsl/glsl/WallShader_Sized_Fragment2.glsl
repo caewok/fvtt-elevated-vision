@@ -4,7 +4,7 @@ precision ${PRECISION_VERTEX} float;
 
 // #define SHADOW true
 
-#define TOTAL_COLLISIONS    10
+#define TOTAL_COLLISIONS    50
 
 uniform sampler2D uTerrainSampler;
 uniform vec3 uLightPosition;
@@ -80,7 +80,8 @@ int wallCollision(in vec3 dir, in float elevation) {
  * Determine the shadow percentage.
  */
 float shadowPercentage() {
-  // Debugging: return 1.0;
+  // Debugging:
+  return 1.0;
 
   // For each direction, test intersection with the wall.
   // TODO: If the wall has different heights for each endpoint, adjust to match the point
@@ -195,8 +196,7 @@ float shadowPercentage() {
   }
   */
 
-  totalCollisions = 20.0;
-  for ( int i = 0; i < 20; i += 1 ) {
+  for ( int i = 0; i < TOTAL_COLLISIONS; i += 1 ) {
     float j = float(i) + 1.0;
     float x = hash(uTime + j);
     float y = hash(uTime + (j * totalCollisions));

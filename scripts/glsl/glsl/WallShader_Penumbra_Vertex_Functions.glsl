@@ -68,6 +68,26 @@ struct ShadowRays2d {
 };
 
 /**
+ * @returns {Wall}
+ */
+Wall calculateWallPositions() {
+  vec2[2] endpointsXY = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
+  // int closerIdx = closerEndpoint(endpointsXY);
+  int closerIdx = closerEndpoint(endpointsXY);
+  vec2 xyCloser = endpointsXY[closerIdx];
+  vec2 xyFurther = endpointsXY[1 - closerIdx];
+  vec2 direction = normalizedDirection(xyCloser, xyFurther);
+  float topZ = aWallCorner0.z;
+  float bottomZ = aWallCorner1.z;
+  return Wall(
+    vec3[2](vec3(xyCloser, topZ), vec3(xyFurther, topZ)),
+    vec3[2](vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)),
+    (xyCloser + xyFurther) * 0.5,
+    direction
+  );
+}
+
+/**
  * Maximum diagonal of the canvas, squared.
  */
 float maxR2() {
@@ -185,14 +205,6 @@ bool adjustSideShadowForLinkedEndpoints(inout ShadowDirections2d shadowDirs, in 
   // Linked wall is after mid.
   return true;
 }
-
-/**
- * Does this directional ray cast an infinite shadow?
- * (Ray is rising as it moves from light --> wall.)
- * @param {vec3} lightDir
- * @returns {bool}
- */
-bool isInfiniteShadow(in vec3 lightDir) { return lightDir.z >= 0.0 || almostEqual(lightDir.z, 0.0, 1.0e-06); }
 
 /**
  * What quadrant does this direction end up in?
@@ -365,6 +377,75 @@ vec2[3] extendTriangleToCanvasEdge(in vec2[3] tri) {
   if ( smallerAB ) return vec2[3](A, ixSmaller, ixLarger);
   else return vec2[3](A, ixLarger, ixSmaller);
 }
+
+/**
+ * Does this source cast an infinite shadow?
+ * (Ray is rising as it moves from light --> wall.)
+ * @param {vec3} samplePt   The sample point or direction
+ * @returns {bool}
+ */
+bool isInfiniteShadow(in vec3 samplePt) {
+  float topZ = aWallCorner0.z;
+  return samplePt.z <= topZ;
+}
+
+/**
+ * The furthest point of the shadow when running a ray from the light through the
+ * top midpoint of the wall.
+ * @param {vec3} samplePt   The sample point or direction
+ * @param {vec3} wallPt
+ * @param {out vec3} ixP
+ * @returns {bool};
+ */
+bool furthestShadowPoint(in vec3 samplePt, in vec3 wallPt, out vec3 ixP) {
+  // For basic version, assume an unsized light: use the centerpoint.
+  Plane canvasPlane = constructCanvasPlane();
+  Ray rAWall = Ray(samplePt, wallPt - samplePt);
+  return intersectRayPlane(rAWall, canvasPlane, ixP);
+}
+
+/**
+ * For a given light center, determine the shadow triangle.
+ * @param {vec3} A      The assumed center point of the light
+ * @param {Wall} wall   The associated wall
+ * @returns {vec2[3]}  Triangle, from center through endpoint a and then endpoint b.
+ */
+vec2[3] shadowTriangle(in vec3 A, in Wall wall) {
+  vec2 a = wall.top[0].xy;
+  vec2 b = wall.top[1].xy;
+  if ( almostEqual(orient(A.xy, a, b), 0.0, 1e-06) ) {
+    // The triangle is a line.
+    if ( isInfiniteShadow(A) ) {
+      // Where A --> wall intersects the canvas edge.
+      Ray2d rWall = Ray2d(A.xy, a - A.xy);
+      Ray2d edge = whichCanvasEdge(rWall);
+      vec2 ix;
+      lineLineIntersection(rWall, edge, ix);
+      return vec2[3](A.xy, ix, ix);
+    }
+    // Where A --> further wall endpoint intersects the canvas plane.
+    vec3 ixP;
+    furthestShadowPoint(A, wall.top[1], ixP); // Wall 1 is further.
+    return vec2[3](A.xy, ixP.xy, ixP.xy);
+  }
+
+  // For infinite shadow, extend triangle formed by light point and wall to the edge of the canvas.
+  if ( isInfiniteShadow(A) ) return extendTriangleToCanvasEdge(vec2[3](A.xy, a, b));
+
+  // For non-infinite, intersect the canvas plane to determine extension point.
+  Plane canvasPlane = constructCanvasPlane();
+  vec3 ixP;
+  if ( !furthestShadowPoint(A, vec3(wall.mid, wall.top[0].z), ixP) ) return extendTriangleToCanvasEdge(vec2[3](A.xy, a, b));
+  Ray2d rWallIx = Ray2d(ixP.xy, b - a);
+  Ray2d rAa = Ray2d(A.xy, a - A.xy);
+  Ray2d rAb = Ray2d(A.xy, b - A.xy);
+  vec2 B;
+  vec2 C;
+  lineLineIntersection(rWallIx, rAa, B);
+  lineLineIntersection(rWallIx, rAb, C);
+  return vec2[3](A.xy, B, C);
+}
+
 
 /**
  * Locate the canvas intersection for a given direction.
