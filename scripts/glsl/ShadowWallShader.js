@@ -463,7 +463,7 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
     const changedLightSize = changes.has("lightSize");
 
     if ( changedPosition || changedElevation ) this.updateLightPosition();
-    if ( changedLightSize ) this.updateLightSize(source);
+    if ( changedLightSize ) this.updateLightSize();
     return changedPosition || changedElevation || changedLightSize;
   }
 
