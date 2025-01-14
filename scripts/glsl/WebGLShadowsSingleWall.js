@@ -483,11 +483,11 @@ export class WebGLShadowsSingleWall {
     // If the target is on the terrain (likely), we can use the faster test using pixelCache.
     const onGround = target instanceof Token ? tokenIsOnGround(target) : waypointIsOnGround(testPoint);
     return onGround
-      ? this.#shadowPercentageFromCache(shadowRenderer.pixelCache, testPoint.x, testPoint.y)
+      ? this.constructor._shadowPercentageFromCache(shadowRenderer.pixelCache, testPoint.x, testPoint.y)
       : this.elevatedPointInShadow(testPoint);
   }
 
-  static #shadowPercentageFromCache(pixelCache, x, y) {
+  static _shadowPercentageFromCache(pixelCache, x, y) {
     const lightAmount = pixelCache.pixelAtCanvas(x, y);
     return 1 - (lightAmount * PIXEL_INV);
   }
