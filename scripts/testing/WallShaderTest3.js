@@ -2558,9 +2558,10 @@ export class SizedRandomShadowsTest extends SizedShadowsTest {
     const vertexNum = this.gl_VertexID % 3;
     const wall = this.wall = this.calculateWallPositions();
     const light = this.light = this.calculateLightPositions();
+    this.shrinkOverlappingWall(wall);
 
     // Side shadows.
-    const sideShadowRays = this.sideShadowRays = this.calculateSideShadowRays(wall, light);
+    const sideShadowRays = this.sideShadowRays = this.calculateSideShadowRays(wall);
 
     // Far direction.
     const farShadowDirs = this.farShadowDirs = this.calculateFarShadowDirections(wall, light);
@@ -2603,18 +2604,14 @@ export class SizedRandomShadowsTest extends SizedShadowsTest {
 
   /**
    * Determine whether there is a collision with the wall at a given direction from the fragment.
-   * @param {vec3} dir
-   * @param {vec2} hWall0
-   * @param {vec2} hWall1
-   * @param {vec2} vWall0
-   * @param {vec2} vWall1
+   * @param {Ray) r
    * @returns {int}
    */
-  wallCollision(dir, elevation) {
+  wallCollision(r) {
     const orient = foundry.utils.orient2dFast;
     const { vVertexPosition, vEdgeDist } = this.varyings;
     const { fWallTop0, fWallTop1, fWallBottom0, fWallBottom1 } = this.flats;
-    const { normalizedDirection, distanceToLine } = glsl;
+    const { normalizedDirection, distance, projectRay, lineLineIntersection } = glsl;
 
     const hWall0 = fWallTop0.xy;
     const hWall1 = fWallTop1.xy;
@@ -2622,16 +2619,21 @@ export class SizedRandomShadowsTest extends SizedShadowsTest {
     const vWall1 = vec2(0.0, fWallBottom0.z);
 
     // Move 1 pixel toward the light, to measure orientation w/r/t the light ray.
-    const b3d = vec3(vVertexPosition, elevation).add(dir);
+    const b = projectRay(r, 1.0);
 
     // Test for horizontal collision. Wall endpoints are opposite sides of the light ray.
-    const hCollision = orient(vVertexPosition, b3d.xy, hWall0) * orient(vVertexPosition, b3d.xy, hWall1) < 0.0;
+    const hCollision = orient(r.origin.xy, b.xy, hWall0) * orient(r.origin.xy, b.xy, hWall1) < 0.0;
     if ( !hCollision ) return 0;
 
     // Test for vertical collision. Transform coordinates based on direction to wall.
-    const vA = vec2(vEdgeDist, elevation);
-    const distB = distanceToLine(b3d.xy, hWall0, normalizedDirection(hWall0, hWall1));
-    const vB = vec2(distB, b3d.z);
+    const rWall = Ray2d(hWall0, hWall1.subtract(hWall0));
+    const wallIx = vec2();
+    lineLineIntersection(Ray2d(r.origin.xy, r.direction.xy), rWall, wallIx);
+
+    const distA = distance(r.origin.xy, wallIx);
+    const distB = distance(b.xy, wallIx);
+    const vA = vec2(distA, r.origin.z);
+    const vB = vec2(distB, b.z)
     const vCollision = orient(vA, vB, vWall0) * orient(vA, vB, vWall1) < 0.0;
     if ( !vCollision ) return 0;
     return 1;
@@ -2671,9 +2673,7 @@ export class SizedRandomShadowsTest extends SizedShadowsTest {
       uLightPosition - vec3(0.0, 0.0, uLightSize)
     ];
     for ( let i = 0; i < 7; i += 1 ) {
-      const pos = pts[i];
-      const dir = normalizedDirection(a, pos);
-      numCollisions += this.wallCollision(dir, elevation);
+      numCollisions += this.wallCollision(Ray(a, normalizedDirection(a, pts[i])));
     }
 
     // TODO: Add in adjacent pixel values as part of the average here.

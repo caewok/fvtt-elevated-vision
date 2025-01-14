@@ -33,12 +33,15 @@ out vec4 fragColor;
 
 ${PENUMBRA_FRAGMENT_FUNCTIONS}
 
+${defineStruct("Ray")}
+${defineFunction("projectRay")}
 ${defineFunction("orient")}
 ${defineFunction("linearConversion")}
 ${defineFunction("hash")}
 ${defineFunction("distanceToLine")}
 ${defineFunction("normalizedDirection")}
 ${defineFunction("noise")}
+${defineFunction("lineLineIntersection")}
 
 /**
  * Select a position on the sphere given vec3 between -1 and 1.
@@ -50,27 +53,33 @@ vec3 spherePosition(in vec3 dir) { return uLightPosition + (dir * uLightSize); }
 
 /**
  * Determine whether there is a collision with the wall at a given direction from the fragment.
+ * @param {Ray2d} r     Ray to test for intersection
  * @param {vec3} dir
  * @param {float} elevation
- * @returns {int}
+ * @returns {int} 0 if no collision, 1 if collision
  */
-int wallCollision(in vec3 dir, in float elevation) {
+int wallCollision(in Ray r) {
   vec2 hWall0 = fWallTop0.xy;
   vec2 hWall1 = fWallTop1.xy;
   vec2 vWall0 = vec2(0.0, fWallTop0.z);
   vec2 vWall1 = vec2(0.0, fWallBottom0.z);
 
   // Move 1 pixel toward the light, to measure orientation w/r/t the light ray.
-  vec3 b3d = vec3(vVertexPosition, elevation) + dir;
+  vec3 b = projectRay(r, 1.0);
 
   // Test for horizontal collision. Wall endpoints are opposite sides of the light ray.
-  bool hCollision = orient(vVertexPosition, b3d.xy, hWall0) * orient(vVertexPosition, b3d.xy, hWall1) < 0.0;
+  bool hCollision = orient(r.origin.xy, b.xy, hWall0) * orient(r.origin.xy, b.xy, hWall1) < 0.0;
   if ( !hCollision ) return 0;
 
   // Test for vertical collision. Transform coordinates based on direction to wall.
-  vec2 vA = vec2(vEdgeDist, elevation);
-  float distB = distanceToLine(b3d.xy, hWall0, normalizedDirection(hWall0, hWall1));
-  vec2 vB = vec2(distB, b3d.z);
+  Ray2d rWall = Ray2d(hWall0, hWall1 - hWall0);
+  vec2 wallIx;
+  lineLineIntersection(Ray2d(r.origin.xy, r.direction.xy), rWall, wallIx);
+
+  float distA = distance(r.origin.xy, wallIx);
+  float distB = distance(b.xy, wallIx);
+  vec2 vA = vec2(distA, r.origin.z);
+  vec2 vB = vec2(distB, b.z);
   bool vCollision = orient(vA, vB, vWall0) * orient(vA, vB, vWall1) < 0.0;
   if ( !vCollision ) return 0;
   return 1;
@@ -80,8 +89,7 @@ int wallCollision(in vec3 dir, in float elevation) {
  * Determine the shadow percentage.
  */
 float shadowPercentage() {
-  // Debugging:
-  return 1.0;
+  // Debugging: return 1.0;
 
   // For each direction, test intersection with the wall.
   // TODO: If the wall has different heights for each endpoint, adjust to match the point
@@ -205,8 +213,7 @@ float shadowPercentage() {
     // Pseudo-Gaussian 3d distribution.
     vec3 rndDir = (x * y * z == 0.0) ? vec3(0.0) : normalize(vec3(x, y, z));
     vec3 pos = spherePosition(linearConversion(rndDir, 0.0, 1.0, -1.0, 1.0));
-    vec3 dir = normalizedDirection(a, pos);
-    numCollisions += wallCollision(dir, elevation);
+    numCollisions += wallCollision(Ray(a, normalizedDirection(a, pos)));
   }
 
 
