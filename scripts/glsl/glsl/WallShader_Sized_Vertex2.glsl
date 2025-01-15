@@ -336,9 +336,9 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   E = DEF[1]; // Penumbra line
   F = DEF[2]; // Umbra line
 
-  int hIdx = int(nearCollinear);
-  H = GHI[2 - hIdx]; // Penumbra line 2 - 1; 2 - 0
-  I = GHI[1 + hIdx]; // Umbra line    1 + 1; 1 + 0
+  int collinearIdx = int(nearCollinear);
+  H = GHI[2 - collinearIdx]; // Penumbra line 2 - 1; 2 - 0
+  I = GHI[1 + collinearIdx]; // Umbra line    1 + 1; 1 + 0
 
   // Use the lower tangent to determine the furthest extent of the shadow from the wall.
   vec3 wallMid3d = vec3(wall.mid, wall.top[0].z);
@@ -348,27 +348,19 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   vec2[3] JKL = shadowTriangle(vTangents[idx], wall);
 
   // Determine B and C by connecting to the penumbra lines.
-  if ( nearCollinear ) {
-    // Connect using the F and I points, but from the further JKL line.
-    // Because ∆DEF and ∆GHI both are turned sideways, so F and I are furthest points.
-    vec2 furthestPoint = JKL[2];
-    Ray2d rFurthest = Ray2d(furthestPoint, I - F);
-    lineLineIntersection(sideShadowRays.penumbra[0], rFurthest, B);
-    lineLineIntersection(sideShadowRays.penumbra[1], rFurthest, C);
+  // If collinear, it is unclear which one is further.
+  float dist2K = distanceSquared(JKL[0], JKL[1]);
+  float dist2L = distanceSquared(JKL[0], JKL[2]);
+  int idxL = int(dist2L > dist2K); // Want the further one.
+  vec2 furthestPoint = JKL[idxL + 1];
 
-  } else {
-    // Use the K->L line or the E-F line, whichever is further.
-    vec2 K = JKL[1];
-    vec2 L = JKL[2];
-    float dist2E = distanceSquaredToLine(E, wall.top[0].xy, wall.direction);
-    float dist2K = distanceSquaredToLine(K, wall.top[0].xy, wall.direction);
-    int idx = int(dist2E > dist2K); // E further: 1; K further: 0
-    vec2 a = vec2[2](K, E)[idx];
-    vec2 b = vec2[2](L, F)[idx];
-    Ray2d rab = Ray2d(a, b - a);
-    lineLineIntersection(sideShadowRays.penumbra[0], rab, B);
-    lineLineIntersection(sideShadowRays.penumbra[1], rab, C);
-  }
+  // Collinear: F->I or E->H form the line.
+  // Noncollinear: Wall direction or E->F or H->I
+  vec2 a = vec2[2](E, F)[collinearIdx];
+  vec2 b = vec2[2](F, I)[collinearIdx];
+  Ray2d rab = Ray2d(furthestPoint, b - a);
+  lineLineIntersection(sideShadowRays.penumbra[0], rab, B);
+  lineLineIntersection(sideShadowRays.penumbra[1], rab, C);
 
   // For debugging, test side shadows
   /*

@@ -1332,7 +1332,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       lineLineIntersection,
       almostEqual,
       Ray2d,
-      distanceSquaredToLine } = glsl;
+      distanceSquared } = glsl;
 
     // Already set the closer endpoint when constructing wall properties.
     W0.set(wall.top[0].xy);
@@ -1356,9 +1356,9 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     E.set(DEF[1]); // Penumbra line
     F.set(DEF[2]); // Umbra line
 
-    const hIdx = Number(nearCollinear);
-    H.set(GHI[2 - hIdx]); // Penumbra line 2 - 1; 2 - 0
-    I.set(GHI[1 + hIdx]); // Umbra line    1 + 1; 1 + 0
+    const collinearIdx = Number(nearCollinear);
+    H.set(GHI[2 - collinearIdx]); // Penumbra line 2 - 1; 2 - 0
+    I.set(GHI[1 + collinearIdx]); // Umbra line    1 + 1; 1 + 0
 
     // Use the lower tangent to determine the furthest extent of the shadow from the wall.
     const wallMid3d = vec3(wall.mid, wall.top[0].z);
@@ -1377,40 +1377,22 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     N.set(MNO[1]); // W0 line
     O.set(MNO[2]); // W1 line
 
-    // TODO: Same for near shadow.
+    // TODO: Same for near shadow: tangents and triangle.
 
     // Determine B and C by connecting to the penumbra lines.
+    // If collinear, it is unclear which one is further.
+    const dist2K = distanceSquared(JKL[0], JKL[1]);
+    const dist2L = distanceSquared(JKL[0], JKL[2]);
+    const idxL = Number(dist2L > dist2K); // Want the further one.
+    const furthestPoint = JKL[idxL + 1];
 
-    if ( nearCollinear ) {
-      // Connect using the F and I points, but from the further JKL line.
-      // Because ∆DEF and ∆GHI both are turned sideways, so F and I are furthest points.
-      const furthestPoint = JKL[2];
-      const rFurthest = Ray2d(furthestPoint, I.subtract(F));
-      glsl.lineLineIntersection(sideShadowRays.penumbra[0], rFurthest, B);
-      glsl.lineLineIntersection(sideShadowRays.penumbra[1], rFurthest, C);
-
-    } else {
-      // Use the K->L line or the E-F line, whichever is further.
-      const dist2E = distanceSquaredToLine(E, wall.top[0].xy, wall.direction);
-      const dist2K = distanceSquaredToLine(K, wall.top[0].xy, wall.direction);
-      const idx = Number(dist2E > dist2K); // E further: 1; K further: 0
-      const a = [K, E][idx];
-      const b = [L, F][idx];
-      const rab = Ray2d(a, b.subtract(a));
-      glsl.lineLineIntersection(sideShadowRays.penumbra[0], rab, B);
-      glsl.lineLineIntersection(sideShadowRays.penumbra[1], rab, C);
-    }
-
-
-
-
-//     const infiniteShadow = this.isInfiniteShadow(farShadowDirs.penumbra);
-//     switch ( (infiniteShadow * 2) + nearCollinear ) {
-//       case 0: this._shadowPoints(sideShadowRays, wall, A, B, C, D, E, F, G, H, I, W0, W1); break;
-//       case 1: this._shadowPointsCollinear(sideShadowRays, wall, A, B, C, D, E, F, G, H, I, W0, W1); break;
-//       case 2: this._shadowPointsInfinite(sideShadowRays, A, B, C, D, E, F, G, H, I, W0, W1); break;
-//       case 3: this._shadowPointsInfiniteCollinear(sideShadowRays, A, B, C, D, E, F, G, H, I, W0, W1); break;
-//     }
+    // Collinear: F->I or E->H form the line.
+    // Noncollinear: Wall direction or E->F or H->I
+    const a = [E, F][collinearIdx];
+    const b = [F, I][collinearIdx];
+    const rab = Ray2d(furthestPoint, b.subtract(a));
+    glsl.lineLineIntersection(sideShadowRays.penumbra[0], rab, B);
+    glsl.lineLineIntersection(sideShadowRays.penumbra[1], rab, C);
     return nearCollinear;
   }
 
