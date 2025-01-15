@@ -14,20 +14,13 @@ out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
 out vec3 vUmbra;
 out float vEdgeDist;
-out float vWallRatio;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
 flat out vec2 fWallHeights;
-flat out vec2 fWallRatios;
-flat out vec2 fFarRatios0;
-flat out vec2 fFarRatios1;
-flat out vec2 fNearRatios0;
-flat out vec2 fNearRatios1;
 flat out vec2 fAmbient;
-flat out float fWallRatio;
-flat out vec2 fNearRatios;
-flat out vec2 fFarRatios;
+flat out vec2 fNearDistances;
+flat out vec2 fFarDistances;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -324,7 +317,7 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   G = W1;
 
   // Adjust for infinite shadows and near-collinear walls.
-  bool infiniteShadow = isInfiniteShadow(farShadowDirs.penumbra);
+  bool infiniteShadow = isInfiniteTopShadow(farShadowDirs.penumbra);
   bool nearCollinear = almostEqual(W0, A, 1.0e-08);
   if ( nearCollinear ) {
     A = W0; // Ensure this is exactly equal.
@@ -468,10 +461,10 @@ void defineFlats(in Wall wall,
 
   // Similar to unsized defineFlats.
   // For far, if umbra is infinite, penumbra will be infinite.
-  bool hasFarUmbra = !isInfiniteShadow(farShadowDirs.umbra);
-  bool hasFarPenumbra = !(hasFarUmbra || isInfiniteShadow(farShadowDirs.penumbra));
-  bool hasNearPenumbra = wallIsFloating() && !isInfiniteShadow(nearShadowDirs.penumbra);
-  bool hasNearUmbra = wallIsFloating() && !isInfiniteShadow(nearShadowDirs.umbra);
+  bool hasFarUmbra = !isInfiniteTopShadow(farShadowDirs.umbra);
+  bool hasFarPenumbra = !(hasFarUmbra || isInfiniteTopShadow(farShadowDirs.penumbra));
+  bool hasNearPenumbra = wallIsFloating() && !isInfiniteTopShadow(nearShadowDirs.penumbra);
+  bool hasNearUmbra = wallIsFloating() && !isInfiniteTopShadow(nearShadowDirs.umbra);
   if ( hasFarUmbra || hasFarPenumbra || hasNearPenumbra || hasNearUmbra ) {
     Ray2d wallRatioRay = nearFarMidRay(wall, penumbraTri);
     Plane canvasPlane = constructCanvasPlane();

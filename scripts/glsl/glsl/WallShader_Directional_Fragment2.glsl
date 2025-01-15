@@ -17,14 +17,12 @@ uniform float uSolarAngle; // radians
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
 in float vEdgeDist;
-in float vWallRatio;
 
 flat in float fThresholdRadius2;
 flat in float fWallSenseType;
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
-flat in float fWallRatio;
-flat in vec2 fNearRatios;
-flat in vec2 fFarRatios;
+flat in vec2 fNearDistances;
+flat in vec2 fFarDistances;
 flat in vec3 fWallTop0;
 flat in vec3 fWallTop1;
 flat in vec3 fWallBottom0;

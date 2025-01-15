@@ -16,14 +16,12 @@ in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
 in vec3 vUmbra;
 in float vEdgeDist;
-in float vWallRatio;
 
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
-flat in float fWallRatio;
-flat in vec2 fFarRatios;
-flat in vec2 fNearRatios;
+flat in vec2 fFarDistances;
+flat in vec2 fNearDistances;
 flat in vec2 fAmbient;
 
 out vec4 fragColor;
@@ -54,28 +52,42 @@ float shadowPercentage() {
   float side1Shadow = 1.0;
   float umbraShadow = 1.0;
 
+  bool hasFar = any(notEqual(fFarDistances, vec2(0.0)));
+  bool hasNear = any(notEqual(fNearDistances, vec2(0.0)));
+  bool inFar = false;
+  bool inNear = false;
+
+  // TODO: Need to adjust these based on elevation.
+  float farPenumbraDist = fFarDistances[PENUMBRA];
+  float farUmbraDist = fFarDistances[UMBRA];
+  float nearPenumbraDist = fNearDistances[PENUMBRA];
+  float nearUmbraDist = fNearDistances[UMBRA];
+
+  if ( hasFar || hasNear ) {
+    float canvasElevation = uElevationRes.x;
+    float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
+
+    if ( elevation > farPenumbraElevation() ) return 0.0;
+    if ( elevation > nearPenumbraElevation() ) return 0.0;
+
+    if ( elevation < farUmbraElevation() ) inFar = true;
+    if ( elevation < nearUmbraElevation() ) inNear = true;
+  }
+
+  // If in the far or near shadow, blend between penumbra (0) and umbra (1).
+  // TODO: The if clauses should not be needed as linearConversion will set to 0 or 1 accordingly.
+  if ( inFar ) {
+    farShadow = linearConversion(vEdgeDist, farPenumbraDist, farUmbraDist, 0.0, 1.0);
+  }
+  if ( inNear ) {
+    nearShadow = linearConversion(vEdgeDist, nearPenumbraDist, nearUmbraDist, 0.0, 1.0);
+  }
+  // return farShadow;
+
   // Blend the two side penumbras if overlapping by multiplying the light amounts.
   if ( inSidePenumbra0() ) side0Shadow = vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z);
   if ( inSidePenumbra1() ) side1Shadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
-  return side0Shadow * side1Shadow;
-
-
-  // If in the far or near shadow, blend between 0 (penumbra) and 1 (umbra).
-
-  vec2[2] nfRatios = elevateNearFarRatios();
-  vec2 farRatios = nfRatios[FAR];
-  vec2 nearRatios = nfRatios[NEAR];
-  if ( farRatios[PENUMBRA] != -1.0 && vWallRatio < farRatios[PENUMBRA] ) return 0.0;
-  if ( nearRatios[PENUMBRA] != -1.0 && vWallRatio > nearRatios[PENUMBRA] ) return 0.0;
-
-  if ( between(farRatios[PENUMBRA], farRatios[UMBRA], vWallRatio) == 1.0 ) {
-    farShadow = linearConversion(vWallRatio, farRatios[PENUMBRA], farRatios[UMBRA], 0.0, 1.0);
-  }
-  if ( between(nearRatios[PENUMBRA], nearRatios[UMBRA], vWallRatio) == 1.0 ) {
-    nearShadow = linearConversion(vWallRatio, nearRatios[PENUMBRA], nearRatios[UMBRA], 0.0, 1.0);
-  }
-
-
+  // return side0Shadow * side1Shadow;
 
 
   /*

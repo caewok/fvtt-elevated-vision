@@ -10,14 +10,12 @@ in float aThresholdRadius2; // Note: no thresholds for walls apply for direction
 out vec2 vVertexPosition;
 out vec2 vTerrainTexCoord;
 out float vEdgeDist;
-out float vWallRatio;
 
 flat out float fThresholdRadius2;
 flat out float fWallSenseType;
 flat out vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
-flat out float fWallRatio;
-flat out vec2 fNearRatios;
-flat out vec2 fFarRatios;
+flat out vec2 fNearDistances;
+flat out vec2 fFarDistances;
 flat out vec3 fWallTop0;
 flat out vec3 fWallTop1;
 flat out vec3 fWallBottom0;

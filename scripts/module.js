@@ -179,7 +179,7 @@ Hooks.once("init", function() {
      * So -2000 (min) + 0.1 (step) * 65556 (max normalized) = 4555
      * @type {number}
      */
-    elevationMin: 0, // -1000,
+    elevationMin: -100, // -1000,
 
     /**
      * WebGL region elevations.

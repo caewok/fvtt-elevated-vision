@@ -12,14 +12,12 @@ in float aThresholdRadius2;
 out vec2 vVertexPosition;
 out vec2 vTerrainTexCoord;
 out float vEdgeDist;
-out float vWallRatio;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
 flat out vec2 fWallHeights;
-flat out float fWallRatio;
-flat out vec2 fNearRatios;
-flat out vec2 fFarRatios;
+flat out vec2 fNearDistances;
+flat out vec2 fFarDistances;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -31,6 +29,7 @@ ${defineStruct("Plane")}
 ${defineFunction("normalizedDirection")}
 ${defineFunction("intersectRayPlane")}
 ${defineFunction("distanceSquared")}
+${defineFunction("distanceToLine")}
 
 /* ----- NOTE: Functions used by Penumbra Vertex Functions ----- */
 
@@ -76,35 +75,25 @@ void defineVaryings(in Wall wall, in vec2[3] penumbraTri) {}
  * @param {vec2[3]} penumbraTri
  */
 void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
-  vec3 dirFar = wall.top[0] - uLightPosition;
-  vec3 dirNear = wall.bottom[0] - uLightPosition;
+  // @type {vec2} fFarDistances, fNearDistances, using UMBRA, PENUMBRA.
+  // Distance from wall to the far penumbra/umbra and near penumbra/umbra.
+  // 0.0 indicates no shadow.
+  fFarDistances = vec2(0.0);
+  fNearDistances = vec2(0.0);
 
-  // Near/far ratios are same for PENUMBRA and UMBRA for unsized.
-  if ( !isInfiniteShadow(dirFar) ) fFarRatios = vec2(0.0);
-  if ( wallIsFloating() && !isInfiniteShadow(dirNear) ) {
-    // Determine canvas intersection of the light ray running through wall midpoint.
-    // See varyingWallRatio
-    // The closer vertex to the wall gets assigned 0.0.
-    float dist01 = distanceSquared(penumbraTri[0], penumbraTri[1]);
-    float dist02 = distanceSquared(penumbraTri[0], penumbraTri[2]);
-    int closerIdx = dist02 < dist01 ? 2 : 1;
-    Ray2d lightRay2d = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wall.mid));
-    vec2 closerIx;
-    lineLineIntersection(lightRay2d, Ray2d(penumbraTri[closerIdx], wall.direction), closerIx);
-
-    vec3 wallBottomMid = vec3(wall.mid, wall.bottom[0].z);
-    Ray lightRay = Ray(uLightPosition, normalizedDirection(uLightPosition, wallBottomMid));
-    vec3 canvasIx;
-    Plane canvasPlane = constructCanvasPlane();
-    intersectRayPlane(lightRay, canvasPlane, canvasIx);
-
-    // Could use distance(closerIx, canvasIx.xy) / distance(closerIx, penumbraTri[0]).
-    // That has a square root but is simpler. Might need negative distance though.
-    Ray2d wallRatioRay = Ray2d(closerIx, penumbraTri[0] - closerIx);
-    float furtherT;
-    lineLineIntersection(wallRatioRay, Ray2d(canvasIx.xy, wall.direction), furtherT);
-    fNearRatios = vec2(furtherT);
+  // The far penumbra shadow by definition is at the far penumbraTri edge.
+  if ( !isInfiniteTopShadow(uLightPosition) ) {
+    fFarDistances[PENUMBRA] = distanceToLine(penumbraTri[2], wall.top[0].xy, wall.direction);
   }
+
+  // The near penumbra shadow depends on wall floating
+  if ( wallIsFloating() && !isInfiniteBottomShadow(uLightPosition) ) {
+    // Use closest wall point for the near shadow.
+    vec3 ixP;
+    furthestShadowPoint(uLightPosition, wall.bottom[0], ixP);
+    fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
+  }
+  // For unsized light, no umbra shadow.
 }
 
 void main() {
