@@ -54,6 +54,11 @@ float shadowPercentage() {
   float side1Shadow = 1.0;
   float umbraShadow = 1.0;
 
+  // Blend the two side penumbras if overlapping by multiplying the light amounts.
+  if ( inSidePenumbra0() ) side0Shadow = vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z);
+  if ( inSidePenumbra1() ) side1Shadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
+  return side0Shadow * side1Shadow;
+
 
   // If in the far or near shadow, blend between 0 (penumbra) and 1 (umbra).
 
@@ -71,9 +76,7 @@ float shadowPercentage() {
   }
 
 
-  // Blend the two side penumbras if overlapping by multiplying the light amounts.
-  if ( inSidePenumbra0() ) side0Shadow = vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z);
-  if ( inSidePenumbra1() ) side1Shadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
+
 
   /*
   1.0 * 0.0 = 0.0  / 0.25 = 0       (1 - x) = 1.0
@@ -98,7 +101,7 @@ float shadowPercentage() {
     }
   }
 
-  return side0Shadow * side1Shadow * farShadow * nearShadow * umbraShadow;
+  return side0Shadow * side1Shadow;// * farShadow * nearShadow * umbraShadow;
 }
 
 void main() {

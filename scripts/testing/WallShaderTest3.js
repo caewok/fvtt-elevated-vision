@@ -1443,24 +1443,26 @@ export class SizedShadowsTest extends PenumbraBasicTest {
    * @returns {vec2[3]} tri
    */
   makeIsoceles(tri) {
-    const { distance, normalizedDirection, almostEqual } = glsl;
+    const { distanceSquared, normalizedDirection, almostEqual, projectRayDistanceSquared, Ray2d } = glsl;
 
     const a = vec2(tri[0]);
     const b = vec2(tri[1]);
     const c = vec2(tri[2]);
-    const distAB = distance(a, b);
-    const distBC = distance(b, c);
-    if ( almostEqual(distAB, distBC, 1.0e-08) ) return [a, b, c];
-    if ( distAB > distBC ) {
+    const dist2AB = distanceSquared(a, b);
+    const dist2AC = distanceSquared(a, c);
+    if ( almostEqual(dist2AB, dist2AC, 1.0e-08) ) return [a, b, c];
+    if ( dist2AB > dist2AC ) {
+      const r = Ray2d(a, normalizedDirection(a, c));
       return [
         a,
         b,
-        a.add(normalizedDirection(a, c).multiplyScalar(distAB))
+        projectRayDistanceSquared(r, dist2AB)
       ];
     } else { // BC distance is larger.
+      const r = Ray2d(a, normalizedDirection(a, b));
       return [
         a,
-        a.add(normalizedDirection(a, b).multiplyScalar(distBC)),
+        projectRayDistanceSquared(r, dist2AC),
         c,
       ];
     }
@@ -1517,11 +1519,11 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     setTri(farUmbraTri, [M, N, O])
 
     // Side triangles used for gradient shading.
-    setTri(sideTri0, [W0, B, I]);
-    setTri(sideTri1, [W1, C, F]);
+    let sTri0;
+    let sTri1;
     if ( nearCollinear ) {
-      setTri(sideTri0, [W0, B, W1]);
-      setTri(sideTri1, [W0, C, W1]);
+      sTri0 = [W0, B, W1];
+      sTri1 = [W0, C, W1];
 
       // Used to shade the portion unblocked by the wall, after the endpoints.
       // Lightest along the line of the wall. To replicate, connect the umbra triangle using
@@ -1536,11 +1538,19 @@ export class SizedShadowsTest extends PenumbraBasicTest {
         lineLineIntersection(Ray2d(W1, normalizedDirection(W1, I)), Ray2d(F, perpDir), newI);
         setTri(umbraTri, [W1, newI, F]);
       }
+    } else {
+      // Extend the wall -> inside range to penumbra triangle edge.
+      const ixI = vec2();
+      const ixF = vec2();
+      lineLineIntersection(B, C, W0, I, ixI);
+      lineLineIntersection(B, C, W1, F, ixF);
+      sTri0 = [W0, B, ixI];
+      sTri1 = [W1, C, ixF];
     }
 
     // Change the side triangles to isoceles so gradient shading works.
-    setTri(sideTri0, this.makeIsoceles(sideTri0));
-    setTri(sideTri1, this.makeIsoceles(sideTri1));
+    setTri(sideTri0, this.makeIsoceles(sTri0));
+    setTri(sideTri1, this.makeIsoceles(sTri1));
     return nearCollinear;
   }
 
@@ -3093,9 +3103,12 @@ shader0.drawNearFarTri(1)
 shader0.drawFarPenumbraTri();
 shader0.drawFarUmbraTri();
 
+let [A, B, C] = shader0.penumbraTri
 let [D, E, F] = shader0.nearFarTri0
 let [G, H, I] = shader0.nearFarTri1
 let [J, K, L] = shader0.farPenumbraTri
+let W0 = shader0.wall.top[0].xy
+let W1 = shader0.wall.top[1].xy
 
 // Treat as cube
 uLightPosition = shader0.uLightPosition
