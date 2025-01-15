@@ -30,8 +30,8 @@ ${PENUMBRA_FRAGMENT_FUNCTIONS}
 float shadowPercentage() {
   return 1.0;
 
-  bool hasFar = fFarRatios[PENUMBRA] != 0.0;
-  bool hasNear = fNearRatios[PENUMBRA] != 0.0;
+  bool hasFar = fFarDistances[PENUMBRA] != 0.0;
+  bool hasNear = fNearDistances[PENUMBRA] != 0.0;
   if ( !(hasFar || hasNear) ) return 1.0;
 
   float canvasElevation = uElevationRes.x;

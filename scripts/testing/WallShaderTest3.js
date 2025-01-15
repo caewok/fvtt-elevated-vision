@@ -461,8 +461,8 @@ export class PenumbraBasicTest extends ShaderTest {
 
     // @type {vec2} fWallHeights
     this.fWallHeights = vec2(0.0);
-    fWallHeights[TOP] = wall.top[0].z - this.canvasElevation; // The full height of the top of the wall from lowest elevation.
-    fWallHeights[BOTTOM] = wall.bottom[0].z - this.canvasElevation; // The full height of the bottom of the wall from lowest elevation.
+    this.fWallHeights[TOP] = wall.top[0].z - this.canvasElevation; // The full height of the top of the wall from lowest elevation.
+    this.fWallHeights[BOTTOM] = wall.bottom[0].z - this.canvasElevation; // The full height of the bottom of the wall from lowest elevation.
   }
 
   /**
@@ -1658,7 +1658,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
   }
 
   /* ----- NOTE: Debugging ----- */
-  drawLight() { Draw.point(this.light.center, { radius: this.uLightSize, color: Draw.COLORS.yellow, fillAlpha: 0.5 }); }
+  drawLight() { Draw.point(this.uLightPosition, { radius: this.uLightSize, color: Draw.COLORS.yellow, fillAlpha: 0.5 }); }
 
   drawUmbraTriangle() {
     const tri = this.umbraTri;

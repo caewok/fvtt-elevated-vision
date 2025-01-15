@@ -67,12 +67,14 @@ float shadowPercentage() {
     float canvasElevation = uElevationRes.x;
     float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
 
-    if ( elevation > farPenumbraElevation() ) return 0.0;
-    if ( elevation > nearPenumbraElevation() ) return 0.0;
+    // if ( elevation > farPenumbraElevation() ) return 0.0;
+    // if ( elevation > nearPenumbraElevation() ) return 0.0;
 
     if ( elevation < farUmbraElevation() ) inFar = true;
     if ( elevation < nearUmbraElevation() ) inNear = true;
   }
+  return inFar ? 1.0 : 0.0;
+
 
   // If in the far or near shadow, blend between penumbra (0) and umbra (1).
   // TODO: The if clauses should not be needed as linearConversion will set to 0 or 1 accordingly.
@@ -113,7 +115,7 @@ float shadowPercentage() {
     }
   }
 
-  return side0Shadow * side1Shadow;// * farShadow * nearShadow * umbraShadow;
+  return side0Shadow * side1Shadow * farShadow * nearShadow * umbraShadow;
 }
 
 void main() {
