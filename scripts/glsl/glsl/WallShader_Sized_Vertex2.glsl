@@ -40,6 +40,7 @@ ${defineFunction("tangentPoints")}
 ${defineFunction("sameSide")}
 ${defineFunction("distanceSquared")}
 ${defineFunction("quadraticIntersection")}
+${defineFunction("distanceToLine")}
 
 
 /* ----- NOTE: Functions used by Penumbra Vertex Functions ----- */
@@ -320,6 +321,9 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   // A found by intersecting the two side penumbra lines.
   lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.penumbra[1], A);
 
+  // If W0 == A, then the wall is nearly collinear with the light (line from wall intersects light circle).
+  bool nearCollinear = almostEqual(W0, A, 1.0e-08);
+
   // D and G are set by the intersection of their respective penumbra/umbra lines.
   // Most of the matching work done in sideShadowRays.
   lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[0], D);
@@ -329,27 +333,42 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   // near-tangent points.
   vec2[3] DEF = shadowTriangle(vec3(D, uLightPosition.z), wall); // Z axis not used for this.
   vec2[3] GHI = shadowTriangle(vec3(G, uLightPosition.z), wall); // Z axis not used for this.
-  E = DEF[1];
-  F = DEF[2];
-  H = GHI[1];
-  I = GHI[2];
+  E = DEF[1]; // Penumbra line
+  F = DEF[2]; // Umbra line
+
+  int hIdx = int(nearCollinear);
+  H = GHI[2 - hIdx]; // Penumbra line 2 - 1; 2 - 0
+  I = GHI[1 + hIdx]; // Umbra line    1 + 1; 1 + 0
 
   // Use the lower tangent to determine the furthest extent of the shadow from the wall.
   vec3 wallMid3d = vec3(wall.mid, wall.top[0].z);
   vec3[2] vTangents;
   verticalTangents(wallMid3d, vTangents);
   int idx = int(vTangents[0].z > vTangents[1].z); // Pick the lower in z direction.
-  vec2[3] triVerticalTangent = shadowTriangle(vTangents[idx], wall);
+  vec2[3] JKL = shadowTriangle(vTangents[idx], wall);
 
   // Determine B and C by connecting to the penumbra lines.
-  // Connect using the F and I points, but from the further triVerticalTangent line.
-  vec2 furthestPoint = triVerticalTangent[2];
-  Ray2d rFurthest = Ray2d(furthestPoint, I - F);
-  lineLineIntersection(sideShadowRays.penumbra[0], rFurthest, B);
-  lineLineIntersection(sideShadowRays.penumbra[1], rFurthest, C);
+  if ( nearCollinear ) {
+    // Connect using the F and I points, but from the further JKL line.
+    // Because ∆DEF and ∆GHI both are turned sideways, so F and I are furthest points.
+    vec2 furthestPoint = JKL[2];
+    Ray2d rFurthest = Ray2d(furthestPoint, I - F);
+    lineLineIntersection(sideShadowRays.penumbra[0], rFurthest, B);
+    lineLineIntersection(sideShadowRays.penumbra[1], rFurthest, C);
 
-  // If W0 == A, then the wall is nearly collinear with the light (line from wall intersects light circle).
-  bool nearCollinear = almostEqual(W0, A, 1.0e-08);
+  } else {
+    // Use the K->L line or the E-F line, whichever is further.
+    vec2 K = JKL[1];
+    vec2 L = JKL[2];
+    float dist2E = distanceSquaredToLine(E, wall.top[0].xy, wall.direction);
+    float dist2K = distanceSquaredToLine(K, wall.top[0].xy, wall.direction);
+    int idx = int(dist2E > dist2K); // E further: 1; K further: 0
+    vec2 a = vec2[2](K, E)[idx];
+    vec2 b = vec2[2](L, F)[idx];
+    Ray2d rab = Ray2d(a, b - a);
+    lineLineIntersection(sideShadowRays.penumbra[0], rab, B);
+    lineLineIntersection(sideShadowRays.penumbra[1], rab, C);
+  }
 
   // For debugging, test side shadows
   /*

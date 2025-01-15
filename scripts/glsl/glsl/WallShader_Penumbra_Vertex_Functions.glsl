@@ -435,7 +435,7 @@ vec2[3] shadowTriangle(in vec3 A, in Wall wall) {
   // For non-infinite, intersect the canvas plane to determine extension point.
   Plane canvasPlane = constructCanvasPlane();
   vec3 ixP;
-  if ( !furthestShadowPoint(A, vec3(wall.mid, wall.top[0].z), ixP) ) return extendTriangleToCanvasEdge(vec2[3](A.xy, a, b));
+  if ( !furthestShadowPoint(A, wall.top[1], ixP) ) return extendTriangleToCanvasEdge(vec2[3](A.xy, a, b));
   Ray2d rWallIx = Ray2d(ixP.xy, b - a);
   Ray2d rAa = Ray2d(A.xy, a - A.xy);
   Ray2d rAb = Ray2d(A.xy, b - A.xy);
