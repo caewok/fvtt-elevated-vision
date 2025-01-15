@@ -123,7 +123,7 @@ void shrinkOverlappingWall(inout Wall wall) {
  * @returns {ShadowDirections}
  */
 ShadowDirections calculateFarShadowDirections(in Wall wall, in Light light) {
-  vec3 wallMid = (wall.top[0] + wall.top[1]) * 0.5;
+  vec3 wallMid = vec3(wall.mid, wall.top[0].z);
   return ShadowDirections(
     normalizedDirection(light.top, wallMid), // umbra
     normalizedDirection(light.center, wallMid), // midpenumbra
