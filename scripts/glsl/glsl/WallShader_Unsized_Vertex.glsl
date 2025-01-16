@@ -12,12 +12,15 @@ in float aThresholdRadius2;
 out vec2 vVertexPosition;
 out vec2 vTerrainTexCoord;
 out float vEdgeDist;
+out float vCollinearEdgeDist;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
 flat out vec2 fWallHeights;
 flat out vec2 fNearDistances;
 flat out vec2 fFarDistances;
+flat out vec2 fFarCollinearDistances;
+flat out vec2 fNearCollinearDistances;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -80,10 +83,16 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
   // 0.0 indicates no shadow.
   fFarDistances = vec2(0.0);
   fNearDistances = vec2(0.0);
+  fFarCollinearDistances = vec2(0.0);
+  fNearCollinearDistances = vec2(0.0);
 
   // The far penumbra shadow by definition is at the far penumbraTri edge.
   if ( !isInfiniteTopShadow(uLightPosition) ) {
-    fFarDistances[PENUMBRA] = distanceToLine(penumbraTri[2], wall.top[0].xy, wall.direction);
+    // fFarDistances[PENUMBRA] = distanceToLine(penumbraTri[2], wall.top[0].xy, wall.direction);
+    vec3 ixP;
+    furthestShadowPoint(uLightPosition, wall.top[0], ixP);
+    fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
+    fFarCollinearDistances[PENUMBRA] = distance(ixP, wall.top[1].xy);
   }
 
   // The near penumbra shadow depends on wall floating
@@ -91,11 +100,22 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
     // Use closest wall point for the near shadow.
     vec3 ixP;
     furthestShadowPoint(uLightPosition, wall.bottom[0], ixP);
-    fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
+    fNearDistances[PENUMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
+    fNearCollinearDistances[PENUMBRA] = distance(ixP, wall.top[1].xy);
   }
   // For unsized light, no umbra shadow.
 }
 
 void main() {
-  ${PENUMBRA_VERTEX_CALCULATIONS}
+  int vertexNum = gl_VertexID % 3;
+
+  Wall wall = calculateWallPositions();
+  vec2[3] penumbraTri = definePenumbraTriangle(wall);
+
+  defineSharedVaryings(wall, penumbraTri);
+  defineVaryings(wall, penumbraTri);
+  if ( vertexNum == 2 ) {
+    defineSharedFlats(wall, penumbraTri);
+    defineFlats(wall, penumbraTri);
+  }
 }

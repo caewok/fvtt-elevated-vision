@@ -496,35 +496,6 @@ Ray2d nearFarMidRay(in Wall wall, in vec2[3] penumbraTri) {
 
 /**
  * Calculate varying variables.
- */
-void defineBasicVaryings(in Wall wall) {
-  int vertexNum = gl_VertexID % 3;
-
-  // Used to determine in front of or behind wall.
-  vEdgeDist = distanceToLine(vVertexPosition, wall.top[0].xy,
-    normalizedDirection(wall.top[0].xy, wall.top[1].xy));
-  if ( vertexNum == 0 ) vEdgeDist *= -1.0;
-
-  // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
-  // @type {vec2} vTerrainTexCoord
-  vTerrainTexCoord = (vVertexPosition - uSceneDims.xy) / uSceneDims.zw;
-  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
-}
-
-/**
- * Basic flats used by all shaders to limit shadow.
- */
-void defineBasicFlats() {
-  // @type {float} fWallSenseType
-  fWallSenseType = aWallSenseType;
-
-  // @type {float} fThresholdRadius
-  fThresholdRadius2 = !(aWallSenseType == DISTANCE_WALL || aWallSenseType == PROXIMATE_WALL)
-    ? -1.0 : aThresholdRadius2;
-}
-
-/**
- * Calculate varying variables.
  * @param {Wall} wall
  * @param {vec2[3]} penumbraTri
  */
@@ -546,6 +517,9 @@ void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
   vEdgeDist = distanceToLine(vVertexPosition, wall.top[0].xy,
     normalizedDirection(wall.top[0].xy, wall.top[1].xy));
   if ( vertexNum == 0 ) vEdgeDist *= -1.0;
+
+  // Distance from the W1 endpoint.
+  vCollinearEdgeDist = distance(vVertexPosition, wall.top[1].xy);
 }
 
 /**

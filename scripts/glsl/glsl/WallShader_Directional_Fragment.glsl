@@ -16,6 +16,7 @@ in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
 in vec3 vUmbra;
 in float vEdgeDist;
+in float vCollinearEdgeDist;
 
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;
@@ -23,6 +24,8 @@ flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in vec2 fFarDistances;
 flat in vec2 fNearDistances;
 flat in vec2 fAmbient;
+flat in vec2 fFarCollinearDistances;
+flat in vec2 fNearCollinearDistances;
 
 out vec4 fragColor;
 

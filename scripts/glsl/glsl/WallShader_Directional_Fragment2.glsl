@@ -17,6 +17,7 @@ uniform float uSolarAngle; // radians
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
 in float vEdgeDist;
+in float vCollinearEdgeDist;
 
 flat in float fThresholdRadius2;
 flat in float fWallSenseType;
@@ -27,6 +28,8 @@ flat in vec3 fWallTop0;
 flat in vec3 fWallTop1;
 flat in vec3 fWallBottom0;
 flat in vec3 fWallBottom1;
+flat in vec2 fFarCollinearDistances;
+flat in vec2 fNearCollinearDistances;
 
 out vec4 fragColor;
 

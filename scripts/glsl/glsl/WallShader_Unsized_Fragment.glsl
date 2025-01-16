@@ -12,12 +12,15 @@ uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
 in float vEdgeDist;
+in float vCollinearEdgeDist;
 
 flat in float fThresholdRadius2;
 flat in float fWallSenseType;
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in vec2 fNearDistances;
 flat in vec2 fFarDistances;
+flat in vec2 fFarCollinearDistances;
+flat in vec2 fNearCollinearDistances;
 
 out vec4 fragColor;
 

@@ -94,6 +94,20 @@ float _nearFarElevation(in float d, in int wallHeightType) {
 }
 
 /**
+ * Distance where border between shadow and not shadow lies for this fragment at given elevation.
+ * @param {float} elevation       Elevation to test
+ * @param {float} d               Distance to the wall for the furthest shadow point at canvas elevation
+ * @param {int} wallHeightType    Relevant wall height (TOP or BOTTOM)
+ * @returns {float}
+ */
+float _nearFarDistance(in float elevation, in float d, in int wallHeightType) {
+  float e = elevation - uElevationRes.x; // Subtract out canvas elevation.
+  float wallH = fWallHeights[wallHeightType];
+  float y = wallH - e;
+  return (d * y) / wallH;
+}
+
+/**
  * What is the elevation needed for this fragment to be out of the far shadow?
  * @returns {float}
  */
@@ -116,6 +130,39 @@ float nearPenumbraElevation() { return _nearFarElevation(fNearDistances[PENUMBRA
  * @returns {float}
  */
 float nearUmbraElevation() { return _nearFarElevation(fNearDistances[UMBRA], BOTTOM); }
+
+/**
+ * What is the far penumbra distance at this elevation?
+ * @param {float} elevation
+ * @returns {float}
+ */
+float farPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarDistances[PENUMBRA], TOP); }
+float farCollinearPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarCollinearDistances[PENUMBRA], TOP); }
+
+/**
+ * What is the far penumbra distance at this elevation?
+ * @param {float} elevation
+ * @returns {float}
+ */
+float farUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarDistances[UMBRA], TOP); }
+float farCollinearUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarCollinearDistances[UMBRA], TOP); }
+
+/**
+ * What is the far penumbra distance at this elevation?
+ * @param {float} elevation
+ * @returns {float}
+ */
+float nearPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearDistances[PENUMBRA], BOTTOM); }
+float nearCollinearPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearCollinearDistances[PENUMBRA], BOTTOM); }
+
+/**
+ * What is the far penumbra distance at this elevation?
+ * @param {float} elevation
+ * @returns {float}
+ */
+float nearUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearDistances[UMBRA], BOTTOM); }
+float nearCollinearUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearCollinearDistances[UMBRA], BOTTOM); }
+
 
 /**
  * Is the fragment location in front of the wall?

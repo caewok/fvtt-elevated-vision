@@ -14,6 +14,7 @@ out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
 out vec3 vUmbra;
 out float vEdgeDist;
+out float vCollinearEdgeDist;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
@@ -21,6 +22,8 @@ flat out vec2 fWallHeights; // r: topZ to canvas bottom; g: bottomZ to canvas bo
 flat out vec2 fAmbient;
 flat out vec2 fNearDistances;
 flat out vec2 fFarDistances;
+flat out vec2 fFarCollinearDistances;
+flat out vec2 fNearCollinearDistances;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -508,6 +511,8 @@ void defineFlats(in Wall wall,
   // 0.0 indicates no shadow.
   fFarDistances = vec2(0.0);
   fNearDistances = vec2(0.0);
+  fFarCollinearDistances = vec2(0.0);
+  fNearCollinearDistances = vec2(0.0);
 
   int idxLower = int(vTangents[0].z > vTangents[1].z); // Pick the lower in z direction.
   vec3 lowerTangent = vTangents[idxLower];
@@ -515,7 +520,11 @@ void defineFlats(in Wall wall,
 
   // The far penumbra shadow by definition is at the far penumbraTri edge.
   if ( !isInfiniteTopShadow(lowerTangent) ) {
-    fFarDistances[PENUMBRA] = distanceToLine(penumbraTri[2], wall.top[0].xy, wall.direction);
+    // fFarDistances[PENUMBRA] = distanceToLine(penumbraTri[2], wall.top[0].xy, wall.direction);
+    vec3 ixP;
+    furthestShadowPoint(lowerTangent, wall.top[0], ixP);
+    fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
+    fFarCollinearDistances[PENUMBRA] = distance(ixP.xy, wall.top[1].xy);
   }
 
   // The far umbra shadow is controlled by the upper tangent.
@@ -524,6 +533,7 @@ void defineFlats(in Wall wall,
     vec3 ixP;
     furthestShadowPoint(upperTangent, wall.top[0], ixP);
     fFarDistances[UMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
+    fFarCollinearDistances[UMBRA] = distance(ixP.xy, wall.top[1].xy);
   }
 
   // The near shadow depends on wall floating
@@ -533,11 +543,13 @@ void defineFlats(in Wall wall,
       vec3 ixP;
       furthestShadowPoint(lowerTangent, wall.top[0], ixP);
       fNearDistances[PENUMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
+      fNearCollinearDistances[PENUMBRA] = distance(ixP.xy, wall.top[1].xy);
     }
     if ( !isInfiniteBottomShadow(lowerTangent) ) {
       vec3 ixP;
       furthestShadowPoint(lowerTangent, wall.top[1], ixP);
       fNearDistances[UMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
+      fNearCollinearDistances[UMBRA] = distance(ixP.xy, wall.top[1].xy);
     }
   }
 }
