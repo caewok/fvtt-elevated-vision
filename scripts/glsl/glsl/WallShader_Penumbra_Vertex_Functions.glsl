@@ -511,15 +511,22 @@ void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
   vTerrainTexCoord = (vVertexPosition - uSceneDims.xy) / uSceneDims.zw;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
 
-  // @type {float} vEdgeDist
+  // @type {float} vEdgeDist              Distance from the wall line.
+  // @type {float} vCollinearEdgeDist     Distance left/right from wall line
   // Used to determine in front of or behind wall.
-  // Simpler than wall ratio, but may want to use that instead.
-  vEdgeDist = distanceToLine(vVertexPosition, wall.top[0].xy,
-    normalizedDirection(wall.top[0].xy, wall.top[1].xy));
+  Ray2d rEdgeWall;
+  Ray2d rCollinearWall;
+  bool isCollinear = almostEqual(penumbraTri[0], wall.top[0].xy, 1.0e-06);
+  if ( isCollinear ) {
+    rCollinearWall = Ray2d(wall.mid, wall.direction);
+    rEdgeWall = Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
+  } else {
+    rEdgeWall = Ray2d(wall.mid, wall.direction);
+    rCollinearWall = Ray2d(wall.mid, vec2(-wall.direction.y, wall.direction.x));
+  }
+  vEdgeDist = distanceToLine(vVertexPosition, rEdgeWall.origin, rEdgeWall.direction);
+  vCollinearEdgeDist = distanceToLine(vVertexPosition, rCollinearWall.origin, rCollinearWall.direction);
   if ( vertexNum == 0 ) vEdgeDist *= -1.0;
-
-  // Distance from the W1 endpoint.
-  vCollinearEdgeDist = distance(vVertexPosition, wall.top[1].xy);
 }
 
 /**

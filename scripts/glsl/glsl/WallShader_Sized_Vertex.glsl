@@ -518,22 +518,33 @@ void defineFlats(in Wall wall,
   vec3 lowerTangent = vTangents[idxLower];
   vec3 upperTangent = vTangents[1 - idxLower];
 
+  Ray2d rEdgeWall;
+  Ray2d rCollinearWall;
+  bool isCollinear = almostEqual(penumbraTri[0], wall.top[0].xy, 1.0e-06);
+  if ( isCollinear ) {
+    rCollinearWall = Ray2d(wall.mid, wall.direction);
+    rEdgeWall = Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
+  } else {
+    rEdgeWall = Ray2d(wall.mid, wall.direction);
+    rCollinearWall = Ray2d(wall.mid, vec2(-wall.direction.y, wall.direction.x));
+  }
+
   // The far penumbra shadow by definition is at the far penumbraTri edge.
   if ( !isInfiniteTopShadow(lowerTangent) ) {
     // fFarDistances[PENUMBRA] = distanceToLine(penumbraTri[2], wall.top[0].xy, wall.direction);
     vec3 ixP;
-    furthestShadowPoint(lowerTangent, wall.top[0], ixP);
-    fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
-    fFarCollinearDistances[PENUMBRA] = distance(ixP.xy, wall.top[1].xy);
+    furthestShadowPoint(lowerTangent, wall.top[1], ixP);
+    fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
+    fFarCollinearDistances[PENUMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
   }
 
   // The far umbra shadow is controlled by the upper tangent.
   if ( !isInfiniteTopShadow(upperTangent) ) {
     // Use closest wall point for the far umbra shadow.
     vec3 ixP;
-    furthestShadowPoint(upperTangent, wall.top[0], ixP);
-    fFarDistances[UMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
-    fFarCollinearDistances[UMBRA] = distance(ixP.xy, wall.top[1].xy);
+    furthestShadowPoint(upperTangent, wall.top[1], ixP);
+    fFarDistances[UMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
+    fFarCollinearDistances[UMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
   }
 
   // The near shadow depends on wall floating
@@ -541,15 +552,15 @@ void defineFlats(in Wall wall,
     if ( !isInfiniteBottomShadow(upperTangent) ) {
       // Use closest wall point for the near penumbra shadow.
       vec3 ixP;
-      furthestShadowPoint(lowerTangent, wall.top[0], ixP);
-      fNearDistances[PENUMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
-      fNearCollinearDistances[PENUMBRA] = distance(ixP.xy, wall.top[1].xy);
+      furthestShadowPoint(upperTangent, wall.top[0], ixP);
+      fNearDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
+      fNearCollinearDistances[PENUMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
     }
     if ( !isInfiniteBottomShadow(lowerTangent) ) {
       vec3 ixP;
-      furthestShadowPoint(lowerTangent, wall.top[1], ixP);
-      fNearDistances[UMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
-      fNearCollinearDistances[UMBRA] = distance(ixP.xy, wall.top[1].xy);
+      furthestShadowPoint(lowerTangent, wall.top[0], ixP);
+      fNearDistances[UMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
+      fNearCollinearDistances[UMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
     }
   }
 }

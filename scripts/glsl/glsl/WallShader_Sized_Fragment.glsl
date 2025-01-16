@@ -64,6 +64,17 @@ float shadowPercentage() {
   float nearCollinearPenumbraDist = fNearCollinearDistances[PENUMBRA];
   float nearCollinearUmbraDist = fNearCollinearDistances[UMBRA];
 
+  // vCollinearEdgeDist
+  /*
+  if ( vEdgeDist > 1000.0 ) return 0.10;
+  if ( vEdgeDist > 500.0  ) return 0.25;
+  if ( vEdgeDist > 200.0  ) return 0.4;
+  if ( vEdgeDist < -200.0  ) return 0.6;
+  if ( vEdgeDist < -500.0  ) return 0.75;
+  if ( vEdgeDist < -1000.0  ) return 0.9;
+  return 0.5;
+  */
+
 
   bool hasFar = any(notEqual(fFarDistances, vec2(0.0)));
   bool hasNear = any(notEqual(fNearDistances, vec2(0.0)));
@@ -90,12 +101,13 @@ float shadowPercentage() {
     nearCollinearUmbraDist = nearCollinearUmbraDistance(elevation);
 
 
+
     // inFar = vEdgeDist > farUmbraDist;
     // inNear = vEdgeDist < nearUmbraDist;
   }
 
-  if ( vEdgeDist > farCollinearPenumbraDist ) return 0.75;
-  if ( vEdgeDist < farCollinearUmbraDist) return 0.25;
+  if ( vEdgeDist > farPenumbraDist ) return 0.10;
+  if ( vEdgeDist > farUmbraDist ) return 0.5;
   return 1.0;
 
 

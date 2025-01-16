@@ -86,13 +86,24 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
   fFarCollinearDistances = vec2(0.0);
   fNearCollinearDistances = vec2(0.0);
 
+  Ray2d rEdgeWall;
+  Ray2d rCollinearWall;
+  bool isCollinear = almostEqual(penumbraTri[0], wall.top[0].xy, 1.0e-06);
+  if ( isCollinear ) {
+    rCollinearWall = Ray2d(wall.mid, wall.direction);
+    rEdgeWall = Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
+  } else {
+    rEdgeWall = Ray2d(wall.mid, wall.direction);
+    rCollinearWall = Ray2d(wall.mid, vec2(-wall.direction.y, wall.direction.x));
+  }
+
   // The far penumbra shadow by definition is at the far penumbraTri edge.
   if ( !isInfiniteTopShadow(uLightPosition) ) {
     // fFarDistances[PENUMBRA] = distanceToLine(penumbraTri[2], wall.top[0].xy, wall.direction);
     vec3 ixP;
-    furthestShadowPoint(uLightPosition, wall.top[0], ixP);
-    fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
-    fFarCollinearDistances[PENUMBRA] = distance(ixP, wall.top[1].xy);
+    furthestShadowPoint(uLightPosition, wall.top[1], ixP);
+    fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
+    fFarCollinearDistances[PENUMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
   }
 
   // The near penumbra shadow depends on wall floating
@@ -100,8 +111,8 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
     // Use closest wall point for the near shadow.
     vec3 ixP;
     furthestShadowPoint(uLightPosition, wall.bottom[0], ixP);
-    fNearDistances[PENUMBRA] = distanceToLine(ixP.xy, wall.top[0].xy, wall.direction);
-    fNearCollinearDistances[PENUMBRA] = distance(ixP, wall.top[1].xy);
+    fNearDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
+    fNearCollinearDistances[PENUMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
   }
   // For unsized light, no umbra shadow.
 }
