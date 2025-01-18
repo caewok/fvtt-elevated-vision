@@ -272,10 +272,10 @@ export class ShaderTest {
  * and Shadow Fragment.
  */
 export class PenumbraBasicTest extends ShaderTest {
-  static VARYINGS = ["vVertexPosition", "vTerrainTexCoord", "vEdgeDist", "vLeftRightEdgeBary"];
+  static VARYINGS = ["vVertexPosition", "vTerrainTexCoord", "vEdgeDist", "vLREdgeDist"];
 
   static FLATS = ["fWallSenseType", "fThresholdRadius2", "fNearDistances", "fFarDistances",
-    "fWallHeights", "fFarCollinearDistances", "fNearCollinearDistances", "fLeftRightWallDist"];
+    "fWallHeights", "fFarLRDistances", "fNearLRDistances"];
 
   /* ----- NOTE: Constants ---- */
 
@@ -480,15 +480,14 @@ export class PenumbraBasicTest extends ShaderTest {
     this.vEdgeDist = distanceToLine(this.vVertexPosition, rEdgeWall.origin, rEdgeWall.direction);
     if ( vertexNum === 0 ) this.vEdgeDist *= -1.0;
 
-    // @type {vec3} vLeftRightEdgeBary     Triangle A --> ix --> C, where
+    // @type {vec3} vLREdgeDist    Triangle A --> ix --> C, where
     //   ix is the intersection of the rCollinearWall with A->B.
-    const rLRWall = this.leftRightBisector(wall, isCollinear);
-    const [A, B, C] = penumbraTri;
-    const ix = vec2();
-    lineLineIntersection(Ray2d(B, C.subtract(B)), rLRWall, ix);
-    this.vLeftRightEdgeBary =
-
-    barycentric(this.vVertexPosition, A, ix, C)
+    if ( vertexNum === 0 ) this.vLREdgeDist = 0.0;
+    else {
+      const rLRWall = this.leftRightBisector(wall, isCollinear);
+      this.vLREdgeDist = glsl.distanceToLine(this.vVertexPosition, rLRWall.origin, rLRWall.direction);
+      if ( vertexNum === 1 )  this.vLREdgeDist *= -1.0;
+    }
   }
 
   /**
@@ -510,12 +509,6 @@ export class PenumbraBasicTest extends ShaderTest {
     this.fWallHeights = vec2(0.0);
     this.fWallHeights[TOP] = wall.top[0].z - this.canvasElevation; // The full height of the top of the wall from lowest elevation.
     this.fWallHeights[BOTTOM] = wall.bottom[0].z - this.canvasElevation; // The full height of the bottom of the wall from lowest elevation.
-
-    // @type {float} fLeftRightWallDist
-    const C = penumbraTri[2];
-    const isCollinear = almostEqual(penumbraTri[0], wall.top[0].xy, 1.0e-06);
-    const rCollinearWall = this.leftRightBisector(wall, isCollinear);
-    this.fLeftRightWallDist = distanceToLine(C, rCollinearWall.origin, rCollinearWall.direction);
   }
 
   /**
@@ -1770,8 +1763,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
 
     const hasFar = any(notEqual(fFarDistances, vec2(0.0)));
     const hasNear = any(notEqual(fNearDistances, vec2(0.0)));
-    const lrDistToEdge = glsl.interpolateBarycentric(this.vLeftRightEdgeBary, 0.0, 0.0, this.fLeftRightWallDist);
-
     if ( hasFar || hasNear ) {
       // In GLSL:
       // float canvasElevation = uElevationRes.x;
@@ -1786,12 +1777,12 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       nearUmbraDist = this.nearUmbraDistance(elevation);
 
       farLRPenumbraDist = this.farLRPenumbraDistance(elevation);
-      if ( lrDistToEdge > farLRPenumbraDist ) return { hasShadow: 0.0 };
-      if ( lrDistToEdge < -farLRPenumbraDist ) return { hasShadow: 0.0 };
+      if ( vLREdgeDist > farLRPenumbraDist ) return { hasShadow: 0.0 };
+      if ( vLREdgeDist < -farLRPenumbraDist ) return { hasShadow: 0.0 };
 
       nearLRPenumbraDist = this.nearLRPenumbraDistance(elevation);
-      if ( lrDistToEdge < nearLRPenumbraDist ) return { hasShadow: 0.0 };
-      if ( lrDistToEdge > -nearLRPenumbraDist ) return { hasShadow: 0.0 };
+      if ( vLREdgeDist < nearLRPenumbraDist ) return { hasShadow: 0.0 };
+      if ( vLREdgeDist > -nearLRPenumbraDist ) return { hasShadow: 0.0 };
 
       farLRUmbraDist = this.farLRUmbraDistance(elevation);
       nearLRUmbraDist = this.nearLRUmbraDistance(elevation);
@@ -1802,8 +1793,8 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     nearShadow = clamp(linearConversion(vEdgeDist, nearPenumbraDist, nearUmbraDist, 0.0, 1.0), 0.0, 1.0);
 
     // If in the left or right shadow, blend between penumbra (0) and umbra (1).
-    lrFarShadow = clamp(linearConversion(lrDistToEdge, farLRPenumbraDist, farLRUmbraDist, 0.0, 1.0), 0.0, 1.0);
-    lrNearShadow = clamp(linearConversion(lrDistToEdge, nearLRPenumbraDist, nearLRUmbraDist, 0.0, 1.0), 0.0, 1.0);
+    lrFarShadow = clamp(linearConversion(vLREdgeDist, farLRPenumbraDist, farLRUmbraDist, 0.0, 1.0), 0.0, 1.0);
+    lrNearShadow = clamp(linearConversion(vLREdgeDist, nearLRPenumbraDist, nearLRUmbraDist, 0.0, 1.0), 0.0, 1.0);
 
 
     // Blend the two side penumbras if overlapping by multiplying the light amounts.

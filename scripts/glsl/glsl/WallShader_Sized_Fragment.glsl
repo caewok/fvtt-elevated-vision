@@ -16,7 +16,7 @@ in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
 in vec3 vUmbra;
 in float vEdgeDist;
-in vec3 vLeftRightEdgeBary;
+in float vLREdgeDist;
 
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;
@@ -26,7 +26,6 @@ flat in vec2 fNearDistances;
 flat in vec2 fAmbient;
 flat in vec2 fFarLRDistances;
 flat in vec2 fNearLRDistances;
-flat in float fLeftRightWallDist;
 
 out vec4 fragColor;
 
@@ -67,17 +66,15 @@ float shadowPercentage() {
   float nearLRPenumbraDist = fNearLRDistances[PENUMBRA];
   float nearLRUmbraDist = fNearLRDistances[UMBRA];
 
-  float lrDistToEdge = interpolateBarycentric(vLeftRightEdgeBary, 0.0, 0.0, fLeftRightWallDist);
 
-  /*
-  if ( lrDistToEdge > 1000.0 ) return 0.10;
-  if ( lrDistToEdge > 500.0  ) return 0.25;
-  if ( lrDistToEdge > 200.0  ) return 0.4;
-  if ( lrDistToEdge < -200.0  ) return 0.6;
-  if ( lrDistToEdge < -500.0  ) return 0.75;
-  if ( lrDistToEdge < -1000.0  ) return 0.9;
+  if ( vLREdgeDist > 1000.0 ) return 0.10;
+  if ( vLREdgeDist > 500.0  ) return 0.25;
+  if ( vLREdgeDist > 200.0  ) return 0.4;
+  if ( vLREdgeDist < -200.0  ) return 0.6;
+  if ( vLREdgeDist < -500.0  ) return 0.75;
+  if ( vLREdgeDist < -1000.0  ) return 0.9;
   return 0.5;
-  */
+
 
   bool hasFar = any(notEqual(fFarDistances, vec2(0.0)));
   bool hasNear = any(notEqual(fNearDistances, vec2(0.0)));
@@ -108,10 +105,10 @@ float shadowPercentage() {
   }
 
 
-    if ( lrDistToEdge > farLRPenumbraDist ) return 0.10;
-    if ( lrDistToEdge < -farLRPenumbraDist ) return 0.20;
-    if ( lrDistToEdge > farLRUmbraDist ) return 0.5;
-    if ( lrDistToEdge < -farLRUmbraDist ) return 0.6;
+    if ( vLREdgeDist > farLRPenumbraDist ) return 0.10;
+    if ( vLREdgeDist < -farLRPenumbraDist ) return 0.20;
+    if ( vLREdgeDist > farLRUmbraDist ) return 0.5;
+    if ( vLREdgeDist < -farLRUmbraDist ) return 0.6;
     return 1.0;
 
 

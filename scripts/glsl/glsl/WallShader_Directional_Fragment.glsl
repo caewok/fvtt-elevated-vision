@@ -16,7 +16,7 @@ in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
 in vec3 vUmbra;
 in float vEdgeDist;
-in vec3 vLeftRightEdgeBary;
+in float vLREdgeDist;
 
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;

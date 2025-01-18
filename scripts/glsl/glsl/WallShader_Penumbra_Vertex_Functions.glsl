@@ -534,22 +534,21 @@ void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
 
   // @type {float} vEdgeDist              Distance from the wall line.
-  // @type {vec3} vLeftRightEdgeBary     Distance left/right from wall line
+  // @type {vec3} vLREdgeDist     Distance left/right from wall line
   // Used to determine in front of or behind wall.
   bool isCollinear = almostEqual(penumbraTri[0], wall.top[0].xy, 1.0e-06);
   Ray2d rEdgeWall = frontBackBisector(wall, isCollinear);
   vEdgeDist = distanceToLine(vVertexPosition, rEdgeWall.origin, rEdgeWall.direction);
   if ( vertexNum == 0 ) vEdgeDist *= -1.0;
 
-  // @type {vec3} vLeftRightEdgeBary     Triangle A --> ix --> C, where
+  // @type {vec3} vLREdgeDist    Triangle A --> ix --> C, where
   //   ix is the intersection of the rCollinearWall with A->B.
-  Ray2d rLRWall = leftRightBisector(wall, isCollinear);
-  vec2 A = penumbraTri[0];
-  vec2 B = penumbraTri[1];
-  vec2 C = penumbraTri[2];
-  vec2 ix;
-  lineLineIntersection(Ray2d(B, C - B), rLRWall, ix);
-  vLeftRightEdgeBary = barycentric(vVertexPosition, A, ix, C);
+  if ( vertexNum == 0 ) vLREdgeDist = 0.0;
+  else {
+    Ray2d rLRWall = leftRightBisector(wall, isCollinear);
+    vLREdgeDist = -distanceToLine(vVertexPosition, rLRWall.origin, rLRWall.direction);
+    if ( vertexNum == 1 ) vLREdgeDist *= -1.0;
+  }
 }
 
 /**
@@ -569,11 +568,4 @@ void defineSharedFlats(Wall wall, vec2[3] penumbraTri) {
   float canvasElevation = uElevationRes.x;
   fWallHeights[TOP] = wall.top[0].z - canvasElevation; // The full height of the top of the wall from lowest elevation.
   fWallHeights[BOTTOM] = wall.bottom[0].z - canvasElevation; // The full height of the bottom of the wall from lowest elevation.
-
-  // @type {float} fLeftRightWallDist
-  vec2 C = penumbraTri[2];
-  bool isCollinear = almostEqual(penumbraTri[0], wall.top[0].xy, 1.0e-06);
-  Ray2d rCollinearWall = leftRightBisector(wall, isCollinear);
-  fLeftRightWallDist = distanceToLine(C, rCollinearWall.origin, rCollinearWall.direction);
-
 }
