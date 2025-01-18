@@ -571,6 +571,44 @@ bool barycentricPointInsideTriangle(in vec3 bary) {
   return bary.y >= 0.0 && bary.z >= 0.0 && (bary.y + bary.z) <= 1.0;
 }`;
 
+GLSLFunctions.interpolateBarycentric =
+`
+/**
+ * Interpolate from values at the triangle vertices using a barycentric point.
+ * @param {vec3} bary
+ * @param {float|vec2|vec3} a
+ * @param {float|vec2|vec3} b
+ * @param {float|vec2|vec3} c
+ * @returns {float|vec2|vec3}
+ */
+float interpolateBarycentric(in vec3 bary, in float a, in float b, in float c) {
+  return dot(bary, vec3(a, b, c));
+}
+
+vec2 interpolateBarycentric(in vec3 bary, in vec2 a, in vec2 b, in vec2 c) {
+  vec2 a1 = a * bary.x;
+  vec2 b1 = b * bary.y;
+  vec2 c1 = c * bary.z;
+  return a1 + b1 + c1;
+}
+
+vec3 interpolateBarycentric(in vec3 bary, in vec3 a, in vec3 b, in vec3 c) {
+  vec3 a1 = a * bary.x;
+  vec3 b1 = b * bary.y;
+  vec3 c1 = c * bary.z;
+  return a1 + b1 + c1;
+}
+
+vec4 interpolateBarycentric(in vec3 bary, in vec4 a, in vec4 b, in vec4 c) {
+  vec4 a1 = a * bary.x;
+  vec4 b1 = b * bary.y;
+  vec4 c1 = c * bary.z;
+  return a1 + b1 + c1;
+}
+
+`
+
+
 // NOTE: Ray struct
 GLSLStructs.Ray =
 `

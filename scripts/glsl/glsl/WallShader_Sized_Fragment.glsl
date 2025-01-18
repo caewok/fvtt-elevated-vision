@@ -16,7 +16,7 @@ in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
 in vec3 vUmbra;
 in float vEdgeDist;
-in float vCollinearEdgeDist;
+in vec3 vLeftRightEdgeBary;
 
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;
@@ -26,8 +26,11 @@ flat in vec2 fNearDistances;
 flat in vec2 fAmbient;
 flat in vec2 fFarCollinearDistances;
 flat in vec2 fNearCollinearDistances;
+flat in float fLeftRightWallDist;
 
 out vec4 fragColor;
+
+${defineFunction("interpolateBarycentric")}
 
 ${PENUMBRA_FRAGMENT_FUNCTIONS}
 
@@ -65,16 +68,15 @@ float shadowPercentage() {
   float nearCollinearUmbraDist = fNearCollinearDistances[UMBRA];
 
   // vCollinearEdgeDist
-  /*
-  if ( vEdgeDist > 1000.0 ) return 0.10;
-  if ( vEdgeDist > 500.0  ) return 0.25;
-  if ( vEdgeDist > 200.0  ) return 0.4;
-  if ( vEdgeDist < -200.0  ) return 0.6;
-  if ( vEdgeDist < -500.0  ) return 0.75;
-  if ( vEdgeDist < -1000.0  ) return 0.9;
-  return 0.5;
-  */
+  float lrDistToEdge = interpolateBarycentric(vLeftRightEdgeBary, 0.0, 0.0, fLeftRightWallDist);
 
+  if ( lrDistToEdge > 1000.0 ) return 0.10;
+  if ( lrDistToEdge > 500.0  ) return 0.25;
+  if ( lrDistToEdge > 200.0  ) return 0.4;
+  if ( lrDistToEdge < -200.0  ) return 0.6;
+  if ( lrDistToEdge < -500.0  ) return 0.75;
+  if ( lrDistToEdge < -1000.0  ) return 0.9;
+  return 0.5;
 
   bool hasFar = any(notEqual(fFarDistances, vec2(0.0)));
   bool hasNear = any(notEqual(fNearDistances, vec2(0.0)));
@@ -86,10 +88,10 @@ float shadowPercentage() {
     //if ( elevation > nearPenumbraElevation() ) return 0.0;
 
     farPenumbraDist = farPenumbraDistance(elevation);
-    // if ( vEdgeDist > farPenumbraDist ) return 0.0; // Outside the penumbra.
+    if ( vEdgeDist > farPenumbraDist ) return 0.0; // Outside the penumbra.
 
     nearPenumbraDist = nearPenumbraDistance(elevation);
-    // if ( vEdgeDist < nearPenumbraDist ) return 0.0; // In front of the wall shadow.
+    if ( vEdgeDist < nearPenumbraDist ) return 0.0; // In front of the wall shadow.
 
     farUmbraDist = farUmbraDistance(elevation);
     nearUmbraDist = nearUmbraDistance(elevation);
@@ -100,22 +102,20 @@ float shadowPercentage() {
     farCollinearUmbraDist = farCollinearUmbraDistance(elevation);
     nearCollinearUmbraDist = nearCollinearUmbraDistance(elevation);
 
-
-
     // inFar = vEdgeDist > farUmbraDist;
     // inNear = vEdgeDist < nearUmbraDist;
   }
 
+  /*
   if ( vEdgeDist > farPenumbraDist ) return 0.10;
   if ( vEdgeDist > farUmbraDist ) return 0.5;
   return 1.0;
-
+  */
 
   // If in the far or near shadow, blend between penumbra (0) and umbra (1).
-  // TODO: The if clauses should not be needed as linearConversion will set to 0 or 1 accordingly.
   farShadow = clamp(linearConversion(vEdgeDist, farPenumbraDist, farUmbraDist, 0.0, 1.0), 0.0, 1.0);
   nearShadow = clamp(linearConversion(vEdgeDist, nearPenumbraDist, nearUmbraDist, 0.0, 1.0), 0.0, 1.0);
-  //return farShadow * nearShadow;
+  return farShadow * nearShadow;
 
   // Blend the two side penumbras if overlapping by multiplying the light amounts.
   // Needs to be 1.0 if outside the penumbra.

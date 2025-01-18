@@ -14,7 +14,7 @@ out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
 out vec3 vUmbra;
 out float vEdgeDist;
-out float vCollinearEdgeDist;
+out vec3 vLeftRightEdgeBary;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;

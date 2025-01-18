@@ -398,6 +398,39 @@ export function interpolateBarycentric(bary, a, b, c) {
   return a.add(b).add(c);
 }
 
+
+/*
+d = glsl.distanceToLine(C, rCollinearWall.origin, rCollinearWall.direction) // 533
+tri = [A, ix, C]  2800,2263; 2800, 1579.32; 3333.89, 1690.35
+glsl.lineLineIntersection(glsl.Ray2d(B, C.subtract(B)), rCollinearWall, ix)
+bary = glsl.barycentric(ix, ...shader0.tri) 0.3502867817878723, 0.36875614523887634, 0.28095707297325134
+glsl.interpolateBarycentric(bary, 0, 0, d); 149.75
+
+bary•vec3(0, 0, d)
+a * 0 + ix * 0 + d * C
+0 + 0 + d * C
+
+bary = (pt, a, b, c)
+bary•vec3(0, 0, d) = dist
+0 + 0 + d * C = dist
+C = dist / d
+
+bary =  glsl.barycentric(ix, 0, 0,
+
+Have:
+tri = [A, ix, C]
+bary = glsl.barycentric(ix, ...shader0.tri)
+glsl.interpolateBarycentric(bary, 0, 0, d) = 149.75
+
+Need:
+bary = glsl.barycentric(ix, ...shader0.penumbraTri)
+glsl.interpolateBarycentric(bary, ?, ? , ?) = 149.75
+
+
+
+
+*/
+
 /**
  * Normalize a barycentric area coordinate.
  * @param {vec3} baryArea

@@ -495,6 +495,28 @@ Ray2d nearFarMidRay(in Wall wall, in vec2[3] penumbraTri) {
 }
 
 /**
+ * The line that defines the left/right sides of the penumbra in relation to the wall.
+ * @param {Wall} wall
+ * @param {bool} isCollinear
+ * @returns {Ray2d}
+ */
+Ray2d leftRightBisector(in Wall wall, in bool isCollinear) {
+  if ( isCollinear ) return Ray2d(wall.mid, wall.direction);
+  return Ray2d(wall.mid, vec2(-wall.direction.y, wall.direction.x));
+}
+
+/**
+ * The line that defines the front/back sides of the penumbra in relation to the wall.
+ * @param {Wall} wall
+ * @param {bool} isCollinear
+ * @returns {Ray2d}
+ */
+Ray2d frontBackBisector(in Wall wall, in bool isCollinear) {
+  if ( isCollinear ) return Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
+  return Ray2d(wall.mid, wall.direction);
+}
+
+/**
  * Calculate varying variables.
  * @param {Wall} wall
  * @param {vec2[3]} penumbraTri
@@ -512,21 +534,22 @@ void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
 
   // @type {float} vEdgeDist              Distance from the wall line.
-  // @type {float} vCollinearEdgeDist     Distance left/right from wall line
+  // @type {vec3} vLeftRightEdgeBary     Distance left/right from wall line
   // Used to determine in front of or behind wall.
-  Ray2d rEdgeWall;
-  Ray2d rCollinearWall;
   bool isCollinear = almostEqual(penumbraTri[0], wall.top[0].xy, 1.0e-06);
-  if ( isCollinear ) {
-    rCollinearWall = Ray2d(wall.mid, wall.direction);
-    rEdgeWall = Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
-  } else {
-    rEdgeWall = Ray2d(wall.mid, wall.direction);
-    rCollinearWall = Ray2d(wall.mid, vec2(-wall.direction.y, wall.direction.x));
-  }
+  Ray2d rEdgeWall = frontBackBisector(wall, isCollinear);
   vEdgeDist = distanceToLine(vVertexPosition, rEdgeWall.origin, rEdgeWall.direction);
-  vCollinearEdgeDist = distanceToLine(vVertexPosition, rCollinearWall.origin, rCollinearWall.direction);
   if ( vertexNum == 0 ) vEdgeDist *= -1.0;
+
+  // @type {vec3} vLeftRightEdgeBary     Triangle A --> ix --> C, where
+  //   ix is the intersection of the rCollinearWall with A->B.
+  Ray2d rLRWall = leftRightBisector(wall, isCollinear);
+  vec2 A = penumbraTri[0];
+  vec2 B = penumbraTri[1];
+  vec2 C = penumbraTri[2];
+  vec2 ix;
+  lineLineIntersection(Ray2d(B, C - B), rLRWall, ix);
+  vLeftRightEdgeBary = barycentric(vVertexPosition, A, ix, C);
 }
 
 /**
@@ -546,4 +569,11 @@ void defineSharedFlats(Wall wall, vec2[3] penumbraTri) {
   float canvasElevation = uElevationRes.x;
   fWallHeights[TOP] = wall.top[0].z - canvasElevation; // The full height of the top of the wall from lowest elevation.
   fWallHeights[BOTTOM] = wall.bottom[0].z - canvasElevation; // The full height of the bottom of the wall from lowest elevation.
+
+  // @type {float} fLeftRightWallDist
+  vec2 C = penumbraTri[2];
+  bool isCollinear = almostEqual(penumbraTri[0], wall.top[0].xy, 1.0e-06);
+  Ray2d rCollinearWall = leftRightBisector(wall, isCollinear);
+  fLeftRightWallDist = distanceToLine(C, rCollinearWall.origin, rCollinearWall.direction);
+
 }

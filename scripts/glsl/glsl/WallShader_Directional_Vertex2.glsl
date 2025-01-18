@@ -10,7 +10,7 @@ in float aThresholdRadius2; // Note: no thresholds for walls apply for direction
 out vec2 vVertexPosition;
 out vec2 vTerrainTexCoord;
 out float vEdgeDist;
-out float vCollinearEdgeDist;
+out vec3 vLeftRightEdgeBary;
 
 flat out float fThresholdRadius2;
 flat out float fWallSenseType;

@@ -16,7 +16,7 @@ uniform vec4 uSceneDims;
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
 in float vEdgeDist;
-in float vCollinearEdgeDist;
+in vec3 vLeftRightEdgeBary;
 
 flat in float fThresholdRadius2;
 flat in float fWallSenseType;

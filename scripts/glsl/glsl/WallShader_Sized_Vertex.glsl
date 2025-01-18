@@ -14,7 +14,7 @@ out vec3 vSidePenumbra0;
 out vec3 vSidePenumbra1;
 out vec3 vUmbra;
 out float vEdgeDist;
-out float vCollinearEdgeDist;
+out vec3 vLeftRightEdgeBary;
 
 flat out float fWallSenseType;
 flat out float fThresholdRadius2;
@@ -24,6 +24,7 @@ flat out vec2 fNearDistances;
 flat out vec2 fFarDistances;
 flat out vec2 fFarCollinearDistances;
 flat out vec2 fNearCollinearDistances;
+flat out float fLeftRightWallDist;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;

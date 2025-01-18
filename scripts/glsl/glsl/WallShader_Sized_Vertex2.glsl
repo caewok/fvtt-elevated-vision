@@ -10,7 +10,7 @@ in float aThresholdRadius2;
 out vec2 vVertexPosition;
 out vec2 vTerrainTexCoord;
 out float vEdgeDist;
-out float vCollinearEdgeDist;
+out vec3 vLeftRightEdgeBary;
 
 flat out float fThresholdRadius2;
 flat out float fWallSenseType;
@@ -23,7 +23,7 @@ flat out vec3 fWallBottom0;
 flat out vec3 fWallBottom1;
 flat out vec2 fFarCollinearDistances;
 flat out vec2 fNearCollinearDistances;
-
+flat out float fLeftRightWallDist;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
