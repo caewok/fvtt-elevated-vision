@@ -21,8 +21,8 @@ flat out vec3 fWallTop0;
 flat out vec3 fWallTop1;
 flat out vec3 fWallBottom0;
 flat out vec3 fWallBottom1;
-flat out vec2 fFarCollinearDistances;
-flat out vec2 fNearCollinearDistances;
+flat out vec2 fFarLRDistances;
+flat out vec2 fNearLRDistances;
 flat out float fLeftRightWallDist;
 
 uniform mat3 translationMatrix;

@@ -28,8 +28,8 @@ flat in vec3 fWallTop0;
 flat in vec3 fWallTop1;
 flat in vec3 fWallBottom0;
 flat in vec3 fWallBottom1;
-flat in vec2 fFarCollinearDistances;
-flat in vec2 fNearCollinearDistances;
+flat in vec2 fFarLRDistances;
+flat in vec2 fNearLRDistances;
 
 out vec4 fragColor;
 

@@ -19,8 +19,8 @@ flat out float fThresholdRadius2;
 flat out vec2 fWallHeights;
 flat out vec2 fNearDistances;
 flat out vec2 fFarDistances;
-flat out vec2 fFarCollinearDistances;
-flat out vec2 fNearCollinearDistances;
+flat out vec2 fFarLRDistances;
+flat out vec2 fNearLRDistances;
 flat out float fLeftRightWallDist;
 
 uniform mat3 translationMatrix;
@@ -84,8 +84,8 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
   // 0.0 indicates no shadow.
   fFarDistances = vec2(0.0);
   fNearDistances = vec2(0.0);
-  fFarCollinearDistances = vec2(0.0);
-  fNearCollinearDistances = vec2(0.0);
+  fFarLRDistances = vec2(0.0);
+  fNearLRDistances = vec2(0.0);
 
   Ray2d rEdgeWall;
   Ray2d rCollinearWall;
@@ -104,7 +104,7 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
     vec3 ixP;
     furthestShadowPoint(uLightPosition, wall.top[1], ixP);
     fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
-    fFarCollinearDistances[PENUMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
+    fFarLRDistances[PENUMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
   }
 
   // The near penumbra shadow depends on wall floating
@@ -113,7 +113,7 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
     vec3 ixP;
     furthestShadowPoint(uLightPosition, wall.bottom[0], ixP);
     fNearDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
-    fNearCollinearDistances[PENUMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
+    fNearLRDistances[PENUMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
   }
   // For unsized light, no umbra shadow.
 }

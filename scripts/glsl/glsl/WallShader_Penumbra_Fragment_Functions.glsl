@@ -137,7 +137,7 @@ float nearUmbraElevation() { return _nearFarElevation(fNearDistances[UMBRA], BOT
  * @returns {float}
  */
 float farPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarDistances[PENUMBRA], TOP); }
-float farCollinearPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarCollinearDistances[PENUMBRA], TOP); }
+float farLRPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarLRDistances[PENUMBRA], TOP); }
 
 /**
  * What is the far penumbra distance at this elevation?
@@ -145,7 +145,7 @@ float farCollinearPenumbraDistance(in float elevation) { return _nearFarDistance
  * @returns {float}
  */
 float farUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarDistances[UMBRA], TOP); }
-float farCollinearUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarCollinearDistances[UMBRA], TOP); }
+float farLRUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarLRDistances[UMBRA], TOP); }
 
 /**
  * What is the far penumbra distance at this elevation?
@@ -153,7 +153,7 @@ float farCollinearUmbraDistance(in float elevation) { return _nearFarDistance(el
  * @returns {float}
  */
 float nearPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearDistances[PENUMBRA], BOTTOM); }
-float nearCollinearPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearCollinearDistances[PENUMBRA], BOTTOM); }
+float nearLRPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearLRDistances[PENUMBRA], BOTTOM); }
 
 /**
  * What is the far penumbra distance at this elevation?
@@ -161,7 +161,7 @@ float nearCollinearPenumbraDistance(in float elevation) { return _nearFarDistanc
  * @returns {float}
  */
 float nearUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearDistances[UMBRA], BOTTOM); }
-float nearCollinearUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearCollinearDistances[UMBRA], BOTTOM); }
+float nearLRUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearLRDistances[UMBRA], BOTTOM); }
 
 
 /**

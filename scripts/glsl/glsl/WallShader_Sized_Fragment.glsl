@@ -24,8 +24,8 @@ flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in vec2 fFarDistances;
 flat in vec2 fNearDistances;
 flat in vec2 fAmbient;
-flat in vec2 fFarCollinearDistances;
-flat in vec2 fNearCollinearDistances;
+flat in vec2 fFarLRDistances;
+flat in vec2 fNearLRDistances;
 flat in float fLeftRightWallDist;
 
 out vec4 fragColor;
@@ -62,14 +62,14 @@ float shadowPercentage() {
   float nearPenumbraDist = fNearDistances[PENUMBRA];
   float nearUmbraDist = fNearDistances[UMBRA];
 
-  float farCollinearPenumbraDist = fFarCollinearDistances[PENUMBRA];
-  float farCollinearUmbraDist = fFarCollinearDistances[UMBRA];
-  float nearCollinearPenumbraDist = fNearCollinearDistances[PENUMBRA];
-  float nearCollinearUmbraDist = fNearCollinearDistances[UMBRA];
+  float farLRPenumbraDist = fFarLRDistances[PENUMBRA];
+  float farLRUmbraDist = fFarLRDistances[UMBRA];
+  float nearLRPenumbraDist = fNearLRDistances[PENUMBRA];
+  float nearLRUmbraDist = fNearLRDistances[UMBRA];
 
-  // vCollinearEdgeDist
   float lrDistToEdge = interpolateBarycentric(vLeftRightEdgeBary, 0.0, 0.0, fLeftRightWallDist);
 
+  /*
   if ( lrDistToEdge > 1000.0 ) return 0.10;
   if ( lrDistToEdge > 500.0  ) return 0.25;
   if ( lrDistToEdge > 200.0  ) return 0.4;
@@ -77,6 +77,7 @@ float shadowPercentage() {
   if ( lrDistToEdge < -500.0  ) return 0.75;
   if ( lrDistToEdge < -1000.0  ) return 0.9;
   return 0.5;
+  */
 
   bool hasFar = any(notEqual(fFarDistances, vec2(0.0)));
   bool hasNear = any(notEqual(fNearDistances, vec2(0.0)));
@@ -97,14 +98,22 @@ float shadowPercentage() {
     nearUmbraDist = nearUmbraDistance(elevation);
 
 
-    farCollinearPenumbraDist = farCollinearPenumbraDistance(elevation);
-    nearCollinearPenumbraDist = nearCollinearPenumbraDistance(elevation);
-    farCollinearUmbraDist = farCollinearUmbraDistance(elevation);
-    nearCollinearUmbraDist = nearCollinearUmbraDistance(elevation);
+    farLRPenumbraDist = farLRPenumbraDistance(elevation);
+    nearLRPenumbraDist = nearLRPenumbraDistance(elevation);
+    farLRUmbraDist = farLRUmbraDistance(elevation);
+    nearLRUmbraDist = nearLRUmbraDistance(elevation);
 
     // inFar = vEdgeDist > farUmbraDist;
     // inNear = vEdgeDist < nearUmbraDist;
   }
+
+
+    if ( lrDistToEdge > farLRPenumbraDist ) return 0.10;
+    if ( lrDistToEdge < -farLRPenumbraDist ) return 0.20;
+    if ( lrDistToEdge > farLRUmbraDist ) return 0.5;
+    if ( lrDistToEdge < -farLRUmbraDist ) return 0.6;
+    return 1.0;
+
 
   /*
   if ( vEdgeDist > farPenumbraDist ) return 0.10;

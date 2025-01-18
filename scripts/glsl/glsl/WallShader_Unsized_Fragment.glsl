@@ -19,8 +19,8 @@ flat in float fWallSenseType;
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in vec2 fNearDistances;
 flat in vec2 fFarDistances;
-flat in vec2 fFarCollinearDistances;
-flat in vec2 fNearCollinearDistances;
+flat in vec2 fFarLRDistances;
+flat in vec2 fNearLRDistances;
 flat in float fLeftRightWallDist;
 
 out vec4 fragColor;
