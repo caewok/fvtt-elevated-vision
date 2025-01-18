@@ -22,8 +22,10 @@ flat out vec2 fWallHeights;
 flat out vec2 fAmbient;
 flat out vec2 fNearDistances;
 flat out vec2 fFarDistances;
-flat out vec2 fFarLRDistances;
-flat out vec2 fNearLRDistances;
+flat out vec2 fFarLDistances;
+flat out vec2 fNearLDistances;
+flat out vec2 fFarRDistances;
+flat out vec2 fNearRDistances;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;

@@ -512,7 +512,7 @@ Ray2d leftRightBisector(in Wall wall, in bool isCollinear) {
  * @returns {Ray2d}
  */
 Ray2d frontBackBisector(in Wall wall, in bool isCollinear) {
-  if ( isCollinear ) return Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
+  if ( isCollinear ) return Ray2d(wall.top[0].xy, vec2(-wall.direction.y, wall.direction.x));
   return Ray2d(wall.mid, wall.direction);
 }
 
@@ -543,8 +543,8 @@ void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
 
   // @type {vec3} vLREdgeDist    Triangle A --> ix --> C, where
   //   ix is the intersection of the rCollinearWall with A->B.
-  if ( vertexNum == 0 ) vLREdgeDist = 0.0;
-  else {
+  vLREdgeDist = 0.0;
+  if ( isCollinear && vertexNum != 0 ) {
     Ray2d rLRWall = leftRightBisector(wall, isCollinear);
     vLREdgeDist = -distanceToLine(vVertexPosition, rLRWall.origin, rLRWall.direction);
     if ( vertexNum == 1 ) vLREdgeDist *= -1.0;

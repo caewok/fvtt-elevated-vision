@@ -24,8 +24,10 @@ flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
 flat in vec2 fFarDistances;
 flat in vec2 fNearDistances;
 flat in vec2 fAmbient;
-flat in vec2 fFarLRDistances;
-flat in vec2 fNearLRDistances;
+flat in vec2 fFarLDistances;
+flat in vec2 fNearLDistances;
+flat in vec2 fFarRDistances;
+flat in vec2 fNearRDistances;
 
 out vec4 fragColor;
 

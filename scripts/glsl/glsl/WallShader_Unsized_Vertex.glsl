@@ -19,8 +19,10 @@ flat out float fThresholdRadius2;
 flat out vec2 fWallHeights;
 flat out vec2 fNearDistances;
 flat out vec2 fFarDistances;
-flat out vec2 fFarLRDistances;
-flat out vec2 fNearLRDistances;
+flat out vec2 fFarLDistances;
+flat out vec2 fNearLDistances;
+flat out vec2 fFarRDistances;
+flat out vec2 fNearRDistances;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -81,21 +83,9 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
   // @type {vec2} fFarDistances, fNearDistances, using UMBRA, PENUMBRA.
   // Distance from wall to the far penumbra/umbra and near penumbra/umbra.
   // 0.0 indicates no shadow.
-  fFarDistances = vec2(0.0);
-  fNearDistances = vec2(0.0);
-  fFarLRDistances = vec2(0.0);
-  fNearLRDistances = vec2(0.0);
 
-  Ray2d rEdgeWall;
-  Ray2d rCollinearWall;
-  bool isCollinear = almostEqual(penumbraTri[0], wall.top[0].xy, 1.0e-06);
-  if ( isCollinear ) {
-    rCollinearWall = Ray2d(wall.mid, wall.direction);
-    rEdgeWall = Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
-  } else {
-    rEdgeWall = Ray2d(wall.mid, wall.direction);
-    rCollinearWall = Ray2d(wall.mid, vec2(-wall.direction.y, wall.direction.x));
-  }
+  // Unsized vertex never collinear b/c no shadow at collinear point (straight line).
+  Ray2d rEdgeWall = frontBackBisector(wall, false);
 
   // The far penumbra shadow by definition is at the far penumbraTri edge.
   if ( !isInfiniteTopShadow(uLightPosition) ) {
@@ -103,7 +93,6 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
     vec3 ixP;
     furthestShadowPoint(uLightPosition, wall.top[1], ixP);
     fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
-    fFarLRDistances[PENUMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
   }
 
   // The near penumbra shadow depends on wall floating
@@ -112,7 +101,6 @@ void defineFlats(in Wall wall, in vec2[3] penumbraTri) {
     vec3 ixP;
     furthestShadowPoint(uLightPosition, wall.bottom[0], ixP);
     fNearDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
-    fNearLRDistances[PENUMBRA] = distanceToLine(ixP.xy, rCollinearWall.origin, rCollinearWall.direction);
   }
   // For unsized light, no umbra shadow.
 }
