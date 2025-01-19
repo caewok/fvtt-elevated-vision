@@ -19,10 +19,10 @@ flat out float fThresholdRadius2;
 flat out vec2 fWallHeights;
 flat out vec2 fNearDistances;
 flat out vec2 fFarDistances;
-flat out vec2 fFarLDistances;
-flat out vec2 fNearLDistances;
-flat out vec2 fFarRDistances;
-flat out vec2 fNearRDistances;
+flat out vec2 fFarRLPenumbraDistances;
+flat out vec2 fFarRLUmbraDistances;
+flat out vec2 fNearRLPenumbraDistances;
+flat out vec2 fNearRLUmbraDistances;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;

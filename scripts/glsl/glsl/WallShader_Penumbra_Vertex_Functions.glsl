@@ -35,6 +35,8 @@ ${defineFunction("distanceToLine")}
 #define BOTTOM                            1
 #define FAR                               0
 #define NEAR                              1
+#define RIGHT                             0
+#define LEFT                              1
 
 // Structs to simplify the data organization.
 
@@ -547,7 +549,9 @@ void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
   if ( isCollinear && vertexNum != 0 ) {
     Ray2d rLRWall = leftRightBisector(wall, isCollinear);
     vLREdgeDist = distanceToLine(vVertexPosition, rLRWall.origin, rLRWall.direction);
-    if ( vertexNum == 1 ) vLREdgeDist *= -1.0;
+    vLREdgeDist *= sign(orient(rLRWall.origin, projectRay(rLRWall, 1.0), vVertexPosition));
+    // Left side is 1.0, right side is -1.0.
+
   }
 }
 

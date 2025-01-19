@@ -21,10 +21,10 @@ flat out vec3 fWallTop0;
 flat out vec3 fWallTop1;
 flat out vec3 fWallBottom0;
 flat out vec3 fWallBottom1;
-flat out vec2 fFarLDistances;
-flat out vec2 fNearLDistances;
-flat out vec2 fFarRDistances;
-flat out vec2 fNearRDistances;
+flat out vec2 fFarRLPenumbraDistances;
+flat out vec2 fFarRLUmbraDistances;
+flat out vec2 fNearRLPenumbraDistances;
+flat out vec2 fNearRLUmbraDistances;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;

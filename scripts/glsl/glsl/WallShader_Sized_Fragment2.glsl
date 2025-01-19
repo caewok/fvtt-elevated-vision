@@ -27,10 +27,10 @@ flat in vec3 fWallTop0;
 flat in vec3 fWallTop1;
 flat in vec3 fWallBottom0;
 flat in vec3 fWallBottom1;
-flat in vec2 fFarLDistances;
-flat in vec2 fNearLDistances;
-flat in vec2 fFarRDistances;
-flat in vec2 fNearRDistances;
+flat in vec2 fFarRLPenumbraDistances;
+flat in vec2 fFarRLUmbraDistances;
+flat in vec2 fNearRLPenumbraDistances;
+flat in vec2 fNearRLUmbraDistances;
 
 out vec4 fragColor;
 
