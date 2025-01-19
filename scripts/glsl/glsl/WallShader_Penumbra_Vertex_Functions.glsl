@@ -546,7 +546,7 @@ void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
   vLREdgeDist = 0.0;
   if ( isCollinear && vertexNum != 0 ) {
     Ray2d rLRWall = leftRightBisector(wall, isCollinear);
-    vLREdgeDist = -distanceToLine(vVertexPosition, rLRWall.origin, rLRWall.direction);
+    vLREdgeDist = distanceToLine(vVertexPosition, rLRWall.origin, rLRWall.direction);
     if ( vertexNum == 1 ) vLREdgeDist *= -1.0;
   }
 }

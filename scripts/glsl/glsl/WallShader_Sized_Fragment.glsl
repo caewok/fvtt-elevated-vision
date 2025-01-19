@@ -59,9 +59,10 @@ float shadowPercentage() {
   float side1Shadow = 1.0;
   float umbraShadow = 1.0;
   float farLShadow = 1.0;
-  float nearLShadow = 1.0;
   float farRShadow = 1.0;
+  float nearLShadow = 1.0;
   float nearRShadow = 1.0;
+
   float farPenumbraDist = fFarDistances[PENUMBRA];
   float farUmbraDist = fFarDistances[UMBRA];
   float nearPenumbraDist = fNearDistances[PENUMBRA];
@@ -80,12 +81,11 @@ float shadowPercentage() {
   if ( vLREdgeDist > 1000.0 ) return 0.10;
   if ( vLREdgeDist > 500.0  ) return 0.25;
   if ( vLREdgeDist > 200.0  ) return 0.4;
-  if ( vLREdgeDist < -200.0  ) return 0.6;
-  if ( vLREdgeDist < -500.0  ) return 0.75;
-  if ( vLREdgeDist < -1000.0  ) return 0.9;
+  if ( vLREdgeDist > -200.0  ) return 0.6;
+  if ( vLREdgeDist > -500.0  ) return 0.75;
+  if ( vLREdgeDist > -1000.0  ) return 0.9;
   return 0.5;
   */
-
 
   bool hasFar = any(notEqual(fFarDistances, vec2(0.0)));
   bool hasNear = any(notEqual(fNearDistances, vec2(0.0)));
@@ -105,24 +105,18 @@ float shadowPercentage() {
     farUmbraDist = farUmbraDistance(elevation);
     nearUmbraDist = nearUmbraDistance(elevation);
 
-
     farLPenumbraDist = farLPenumbraDistance(elevation);
-    if ( vLREdgeDist > farLPenumbraDist ) return 0.0; // Outside the penumbra.
+    //if ( farLPenumbraDist != 0.0 && vLREdgeDist > farLPenumbraDist ) return 0.0; // Outside the penumbra.
 
     farRPenumbraDist = farRPenumbraDistance(elevation);
-    if ( -vLREdgeDist > farRPenumbraDist ) return 0.0; // Outside the penumbra.
+    //if ( farRPenumbraDist != 0.0 && -vLREdgeDist > farRPenumbraDist ) return 0.0; // Outside the penumbra.
 
     nearLPenumbraDist = nearLPenumbraDistance(elevation);
-    farLUmbraDist = farLUmbraDistance(elevation);
-    nearLUmbraDist = nearLUmbraDistance(elevation);
-
-    farRPenumbraDist = farRPenumbraDistance(elevation);
     nearRPenumbraDist = nearRPenumbraDistance(elevation);
+    farLUmbraDist = farLUmbraDistance(elevation);
     farRUmbraDist = farRUmbraDistance(elevation);
+    nearLUmbraDist = nearLUmbraDistance(elevation);
     nearRUmbraDist = nearRUmbraDistance(elevation);
-
-    // inFar = vEdgeDist > farUmbraDist;
-    // inNear = vEdgeDist < nearUmbraDist;
   }
 
   /*
@@ -178,16 +172,28 @@ float shadowPercentage() {
   if ( hasFar ) {
     farShadow = clamp(linearConversion(vEdgeDist, farPenumbraDist, farUmbraDist, 0.0, 1.0), 0.0, 1.0);
     if ( vLREdgeDist != 0.0 ) {
-      farLShadow = clamp(linearConversion(vLREdgeDist, farLPenumbraDist, farLUmbraDist, 0.0, 1.0), 0.0, 1.0);
-      farRShadow = clamp(linearConversion(-vLREdgeDist, farRPenumbraDist, farRUmbraDist, 0.0, 1.0), 0.0, 1.0);
+      // return vLREdgeDist < -50.0 ? 1.0 : 0.5; // ~ -50
+      // return farRPenumbraDist == 0.0 ? 1.0 : 0.5; // 0.0
+      // return farRUmbraDist == 0.0 ? 1.0 : 0.5; // 0.0
+      // return linearConversion(-vLREdgeDist, farRPenumbraDist, farRUmbraDist, 0.0, 1.0) == 0.0 ? 1.0 : 0.5; // 0.0
+      farLShadow = (farLPenumbraDist == 0.0 && farLUmbraDist == 0.0)
+        ? 1.0 : clamp(linearConversion(vLREdgeDist, farLPenumbraDist, farLUmbraDist, 0.0, 1.0), 0.0, 1.0);
+      farRShadow = (farRPenumbraDist == 0.0 && farRUmbraDist == 0.0)
+        ? 1.0 : clamp(linearConversion(-vLREdgeDist, farRPenumbraDist, farRUmbraDist, 0.0, 1.0), 0.0, 1.0);
+
+      // vLREdgeDist = -59.00000150166488
+      // farRPenumbraDist = 0
+      // farRUmbraDist = 0
     }
   }
 
   if ( hasNear ) {
     nearShadow = clamp(linearConversion(vEdgeDist, nearPenumbraDist, nearUmbraDist, 0.0, 1.0), 0.0, 1.0);
     if ( vLREdgeDist != 0.0 ) {
-      nearLShadow = clamp(linearConversion(vLREdgeDist, nearLPenumbraDist, nearLPenumbraDist, 0.0, 1.0), 0.0, 1.0);
-      nearRShadow = clamp(linearConversion(-vLREdgeDist, nearRPenumbraDist, nearRPenumbraDist, 0.0, 1.0), 0.0, 1.0);
+      nearLShadow = (nearLPenumbraDist == 0.0 && nearLPenumbraDist == 0.0)
+        ? 1.0 : clamp(linearConversion(vLREdgeDist, nearLPenumbraDist, nearLPenumbraDist, 0.0, 1.0), 0.0, 1.0);
+      nearRShadow = (nearRPenumbraDist == 0.0 && nearRPenumbraDist == 0.0)
+        ? 1.0 : clamp(linearConversion(-vLREdgeDist, nearRPenumbraDist, nearRPenumbraDist, 0.0, 1.0), 0.0, 1.0);
     }
   }
 
@@ -225,6 +231,7 @@ float shadowPercentage() {
   }
   */
 
+  // return farRShadow;
   // return farShadow * nearShadow;
   // return farLShadow * nearLShadow * farRShadow * nearRShadow;
   // return side0Shadow * side1Shadow;

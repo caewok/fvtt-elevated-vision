@@ -65,19 +65,27 @@ GLSLFunctions.linearConversion =
  * Linear conversion from one range to another.
  */
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
-  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+  float denom = oldMax - oldMin;
+  if ( denom == 0.0 ) return float[2](newMin, newMax)[int(step(oldMin, x))];
+  return (((x - oldMin) * (newMax - newMin)) / denom) + newMin;
 }
 
 vec2 linearConversion(in vec2 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
-  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+  float denom = oldMax - oldMin;
+  if ( denom == 0.0 ) return mix(vec2(newMin), vec2(newMax), step(oldMin, x));
+  return (((x - oldMin) * (newMax - newMin)) / denom) + newMin;
 }
 
 vec3 linearConversion(in vec3 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
-  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+  float denom = oldMax - oldMin;
+  if ( denom == 0.0 ) return mix(vec3(newMin), vec3(newMax), step(oldMin, x));
+  return (((x - oldMin) * (newMax - newMin)) / denom) + newMin;
 }
 
 vec4 linearConversion(in vec4 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
-  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+  float denom = oldMax - oldMin;
+  if ( denom == 0.0 ) return mix(vec4(newMin), vec4(newMax), step(oldMin, x));
+  return (((x - oldMin) * (newMax - newMin)) / denom) + newMin;
 }
 `;
 

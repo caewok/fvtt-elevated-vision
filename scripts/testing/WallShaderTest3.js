@@ -486,7 +486,7 @@ export class PenumbraBasicTest extends ShaderTest {
     if ( isCollinear && vertexNum !== 0 ) {
       const rLRWall = this.leftRightBisector(wall, isCollinear);
       this.vLREdgeDist = glsl.distanceToLine(this.vVertexPosition, rLRWall.origin, rLRWall.direction);
-      if ( vertexNum === 1 )  this.vLREdgeDist *= -1.0;
+      if ( vertexNum === 1 ) this.vLREdgeDist *= -1.0;
     }
   }
 
@@ -652,11 +652,11 @@ export class PenumbraBasicTest extends ShaderTest {
 
   /**
    * For a given light center, determine the shadow triangle.
-   * @param {vec3} A      The assumed center point of the light
+   * @param {vec3} o      The assumed center point of the light
    * @param {Wall} wall   The associated wall
    * @returns {vec2[3]}  Triangle, from center through endpoint a and then endpoint b.
    */
-  shadowTriangle(A, wall) {
+  shadowTriangle(O, wall) {
     const orient = foundry.utils.orient2dFast;
     const {
       lineLineIntersection,
@@ -668,38 +668,38 @@ export class PenumbraBasicTest extends ShaderTest {
       almostEqual } = glsl;
     const a = wall.top[0].xy;
     const b = wall.top[1].xy;
-    if ( almostEqual(orient(A.xy, a, b), 0.0, 1e-06) ) {
+    if ( almostEqual(orient(O.xy, a, b), 0.0, 1e-06) ) {
       // The triangle is a line.
-      if ( this.isInfiniteTopShadow(A) ) {
-        // Where A --> wall intersects the canvas edge.
-        const rWall = Ray2d(A.xy, a.subtract(A.xy));
+      if ( this.isInfiniteTopShadow(O) ) {
+        // Where O --> wall intersects the canvas edge.
+        const rWall = Ray2d(O.xy, a.subtract(O.xy));
         const edge = this.whichCanvasEdge(rWall);
         const ix = vec2();
         lineLineIntersection(rWall, edge, ix);
-        return [A.xy, ix, ix];
+        return [O.xy, ix, ix];
       }
-      // Where A --> further wall endpoint intersects the canvas plane.
+      // Where O --> further wall endpoint intersects the canvas plane.
       const ixP = vec3();
-      const hasFurthestPoint = this._furthestShadowPoint(A, wall.top[1], ixP); // Wall 1 is further.
+      const hasFurthestPoint = this._furthestShadowPoint(O, wall.top[1], ixP); // Wall 1 is further.
       if ( !hasFurthestPoint ) new Error(`${MODULE_ID}|shadowTriangle|No furthest point found!`);
-      return [A.xy, ixP.xy, ixP.xy];
+      return [O.xy, ixP.xy, ixP.xy];
     }
 
     // For infinite shadow, extend triangle formed by light point and wall to the edge of the canvas.
-    if ( this.isInfiniteTopShadow(A) ) return this.extendTriangleToCanvasEdge([A.xy, a, b]);
+    if ( this.isInfiniteTopShadow(O) ) return this.extendTriangleToCanvasEdge([O.xy, a, b]);
 
     // For non-infinite, intersect the canvas plane to determine extension point.
     // Use the furthest wall point.
     const ixP = vec3();
-    if ( !this._furthestShadowPoint(A, wall.top[1], ixP) ) return this.extendTriangleToCanvasEdge([A.xy, a, b]);
+    if ( !this._furthestShadowPoint(O, wall.top[1], ixP) ) return this.extendTriangleToCanvasEdge([O.xy, a, b]);
     const rWallIx = Ray2d(ixP.xy, b.subtract(a));
-    const rAa = Ray2d(A.xy, a.subtract(A.xy));
-    const rAb = Ray2d(A.xy, b.subtract(A.xy));
+    const rAa = Ray2d(O.xy, a.subtract(O.xy));
+    const rAb = Ray2d(O.xy, b.subtract(O.xy));
     const B = vec2();
     const C = vec2();
     glsl.lineLineIntersection(rWallIx, rAa, B);
     glsl.lineLineIntersection(rWallIx, rAb, C);
-    return [A.xy, B, C];
+    return [O.xy, B, C];
   }
 
   /**
@@ -1334,6 +1334,8 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     farShadowDirs = shader0.farShadowDirs
     wall = shader0.wall
     orient = foundry.utils.orient2dFast;
+    uLightPosition = shader0.uLightPosition
+    uLightSize = shader0.uLightSize
     let {
       distanceSquared,
       projectRay,
@@ -1364,6 +1366,10 @@ export class SizedShadowsTest extends PenumbraBasicTest {
 
     // D and G are set by the intersection of their respective penumbra/umbra lines.
     // Most of the matching work done in sideShadowRays.
+    // If no intersection, D and G should be set to W0 (happens if side shadow rays are parallel):
+    // - when wall is near-collinear and wall line is tangent to source circle.
+    D.set(W0);
+    G.set(W0);
     glsl.lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[0], D);
     glsl.lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[1], G);
 
@@ -1403,9 +1409,16 @@ export class SizedShadowsTest extends PenumbraBasicTest {
 
     // Collinear: F->I or E->H form the line.
     // Noncollinear: Wall direction or E->F or H->I
-    const a = [E, F][collinearIdx];
-    const b = [F, I][collinearIdx];
-    const rab = Ray2d(furthestPoint, b.subtract(a));
+    // But E, F, I could be malformed if the side shadow ray runs parallel to and through the wall.
+    // So use perpendicular to the median direction.
+    let rabDir = wall.direction;
+    if ( nearCollinear ) {
+      const meanDir = sideShadowRays.penumbra[0].direction
+        .add(sideShadowRays.penumbra[1].direction)
+        .multiplyScalar(0.5);
+      rabDir = vec2(-meanDir.y, meanDir.x);
+    }
+    const rab = Ray2d(furthestPoint, rabDir);
     glsl.lineLineIntersection(sideShadowRays.penumbra[0], rab, B);
     glsl.lineLineIntersection(sideShadowRays.penumbra[1], rab, C);
     return nearCollinear;
@@ -1651,10 +1664,17 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       this.fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
 
       if ( isCollinear ) {
-        this._furthestShadowPoint(vec3(nearFarTri0[0], uLightPosition.z), wall.top[1], ixP);
+        // nearFarTri0 and nearFarTri1 are on opposite sides. Either (only nearFarTri1?) could be the wall line.
+        // Need the nearFarTri on the same side as the ixP. Only needed for isCollinear.
+        const lIdx = Number(orient(W0, W1, ixP.xy) * orient(W0, W1, nearFarTri0[2]) < 0.0);
+        const arr = [nearFarTri0[0], nearFarTri1[0]];
+        const lOrigin = arr[lIdx];
+        const rOrigin = arr[1 - lIdx];
+
+        this._furthestShadowPoint(vec3(lOrigin, uLightPosition.z), wall.top[1], ixP);
         this.fFarLDistances[PENUMBRA] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
 
-        this._furthestShadowPoint(vec3(nearFarTri1[0], uLightPosition.z), wall.top[1], ixP);
+        this._furthestShadowPoint(vec3(rOrigin, uLightPosition.z), wall.top[1], ixP);
         this.fFarRDistances[PENUMBRA] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
       }
     }
@@ -1670,13 +1690,13 @@ export class SizedShadowsTest extends PenumbraBasicTest {
         this.fFarLDistances[UMBRA] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
 
         // Approximate the other side's umbra by taking the ratio of the PENUMBRA distances.
-        const ratio = this.fFarRDistances[PENUMBRA] / this.fFarLDistances[PENUMBRA];
+        const ratio = this.fFarLDistances[PENUMBRA] !== 0.0  ? this.fFarRDistances[PENUMBRA] / this.fFarLDistances[PENUMBRA] : 0.0;
         this.fFarRDistances[UMBRA] = ratio * this.fFarLDistances[UMBRA];
       }
     }
 
     // The near shadow depends on wall floating
-    if ( this.wallIsFloating ) {
+    if ( this.wallIsFloating() ) {
       if ( !this.isInfiniteBottomShadow(upperTangent) ) {
         // Use closest wall point for the near penumbra shadow.
         const ixP = vec3();
@@ -1684,10 +1704,16 @@ export class SizedShadowsTest extends PenumbraBasicTest {
         this.fNearDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
 
         if ( isCollinear ) {
-          this._furthestShadowPoint(vec3(nearFarTri0[0], uLightPosition.z), wall.bottom[1], ixP);
+          // Need the nearFarTri on the same side as the ixP. Only needed for isCollinear.
+          const lIdx = Number(orient(W0, W1, ixP.xy) * orient(W0, W1, nearFarTri0[2]) < 0.0);
+          const arr = [nearFarTri0[0], nearFarTri1[0]];
+          const lOrigin = arr[lIdx];
+          const rOrigin = arr[1 - lIdx];
+
+          this._furthestShadowPoint(vec3(lOrigin, uLightPosition.z), wall.bottom[1], ixP);
           this.fNearLDistances[PENUMBRA] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
 
-          this._furthestShadowPoint(vec3(nearFarTri1[0], uLightPosition.z), wall.bottom[1], ixP);
+          this._furthestShadowPoint(vec3(rOrigin, uLightPosition.z), wall.bottom[1], ixP);
           this.fNearRDistances[PENUMBRA] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
         }
       }
@@ -1697,10 +1723,10 @@ export class SizedShadowsTest extends PenumbraBasicTest {
         this.fNearDistances[UMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
 
         if ( isCollinear ) {
-         this.fNearLDistances[UMBRA] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
+          this.fNearLDistances[UMBRA] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
 
           // Approximate the other side's umbra by taking the ratio of the PENUMBRA distances.
-          const ratio = this.fNearRDistances[PENUMBRA] / this.fNearLDistances[PENUMBRA];
+          const ratio = this.fNearLDistances[PENUMBRA] !== 0.0 ? this.fNearRDistances[PENUMBRA] / this.fNearLDistances[PENUMBRA] : 0.0;
           this.fNearRDistances[UMBRA] = ratio * this.fNearLDistances[UMBRA];
         }
       }
@@ -1795,17 +1821,25 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     let side0Shadow = 1.0;
     let side1Shadow = 1.0;
     let umbraShadow = 1.0;
-    let lrFarShadow = 1.0;
-    let lrNearShadow = 1.0;
+    let farLShadow = 1.0;
+    let farRShadow = 1.0;
+    let nearLShadow = 1.0;
+    let nearRShadow = 1.0;
+
     let farPenumbraDist = fFarDistances[PENUMBRA];
     let farUmbraDist = fFarDistances[UMBRA];
     let nearPenumbraDist = fNearDistances[PENUMBRA];
     let nearUmbraDist = fNearDistances[UMBRA];
 
-    let farLRPenumbraDist = fFarLRDistances[PENUMBRA];
-    let farLRUmbraDist = fFarLRDistances[UMBRA];
-    let nearLRPenumbraDist = fNearLRDistances[PENUMBRA];
-    let nearLRUmbraDist = fNearLRDistances[UMBRA];
+    let farLPenumbraDist = fFarLDistances[PENUMBRA];
+    let farLUmbraDist = fFarLDistances[UMBRA];
+    let nearLPenumbraDist = fNearLDistances[PENUMBRA];
+    let nearLUmbraDist = fNearLDistances[UMBRA];
+    let farRPenumbraDist = fFarRDistances[PENUMBRA];
+    let farRUmbraDist = fFarRDistances[UMBRA];
+    let nearRPenumbraDist = fNearRDistances[PENUMBRA];
+    let nearRUmbraDist = fNearRDistances[UMBRA];
+
 
     const hasFar = any(notEqual(fFarDistances, vec2(0.0)));
     const hasNear = any(notEqual(fNearDistances, vec2(0.0)));
@@ -1822,26 +1856,41 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       farUmbraDist = this.farUmbraDistance(elevation);
       nearUmbraDist = this.nearUmbraDistance(elevation);
 
-      farLRPenumbraDist = this.farLRPenumbraDistance(elevation);
-      if ( vLREdgeDist > farLRPenumbraDist ) return { hasShadow: 0.0 };
-      if ( vLREdgeDist < -farLRPenumbraDist ) return { hasShadow: 0.0 };
+      farLPenumbraDist = this.farLPenumbraDistance(elevation);
+      if ( farLPenumbraDist != 0.0 && vLREdgeDist > farLPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
 
-      nearLRPenumbraDist = this.nearLRPenumbraDistance(elevation);
-      if ( vLREdgeDist < nearLRPenumbraDist ) return { hasShadow: 0.0 };
-      if ( vLREdgeDist > -nearLRPenumbraDist ) return { hasShadow: 0.0 };
+      farRPenumbraDist = this.farRPenumbraDistance(elevation);
+      if ( farRPenumbraDist != 0.0 && -vLREdgeDist > farRPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
 
-      farLRUmbraDist = this.farLRUmbraDistance(elevation);
-      nearLRUmbraDist = this.nearLRUmbraDistance(elevation);
+      nearLPenumbraDist = this.nearLPenumbraDistance(elevation);
+      nearRPenumbraDist = this.nearRPenumbraDistance(elevation);
+      farLUmbraDist = this.farLUmbraDistance(elevation);
+      farRUmbraDist = this.farRUmbraDistance(elevation);
+      nearLUmbraDist = this.nearLUmbraDistance(elevation);
+      nearRUmbraDist = this.nearRUmbraDistance(elevation);
     }
 
     // If in the far or near shadow, blend between penumbra (0) and umbra (1).
-    farShadow = clamp(linearConversion(vEdgeDist, farPenumbraDist, farUmbraDist, 0.0, 1.0), 0.0, 1.0);
-    nearShadow = clamp(linearConversion(vEdgeDist, nearPenumbraDist, nearUmbraDist, 0.0, 1.0), 0.0, 1.0);
+    // If in the far or near left/right shadow, blend between penumbra (0) and umbra (1).
+    if ( hasFar ) {
+      farShadow = clamp(linearConversion(vEdgeDist, farPenumbraDist, farUmbraDist, 0.0, 1.0), 0.0, 1.0);
+      if ( vLREdgeDist !== 0.0 ) {
+        farLShadow = (farLPenumbraDist === 0.0 && farLUmbraDist === 0.0)
+        ? 1.0 : clamp(linearConversion(vLREdgeDist, farLPenumbraDist, farLUmbraDist, 0.0, 1.0), 0.0, 1.0);
+        farRShadow = (farRPenumbraDist === 0.0 && farRUmbraDist === 0.0)
+        ? 1.0 : clamp(linearConversion(-vLREdgeDist, farRPenumbraDist, farRUmbraDist, 0.0, 1.0), 0.0, 1.0);
+      }
+    }
 
-    // If in the left or right shadow, blend between penumbra (0) and umbra (1).
-    lrFarShadow = clamp(linearConversion(vLREdgeDist, farLRPenumbraDist, farLRUmbraDist, 0.0, 1.0), 0.0, 1.0);
-    lrNearShadow = clamp(linearConversion(vLREdgeDist, nearLRPenumbraDist, nearLRUmbraDist, 0.0, 1.0), 0.0, 1.0);
-
+    if ( hasNear ) {
+      nearShadow = clamp(linearConversion(vEdgeDist, nearPenumbraDist, nearUmbraDist, 0.0, 1.0), 0.0, 1.0);
+      if ( vLREdgeDist !== 0.0 ) {
+        nearLShadow = (nearLPenumbraDist === 0.0 && nearLPenumbraDist === 0.0)
+        ? 1.0 : clamp(linearConversion(vLREdgeDist, nearLPenumbraDist, nearLPenumbraDist, 0.0, 1.0), 0.0, 1.0);
+        nearRShadow = (nearRPenumbraDist === 0.0 && nearRPenumbraDist === 0.0)
+        ? 1.0 : clamp(linearConversion(-vLREdgeDist, nearRPenumbraDist, nearRPenumbraDist, 0.0, 1.0), 0.0, 1.0);
+      }
+    }
 
     // Blend the two side penumbras if overlapping by multiplying the light amounts.
     // Needs to be 1.0 if outside the penumbra.
@@ -1882,8 +1931,10 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       farShadow,
       nearShadow,
       umbraShadow,
-      lrFarShadow,
-      lrNearShadow };
+      farLShadow,
+      nearLShadow,
+      farRShadow,
+      nearRShadow};
   }
 
   /* ----- NOTE: Debugging ----- */
@@ -2639,7 +2690,7 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
     if ( vertexNum === 2 ) {
       this.defineSharedFlats(wall, penumbraTri);
       this.nearShadowDirs = ShadowDirections();
-      if ( this.wallIsFloating ) this.nearShadowDirs = this.calculateNearShadowDirections(wall);
+      if ( this.wallIsFloating() ) this.nearShadowDirs = this.calculateNearShadowDirections(wall);
       this.defineFlats(wall, penumbraTri, sideTri0, farShadowDirs, this.nearShadowDirs);
     }
   }

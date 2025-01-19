@@ -466,7 +466,7 @@ export function convertBarycentericAreaSimilarTriangle(baryArea, ratio) {
 
 /**
  * Linear conversion from one range to another.
- * @param {float} x
+ * @param {float|vec} x
  * @param {float} oldMin
  * @param {float} oldMax
  * @param {float} newMin
@@ -475,6 +475,12 @@ export function convertBarycentericAreaSimilarTriangle(baryArea, ratio) {
  */
 export function linearConversion(x, oldMin, oldMax, newMin, newMax) {
   // (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin
+  const denom = oldMax - oldMin;
+  if ( denom == 0.0 ) {
+    if ( Number.isNumeric(x) ) return [newMin, newMax][step(oldMin, x)];
+    return mix(new x.constructor(newMin), new x.constructor(newMax), step(oldMin, x))
+  }
+
   const denomInv = 1.0 / (oldMax - oldMin);
   if ( Number.isNumeric(x) ) return ((x - oldMin) * (newMax - newMin) * denomInv) + newMin;
   return x
@@ -1295,11 +1301,15 @@ export function sameSide(a, b, p0, p1) {
 
 /**
  * Returns 0.0 if x < a, otherwise 1.0
- * @param {float} a
- * @param {float} x
+ * @param {float|vec} a
+ * @param {float|vec} x
  * @returns {float}
  */
-export function step(a, x) { return x < a ? 0.0 : 1.0; }
+export function step(a, x) {
+  if ( Number.isNumeric(x) ) return x < a ? 0.0 : 1.0;
+  if ( Number.isNumeric(a) ) return x._componentWise((elem, i) => step(a, x[i]));
+  return x._componentWise((elem, i) => step(a[i], x[i]));
+}
 
 /**
  * Is x in the range of [a, b]?
@@ -1309,7 +1319,8 @@ export function step(a, x) { return x < a ? 0.0 : 1.0; }
  * @returns {float} 0.0 if false
  */
 export function between(a, b, x) {
-  return step(a, x) * step(x, b);
+  if ( Number.isNumeric(x) ) return step(a, x) * step(x, b);
+  return step(a, x).multiply(step(x, b));
 }
 
 /**
