@@ -413,44 +413,44 @@ bool furthestShadowPoint(in vec3 samplePt, in vec3 wallPt, out vec3 ixP) {
 
 /**
  * For a given light center, determine the shadow triangle.
- * @param {vec3} A      The assumed center point of the light
+ * @param {vec3} O      The assumed center point of the light
  * @param {Wall} wall   The associated wall
  * @returns {vec2[3]}  Triangle, from center through endpoint a and then endpoint b.
  */
-vec2[3] shadowTriangle(in vec3 A, in Wall wall) {
+vec2[3] shadowTriangle(in vec3 O, in Wall wall) {
   vec2 a = wall.top[0].xy;
   vec2 b = wall.top[1].xy;
-  if ( almostEqual(orient(A.xy, a, b), 0.0, 1e-06) ) {
+  if ( almostEqual(orient(O.xy, a, b), 0.0, 1e-06) ) {
     // The triangle is a line.
-    if ( isInfiniteTopShadow(A) ) {
-      // Where A --> wall intersects the canvas edge.
-      Ray2d rWall = Ray2d(A.xy, a - A.xy);
+    if ( isInfiniteTopShadow(O) ) {
+      // Where O --> wall intersects the canvas edge.
+      Ray2d rWall = Ray2d(O.xy, a - O.xy);
       Ray2d edge = whichCanvasEdge(rWall);
       vec2 ix;
       lineLineIntersection(rWall, edge, ix);
-      return vec2[3](A.xy, ix, ix);
+      return vec2[3](O.xy, ix, ix);
     }
-    // Where A --> further wall endpoint intersects the canvas plane.
+    // Where O --> further wall endpoint intersects the canvas plane.
     vec3 ixP;
-    furthestShadowPoint(A, wall.top[1], ixP); // Wall 1 is further.
-    return vec2[3](A.xy, ixP.xy, ixP.xy);
+    furthestShadowPoint(O, wall.top[1], ixP); // Wall 1 is further.
+    return vec2[3](O.xy, ixP.xy, ixP.xy);
   }
 
   // For infinite shadow, extend triangle formed by light point and wall to the edge of the canvas.
-  if ( isInfiniteTopShadow(A) ) return extendTriangleToCanvasEdge(vec2[3](A.xy, a, b));
+  if ( isInfiniteTopShadow(O) ) return extendTriangleToCanvasEdge(vec2[3](O.xy, a, b));
 
   // For non-infinite, intersect the canvas plane to determine extension point.
   Plane canvasPlane = constructCanvasPlane();
   vec3 ixP;
-  if ( !furthestShadowPoint(A, wall.top[1], ixP) ) return extendTriangleToCanvasEdge(vec2[3](A.xy, a, b));
+  if ( !furthestShadowPoint(O, wall.top[1], ixP) ) return extendTriangleToCanvasEdge(vec2[3](O.xy, a, b));
   Ray2d rWallIx = Ray2d(ixP.xy, b - a);
-  Ray2d rAa = Ray2d(A.xy, a - A.xy);
-  Ray2d rAb = Ray2d(A.xy, b - A.xy);
+  Ray2d rOa = Ray2d(O.xy, a - O.xy);
+  Ray2d rOb = Ray2d(O.xy, b - O.xy);
   vec2 B;
   vec2 C;
-  lineLineIntersection(rWallIx, rAa, B);
-  lineLineIntersection(rWallIx, rAb, C);
-  return vec2[3](A.xy, B, C);
+  lineLineIntersection(rWallIx, rOa, B);
+  lineLineIntersection(rWallIx, rOb, C);
+  return vec2[3](O.xy, B, C);
 }
 
 

@@ -289,6 +289,7 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vTang
   // Most of the matching work done in sideShadowRays.
   // If no intersection, D and G should be set to W0 (happens if side shadow rays are parallel):
   // - when wall is near-collinear and wall line is tangent to source circle.
+  // TODO: Is setting D and G in advance sufficient?
   D = W0;
   G = W0;
   bool hasIx0 = lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[0], D);
@@ -516,17 +517,43 @@ void defineFlats(in Wall wall,
   fAmbient = vec2(1.0) - ambientLight(W0, W1);
   if ( orient(W0, W1, penumbraTri[1]) < 0.0 ) fAmbient = fAmbient.yx; // CW
 
-  // @type {vec2} fFarDistances, fNearDistances, using UMBRA, PENUMBRA.
-  // Distance from wall to the far penumbra/umbra and near penumbra/umbra.
-  // 0.0 indicates no shadow.
-  int idxLower = int(vTangents[0].z > vTangents[1].z); // Pick the lower in z direction.
-  vec3 lowerTangent = vTangents[idxLower];
-  vec3 upperTangent = vTangents[1 - idxLower];
-
   bool isCollinear = almostEqual(penumbraTri[0], wall.top[0].xy, 1.0e-06);
   Ray2d rEdgeWall = frontBackBisector(wall, isCollinear);
   Ray2d rLRWall = leftRightBisector(wall, isCollinear);
 
+  int idxLower = int(vTangents[0].z > vTangents[1].z); // Pick the lower in z direction.
+  vec3 lowerTangent = vTangents[idxLower];
+  vec3 upperTangent = vTangents[1 - idxLower];
+
+  int rlIdx = 0;
+  vec2 sameSideOrigin;
+  vec2 otherSideOrigin;
+  if ( isCollinear ) {
+    // Which side will the far/near points fall?
+    // Measure from the light; the points will be on the opposite side.
+    // If light center is collinear with the wall, ixP will be collinear and can just pick a side.
+    // ccw/left is positive; cw/right is negative
+    // TODO: Why not negate orient like in WallShaderTest3?
+    int rlIdx = int(step(0.0, -orient(W0, W1, uLightPosition.xy))); // RIGHT: 0, LEFT: 1
+
+    // Which nearFarTri is on that side?
+    // sides[RIGHT, LEFT]
+    // nearFarTri0 and nearFarTri1 are on opposite sides.
+    // Either (only nearFarTri1?) could collinear with  the wall line.
+    float o = sign(orient(W0, W1, nearFarTri0[2]));
+    int leftIdx = o > 0.0 ? 0
+      : o < 0.0 ? 1
+        : orient(W0, W1, nearFarTri1[2]) > 0.0 ? 1 : 0;
+    vec2[2] nfOrigins = vec2[2](nearFarTri0[0], nearFarTri1[0]);
+    vec2[2] sides;
+    sides[LEFT] = nfOrigins[leftIdx];
+    sides[RIGHT] = nfOrigins[1 - leftIdx];
+    sameSideOrigin = sides[rlIdx];
+    otherSideOrigin = sides[1 - rlIdx];
+  }
+
+  // Distinguish left and right.
+  // vLREdgeDist defined as positive if to left of (ccw to) the wall; negative if right (cw)
   // The far penumbra shadow by definition is at the far penumbraTri edge.
   if ( !isInfiniteTopShadow(lowerTangent) ) {
     // fFarDistances[PENUMBRA] = distanceToLine(penumbraTri[2], wall.top[0].xy, wall.direction);
@@ -535,18 +562,12 @@ void defineFlats(in Wall wall,
     fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
 
     if ( isCollinear ) {
-      int rlIdx = int(step(0.0, orient(W0, W1, ixP.xy))); // 0 if right, 1 if left
-
-      // Need the nearFarTri on the same side as the ixP. Only needed for isCollinear.
-      int lIdx = int(orient(W0, W1, ixP.xy) * orient(W0, W1, nearFarTri0[2]) < 0.0);
-      vec2[2] arr = vec2[2](nearFarTri0[0], nearFarTri1[0]);
-      vec2 lOrigin = arr[lIdx];
-      vec2 rOrigin = arr[1 - lIdx];
-
-      furthestShadowPoint(vec3(lOrigin, uLightPosition.z), wall.top[1], ixP);
+      // First the rlIdx side.
+      furthestShadowPoint(vec3(sameSideOrigin, uLightPosition.z), wall.top[1], ixP);
       fFarRLPenumbraDistances[rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
 
-      furthestShadowPoint(vec3(rOrigin, uLightPosition.z), wall.top[1], ixP);
+      // Then the other side.
+      furthestShadowPoint(vec3(otherSideOrigin, uLightPosition.z), wall.top[1], ixP);
       fFarRLPenumbraDistances[1 - rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
     }
   }
@@ -559,11 +580,12 @@ void defineFlats(in Wall wall,
     fFarDistances[UMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
 
     if ( isCollinear ) {
-      int rlIdx = int(step(0.0, orient(W0, W1, ixP.xy))); // 0 if right, 1 if left
+      // First the rlIdx side. Use the above umbra point.
       fFarRLUmbraDistances[rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
 
       // Approximate the other side's umbra by taking the ratio of the PENUMBRA distances.
-      float ratio = fFarRLPenumbraDistances[rlIdx] != 0.0 ? fFarRLPenumbraDistances[1 - rlIdx] / fFarRLPenumbraDistances[rlIdx] : 0.0;
+      float ratio = fFarRLPenumbraDistances[rlIdx] != 0.0
+        ? fFarRLPenumbraDistances[1 - rlIdx] / fFarRLPenumbraDistances[rlIdx] : 0.0;
       fFarRLUmbraDistances[1 - rlIdx] = ratio * fFarRLUmbraDistances[rlIdx];
     }
   }
@@ -577,16 +599,12 @@ void defineFlats(in Wall wall,
       fNearDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
 
       if ( isCollinear ) {
-        int rlIdx = int(step(0.0, orient(W0, W1, ixP.xy))); // 0 if right, 1 if left
-        int lIdx = int(orient(W0, W1, ixP.xy) * orient(W0, W1, nearFarTri0[2]) < 0.0);
-        vec2[2] arr = vec2[2](nearFarTri0[0], nearFarTri1[0]);
-        vec2 lOrigin = arr[lIdx];
-        vec2 rOrigin = arr[1 - lIdx];
-
-        furthestShadowPoint(vec3(lOrigin, uLightPosition.z), wall.bottom[1], ixP);
+        // First the rlIdx side.
+        furthestShadowPoint(vec3(sameSideOrigin, uLightPosition.z), wall.bottom[1], ixP);
         fNearRLPenumbraDistances[rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
 
-        furthestShadowPoint(vec3(rOrigin, uLightPosition.z), wall.bottom[1], ixP);
+        // Then the other side.
+        furthestShadowPoint(vec3(otherSideOrigin, uLightPosition.z), wall.bottom[1], ixP);
         fNearRLPenumbraDistances[1 - rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
       }
     }
@@ -596,11 +614,12 @@ void defineFlats(in Wall wall,
       fNearDistances[UMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
 
       if ( isCollinear ) {
-        int rlIdx = int(step(0.0, orient(W0, W1, ixP.xy))); // 0 if right, 1 if left
+        // First the rlIdx side. Use the above umbra point.
         fNearRLUmbraDistances[rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
 
         // Approximate the other side's umbra by taking the ratio of the PENUMBRA distances.
-        float ratio = fNearRLPenumbraDistances[rlIdx] != 0.0 ? fNearRLPenumbraDistances[1 - rlIdx] / fNearRLPenumbraDistances[rlIdx] : 0.0;
+        float ratio = fNearRLPenumbraDistances[rlIdx] != 0.0
+          ? fNearRLPenumbraDistances[1 - rlIdx] / fNearRLPenumbraDistances[rlIdx] : 0.0;
         fNearRLUmbraDistances[1 - rlIdx] = ratio * fNearRLUmbraDistances[rlIdx];
       }
     }

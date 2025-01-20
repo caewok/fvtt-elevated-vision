@@ -81,11 +81,21 @@ float shadowPercentage() {
   if ( vLREdgeDist > 1000.0 ) return 0.10;
   if ( vLREdgeDist > 500.0  ) return 0.25;
   if ( vLREdgeDist > 200.0  ) return 0.4;
+  if ( vLREdgeDist > 0.0 ) return 0.5;
   if ( vLREdgeDist > -200.0  ) return 0.6;
   if ( vLREdgeDist > -500.0  ) return 0.75;
   if ( vLREdgeDist > -1000.0  ) return 0.9;
-  return 0.5;
+  return 1.0;
   */
+
+  // return farRPenumbraDist > 328.0 ? 1.0 : 0.5; // between 327 and 328
+  // return vLREdgeDist > 0.0 ? 1.0 : 0.5; // positive on left side
+  // return farRPenumbraDist > 376.0 ? 1.0 : 0.5; // between 375 and 376
+  // return farLPenumbraDist > 26.0 ? 1.0 : 0.5; // 0.0 Left: 375.51123046875, right: 25.40869140625 (between 25 and 26)
+  // return farLUmbraDist > 9.0 ? 1.0 : 0.5; // 0.0 Left: 137.99560546875, right: 9.337370872497559 (between 9 and 10)
+  // Penumbra RL: 83.301513671875, 327.778564453125
+  // Umbra RL: 24.656877517700195, 97.02099609375
+
   bool isLeft = vLREdgeDist > 0.0;
   bool hasFar = any(notEqual(fFarDistances, vec2(0.0)));
   bool hasNear = any(notEqual(fNearDistances, vec2(0.0)));
@@ -118,6 +128,7 @@ float shadowPercentage() {
     nearLUmbraDist = nearLUmbraDistance(elevation);
     nearRUmbraDist = nearRUmbraDistance(elevation);
   }
+  //return 1.0;
 
   /*
   if ( vLREdgeDist > farLPenumbraDist ) return 0.10;
@@ -172,9 +183,9 @@ float shadowPercentage() {
   if ( hasFar ) {
     farShadow = clamp(linearConversion(vEdgeDist, farPenumbraDist, farUmbraDist, 0.0, 1.0), 0.0, 1.0);
     if ( vLREdgeDist != 0.0 ) {
-      // return vLREdgeDist < -50.0 ? 1.0 : 0.5; // ~ -50
-      // return farRPenumbraDist == 0.0 ? 1.0 : 0.5; // 0.0
-      // return farRUmbraDist == 0.0 ? 1.0 : 0.5; // 0.0
+      // return vLREdgeDist > 50.0 ? 1.0 : 0.5; // ~ 50
+      // return farLPenumbraDist > 8.0 ? 1.0 : 0.5; // 0.0 Left: 375.51123046875, right: 25.40869140625 (between 7 and 8)
+      // return farLUmbraDist > 2.0 ? 1.0 : 0.5; // 0.0 Left: 137.99560546875, right: 9.337370872497559 (between 2 and 3)
       // return linearConversion(-vLREdgeDist, farRPenumbraDist, farRUmbraDist, 0.0, 1.0) == 0.0 ? 1.0 : 0.5; // 0.0
       if ( isLeft ) {
         farLShadow = (farLPenumbraDist == 0.0 && farLUmbraDist == 0.0)
@@ -237,7 +248,7 @@ float shadowPercentage() {
   }
   */
 
-  // return farRShadow;
+  // return farLShadow;
   // return farShadow * nearShadow;
   // return farLShadow * nearLShadow * farRShadow * nearRShadow;
   // return side0Shadow * side1Shadow;
