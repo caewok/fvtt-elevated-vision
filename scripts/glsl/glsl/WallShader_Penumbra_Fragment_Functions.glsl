@@ -13,6 +13,8 @@
 #define BOTTOM                            1
 #define FAR                               0
 #define NEAR                              1
+#define RIGHT                             0
+#define LEFT                              1
 
 ${defineFunction("terrainElevation")}
 ${defineFunction("between")}
@@ -78,61 +80,95 @@ vec4 lightEncoding(in float light) {
 }
 
 /**
- * Calculate the height fraction for elevating shadow ratios.
+ * Elevation where the border between shadow and not shadow lies for this fragment.
+ * @param {float} d               Distance to the wall for the furthest shadow point at canvas elevation
+ * @param {int} wallHeightType    Relevant wall height (TOP or BOTTOM)
+ * @returns {float}
  */
-float elevationHeightFraction(in float elevation, in float wallHeight) {
-  float canvasElevation = uElevationRes.x;
-  if ( elevation <= canvasElevation ) return 0.0;
-
-  wallHeight = max(wallHeight - canvasElevation, 0.0);
-  if ( wallHeight == 0.0 ) return 0.0;
-
-  float elevationChange = elevation - canvasElevation;
-  return elevationChange / wallHeight;
+float _nearFarElevation(in float d, in int wallHeightType) {
+  // Calculate using similar triangles.
+  // - Elevation <--> wall height.
+  // - Distance to max penumbra point <--> max penumbra point to wall.
+  if ( d <= 0.0 ) return uElevationRes.x - 1.0; // canvasElevation
+  float y = d - vEdgeDist;
+  float wallH = fWallHeights[wallHeightType];
+  return (wallH * y) / d;
 }
 
 /**
- * Elevate given shadow ratios
- * Use a stored height fraction to avoid repetitive calcs.
+ * Distance where border between shadow and not shadow lies for this fragment at given elevation.
+ * @param {float} elevation       Elevation to test
+ * @param {float} d               Distance to the wall for the furthest shadow point at canvas elevation
+ * @param {int} wallHeightType    Relevant wall height (TOP or BOTTOM)
+ * @returns {float}
  */
-float elevateShadowRatio(in float ratio, in float wallRatio, in float heightFraction) {
-  return ratio + (heightFraction * (wallRatio - ratio));
+float _nearFarDistance(in float elevation, in float d, in int wallHeightType) {
+  float e = elevation - uElevationRes.x; // Subtract out canvas elevation.
+  float wallH = fWallHeights[wallHeightType];
+  float y = wallH - e;
+  return (d * y) / wallH;
 }
 
 /**
- * Elevate the near ratios.
- * @returns {vec2[2]}
+ * What is the elevation needed for this fragment to be out of the far shadow?
+ * @returns {float}
  */
-vec2[2] elevateNearFarRatios() {
+float farPenumbraElevation() { return _nearFarElevation(fFarDistances[PENUMBRA], TOP); }
 
-  vec2 farRatios = vec2(fFarRatios);
-  vec2 nearRatios = vec2(fNearRatios);
+/**
+ * What is the elevation needed for this fragment to be in the far umbra shadow?
+ * @returns {float}
+ */
+float farUmbraElevation() { return _nearFarElevation(fFarDistances[UMBRA], TOP); }
 
-  bool hasFar = any(notEqual(fFarRatios, vec2(-1.0)));
-  bool hasNear = any(notEqual(fNearRatios, vec2(-1.0)));
-  if ( hasFar || hasNear ) {
-    farRatios = vec2(0.0);
-    nearRatios = vec2(1.0);
-    float canvasElevation = uElevationRes.x;
-    float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
-    if ( elevation != canvasElevation ) {
-      if ( hasFar ) {
-        float farF = elevationHeightFraction(elevation, fWallHeights[TOP]);
-        if ( fFarRatios[UMBRA] != -1.0 ) farRatios[UMBRA] = elevateShadowRatio(farRatios[UMBRA], fWallRatio, farF);
-        if ( fFarRatios[PENUMBRA] != -1.0 ) farRatios[PENUMBRA] = elevateShadowRatio(farRatios[PENUMBRA], fWallRatio, farF);
-      }
-      if ( hasNear ) {
-        float nearF = elevationHeightFraction(elevation, fWallHeights[BOTTOM]);
-        if ( fNearRatios[UMBRA] != -1.0 ) nearRatios[UMBRA] = elevateShadowRatio(nearRatios[UMBRA], fWallRatio, nearF);
-        if ( fNearRatios[PENUMBRA] != -1.0 ) nearRatios[PENUMBRA] = elevateShadowRatio(nearRatios[PENUMBRA], fWallRatio, nearF);
-      }
-    }
-  }
-  vec2[2] res;
-  res[NEAR] = nearRatios;
-  res[FAR] = farRatios;
-  return res;
-}
+/**
+ * What is the elevation needed for this fragment to be out of the far shadow?
+ * @returns {float}
+ */
+float nearPenumbraElevation() { return _nearFarElevation(fNearDistances[PENUMBRA], BOTTOM); }
+
+/**
+ * What is the elevation needed for this fragment to be in the far umbra shadow?
+ * @returns {float}
+ */
+float nearUmbraElevation() { return _nearFarElevation(fNearDistances[UMBRA], BOTTOM); }
+
+/**
+ * What is the far penumbra distance at this elevation?
+ * @param {float} elevation
+ * @returns {float}
+ */
+float farPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarDistances[PENUMBRA], TOP); }
+float farLPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarRLPenumbraDistances[LEFT], TOP); }
+float farRPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarRLPenumbraDistances[RIGHT], TOP); }
+
+/**
+ * What is the far penumbra distance at this elevation?
+ * @param {float} elevation
+ * @returns {float}
+ */
+float farUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarDistances[UMBRA], TOP); }
+float farLUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarRLUmbraDistances[LEFT], TOP); }
+float farRUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fFarRLUmbraDistances[RIGHT], TOP); }
+
+/**
+ * What is the far penumbra distance at this elevation?
+ * @param {float} elevation
+ * @returns {float}
+ */
+float nearPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearDistances[PENUMBRA], BOTTOM); }
+float nearLPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearRLPenumbraDistances[LEFT], BOTTOM); }
+float nearRPenumbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearRLPenumbraDistances[RIGHT], BOTTOM); }
+
+/**
+ * What is the far penumbra distance at this elevation?
+ * @param {float} elevation
+ * @returns {float}
+ */
+float nearUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearDistances[UMBRA], BOTTOM); }
+float nearLUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearRLUmbraDistances[LEFT], BOTTOM); }
+float nearRUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearRLUmbraDistances[RIGHT], BOTTOM); }
+
 
 /**
  * Is the fragment location in front of the wall?

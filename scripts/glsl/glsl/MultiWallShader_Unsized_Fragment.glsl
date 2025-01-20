@@ -7,12 +7,14 @@ in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
 in float vEdgeDist;
 
+flat in float fWallType;
+flat in float fThresholdRadius2;
+
 /* ----- NOTE: Uniform Variables ----- */
 uniform sampler2D uTerrainSampler;
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 uniform vec3 uLightPosition;
 uniform float uNumSamples;
-uniform float uThresholdRadius2;
 
 /* ----- NOTE: Out Variable ----- */
 out vec4 fragColor;
@@ -22,17 +24,7 @@ ${defineFunction("distanceSquared")}
 
 /* ------ NOTE: Fragment functions ----- */
 
-/**
- * Fragment color when no shadow present.
- * @returns {vec4}
- */
-vec4 noShadow() {
-  // If not in shadow, need to treat limited wall as non-limited
-  #ifdef SHADOW
-  return vec4(0.0, 1.0 / uNumSamples);
-  #endif
-  return vec4(1.0, 1.0, 1.0, 1.0 / uNumSamples);
-}
+#define LIMITED_WALL        10.0
 
 /**
  * Fragment color to encode percentage of light.
@@ -43,18 +35,16 @@ vec4 lightEncoding(in float light) {
   // For testing, return the amount of shadow, which can be directly rendered to the canvas.
   #if defined SHADOW
   return vec4(vec3(0.0), (1.0 - light) * 0.7);
-
-  #elif defined LIMITED_WALL
-  return vec4(1.0, 0.5, light, 1.0);
-
-  #else
-  return vec4(light, 1.0, 1.0, 1.0);
   #endif
+
+  if ( fWallType == LIMITED_WALL ) return vec4(1.0, 0.5, light, 1.0);
+  else return vec4(light, 1.0, 1.0, 1.0);
 
   // float ltd = 0.0;
   // float ltdInv = 1.0 - ltd;
   // return vec4((light * ltdInv) + ltd, 1.0 - (0.5 * ltd), (light * ltd) + ltdInv, 1.0);
 }
+
 
 /**
  * Is the fragment location in front of the wall?
@@ -70,7 +60,7 @@ bool thresholdApplies() {
   #ifdef EV_DIRECTIONAL_LIGHT
   return false;
   #else
-  return distanceSquared(vVertexPosition, uLightPosition.xy) < uThresholdRadius2;
+  return distanceSquared(vVertexPosition, uLightPosition.xy) < fThresholdRadius2;
   #endif
 }
 

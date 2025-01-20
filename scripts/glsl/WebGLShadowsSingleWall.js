@@ -160,13 +160,14 @@ export class WebGLShadowsSingleWall {
     return new PIXI.Rectangle(x - r, y - r, d, d);
   }
 
-  /**
-   * Initialize the shadow properties for this source.
-   */
+  /** @type {boolean} */
   #initialized = false;
 
   get initialized() { return this.#initialized; }
 
+  /**
+   * Initialize the shadow properties for this source.
+   */
   initializeShadows() {
     if ( this.#initialized ) return;
     this._initializeShadowMesh();
@@ -196,8 +197,9 @@ export class WebGLShadowsSingleWall {
    * @param {Edge} edge
    */
   #initializeEdge(edge) {
-    const geometry = new this.constructor.geometryClass(this.source, edge);
+    const geometry = new this.constructor.geometryClass();
     const shader = this.constructor.shaderClass.create(this.source, edge);
+    geometry.initialize(this.source, edge);
     const mesh = new ShadowMesh(geometry, shader);
     this.meshEdgeMap.set(edge.id, mesh);
     this.shadowMesh.addChild(mesh);
@@ -301,6 +303,7 @@ export class WebGLShadowsSingleWall {
 
   /**
    * Update shadow data based on the removed edge, as necessary.
+   * @param {Edge} edge                     Edge that was removed
    * @param {object} [opts]
    * @param {boolean} [opts.render=true]    Trigger a re-render.
    * @returns {boolean} True if the added edge resulted in a change.
@@ -480,11 +483,11 @@ export class WebGLShadowsSingleWall {
     // If the target is on the terrain (likely), we can use the faster test using pixelCache.
     const onGround = target instanceof Token ? tokenIsOnGround(target) : waypointIsOnGround(testPoint);
     return onGround
-      ? this.#shadowPercentageFromCache(shadowRenderer.pixelCache, testPoint.x, testPoint.y)
+      ? this.constructor._shadowPercentageFromCache(shadowRenderer.pixelCache, testPoint.x, testPoint.y)
       : this.elevatedPointInShadow(testPoint);
   }
 
-  static #shadowPercentageFromCache(pixelCache, x, y) {
+  static _shadowPercentageFromCache(pixelCache, x, y) {
     const lightAmount = pixelCache.pixelAtCanvas(x, y);
     return 1 - (lightAmount * PIXEL_INV);
   }
@@ -629,6 +632,14 @@ export class GlobalLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
     const draw = new Draw(this.shadowVisionMask);
     draw.shape(this.source.shape, { fill: this.source.constructor.maskColor });
   }
+
+  sourceUpdated() { return false; }
+
+  edgeAdded() { return false; }
+
+  edgeUpdated() { return false; }
+
+  edgeRemoved() { return false; }
 
   /**
    * Destroy meshes, geometry, textures.

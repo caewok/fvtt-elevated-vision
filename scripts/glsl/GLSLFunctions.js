@@ -33,6 +33,7 @@ ${GLSLStructs[struct]}
 
 
 // NOTE: Utility
+
 GLSLFunctions.almostEqual =
 `
 /**
@@ -64,19 +65,27 @@ GLSLFunctions.linearConversion =
  * Linear conversion from one range to another.
  */
 float linearConversion(in float x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
-  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+  float denom = oldMax - oldMin;
+  if ( denom == 0.0 ) return float[2](newMin, newMax)[int(step(oldMin, x))];
+  return (((x - oldMin) * (newMax - newMin)) / denom) + newMin;
 }
 
 vec2 linearConversion(in vec2 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
-  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+  float denom = oldMax - oldMin;
+  if ( denom == 0.0 ) return mix(vec2(newMin), vec2(newMax), step(oldMin, x));
+  return (((x - oldMin) * (newMax - newMin)) / denom) + newMin;
 }
 
 vec3 linearConversion(in vec3 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
-  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+  float denom = oldMax - oldMin;
+  if ( denom == 0.0 ) return mix(vec3(newMin), vec3(newMax), step(oldMin, x));
+  return (((x - oldMin) * (newMax - newMin)) / denom) + newMin;
 }
 
 vec4 linearConversion(in vec4 x, in float oldMin, in float oldMax, in float newMin, in float newMax) {
-  return (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin;
+  float denom = oldMax - oldMin;
+  if ( denom == 0.0 ) return mix(vec4(newMin), vec4(newMax), step(oldMin, x));
+  return (((x - oldMin) * (newMax - newMin)) / denom) + newMin;
 }
 `;
 
@@ -570,6 +579,44 @@ bool barycentricPointInsideTriangle(in vec3 bary) {
   return bary.y >= 0.0 && bary.z >= 0.0 && (bary.y + bary.z) <= 1.0;
 }`;
 
+GLSLFunctions.interpolateBarycentric =
+`
+/**
+ * Interpolate from values at the triangle vertices using a barycentric point.
+ * @param {vec3} bary
+ * @param {float|vec2|vec3} a
+ * @param {float|vec2|vec3} b
+ * @param {float|vec2|vec3} c
+ * @returns {float|vec2|vec3}
+ */
+float interpolateBarycentric(in vec3 bary, in float a, in float b, in float c) {
+  return dot(bary, vec3(a, b, c));
+}
+
+vec2 interpolateBarycentric(in vec3 bary, in vec2 a, in vec2 b, in vec2 c) {
+  vec2 a1 = a * bary.x;
+  vec2 b1 = b * bary.y;
+  vec2 c1 = c * bary.z;
+  return a1 + b1 + c1;
+}
+
+vec3 interpolateBarycentric(in vec3 bary, in vec3 a, in vec3 b, in vec3 c) {
+  vec3 a1 = a * bary.x;
+  vec3 b1 = b * bary.y;
+  vec3 c1 = c * bary.z;
+  return a1 + b1 + c1;
+}
+
+vec4 interpolateBarycentric(in vec3 bary, in vec4 a, in vec4 b, in vec4 c) {
+  vec4 a1 = a * bary.x;
+  vec4 b1 = b * bary.y;
+  vec4 c1 = c * bary.z;
+  return a1 + b1 + c1;
+}
+
+`
+
+
 // NOTE: Ray struct
 GLSLStructs.Ray =
 `
@@ -639,6 +686,48 @@ vec2 projectRay(in Ray2d r, in float distanceMultiplier) {
 
 vec3 projectRay(in Ray r, in float distanceMultiplier) {
   return r.origin + (r.direction * distanceMultiplier);
+}`;
+
+GLSLFunctions.projectRayDistance =
+`
+${defineStruct("Ray")}
+${defineStruct("Ray2d")}
+${defineFunction("projectRay")}
+
+/**
+ * Project the ray a given distance multiplier of the ray length.
+ * If ray is normalized, this will project the ray the given distance.
+ */
+vec2 projectRayDistance(in Ray2d r, in float distance) {
+  float t = distance / length(r.direction);
+  return projectRay(r, t);
+}
+
+vec3 projectRayDistance(in Ray r, in float distance) {
+  float t = distance / length(r.direction);
+  return projectRay(r, t);
+}`;
+
+GLSLFunctions.projectRayDistanceSquared =
+`
+${defineStruct("Ray")}
+${defineStruct("Ray2d")}
+${defineFunction("projectRay")}
+
+/**
+ * Project the ray a given distance multiplier of the ray length.
+ * If ray is normalized, this will project the ray the given distance.
+ */
+vec2 projectRayDistanceSquared(in Ray2d r, in float distance2) {
+  float sign = sign(distance2);
+  float t = sign * sqrt(abs(distance2)) / dot(r.direction, r.direction); // Divide by magnitude(r.direction)
+  return projectRay(r, t);
+}
+
+vec3 projectRayDistanceSquared(in Ray r, in float distance2) {
+  float sign = sign(distance2);
+  float t = sign * sqrt(abs(distance2)) / dot(r.direction, r.direction); // Divide by magnitude(r.direction)
+  return projectRay(r, t);
 }`;
 
 

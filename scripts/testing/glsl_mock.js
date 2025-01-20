@@ -398,6 +398,43 @@ export function interpolateBarycentric(bary, a, b, c) {
   return a.add(b).add(c);
 }
 
+
+/*
+d = glsl.distanceToLine(C, rLRWall.origin, rLRWall.direction) // 533
+ix = vec2()
+glsl.lineLineIntersection(glsl.Ray2d(B, C.subtract(B)), rLRWall, ix)
+tri = [A, ix, C]  2800,2263; 2800, 1579.32; 3333.89, 1690.35
+bary = glsl.barycentric(ix, ...shader0.tri) 0.3502867817878723, 0.36875614523887634, 0.28095707297325134
+glsl.interpolateBarycentric(bary, 0, 0, d); 149.75
+
+bary•vec3(0, 0, d)
+a * 0 + ix * 0 + d * C
+0 + 0 + d * C
+
+bary = (pt, a, b, c)
+bary•vec3(0, 0, d) = dist
+0 + 0 + d * C = dist
+C = dist / d
+
+bary =  glsl.barycentric(ix, 0, 0,
+
+Have:
+tri = [A, ix, C]
+bary = glsl.barycentric(pt, ...tri)
+glsl.interpolateBarycentric(bary, 0, 0, d) = 149.75
+
+Need:
+bary = glsl.barycentric(pt, ...shader0.penumbraTri)
+glsl.interpolateBarycentric(bary, ?, ? , ?) = 149.75
+
+dB = glsl.distanceToLine(B, rLRWall.origin, rLRWall.direction)
+dC = glsl.distanceToLine(C, rLRWall.origin, rLRWall.direction)
+glsl.interpolateBarycentric(bary, 0, -dB, dC)
+
+
+
+*/
+
 /**
  * Normalize a barycentric area coordinate.
  * @param {vec3} baryArea
@@ -429,7 +466,7 @@ export function convertBarycentericAreaSimilarTriangle(baryArea, ratio) {
 
 /**
  * Linear conversion from one range to another.
- * @param {float} x
+ * @param {float|vec} x
  * @param {float} oldMin
  * @param {float} oldMax
  * @param {float} newMin
@@ -438,6 +475,12 @@ export function convertBarycentericAreaSimilarTriangle(baryArea, ratio) {
  */
 export function linearConversion(x, oldMin, oldMax, newMin, newMax) {
   // (((x - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin
+  const denom = oldMax - oldMin;
+  if ( denom == 0.0 ) {
+    if ( Number.isNumeric(x) ) return [newMin, newMax][step(oldMin, x)];
+    return mix(new x.constructor(newMin), new x.constructor(newMax), step(oldMin, x))
+  }
+
   const denomInv = 1.0 / (oldMax - oldMin);
   if ( Number.isNumeric(x) ) return ((x - oldMin) * (newMax - newMin) * denomInv) + newMin;
   return x
@@ -1258,11 +1301,15 @@ export function sameSide(a, b, p0, p1) {
 
 /**
  * Returns 0.0 if x < a, otherwise 1.0
- * @param {float} a
- * @param {float} x
+ * @param {float|vec} a
+ * @param {float|vec} x
  * @returns {float}
  */
-export function step(a, x) { return x < a ? 0.0 : 1.0; }
+export function step(a, x) {
+  if ( Number.isNumeric(x) ) return x < a ? 0.0 : 1.0;
+  if ( Number.isNumeric(a) ) return x._componentWise((elem, i) => step(a, x[i]));
+  return x._componentWise((elem, i) => step(a[i], x[i]));
+}
 
 /**
  * Is x in the range of [a, b]?
@@ -1272,7 +1319,8 @@ export function step(a, x) { return x < a ? 0.0 : 1.0; }
  * @returns {float} 0.0 if false
  */
 export function between(a, b, x) {
-  return step(a, x) * step(x, b);
+  if ( Number.isNumeric(x) ) return step(a, x) * step(x, b);
+  return step(a, x).multiply(step(x, b));
 }
 
 /**

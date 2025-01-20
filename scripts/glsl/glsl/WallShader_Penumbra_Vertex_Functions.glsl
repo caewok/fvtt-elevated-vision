@@ -35,6 +35,8 @@ ${defineFunction("distanceToLine")}
 #define BOTTOM                            1
 #define FAR                               0
 #define NEAR                              1
+#define RIGHT                             0
+#define LEFT                              1
 
 // Structs to simplify the data organization.
 
@@ -66,6 +68,26 @@ struct ShadowRays2d {
   Ray2d[2] midpenumbra;
   Ray2d[2] penumbra;
 };
+
+/**
+ * @returns {Wall}
+ */
+Wall calculateWallPositions() {
+  vec2[2] endpointsXY = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
+  // int closerIdx = closerEndpoint(endpointsXY);
+  int closerIdx = closerEndpoint(endpointsXY);
+  vec2 xyCloser = endpointsXY[closerIdx];
+  vec2 xyFurther = endpointsXY[1 - closerIdx];
+  vec2 direction = normalizedDirection(xyCloser, xyFurther);
+  float topZ = aWallCorner0.z;
+  float bottomZ = aWallCorner1.z;
+  return Wall(
+    vec3[2](vec3(xyCloser, topZ), vec3(xyFurther, topZ)),
+    vec3[2](vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)),
+    (xyCloser + xyFurther) * 0.5,
+    direction
+  );
+}
 
 /**
  * Maximum diagonal of the canvas, squared.
@@ -185,14 +207,6 @@ bool adjustSideShadowForLinkedEndpoints(inout ShadowDirections2d shadowDirs, in 
   // Linked wall is after mid.
   return true;
 }
-
-/**
- * Does this directional ray cast an infinite shadow?
- * (Ray is rising as it moves from light --> wall.)
- * @param {vec3} lightDir
- * @returns {bool}
- */
-bool isInfiniteShadow(in vec3 lightDir) { return lightDir.z >= 0.0 || almostEqual(lightDir.z, 0.0, 1.0e-06); }
 
 /**
  * What quadrant does this direction end up in?
@@ -367,6 +381,80 @@ vec2[3] extendTriangleToCanvasEdge(in vec2[3] tri) {
 }
 
 /**
+ * Does this source cast an infinite shadow?
+ * (Ray is rising as it moves from light --> wall.)
+ * @param {vec3} samplePt   The sample point or direction
+ * @returns {bool}
+ */
+bool isInfiniteTopShadow(in vec3 samplePt) {
+  float topZ = aWallCorner0.z;
+  return samplePt.z <= topZ;
+}
+
+bool isInfiniteBottomShadow(in vec3 samplePt) {
+  float bottomZ = aWallCorner1.z;
+  return samplePt.z <= bottomZ;
+}
+
+/**
+ * The furthest point of the shadow when running a ray from the light through the
+ * top midpoint of the wall.
+ * @param {vec3} samplePt   The sample point or direction
+ * @param {vec3} wallPt
+ * @param {out vec3} ixP
+ * @returns {bool};
+ */
+bool furthestShadowPoint(in vec3 samplePt, in vec3 wallPt, out vec3 ixP) {
+  // For basic version, assume an unsized light: use the centerpoint.
+  Plane canvasPlane = constructCanvasPlane();
+  Ray rAWall = Ray(samplePt, wallPt - samplePt);
+  return intersectRayPlane(rAWall, canvasPlane, ixP);
+}
+
+/**
+ * For a given light center, determine the shadow triangle.
+ * @param {vec3} O      The assumed center point of the light
+ * @param {Wall} wall   The associated wall
+ * @returns {vec2[3]}  Triangle, from center through endpoint a and then endpoint b.
+ */
+vec2[3] shadowTriangle(in vec3 O, in Wall wall) {
+  vec2 a = wall.top[0].xy;
+  vec2 b = wall.top[1].xy;
+  if ( almostEqual(orient(O.xy, a, b), 0.0, 1e-06) ) {
+    // The triangle is a line.
+    if ( isInfiniteTopShadow(O) ) {
+      // Where O --> wall intersects the canvas edge.
+      Ray2d rWall = Ray2d(O.xy, a - O.xy);
+      Ray2d edge = whichCanvasEdge(rWall);
+      vec2 ix;
+      lineLineIntersection(rWall, edge, ix);
+      return vec2[3](O.xy, ix, ix);
+    }
+    // Where O --> further wall endpoint intersects the canvas plane.
+    vec3 ixP;
+    furthestShadowPoint(O, wall.top[1], ixP); // Wall 1 is further.
+    return vec2[3](O.xy, ixP.xy, ixP.xy);
+  }
+
+  // For infinite shadow, extend triangle formed by light point and wall to the edge of the canvas.
+  if ( isInfiniteTopShadow(O) ) return extendTriangleToCanvasEdge(vec2[3](O.xy, a, b));
+
+  // For non-infinite, intersect the canvas plane to determine extension point.
+  Plane canvasPlane = constructCanvasPlane();
+  vec3 ixP;
+  if ( !furthestShadowPoint(O, wall.top[1], ixP) ) return extendTriangleToCanvasEdge(vec2[3](O.xy, a, b));
+  Ray2d rWallIx = Ray2d(ixP.xy, b - a);
+  Ray2d rOa = Ray2d(O.xy, a - O.xy);
+  Ray2d rOb = Ray2d(O.xy, b - O.xy);
+  vec2 B;
+  vec2 C;
+  lineLineIntersection(rWallIx, rOa, B);
+  lineLineIntersection(rWallIx, rOb, C);
+  return vec2[3](O.xy, B, C);
+}
+
+
+/**
  * Locate the canvas intersection for a given direction.
  * If none, determine the infinite shadow canvas ray.
  * @param {vec3} nearFarDir           Typically farShadowDirs.penumbra
@@ -379,7 +467,7 @@ bool canvasIntersectionRay(in vec3 nearFarDir, in Ray2d[2] sidePenumbra, in Wall
   Plane canvasPlane = constructCanvasPlane();
   vec3 wallTopMid = vec3(wall.mid, wall.top[0].z);
   vec3 canvasIx;
-  if ( !isInfiniteShadow(nearFarDir)
+  if ( !isInfiniteTopShadow(nearFarDir)
     && intersectRayPlane(Ray(wallTopMid, nearFarDir), canvasPlane, canvasIx) ) {
     canvasRay.origin = canvasIx.xy;
     canvasRay.direction = wall.direction;
@@ -409,94 +497,25 @@ Ray2d nearFarMidRay(in Wall wall, in vec2[3] penumbraTri) {
 }
 
 /**
- * Calculate varying variables.
- */
-void defineBasicVaryings(in Wall wall) {
-  int vertexNum = gl_VertexID % 3;
-
-  // Used to determine in front of or behind wall.
-  vEdgeDist = distanceToLine(vVertexPosition, wall.top[0].xy,
-    normalizedDirection(wall.top[0].xy, wall.top[1].xy));
-  if ( vertexNum == 0 ) vEdgeDist *= -1.0;
-
-  // Calculate the terrain texture coordinate at this vertex based on scene dimensions.
-  // @type {vec2} vTerrainTexCoord
-  vTerrainTexCoord = (vVertexPosition - uSceneDims.xy) / uSceneDims.zw;
-  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
-}
-
-/**
- * Basic flats used by all shaders to limit shadow.
- */
-void defineBasicFlats() {
-  // @type {float} fWallSenseType
-  fWallSenseType = aWallSenseType;
-
-  // @type {float} fThresholdRadius
-  fThresholdRadius2 = !(aWallSenseType == DISTANCE_WALL || aWallSenseType == PROXIMATE_WALL)
-    ? -1.0 : aThresholdRadius2;
-}
-
-/**
- * Define the varying wall ratio.
- * How far the vertex is along the line running from vertex 0 through mid-wall.
+ * The line that defines the left/right sides of the penumbra in relation to the wall.
  * @param {Wall} wall
- * @param {vec2[3]} penumbraTri
- * @returns {float}
+ * @param {bool} isCollinear
+ * @returns {Ray2d}
  */
-float varyingWallRatio(in Wall wall, in vec2[3] penumbraTri) {
-  int vertexNum = gl_VertexID % 3;
-
-  // Define the wall ratio as 1 at the first vertex and 0 at the shorter of the two edges.
-  // For the third, it is the value at the wall direction intersection with the line
-  // from first vertex through the wall midpoint.
-  if ( vertexNum == 0 ) return 1.0;
-
-  // The closer vertex to the wall gets assigned 0.0.
-  float dist01 = distanceSquared(penumbraTri[0], penumbraTri[1]);
-  float dist02 = distanceSquared(penumbraTri[0], penumbraTri[2]);
-  int closerIdx = dist02 < dist01 ? 2 : 1;
-  if ( vertexNum == closerIdx ) return 0.0;
-
-  // If the ray from further index along the wall direction intersects the nearer index,
-  // it will also get assigned 0.0. Otherwise, it is some value smaller than 0.
-  int furtherIdx = (1 - closerIdx) + 2; // Either 2 or 1.
-  Ray2d lightRay = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wall.mid));
-  vec2 closerIx;
-  lineLineIntersection(lightRay, Ray2d(penumbraTri[closerIdx], wall.direction), closerIx);
-
-  // Could use distance(closerIx, wallMid) / distance(closerIx, penumbraTri[0]).
-  // That has a square root but is simpler.
-  Ray2d wallRatioRay = Ray2d(closerIx, penumbraTri[0] - closerIx);
-  float furtherT;
-  lineLineIntersection(wallRatioRay, Ray2d(penumbraTri[vertexNum], wall.direction), furtherT);
-
-  // Often will be near zero (if penumbra triangle uses wall direction); round to zero.
-  return almostEqual(furtherT, 0.0, 1.0e-06) ? 0.0 : furtherT;
+Ray2d leftRightBisector(in Wall wall, in bool isCollinear) {
+  if ( isCollinear ) return Ray2d(wall.mid, wall.direction);
+  return Ray2d(wall.mid, vec2(-wall.direction.y, wall.direction.x));
 }
 
 /**
- * Define the flat wall ratio.
- * How far the wall along the line running from vertex 0 through mid-wall,
- * where 1.0 would be at vertex 0 and 0.0 would be at the closer of vertices 2 or 3.
+ * The line that defines the front/back sides of the penumbra in relation to the wall.
  * @param {Wall} wall
- * @param {vec2[3]} penumbraTri
- * @returns {float}
+ * @param {bool} isCollinear
+ * @returns {Ray2d}
  */
-float flatWallRatio(in Wall wall, in vec2[3] penumbraTri) {
-  float dist01 = distanceSquared(penumbraTri[0], penumbraTri[1]);
-  float dist02 = distanceSquared(penumbraTri[0], penumbraTri[2]);
-  int closerIdx = dist02 < dist01 ? 2 : 1;
-  Ray2d lightRay = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wall.mid));
-  vec2 closerIx;
-  lineLineIntersection(lightRay, Ray2d(penumbraTri[closerIdx], wall.direction), closerIx);
-
-  // Could use distance(closerIx, wallMid) / distance(closerIx, penumbraTri[0]).
-  // That has a square root but is simpler.
-  Ray2d wallRatioRay = Ray2d(closerIx, penumbraTri[0] - closerIx);
-  float furtherT;
-  lineLineIntersection(wallRatioRay, Ray2d(wall.top[0].xy, wall.direction), furtherT);
-  return furtherT;
+Ray2d frontBackBisector(in Wall wall, in bool isCollinear) {
+  if ( isCollinear ) return Ray2d(wall.top[0].xy, vec2(-wall.direction.y, wall.direction.x));
+  return Ray2d(wall.mid, wall.direction);
 }
 
 /**
@@ -516,15 +535,24 @@ void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
   vTerrainTexCoord = (vVertexPosition - uSceneDims.xy) / uSceneDims.zw;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vVertexPosition, 1.0)).xy, 0.0, 1.0);
 
-  // @type {float} vEdgeDist
+  // @type {float} vEdgeDist              Distance from the wall line.
+  // @type {vec3} vLREdgeDist     Distance left/right from wall line
   // Used to determine in front of or behind wall.
-  // Simpler than wall ratio, but may want to use that instead.
-  vEdgeDist = distanceToLine(vVertexPosition, wall.top[0].xy,
-    normalizedDirection(wall.top[0].xy, wall.top[1].xy));
+  bool isCollinear = almostEqual(penumbraTri[0], wall.top[0].xy, 1.0e-06);
+  Ray2d rEdgeWall = frontBackBisector(wall, isCollinear);
+  vEdgeDist = distanceToLine(vVertexPosition, rEdgeWall.origin, rEdgeWall.direction);
   if ( vertexNum == 0 ) vEdgeDist *= -1.0;
 
-  // @type {float} vWallRatio
-  vWallRatio = varyingWallRatio(wall, penumbraTri);
+  // @type {vec3} vLREdgeDist    Triangle A --> ix --> C, where
+  //   ix is the intersection of the rCollinearWall with A->B.
+  vLREdgeDist = 0.0;
+  if ( isCollinear && vertexNum != 0 ) {
+    Ray2d rLRWall = leftRightBisector(wall, isCollinear);
+    vLREdgeDist = distanceToLine(vVertexPosition, rLRWall.origin, rLRWall.direction);
+    vLREdgeDist *= sign(orient(rLRWall.origin, projectRay(rLRWall, 1.0), vVertexPosition));
+    // Left side is 1.0, right side is -1.0.
+
+  }
 }
 
 /**
@@ -540,15 +568,8 @@ void defineSharedFlats(Wall wall, vec2[3] penumbraTri) {
   fThresholdRadius2 = !(aWallSenseType == DISTANCE_WALL || aWallSenseType == PROXIMATE_WALL)
     ? -1.0 : aThresholdRadius2;
 
-  // @type {float} fWallRatio
-  fWallRatio = flatWallRatio(wall, penumbraTri);
-
   // @type {vec2} fWallHeights
-  fWallHeights[TOP] = wall.top[0].z;
-  fWallHeights[BOTTOM] = wall.bottom[0].z;
-
-  // @type {vec2} fFarRatio, fNearRatio, using UMBRA, PENUMBRA.
-  // Uses -1.0 to indicate no shadow.
-  fFarRatios = vec2(-1.0, -1.0);
-  fNearRatios = vec2(-1.0, -1.0);
+  float canvasElevation = uElevationRes.x;
+  fWallHeights[TOP] = wall.top[0].z - canvasElevation; // The full height of the top of the wall from lowest elevation.
+  fWallHeights[BOTTOM] = wall.bottom[0].z - canvasElevation; // The full height of the bottom of the wall from lowest elevation.
 }

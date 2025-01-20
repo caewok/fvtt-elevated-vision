@@ -17,18 +17,21 @@ uniform float uSolarAngle; // radians
 in vec2 vVertexPosition;
 in vec2 vTerrainTexCoord;
 in float vEdgeDist;
-in float vWallRatio;
+in float vLREdgeDist;
 
 flat in float fThresholdRadius2;
 flat in float fWallSenseType;
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
-flat in float fWallRatio;
-flat in vec2 fNearRatios;
-flat in vec2 fFarRatios;
+flat in vec2 fNearDistances;
+flat in vec2 fFarDistances;
 flat in vec3 fWallTop0;
 flat in vec3 fWallTop1;
 flat in vec3 fWallBottom0;
 flat in vec3 fWallBottom1;
+flat in vec2 fFarRLPenumbraDistances;
+flat in vec2 fFarRLUmbraDistances;
+flat in vec2 fNearRLPenumbraDistances;
+flat in vec2 fNearRLUmbraDistances;
 
 out vec4 fragColor;
 
@@ -154,7 +157,7 @@ float shadowPercentage() {
   vec3 a = vec3(vVertexPosition, elevation);
   for ( int i = 0; i < NUM_DIRS; i += 1 ) {
     vec3 dir = dirs[i];
-    numCollisions += wallCollision(dir, elevation);
+    numCollisions += wallCollision(Ray2d(a, dir));
   }
 
   // TODO: Add in adjacent pixel values as part of the average here.

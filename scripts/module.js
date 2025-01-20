@@ -86,9 +86,37 @@ import {
 } from "./glsl/ShadowSingleWallShader.js";
 
 import {
-  WebGLShadowsSingleWall
+  SourceShadowMultiWallGeometry,
+  PointSourceShadowMultiWallGeometry,
+  DirectionalSourceShadowMultiWallGeometry,
+  SourceShadowMultiWallSubGeometry,
+  PointSourceShadowMultiWallSubGeometry,
+  DirectionalSourceShadowMultiWallSubGeometry
+} from "./glsl/SourceShadowMultiWallGeometry.js";
+
+import {
+  WebGLShadows,
+  GlobalLightWebGLShadows,
+  PointVisionWebGLShadows,
+  PointLightWebGLShadows,
+  DirectionalLightWebGLShadows
+} from "./glsl/WebGLShadows.js";
+
+import {
+  WebGLShadowsSingleWall,
+  GlobalLightWebGLShadowsSingleWall,
+  PointVisionWebGLShadowsSingleWall,
+  PointLightWebGLShadowsSingleWall,
+  DirectionalLightWebGLShadowsSingleWall
 } from "./glsl/WebGLShadowsSingleWall.js";
 
+import {
+  WebGLShadowsMultiWall,
+  GlobalLightWebGLShadowsMultiWall,
+  PointVisionWebGLShadowsMultiWall,
+  PointLightWebGLShadowsMultiWall,
+  DirectionalLightWebGLShadowsMultiWall
+} from "./glsl/WebGLShadowsMultiWall.js";
 
 // Imported elsewhere: import "./scenes.js";
 
@@ -104,9 +132,20 @@ Hooks.once("init", function() {
   // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
 
-    useSingleWallShader: true,
+    /**
+     * Options in api:
+     *   - WebGLShadows
+     *   - WebGLShadowsSingleWall
+     *   - WebGLShadowsMultiWall
+     * @type {class}
+     */
+    webGLShadowClass: WebGLShadows,
 
-    singleWallSamples: 10,
+    /**
+     * For WebGLShadowsSingleWall and WebGLShadowsMultiWall, how many shadow triangles per edge.
+     * @type {number} (
+     */
+    webGLShadowSamples: 10,
 
     /**
      * ElevationLayer.
@@ -140,7 +179,7 @@ Hooks.once("init", function() {
      * So -2000 (min) + 0.1 (step) * 65556 (max normalized) = 4555
      * @type {number}
      */
-    elevationMin: 0, // -1000,
+    elevationMin: -1000, // -1000,
 
     /**
      * WebGL region elevations.
@@ -156,6 +195,10 @@ Hooks.once("init", function() {
     extract,
     DirectionalLightSource,
     PATCHER,
+
+    WebGLShadows,
+    WebGLShadowsSingleWall,
+    WebGLShadowsMultiWall,
 
     glsl: {
       SourceShadowWallGeometry,
@@ -201,7 +244,14 @@ Hooks.once("init", function() {
       PointSourceShadowSingleWallShader,
       DirectionalSourceShadowSingleWallShader,
 
-      WebGLShadowsSingleWall
+      WebGLShadowsSingleWall,
+
+      SourceShadowMultiWallGeometry,
+      PointSourceShadowMultiWallGeometry,
+      DirectionalSourceShadowMultiWallGeometry,
+      SourceShadowMultiWallSubGeometry,
+      PointSourceShadowMultiWallSubGeometry,
+      DirectionalSourceShadowMultiWallSubGeometry
     }
   };
 

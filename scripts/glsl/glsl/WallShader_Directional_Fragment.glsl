@@ -16,15 +16,18 @@ in vec3 vSidePenumbra0;
 in vec3 vSidePenumbra1;
 in vec3 vUmbra;
 in float vEdgeDist;
-in float vWallRatio;
+in float vLREdgeDist;
 
 flat in float fWallSenseType;
 flat in float fThresholdRadius2;
 flat in vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
-flat in float fWallRatio;
-flat in vec2 fFarRatios;
-flat in vec2 fNearRatios;
+flat in vec2 fFarDistances;
+flat in vec2 fNearDistances;
 flat in vec2 fAmbient;
+flat in vec2 fFarRLPenumbraDistances;
+flat in vec2 fFarRLUmbraDistances;
+flat in vec2 fNearRLPenumbraDistances;
+flat in vec2 fNearRLUmbraDistances;
 
 out vec4 fragColor;
 

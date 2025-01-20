@@ -1,5 +1,5 @@
 /* ----- NOTE: Penumbra Vertex ----- */
-
+/*
 #ifdef UNSIZED_SOURCE
 int vertexNum = gl_VertexID % 3;
 
@@ -29,3 +29,4 @@ defineBasicVaryings(wall);
 // Flats
 if ( vertexNum == 2 ) defineBasicFlats();
 #endif
+*/

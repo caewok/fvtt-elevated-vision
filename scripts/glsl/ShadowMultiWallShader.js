@@ -53,7 +53,7 @@ function interpolate(str, params = {}) {
   // Replace the names with the relevant values.
   const names = Object.keys(params);
   const vals = Object.values(params);
-  return new Function(...names, `return \`${str}\`;`)(...vals);
+  return new Function(...names, `return \`${str}\`;`)(...vals); /* eslint-disable-line no-new-func */
 }
 
 // NOTE: GLSL Shared functions and calculations.
@@ -61,24 +61,21 @@ function interpolate(str, params = {}) {
 
 // NOTE: GLSL code for each class.
 const GLSL_UNSIZED_VERTEX = interpolate(
-  await fetchGLSLCode("SingleWallShader_Unsized_Vertex")
+  await fetchGLSLCode("MultiWallShader_Unsized_Vertex")
 );
 
 const GLSL_UNSIZED_FRAGMENT = interpolate(
-  await fetchGLSLCode("SingleWallShader_Unsized_Fragment")
+  await fetchGLSLCode("MultiWallShader_Unsized_Fragment")
 );
 
 /**
  * Draw shadow for wall without shading for penumbra and without the outer penumbra.
  */
-export class ShadowSingleWallShader extends AbstractEVShader {
+export class ShadowMultiWallShader extends AbstractEVShader {
   // NOTE: ShadowWallShader.vertexShader
 
   /** @type {RenderedSource} */
   source;
-
-  /** @type {Edge} */
-  edge;
 
   /**
    * Vertices are light --> wall corner to intersection on surface.
@@ -108,7 +105,6 @@ export class ShadowSingleWallShader extends AbstractEVShader {
     uSceneDims: [0, 0, 1, 1],
     uElevationRes: [0, 1, 256 * 256, 1],
     uTerrainSampler: 0,
-    uThresholdRadius2: -1,
     uLightPosition: [0, 0, 0],
     uNumSamples: 1
   };
@@ -119,7 +115,7 @@ export class ShadowSingleWallShader extends AbstractEVShader {
    * @param {object} defaultUniforms    Changes from the default uniforms set here.
    * @returns {ShadowMaskWallShader}
    */
-  static create(source, edge, defaultUniforms = {}) {
+  static create(source, defaultUniforms = {}) {
     const { sceneRect, distancePixels } = canvas.dimensions;
     defaultUniforms.uSceneDims ??= [
       sceneRect.x,
@@ -136,7 +132,6 @@ export class ShadowSingleWallShader extends AbstractEVShader {
       distancePixels
     ];
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
-    defaultUniforms.uThresholdRadius2 = this.threshold2Attribute(source, edge);
 
     const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
     if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
@@ -144,63 +139,8 @@ export class ShadowSingleWallShader extends AbstractEVShader {
 
     const shader = super.create(defaultUniforms);
     shader.source = source;
-    shader.edge = edge;
     return shader;
   }
-
-  /**
-   * For threshold edges, determine if threshold applies.
-   * @param {Edge} edge
-   * @returns {boolean} True if the threshold applies.
-   */
-  static thresholdApplies(source, edge) {
-    const sourceType = source.constructor.sourceType;
-    return edge.applyThreshold(sourceType, source, source.data.externalRadius);
-  }
-
-  /**
-   * For threshold edge, get the threshold distance
-   * @param {Edge} edge
-   * @returns {number}  Distance of the threshold in pixel units, or -1 if none.
-   */
-  static threshold2Attribute(source, edge) {
-    if ( !this.thresholdApplies(source, edge) ) return -1;
-    const { inside, outside } = this.calculateThresholdAttenuation(source, edge);
-    return Math.min(Number.MAX_SAFE_INTEGER, Math.pow(inside + outside, 2)); // Avoid infinity.
-  }
-
-  /**
-   * Calculate threshold attenuation for an edge.
-   * If the edge is not attenuated, inside + outside will be >= source radius.
-   * See PointSourcePolygon.prototype.#calculateThresholdAttenuation
-   * @param {Edge} edge
-   * @returns {{inside: number, outside: number}} The inside and outside portions of the radius
-   */
-  static calculateThresholdAttenuation(source, edge) {
-    const sourceType = source.constructor.sourceType;
-    const externalRadius = 0;
-    const radius = source.radius;
-    const origin = source;
-    const d = edge.threshold?.[sourceType];
-    if ( !d ) return { inside: radius, outside: radius };
-    const proximity = edge[sourceType] === CONST.WALL_SENSE_TYPES.PROXIMITY;
-
-    // Find the closest point on the threshold wall to the source.
-    // Calculate the proportion of the source radius that is "inside" and "outside" the threshold wall.
-    const pt = foundry.utils.closestPointToSegment(origin, edge.a, edge.b);
-    const inside = Math.hypot(pt.x - origin.x, pt.y - origin.y);
-    const outside = radius - inside;
-    if ( (outside < 0) || outside.almostEqual(0) ) return { inside, outside: 0 };
-
-    // Attenuate the radius outside the threshold wall based on source proximity to the wall.
-    const sourceDistance = proximity ? Math.max(inside - externalRadius, 0) : (inside + externalRadius);
-    const thresholdDistance = d * canvas.scene.dimensions.distancePixels;
-    const percentDistance = sourceDistance / thresholdDistance;
-    const pInv = proximity ? 1 - percentDistance : Math.min(1, percentDistance - 1);
-    const a = (pInv / (2 * (1 - pInv))) * CONFIG.Wall.thresholdAttenuationMultiplier;
-    return { inside, outside: a * thresholdDistance };
-  }
-
 
   /**
    * Update based on indicated changes to the source.
@@ -211,27 +151,7 @@ export class ShadowSingleWallShader extends AbstractEVShader {
     const changedPosition = changes.has("x") || changes.has("y");
     const changedElevation = changes.has("elevation");
     if ( changedPosition || changedElevation ) this.updateLightPosition();
-    if ( changedPosition ) this.updateEdgeThreshold();
     return changedPosition || changedElevation;
-  }
-
-  /**
-   * Update based on indicated changes to the edge.
-   * @param {Set<string>} changes         Change keys for the source.
-   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
-   */
-  edgeUpdated(changes) {
-    const changedThreshold = changes.has("threshold.sight", "threshold.light", "threshold.attenuation");
-    if ( changedThreshold ) this.updateEdgeThreshold();
-    return changedThreshold;
-  }
-
-  /**
-   * Update the wall threshold.
-   * @param {Edge} edge
-   */
-  updateEdgeThreshold() {
-    this.uniforms.uThresholdRadius2 = this.constructor.threshold2Attribute(this.source, this.edge);
   }
 
   /**
@@ -249,7 +169,6 @@ export class ShadowSingleWallShader extends AbstractEVShader {
    */
   destroy() {
     this.source = null;
-    this.edge = null;
     super.destroy();
   }
 }
@@ -258,7 +177,7 @@ export class ShadowSingleWallShader extends AbstractEVShader {
  * Draw directional shadow for wall with shading for penumbra and with the outer penumbra.
  * https://www.researchgate.net/publication/266204563_Calculation_of_the_shadow-penumbra_relation_and_its_application_on_efficient_architectural_design
  */
-export class DirectionalSourceShadowSingleWallShader extends ShadowSingleWallShader {
+export class DirectionalSourceShadowMultiWallShader extends ShadowMultiWallShader {
   // NOTE: DirectionalShadowWallShader.vertexShader
   /**
    * Vertices are light --> wall corner to intersection on surface.
@@ -282,9 +201,9 @@ export class DirectionalSourceShadowSingleWallShader extends ShadowSingleWallSha
    * @param {object} defaultUniforms    Changes from the default uniforms set here.
    * @returns {ShadowMaskWallShader}
    */
-  static create(source, edge, defaultUniforms = {}) {
+  static create(source, defaultUniforms = {}) {
     defaultUniforms.uNumSamples = CONFIG[MODULE_ID].webGLShadowSamples;
-    return super.create(source, edge, defaultUniforms);
+    return super.create(source, defaultUniforms);
   }
 
 }
@@ -293,7 +212,7 @@ export class DirectionalSourceShadowSingleWallShader extends ShadowSingleWallSha
  * Draw shadow from a sized source for wall with shading for penumbra and with the outer penumbra
  * https://www.researchgate.net/publication/266204563_Calculation_of_the_shadow-penumbra_relation_and_its_application_on_efficient_architectural_design
  */
-export class PointSourceShadowSingleWallShader extends ShadowSingleWallShader {
+export class PointSourceShadowMultiWallShader extends ShadowMultiWallShader {
   // NOTE: SizedPointSourceShadowWallShader.vertexShader
   /**
    * Wall shadow with side, near, and far penumbra.
@@ -318,9 +237,9 @@ export class PointSourceShadowSingleWallShader extends ShadowSingleWallShader {
    * @param {object} defaultUniforms    Changes from the default uniforms set here.
    * @returns {ShadowMaskWallShader}
    */
-  static create(source, edge, defaultUniforms = {}) {
+  static create(source, defaultUniforms = {}) {
     defaultUniforms.uNumSamples = CONFIG[MODULE_ID].webGLShadowSamples;
-    return super.create(source, edge, defaultUniforms);
+    return super.create(source, defaultUniforms);
   }
 }
 

@@ -10,18 +10,21 @@ in float aThresholdRadius2; // Note: no thresholds for walls apply for direction
 out vec2 vVertexPosition;
 out vec2 vTerrainTexCoord;
 out float vEdgeDist;
-out float vWallRatio;
+out float vLREdgeDist;
 
 flat out float fThresholdRadius2;
 flat out float fWallSenseType;
 flat out vec2 fWallHeights; // topZ to canvas bottom, bottomZ to canvas bottom
-flat out float fWallRatio;
-flat out vec2 fNearRatios;
-flat out vec2 fFarRatios;
+flat out vec2 fNearDistances;
+flat out vec2 fFarDistances;
 flat out vec3 fWallTop0;
 flat out vec3 fWallTop1;
 flat out vec3 fWallBottom0;
 flat out vec3 fWallBottom1;
+flat out vec2 fFarRLPenumbraDistances;
+flat out vec2 fFarRLUmbraDistances;
+flat out vec2 fNearRLPenumbraDistances;
+flat out vec2 fNearRLUmbraDistances;
 
 
 uniform mat3 translationMatrix;
@@ -35,6 +38,7 @@ uniform float uSolarAngle; // radians
 #define PI_1_2 1.5707963267948966
 #define EV_DIRECTIONAL_LIGHT true
 
+${defineStruct("Plane")}
 ${defineFunction("normalizeRay")}
 ${defineFunction("rayFromPoints")}
 ${defineFunction("intersectRayPlane")}
@@ -44,27 +48,23 @@ ${defineFunction("orient")}
 ${defineFunction("fromAngle")}
 ${defineFunction("almostEqual")}
 
-${PENUMBRA_VERTEX_FUNCTIONS}
+/* ----- NOTE: Functions used by Penumbra Vertex Functions ----- */
 
 /**
- * @returns {Wall}
+ * Determine the closer and further endpoints.
+ * @param {vec2[2]} pts
+ * @returns {int} Index for the closer endpoint.
  */
-Wall calculateWallPositions() {
-  vec2[2] endpointsXY = vec2[2](aWallCorner0.xy, aWallCorner1.xy);
-  // int closerIdx = closerEndpoint(endpointsXY);
-  int closerIdx = 0;
-  vec2 xyCloser = endpointsXY[closerIdx];
-  vec2 xyFurther = endpointsXY[1 - closerIdx];
-  vec2 direction = normalizedDirection(xyCloser, xyFurther);
-  float topZ = aWallCorner0.z;
-  float bottomZ = aWallCorner1.z;
-  return Wall(
-    vec3[2](vec3(xyCloser, topZ), vec3(xyFurther, topZ)),
-    vec3[2](vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)),
-    (xyCloser + xyFurther) * 0.5,
-    direction
-  );
+int closerEndpoint(vec2[2] pts) {
+  vec2 dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0) * -1.0;
+  vec2 perpDir = vec2(dirMid.y, -dirMid.x);
+  Ray2d r01 = Ray2d(pts[0], perpDir);
+  vec2 b = projectRay(r01, 1.0);
+  return int(orient(pts[0], b, pts[1]) > 0.0);
 }
+
+${PENUMBRA_VERTEX_FUNCTIONS}
+
 
 float zChangeForElevationAngle(in float elevationAngle) {
   // elevationAngle = clamp(elevationAngle, 0.0, PI_1_2); // 0ÔøΩ to 90ÔøΩ
