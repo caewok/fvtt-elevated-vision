@@ -22,10 +22,10 @@ import { ShadowVisionMaskShader, ShadowVisionMaskTokenLOSShader } from "./Shadow
 import { DirectionalLightSource } from "../DirectionalLightSource.js";
 
 import {
-  SourceShadowMultiWallGeometry,
-  PointSourceShadowMultiWallGeometry,
-  DirectionalSourceShadowMultiWallGeometry,
-} from "./SourceShadowMultiWallGeometry.js";
+  SourceShadowSampleMultiWallGeometry,
+  PointSourceShadowSampleMultiWallGeometry,
+  DirectionalSourceShadowSampleMultiWallGeometry,
+} from "./SourceShadowSampleMultiWallGeometry.js";
 
 import {
   ShadowMultiWallShader,
@@ -45,7 +45,7 @@ export class WebGLShadowsMultiWall {
   static maskColor = 0xFF0000;
 
   /** @type {PIXI.Geometry} */
-  static geometryClass = SourceShadowMultiWallGeometry;
+  static geometryClass = SourceShadowSampleMultiWallGeometry;
 
   /** @type {AbstractEVShader} */
   static shaderClass = ShadowMultiWallShader;
@@ -530,7 +530,7 @@ export class GlobalLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 export class PointVisionWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   /** @type {PIXI.Geometry} */
-  static geometryClass = SourceShadowMultiWallGeometry;
+  static geometryClass = SourceShadowSampleMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
   static shaderClass = ShadowMultiWallShader;
@@ -606,7 +606,7 @@ export class PointVisionWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 export class PointLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   /** @type {PIXI.Geometry} */
-  static geometryClass = PointSourceShadowMultiWallGeometry;
+  static geometryClass = PointSourceShadowSampleMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
   static shaderClass = PointSourceShadowMultiWallShader;
@@ -655,7 +655,7 @@ export class PointLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
 export class DirectionalLightWebGLShadowsMultiWall extends PointLightWebGLShadowsMultiWall {
   /** @type {PIXI.Geometry} */
-  static geometryClass = DirectionalSourceShadowMultiWallGeometry;
+  static geometryClass = DirectionalSourceShadowSampleMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
   static shaderClass = DirectionalSourceShadowMultiWallShader;
