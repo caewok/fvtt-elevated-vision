@@ -48,17 +48,40 @@ uniform float uSourceRadius2;
 ${defineFunction("between")}
 ${defineFunction("distanceSquared")}
 
-void main() {
-  // if ( any(equal(between(0.0, 1.0, vTextureCoord), vec2(0.0))) ) discard;
-  float dist2 = distanceSquared(vVertexPosition, uSourcePosition);
-  if ( dist2 > uSourceRadius2 ) discard;
-
-  vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
+float calcLightAmount(in vec2 coord) {
+  vec4 shadowTexel = texture(uShadowSampler, coord);
   float lightAmount = shadowTexel.r;
 
   // If more than 1 limited wall at this point, add to the shadow.
   // If a single limited wall, ignore.
   if ( shadowTexel.g < 0.3 ) lightAmount *= shadowTexel.b;
+  return lightAmount;
+}
+
+
+void main() {
+  // if ( any(equal(between(0.0, 1.0, vTextureCoord), vec2(0.0))) ) discard;
+  float dist2 = distanceSquared(vVertexPosition, uSourcePosition);
+  if ( dist2 > uSourceRadius2 ) discard;
+
+  ivec2 textureSize2d = textureSize(uShadowSampler,0);
+  vec2 onePixel = vec2(1.0) / vec2(textureSize2d);
+
+  float lightAmount = 0.0;
+  for ( int i = -1; i < 2; i += 1 ) {
+    for ( int j = -1; j < 2; j += 1 ) {
+      vec2 texCoord = vTextureCoord + (vec2(float(i), float(j)) * onePixel);
+      lightAmount += calcLightAmount(texCoord);
+    }
+  }
+  lightAmount /= 5.0;
+
+  // vec4 shadowTexel = texture(uShadowSampler, vTextureCoord);
+  // float lightAmount = shadowTexel.r;
+
+  // If more than 1 limited wall at this point, add to the shadow.
+  // If a single limited wall, ignore.
+  // if ( shadowTexel.g < 0.3 ) lightAmount *= shadowTexel.b;
 
   // If in light, color red. Discard if in shadow.
   // See https://github.com/caewok/fvtt-elevated-vision/blob/0.4.8/scripts/vision.js#L209
