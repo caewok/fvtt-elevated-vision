@@ -289,7 +289,6 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vTang
   // If W0 == A, then the wall is nearly collinear with the light (line from wall intersects light circle).
   bool nearCollinear = almostEqual(W0, A, 1.0e-08);
 
-
   // D and G are set by the intersection of their respective penumbra/umbra lines.
   // Most of the matching work done in sideShadowRays.
   // If no intersection, D and G should be set to W0 (happens if side shadow rays are parallel):
@@ -297,10 +296,17 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vTang
   // TODO: Is setting D and G in advance sufficient?
   D = W0;
   G = W0;
-  bool hasIx0 = lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[0], D);
-  bool hasIx1 = lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[1], G);
-  if ( !hasIx0 ) D = W0;
-  if ( !hasIx1 ) G = W0;
+  if ( nearCollinear ) {
+    bool hasIx0 = lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[0], D);
+    bool hasIx1 = lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[1], G);
+    if ( !hasIx0 ) D = W0;
+    if ( !hasIx1 ) G = W0;
+  } else {
+    bool hasIx0 = lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[1], D);
+    bool hasIx1 = lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[0], G);
+    if ( !hasIx0 ) D = W0;
+    if ( !hasIx1 ) G = W0;
+  }
 
   // ∆DEF and ∆GHI represent the furtherest extent of the shadow because D and G are
   // near-tangent points.
@@ -332,6 +338,13 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vTang
   if ( nearCollinear ) {
     vec2 meanDir = (sideShadowRays.penumbra[0].direction + sideShadowRays.penumbra[1].direction) * 0.5;
     rabDir = vec2(-meanDir.y, meanDir.x);
+  } else {
+    // Furthest point could be based on the JKL triangle or on the distance to E or H(?).
+    float distJKL = distanceSquaredToLine(furthestPoint, W0, wall.direction);
+    float distE = distanceSquaredToLine(E, W0, wall.direction);
+    float distH = distanceSquaredToLine(H, W0, wall.direction);
+    if ( distE > distJKL && distE > distJKL ) furthestPoint = E;
+    else if ( distH > distJKL ) furthestPoint = H;
   }
   Ray2d rab = Ray2d(furthestPoint, rabDir);
   lineLineIntersection(sideShadowRays.penumbra[0], rab, B);

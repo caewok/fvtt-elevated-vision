@@ -1409,12 +1409,12 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     // - when wall is near-collinear and wall line is tangent to source circle.
     D.set(W0);
     G.set(W0);
-    if ( !nearCollinear ) {
-      glsl.lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[1], D);
-      glsl.lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[0], G);
-    } else {
+    if ( nearCollinear ) {
       glsl.lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[0], D);
       glsl.lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[1], G);
+    } else {
+      glsl.lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[1], D);
+      glsl.lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[0], G);
     }
 
     // ∆DEF and ∆GHI represent the furthest left/right extent of the shadow  because D and G are
@@ -1450,7 +1450,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const dist2L = distanceSquared(JKL[0], JKL[2]);
     const idxL = Number(dist2L > dist2K); // Want the further one.
     let furthestPoint = JKL[idxL + 1];
-
 
     // Collinear: F->I or E->H form the line.
     // Noncollinear: Wall direction or E->F or H->I

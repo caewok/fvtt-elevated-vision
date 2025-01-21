@@ -260,13 +260,22 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vTang
 
   // D and G are set by the intersection of their respective penumbra/umbra lines.
   // Most of the matching work done in sideShadowRays.
+  // If no intersection, D and G should be set to W0 (happens if side shadow rays are parallel):
+  // - when wall is near-collinear and wall line is tangent to source circle.
   // TODO: Is setting D and G in advance sufficient?
   D = W0;
   G = W0;
-  bool hasIx0 = lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[0], D);
-  bool hasIx1 = lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[1], G);
-  if ( !hasIx0 ) D = W0;
-  if ( !hasIx1 ) G = W0;
+  if ( nearCollinear ) {
+    bool hasIx0 = lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[0], D);
+    bool hasIx1 = lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[1], G);
+    if ( !hasIx0 ) D = W0;
+    if ( !hasIx1 ) G = W0;
+  } else {
+    bool hasIx0 = lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[1], D);
+    bool hasIx1 = lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[0], G);
+    if ( !hasIx0 ) D = W0;
+    if ( !hasIx1 ) G = W0;
+  }
 
   // ∆DEF and ∆GHI represent the furtherest extent of the shadow because D and G are
   // near-tangent points.
@@ -298,11 +307,17 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vTang
   if ( nearCollinear ) {
     vec2 meanDir = (sideShadowRays.penumbra[0].direction + sideShadowRays.penumbra[1].direction) * 0.5;
     rabDir = vec2(-meanDir.y, meanDir.x);
+  } else {
+    // Furthest point could be based on the JKL triangle or on the distance to E or H(?).
+    float distJKL = distanceSquaredToLine(furthestPoint, W0, wall.direction);
+    float distE = distanceSquaredToLine(E, W0, wall.direction);
+    float distH = distanceSquaredToLine(H, W0, wall.direction);
+    if ( distE > distJKL && distE > distJKL ) furthestPoint = E;
+    else if ( distH > distJKL ) furthestPoint = H;
   }
   Ray2d rab = Ray2d(furthestPoint, rabDir);
   lineLineIntersection(sideShadowRays.penumbra[0], rab, B);
   lineLineIntersection(sideShadowRays.penumbra[1], rab, C);
-
 
   // For debugging, test side shadows
   /*
@@ -312,13 +327,11 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vTang
   B = projectRay(r0, 2000.0);
   C = projectRay(r1, 2000.0);
   */
-
   /*
-  A = G;
-  B = H;
-  C = I;
+  A = D;
+  B = E;
+  C = F;
   */
-
 
   /* Debugging
   B = projectRay(Ray2d(A, normalize(B - A)), 2000.0);
