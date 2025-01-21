@@ -33,6 +33,24 @@ import {
   DirectionalSourceShadowMultiWallShader
 } from "./ShadowMultiWallShader.js";
 
+import {
+  SourceShadowSingleWallGeometry,
+  PointSourceShadowSingleWallGeometry,
+  DirectionalSourceShadowSingleWallGeometry,
+} from "./SourceShadowSingleWallGeometry.js";
+
+import {
+  SourceShadowMultiWallGeometry,
+  PointSourceShadowMultiWallGeometry,
+  DirectionalSourceShadowMultiWallGeometry,
+} from "./SourceShadowMultiWallGeometry.js";
+
+import {
+  ShadowWallShader,
+  SizedPointSourceShadowWallShader,
+  DirectionalShadowWallShader
+} from "./ShadowWallShader.js";
+
 const PIXEL_INV = 1 / 255;
 
 /**
@@ -46,9 +64,11 @@ export class WebGLShadowsMultiWall {
 
   /** @type {PIXI.Geometry} */
   static geometryClass = SourceShadowSampleMultiWallGeometry;
+  // static geometryClass = SourceShadowMultiWallGeometry;
 
   /** @type {AbstractEVShader} */
   static shaderClass = ShadowMultiWallShader;
+  // static shaderClass = ShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -531,9 +551,11 @@ export class PointVisionWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   /** @type {PIXI.Geometry} */
   static geometryClass = SourceShadowSampleMultiWallGeometry;
+  // static geometryClass = SourceShadowMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
   static shaderClass = ShadowMultiWallShader;
+  // static shaderClass = ShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;
@@ -607,9 +629,11 @@ export class PointLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   /** @type {PIXI.Geometry} */
   static geometryClass = PointSourceShadowSampleMultiWallGeometry;
+  // static geometryClass = PointSourceShadowMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
   static shaderClass = PointSourceShadowMultiWallShader;
+  // static shaderClass = SizedPointSourceShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -656,9 +680,11 @@ export class PointLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 export class DirectionalLightWebGLShadowsMultiWall extends PointLightWebGLShadowsMultiWall {
   /** @type {PIXI.Geometry} */
   static geometryClass = DirectionalSourceShadowSampleMultiWallGeometry;
+  // static geometryClass = DirectionalSourceShadowMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
   static shaderClass = DirectionalSourceShadowMultiWallShader;
+  // static shaderClass = DirectionalShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;

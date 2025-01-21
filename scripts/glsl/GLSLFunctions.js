@@ -1117,6 +1117,44 @@ bool baryIntersectRayQuad(in Ray r, in Quad quad, out vec3 ix) {
 }
 `;
 
+GLSLFunctions.planePointTo3d =
+`
+${defineStruct("Plane")}
+
+/**
+ * Convert a 2d point in plane coordinates to a 3d point.
+ * Inverse of to2d()
+ * More numerically stable than using the inverse of the 2d conversion matrix.
+ * Use planeAxisVectors to first calculate u and v
+ * @param {vec2} pt       The 2d point on the plane
+ * @param {Plane} plane   The plane
+ * @param {vec3} u        One axis of the plane
+ * @param {vec3} v        Second axis of the plane
+ */
+vec3 planePointTo3d(in vec2 pt, in Plane plane, in vec3 u, in vec3 v) {
+  return plane.point + (u * pt.x) + (v * pt.y);
+}
+
+/**
+ * Calculate normalized axis vectors for the plane.
+ * @param {Plane} plane     The plane
+ * @param {inout vec3} u    One vector on the plane
+ * @param {out vec3} v    Orthogonal vector on the plane
+ */
+void planeAxisVectors(in Plane plane, inout vec3 u, out vec3 v) {
+  vec3 n = plane.normal;
+  vec3 w = n.x == 0.0 ? vec3(1.0, 0.0, 0.0)
+    : n.y == 0.0 ? vec3(0.0, 1.0, 0.0)
+      : n.z == 0.0 ? vec3(0.0, 0.0, 1.0)
+        : (n.x < n.y && n.x < n.z) ? vec3(1.0, 0.0, 0.0)
+          : n.y < n.z ? vec3(0.0, 1.0, 0.0)
+            : vec3(0.0, 0.0, 1.0);
+
+  u = normalize(cross(w, n));
+  v = normalize(cross(n, u));
+}
+`;
+
 // NOTE: Circle struct
 GLSLStructs.Circle =
 `

@@ -8,20 +8,10 @@ PIXI
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
-/* Wall Geometry version 2
-Track relationship between a single edge and a light source.
-Also tracks connected edges used to determine shape of the penumbra.
-Creates geometry used by the shader.
-- Vertices of the penumbra triangle.
-- Wall ratio to determine if fragment is in front of wall.
-- Wall threshold information to determine if fragment is shaded.
-
-Randomly samples points in the light sphere to create the shadow.
-*/
-
 import { MODULE_ID } from "../const.js";
 import { Draw } from "../geometry/Draw.js";
-import { pointVTest, tangentToV } from "../util.js";
+import { CombinedGeometry, SubGeometry } from "./CombinedGeometry.js";
+import { pointVTest, tangentToV, edgeElevationZ } from "../util.js";
 
 const flipEdgeLabel = {
   a: "b",
@@ -30,24 +20,218 @@ const flipEdgeLabel = {
 
 // TODO: Handle linked edge updates.
 
+export class SourceShadowMultiWallGeometry extends CombinedGeometry {
+  /** @type {PointSource} */
+  source;
 
-export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
-  /**
-   * Number of pixels to extend edges, to ensure overlapping shadows for connected edges.
-   * @type {number}
-   */
-  static WALL_OFFSET_PIXELS = 2;
+  /** @type {Map<string, SubGeometry>} */
+  geomEdgeMap = new Map(); // Uses edge.id b/c edge not guaranteed to be the same.
+
+  /** @type {SubGeometry|PIXI.Geometry} */
+  subclass = SourceShadowMultiWallSubGeometry;
+
+  // ----- NOTE: Instantiation and initialization ----- //
+
+  /** @type {boolean} */
+  #initialized = false;
+
+  get initialized() { return this.#initialized; }
 
   /**
-   * Signal that a wall endpoint has no linked walls.
-   * @type {number}
+   * Initialize this geometry with zero values for index and attributes.
    */
-  static EV_ENDPOINT_LINKED_UNBLOCKED = -10.0;
+  initialize(source, edges) {
+    if ( this.#initialized ) return;
+    this.source = source;
+    this.#initializeEdges(edges);
+    this.#initializeIndex();
+    this.#initializeAttribute("aWallCorner0", 4, PIXI.TYPES.FLOAT);
+    this.#initializeAttribute("aWallCorner1", 4, PIXI.TYPES.FLOAT);
+    this.#initializeAttribute("aWallSenseType", 1, PIXI.TYPES.FLOAT);
+    this.#initializeAttribute("aThresholdRadius2", 1, PIXI.TYPES.FLOAT); // TODO: Change to UNSIGNED_BYTE?
+    this.subgeometries.forEach(sg => sg._updateGeometry());
+    this.#initialized = true;
+  }
 
   /**
-   * Signal that a linked wall to the edge will completely block the light.
+   * Initialize the edges for this source.
+   * Does not create index or attributes.
+   * @param {Edge[]} edges
    */
-  static EV_ENDPOINT_LINK_BLOCKED = -20.0;
+  #initializeEdges(edges) {
+    edges ??= canvas.edges.values();
+    edges = [...edges].filter(edge => this._includeEdge(edge));
+    const nEdges = edges.length;
+    this.subgeometries.length = nEdges;
+    for ( let i = 0; i < nEdges; i += 1 ) {
+      const edge = edges[i];
+      const subgeom = new this.subclass(this.source, edge);
+      this.geomEdgeMap.set(edge.id, subgeom);
+      this.subgeometries[i] = subgeom;
+    }
+  }
+
+  /**
+   * Initialize index and attributes for this source.
+   */
+  #initializeIndex() {
+    const bufferSize = this.subgeometries.length * this.subclassSize;
+    this.addIndex(Array.fromRange(bufferSize));
+  }
+
+  /**
+   * Initialize attributes for this source.
+   * @param {string} id         The name of the attribute
+   * @param {number} [size=1]   How many values makes up a single entry; e.g., {x, y} would be 2
+   * @param {PIXI.TYPES} [type = PIXI.TYPES.FLOAT]  The type of value stored
+   */
+  #initializeAttribute(id, size = 1, type = PIXI.TYPES.FLOAT) {
+    // TODO: Use other buffer types?
+    const bufferSize = this.subgeometries.length * this.subclassSize * size;
+    const buffer = new Float32Array(bufferSize);
+    const normalized = false;
+    this.addAttribute(id, buffer, size, normalized, type);
+  }
+
+  // ----- NOTE: Updates to geometry ----- //
+
+  /**
+   * Update based on indicated changes to the source.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
+   */
+  sourceUpdated(changes) {
+    let updated = false;
+    this.geomEdgeMap.forEach(geom => {
+      const hadUpdate = geom.sourceUpdated(changes);
+      updated ||= hadUpdate;
+    });
+    return updated;
+  }
+
+  // TODO: Handle linked edge updates.
+
+  /**
+   * Update based on indicated changes to the edge.
+   * @param {Edge} edge                   The edge that was updated.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
+   */
+  edgeUpdated(edge, changes) {
+    return this.geomEdgeMap.get(edge)?.edgeUpdated(changes);
+  }
+
+  /**
+   * Update shadow data based on the added edge, as necessary.
+   * @param {Edge} edge     Edge that was added to the scene.
+   * @returns {boolean} True if the added edge resulted in a change.
+   */
+  edgeAdded(edge) {
+    if ( this.geomEdgeMap.has(edge.id) ) return false;
+    if ( !this._includeEdge(edge) ) return false;
+    const subgeom = this.addSubGeometry();
+    subgeom.source = this.source;
+    subgeom.edge = edge;
+    this.geomEdgeMap.set(edge.id, subgeom);
+    this.subgeometries.push(subgeom);
+    subgeom._updateGeometry();
+    return true;
+  }
+
+  /**
+   * Update shadow data based on the removed edge, as necessary.
+   * @param {Edge} edge             Edge that was removed
+   * @returns {boolean} True if the added edge resulted in a change.
+   */
+  edgeRemoved(edge) {
+    if ( !this.geomEdgeMap.has(edge.id) ) return false;
+    const subgeom = this.geomEdgeMap.get(edge.id);
+    this.geomEdgeMap.delete(edge.id);
+    const idxToRemove = this.subgeometries.indexOf(subgeom);
+    return Boolean(this.removeSubGeometry(idxToRemove));
+  }
+
+  // ----- NOTE: Edge testing ----- //
+
+  /**
+   * Should this edge be included in the geometry for this source shadow?
+   * @param {Edge} edge
+   * @returns {boolean}   True if edge should be included
+   */
+  _includeEdge(edge) {
+    if ( edge.type !== "wall" && edge.type !== "regionWall" ) return false;
+    return this._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
+  }
+
+  /**
+   * Comparable to PointSourcePolygon.prototype._testWallInclusion
+   * Test for whether a given wall interacts with this source.
+   * Used to filter walls in the quadtree in _getWalls
+   * @param {Edge} edge
+   * @param {PIXI.Point} origin
+   * @returns {boolean}
+   */
+  _testEdgeInclusion(edge, origin) {
+    const src = this.source;
+
+    // Ignore walls that are non-blocking for this type.
+    const type = src.constructor.sourceType;
+    if ( !edge[type] || edge.isOpen ) return false;
+
+    // TODO: Handle elevation for ramps where walls are not equal
+    const { topZ, bottomZ } = edgeElevationZ(edge);
+
+    // If edge is entirely above the light, do not keep.
+    const elevationZ = src.elevationZ;
+    if ( bottomZ > elevationZ ) return false;
+
+    // If wall is entirely below the canvas and source is above, do not keep.
+    const minCanvasE = canvas.scene[MODULE_ID]?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
+    if ( topZ <= minCanvasE && elevationZ > minCanvasE ) return false;
+
+    // Ignore collinear walls
+    const side = edge.orientPoint(origin);
+    // Keep collinear. if ( !side ) return false;
+
+    // Ignore one-directional walls facing away from the origin.
+    if ( side === edge.dir ) return false;
+
+    // Ignore non-attenuated threshold walls where the threshold applies.
+    if ( !edge.threshold?.attenuation && this.thresholdApplies(edge) ) return false;
+
+    return true;
+  }
+
+  /**
+   * For threshold edges, determine if threshold applies.
+   * @param {Edge} edge
+   * @returns {boolean} True if the threshold applies.
+   */
+  thresholdApplies(edge) {
+    const src = this.source;
+    return edge.applyThreshold(src.constructor.sourceType, src, src.data.externalRadius);
+  }
+}
+
+export class PointSourceShadowMultiWallGeometry extends SourceShadowMultiWallGeometry {
+  /** @type {SubGeometry|PIXI.Geometry} */
+  subclass = PointSourceShadowMultiWallSubGeometry;
+
+  /** @type {number} */
+  subclassSize = 3;
+}
+
+
+export class DirectionalSourceShadowMultiWallGeometry extends SourceShadowMultiWallGeometry {
+  /** @type {SubGeometry|PIXI.Geometry} */
+  subclass = DirectionalSourceShadowMultiWallSubGeometry;
+
+  /** @type {number} */
+  subclassSize = 3;
+}
+
+
+export class SourceShadowMultiWallSubGeometry extends SubGeometry {
 
   /** @type {PointSource} */
   source;
@@ -61,22 +245,14 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    */
   linkedEdges = { a: new Set(), b: new Set() };
 
-  // ----- NOTE: Instantiation ----- //
-
-  /** @type {boolean} */
-  #initialized = false;
-
-  get initialized() { return this.#initialized; }
-
   /**
-   * Initialize the shadow properties for this source.
+   * @type {PointSource}
+   * @type {Edge}
    */
-  initialize(source, edge) {
-    if ( this.#initialized ) return;
+  constructor(source, edge) {
+    super();
     this.source = source;
     this.edge = edge;
-    this.constructWallGeometry();
-    this.#initialized = true;
   }
 
   // ----- NOTE: Getters / Setters ----- //
@@ -91,7 +267,9 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
   get edgeTopZ() { return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.edge.elevationLibGeometry.a.top ?? 1e08); }
 
   /** @type {number} */
-  get edgeBottomZ() { return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.edge.elevationLibGeometry.a.bottom ?? -1e08); }
+  get edgeBottomZ() {
+    return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.edge.elevationLibGeometry.a.bottom ?? -1e08);
+  }
 
   /**
    * Sense type for this edge and source combination.
@@ -104,7 +282,9 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    * For threshold edges, determine if threshold applies.
    * @type {boolean} True if the threshold applies.
    */
-  get thresholdApplies() { return this.edge.applyThreshold(this.sourceType, this.source, this.source.data.externalRadius); }
+  get thresholdApplies() {
+    return this.edge.applyThreshold(this.sourceType, this.source, this.source.data.externalRadius);
+  }
 
   // ----- NOTE: Threshold calculation ----- //
 
@@ -217,34 +397,6 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
   // ----- NOTE: Geometry ----- //
 
   /**
-   * Calculate the wall geometry for this source.
-   * The base assumes a single shadow from the light center.
-   * @param {Point3d[]} [samples = this.sourceOrigin]     The points within the light to use
-   */
-  constructWallGeometry() {
-    // Add index.
-    this.addIndex(Array.fromRange(3)); // 3 vertices each.
-
-    // Set the wall values.
-    // Must repeat the wall data for each vertex. (x3)
-    const aWallCorner0 = Array(4 * 3);
-    const aWallCorner1 = Array(4 * 3);
-    this.#updateCorners(aWallCorner0, aWallCorner1);
-
-    const aWallSenseType = Array(1 * 3);
-    this.#updateSenseType(aWallSenseType);
-
-    const aThresholdRadius2 = Array(1 * 3);
-    this.#updateThresholdRadius2(aThresholdRadius2);
-
-    // Add the data to the buffer.
-    this.addAttribute("aWallCorner0", aWallCorner0, 4);
-    this.addAttribute("aWallCorner1", aWallCorner1, 4);
-    this.addAttribute("aWallSenseType", aWallSenseType, 1);
-    this.addAttribute("aThresholdRadius2", aThresholdRadius2, 1);
-  }
-
-  /**
    * Update the edge corner data.
    * @param {number[12]} aWallCorner0     Array or buffer array of vertices to update in place
    * @param {number[12]} aWallCorner1     Array or buffer array of vertices to update in place
@@ -339,16 +491,6 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     };
   }
 
-  /**
-   * Should this edge be included in the geometry for this source shadow?
-   * @param {Edge} edge
-   * @returns {boolean}   True if edge should be included
-   */
-  _includeEdge(edge) {
-    if ( edge.type !== "wall" && edge.type !== "regionWall" ) return false;
-    return this.source[MODULE_ID]._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
-  }
-
   // ----- NOTE: Updates to geometry ----- //
 
   /**
@@ -356,7 +498,7 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
    */
-  sourceUpdated(changes) {
+  sourceUpdated(_changes) {
     return false;
   }
 
@@ -386,6 +528,15 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
   }
 
   /**
+   * Update the entire geometry.
+   */
+  _updateGeometry() {
+    this._updateCorners();
+    this._updateThresholdRadius2();
+    this._updateSenseType();
+  }
+
+  /**
    * Update the edge geometry for this source-edge relationship.
    */
   _updateCorners() {
@@ -410,6 +561,17 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     this.#updateThresholdRadius2(aThresholdRadius2);
   }
 
+
+  /**
+   * Should this edge be included in the geometry for this source shadow?
+   * @param {Edge} edge
+   * @returns {boolean}   True if edge should be included
+   */
+  _includeEdge(edge) {
+    if ( edge.type !== "wall" && edge.type !== "regionWall" ) return false;
+    return this.source[MODULE_ID]._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source));
+  }
+
   // ----- NOTE: Cleanup ----- //
 
   /**
@@ -426,7 +588,7 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
   drawEdge() { Draw.segment(this.edge, { width: 2 }); }
 }
 
-export class PointSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
+export class PointSourceShadowMultiWallSubGeometry extends SourceShadowMultiWallSubGeometry {
   // ----- NOTE: Getters / Setters ----- //
 
   /** @type {number} */
@@ -441,38 +603,26 @@ export class PointSourceShadowSingleWallGeometry extends SourceShadowSingleWallG
     const light = new PIXI.Circle(this.sourceOrigin.x, this.sourceOrigin.y, this.sourceSize);
     Draw.shape(light, { color: Draw.COLORS.yellow, fillColor: Draw.COLORS.yellow, fillAlpha: 0.5 });
   }
+}
+
+export class DirectionalSourceShadowMultiWallSubGeometry extends SourceShadowMultiWallSubGeometry {
 
 }
 
-export class DirectionalSourceShadowSingleWallGeometry extends SourceShadowSingleWallGeometry {
+/* Testing point light
 
-}
-
-// ----- NOTE: Helper functions ----- //
-
-
-/** Testing single shadow
 MODULE_ID = "elevatedvision"
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 Draw = CONFIG.GeometryLib.Draw;
 api = game.modules.get("elevatedvision").api
-SourceShadowWallGeometry2 = api.testing.SourceShadowWallGeometry2
-l = canvas.lighting.placeables[0];
-edge0 = canvas.walls.placeables[0].edge
-geom = new SourceShadowWallGeometry2(l.lightSource, edge0)
-*/
+SourceShadowMultiWallGeometry = api.testing.SourceShadowMultiWallGeometry
+SourceShadowMultiWallSubGeometry = api.testing.SourceShadowMultiWallSubGeometry
 
-/** Testing sized shadow
-MODULE_ID = "elevatedvision"
-Point3d = CONFIG.GeometryLib.threeD.Point3d
-Draw = CONFIG.GeometryLib.Draw;
-api = game.modules.get("elevatedvision").api
-SizedSourceShadowWallGeometry2 = api.testing.SizedSourceShadowWallGeometry2
-l = canvas.lighting.placeables[0];
-edge0 = canvas.walls.placeables[0].edge
-geom = new SizedSourceShadowWallGeometry2(l.lightSource, edge0)
-geom.drawLight()
-geom.drawShadowTriangles({ width: 0})
-geom.drawEdge()
+
+let [l] = canvas.lighting.placeables;
+
+geom = SourceShadowMultiWallGeometry.create(l.lightSource)
+geom.initialize()
+
 
 */

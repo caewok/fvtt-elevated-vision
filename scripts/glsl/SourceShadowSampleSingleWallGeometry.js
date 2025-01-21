@@ -111,8 +111,8 @@ export class SourceShadowSampleSingleWallGeometry extends PIXI.Geometry {
    */
   closerEndpoint(pts) {
     // Closer endpoint can be determined with relation to the light center.
-    const d0 = PIXI.Point.distanceSquared(pts[0], this.source);
-    const d1 = PIXI.Point.distanceSquared(pts[1], this.source);
+    const d0 = PIXI.Point.distanceSquaredBetween(pts[0], this.source);
+    const d1 = PIXI.Point.distanceSquaredBetween(pts[1], this.source);
     return Number(d1 < d0);
   }
 
@@ -183,19 +183,21 @@ export class SourceShadowSampleSingleWallGeometry extends PIXI.Geometry {
       // The triangle is a line.
       if ( this.isInfiniteShadow(A) ) {
         // Where A --> wall intersects the canvas edge.
-        const rWall = Ray2d(A2d, a.subtract(A2d));
+        const rWall = new Ray2d(A2d, a.subtract(A2d));
         const edge = this.whichCanvasEdge(rWall);
         const ix = new PIXI.Point();
         rWall.intersectPoints(edge.A, edge.B, ix);
         return [A2d, ix, ix];
       }
       // Where A --> further wall endpoint intersects the canvas plane.
-      const furthestPoint = this.closerEndpoint([a, b]);
+      const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+      const closerIdx = this.closerEndpoint([a, b]);
+      const furthestPoint = [a, b][1 - closerIdx];
       const furthestPoint3d = new Point3d(furthestPoint.x, furthestPoint.y, this.edgeTopZ);
       const ixP = new Point3d();
       const hasFurthestPoint = this._furthestShadowPoint(A, furthestPoint3d, ixP); // Wall 1 is further.
       if ( !hasFurthestPoint ) new Error(`${MODULE_ID}|shadowTriangle|No furthest point found!`);
-      return [A.xy, ixP.xy, ixP.xy];
+      return [A2d, ixP.to2d(), ixP.to2d()];
     }
 
     // For infinite shadow, extend triangle formed by light point and wall to the edge of the canvas.

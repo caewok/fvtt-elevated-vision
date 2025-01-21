@@ -325,7 +325,7 @@ export class SourceShadowMultiWallSubGeometry extends SubGeometry {
       // The triangle is a line.
       if ( this.isInfiniteShadow(A) ) {
         // Where A --> wall intersects the canvas edge.
-        const rWall = Ray2d(A2d, a.subtract(A2d));
+        const rWall = new Ray2d(A2d, a.subtract(A2d));
         const edge = this.whichCanvasEdge(rWall);
         const ix = new PIXI.Point();
         rWall.intersectPoints(edge.A, edge.B, ix);
