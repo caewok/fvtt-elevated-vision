@@ -35,6 +35,25 @@ function updateAmbientLightHook(doc, data, _options, _userId) {
   }
 }
 
+// Debugging
+function refreshAmbientLight(doc, flags) {
+  CONFIG.GeometryLib.Draw.clearDrawings();
+  const ev = doc.lightSource?.elevatedvision
+    ?? doc._original?.lightSource?.elevatedvision
+    ?? doc._preview?.lightSource?.elevatedvision;
+  if ( !ev ) return;
+  const api = game.modules.get(MODULE_ID).api;
+  const shaderTests = api.testing.SizedShadowsTest.fromMesh(ev.shadowMesh);
+  for ( const shaderTest of shaderTests ) {
+    shaderTest.canvasElevation = 0;
+    shaderTest.vertexCalculations(2);
+    shaderTest.drawLight();
+    shaderTest.drawWall();
+    shaderTest.drawPenumbraTriangle();
+    shaderTest.drawSideShadowRays();
+  }
+}
+
 // ----- NOTE: Ambient Light Modifications ----- //
 
 
@@ -52,7 +71,8 @@ function hoverAmbientLightHook(light, hover) {
 
 PATCHES.BASIC.HOOKS = {
   updateAmbientLight: updateAmbientLightHook,
-  hoverAmbientLight: hoverAmbientLightHook
+  hoverAmbientLight: hoverAmbientLightHook,
+  refreshAmbientLight
 };
 
 // Note: Ambient Light Wraps
