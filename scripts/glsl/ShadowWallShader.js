@@ -390,7 +390,7 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
    * 3 vertices: light, ix for corner 1, ix for corner 2
    * @type {string}
    */
-  static vertexShader = GLSL_SIZED_VERTEX;
+  static vertexShader = GLSL_SIZED_VERTEX2;
 
   // NOTE: SizedPointSourceShadowWallShader.fragmentShader
   /**
@@ -398,7 +398,7 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
    * See lightEncoding.
    * This mask shader is binary: encodes either full light or no light.
    */
-  static fragmentShader = GLSL_SIZED_FRAGMENT;
+  static fragmentShader = GLSL_SIZED_FRAGMENT2;
 
   /**
    * Set the basic uniform structures.

@@ -253,8 +253,13 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vTang
 
   // D and G are set by the intersection of their respective penumbra/umbra lines.
   // Most of the matching work done in sideShadowRays.
-  lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[0], D);
-  lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[1], G);
+  // TODO: Is setting D and G in advance sufficient?
+  D = W0;
+  G = W0;
+  bool hasIx0 = lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.umbra[0], D);
+  bool hasIx1 = lineLineIntersection(sideShadowRays.penumbra[1], sideShadowRays.umbra[1], G);
+  if ( !hasIx0 ) D = W0;
+  if ( !hasIx1 ) G = W0;
 
   // ∆DEF and ∆GHI represent the furtherest extent of the shadow because D and G are
   // near-tangent points.
@@ -280,11 +285,17 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vTang
 
   // Collinear: F->I or E->H form the line.
   // Noncollinear: Wall direction or E->F or H->I
-  vec2 a = vec2[2](E, F)[collinearIdx];
-  vec2 b = vec2[2](F, I)[collinearIdx];
-  Ray2d rab = Ray2d(furthestPoint, b - a);
+  // But E, F, I could be malformed if the side shadow ray runs parallel to and through the wall.
+  // So use perpendicular to the median direction.
+  vec2 rabDir = wall.direction;
+  if ( nearCollinear ) {
+    vec2 meanDir = (sideShadowRays.penumbra[0].direction + sideShadowRays.penumbra[1].direction) * 0.5;
+    rabDir = vec2(-meanDir.y, meanDir.x);
+  }
+  Ray2d rab = Ray2d(furthestPoint, rabDir);
   lineLineIntersection(sideShadowRays.penumbra[0], rab, B);
   lineLineIntersection(sideShadowRays.penumbra[1], rab, C);
+
 
   // For debugging, test side shadows
   /*
@@ -347,11 +358,11 @@ bool shadowTriangles(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vT
   nearFarTri1 = vec2[3](G, H, I);
 
   // Side triangles used for gradient shading. Vary based on wall location relative to light.
-  sideTri0 = vec2[3](W0, B, I);
-  sideTri1 = vec2[3](W1, C, F);
+  vec2[3] sTri0;
+  vec2[3] sTri1;
   if ( nearCollinear ) {
-    sideTri0 = vec2[3](W0, B, W1);
-    sideTri1 = vec2[3](W0, C, W1);
+    sTri0 = vec2[3](W0, B, W1);
+    sTri1 = vec2[3](W0, C, W1);
 
     // Used to shade the portion unblocked by the wall, after the endpoints.
     // Lightest along the line of the wall. To replicate, connect the umbra triangle using
@@ -366,11 +377,22 @@ bool shadowTriangles(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vT
       lineLineIntersection(Ray2d(W1, normalizedDirection(W1, I)), Ray2d(F, perpDir), newI);
       umbraTri = vec2[3](W1, newI, F);
     }
+  } else {
+    // Extend the wall -> inside range to penumbra triangle edge.
+    vec2 ixI;
+    vec2 ixF;
+    Ray2d rBC = Ray2d(B, C - B);
+    lineLineIntersection(rBC, Ray2d(W0, I - W0), ixI);
+    lineLineIntersection(rBC, Ray2d(W1, F - W1), ixF);
+    sTri0 = vec2[3](W0, B, ixI);
+    sTri1 = vec2[3](W1, C, ixF);
   }
 
   // Change the side triangles to isoceles so gradient shading works.
-  // sideTri0 = makeIsoceles(sideTri0); // Need to set sideTri to inout if using
-  // sideTri1 = makeIsoceles(sideTri1); // Need to set sideTri to inout if using
+  sideTri0 = sTri0;
+  sideTri1 = sTri1;
+  // sideTri0 = makeIsoceles(sTri0);
+  // sideTri1 = makeIsoceles(sTri1);
   return nearCollinear;
 }
 
@@ -394,6 +416,11 @@ void main() {
 
   // Side shadows.
   ShadowRays2d sideShadowRays = calculateSideShadowRays(wall);
+
+  // Lowest and highest point of the sphere that forms a tangent with the wall.
+  vec3 wallMid3d = vec3(wall.mid, wall.top[0].z);
+  vec3[2] vTangents;
+  verticalTangents(wallMid3d, vTangents);
 
   // Triangles defining parts of the shadow.
   vec2[3] penumbraTri;
