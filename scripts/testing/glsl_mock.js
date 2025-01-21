@@ -1424,8 +1424,6 @@ export function tangentPoints(circle, p, tangents) {
  * @returns {bool}
  */
 export function verticalTangentPoints(pt, center, radius, tangents3d) {
-  const { Circle, distance, tangentPoints, projectRay, Ray2d } = glsl;
-
   // Treat center of sphere as 0,0.
   const pt2d = to2dCutaway(pt, center, pt);
   const lightCir = Circle({
@@ -1467,7 +1465,6 @@ export function verticalTangentPoints(pt, center, radius, tangents3d) {
  * @returns {vec2}
  */
 export function to2dCutaway(currPt, start, end) {
-  const { distance } = glsl;
   const distCS = distance(currPt, start);
   const pt = vec2(distCS, currPt.z);
   const distCE = distance(currPt, end);
@@ -1483,14 +1480,12 @@ export function to2dCutaway(currPt, start, end) {
  * @returns {vec3}
  */
 export function from2dCutaway(cutawayPt, start, end) {
-  const { Ray2d, projectRay } = glsl;
   const r2d = Ray2d(start.xy, normalize(end.xy.subtract(start.xy)));
   const xy = projectRay(r2d, cutawayPt.x);
   return vec3(xy, cutawayPt.y);
 }
 
 export function to2dCutawaySquared(currPt, start, end) {
-  const { distanceSquared } = glsl;
   const distCS = distanceSquared(currPt, start);
   const pt = vec2(distCS, currPt.z);
   const distCE = distanceSquared(currPt, end);
@@ -1506,7 +1501,6 @@ export function to2dCutawaySquared(currPt, start, end) {
  * @returns {vec3}
  */
 export function from2dCutawaySquared(cutawayPt, start, end) {
-  const { Ray2d, projectRayDistanceSquared } = glsl;
   const r2d = Ray2d(start.xy, normalize(end.xy.subtract(start.xy)));
   const xy = projectRayDistanceSquared(r2d, cutawayPt.x);
   return vec3(xy, cutawayPt.y);
