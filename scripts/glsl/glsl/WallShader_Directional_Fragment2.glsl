@@ -61,14 +61,14 @@ int wallCollision(in vec3 dir, in float elevation) {
   vec3 b3d = vec3(vVertexPosition, elevation) + dir;
 
   // Test for horizontal collision. Wall endpoints are opposite sides of the light ray.
-  bool hCollision = orient(vVertexPosition, b3d.xy, hWall0) * orient(vVertexPosition, b3d.xy, hWall1) < 0.0;
+  bool hCollision = OPP_SIDE(orient(vVertexPosition, b3d.xy, hWall0), orient(vVertexPosition, b3d.xy, hWall1));
   if ( !hCollision ) return 0;
 
   // Test for vertical collision. Transform coordinates based on direction to wall.
   vec2 vA = vec2(vEdgeDist, elevation);
   float distB = distanceToLine(b3d.xy, hWall0, normalizedDirection(hWall0, hWall1));
   vec2 vB = vec2(distB, b3d.z);
-  bool vCollision = orient(vA, vB, vWall0) * orient(vA, vB, vWall1) < 0.0;
+  bool vCollision = OPP_SIDE(orient(vA, vB, vWall0), orient(vA, vB, vWall1));
   if ( !vCollision ) return 0;
   return 1;
 }

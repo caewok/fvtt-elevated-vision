@@ -38,6 +38,12 @@ ${defineFunction("distanceToLine")}
 #define RIGHT                             0
 #define LEFT                              1
 
+#define SAME_SIDE(o0, o1) (o0 * o1 > 0.0)
+#define OPP_SIDE(o0, o1) (o0 * o1 < 0.0)
+#define COLLINEAR(o) (almostEqual(o, 0.0, 1.0e-06))
+#define COUNTERCLOCKWISE(o) (o > 0.0)
+#define CLOCKWISE(o) (o < 0.0)
+
 // Structs to simplify the data organization.
 
 /** Representation of a Foundry wall */
@@ -183,7 +189,7 @@ bool adjustSideShadowForLinkedEndpoints(inout ShadowDirections2d shadowDirs, in 
   // 3: Linked wall in quadrant with light, not blocking.
   float oLinkWall = orient(wXY, linkPt, other);
   float oLinkMid = orient(wXY, linkPt, midPt);
-  bool linkBetweenWallAndMid = oLinkWall * oLinkMid < 0.0;
+  bool linkBetweenWallAndMid = OPP_SIDE(oLinkWall, oLinkMid);
   if ( !linkBetweenWallAndMid ) return true;
 
   // 4. possible block.
@@ -192,7 +198,7 @@ bool adjustSideShadowForLinkedEndpoints(inout ShadowDirections2d shadowDirs, in 
   vec2 umbraPt = projectRay(umbraR, 1.0);
   float oUmbraLink = orient(wXY, umbraPt, linkPt);
   float oUmbraMid = orient(wXY, umbraPt, midPt);
-  bool linkAfterUmbra = oUmbraLink * oUmbraMid > 0.0;
+  bool linkAfterUmbra = SAME_SIDE(oUmbraLink, oUmbraMid);
   if ( !linkAfterUmbra ) return true;
 
   // Linked wall is after umbra, moving toward mid.
@@ -420,7 +426,7 @@ bool furthestShadowPoint(in vec3 samplePt, in vec3 wallPt, out vec3 ixP) {
 vec2[3] shadowTriangle(in vec3 O, in Wall wall) {
   vec2 a = wall.top[0].xy;
   vec2 b = wall.top[1].xy;
-  if ( almostEqual(orient(O.xy, a, b), 0.0, 1e-06) ) {
+  if ( COLLINEAR(orient(O.xy, a, b)) ) {
     // The triangle is a line.
     if ( isInfiniteTopShadow(O) ) {
       // Where O --> wall intersects the canvas edge.

@@ -9,7 +9,7 @@ precision ${PRECISION_VERTEX} float;
 
 // Type of algorithm to use to generate collision test points.
 // 0: random 3d, 1: random 2d, 2: fixed spacing 2d
-#define ALG_TYPE              2
+#define ALG_TYPE              0
 
 uniform sampler2D uTerrainSampler;
 uniform vec3 uLightPosition;
@@ -77,7 +77,7 @@ float wallCollision(in Ray r) {
   vec3 b = projectRay(r, 1.0);
 
   // Test for horizontal collision. Wall endpoints are opposite sides of the light ray.
-  bool hCollision = orient(r.origin.xy, b.xy, hWall0) * orient(r.origin.xy, b.xy, hWall1) < 0.0;
+  bool hCollision = OPP_SIDE(orient(r.origin.xy, b.xy, hWall0), orient(r.origin.xy, b.xy, hWall1));
   if ( !hCollision ) return 0.0;
 
   // Test for vertical collision. Transform coordinates based on direction to wall.
@@ -89,7 +89,7 @@ float wallCollision(in Ray r) {
   float distB = distance(b.xy, wallIx);
   vec2 vA = vec2(distA, r.origin.z);
   vec2 vB = vec2(distB, b.z);
-  bool vCollision = orient(vA, vB, vWall0) * orient(vA, vB, vWall1) < 0.0;
+  bool vCollision = OPP_SIDE(orient(vA, vB, vWall0), orient(vA, vB, vWall1));
   if ( !vCollision ) return 0.0;
   return 1.0;
 }

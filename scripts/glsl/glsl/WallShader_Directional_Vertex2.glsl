@@ -60,7 +60,7 @@ int closerEndpoint(vec2[2] pts) {
   vec2 perpDir = vec2(dirMid.y, -dirMid.x);
   Ray2d r01 = Ray2d(pts[0], perpDir);
   vec2 b = projectRay(r01, 1.0);
-  return int(orient(pts[0], b, pts[1]) > 0.0);
+  return int(CLOCKWISE(orient(pts[0], b, pts[1])));
 }
 
 ${PENUMBRA_VERTEX_FUNCTIONS}
@@ -126,7 +126,7 @@ ShadowDirections2d calculateSideShadowDirections(in int idx, in Wall wall) {
  * @param {int} idx1
  */
 void _cmpSwapTangentRays(inout Ray2d[4] tangentRays, inout vec2[4] projectedPoints, int idx0, int idx1) {
-  if ( orient(tangentRays[idx0].origin, projectedPoints[idx0], projectedPoints[idx1]) > 0.0 ) {
+  if ( COUNTERCLOCKWISE(orient(tangentRays[idx0].origin, projectedPoints[idx0], projectedPoints[idx1])) ) {
     Ray2d tmpRay = tangentRays[idx0];
     tangentRays[idx0] = tangentRays[idx1];
     tangentRays[idx1] = tmpRay;
