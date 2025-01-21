@@ -4,9 +4,12 @@ precision ${PRECISION_VERTEX} float;
 
 // #define SHADOW true
 
-#define TOTAL_COLLISIONS    76
+#define TOTAL_COLLISIONS      76
 #define TOTAL_MID_COLLISIONS  ((TOTAL_COLLISIONS / 2) - 4)
-#define RANDOM              0
+
+// Type of algorithm to use to generate collision test points.
+// 0: random 3d, 1: random 2d, 2: fixed spacing 2d
+#define ALG_TYPE              2
 
 uniform sampler2D uTerrainSampler;
 uniform vec3 uLightPosition;
@@ -107,7 +110,7 @@ float shadowPercentage() {
   float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
   vec3 a = vec3(vVertexPosition, elevation);
 
-  #if RANDOM
+  #if (ALG_TYPE == 0)
 
   float numCollisions = 0.0;
   float totalCollisions = float(TOTAL_COLLISIONS);
@@ -125,7 +128,35 @@ float shadowPercentage() {
   // TODO: Add in adjacent pixel values as part of the average here.
   return numCollisions / totalCollisions;
 
-  #else
+  #elif (ALG_TYPE == 1)
+  /**
+   * Slice the light sphere such that is creates a 2d circle orthogonal to the
+   * line from the fragment to the center of the sphere.
+   * If the light and fragment are at the same elevation, this would be a vertical circle.
+   * Use this circle to generate random test points along the horizontal and vertical lines.
+   */
+  Plane lightCircle = Plane(uLightPosition, normalizedDirection(a, uLightPosition));
+  vec3 u;
+  vec3 v;
+  planeAxisVectors(lightCircle, u, v);
+
+  // Add up the collisions for random points within the 2d circle.
+  float numCollisions = 0.0;
+  float totalCollisions = float(TOTAL_COLLISIONS);
+  for ( int i = 0; i < TOTAL_COLLISIONS; i += 1 ) {
+    float j = float(i) + 1.0;
+    float x = hash(uTime + j);
+    float y = hash(uTime + (j * totalCollisions));
+
+    // Pseudo-Gaussian 2d distribution.
+    vec2 rndDir = (x * y == 0.0) ? vec2(0.0) : normalize(vec2(x, y));
+    vec2 pt2d = linearConversion(rndDir, 0.0, 1.0, -1.0, 1.0) * uLightSize;
+    vec3 pos = planePointTo3d(pt2d, lightCircle, u, v);
+    numCollisions += wallCollision(Ray(a, normalizedDirection(a, pos)));
+  }
+  return numCollisions / totalCollisions;
+
+  #elif (ALG_TYPE == 2)
 
   /**
    * Slice the light sphere such that is creates a 2d circle orthogonal to the
