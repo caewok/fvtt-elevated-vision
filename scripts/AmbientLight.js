@@ -50,7 +50,11 @@ function refreshAmbientLight(doc, flags) {
     shaderTest.drawLight();
     shaderTest.drawWall();
     shaderTest.drawPenumbraTriangle();
-    shaderTest.drawSideShadowRays();
+    // shaderTest.drawSideShadowRays();
+    //shaderTest.drawFarPenumbraTri();
+    //shaderTest.drawFarUmbraTri();
+    shaderTest.drawNearFarTri(0);
+    shaderTest.drawNearFarTri(1);
   }
 }
 

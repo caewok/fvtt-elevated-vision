@@ -128,7 +128,7 @@ float shadowPercentage() {
     nearLUmbraDist = nearLUmbraDistance(elevation);
     nearRUmbraDist = nearRUmbraDistance(elevation);
   }
-  //return 1.0;
+  // return 1.0;
 
   /*
   if ( vLREdgeDist > farLPenumbraDist ) return 0.10;
@@ -248,10 +248,11 @@ float shadowPercentage() {
   }
   */
 
-  // return farLShadow;
+  return side1Shadow;
   // return farShadow * nearShadow;
   // return farLShadow * nearLShadow * farRShadow * nearRShadow;
   // return side0Shadow * side1Shadow;
+  // return farShadow * nearShadow;
 
   return side0Shadow * side1Shadow
     * farShadow * nearShadow
