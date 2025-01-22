@@ -1745,7 +1745,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       // Measure from the light; the points will be on the opposite side.
       // If light center is collinear with the wall, ixP will be collinear and can just pick a side.
       // ccw/left is positive; cw/right is negative
-      if ( COUNTERCLOCKWISE(orient(W0, W1, uLightPosition.xy)) ) rlIdx = LEFT;
+      if ( CLOCKWISE(orient(W0, W1, uLightPosition.xy)) ) rlIdx = LEFT;
 
       // Which nearFarTri is on that side?
       // sides[RIGHT, LEFT]

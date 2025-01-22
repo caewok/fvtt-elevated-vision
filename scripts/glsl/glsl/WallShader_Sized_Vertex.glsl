@@ -575,7 +575,7 @@ void defineFlats(in Wall wall,
     // If light center is collinear with the wall, ixP will be collinear and can just pick a side.
     // ccw/left is positive; cw/right is negative
     // TODO: Why not negate orient like in WallShaderTest3?
-    if ( COUNTERCLOCKWISE(orient(W0, W1, uLightPosition.xy)) ) rlIdx = LEFT;
+    if ( CLOCKWISE(orient(W0, W1, uLightPosition.xy)) ) rlIdx = LEFT;
 
     // Which nearFarTri is on that side?
     // sides[RIGHT, LEFT]

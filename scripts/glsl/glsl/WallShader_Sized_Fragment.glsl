@@ -252,7 +252,7 @@ float shadowPercentage() {
   }
   */
 
-  return farShadow;
+  // return farShadow;
   // return farShadow * nearShadow;
   // return farLShadow * nearLShadow * farRShadow * nearRShadow;
   // return side0Shadow * side1Shadow;
