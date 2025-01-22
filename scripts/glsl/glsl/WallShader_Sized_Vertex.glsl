@@ -612,8 +612,8 @@ void defineFlats(in Wall wall,
   // The far umbra shadow is controlled by the upper tangent.
   if ( !isInfiniteTopShadow(upperTangent) ) {
     // Use closest wall point for the far umbra shadow.
-    fFarDistances[UMBRA] = furthestShadowDistance(upperTangent,
-        hTangents[0], hTangents[1], wall.top[1], rEdgeWall);
+    furthestShadowPoint(upperTangent, wall.top[1], ixP);
+    fFarDistances[UMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
     if ( isCollinear ) {
       // First the rlIdx side. Use the above umbra point.
       fFarRLUmbraDistances[rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
@@ -642,9 +642,9 @@ void defineFlats(in Wall wall,
       }
     }
     if ( !isInfiniteBottomShadow(lowerTangent) ) {
-        fNearDistances[UMBRA] = furthestShadowDistance(lowerTangent,
-          hTangents[0], hTangents[1], wall.bottom[0], rEdgeWall);
-        if ( isCollinear ) {
+      furthestShadowPoint(lowerTangent, wall.bottom[0], ixP);
+      fNearDistances[UMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
+      if ( isCollinear ) {
         // First the rlIdx side. Use the above umbra point.
         fNearRLUmbraDistances[rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
 

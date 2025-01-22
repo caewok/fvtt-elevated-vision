@@ -1782,8 +1782,8 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     // The far umbra shadow is controlled by the upper tangent.
     if ( !this.isInfiniteTopShadow(upperTangent) ) {
       // Use closest wall point for the far umbra shadow.
-      this.fFarDistances[UMBRA] = this.furthestShadowDistance(upperTangent,
-        hTangents[0], hTangents[1], wall.top[1], rEdgeWall);
+      this._furthestShadowPoint(upperTangent, wall.top[1], ixP);
+      this.fFarDistances[UMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
       if ( isCollinear ) {
         // First the rlIdx side. Use the above umbra point.
         this.fFarRLUmbraDistances[rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
@@ -1812,8 +1812,8 @@ export class SizedShadowsTest extends PenumbraBasicTest {
         }
       }
       if ( !this.isInfiniteBottomShadow(lowerTangent) ) {
-        this.fNearDistances[UMBRA] = this.furthestShadowDistance(lowerTangent,
-          hTangents[0], hTangents[1], wall.bottom[0], rEdgeWall);
+        this._furthestShadowPoint(lowerTangent, wall.bottom[0], ixP);
+        this.fNearDistances[UMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
         if ( isCollinear ) {
           // First the rlIdx side. Use the above umbra point.
           this.fNearRLUmbraDistances[rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
