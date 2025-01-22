@@ -514,6 +514,29 @@ void defineVaryings(bool nearCollinear,
 }
 
 /**
+ * Determine the furthest canvas point from a given line.
+ * Three options: from a vertical tangent or from one of the two horizontal tangents.
+ * @param {vec3} vPt        Vertical tangent point to test
+ * @param {vec3} hPt0       Horizontal tangent point to test
+ * @param {vec3} hPt1       Horizontal tangent point to test
+ * @param {vec3} wallPt     Point along the wall that is intersected
+ * @param {Ray2d} distR     The ray representing the line for which distance is measured
+ * @returns {number} Furthest distance
+ */
+float furthestShadowDistance(in vec3 vPt, in vec3 hPt0, in vec3 hPt1, in vec3 wallPt, in Ray2d distR) {
+  vec3 ixV;
+  vec3 ixH0;
+  vec3 ixH1;
+  furthestShadowPoint(vPt, wallPt, ixV);
+  furthestShadowPoint(hPt0, wallPt, ixH0);
+  furthestShadowPoint(hPt1, wallPt, ixH1);
+  float dist2V = distanceSquaredToLine(ixV.xy, distR.origin, distR.direction);
+  float dist2H0 = distanceSquaredToLine(ixH0.xy, distR.origin, distR.direction);
+  float dist2H1 = distanceSquaredToLine(ixH1.xy, distR.origin, distR.direction);
+  return sqrt(max(max(dist2V, dist2H0), dist2H1));
+}
+
+/**
  * Calculate the flat variables, including near/far ratios.
  * @param {Wall} wall
  * @param {vec2} W0
@@ -573,12 +596,11 @@ void defineFlats(in Wall wall,
   // Distinguish left and right.
   // vLREdgeDist defined as positive if to left of (ccw to) the wall; negative if right (cw)
   // The far penumbra shadow by definition is at the far penumbraTri edge.
+  vec3[2] hTangents = vec3[2](vec3(nearFarTri0[0], uLightPosition.z), vec3(nearFarTri1[0], uLightPosition.z));
+  vec3 ixP;
   if ( !isInfiniteTopShadow(lowerTangent) ) {
-    // fFarDistances[PENUMBRA] = distanceToLine(penumbraTri[2], wall.top[0].xy, wall.direction);
-    vec3 ixP;
-    furthestShadowPoint(lowerTangent, wall.top[1], ixP);
-    fFarDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
-
+    fFarDistances[PENUMBRA] = furthestShadowDistance(lowerTangent,
+      hTangents[0], hTangents[1], wall.top[1], rEdgeWall);
     if ( isCollinear ) {
       // First the rlIdx side.
       furthestShadowPoint(vec3(sameSideOrigin, uLightPosition.z), wall.top[1], ixP);
@@ -593,10 +615,8 @@ void defineFlats(in Wall wall,
   // The far umbra shadow is controlled by the upper tangent.
   if ( !isInfiniteTopShadow(upperTangent) ) {
     // Use closest wall point for the far umbra shadow.
-    vec3 ixP;
-    furthestShadowPoint(upperTangent, wall.top[1], ixP);
-    fFarDistances[UMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
-
+    fFarDistances[UMBRA] = furthestShadowDistance(upperTangent,
+        hTangents[0], hTangents[1], wall.top[1], rEdgeWall);
     if ( isCollinear ) {
       // First the rlIdx side. Use the above umbra point.
       fFarRLUmbraDistances[rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
@@ -612,10 +632,8 @@ void defineFlats(in Wall wall,
   if ( wallIsFloating() ) {
     if ( !isInfiniteBottomShadow(upperTangent) ) {
       // Use closest wall point for the near penumbra shadow.
-      vec3 ixP;
-      furthestShadowPoint(upperTangent, wall.top[0], ixP);
-      fNearDistances[PENUMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
-
+      fNearDistances[PENUMBRA] = furthestShadowDistance(upperTangent,
+          hTangents[0], hTangents[1], wall.bottom[0], rEdgeWall);
       if ( isCollinear ) {
         // First the rlIdx side.
         furthestShadowPoint(vec3(sameSideOrigin, uLightPosition.z), wall.bottom[1], ixP);
@@ -627,11 +645,9 @@ void defineFlats(in Wall wall,
       }
     }
     if ( !isInfiniteBottomShadow(lowerTangent) ) {
-      vec3 ixP;
-      furthestShadowPoint(lowerTangent, wall.top[0], ixP);
-      fNearDistances[UMBRA] = distanceToLine(ixP.xy, rEdgeWall.origin, rEdgeWall.direction);
-
-      if ( isCollinear ) {
+        fNearDistances[UMBRA] = furthestShadowDistance(lowerTangent,
+          hTangents[0], hTangents[1], wall.bottom[0], rEdgeWall);
+        if ( isCollinear ) {
         // First the rlIdx side. Use the above umbra point.
         fNearRLUmbraDistances[rlIdx] = distanceToLine(ixP.xy, rLRWall.origin, rLRWall.direction);
 

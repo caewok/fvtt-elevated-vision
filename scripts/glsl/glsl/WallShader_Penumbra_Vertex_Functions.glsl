@@ -520,7 +520,7 @@ Ray2d leftRightBisector(in Wall wall, in bool isCollinear) {
  * @returns {Ray2d}
  */
 Ray2d frontBackBisector(in Wall wall, in bool isCollinear) {
-  if ( isCollinear ) return Ray2d(wall.top[0].xy, vec2(-wall.direction.y, wall.direction.x));
+  if ( isCollinear ) return Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
   return Ray2d(wall.mid, wall.direction);
 }
 
