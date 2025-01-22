@@ -239,6 +239,23 @@ export class DirectionalSourceShadowMultiWallGeometry extends SourceShadowMultiW
 
 export class SourceShadowMultiWallSubGeometry extends SubGeometry {
 
+  /**
+   * Number of pixels to extend edges, to ensure overlapping shadows for connected edges.
+   * @type {number}
+   */
+  static WALL_OFFSET_PIXELS = 2;
+
+  /**
+   * Signal that a wall endpoint has no linked walls.
+   * @type {number}
+   */
+  static EV_ENDPOINT_LINKED_UNBLOCKED = -10.0;
+
+  /**
+   * Signal that a linked wall to the edge will completely block the light.
+   */
+  static EV_ENDPOINT_LINK_BLOCKED = -20.0;
+
   /** @type {PointSource} */
   source;
 

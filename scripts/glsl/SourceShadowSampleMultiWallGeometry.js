@@ -358,7 +358,7 @@ export class SourceShadowMultiWallSubGeometry extends SubGeometry {
       const [A, B, C] = this.shadowTriangle(samples[i]);
 
       // Determine the ∆ABC vertices
-      vertices[vIdx] = A.x;
+      vertices[vIdx + 0] = A.x;
       vertices[vIdx + 1] = A.y;
       vertices[vIdx + 2] = B.x;
       vertices[vIdx + 3] = B.y;
@@ -366,7 +366,7 @@ export class SourceShadowMultiWallSubGeometry extends SubGeometry {
       vertices[vIdx + 5] = C.y;
 
       // Determine distance from the wall for each vertex.
-      edgeDist[eIdx] = -distanceToLine(A, l);
+      edgeDist[eIdx + 0] = -distanceToLine(A, l);
       edgeDist[eIdx + 1] = distanceToLine(B, l);
       edgeDist[eIdx + 2] = distanceToLine(C, l);
     }

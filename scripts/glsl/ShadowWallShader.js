@@ -295,7 +295,7 @@ export class DirectionalShadowWallShader extends AbstractEVShader {
    * No consideration of penumbra---just light --> corner --> canvas.
    * @type {string}
    */
-  static vertexShader = GLSL_DIRECTIONAL_VERTEX2;
+  static vertexShader = GLSL_DIRECTIONAL_VERTEX;
 
   // NOTE: DirectionalShadowWallShader.fragmentShader
   /**
@@ -303,7 +303,7 @@ export class DirectionalShadowWallShader extends AbstractEVShader {
    * See lightEncoding.
    * This mask shader is binary: encodes either full light or no light.
    */
-  static fragmentShader = GLSL_DIRECTIONAL_FRAGMENT2;
+  static fragmentShader = GLSL_DIRECTIONAL_FRAGMENT;
 
   /**
    * Set the basic uniform structures.

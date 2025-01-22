@@ -14,7 +14,6 @@ Wall
 import { MODULE_ID } from "../const.js";
 import { tokenIsOnGround, waypointIsOnGround, edgeElevationZ } from "../util.js";
 import { Draw } from "../geometry/Draw.js";
-import { ShadowMesh } from "./ShadowWallShader.js";
 import { ShadowTerrainShader } from "./ShadowTerrainShader.js";
 import { EVUpdatingQuadMesh, EVQuadMesh } from "./EVQuadMesh.js";
 import { ShadowTextureRenderer, ShadowVisionLOSTextureRenderer, ShadowDirectionalTextureRenderer } from "./ShadowTextureRenderer.js";
@@ -34,18 +33,13 @@ import {
 } from "./ShadowMultiWallShader.js";
 
 import {
-  SourceShadowSingleWallGeometry,
-  PointSourceShadowSingleWallGeometry,
-  DirectionalSourceShadowSingleWallGeometry,
-} from "./SourceShadowSingleWallGeometry.js";
-
-import {
   SourceShadowMultiWallGeometry,
   PointSourceShadowMultiWallGeometry,
   DirectionalSourceShadowMultiWallGeometry,
 } from "./SourceShadowMultiWallGeometry.js";
 
 import {
+  ShadowMesh,
   ShadowWallShader,
   SizedPointSourceShadowWallShader,
   DirectionalShadowWallShader
@@ -63,12 +57,12 @@ export class WebGLShadowsMultiWall {
   static maskColor = 0xFF0000;
 
   /** @type {PIXI.Geometry} */
-  static geometryClass = SourceShadowSampleMultiWallGeometry;
-  // static geometryClass = SourceShadowMultiWallGeometry;
+  // static geometryClass = SourceShadowSampleMultiWallGeometry;
+  static geometryClass = SourceShadowMultiWallGeometry;
 
   /** @type {AbstractEVShader} */
-  static shaderClass = ShadowMultiWallShader;
-  // static shaderClass = ShadowWallShader;
+  // static shaderClass = ShadowMultiWallShader;
+  static shaderClass = ShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -207,7 +201,6 @@ export class WebGLShadowsMultiWall {
    * @param {object} changes      Object of change data corresponding to source.data properties.
    */
   sourceUpdated(changes) {
-    console.table(...changes);
     const changedPosition = changes.has("x") || changes.has("y");
     const changedRadius = changes.has("dim");
     const shaderChanged = this.shadowMesh.shader.sourceUpdated(changes);
@@ -508,12 +501,6 @@ export class GlobalLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   sourceUpdated() { return false; }
 
-  edgeAdded() { return false; }
-
-  edgeUpdated() { return false; }
-
-  edgeRemoved() { return false; }
-
   /**
    * Destroy meshes, geometry, textures.
    */
@@ -551,12 +538,12 @@ export class GlobalLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 export class PointVisionWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   /** @type {PIXI.Geometry} */
-  static geometryClass = SourceShadowSampleMultiWallGeometry;
-  // static geometryClass = SourceShadowMultiWallGeometry;
+  // static geometryClass = SourceShadowSampleMultiWallGeometry;
+  static geometryClass = SourceShadowMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = ShadowMultiWallShader;
-  // static shaderClass = ShadowWallShader;
+  // static shaderClass = ShadowMultiWallShader;
+  static shaderClass = ShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;
@@ -629,12 +616,12 @@ export class PointVisionWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 export class PointLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   /** @type {PIXI.Geometry} */
-  static geometryClass = PointSourceShadowSampleMultiWallGeometry;
-  // static geometryClass = PointSourceShadowMultiWallGeometry;
+  // static geometryClass = PointSourceShadowSampleMultiWallGeometry;
+  static geometryClass = PointSourceShadowMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = PointSourceShadowMultiWallShader;
-  // static shaderClass = SizedPointSourceShadowWallShader;
+  // static shaderClass = PointSourceShadowMultiWallShader;
+  static shaderClass = SizedPointSourceShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -677,12 +664,12 @@ export class PointLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
 export class DirectionalLightWebGLShadowsMultiWall extends PointLightWebGLShadowsMultiWall {
   /** @type {PIXI.Geometry} */
-  static geometryClass = DirectionalSourceShadowSampleMultiWallGeometry;
-  // static geometryClass = DirectionalSourceShadowMultiWallGeometry;
+  // static geometryClass = DirectionalSourceShadowSampleMultiWallGeometry;
+  static geometryClass = DirectionalSourceShadowMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = DirectionalSourceShadowMultiWallShader;
-  // static shaderClass = DirectionalShadowWallShader;
+  // static shaderClass = DirectionalSourceShadowMultiWallShader;
+  static shaderClass = DirectionalShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;

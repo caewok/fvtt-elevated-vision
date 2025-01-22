@@ -14,7 +14,6 @@ Wall
 import { MODULE_ID } from "../const.js";
 import { tokenIsOnGround, waypointIsOnGround, edgeElevationZ } from "../util.js";
 import { Draw } from "../geometry/Draw.js";
-import { ShadowMesh } from "./ShadowWallShader.js";
 import { ShadowTerrainShader } from "./ShadowTerrainShader.js";
 import { EVUpdatingQuadMesh, EVQuadMesh } from "./EVQuadMesh.js";
 import { ShadowTextureRenderer, ShadowVisionLOSTextureRenderer, ShadowDirectionalTextureRenderer } from "./ShadowTextureRenderer.js";
@@ -40,6 +39,7 @@ import {
 } from "./SourceShadowSingleWallGeometry.js";
 
 import {
+  ShadowMesh,
   ShadowWallShader,
   SizedPointSourceShadowWallShader,
   DirectionalShadowWallShader
@@ -57,12 +57,12 @@ export class WebGLShadowsSingleWall {
   static maskColor = 0xFF0000;
 
   /** @type {PIXI.Geometry} */
-  static geometryClass = SourceShadowSampleSingleWallGeometry;
-  // static geometryClass = SourceShadowSingleWallGeometry;
+  // static geometryClass = SourceShadowSampleSingleWallGeometry;
+  static geometryClass = SourceShadowSingleWallGeometry;
 
   /** @type {AbstractEVShader} */
-  static shaderClass = ShadowSingleWallShader;
-  // static shaderClass = ShadowWallShader;
+  // static shaderClass = ShadowSingleWallShader;
+  static shaderClass = ShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -650,12 +650,6 @@ export class GlobalLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 
   sourceUpdated() { return false; }
 
-  edgeAdded() { return false; }
-
-  edgeUpdated() { return false; }
-
-  edgeRemoved() { return false; }
-
   /**
    * Destroy meshes, geometry, textures.
    */
@@ -693,12 +687,12 @@ export class GlobalLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 export class PointVisionWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 
   /** @type {PIXI.Geometry} */
-  static geometryClass = SourceShadowSampleSingleWallGeometry;
-  // static geometryClass = SourceShadowSingleWallGeometry;
+  // static geometryClass = SourceShadowSampleSingleWallGeometry;
+  static geometryClass = SourceShadowSingleWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = ShadowSingleWallShader;
-  // static shaderClass = ShadowWallShader;
+  // static shaderClass = ShadowSingleWallShader;
+  static shaderClass = ShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;
@@ -786,12 +780,12 @@ export class PointVisionWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 export class PointLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 
   /** @type {PIXI.Geometry} */
-  static geometryClass = PointSourceShadowSampleSingleWallGeometry;
-  // static geometryClass = PointSourceShadowSingleWallGeometry;
+  // static geometryClass = PointSourceShadowSampleSingleWallGeometry;
+  static geometryClass = PointSourceShadowSingleWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = PointSourceShadowSingleWallShader;
-  // static shaderClass = SizedPointSourceShadowWallShader;
+  // static shaderClass = PointSourceShadowSingleWallShader;
+  static shaderClass = SizedPointSourceShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -833,12 +827,12 @@ export class PointLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 
 export class DirectionalLightWebGLShadowsSingleWall extends PointLightWebGLShadowsSingleWall {
   /** @type {PIXI.Geometry} */
-  static geometryClass = DirectionalSourceShadowSampleSingleWallGeometry;
-  //static geometryClass = DirectionalSourceShadowSingleWallGeometry;
+  // static geometryClass = DirectionalSourceShadowSampleSingleWallGeometry;
+  static geometryClass = DirectionalSourceShadowSingleWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = DirectionalSourceShadowSingleWallShader;
-  //static shaderClass = DirectionalShadowWallShader;
+  // static shaderClass = DirectionalSourceShadowSingleWallShader;
+  static shaderClass = DirectionalShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;
