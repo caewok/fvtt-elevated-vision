@@ -4,7 +4,7 @@ precision ${PRECISION_VERTEX} float;
 
 // #define SHADOW true
 
-#define TOTAL_COLLISIONS      76
+#define TOTAL_COLLISIONS      50
 #define TOTAL_MID_COLLISIONS  ((TOTAL_COLLISIONS / 2) - 4)
 
 // Type of algorithm to use to generate collision test points.

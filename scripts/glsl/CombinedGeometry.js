@@ -105,7 +105,7 @@ export class CombinedGeometry extends PIXI.Geometry {
     const attrData = this.getBuffer(id).data;
     const newData = new attrData.constructor(
       attrData.buffer,
-      attrData.BYTES_PER_ELEMENT * subclassSize * offset,
+      attrData.BYTES_PER_ELEMENT * subclassSize * attribute.size * offset,
       subclassSize * attribute.size);
     geom.addAttribute(id, newData, attribute.size, attribute.normalized, attribute.type);
   }
@@ -173,9 +173,9 @@ export class CombinedGeometry extends PIXI.Geometry {
       this.#replaceIndexBuffer();
     }
 
-    for ( const id of Object.keys(this.attributes) ) {
+    for ( const [id, attribute] of Object.entries(this.attributes) ) {
       const attributeBuffer = this.getBuffer(id);
-      attributeData.id ??= new attributeBuffer.data.constructor(subclassSize); // All zeros.
+      attributeData.id ??= new attributeBuffer.data.constructor(attribute.size * subclassSize); // All zeros.
 
       // Increase the size of the buffer to hold the new data.
       attributeBuffer.data = this.constructor.addToBuffer(attributeBuffer.data, attributeData.id);
