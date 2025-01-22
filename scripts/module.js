@@ -139,13 +139,13 @@ Hooks.once("init", function() {
      *   - WebGLShadowsMultiWall
      * @type {class}
      */
-    webGLShadowClass: WebGLShadows,
+    webGLShadowClass: WebGLShadowsMultiWall,
 
     /**
      * For WebGLShadowsSingleWall and WebGLShadowsMultiWall, how many shadow triangles per edge.
      * @type {number} (
      */
-    webGLShadowSamples: 10,
+    webGLShadowSamples: 50,
 
     /**
      * ElevationLayer.

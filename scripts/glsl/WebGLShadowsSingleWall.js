@@ -272,7 +272,8 @@ export class WebGLShadowsSingleWall {
 
     // TODO: Can this bounds check be moved to the above?
     if ( changedPosition || changedRadius ) this.shadowVisionMask.updateGeometry(this.bounds);
-    this.visionShader.sourceUpdated(changes);
+    if ( this.visionShader.sourceUpdated(changes) ) shadowsChanged ||= true;
+    return shadowsChanged;
   }
 
   /**
@@ -804,18 +805,14 @@ export class PointLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
   /**
    * Update the shadow mesh, geometry, render, given changes.
    * @param {object} changes      Object of change data corresponding to source.data properties.
-   * @param {object} [changeObj]  Keys for changed items to override the changes object
    */
-  _updateShadowData(changes, changeObj = {}) {
-    // Sized point source shader must track light size.
-    changeObj.changedLightSize ??= Object.hasOwn(changes, "lightSize");
-
+  sourceUpdated(changes) {
     // Update the uniforms b/c they are not necessarily updated in drag operations.
     for ( const layer of Object.values(this.source.layers) ) {
       const shader = layer.shader;
       this._updateCommonUniforms(shader);
     }
-    super._updateShadowData(changes, changeObj);
+    return super.sourceUpdated(changes);
   }
 
   /**
@@ -851,20 +848,6 @@ export class DirectionalLightWebGLShadowsSingleWall extends PointLightWebGLShado
 
   /** @type {AbstractEVShader} */
   static shadowMaskClass = ShadowVisionMaskTokenLOSShader;
-
-  /**
-   * Update the shadow mesh, geometry, render, given changes.
-   * @param {object} changes      Object of change data corresponding to source.data properties.
-   * @param {object} [changeObj]  Keys for changed items to override the changes object
-   */
-  _updateShadowData(changes, changeObj = {}) {
-    if ( Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y") ) {
-      changeObj.changedAzimuth ??= true;
-      changeObj.changedElevationAngle ??= true;
-    }
-    changeObj.changedSolarAngle ??= Object.hasOwn(changes, "solarAngle");
-    super._updateShadowData(changes, changeObj);
-  }
 
   /**
    * Update uniforms for the source shader.

@@ -683,7 +683,7 @@ export class PenumbraBasicTest extends ShaderTest {
       almostEqual } = glsl;
     const a = wall.top[0].xy;
     const b = wall.top[1].xy;
-    if ( almostEqual(orient(O.xy, a, b), 0.0, 1e-06) ) {
+    if ( COLLINEAR(orient(O.xy, a, b)) ) {
       // The triangle is a line.
       if ( this.isInfiniteTopShadow(O) ) {
         // Where O --> wall intersects the canvas edge.

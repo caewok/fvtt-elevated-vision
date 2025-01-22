@@ -13,6 +13,12 @@ import { edgeElevationZ } from "../util.js";
 import { CombinedGeometry, SubGeometry } from "./CombinedGeometry.js";
 import { Ray2d, distanceToLine, normalizedDirection, randomSphereCoordinate } from "./SourceShadowSampleSingleWallGeometry.js";
 
+const SAME_SIDE = (o0, o1) => o0 * o1 > 0.0;
+const OPP_SIDE = (o0, o1) => o0 * o1 < 0.0;
+const COLLINEAR = o => o.almostEqual(0.0, 1.0e-06);
+const COUNTERCLOCKWISE = o => o > 0.0;
+const CLOCKWISE = o => o < 0.0;
+
 export class SourceShadowSampleMultiWallGeometry extends CombinedGeometry {
   /** @type {PointSource} */
   source;
@@ -91,33 +97,39 @@ export class SourceShadowSampleMultiWallGeometry extends CombinedGeometry {
   /**
    * Update based on indicated changes to the source.
    * @param {Set<string>} changes         Change keys for the source.
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update.
    * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
    */
-  sourceUpdated(changes) {
-    let updated = false;
+  sourceUpdated(changes, { update = true } = {}) {
+    let changed = false;
     this.geomEdgeMap.forEach(geom => {
       const hadUpdate = geom.sourceUpdated(changes);
-      updated ||= hadUpdate;
+      changed ||= hadUpdate;
     });
-    return updated;
+    if ( changed && update ) this.update();
+    return changed;
   }
 
   /**
    * Update based on indicated changes to the edge.
    * @param {Edge} edge                   The edge that was updated.
    * @param {Set<string>} changes         Change keys for the source.
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update.
    * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
    */
-  edgeUpdated(edge, changes) {
-    return this.geomEdgeMap.get(edge)?.edgeUpdated(changes);
+  edgeUpdated(edge, changes, { update = true } = {}) {
+    const changed = this.geomEdgeMap.get(edge)?.edgeUpdated(changes);
+    if ( update && changed ) this.update();
+    return changed;
   }
 
   /**
    * Update shadow data based on the added edge, as necessary.
    * @param {Edge} edge     Edge that was added to the scene.
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update.
    * @returns {boolean} True if the added edge resulted in a change.
    */
-  edgeAdded(edge) {
+  edgeAdded(edge, { update = true } = {}) {
     if ( this.geomEdgeMap.has(edge.id) ) return false;
     if ( !this._includeEdge(edge) ) return false;
     const subgeom = this.addSubGeometry();
@@ -126,20 +138,38 @@ export class SourceShadowSampleMultiWallGeometry extends CombinedGeometry {
     this.geomEdgeMap.set(edge.id, subgeom);
     this.subgeometries.push(subgeom);
     subgeom._updateGeometry();
+    if ( update ) this.update();
     return true;
   }
 
   /**
    * Update shadow data based on the removed edge, as necessary.
    * @param {Edge} edge             Edge that was removed
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update.
    * @returns {boolean} True if the added edge resulted in a change.
    */
-  edgeRemoved(edge) {
+  edgeRemoved(edge, { update = true } = {}) {
     if ( !this.geomEdgeMap.has(edge.id) ) return false;
     const subgeom = this.geomEdgeMap.get(edge.id);
     this.geomEdgeMap.delete(edge.id);
     const idxToRemove = this.subgeometries.indexOf(subgeom);
-    return Boolean(this.removeSubGeometry(idxToRemove));
+    const changed = Boolean(this.removeSubGeometry(idxToRemove));
+    if ( update && changed ) this.update();
+    return changed;
+  }
+
+  /**
+   * Flag each buffer for updating.
+   * Assumes buffers were in fact changed. See _updateGeometry.
+   */
+  update() {
+    // Flag each buffer for updating.
+    // Assumes that addWall, updateWall, or removeWall updated the local buffer previously.
+    for ( const attr of Object.keys(this.attributes) ) {
+      const buffer = this.getBuffer(attr);
+      buffer.update(buffer.data);
+    }
+    this.indexBuffer.update(this.indexBuffer.data);
   }
 
   // ----- NOTE: Edge testing ----- //
@@ -280,7 +310,37 @@ export class SourceShadowMultiWallSubGeometry extends SubGeometry {
   /** @type {PIXI.Point} */
   get edgeMid() { this.edge.a.add(this.edge.b).multiplyScalar(0.5); }
 
+  /** @type {WallStruct} */
+  get wall() {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const endpointsXY = [this.edge.a, this.edge.b];
+    const closerIdx = this.closerEndpoint(endpointsXY);
+    const xyCloser = endpointsXY[closerIdx];
+    const xyFurther = endpointsXY[1 - closerIdx];
+    const direction = normalizedDirection(xyCloser, xyFurther);
+    const topZ = this.edgeTopZ;
+    const bottomZ = this.edgeBottomZ;
+    return {
+      top: [new Point3d(xyCloser.x, xyCloser.y, topZ), new Point3d(xyFurther.x, xyFurther.y, topZ)],
+      bottom: [new Point3d(xyCloser.x, xyCloser.y, bottomZ), new Point3d(xyFurther.x, xyFurther.y, bottomZ)],
+      mid: xyCloser.add(xyFurther).multiplyScalar(0.5),
+      direction
+    };
+  }
+
   // ----- NOTE: Geometry ----- //
+
+  /**
+   * Determine the closer and further endpoints.
+   * @param {PIXI.Point[2]} pts
+   * @returns {number} Index for the closer endpoint.
+   */
+  closerEndpoint(pts) {
+    // Closer endpoint can be determined with relation to the light center.
+    const d0 = PIXI.Point.distanceSquaredBetween(pts[0], this.source);
+    const d1 = PIXI.Point.distanceSquaredBetween(pts[1], this.source);
+    return Number(d1 < d0);
+  }
 
   /**
    * Resample and update the vertices and associated distances from the edge.
@@ -314,49 +374,45 @@ export class SourceShadowMultiWallSubGeometry extends SubGeometry {
 
   /**
    * For a given light center, determine the shadow triangle.
-   * @param {Point3d} A     The assumed center point of the light
+   * @param {Point3d} O     The assumed center point of the light
    * @returns {PIXI.Point[3]}  Triangle, from center through endpoint a and then endpoint b.
    */
-  shadowTriangle(A) {
-    const { a, b } = this.edge;
-    const topZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(this.edge.elevationLibGeometry.a.top ?? 1e08);
-    const A2d = A.to2d();
-    if ( !foundry.utils.orient2dFast(A2d, a, b).almostEqual(0) ) {
+  shadowTriangle(O) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const wall = this.wall;
+    const a = wall.top[0].to2d();
+    const b = wall.top[1].to2d();
+    const O2d = O.to2d();
+    if ( COLLINEAR(foundry.utils.orient2dFast(O2d, a, b)) ) {
       // The triangle is a line.
-      if ( this.isInfiniteShadow(A) ) {
-        // Where A --> wall intersects the canvas edge.
-        const rWall = new Ray2d(A2d, a.subtract(A2d));
+      if ( this.isInfiniteShadow(O) ) {
+        // Where O --> wall intersects the canvas edge.
+        const rWall = new Ray2d(O2d, a.subtract(O2d));
         const edge = this.whichCanvasEdge(rWall);
         const ix = new PIXI.Point();
         rWall.intersectPoints(edge.A, edge.B, ix);
-        return [A2d, ix, ix];
+        return [O2d, ix, ix];
       }
-      // Where A --> further wall endpoint intersects the canvas plane.
-      const furthestPoint = this.closerEndpoint([a, b]);
-      const furthestPoint3d = new Point3d(furthestPoint.x, furthestPoint.y, this.edgeTopZ);
+      // Where O --> further wall endpoint intersects the canvas plane.
       const ixP = new Point3d();
-      const hasFurthestPoint = this._furthestShadowPoint(A, furthestPoint3d, ixP); // Wall 1 is further.
+      const hasFurthestPoint = this._furthestShadowPoint(O, b, ixP); // Wall 1 is further.
       if ( !hasFurthestPoint ) new Error(`${MODULE_ID}|shadowTriangle|No furthest point found!`);
-      return [A.xy, ixP.xy, ixP.xy];
+      return [O2d, ixP.to2d(), ixP.to2d()];
     }
 
     // For infinite shadow, extend triangle formed by light point and wall to the edge of the canvas.
-    if ( this.isInfiniteShadow(A) ) return this.extendTriangleToCanvasEdge([A2d, a, b]);
+    if ( this.isInfiniteShadow(O) ) return this.extendTriangleToCanvasEdge([O2d, a, b]);
 
     // For non-infinite, intersect the canvas plane to determine extension point.
     const ixP = new CONFIG.GeometryLib.threeD.Point3d();
-    const edgeMid = this.edgeMid;
-    if ( !this._furthestShadowPoint(A, new Point3d(edgeMid.x, edgeMid.y, this.edgeTopZ), ixP) ) {
-      return this.extendTriangleToCanvasEdge([A, a, b]);
-    }
+    if ( !this._furthestShadowPoint(O, b, ixP) ) return this.extendTriangleToCanvasEdge([O2d, a, b]);
     const rWallIx = new Ray2d(ixP, b.subtract(a));
-    const rAa = new Ray2d(A, a.subtract(A));
-    const rAb = new Ray2d(A, b.subtract(A));
-    const B = rWallIx.intersectRay(rAa);
-    const C = rWallIx.intersectRay(rAb);
-    return [A, B, C];
+    const rOa = new Ray2d(O, a.subtract(O2d));
+    const rOb = new Ray2d(O, b.subtract(O2d));
+    const B = rWallIx.intersectRay(rOa);
+    const C = rWallIx.intersectRay(rOb);
+    return [O2d, B, C];
   }
-
   /**
    * Does this source cast an infinite shadow?
    * (Ray is rising as it moves from light --> wall.)

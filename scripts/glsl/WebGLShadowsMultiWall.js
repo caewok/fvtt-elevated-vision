@@ -207,9 +207,9 @@ export class WebGLShadowsMultiWall {
    * @param {object} changes      Object of change data corresponding to source.data properties.
    */
   sourceUpdated(changes) {
+    console.table(...changes);
     const changedPosition = changes.has("x") || changes.has("y");
     const changedRadius = changes.has("dim");
-
     const shaderChanged = this.shadowMesh.shader.sourceUpdated(changes);
     const geomChanged = this.shadowMesh.geometry.sourceUpdated(changes);
     let shadowsChanged = (shaderChanged || geomChanged);
@@ -221,7 +221,8 @@ export class WebGLShadowsMultiWall {
 
     // TODO: Can this bounds check be moved to the above?
     if ( changedPosition || changedRadius ) this.shadowVisionMask.updateGeometry(this.bounds);
-    this.visionShader.sourceUpdated(changes);
+    if ( this.visionShader.sourceUpdated(changes) ) shadowsChanged ||= true;
+    return shadowsChanged;
   }
 
   /**
@@ -645,20 +646,17 @@ export class PointLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
   static shadowMaskClass = ShadowVisionMaskShader;
 
   /**
-   * Update the shadow mesh, geometry, render, given changes.
-   * @param {object} changes      Object of change data corresponding to source.data properties.
-   * @param {object} [changeObj]  Keys for changed items to override the changes object
+   * Update based on indicated changes to the source.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  _updateShadowData(changes, changeObj = {}) {
-    // Sized point source shader must track light size.
-    changeObj.changedLightSize ??= Object.hasOwn(changes, "lightSize");
-
+  sourceUpdated(changes) {
     // Update the uniforms b/c they are not necessarily updated in drag operations.
     for ( const layer of Object.values(this.source.layers) ) {
       const shader = layer.shader;
       this._updateCommonUniforms(shader);
     }
-    super._updateShadowData(changes, changeObj);
+    super.sourceUpdated(changes);
   }
 
   /**
@@ -694,20 +692,6 @@ export class DirectionalLightWebGLShadowsMultiWall extends PointLightWebGLShadow
 
   /** @type {AbstractEVShader} */
   static shadowMaskClass = ShadowVisionMaskTokenLOSShader;
-
-  /**
-   * Update the shadow mesh, geometry, render, given changes.
-   * @param {object} changes      Object of change data corresponding to source.data properties.
-   * @param {object} [changeObj]  Keys for changed items to override the changes object
-   */
-  _updateShadowData(changes, changeObj = {}) {
-    if ( Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y") ) {
-      changeObj.changedAzimuth ??= true;
-      changeObj.changedElevationAngle ??= true;
-    }
-    changeObj.changedSolarAngle ??= Object.hasOwn(changes, "solarAngle");
-    super._updateShadowData(changes, changeObj);
-  }
 
   /**
    * Update uniforms for the source shader.

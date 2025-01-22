@@ -51,8 +51,8 @@ function refreshAmbientLight(doc, flags) {
     shaderTest.drawWall();
     shaderTest.drawPenumbraTriangle();
     // shaderTest.drawSideShadowRays();
-    //shaderTest.drawFarPenumbraTri();
-    //shaderTest.drawFarUmbraTri();
+    shaderTest.drawFarPenumbraTri();
+    shaderTest.drawFarUmbraTri();
     shaderTest.drawNearFarTri(0);
     shaderTest.drawNearFarTri(1);
   }
@@ -76,7 +76,7 @@ function hoverAmbientLightHook(light, hover) {
 PATCHES.BASIC.HOOKS = {
   updateAmbientLight: updateAmbientLightHook,
   hoverAmbientLight: hoverAmbientLightHook,
-  refreshAmbientLight
+  //refreshAmbientLight
 };
 
 // Note: Ambient Light Wraps

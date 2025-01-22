@@ -18,6 +18,12 @@ const flipEdgeLabel = {
   b: "a"
 };
 
+const SAME_SIDE = (o0, o1) => o0 * o1 > 0.0;
+const OPP_SIDE = (o0, o1) => o0 * o1 < 0.0;
+const COLLINEAR = o => o.almostEqual(0.0, 1.0e-06);
+const COUNTERCLOCKWISE = o => o > 0.0;
+const CLOCKWISE = o => o < 0.0;
+
 // TODO: Handle linked edge updates.
 
 export class SourceShadowMultiWallGeometry extends CombinedGeometry {

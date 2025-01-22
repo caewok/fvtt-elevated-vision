@@ -239,7 +239,25 @@ export class PointSourceShadowMultiWallShader extends ShadowMultiWallShader {
    */
   static create(source, defaultUniforms = {}) {
     defaultUniforms.uNumSamples = CONFIG[MODULE_ID].webGLShadowSamples;
+    defaultUniforms.uLightSize = source.data.lightSize;
     return super.create(source, defaultUniforms);
+  }
+
+  /**
+   * Update based on indicated changes to the source.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   */
+  sourceUpdated(changes) {
+    const otherUpdates = super.sourceUpdated(changes);
+    const changedLightSize = changes.has("lightSize");
+    if ( changedLightSize ) this.updateLightSize();
+    return otherUpdates || changedLightSize;
+  }
+
+  updateLightSize() {
+    this.uniforms.uLightSize = this.source.data.lightSize;
+    this.uniforms.uTime = Date.now() * 1e-12;
   }
 }
 

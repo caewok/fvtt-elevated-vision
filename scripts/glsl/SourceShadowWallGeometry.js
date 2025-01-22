@@ -689,6 +689,17 @@ sourceOrigin = geom.sourceOrigin;
   }
 
   /**
+   * Update based on indicated changes to the source.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   */
+  sourceUpdated(changes) {
+    const changedPosition = changes.has("x") || changes.has("y");
+    if ( changedPosition ) return this.updateSourcePosition();
+    return false;
+  }
+
+  /**
    * On source movement, check:
    * - wall links. If the source changes orientation w/r/t 2+ linked walls, the link status would update.
    * - whether the wall is included. If the source changes position, the wall may not be included

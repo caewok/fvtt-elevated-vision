@@ -28,6 +28,12 @@ const flipEdgeLabel = {
   b: "a"
 };
 
+const SAME_SIDE = (o0, o1) => o0 * o1 > 0.0;
+const OPP_SIDE = (o0, o1) => o0 * o1 < 0.0;
+const COLLINEAR = o => o.almostEqual(0.0, 1.0e-06);
+const COUNTERCLOCKWISE = o => o > 0.0;
+const CLOCKWISE = o => o < 0.0;
+
 // TODO: Handle linked edge updates.
 
 
@@ -88,10 +94,14 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
   get sourceOrigin() { return CONFIG.GeometryLib.threeD.Point3d.fromPointSource(this.source); }
 
   /** @type {number} */
-  get edgeTopZ() { return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.edge.elevationLibGeometry.a.top ?? 1e08); }
+  get edgeTopZ() {
+    return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.edge.elevationLibGeometry.a.top ?? 1e08);
+  }
 
   /** @type {number} */
-  get edgeBottomZ() { return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.edge.elevationLibGeometry.a.bottom ?? -1e08); }
+  get edgeBottomZ() {
+    return CONFIG.GeometryLib.utils.gridUnitsToPixels(this.edge.elevationLibGeometry.a.bottom ?? -1e08);
+  }
 
   /**
    * Sense type for this edge and source combination.
@@ -104,7 +114,9 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    * For threshold edges, determine if threshold applies.
    * @type {boolean} True if the threshold applies.
    */
-  get thresholdApplies() { return this.edge.applyThreshold(this.sourceType, this.source, this.source.data.externalRadius); }
+  get thresholdApplies() {
+    return this.edge.applyThreshold(this.sourceType, this.source, this.source.data.externalRadius);
+  }
 
   // ----- NOTE: Threshold calculation ----- //
 
@@ -356,16 +368,15 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
    * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
    */
-  sourceUpdated(changes) {
-    return false;
-  }
+  sourceUpdated(_changes) { return false; }
 
   /**
    * Update based on indicated changes to the edge.
    * @param {Set<string>} changes         Change keys for the source.
+   * @param {boolean} [update=true]   If false, buffer will not be flagged for update.
    * @returns {boolean} True if the indicated changes resulted in a change to the geometry.
    */
-  edgeUpdated(changes) {
+  edgeUpdated(changes, { update = true } = {}) {
     // Determine relevant changes in the changes set.
     const changedPosition = changes.has("c");
     const changedElevation = [
@@ -382,7 +393,9 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
     if ( changedSenseType ) this._updateSenseType();
 
     // If anything was updated, return true.
-    return changedPosition || changedElevation || changedThreshold || changedSenseType;
+    const anyChanges = changedPosition || changedElevation || changedThreshold || changedSenseType;
+    if ( anyChanges && update ) this.update();
+    return anyChanges;
   }
 
   /**
@@ -408,6 +421,20 @@ export class SourceShadowSingleWallGeometry extends PIXI.Geometry {
   _updateThresholdRadius2() {
     const aThresholdRadius2 = this.getBuffer("aThresholdRadius2").data;
     this.#updateThresholdRadius2(aThresholdRadius2);
+  }
+
+  /**
+   * Flag each buffer for updating.
+   * Assumes buffers were in fact changed. See _updateGeometry.
+   */
+  update() {
+    // Flag each buffer for updating.
+    // Assumes that addWall, updateWall, or removeWall updated the local buffer previously.
+    for ( const attr of Object.keys(this.attributes) ) {
+      const buffer = this.getBuffer(attr);
+      buffer.update(buffer.data);
+    }
+    this.indexBuffer.update(this.indexBuffer.data);
   }
 
   // ----- NOTE: Cleanup ----- //
