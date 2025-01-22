@@ -76,7 +76,7 @@ function hoverAmbientLightHook(light, hover) {
 PATCHES.BASIC.HOOKS = {
   updateAmbientLight: updateAmbientLightHook,
   hoverAmbientLight: hoverAmbientLightHook,
-  //refreshAmbientLight
+  refreshAmbientLight
 };
 
 // Note: Ambient Light Wraps

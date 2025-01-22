@@ -1915,6 +1915,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     let nearRPenumbraDist = fNearRLPenumbraDistances[RIGHT];
     let nearRUmbraDist = fNearRLUmbraDistances[RIGHT];
 
+    const isCollinear = fAmbient[0] * fAmbient[1] !== 0.0;
     const isLeft = vLREdgeDist > 0.0;
     const hasFar = any(notEqual(fFarDistances, vec2(0.0)));
     const hasNear = any(notEqual(fNearDistances, vec2(0.0)));
@@ -1926,7 +1927,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       if ( vEdgeDist > farPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
 
       nearPenumbraDist = this.nearPenumbraDistance(elevation);
-      if ( vEdgeDist < nearPenumbraDist ) return { hasShadow: 0.0 }; // In front of the wall shadow.
+      if ( !isCollinear && vEdgeDist < nearPenumbraDist ) return { hasShadow: 0.0 }; // In front of the wall shadow.
 
       farUmbraDist = this.farUmbraDistance(elevation);
       nearUmbraDist = this.nearUmbraDistance(elevation);
@@ -1985,7 +1986,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     0.1 * 0.9 = 0.09 / 0.25 = 0.0225  (1 - x) = 0.9775
     0.0 * 1.0 = 0.0  / 0.25 = 0       (1 - x) = 1.0
     */
-    if ( fAmbient[0] !== 1.0 && fAmbient[1] !== 1.0 ) {
+    if ( isCollinear ) {
       if ( this.inSidePenumbra0() ) side0Shadow *= fAmbient[0];
       if ( this.inSidePenumbra1() ) side1Shadow *= fAmbient[1];
 

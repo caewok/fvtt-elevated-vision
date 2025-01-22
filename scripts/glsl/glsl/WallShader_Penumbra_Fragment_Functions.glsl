@@ -179,7 +179,11 @@ float nearRUmbraDistance(in float elevation) { return _nearFarDistance(elevation
 /**
  * Is the fragment location in front of the wall?
  */
-bool inFrontOfWall() { return vEdgeDist < 0.0; }
+bool inFrontOfWall() {
+  // If collinear, cannot be in front of wall.
+  if ( fAmbient[0] * fAmbient[1] != 0.0 ) return false;
+  return vEdgeDist < 0.0;
+}
 
 /**
  * Does a threshold apply?
