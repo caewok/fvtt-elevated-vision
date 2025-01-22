@@ -1737,7 +1737,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const lowerTangent = vTangents[idxLower];
     const upperTangent = vTangents[1 - idxLower];
 
-    let rlIdx = 0;
+    let rlIdx = RIGHT;
     let sameSideOrigin = vec2();
     let otherSideOrigin = vec2();
     if ( isCollinear ) {
@@ -1745,20 +1745,17 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       // Measure from the light; the points will be on the opposite side.
       // If light center is collinear with the wall, ixP will be collinear and can just pick a side.
       // ccw/left is positive; cw/right is negative
-      rlIdx = Number(step(0.0, -orient(W0, W1, uLightPosition.xy))); // RIGHT: 0, LEFT: 1
+      if ( COUNTERCLOCKWISE(orient(W0, W1, uLightPosition.xy)) ) rlIdx = LEFT;
 
       // Which nearFarTri is on that side?
       // sides[RIGHT, LEFT]
       // nearFarTri0 and nearFarTri1 are on opposite sides.
       // Either (only nearFarTri1?) could collinear with  the wall line.
-      const o = sign(orient(W0, W1, nearFarTri0[2]));
-      const leftIdx = COUNTERCLOCKWISE(o) ? 0
-        : CLOCKWISE(o) ? 1
-          : COUNTERCLOCKWISE(orient(W0, W1, nearFarTri1[2])) ? 1 : 0;
-      const nfOrigins = [nearFarTri0[0], nearFarTri1[0]];
-      const sides = Array(2);
-      sides[LEFT] = nfOrigins[leftIdx];
-      sides[RIGHT] = nfOrigins[1 - leftIdx];
+      const o = orient(W0, W1, nearFarTri0[2]);
+      let sides;
+      if ( COUNTERCLOCKWISE(o)
+        || (COLLINEAR(o) && CLOCKWISE(orient(W0, W1, nearFarTri1[2]))) ) sides = [nearFarTri1[0], nearFarTri0[0]];
+      else sides = [nearFarTri0[0], nearFarTri1[0]];
       sameSideOrigin = sides[rlIdx];
       otherSideOrigin = sides[1 - rlIdx];
     }

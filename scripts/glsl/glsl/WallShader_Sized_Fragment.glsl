@@ -78,18 +78,21 @@ float shadowPercentage() {
   float nearRUmbraDist = fNearRLUmbraDistances[RIGHT];
 
   /*
-  if ( vLREdgeDist > 1000.0 ) return 0.10;
-  if ( vLREdgeDist > 500.0  ) return 0.25;
-  if ( vLREdgeDist > 200.0  ) return 0.4;
+  if ( vLREdgeDist > 200.0 ) return 0.10;
+  if ( vLREdgeDist > 100.0  ) return 0.25;
+  if ( vLREdgeDist > 50.0  ) return 0.4;
   if ( vLREdgeDist > 0.0 ) return 0.5;
-  if ( vLREdgeDist > -200.0  ) return 0.6;
-  if ( vLREdgeDist > -500.0  ) return 0.75;
-  if ( vLREdgeDist > -1000.0  ) return 0.9;
+  if ( vLREdgeDist == 0.0 ) return 1.0;
+  if ( vLREdgeDist > -50.0  ) return 0.6;
+  if ( vLREdgeDist > -100.0  ) return 0.75;
+  if ( vLREdgeDist > -200.0  ) return 0.9;
   return 1.0;
   */
+  // penumbra: 158.47547912597656, 302.0068664550781
+  // umbra: 83.15863037109375, 158.47547912597656
 
-
-  // return farRPenumbraDist > 328.0 ? 1.0 : 0.5; // between 327 and 328
+  // return farLPenumbraDist < 158.4 ? .2 : farLPenumbraDist > 158.5 ? 0.7 : 1.0;
+  //return farRPenumbraDist < 158.0 ? .2 : farRPenumbraDist > 159.0 ? 0.7 : 1.0;
   // return vLREdgeDist > 0.0 ? 1.0 : 0.5; // positive on left side
   // return farRPenumbraDist > 376.0 ? 1.0 : 0.5; // between 375 and 376
   // return farLPenumbraDist > 26.0 ? 1.0 : 0.5; // 0.0 Left: 375.51123046875, right: 25.40869140625 (between 25 and 26)
@@ -117,10 +120,10 @@ float shadowPercentage() {
     nearUmbraDist = nearUmbraDistance(elevation);
 
     farLPenumbraDist = farLPenumbraDistance(elevation);
-    //if ( isLeft && farLPenumbraDist != 0.0 && vLREdgeDist > farLPenumbraDist ) return 0.0; // Outside the penumbra.
+    if ( isLeft && farLPenumbraDist != 0.0 && vLREdgeDist > farLPenumbraDist ) return 0.0; // Outside the penumbra.
 
     farRPenumbraDist = farRPenumbraDistance(elevation);
-    //if ( !isLeft && farRPenumbraDist != 0.0 && -vLREdgeDist > farRPenumbraDist ) return 0.0; // Outside the penumbra.
+    if ( !isLeft && farRPenumbraDist != 0.0 && -vLREdgeDist > farRPenumbraDist ) return 0.0; // Outside the penumbra.
 
     nearLPenumbraDist = nearLPenumbraDistance(elevation);
     nearRPenumbraDist = nearRPenumbraDistance(elevation);

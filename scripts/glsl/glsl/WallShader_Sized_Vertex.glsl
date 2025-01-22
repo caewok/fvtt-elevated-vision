@@ -566,7 +566,7 @@ void defineFlats(in Wall wall,
   vec3 lowerTangent = vTangents[idxLower];
   vec3 upperTangent = vTangents[1 - idxLower];
 
-  int rlIdx = 0;
+  int rlIdx = RIGHT;
   vec2 sameSideOrigin;
   vec2 otherSideOrigin;
   if ( isCollinear ) {
@@ -575,20 +575,17 @@ void defineFlats(in Wall wall,
     // If light center is collinear with the wall, ixP will be collinear and can just pick a side.
     // ccw/left is positive; cw/right is negative
     // TODO: Why not negate orient like in WallShaderTest3?
-    int rlIdx = int(step(0.0, -orient(W0, W1, uLightPosition.xy))); // RIGHT: 0, LEFT: 1
+    if ( COUNTERCLOCKWISE(orient(W0, W1, uLightPosition.xy)) ) rlIdx = LEFT;
 
     // Which nearFarTri is on that side?
     // sides[RIGHT, LEFT]
     // nearFarTri0 and nearFarTri1 are on opposite sides.
     // Either (only nearFarTri1?) could collinear with  the wall line.
-    float o = sign(orient(W0, W1, nearFarTri0[2]));
-    int leftIdx = COUNTERCLOCKWISE(o) ? 0
-      : CLOCKWISE(o) ? 1
-        : COUNTERCLOCKWISE(orient(W0, W1, nearFarTri1[2])) ? 1 : 0;
-    vec2[2] nfOrigins = vec2[2](nearFarTri0[0], nearFarTri1[0]);
     vec2[2] sides;
-    sides[LEFT] = nfOrigins[leftIdx];
-    sides[RIGHT] = nfOrigins[1 - leftIdx];
+    float o = orient(W0, W1, nearFarTri0[2]);
+    if ( COUNTERCLOCKWISE(o)
+      || (COLLINEAR(o) && CLOCKWISE(orient(W0, W1, nearFarTri1[2]))) ) sides = vec2[2](nearFarTri1[0], nearFarTri0[0]);
+    else sides = vec2[2](nearFarTri0[0], nearFarTri1[0]);
     sameSideOrigin = sides[rlIdx];
     otherSideOrigin = sides[1 - rlIdx];
   }
