@@ -1440,31 +1440,27 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     h.set(GHI[2 - collinearIdx]); // Penumbra line 2 - 1; 2 - 0
     i.set(GHI[1 + collinearIdx]); // Umbra line    1 + 1; 1 + 0
 
-    // Determine B and C by connecting to the penumbra lines.
-    // If collinear, it is unclear which one is further.
-    const dist2K = distanceSquared(farPenumbraTri[0], farPenumbraTri[1]);
-    const dist2L = distanceSquared(farPenumbraTri[0], farPenumbraTri[2]);
-    const idxL = Number(dist2L > dist2K); // Want the further one.
-    let furthestPoint = farPenumbraTri[idxL + 1];
+    // Determine B and C by connecting to the penumbra sideShadowRays.
+    // Use whichever is greater distance from wall: I, H, farPenumbraTri[1]
+    const rEdgeWall = this.frontBackBisector(wall, nearCollinear);
+    const dist2F = distanceSquaredToLine(f, rEdgeWall.origin, rEdgeWall.direction);
+    const dist2I = distanceSquaredToLine(i, rEdgeWall.origin, rEdgeWall.direction);
+    const dist2P = distanceSquaredToLine(farPenumbraTri[2], rEdgeWall.origin, rEdgeWall.direction);
+    const furthestPoint = (dist2F > dist2I && dist2F > dist2P) ? f
+      : (dist2I > dist2P) ? i : farPenumbraTri[2];
 
-    // Collinear: F->I or E->H form the line.
-    // Noncollinear: Wall direction or E->F or H->I
-    // But E, F, I could be malformed if the side shadow ray runs parallel to and through the wall.
-    // So use perpendicular to the median direction.
+      // F and I
+
+    // Direction to run the ray connect the two penumbra sides.
     let rabDir = wall.direction;
     if ( nearCollinear ) {
+      // Perpendicular to the mean ray between the two penumbra sides.
       const meanDir = sideShadowRays.penumbra[0].direction
         .add(sideShadowRays.penumbra[1].direction)
         .multiplyScalar(0.5);
       rabDir = vec2(-meanDir.y, meanDir.x);
-    } else {
-      // Furthest point could be based on the JKL triangle or on the distance to E or H(?).
-      const distJKL = distanceSquaredToLine(furthestPoint, W0, wall.direction);
-      const distE = distanceSquaredToLine(E, W0, wall.direction);
-      const distH = distanceSquaredToLine(H, W0, wall.direction);
-      if ( distE > distJKL && distE > distJKL ) furthestPoint = e;
-      else if ( distH > distJKL ) furthestPoint = h;
     }
+
     const rab = Ray2d(furthestPoint, rabDir);
     glsl.lineLineIntersection(sideShadowRays.penumbra[0], rab, B);
     glsl.lineLineIntersection(sideShadowRays.penumbra[1], rab, C);
@@ -1738,7 +1734,7 @@ export class SizedShadowsTest extends PenumbraBasicTest {
 
     this.fFarDistances = vec2(0.0);
     this.fNearDistances = vec2(0.0);
-    const rEdgeWall = this.frontBackBisector(wall, );
+    const rEdgeWall = this.frontBackBisector(wall, nearCollinear);
 
     if ( hasFarP || hasFarU ) {
       const distFarH0 = distanceSquaredToLine(leftFarTri[1], rEdgeWall.origin, rEdgeWall.direction);
@@ -3389,9 +3385,9 @@ shader0.drawRLNEarTri(LEFT)
 let [A, B, C] = shader0.penumbraTri
 let [D, E, F] = shader0.DEF
 let [G, H, I] = shader0.GHI
-
 let W0 = shader0.wall.top[0].xy
 let W1 = shader0.wall.top[1].xy
+let farPenumbraTri = shader0.farPenumbraTri
 
 // Treat as cube
 uLightPosition = shader0.uLightPosition
