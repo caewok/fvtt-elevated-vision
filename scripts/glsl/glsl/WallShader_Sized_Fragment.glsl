@@ -32,6 +32,7 @@ flat in vec2 fNearRLUmbraDistances;
 out vec4 fragColor;
 
 ${defineFunction("interpolateBarycentric")}
+${defineFunction("almostEqual")}
 
 ${PENUMBRA_FRAGMENT_FUNCTIONS}
 
@@ -77,17 +78,17 @@ float shadowPercentage() {
   float nearRPenumbraDist = fNearRLPenumbraDistances[RIGHT];
   float nearRUmbraDist = fNearRLUmbraDistances[RIGHT];
 
-  /*
+
   if ( vLREdgeDist > 200.0 ) return 0.10;
   if ( vLREdgeDist > 100.0  ) return 0.25;
   if ( vLREdgeDist > 50.0  ) return 0.4;
   if ( vLREdgeDist > 0.0 ) return 0.5;
-  if ( vLREdgeDist == 0.0 ) return 1.0;
+  if ( almostEqual(vLREdgeDist, 0.0, 1.0) ) return 1.0;
   if ( vLREdgeDist > -50.0  ) return 0.6;
   if ( vLREdgeDist > -100.0  ) return 0.75;
   if ( vLREdgeDist > -200.0  ) return 0.9;
   return 1.0;
-  */
+
   // penumbra: 158.47547912597656, 302.0068664550781
   // umbra: 83.15863037109375, 158.47547912597656
 
