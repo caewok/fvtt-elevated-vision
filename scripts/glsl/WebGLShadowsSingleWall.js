@@ -14,12 +14,23 @@ Wall
 import { MODULE_ID } from "../const.js";
 import { tokenIsOnGround, waypointIsOnGround, edgeElevationZ } from "../util.js";
 import { Draw } from "../geometry/Draw.js";
-import { ShadowMesh } from "./ShadowWallShader.js";
 import { ShadowTerrainShader } from "./ShadowTerrainShader.js";
 import { EVUpdatingQuadMesh, EVQuadMesh } from "./EVQuadMesh.js";
 import { ShadowTextureRenderer, ShadowVisionLOSTextureRenderer, ShadowDirectionalTextureRenderer } from "./ShadowTextureRenderer.js";
 import { ShadowVisionMaskShader, ShadowVisionMaskTokenLOSShader } from "./ShadowVisionMaskShader.js";
 import { DirectionalLightSource } from "../DirectionalLightSource.js";
+
+import {
+  SourceShadowSampleSingleWallGeometry,
+  PointSourceShadowSampleSingleWallGeometry,
+  DirectionalSourceShadowSampleSingleWallGeometry,
+} from "./SourceShadowSampleSingleWallGeometry.js";
+
+import {
+  ShadowSingleWallShader,
+  PointSourceShadowSingleWallShader,
+  DirectionalSourceShadowSingleWallShader
+} from "./ShadowSingleWallShader.js";
 
 import {
   SourceShadowSingleWallGeometry,
@@ -28,10 +39,11 @@ import {
 } from "./SourceShadowSingleWallGeometry.js";
 
 import {
-  ShadowSingleWallShader,
-  PointSourceShadowSingleWallShader,
-  DirectionalSourceShadowSingleWallShader
-} from "./ShadowSingleWallShader.js";
+  ShadowMesh,
+  ShadowWallShader,
+  SizedPointSourceShadowWallShader,
+  DirectionalShadowWallShader
+} from "./ShadowWallShader.js";
 
 const PIXEL_INV = 1 / 255;
 
@@ -45,10 +57,12 @@ export class WebGLShadowsSingleWall {
   static maskColor = 0xFF0000;
 
   /** @type {PIXI.Geometry} */
+  // static geometryClass = SourceShadowSampleSingleWallGeometry;
   static geometryClass = SourceShadowSingleWallGeometry;
 
   /** @type {AbstractEVShader} */
-  static shaderClass = ShadowSingleWallShader;
+  // static shaderClass = ShadowSingleWallShader;
+  static shaderClass = ShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -258,7 +272,8 @@ export class WebGLShadowsSingleWall {
 
     // TODO: Can this bounds check be moved to the above?
     if ( changedPosition || changedRadius ) this.shadowVisionMask.updateGeometry(this.bounds);
-    this.visionShader.sourceUpdated(changes);
+    if ( this.visionShader.sourceUpdated(changes) ) shadowsChanged ||= true;
+    return shadowsChanged;
   }
 
   /**
@@ -635,12 +650,6 @@ export class GlobalLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 
   sourceUpdated() { return false; }
 
-  edgeAdded() { return false; }
-
-  edgeUpdated() { return false; }
-
-  edgeRemoved() { return false; }
-
   /**
    * Destroy meshes, geometry, textures.
    */
@@ -678,10 +687,12 @@ export class GlobalLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 export class PointVisionWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 
   /** @type {PIXI.Geometry} */
+  // static geometryClass = SourceShadowSampleSingleWallGeometry;
   static geometryClass = SourceShadowSingleWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = ShadowSingleWallShader;
+  // static shaderClass = ShadowSingleWallShader;
+  static shaderClass = ShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;
@@ -769,10 +780,12 @@ export class PointVisionWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 export class PointLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 
   /** @type {PIXI.Geometry} */
+  // static geometryClass = PointSourceShadowSampleSingleWallGeometry;
   static geometryClass = PointSourceShadowSingleWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = PointSourceShadowSingleWallShader;
+  // static shaderClass = PointSourceShadowSingleWallShader;
+  static shaderClass = SizedPointSourceShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -786,18 +799,14 @@ export class PointLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
   /**
    * Update the shadow mesh, geometry, render, given changes.
    * @param {object} changes      Object of change data corresponding to source.data properties.
-   * @param {object} [changeObj]  Keys for changed items to override the changes object
    */
-  _updateShadowData(changes, changeObj = {}) {
-    // Sized point source shader must track light size.
-    changeObj.changedLightSize ??= Object.hasOwn(changes, "lightSize");
-
+  sourceUpdated(changes) {
     // Update the uniforms b/c they are not necessarily updated in drag operations.
     for ( const layer of Object.values(this.source.layers) ) {
       const shader = layer.shader;
       this._updateCommonUniforms(shader);
     }
-    super._updateShadowData(changes, changeObj);
+    return super.sourceUpdated(changes);
   }
 
   /**
@@ -818,10 +827,12 @@ export class PointLightWebGLShadowsSingleWall extends WebGLShadowsSingleWall {
 
 export class DirectionalLightWebGLShadowsSingleWall extends PointLightWebGLShadowsSingleWall {
   /** @type {PIXI.Geometry} */
+  // static geometryClass = DirectionalSourceShadowSampleSingleWallGeometry;
   static geometryClass = DirectionalSourceShadowSingleWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = DirectionalSourceShadowSingleWallShader;
+  // static shaderClass = DirectionalSourceShadowSingleWallShader;
+  static shaderClass = DirectionalShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;
@@ -831,20 +842,6 @@ export class DirectionalLightWebGLShadowsSingleWall extends PointLightWebGLShado
 
   /** @type {AbstractEVShader} */
   static shadowMaskClass = ShadowVisionMaskTokenLOSShader;
-
-  /**
-   * Update the shadow mesh, geometry, render, given changes.
-   * @param {object} changes      Object of change data corresponding to source.data properties.
-   * @param {object} [changeObj]  Keys for changed items to override the changes object
-   */
-  _updateShadowData(changes, changeObj = {}) {
-    if ( Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y") ) {
-      changeObj.changedAzimuth ??= true;
-      changeObj.changedElevationAngle ??= true;
-    }
-    changeObj.changedSolarAngle ??= Object.hasOwn(changes, "solarAngle");
-    super._updateShadowData(changes, changeObj);
-  }
 
   /**
    * Update uniforms for the source shader.

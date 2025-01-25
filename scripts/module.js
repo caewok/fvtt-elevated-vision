@@ -74,10 +74,10 @@ import {
   DirectionalRandomShadowsTest } from "./testing/WallShaderTest3.js";
 
 import {
-  SourceShadowSingleWallGeometry,
-  PointSourceShadowSingleWallGeometry,
-  DirectionalSourceShadowSingleWallGeometry,
-} from "./glsl/SourceShadowSingleWallGeometry.js";
+  SourceShadowSampleSingleWallGeometry,
+  PointSourceShadowSampleSingleWallGeometry,
+  DirectionalSourceShadowSampleSingleWallGeometry,
+} from "./glsl/SourceShadowSampleSingleWallGeometry.js";
 
 import {
   ShadowSingleWallShader,
@@ -86,13 +86,13 @@ import {
 } from "./glsl/ShadowSingleWallShader.js";
 
 import {
-  SourceShadowMultiWallGeometry,
-  PointSourceShadowMultiWallGeometry,
-  DirectionalSourceShadowMultiWallGeometry,
+  SourceShadowSampleMultiWallGeometry,
+  PointSourceShadowSampleMultiWallGeometry,
+  DirectionalSourceShadowSampleMultiWallGeometry,
   SourceShadowMultiWallSubGeometry,
   PointSourceShadowMultiWallSubGeometry,
   DirectionalSourceShadowMultiWallSubGeometry
-} from "./glsl/SourceShadowMultiWallGeometry.js";
+} from "./glsl/SourceShadowSampleMultiWallGeometry.js";
 
 import {
   WebGLShadows,
@@ -145,7 +145,7 @@ Hooks.once("init", function() {
      * For WebGLShadowsSingleWall and WebGLShadowsMultiWall, how many shadow triangles per edge.
      * @type {number} (
      */
-    webGLShadowSamples: 10,
+    webGLShadowSamples: 50,
 
     /**
      * ElevationLayer.
@@ -236,9 +236,9 @@ Hooks.once("init", function() {
       DirectionalShadowsTest,
       DirectionalRandomShadowsTest,
 
-      SourceShadowSingleWallGeometry,
-      PointSourceShadowSingleWallGeometry,
-      DirectionalSourceShadowSingleWallGeometry,
+      SourceShadowSampleSingleWallGeometry,
+      PointSourceShadowSampleSingleWallGeometry,
+      DirectionalSourceShadowSampleSingleWallGeometry,
 
       ShadowSingleWallShader,
       PointSourceShadowSingleWallShader,
@@ -246,9 +246,9 @@ Hooks.once("init", function() {
 
       WebGLShadowsSingleWall,
 
-      SourceShadowMultiWallGeometry,
-      PointSourceShadowMultiWallGeometry,
-      DirectionalSourceShadowMultiWallGeometry,
+      SourceShadowSampleMultiWallGeometry,
+      PointSourceShadowSampleMultiWallGeometry,
+      DirectionalSourceShadowSampleMultiWallGeometry,
       SourceShadowMultiWallSubGeometry,
       PointSourceShadowMultiWallSubGeometry,
       DirectionalSourceShadowMultiWallSubGeometry

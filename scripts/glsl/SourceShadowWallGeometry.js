@@ -3,8 +3,7 @@ canvas,
 CONFIG,
 CONST,
 foundry,
-PIXI,
-Wall
+PIXI
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -220,7 +219,6 @@ export class SourceShadowWallGeometry extends PIXI.Geometry {
    * @returns { corner0: {PIXI.Point}, corner1: {PIXI.Point}, topZ: {number}, bottomZ: {number} }
    */
   edgeCornerCoordinates(edge) {
-    const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
     const MAX_ELEV = 1e6;
 
     // TODO: Handle different a/b elevations.
@@ -688,6 +686,17 @@ sourceOrigin = geom.sourceOrigin;
       buffer.update(buffer.data);
     }
     this.indexBuffer.update(this.indexBuffer.data);
+  }
+
+  /**
+   * Update based on indicated changes to the source.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   */
+  sourceUpdated(changes) {
+    const changedPosition = changes.has("x") || changes.has("y");
+    if ( changedPosition ) return this.updateSourcePosition();
+    return false;
   }
 
   /**

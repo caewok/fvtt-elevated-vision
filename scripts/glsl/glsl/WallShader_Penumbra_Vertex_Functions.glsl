@@ -38,6 +38,12 @@ ${defineFunction("distanceToLine")}
 #define RIGHT                             0
 #define LEFT                              1
 
+#define SAME_SIDE(o0, o1) (o0 * o1 > 0.0)
+#define OPP_SIDE(o0, o1) (o0 * o1 < 0.0)
+#define COLLINEAR(o) (almostEqual(o, 0.0, 1.0e-06))
+#define COUNTERCLOCKWISE(o) (o > 0.0)
+#define CLOCKWISE(o) (o < 0.0)
+
 // Structs to simplify the data organization.
 
 /** Representation of a Foundry wall */
@@ -183,7 +189,7 @@ bool adjustSideShadowForLinkedEndpoints(inout ShadowDirections2d shadowDirs, in 
   // 3: Linked wall in quadrant with light, not blocking.
   float oLinkWall = orient(wXY, linkPt, other);
   float oLinkMid = orient(wXY, linkPt, midPt);
-  bool linkBetweenWallAndMid = oLinkWall * oLinkMid < 0.0;
+  bool linkBetweenWallAndMid = OPP_SIDE(oLinkWall, oLinkMid);
   if ( !linkBetweenWallAndMid ) return true;
 
   // 4. possible block.
@@ -192,7 +198,7 @@ bool adjustSideShadowForLinkedEndpoints(inout ShadowDirections2d shadowDirs, in 
   vec2 umbraPt = projectRay(umbraR, 1.0);
   float oUmbraLink = orient(wXY, umbraPt, linkPt);
   float oUmbraMid = orient(wXY, umbraPt, midPt);
-  bool linkAfterUmbra = oUmbraLink * oUmbraMid > 0.0;
+  bool linkAfterUmbra = SAME_SIDE(oUmbraLink, oUmbraMid);
   if ( !linkAfterUmbra ) return true;
 
   // Linked wall is after umbra, moving toward mid.
@@ -415,12 +421,14 @@ bool furthestShadowPoint(in vec3 samplePt, in vec3 wallPt, out vec3 ixP) {
  * For a given light center, determine the shadow triangle.
  * @param {vec3} O      The assumed center point of the light
  * @param {Wall} wall   The associated wall
+ * @param {bool} top    Is this for the top or bottom of the wall?
  * @returns {vec2[3]}  Triangle, from center through endpoint a and then endpoint b.
  */
-vec2[3] shadowTriangle(in vec3 O, in Wall wall) {
+vec2[3] shadowTriangle(in vec3 O, in Wall wall, in bool top) {
   vec2 a = wall.top[0].xy;
   vec2 b = wall.top[1].xy;
-  if ( almostEqual(orient(O.xy, a, b), 0.0, 1e-06) ) {
+  vec3 wallPt = top ? wall.top[1] : wall.bottom[0];
+  if ( COLLINEAR(orient(O.xy, a, b)) ) {
     // The triangle is a line.
     if ( isInfiniteTopShadow(O) ) {
       // Where O --> wall intersects the canvas edge.
@@ -432,7 +440,7 @@ vec2[3] shadowTriangle(in vec3 O, in Wall wall) {
     }
     // Where O --> further wall endpoint intersects the canvas plane.
     vec3 ixP;
-    furthestShadowPoint(O, wall.top[1], ixP); // Wall 1 is further.
+    furthestShadowPoint(O, wallPt, ixP); // Wall 1 is further.
     return vec2[3](O.xy, ixP.xy, ixP.xy);
   }
 
@@ -442,7 +450,7 @@ vec2[3] shadowTriangle(in vec3 O, in Wall wall) {
   // For non-infinite, intersect the canvas plane to determine extension point.
   Plane canvasPlane = constructCanvasPlane();
   vec3 ixP;
-  if ( !furthestShadowPoint(O, wall.top[1], ixP) ) return extendTriangleToCanvasEdge(vec2[3](O.xy, a, b));
+  if ( !furthestShadowPoint(O, wallPt, ixP) ) return extendTriangleToCanvasEdge(vec2[3](O.xy, a, b));
   Ray2d rWallIx = Ray2d(ixP.xy, b - a);
   Ray2d rOa = Ray2d(O.xy, a - O.xy);
   Ray2d rOb = Ray2d(O.xy, b - O.xy);
@@ -514,8 +522,8 @@ Ray2d leftRightBisector(in Wall wall, in bool isCollinear) {
  * @returns {Ray2d}
  */
 Ray2d frontBackBisector(in Wall wall, in bool isCollinear) {
-  if ( isCollinear ) return Ray2d(wall.top[0].xy, vec2(-wall.direction.y, wall.direction.x));
-  return Ray2d(wall.mid, wall.direction);
+  if ( !isCollinear ) return Ray2d(wall.mid, wall.direction);
+  return Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
 }
 
 /**
@@ -544,14 +552,18 @@ void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
   if ( vertexNum == 0 ) vEdgeDist *= -1.0;
 
   // @type {vec3} vLREdgeDist    Triangle A --> ix --> C, where
-  //   ix is the intersection of the rCollinearWall with A->B.
+  //   ix is the intersection of the rRLWall with A->B.
+  // Left side is +, right side is -.
   vLREdgeDist = 0.0;
-  if ( isCollinear && vertexNum != 0 ) {
-    Ray2d rLRWall = leftRightBisector(wall, isCollinear);
-    vLREdgeDist = distanceToLine(vVertexPosition, rLRWall.origin, rLRWall.direction);
-    vLREdgeDist *= sign(orient(rLRWall.origin, projectRay(rLRWall, 1.0), vVertexPosition));
-    // Left side is 1.0, right side is -1.0.
-
+  if ( (vertexNum != 0 && isCollinear) || !isCollinear ) {
+    Ray2d rRLWall = leftRightBisector(wall, isCollinear);
+    vLREdgeDist = distanceToLine(vVertexPosition, rRLWall.origin, rRLWall.direction);
+    vec2 projPt = projectRay(rRLWall, 1.0);
+    float projDir = 1.0;
+    if ( !isCollinear
+      && OPP_SIDE(orient(wall.top[0].xy, wall.top[1].xy, penumbraTri[1]),
+                  orient(wall.top[0].xy, wall.top[1].xy, projPt)) ) projDir = -1.0;
+    vLREdgeDist *= sign(orient(rRLWall.origin, projectRay(rRLWall, projDir), vVertexPosition));
   }
 }
 

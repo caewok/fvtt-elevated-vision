@@ -23,6 +23,7 @@ flat in vec2 fFarRLPenumbraDistances;
 flat in vec2 fFarRLUmbraDistances;
 flat in vec2 fNearRLPenumbraDistances;
 flat in vec2 fNearRLUmbraDistances;
+flat in vec2 fAmbient;
 
 out vec4 fragColor;
 

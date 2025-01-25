@@ -86,19 +86,28 @@ export class CombinedGeometry extends PIXI.Geometry {
 
     // Add to existing sub-geometries.
     const numSubGeoms = this.subgeometries.length;
-    const attrData = this.getBuffer(id).data;
-    for ( let i = 0; i < numSubGeoms; i += 1 ) {
-      const attribute = this.attributes[id];
-      const newData = new attrData.constructor(
-        attrData.buffer,
-        attrData.BYTES_PER_ELEMENT * subclassSize * i,
-        subclassSize);
-      this.subgeometries[i].addAttribute(id, newData, attribute.size, attribute.normalized, attribute.type);
-    }
+    for ( let i = 0; i < numSubGeoms; i += 1 ) this.#addAttribute(this.subgeometries[i], id, i);
 
     // Add new sub-geometries.
     if ( numSubs > numSubGeoms ) return this._addSubGeometries(numSubs - numSubGeoms);
     return [];
+  }
+
+  /**
+   * Add attribute to a subgeometry.
+   * @param {SubGeometry} geom    Subgeometry to modify
+   * @param {string} id           Attribute id
+   * @param {number} [offset=0]   Offset in the data buffer to use
+   */
+  #addAttribute(geom, id, offset = 0) {
+    const subclassSize = this.subclassSize;
+    const attribute = this.attributes[id];
+    const attrData = this.getBuffer(id).data;
+    const newData = new attrData.constructor(
+      attrData.buffer,
+      attrData.BYTES_PER_ELEMENT * subclassSize * attribute.size * offset,
+      subclassSize * attribute.size);
+    geom.addAttribute(id, newData, attribute.size, attribute.normalized, attribute.type);
   }
 
   /**
@@ -114,18 +123,26 @@ export class CombinedGeometry extends PIXI.Geometry {
 
     // Add to existing sub-geometries.
     const numSubGeoms = this.subgeometries.length;
-    const indexData = this.indexBuffer.data;
-    for ( let i = 0; i < numSubGeoms; i += 1 ) {
-      const newIndex = new indexData.constructor(
-        indexData.buffer,
-        indexData.BYTES_PER_ELEMENT * subclassSize * i,
-        subclassSize);
-      this.subgeometries[i].addIndex(newIndex);
-    }
+    for ( let i = 0; i < numSubGeoms; i += 1 ) this.#addIndex(this.subgeometries[i], i);
 
     // Add new sub-geometries.
     if ( numSubs > numSubGeoms ) return this._addSubGeometries(numSubs - numSubGeoms);
     return [];
+  }
+
+  /**
+   * Add index to a subgeometry.
+   * @param {SubGeometry} geom    Subgeometry to modify
+   * @param {number} [offset=0]   Offset in the data buffer to use
+   */
+  #addIndex(geom, offset = 0) {
+    const subclassSize = this.subclassSize;
+    const indexData = this.indexBuffer.data;
+    const newIndex = new indexData.constructor(
+      indexData.buffer,
+      indexData.BYTES_PER_ELEMENT * subclassSize * offset,
+      subclassSize);
+    geom.addIndex(newIndex);
   }
 
   /**
@@ -156,9 +173,9 @@ export class CombinedGeometry extends PIXI.Geometry {
       this.#replaceIndexBuffer();
     }
 
-    for ( const id of Object.keys(this.attributes) ) {
+    for ( const [id, attribute] of Object.entries(this.attributes) ) {
       const attributeBuffer = this.getBuffer(id);
-      attributeData.id ??= new attributeBuffer.data.constructor(subclassSize); // All zeros.
+      attributeData.id ??= new attributeBuffer.data.constructor(attribute.size * subclassSize); // All zeros.
 
       // Increase the size of the buffer to hold the new data.
       attributeBuffer.data = this.constructor.addToBuffer(attributeBuffer.data, attributeData.id);
@@ -201,25 +218,13 @@ export class CombinedGeometry extends PIXI.Geometry {
    * to add the geometry.
    */
   #addSubGeometryWithoutResize() {
-    const subclassSize = this.subclassSize;
     const geom = new this.subclass();
-    if ( this.indexBuffer ) {
-      // Add new index to the new sub-geometry.
-      const newIndex = new this.indexBuffer.data.constructor(
-        this.indexBuffer.data.buffer,
-        this.indexBuffer.data.BYTES_PER_ELEMENT * subclassSize,
-        subclassSize);
-      geom.addIndex(newIndex);
-    }
-    for ( const [id, attribute] of Object.entries(this.attributes) ) {
-      // Add a new attribute to the new sub-geometry.
-      const attributeBuffer = this.getBuffer(id);
-      const newData = new attributeBuffer.data.constructor(
-        attributeBuffer.data.buffer,
-        attributeBuffer.data.BYTES_PER_ELEMENT * subclassSize,
-        subclassSize);
-      geom.addAttribute(id, newData, attribute.size, attribute.normalized, attribute.type);
-    }
+
+    // Add new index to the new sub-geometry.
+    if ( this.indexBuffer ) this.#addIndex(geom);
+
+    // Add a new attribute to the new sub-geometry.
+    for ( const id of Object.keys(this.attributes) ) this.#addAttribute(geom, id);
     this.subgeometries.push(geom);
     return geom;
   }

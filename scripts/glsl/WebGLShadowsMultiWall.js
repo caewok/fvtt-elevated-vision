@@ -14,12 +14,23 @@ Wall
 import { MODULE_ID } from "../const.js";
 import { tokenIsOnGround, waypointIsOnGround, edgeElevationZ } from "../util.js";
 import { Draw } from "../geometry/Draw.js";
-import { ShadowMesh } from "./ShadowWallShader.js";
 import { ShadowTerrainShader } from "./ShadowTerrainShader.js";
 import { EVUpdatingQuadMesh, EVQuadMesh } from "./EVQuadMesh.js";
 import { ShadowTextureRenderer, ShadowVisionLOSTextureRenderer, ShadowDirectionalTextureRenderer } from "./ShadowTextureRenderer.js";
 import { ShadowVisionMaskShader, ShadowVisionMaskTokenLOSShader } from "./ShadowVisionMaskShader.js";
 import { DirectionalLightSource } from "../DirectionalLightSource.js";
+
+import {
+  SourceShadowSampleMultiWallGeometry,
+  PointSourceShadowSampleMultiWallGeometry,
+  DirectionalSourceShadowSampleMultiWallGeometry,
+} from "./SourceShadowSampleMultiWallGeometry.js";
+
+import {
+  ShadowMultiWallShader,
+  PointSourceShadowMultiWallShader,
+  DirectionalSourceShadowMultiWallShader
+} from "./ShadowMultiWallShader.js";
 
 import {
   SourceShadowMultiWallGeometry,
@@ -28,10 +39,11 @@ import {
 } from "./SourceShadowMultiWallGeometry.js";
 
 import {
-  ShadowMultiWallShader,
-  PointSourceShadowMultiWallShader,
-  DirectionalSourceShadowMultiWallShader
-} from "./ShadowMultiWallShader.js";
+  ShadowMesh,
+  ShadowWallShader,
+  SizedPointSourceShadowWallShader,
+  DirectionalShadowWallShader
+} from "./ShadowWallShader.js";
 
 const PIXEL_INV = 1 / 255;
 
@@ -45,10 +57,12 @@ export class WebGLShadowsMultiWall {
   static maskColor = 0xFF0000;
 
   /** @type {PIXI.Geometry} */
+  // static geometryClass = SourceShadowSampleMultiWallGeometry;
   static geometryClass = SourceShadowMultiWallGeometry;
 
   /** @type {AbstractEVShader} */
-  static shaderClass = ShadowMultiWallShader;
+  // static shaderClass = ShadowMultiWallShader;
+  static shaderClass = ShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -189,7 +203,6 @@ export class WebGLShadowsMultiWall {
   sourceUpdated(changes) {
     const changedPosition = changes.has("x") || changes.has("y");
     const changedRadius = changes.has("dim");
-
     const shaderChanged = this.shadowMesh.shader.sourceUpdated(changes);
     const geomChanged = this.shadowMesh.geometry.sourceUpdated(changes);
     let shadowsChanged = (shaderChanged || geomChanged);
@@ -201,7 +214,8 @@ export class WebGLShadowsMultiWall {
 
     // TODO: Can this bounds check be moved to the above?
     if ( changedPosition || changedRadius ) this.shadowVisionMask.updateGeometry(this.bounds);
-    this.visionShader.sourceUpdated(changes);
+    if ( this.visionShader.sourceUpdated(changes) ) shadowsChanged ||= true;
+    return shadowsChanged;
   }
 
   /**
@@ -487,12 +501,6 @@ export class GlobalLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   sourceUpdated() { return false; }
 
-  edgeAdded() { return false; }
-
-  edgeUpdated() { return false; }
-
-  edgeRemoved() { return false; }
-
   /**
    * Destroy meshes, geometry, textures.
    */
@@ -530,10 +538,12 @@ export class GlobalLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 export class PointVisionWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   /** @type {PIXI.Geometry} */
+  // static geometryClass = SourceShadowSampleMultiWallGeometry;
   static geometryClass = SourceShadowMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = ShadowMultiWallShader;
+  // static shaderClass = ShadowMultiWallShader;
+  static shaderClass = ShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;
@@ -606,10 +616,12 @@ export class PointVisionWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 export class PointLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
   /** @type {PIXI.Geometry} */
+  // static geometryClass = PointSourceShadowSampleMultiWallGeometry;
   static geometryClass = PointSourceShadowMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = PointSourceShadowMultiWallShader;
+  // static shaderClass = PointSourceShadowMultiWallShader;
+  static shaderClass = SizedPointSourceShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
@@ -621,20 +633,17 @@ export class PointLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
   static shadowMaskClass = ShadowVisionMaskShader;
 
   /**
-   * Update the shadow mesh, geometry, render, given changes.
-   * @param {object} changes      Object of change data corresponding to source.data properties.
-   * @param {object} [changeObj]  Keys for changed items to override the changes object
+   * Update based on indicated changes to the source.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  _updateShadowData(changes, changeObj = {}) {
-    // Sized point source shader must track light size.
-    changeObj.changedLightSize ??= Object.hasOwn(changes, "lightSize");
-
+  sourceUpdated(changes) {
     // Update the uniforms b/c they are not necessarily updated in drag operations.
     for ( const layer of Object.values(this.source.layers) ) {
       const shader = layer.shader;
       this._updateCommonUniforms(shader);
     }
-    super._updateShadowData(changes, changeObj);
+    super.sourceUpdated(changes);
   }
 
   /**
@@ -655,10 +664,12 @@ export class PointLightWebGLShadowsMultiWall extends WebGLShadowsMultiWall {
 
 export class DirectionalLightWebGLShadowsMultiWall extends PointLightWebGLShadowsMultiWall {
   /** @type {PIXI.Geometry} */
+  // static geometryClass = DirectionalSourceShadowSampleMultiWallGeometry;
   static geometryClass = DirectionalSourceShadowMultiWallGeometry;
 
   /** @type {PIXI.Shader} */
-  static shaderClass = DirectionalSourceShadowMultiWallShader;
+  // static shaderClass = DirectionalSourceShadowMultiWallShader;
+  static shaderClass = DirectionalShadowWallShader;
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVQuadMesh;
@@ -668,20 +679,6 @@ export class DirectionalLightWebGLShadowsMultiWall extends PointLightWebGLShadow
 
   /** @type {AbstractEVShader} */
   static shadowMaskClass = ShadowVisionMaskTokenLOSShader;
-
-  /**
-   * Update the shadow mesh, geometry, render, given changes.
-   * @param {object} changes      Object of change data corresponding to source.data properties.
-   * @param {object} [changeObj]  Keys for changed items to override the changes object
-   */
-  _updateShadowData(changes, changeObj = {}) {
-    if ( Object.hasOwn(changes, "x") || Object.hasOwn(changes, "y") ) {
-      changeObj.changedAzimuth ??= true;
-      changeObj.changedElevationAngle ??= true;
-    }
-    changeObj.changedSolarAngle ??= Object.hasOwn(changes, "solarAngle");
-    super._updateShadowData(changes, changeObj);
-  }
 
   /**
    * Update uniforms for the source shader.

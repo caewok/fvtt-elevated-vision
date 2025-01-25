@@ -16,6 +16,12 @@
 #define RIGHT                             0
 #define LEFT                              1
 
+#define SAME_SIDE(o0, o1) (o0 * o1 > 0.0)
+#define OPP_SIDE(o0, o1) (o0 * o1 < 0.0)
+#define COLLINEAR(o) (almostEqual(o, 0.0, 1.0e-06))
+#define COUNTERCLOCKWISE(o) (o > 0.0)
+#define CLOCKWISE(o) (o < 0.0)
+
 ${defineFunction("terrainElevation")}
 ${defineFunction("between")}
 ${defineFunction("distanceSquared")}
@@ -173,7 +179,11 @@ float nearRUmbraDistance(in float elevation) { return _nearFarDistance(elevation
 /**
  * Is the fragment location in front of the wall?
  */
-bool inFrontOfWall() { return vEdgeDist < 0.0; }
+bool inFrontOfWall() {
+  // If collinear, cannot be in front of wall.
+  if ( fAmbient[0] * fAmbient[1] != 0.0 ) return false;
+  return vEdgeDist < 0.0;
+}
 
 /**
  * Does a threshold apply?

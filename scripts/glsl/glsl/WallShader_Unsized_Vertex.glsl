@@ -23,6 +23,7 @@ flat out vec2 fFarRLPenumbraDistances;
 flat out vec2 fFarRLUmbraDistances;
 flat out vec2 fNearRLPenumbraDistances;
 flat out vec2 fNearRLUmbraDistances;
+flat out vec2 fAmbient;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -64,7 +65,7 @@ ${PENUMBRA_VERTEX_FUNCTIONS}
 vec2[3] definePenumbraTriangle(in Wall wall) {
   // return vec2[3](uLightPosition.xy, aWallCorner0.xy, aWallCorner0.xy);
 
-  return shadowTriangle(uLightPosition, wall);
+  return shadowTriangle(uLightPosition, wall, true);
 }
 
 /**
