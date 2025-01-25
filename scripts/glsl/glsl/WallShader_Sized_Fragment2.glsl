@@ -5,11 +5,11 @@ precision ${PRECISION_VERTEX} float;
 // #define SHADOW true
 
 #define TOTAL_COLLISIONS      50
-#define TOTAL_MID_COLLISIONS  ((TOTAL_COLLISIONS / 2) - 4)
+#define TOTAL_MID_COLLISIONS  ((TOTAL_COLLISIONS / 2) - 2)
 
 // Type of algorithm to use to generate collision test points.
 // 0: random 3d, 1: random 2d, 2: fixed spacing 2d
-#define ALG_TYPE              0
+#define ALG_TYPE              2
 
 uniform sampler2D uTerrainSampler;
 uniform vec3 uLightPosition;
@@ -165,46 +165,48 @@ float shadowPercentage() {
    * If the light and fragment are at the same elevation, this would be a vertical circle.
    * Use this circle to generate test points.
    */
-  Plane lightCircle = Plane(uLightPosition, normalizedDirection(a, uLightPosition));
-  vec3 u;
-  vec3 v;
-  planeAxisVectors(lightCircle, u, v);
+  // Use cross product to find the horizontal and vertical vectors.
+  vec3 viewV = normalizedDirection(a, uLightPosition);
+  vec3 hCross = normalize(vec3(-viewV.y, viewV.x, 0.0)); // Always align along horizontal plane.
+  vec3 vCross = cross(viewV, hCross); // Tilt vertical plane to keep perpendicular with the view ray.
 
   // Add up the collisions along the horizontal axis of the light circle
   // e.g. 5 collisions.
   // • • • • •
   // 2 are at the edges.
   // 3 points, 25% step each time. If uLightSize = 50, nStep is (50 * 2) / (3 + 1) = 100 / 4 = 25
-  float nStep = (uLightSize * 2.0) / float(TOTAL_MID_COLLISIONS + 1);
-
+  float stepSize = (uLightSize * 2.0) / float(TOTAL_MID_COLLISIONS + 1);
   float hCollisions = 0.0;
   for ( int i = 0; i < TOTAL_MID_COLLISIONS; i += 1 ) {
-    vec2 pt2d = vec2(0.0, (nStep * float(i + 1)) - uLightSize);
-    vec3 pt3d = planePointTo3d(pt2d, lightCircle, u, v);
+    float s = (stepSize * float(i + 1)) - uLightSize;
+    vec3 pt3d = uLightPosition + (hCross * s);
     hCollisions += wallCollision(Ray(a, normalizedDirection(a, pt3d)));
   }
 
   // Each edge counts as half.
-  vec3 h0 = planePointTo3d(vec2(0.0, -uLightSize), lightCircle, u, v);
+  vec3 h0 = uLightPosition + (hCross * -uLightSize);
+  vec3 h1 = uLightPosition + (hCross * uLightSize);
   hCollisions += (wallCollision(Ray(a, normalizedDirection(a, h0))) * 0.5);
-  vec3 h1 = planePointTo3d(vec2(0.0, uLightSize), lightCircle, u, v);
   hCollisions += (wallCollision(Ray(a, normalizedDirection(a, h1))) * 0.5);
 
   // Add up the collisions along the vertical axis of the light circle
   float vCollisions = 0.0;
   for ( int i = 0; i < TOTAL_MID_COLLISIONS; i += 1 ) {
-    vec2 pt2d = vec2((nStep * float(i + 1)) - uLightSize, 0.0);
-    vec3 pt3d = planePointTo3d(pt2d, lightCircle, u, v);
+    float s = (stepSize * float(i + 1)) - uLightSize;
+    vec3 pt3d = uLightPosition + (vCross * s);
     vCollisions += wallCollision(Ray(a, normalizedDirection(a, pt3d)));
   }
 
   // Each edge counts as half.
-  vec3 v0 = planePointTo3d(vec2(-uLightSize, 0.0), lightCircle, u, v);
+  vec3 v0 = uLightPosition + (vCross * -uLightSize);
+  vec3 v1 = uLightPosition + (vCross * uLightSize);
   vCollisions += (wallCollision(Ray(a, normalizedDirection(a, v0))) * 0.5);
-  vec3 v1 = planePointTo3d(vec2(uLightSize, 0.0), lightCircle, u, v);
   vCollisions += (wallCollision(Ray(a, normalizedDirection(a, v1))) * 0.5);
 
   // Multiply the amount of horizontal shadow times the amount of vertical shadow.
+  // return hCollisions / float(TOTAL_MID_COLLISIONS + 1);
+  // return vCollisions / float(TOTAL_MID_COLLISIONS + 1);
+
   return (hCollisions / float(TOTAL_MID_COLLISIONS + 1))
        * (vCollisions / float(TOTAL_MID_COLLISIONS + 1));
 
