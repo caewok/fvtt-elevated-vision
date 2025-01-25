@@ -503,17 +503,17 @@ void defineFlats(in Wall wall,
 
   // Orient the left and right tri
   Ray2d rRLWall = leftRightBisector(wall, nearCollinear);
+  vec2 projRLPt = projectRay(rRLWall, 1.0);
   if ( !nearCollinear ) {
     // Ray rRLWall could point either way; turn it so it points away from the light.
-    vec2 projPt = projectRay(rRLWall, 1.0);
-    if ( SAME_SIDE(orient(W0, W1, projPt),
+    if ( SAME_SIDE(orient(W0, W1, projRLPt),
       orient(W0, W1, uLightPosition.xy)) ) rRLWall.direction *= vec2(-1.0);
+    projRLPt = projectRay(rRLWall, 1.0);
   }
 
-  vec2 ptLRWall = projectRay(rRLWall, 1.0);
   vec2[3] rightFarTri;
   vec2[3] leftFarTri;
-  if ( CLOCKWISE(orient(rRLWall.origin, ptLRWall, GHI[1])) ) {
+  if ( CLOCKWISE(orient(rRLWall.origin, projRLPt, GHI[1])) ) {
     rightFarTri = GHI;
     leftFarTri = DEF;
   } else {
@@ -596,42 +596,55 @@ void defineFlats(in Wall wall,
   this.fNearRLPenumbraDistances[RIGHT] = maxLDist;
   */
 
-  // TODO: How to ensure the [1] points are right and the [2] points are left, or vice-versa?
   if ( !nearCollinear && (hasFarP || hasFarU) ) {
-    float farLDist1 = distanceSquaredToLine(leftNearTri[1], rRLWall.origin, rRLWall.direction);
-    float farRDist1 = distanceSquaredToLine(rightNearTri[1], rRLWall.origin, rRLWall.direction);
-    float farLDist2 = distanceSquaredToLine(leftNearTri[2], rRLWall.origin, rRLWall.direction);
-    float farRDist2 = distanceSquaredToLine(rightNearTri[2], rRLWall.origin, rRLWall.direction);
+    float farLDist = distanceSquaredToLine(leftFarTri[1], rRLWall.origin, rRLWall.direction);
+    float farRDist = distanceSquaredToLine(rightFarTri[1], rRLWall.origin, rRLWall.direction);
     if ( hasFarP ) {
-      float farPDist1 = distanceSquaredToLine(farPenumbraTri[1], rRLWall.origin, rRLWall.direction);
-      float farPDist2 = distanceSquaredToLine(farPenumbraTri[2], rRLWall.origin, rRLWall.direction);
-      fFarRLPenumbraDistances[RIGHT] = sqrt(max(max(farLDist1, farRDist1), farPDist1));
-      fFarRLPenumbraDistances[LEFT] = sqrt(max(max(farLDist2, farRDist2), farPDist2));
+      int idx = int(CLOCKWISE(orient(rRLWall.origin, projRLPt, farPenumbraTri[2]))); // 2 is right: idx 1; 2 is left: idx 0
+      int lIdx = 2 - idx; // 2 is right: 2 - 1 = 1; 2 is left: 2 - 0 = 2
+      int rIdx = idx + 1; // 2 is right: 1 + 1 = 2; 2 is left: 0 + 1 = 1
+
+      float farPDistL = distanceSquaredToLine(farPenumbraTri[lIdx], rRLWall.origin, rRLWall.direction);
+      float farPDistR = distanceSquaredToLine(farPenumbraTri[rIdx], rRLWall.origin, rRLWall.direction);
+      fFarRLPenumbraDistances[RIGHT] = sqrt(max(farRDist, farPDistR));
+      fFarRLPenumbraDistances[LEFT] = sqrt(max(farLDist, farPDistL));
     }
     if ( hasFarU ) {
-      float farUDist1 = distanceSquaredToLine(farUmbraTri[1], rRLWall.origin, rRLWall.direction);
-      float farUDist2 = distanceSquaredToLine(farUmbraTri[2], rRLWall.origin, rRLWall.direction);
-      fFarRLUmbraDistances[RIGHT] = sqrt(min(min(farLDist1, farRDist1), farUDist1));
-      fFarRLUmbraDistances[LEFT] = sqrt(min(min(farLDist2, farRDist2), farUDist2));
+      int idx = int(COUNTERCLOCKWISE(orient(rRLWall.origin, projRLPt, farUmbraTri[2]))); // 2 is right: idx 1; 2 is left: idx 0
+      int lIdx = 2 - idx; // 2 is right: 2 - 1 = 1; 2 is left: 2 - 0 = 2
+      int rIdx = idx + 1; // 2 is right: 1 + 1 = 2; 2 is left: 0 + 1 = 1
+
+      float wallDist = distanceSquared(W0, rRLWall.origin);
+      float farUDistL = distanceSquaredToLine(farUmbraTri[lIdx], rRLWall.origin, rRLWall.direction);
+      float farUDistR = distanceSquaredToLine(farUmbraTri[rIdx], rRLWall.origin, rRLWall.direction);
+      fFarRLUmbraDistances[RIGHT] = sqrt(min(min(wallDist, farRDist), farUDistR));
+      fFarRLUmbraDistances[LEFT] = sqrt(min(min(wallDist, farLDist), farUDistL));
     }
   }
 
   if ( !nearCollinear && (hasNearP || hasNearU) ) {
-    float nearLDist1 = distanceSquaredToLine(leftNearTri[1], rRLWall.origin, rRLWall.direction);
-    float nearRDist1 = distanceSquaredToLine(rightNearTri[1], rRLWall.origin, rRLWall.direction);
-    float nearLDist2 = distanceSquaredToLine(leftNearTri[2], rRLWall.origin, rRLWall.direction);
-    float nearRDist2 = distanceSquaredToLine(rightNearTri[2], rRLWall.origin, rRLWall.direction);
+    float nearLDist = distanceSquaredToLine(leftNearTri[1], rRLWall.origin, rRLWall.direction);
+    float nearRDist = distanceSquaredToLine(rightNearTri[1], rRLWall.origin, rRLWall.direction);
     if ( hasNearP ) {
-      float nearPDist1 = distanceSquaredToLine(nearPenumbraTri[1], rRLWall.origin, rRLWall.direction);
-      float nearPDist2 = distanceSquaredToLine(nearPenumbraTri[2], rRLWall.origin, rRLWall.direction);
-      fNearRLPenumbraDistances[RIGHT] = sqrt(max(max(nearLDist1, nearRDist1), nearPDist1));
-      fNearRLPenumbraDistances[LEFT] = sqrt(max(max(nearLDist2, nearRDist2), nearPDist2));
+      int idx = int(CLOCKWISE(orient(rRLWall.origin, projRLPt, nearPenumbraTri[2]))); // 2 is right: idx 1; 2 is left: idx 0
+      int lIdx = 2 - idx; // 2 is right: 2 - 1 = 1; 2 is left: 2 - 0 = 2
+      int rIdx = idx + 1; // 2 is right: 1 + 1 = 2; 2 is left: 0 + 1 = 1
+
+      float nearPDistL = distanceSquaredToLine(nearPenumbraTri[lIdx], rRLWall.origin, rRLWall.direction);
+      float nearPDistR = distanceSquaredToLine(nearPenumbraTri[rIdx], rRLWall.origin, rRLWall.direction);
+      fNearRLPenumbraDistances[RIGHT] = sqrt(max(nearRDist, nearPDistR));
+      fNearRLPenumbraDistances[LEFT] = sqrt(max(nearLDist, nearPDistL));
     }
     if ( hasNearU ) {
-      float nearUDist1 = distanceSquaredToLine(nearUmbraTri[1], rRLWall.origin, rRLWall.direction);
-      float nearUDist2 = distanceSquaredToLine(nearUmbraTri[2], rRLWall.origin, rRLWall.direction);
-      fNearRLUmbraDistances[RIGHT] = sqrt(min(min(nearLDist1, nearRDist1), nearUDist1));
-      fNearRLUmbraDistances[LEFT] = sqrt(min(min(nearLDist2, nearRDist2), nearUDist2));
+      int idx = int(COUNTERCLOCKWISE(orient(rRLWall.origin, projRLPt, nearUmbraTri[2]))); // 2 is right: idx 1; 2 is left: idx 0
+      int lIdx = 2 - idx; // 2 is right: 2 - 1 = 1; 2 is left: 2 - 0 = 2
+      int rIdx = idx + 1; // 2 is right: 1 + 1 = 2; 2 is left: 0 + 1 = 1
+
+      float wallDist = distanceSquared(W0, rRLWall.origin);
+      float nearUDistL = distanceSquaredToLine(nearUmbraTri[lIdx], rRLWall.origin, rRLWall.direction);
+      float nearUDistR = distanceSquaredToLine(nearUmbraTri[rIdx], rRLWall.origin, rRLWall.direction);
+      fNearRLUmbraDistances[RIGHT] = sqrt(min(min(wallDist, nearRDist), nearUDistR));
+      fNearRLUmbraDistances[LEFT] = sqrt(min(min(wallDist, nearLDist), nearUDistL));
     }
   }
 

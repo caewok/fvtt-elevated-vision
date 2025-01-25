@@ -553,12 +553,17 @@ void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
 
   // @type {vec3} vLREdgeDist    Triangle A --> ix --> C, where
   //   ix is the intersection of the rRLWall with A->B.
+  // Left side is +, right side is -.
   vLREdgeDist = 0.0;
   if ( (vertexNum != 0 && isCollinear) || !isCollinear ) {
-    Ray2d rLRWall = leftRightBisector(wall, isCollinear);
-    vLREdgeDist = distanceToLine(vVertexPosition, rLRWall.origin, rLRWall.direction);
-    vLREdgeDist *= sign(orient(rLRWall.origin, projectRay(rLRWall, 1.0), vVertexPosition));
-    // Left side is 1.0, right side is -1.0.
+    Ray2d rRLWall = leftRightBisector(wall, isCollinear);
+    vLREdgeDist = distanceToLine(vVertexPosition, rRLWall.origin, rRLWall.direction);
+    vec2 projPt = projectRay(rRLWall, 1.0);
+    float projDir = 1.0;
+    if ( !isCollinear
+      && OPP_SIDE(orient(wall.top[0].xy, wall.top[1].xy, penumbraTri[1]),
+                  orient(wall.top[0].xy, wall.top[1].xy, projPt)) ) projDir = -1.0;
+    vLREdgeDist *= sign(orient(rRLWall.origin, projectRay(rRLWall, projDir), vVertexPosition));
   }
 }
 
