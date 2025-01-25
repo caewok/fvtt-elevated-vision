@@ -65,7 +65,7 @@ ${PENUMBRA_VERTEX_FUNCTIONS}
 vec2[3] definePenumbraTriangle(in Wall wall) {
   // return vec2[3](uLightPosition.xy, aWallCorner0.xy, aWallCorner0.xy);
 
-  return shadowTriangle(uLightPosition, wall);
+  return shadowTriangle(uLightPosition, wall, true);
 }
 
 /**

@@ -280,8 +280,8 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vTang
 
   // ∆DEF and ∆GHI represent the furtherest extent of the shadow because D and G are
   // near-tangent points.
-  vec2[3] DEF = shadowTriangle(vec3(D, uLightPosition.z), wall); // Z axis not used for this.
-  vec2[3] GHI = shadowTriangle(vec3(G, uLightPosition.z), wall); // Z axis not used for this.
+  vec2[3] DEF = shadowTriangle(vec3(D, uLightPosition.z), wall, true); // Z axis not used for this.
+  vec2[3] GHI = shadowTriangle(vec3(G, uLightPosition.z), wall, true); // Z axis not used for this.
   E = DEF[1]; // Penumbra line
   F = DEF[2]; // Umbra line
 
@@ -291,7 +291,7 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in Wall wall, in vec3[2] vTang
 
   // Use the lower tangent to determine the furthest extent of the shadow from the wall.
   int idx = int(vTangents[0].z > vTangents[1].z); // Pick the lower in z direction.
-  vec2[3] JKL = shadowTriangle(vTangents[idx], wall);
+  vec2[3] JKL = shadowTriangle(vTangents[idx], wall, true);
 
   // Determine B and C by connecting to the penumbra lines.
   // If collinear, it is unclear which one is further.

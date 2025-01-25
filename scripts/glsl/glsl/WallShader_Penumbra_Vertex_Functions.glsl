@@ -421,11 +421,13 @@ bool furthestShadowPoint(in vec3 samplePt, in vec3 wallPt, out vec3 ixP) {
  * For a given light center, determine the shadow triangle.
  * @param {vec3} O      The assumed center point of the light
  * @param {Wall} wall   The associated wall
+ * @param {bool} top    Is this for the top or bottom of the wall?
  * @returns {vec2[3]}  Triangle, from center through endpoint a and then endpoint b.
  */
-vec2[3] shadowTriangle(in vec3 O, in Wall wall) {
+vec2[3] shadowTriangle(in vec3 O, in Wall wall, in bool top) {
   vec2 a = wall.top[0].xy;
   vec2 b = wall.top[1].xy;
+  vec3 wallPt = top ? wall.top[1] : wall.bottom[0];
   if ( COLLINEAR(orient(O.xy, a, b)) ) {
     // The triangle is a line.
     if ( isInfiniteTopShadow(O) ) {
@@ -438,7 +440,7 @@ vec2[3] shadowTriangle(in vec3 O, in Wall wall) {
     }
     // Where O --> further wall endpoint intersects the canvas plane.
     vec3 ixP;
-    furthestShadowPoint(O, wall.top[1], ixP); // Wall 1 is further.
+    furthestShadowPoint(O, wallPt, ixP); // Wall 1 is further.
     return vec2[3](O.xy, ixP.xy, ixP.xy);
   }
 
@@ -448,7 +450,7 @@ vec2[3] shadowTriangle(in vec3 O, in Wall wall) {
   // For non-infinite, intersect the canvas plane to determine extension point.
   Plane canvasPlane = constructCanvasPlane();
   vec3 ixP;
-  if ( !furthestShadowPoint(O, wall.top[1], ixP) ) return extendTriangleToCanvasEdge(vec2[3](O.xy, a, b));
+  if ( !furthestShadowPoint(O, wallPt, ixP) ) return extendTriangleToCanvasEdge(vec2[3](O.xy, a, b));
   Ray2d rWallIx = Ray2d(ixP.xy, b - a);
   Ray2d rOa = Ray2d(O.xy, a - O.xy);
   Ray2d rOb = Ray2d(O.xy, b - O.xy);
@@ -520,8 +522,8 @@ Ray2d leftRightBisector(in Wall wall, in bool isCollinear) {
  * @returns {Ray2d}
  */
 Ray2d frontBackBisector(in Wall wall, in bool isCollinear) {
-  if ( isCollinear ) return Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
-  return Ray2d(wall.mid, wall.direction);
+  if ( !isCollinear ) return Ray2d(wall.mid, wall.direction);
+  return Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
 }
 
 /**
@@ -550,17 +552,13 @@ void defineSharedVaryings(Wall wall, vec2[3] penumbraTri) {
   if ( vertexNum == 0 ) vEdgeDist *= -1.0;
 
   // @type {vec3} vLREdgeDist    Triangle A --> ix --> C, where
-  //   ix is the intersection of the rCollinearWall with A->B.
+  //   ix is the intersection of the rRLWall with A->B.
   vLREdgeDist = 0.0;
-  if ( isCollinear && vertexNum != 0 ) {
+  if ( (vertexNum != 0 && isCollinear) || !isCollinear ) {
     Ray2d rLRWall = leftRightBisector(wall, isCollinear);
     vLREdgeDist = distanceToLine(vVertexPosition, rLRWall.origin, rLRWall.direction);
     vLREdgeDist *= sign(orient(rLRWall.origin, projectRay(rLRWall, 1.0), vVertexPosition));
     // Left side is 1.0, right side is -1.0.
-  }  else if ( !isCollinear ) {
-    Ray2d rLRWall = leftRightBisector(wall, isCollinear);
-    vLREdgeDist = distanceToLine(vVertexPosition, rLRWall.origin, rLRWall.direction);
-    vLREdgeDist *= sign(orient(rLRWall.origin, projectRay(rLRWall, 1.0), vVertexPosition));
   }
 }
 
