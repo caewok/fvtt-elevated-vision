@@ -9,7 +9,7 @@ precision ${PRECISION_VERTEX} float;
 
 // Type of algorithm to use to generate collision test points.
 // 0: random 3d, 1: random 2d, 2: fixed spacing 2d
-#define ALG_TYPE              1
+#define ALG_TYPE              2
 
 uniform sampler2D uTerrainSampler;
 uniform vec3 uLightPosition;

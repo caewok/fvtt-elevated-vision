@@ -254,8 +254,8 @@ export class WebGLShadowsMultiWall {
    * @param {boolean} [opts.render=true]    Trigger a re-render.
    * @returns {boolean} True if the added edge resulted in a change.
    */
-  edgeRemoved(edge, { render = true } = {}) {
-    if ( !this.shadowMesh.geometry.edgeRemoved(edge) ) return false;
+  edgeRemoved(edgeId, { render = true } = {}) {
+    if ( !this.shadowMesh.geometry.edgeRemoved(edgeId) ) return false;
 
     // Re-render.
     if ( render ) this.shadowRenderer.update();

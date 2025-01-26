@@ -61,24 +61,46 @@ function updateWall(wallD, data, _options, _userId) {
 }
 
 /**
+ * A hook event that fires for every Document type after conclusion of an deletion workflow.
+ * Substitute the Document name in the hook event to target a specific Document type, for example "deleteActor".
+ * This hook fires for all connected clients after the deletion has been processed.
+ *
+ * @event deleteDocument
+ * @category Document
+ * @param {Document} document                       The existing Document which was deleted
+ * @param {Partial<DatabaseDeleteOperation>} options Additional options which modified the deletion request
+ * @param {string} userId                           The ID of the User who triggered the deletion workflow
+ */
+function deleteWall(wallD, _options, _userId) {
+  const sources = [
+    ...canvas.effects.lightSources,
+    ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
+  ];
+  for ( const src of sources ) src[MODULE_ID].edgeRemoved(wallD.id); // Edge shares the same id with wall.
+}
+
+
+/**
  * A hook event that fires when a {@link PlaceableObject} is destroyed.
  * The dispatched event name replaces "Object" with the named PlaceableObject subclass, i.e. "destroyToken".
  * @event destroyObject
  * @category PlaceableObject
  * @param {PlaceableObject} object    The object instance being destroyed
  */
+// Does not work b/c the preview walls are destroyed on update.
 function destroyWall(wall) {
   const sources = [
     ...canvas.effects.lightSources,
     ...canvas.tokens.placeables.map(t => t.vision).filter(v => Boolean(v))
   ];
 
-  for ( const src of sources ) src[MODULE_ID].edgeRemoved(wall.edge);
+  // for ( const src of sources ) src[MODULE_ID].edgeRemoved(wall.edge);
 }
 
 
 PATCHES.BASIC.HOOKS = {
   createWall,
   updateWall,
-  destroyWall
+  // destroyWall,
+  deleteWall
 };
