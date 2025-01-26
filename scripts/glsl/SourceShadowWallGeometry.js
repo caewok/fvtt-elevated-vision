@@ -483,13 +483,11 @@ sourceOrigin = geom.sourceOrigin;
     const idxToUpdate = this._triEdgeMap.get(edge.id);
 
     const { corner0, corner1 } = this.edgeCornerCoordinates(edge);
-    let changedLink = this.getAttributeAtIndex("aWallCorner0", idxToUpdate)[3] !== corner0[3];
-    changedLink ||= this.getAttributeAtIndex("aWallCorner1", idxToUpdate)[3] !== corner1[3];
-    if ( changedLink ) {
-      this._updateBuffer(corner0, "aWallCorner0", idxToUpdate, update);
-      this._updateBuffer(corner1, "aWallCorner1", idxToUpdate, update);
-    }
-    return changedLink;
+    const changedLink0 = this.getAttributeAtIndex("aWallCorner0", idxToUpdate)[3] !== corner0[3];
+    const changedLink1 = this.getAttributeAtIndex("aWallCorner1", idxToUpdate)[3] !== corner1[3];
+    if ( changedLink0 && update ) this._updateBuffer(corner0, "aWallCorner0", idxToUpdate, update);
+    if ( changedLink1 && update ) this._updateBuffer(corner1, "aWallCorner1", idxToUpdate, update);
+    return changedLink0 || changedLink1;
   }
 
   /**

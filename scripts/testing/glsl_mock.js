@@ -1535,8 +1535,8 @@ export const Light = (...args) => new LightGLSLStruct(...args);
  * @prop {float} thresholdRadius2
  */
 export class WallGLSLStruct {
-  constructor({ top, bottom, mid, direction, direction2d, linkValue, type, thresholdRadius2 } = {}) {
-    const args = { top, bottom, mid, direction, direction2d, linkValue, type, thresholdRadius2 };
+  constructor({ top, bottom, mid, direction, direction2d, linkValues, type, thresholdRadius2 } = {}) {
+    const args = { top, bottom, mid, direction, direction2d, linkValues, type, thresholdRadius2 };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }

@@ -31,6 +31,8 @@ const COLLINEAR = o => glsl.almostEqual(o, 0.0, 1.0e-06);
 const COUNTERCLOCKWISE = o => o > 0.0;
 const CLOCKWISE = o => o < 0.0;
 
+const LINKED_IDX = 3;
+
 /* Mock shader calculations.
 Use the fragment shader to test different rays back to the light for intersection with the wall
 
@@ -292,7 +294,17 @@ export class PenumbraBasicTest extends ShaderTest {
 
   /* ----- NOTE: Constants ---- */
 
+  /**
+   * Signal that a wall endpoint has no linked walls.
+   * @type {number}
+   */
   static EV_ENDPOINT_LINKED_UNBLOCKED = -10.0;
+
+  /**
+   * Signal that a linked wall to the edge will completely block the light.
+   */
+  static EV_ENDPOINT_LINK_BLOCKED = -20.0;
+
 
   // From CONST.WALL_SENSE_TYPES
   static LIMITED_WALL = 10.0;
@@ -324,10 +336,12 @@ export class PenumbraBasicTest extends ShaderTest {
     const direction = normalizedDirection(xyCloser, xyFurther);
     const topZ = aWallCorner0.z;
     const bottomZ = aWallCorner1.z;
+    const linkValues = [aWallCorner0.w, aWallCorner1.w];
     return Wall({
       top: [vec3(xyCloser, topZ), vec3(xyFurther, topZ)],
       bottom: [vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)],
       mid: xyCloser.add(xyFurther).multiplyScalar(0.5),
+      linkValues: [linkValues[closerIdx], linkValues[1 - closerIdx]],
       direction
     });
   }
@@ -1240,7 +1254,8 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       almostEqual,
       normalizedDirection,
       projectRay,
-      ShadowRays2d} = glsl;
+      ShadowRays2d,
+      fromAngle } = glsl;
     const { uLightPosition } = this;
     const W0 = wall.top[0].xy;
     const W1 = wall.top[1].xy;
@@ -1311,13 +1326,72 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     }
 
     // If light center is on the wall, offset.
+    // TODO: Remove all midpenumbra.
     const distToWall = distanceToSegment(uLightPosition.xy, W0, W1);
     const lightCenter = almostEqual(distToWall, 0.0, 1.0e-06)
       ? vec3(this.offsetLightFromWall(wall, 10.0), uLightPosition.z) : uLightPosition;
-    const midpenumbra = [
+    let midpenumbra = [
       Ray2d(W0, normalizedDirection(lightCenter.xy, W0)),
       Ray2d(W1, normalizedDirection(lightCenter.xy, W1))
     ];
+
+    // If a linked wall is present, use its direction for the penumbra, midpenumbra, and umbra.
+    // If in-between mid and penumbra, change umbra and mid.
+    const UNBLOCKED = Number(this.constructor.EV_ENDPOINT_LINKED_UNBLOCKED); // Convert to int in glsl.
+    const BLOCKED = Number(this.constructor.EV_ENDPOINT_LINK_BLOCKED); // Convert to int in glsl.
+    const BETWEEN_UM = 1;
+    const BETWEEN_MP = 2;
+
+
+    for ( let i = 0; i < 2; i += 1 ) {
+      const W = wall.top[i].xy;
+      const WO = wall.top[1 - i].xy;
+      let linkStatus = Number(wall.linkValues[i]); // GLSL: int
+      if ( linkStatus !== UNBLOCKED ) {
+        const linkPt = fromAngle(W, wall.linkValues[i], 1.0);
+        const umbraPt = projectRay(umbra[i], 1.0);
+        const oLight = orient(W, WO, uLightPosition.xy);
+        const oLinked = orient(W, WO, linkPt);
+        const oUmbra = orient(W, umbraPt, linkPt);
+
+        if ( SAME_SIDE(oLight, oLinked) ) {
+          // Negative penumbra and negative umbra are the points on the light side of the wall.
+          // Wall <--> negative penumbra <--> negative umbra <--> wall line on other side of W0.
+          // If between negative umbra and other side of W0, the linked wall blocks completely.
+          // If between negative penumbra and negative umbra, linked wall is collinear and partially blocks.
+          //   - Should set fAmbient for this situation, but probably doesn't matter much.
+          if ( SAME_SIDE(oLinked, -oUmbra) ) linkStatus = BLOCKED;
+          else linkStatus = UNBLOCKED;
+        } else {
+          // Wall <--> umbra <--> mid <--> penumbra <--> wall line on other side of W0.
+          const penumbraPt = projectRay(penumbra[i], 1.0);
+          const midPt = projectRay(midpenumbra[i], 1.0);
+          const oPenumbra = orient(W, penumbraPt, linkPt);
+          const oMid = orient(W, midPt, linkPt);
+
+          if ( SAME_SIDE(oLinked, oPenumbra) ) linkStatus = BLOCKED;
+          else if ( SAME_SIDE(oLinked, oMid) ) linkStatus = BETWEEN_MP;
+          else if ( SAME_SIDE(oLinked, oUmbra) ) linkStatus = BETWEEN_UM;
+          else linkStatus = UNBLOCKED;
+        }
+
+        switch ( linkStatus ) {
+          case BLOCKED: {
+            umbra[i] = penumbra[i];
+            midpenumbra[i] = penumbra[i];
+            break;
+          }
+          case BETWEEN_UM: {
+            umbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
+          }
+          case BETWEEN_MP: {
+            umbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
+            midpenumbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
+            break;
+          }
+        }
+      }
+    }
 
     return ShadowRays2d({
       umbra,
@@ -1654,7 +1728,16 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const orient = foundry.utils.orient2dFast;
     const { sign, max, min, sqrt } = Math;
     const uLightPosition = this.uLightPosition;
-    const { all, equal, Ray2d, almostEqual, projectRay, step, distanceSquaredToLine, distanceToLine, distanceSquared } = glsl;
+    const {
+      all,
+      equal,
+      Ray2d,
+      almostEqual,
+      projectRay,
+      step,
+      distanceSquaredToLine,
+      distanceToLine,
+      distanceSquared } = glsl;
 
     // @type {vec2} fAmbient
     const W0 = wall.top[0].xy; // Nearer wall endpoint to source.
@@ -1977,10 +2060,15 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       nearUmbraDist = this.nearUmbraDistance(elevation);
 
       farLPenumbraDist = this.farLPenumbraDistance(elevation);
-      if ( isLeft && isCollinear && farLPenumbraDist !== 0.0 && vLREdgeDist > farLPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
+      if ( isLeft && isCollinear
+        && farLPenumbraDist !== 0.0
+        && vLREdgeDist > farLPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
 
       farRPenumbraDist = this.farRPenumbraDistance(elevation);
-      if ( !isLeft && isCollinear && farRPenumbraDist !== 0.0 && -vLREdgeDist > farRPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
+      if ( !isLeft
+        && isCollinear
+        && farRPenumbraDist !== 0.0
+        && -vLREdgeDist > farRPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
 
       nearLPenumbraDist = this.nearLPenumbraDistance(elevation);
       nearRPenumbraDist = this.nearRPenumbraDistance(elevation);
