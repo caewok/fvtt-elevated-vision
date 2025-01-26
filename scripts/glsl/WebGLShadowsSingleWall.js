@@ -306,7 +306,7 @@ export class WebGLShadowsSingleWall {
     if ( !includeEdge ) return this.edgeRemoved(edge, { render });
 
     // Edge already in the map.
-    const mesh = this.meshMap.get(edge.id);
+    const mesh = this.meshEdgeMap.get(edge.id);
     const shaderChanged = mesh.shader.edgeUpdated(changes);
     const geomChanged = mesh.geometry.edgeUpdated(changes);
     if ( !(shaderChanged || geomChanged) ) return false;
