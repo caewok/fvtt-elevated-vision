@@ -4,12 +4,12 @@ precision ${PRECISION_VERTEX} float;
 
 // #define SHADOW true
 
-#define TOTAL_COLLISIONS      50
+#define TOTAL_COLLISIONS      52
 #define TOTAL_MID_COLLISIONS  ((TOTAL_COLLISIONS / 2) - 2)
 
 // Type of algorithm to use to generate collision test points.
 // 0: random 3d, 1: random 2d, 2: fixed spacing 2d
-#define ALG_TYPE              2
+#define ALG_TYPE              1
 
 uniform sampler2D uTerrainSampler;
 uniform vec3 uLightPosition;
@@ -96,6 +96,54 @@ float wallCollision(in Ray r) {
 }
 
 /**
+ * Axis vectors for a plane.
+ * https://math.stackexchange.com/questions/64430/find-extra-arbitrary-two-points-for-a-plane-given-the-normal-and-a-point-that-l
+ * @param {Plane} plane
+ * @returns {vec3[2]} Two orthogonal vectors on the plane, normalized
+ */
+vec3[2] planeAxisVectors(in Plane plane) {
+  vec3 w = plane.normal.x == 0.0 ? vec3(1.0, 0.0, 0.0)
+    : plane.normal.y == 0.0 ? vec3(0.0, 1.0, 0.0)
+      : plane.normal.z == 0.0 ? vec3(0.0, 0.0, 1.0)
+        : (plane.normal.x < plane.normal.y) && (plane.normal.x < plane.normal.z) ? vec3(1.0, 0.0, 0.0)
+          : plane.normal.y < plane.normal.z ? vec3(0.0, 1.0, 0.0)
+            : vec3(0.0, 0.0, 1.0);
+  vec3 u = normalize(cross(w, plane.normal));
+  vec3 n = normalize(cross(plane.normal, u));
+  return vec3[2](u, n);
+}
+
+/**
+ * 2d conversion matrix.
+ * Matrix should take points on the plane and shift to 2d: {x,y,z} * M = {x, y, 0}
+ * Inverse of matrix should reverse the operation: {x, y, 0} * Minv = {x, y, z}
+ * https://stackoverflow.com/questions/49769459/convert-points-on-a-3d-plane-to-2d-coordinates
+ * @returns {Matrix} 4x4 matrix
+ */
+void plane2dConversionMatrix(in Plane plane, out mat4 M, inout mat4 Minv) {
+  vec3[2] vs = planeAxisVectors(plane);
+  vec3 u = plane.point + vs[0];
+  vec3 v = plane.point - vs[1];
+  vec3 n = plane.point + plane.normal;
+
+  // column major, left-hand coordinate system
+  Minv = mat4(
+    plane.point.x, u.x, v.x, n.x,
+    plane.point.y, u.y, v.y, n.y,
+    plane.point.z, u.z, v.z, n.z,
+    1.0, 1.0, 1.0, 1.0
+  );
+
+  mat4 D = mat4(
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, 0.0, 0.0, 1.0,
+    1.0, 1.0, 1.0, 1.0
+  );
+  M = D * inverse(Minv);
+}
+
+/**
  * Determine the shadow percentage.
  */
 float shadowPercentage() {
@@ -136,10 +184,34 @@ float shadowPercentage() {
    * If the light and fragment are at the same elevation, this would be a vertical circle.
    * Use this circle to generate random test points along the horizontal and vertical lines.
    */
+  // Use cross product to find the horizontal and vertical vectors.
+  /*
+  vec3 viewV = normalizedDirection(a, uLightPosition);
+  vec3 hCross = normalize(vec3(-viewV.y, viewV.x, 0.0)); // Always align along horizontal plane.
+  vec3 vCross = cross(viewV, hCross); // Tilt vertical plane to keep perpendicular with the view ray.
+
+  // Add up the collisions for random points within the 2d circle.
+  float numCollisions = 0.0;
+  float totalCollisions = float(TOTAL_COLLISIONS);
+  for ( int i = 0; i < TOTAL_COLLISIONS; i += 1 ) {
+    float j = float(i) + 1.0;
+    float x = (hash(uTime + j) * 2.0) - 1.0;
+    float y = (hash(uTime + (j * totalCollisions)) * 2.0) - 1.0;
+    float d = hash(uTime + (j * totalCollisions * totalCollisions)) * uLightSize;
+
+    // Pseudo-Gaussian 2d distribution. (maybe?)
+    vec3 sqPt = (hCross * x) + (vCross * y);
+    vec3 dir = normalize(sqPt);
+    vec3 pos = dir * d;
+    numCollisions += wallCollision(Ray(a, normalizedDirection(a, pos)));
+  }
+  return numCollisions / totalCollisions;
+  */
+
   Plane lightCircle = Plane(uLightPosition, normalizedDirection(a, uLightPosition));
-  vec3 u;
-  vec3 v;
-  planeAxisVectors(lightCircle, u, v);
+  mat4 M2d;
+  mat4 M3d;
+  plane2dConversionMatrix(lightCircle, M2d, M3d);
 
   // Add up the collisions for random points within the 2d circle.
   float numCollisions = 0.0;
@@ -148,12 +220,10 @@ float shadowPercentage() {
     float j = float(i) + 1.0;
     float x = hash(uTime + j);
     float y = hash(uTime + (j * totalCollisions));
-
-    // Pseudo-Gaussian 2d distribution.
     vec2 rndDir = (x * y == 0.0) ? vec2(0.0) : normalize(vec2(x, y));
-    vec2 pt2d = linearConversion(rndDir, 0.0, 1.0, -1.0, 1.0) * uLightSize;
-    vec3 pos = planePointTo3d(pt2d, lightCircle, u, v);
-    numCollisions += wallCollision(Ray(a, normalizedDirection(a, pos)));
+    vec2 pos2d = rndDir * uLightSize;
+    vec4 pos = vec4(pos2d, 0.0, 1.0) * M3d;
+    numCollisions += wallCollision(Ray(a, normalizedDirection(a, vec3(pos.xyz / pos.w))));
   }
   return numCollisions / totalCollisions;
 
