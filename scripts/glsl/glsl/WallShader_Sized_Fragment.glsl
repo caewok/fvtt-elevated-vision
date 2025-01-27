@@ -231,7 +231,7 @@ float shadowPercentage() {
   side0Shadow = almostEqual(denom0, 0.0, 1.0e-08) ? 1.0 : (inSide0 * vSidePenumbra0.z / denom0) + (1.0 - inSide0);
   side1Shadow = almostEqual(denom1, 0.0, 1.0e-08) ? 1.0 : (inSide1 * vSidePenumbra1.z / denom1) + (1.0 - inSide1);
 
-  // side1Shadow = inSide1 == 1.0 ? 0.5 : 0.0;
+  // side1Shadow = inSide1 == 1.0 ? 0.5 : 1.0;
 
   /*
   1.0 * 0.0 = 0.0  / 0.25 = 0       (1 - x) = 1.0
@@ -260,7 +260,6 @@ float shadowPercentage() {
 
 
   // return side1Shadow;
-  // return farShadow * nearShadow;
   // return farLShadow * nearLShadow * farRShadow * nearRShadow;
   // return side0Shadow * side1Shadow;
   // return farShadow * nearShadow;

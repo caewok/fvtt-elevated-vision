@@ -1618,10 +1618,13 @@ export class SizedShadowsTest extends PenumbraBasicTest {
   /**
    * Define varyings for this shader.
    * @param {Wall} wall
-   * @param {bool} nearCollinear
-   * @param {vec2[3]} penumbraTri, umbraTri, sideTri0, sideTri1
+   * @param {vec2[3]} penumbraTri
+   * @param {vec2} F
+   * @param {vec2} I
+   * @param {bool} hasSide0
+   * @param {bool} hasSide1
    */
-  defineVaryings(wall, penumbraTri, F, I) {
+  defineVaryings(wall, penumbraTri, F, I, hasSide0, hasSide1) {
     const abs = Math.abs;
     const orient = foundry.utils.orient2dFast;
     const { barycentric, almostEqual, distanceSquared, lineLineIntersection, Ray2d, normalizedDirection } = glsl;
@@ -1673,10 +1676,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       lineLineIntersection(B, C, W1, F, ixF);
       setTri(sideTri0, [W0, B, ixI]);
       setTri(sideTri1, [W1, C, ixF]);
-
-      // Happens if the umbra and penumbra side rays are equal b/c of linked edge.
-      if ( almostEqual(B, ixI, 1.0) ) sideTri0[2] = B;
-      if ( almostEqual(C, ixF, 1.0) ) sideTri1[2] = C;
     }
 
     // @type {vec3} vUmbra
@@ -1686,12 +1685,12 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     // Define side triangles in relation to the penumbra triangle.
     // If no real side penumbra, set values to -1 to avoid inclusion.
     // Change the side triangles to isoceles so gradient shading works.
-    if ( abs(orient(...sideTri0)) > 1.0 ) this.vSidePenumbra0 = baryForPoint(vVertexPosition, this.makeIsoceles(sideTri0));
-    if ( abs(orient(...sideTri1)) > 1.0 ) this.vSidePenumbra1 = baryForPoint(vVertexPosition, this.makeIsoceles(sideTri1));
+    if ( hasSide0 && abs(orient(...sideTri0)) > 1.0 ) this.vSidePenumbra0 = baryForPoint(vVertexPosition, this.makeIsoceles(sideTri0));
+    if ( hasSide1 && abs(orient(...sideTri1)) > 1.0 ) this.vSidePenumbra1 = baryForPoint(vVertexPosition, this.makeIsoceles(sideTri1));
 
     // For debugging.
-    setTri(sideTri0, this.makeIsoceles(sideTri0));
-    setTri(sideTri1, this.makeIsoceles(sideTri1));
+    if ( hasSide0 && abs(orient(...sideTri0)) > 1.0 ) setTri(sideTri0, this.makeIsoceles(sideTri0));
+    if ( hasSide0 && abs(orient(...sideTri1)) > 1.0 ) setTri(sideTri1, this.makeIsoceles(sideTri1));
   }
 
   /**
@@ -1939,7 +1938,8 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       distanceToSegment,
       circleContainsPoint,
       projectRay,
-      normalizedDirection } = glsl;
+      normalizedDirection,
+      almostEqual } = glsl;
     const { uLightSize } = this;
     const vertexNum = this.gl_VertexID % 3;
     const wall = this.wall = this.calculateWallPositions();
@@ -1964,11 +1964,22 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const penumbraTri = this.penumbraTri = [vec2(), vec2(), vec2()];
     const DEF = this.DEF = [vec2(), vec2(), vec2()];
     const GHI = this.GHI = [vec2(), vec2(), vec2()];
-    this.shadowPoints(wall, sideShadowRays, farPenumbraTri,
+    const nearCollinear = this.shadowPoints(wall, sideShadowRays, farPenumbraTri,
       penumbraTri[0], penumbraTri[1], penumbraTri[2], DEF[0], DEF[1], DEF[2], GHI[0], GHI[1], GHI[2]);
 
+    // If a linked wall is fully blocking, don't use a side shadow.
+    let hasSide0 = true;
+    let hasSide1 = true;
+    if ( !nearCollinear ) {
+      hasSide0 = !almostEqual(sideShadowRays.umbra[0].direction, sideShadowRays.penumbra[0].direction, 1.0e-06);
+      hasSide1 = !almostEqual(sideShadowRays.umbra[1].direction, sideShadowRays.penumbra[1].direction, 1.0e-06);
+    }
+
+    // Varyings
     this.defineSharedVaryings(wall, penumbraTri);
-    this.defineVaryings(wall, penumbraTri, DEF[2], GHI[2]);
+    this.defineVaryings(wall, penumbraTri, DEF[2], GHI[2], hasSide0, hasSide1);
+
+    // Flats
     if ( vertexNum === 2 ) {
       this.defineSharedFlats(wall, penumbraTri);
       this.defineFlats(wall, penumbraTri, farPenumbraTri, DEF, GHI, lowerTangent, upperTangent);

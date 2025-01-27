@@ -461,7 +461,7 @@ vec2 ambientLight(vec2 w0, vec2 w1) {
 /**
  * Define varyings for this shader.
  */
-void defineVaryings(in Wall wall, in vec2[3] penumbraTri, in vec2 F, in vec2 I) {
+void defineVaryings(in Wall wall, in vec2[3] penumbraTri, in vec2 F, in vec2 I, in bool hasSide0, in bool hasSide1) {
   int vertexNum = gl_VertexID % 3;
 
   // Presets for varyings.
@@ -507,13 +507,7 @@ void defineVaryings(in Wall wall, in vec2[3] penumbraTri, in vec2 F, in vec2 I) 
     lineLineIntersection(B, C, W1, F, ixF);
     sideTri0 = vec2[3](W0, B, ixI);
     sideTri1 = vec2[3](W1, C, ixF);
-
-    // Happens if the umbra and penumbra side rays are equal b/c of linked edge.
-    if ( almostEqual(B, ixI, 1.0) ) sideTri0[2] = B;
-    if ( almostEqual(C, ixF, 1.0) ) sideTri1[2] = C;
   }
-
-
 
   // @type {vec3} vUmbra
   if ( nearCollinear ) vUmbra = baryForPoint(vVertexPosition, umbraTri);
@@ -522,8 +516,8 @@ void defineVaryings(in Wall wall, in vec2[3] penumbraTri, in vec2 F, in vec2 I) 
   // Define side triangles in relation to the penumbra triangle.
   // If no real side penumbra, set values to -1 to avoid inclusion.
   // Change the side triangles to isoceles so gradient shading works.
-  if ( abs(orient(sideTri0[0], sideTri0[1], sideTri0[2])) > 1.0 ) vSidePenumbra0 = baryForPoint(vVertexPosition, makeIsoceles(sideTri0));
-  if ( abs(orient(sideTri1[0], sideTri1[1], sideTri1[2])) > 1.0 ) vSidePenumbra1 = baryForPoint(vVertexPosition, makeIsoceles(sideTri1));
+  if ( hasSide0 && abs(orient(sideTri0[0], sideTri0[1], sideTri0[2])) > 1.0 ) vSidePenumbra0 = baryForPoint(vVertexPosition, makeIsoceles(sideTri0));
+  if ( hasSide1 && abs(orient(sideTri1[0], sideTri1[1], sideTri1[2])) > 1.0 ) vSidePenumbra1 = baryForPoint(vVertexPosition, makeIsoceles(sideTri1));
 }
 
 /**
@@ -752,12 +746,24 @@ void main() {
   vec2[3] penumbraTri;
   vec2[3] DEF;
   vec2[3] GHI;
-  shadowPoints(wall, sideShadowRays, farPenumbraTri,
+  bool nearCollinear = shadowPoints(wall, sideShadowRays, farPenumbraTri,
     penumbraTri[0], penumbraTri[1], penumbraTri[2], DEF[0], DEF[1], DEF[2], GHI[0], GHI[1], GHI[2]);
+
+  // If a linked wall is fully blocking, don't use a side shadow.
+  bool hasSide0 = true;
+  bool hasSide1 = true;
+  if ( !nearCollinear ) {
+    hasSide0 = !almostEqual(sideShadowRays.umbra[0].direction, sideShadowRays.penumbra[0].direction, 1.0e-06);
+    hasSide1 = !almostEqual(sideShadowRays.umbra[1].direction, sideShadowRays.penumbra[1].direction, 1.0e-06);
+  }
+
+  // Debugging.
+  // hasSide0 = true;
+  // hasSide1 = true;
 
   // Varyings
   defineSharedVaryings(wall, penumbraTri);
-  defineVaryings(wall, penumbraTri, DEF[2], GHI[2]);
+  defineVaryings(wall, penumbraTri, DEF[2], GHI[2], hasSide0, hasSide1);
 
   // Flats
   if ( vertexNum == 2) {
