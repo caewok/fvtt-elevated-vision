@@ -244,6 +244,62 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
     Ray2d(W1, normalizedDirection(lightCenter.xy, W1))
   );
 
+  // If a linked wall is present, use its direction for the penumbra, midpenumbra, and umbra.
+  // If in-between mid and penumbra, change umbra and mid.
+  const int UNBLOCKED = int(EV_ENDPOINT_LINKED_UNBLOCKED);
+  const int BLOCKED = int(EV_ENDPOINT_LINKED_BLOCKED);
+  const int BETWEEN_UM = 1;
+  const int BETWEEN_MP = 2;
+  for ( int i = 0; i < 2; i += 1 ) {
+    vec2 W = wall.top[i].xy;
+    vec2 WO = wall.top[1 - i].xy;
+    int linkStatus = int(wall.linkValues[i]);
+    if ( linkStatus != UNBLOCKED ) {
+      vec2 linkPt = fromAngle(W, wall.linkValues[i], 1.0);
+      vec2 umbraPt = projectRay(umbra[i], 1.0);
+      float oLight = orient(W, WO, uLightPosition.xy);
+      float oLinked = orient(W, WO, linkPt);
+      float oUmbra = orient(W, umbraPt, linkPt);
+
+      if ( SAME_SIDE(oLight, oLinked) ) {
+        // Negative penumbra and negative umbra are the points on the light side of the wall.
+        // Wall <--> negative penumbra <--> negative umbra <--> wall line on other side of W0.
+        // If between negative umbra and other side of W0, the linked wall blocks completely.
+        // If between negative penumbra and negative umbra, linked wall is collinear and partially blocks.
+        //   - Should set fAmbient for this situation, but probably doesn't matter much.
+        if ( SAME_SIDE(oLinked, -oUmbra) ) linkStatus = BLOCKED;
+        else linkStatus = UNBLOCKED;
+      } else {
+        // Wall <--> umbra <--> mid <--> penumbra <--> wall line on other side of W0.
+        vec2 penumbraPt = projectRay(penumbra[i], 1.0);
+        vec2 midPt = projectRay(midpenumbra[i], 1.0);
+        float oPenumbra = orient(W, penumbraPt, linkPt);
+        float oMid = orient(W, midPt, linkPt);
+
+        if ( SAME_SIDE(oLinked, oPenumbra) ) linkStatus = BLOCKED;
+        else if ( SAME_SIDE(oLinked, oMid) ) linkStatus = BETWEEN_MP;
+        else if ( SAME_SIDE(oLinked, oUmbra) ) linkStatus = BETWEEN_UM;
+        else linkStatus = UNBLOCKED;
+      }
+
+      switch ( linkStatus ) {
+        case BLOCKED: {
+          umbra[i] = penumbra[i];
+          midpenumbra[i] = penumbra[i];
+          break;
+        }
+        case BETWEEN_UM: {
+          umbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
+        }
+        case BETWEEN_MP: {
+          umbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
+          midpenumbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
+          break;
+        }
+      }
+    }
+  }
+
   return ShadowRays2d(
     umbra,
     midpenumbra,

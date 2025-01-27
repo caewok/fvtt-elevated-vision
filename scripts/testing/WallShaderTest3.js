@@ -303,7 +303,7 @@ export class PenumbraBasicTest extends ShaderTest {
   /**
    * Signal that a linked wall to the edge will completely block the light.
    */
-  static EV_ENDPOINT_LINK_BLOCKED = -20.0;
+  static EV_ENDPOINT_LINKED_BLOCKED = -20.0;
 
 
   // From CONST.WALL_SENSE_TYPES
@@ -341,8 +341,8 @@ export class PenumbraBasicTest extends ShaderTest {
       top: [vec3(xyCloser, topZ), vec3(xyFurther, topZ)],
       bottom: [vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)],
       mid: xyCloser.add(xyFurther).multiplyScalar(0.5),
-      linkValues: [linkValues[closerIdx], linkValues[1 - closerIdx]],
-      direction
+      direction,
+      linkValues: [linkValues[closerIdx], linkValues[1 - closerIdx]]
     });
   }
 
@@ -1338,11 +1338,9 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     // If a linked wall is present, use its direction for the penumbra, midpenumbra, and umbra.
     // If in-between mid and penumbra, change umbra and mid.
     const UNBLOCKED = Number(this.constructor.EV_ENDPOINT_LINKED_UNBLOCKED); // Convert to int in glsl.
-    const BLOCKED = Number(this.constructor.EV_ENDPOINT_LINK_BLOCKED); // Convert to int in glsl.
+    const BLOCKED = Number(this.constructor.EV_ENDPOINT_LINKED_BLOCKED); // Convert to int in glsl.
     const BETWEEN_UM = 1;
     const BETWEEN_MP = 2;
-
-
     for ( let i = 0; i < 2; i += 1 ) {
       const W = wall.top[i].xy;
       const WO = wall.top[1 - i].xy;
@@ -3431,7 +3429,7 @@ OPP_SIDE = (o0, o1) => o0 * o1 < 0.0;
 COLLINEAR = o => glsl.almostEqual(o, 0.0, 1.0e-06);
 COUNTERCLOCKWISE = o => o > 0.0;
 CLOCKWISE = o => o < 0.0;
-let [shader0] = SizedShadowsTest.fromMesh(ev.shadowMesh)
+let [shader0, shader1] = SizedShadowsTest.fromMesh(ev.shadowMesh)
 
 shader0.canvasElevation = 0
 shader0.vertexCalculations(2)
@@ -3480,6 +3478,7 @@ W1 = shader0.sideTri1[0]
 if ( shader0.nearCollinear ) [W0, W1] = [shader0.sideTri0[0], shader0.sideTri0[2]]
 shader0.ambientLight(W0, W1)
 
+pt = vec2(_token.center.x, _token.center.y)
 shader0.vertexCalculations(2)
 shader0.setVaryings(pt)
 shader0.fragmentCalculations(pt, 0)

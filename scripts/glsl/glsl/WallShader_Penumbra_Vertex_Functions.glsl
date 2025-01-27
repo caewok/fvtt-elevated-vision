@@ -21,6 +21,7 @@ ${defineFunction("distanceSquared")}
 ${defineFunction("distanceToLine")}
 
 #define EV_ENDPOINT_LINKED_UNBLOCKED  -10.0
+#define EV_ENDPOINT_LINKED_BLOCKED  -20.0
 
 // From CONST.WALL_SENSE_TYPES.
 #define LIMITED_WALL      10.0
@@ -52,6 +53,7 @@ struct Wall {
   vec3[2] bottom;
   vec2 mid;
   vec2 direction;
+  float[2] linkValues;
 };
 
 /** Represent the three directions of a shadow from a wall endpoint. */
@@ -87,11 +89,13 @@ Wall calculateWallPositions() {
   vec2 direction = normalizedDirection(xyCloser, xyFurther);
   float topZ = aWallCorner0.z;
   float bottomZ = aWallCorner1.z;
+  float[2] linkValues = float[2](aWallCorner0.w, aWallCorner1.w);
   return Wall(
     vec3[2](vec3(xyCloser, topZ), vec3(xyFurther, topZ)),
     vec3[2](vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)),
     (xyCloser + xyFurther) * 0.5,
-    direction
+    direction,
+    float[2](linkValues[closerIdx], linkValues[1 - closerIdx])
   );
 }
 
