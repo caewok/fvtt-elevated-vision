@@ -1682,11 +1682,11 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       lineLineIntersection(B, C, W1, F, ixF);
       setTri(sideTri0, [W0, B, ixI]);
       setTri(sideTri1, [W1, C, ixF]);
-    }
 
-    // Change the side triangles to isoceles so gradient shading works.
-    setTri(sideTri0, this.makeIsoceles(sideTri0));
-    setTri(sideTri1, this.makeIsoceles(sideTri1));
+      // Happens if the umbra and penumbra side rays are equal b/c of linked edge.
+      if ( almostEqual(B, ixI, 1.0) ) sideTri0[2] = B;
+      if ( almostEqual(C, ixF, 1.0) ) sideTri1[2] = C;
+    }
 
     // @type {vec3} vUmbra
     if ( nearCollinear ) this.vUmbra = baryForPoint(vVertexPosition, umbraTri);
@@ -1694,8 +1694,13 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     // @type {vec3} vSidePenumbra0, vSidePenumbra1
     // Define side triangles in relation to the penumbra triangle.
     // If no real side penumbra, set values to -1 to avoid inclusion.
-    if ( abs(orient(...sideTri0)) > 1.0 ) this.vSidePenumbra0 = baryForPoint(vVertexPosition, sideTri0);
-    if ( abs(orient(...sideTri1)) > 1.0 ) this.vSidePenumbra1 = baryForPoint(vVertexPosition, sideTri1);
+    // Change the side triangles to isoceles so gradient shading works.
+    if ( abs(orient(...sideTri0)) > 1.0 ) this.vSidePenumbra0 = baryForPoint(vVertexPosition, this.makeIsoceles(sideTri0));
+    if ( abs(orient(...sideTri1)) > 1.0 ) this.vSidePenumbra1 = baryForPoint(vVertexPosition, this.makeIsoceles(sideTri1));
+
+    // For debugging.
+    setTri(sideTri0, this.makeIsoceles(sideTri0));
+    setTri(sideTri1, this.makeIsoceles(sideTri1));
   }
 
   /**
@@ -2049,10 +2054,10 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       // float canvasElevation = uElevationRes.x;
       // float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
       farPenumbraDist = this.farPenumbraDistance(elevation);
-      if ( vEdgeDist > farPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
+      if ( hasFar && vEdgeDist > farPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
 
       nearPenumbraDist = this.nearPenumbraDistance(elevation);
-      if ( !isCollinear && vEdgeDist < nearPenumbraDist ) return { hasShadow: 0.0 }; // In front of the wall shadow.
+      if ( hasNear && !isCollinear && vEdgeDist < nearPenumbraDist ) return { hasShadow: 0.0 }; // In front of the wall shadow.
 
       farUmbraDist = this.farUmbraDistance(elevation);
       nearUmbraDist = this.nearUmbraDistance(elevation);

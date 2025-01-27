@@ -113,10 +113,10 @@ float shadowPercentage() {
     //if ( elevation > nearPenumbraElevation() ) return 0.0;
 
     farPenumbraDist = farPenumbraDistance(elevation);
-    if ( vEdgeDist > farPenumbraDist ) return 0.0; // Outside the penumbra.
+    if ( hasFar && vEdgeDist > farPenumbraDist ) return 0.0; // Outside the penumbra.
 
     nearPenumbraDist = nearPenumbraDistance(elevation);
-    if ( !isCollinear && vEdgeDist < nearPenumbraDist ) return 0.0; // In front of the wall shadow.
+    if ( hasNear && !isCollinear && vEdgeDist < nearPenumbraDist ) return 0.0; // In front of the wall shadow.
 
     farUmbraDist = farUmbraDistance(elevation);
     nearUmbraDist = nearUmbraDistance(elevation);
@@ -228,8 +228,10 @@ float shadowPercentage() {
   float inSide1 = float(inSidePenumbra1());
   float denom0 = vSidePenumbra0.y + vSidePenumbra0.z;
   float denom1 = vSidePenumbra1.y + vSidePenumbra1.z;
-  side0Shadow = denom0 == 0.0 ? 1.0 : (inSide0 * vSidePenumbra0.z / denom0) + (1.0 - inSide0);
-  side1Shadow = denom1 == 0.0 ? 1.0 : (inSide1 * vSidePenumbra1.z / denom1) + (1.0 - inSide1);
+  side0Shadow = almostEqual(denom0, 0.0, 1.0e-08) ? 1.0 : (inSide0 * vSidePenumbra0.z / denom0) + (1.0 - inSide0);
+  side1Shadow = almostEqual(denom1, 0.0, 1.0e-08) ? 1.0 : (inSide1 * vSidePenumbra1.z / denom1) + (1.0 - inSide1);
+
+  // side1Shadow = inSide1 == 1.0 ? 0.5 : 0.0;
 
   /*
   1.0 * 0.0 = 0.0  / 0.25 = 0       (1 - x) = 1.0
@@ -257,8 +259,7 @@ float shadowPercentage() {
   }
 
 
-  // return umbraShadow;
-  // return farShadow;
+  // return side1Shadow;
   // return farShadow * nearShadow;
   // return farLShadow * nearLShadow * farRShadow * nearRShadow;
   // return side0Shadow * side1Shadow;

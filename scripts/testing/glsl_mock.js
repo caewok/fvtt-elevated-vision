@@ -288,7 +288,7 @@ export function barycentric(p, a, b, c) {
   const d21 = v2.dot(v1);
 
   const denom = ((d00 * d11) - (d01 * d01));
-  // TODO: Is this test needed? if ( denom == 0.0 ) return new vec3(-1.0, -1.0, -1.0);
+  // TODO: Is this test needed? if ( denom == 0.0 ) return new vec3(-1.0);
 
   const denomInv = 1.0 / denom; // Fixed for given triangle
   const v = ((d11 * d20) - (d01 * d21)) * denomInv;

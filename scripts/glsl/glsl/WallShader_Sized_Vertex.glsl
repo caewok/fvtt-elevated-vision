@@ -515,11 +515,13 @@ void defineVaryings(in Wall wall, in vec2[3] penumbraTri, in vec2 F, in vec2 I) 
     lineLineIntersection(B, C, W1, F, ixF);
     sideTri0 = vec2[3](W0, B, ixI);
     sideTri1 = vec2[3](W1, C, ixF);
+
+    // Happens if the umbra and penumbra side rays are equal b/c of linked edge.
+    if ( almostEqual(B, ixI, 1.0) ) sideTri0[2] = B;
+    if ( almostEqual(C, ixF, 1.0) ) sideTri1[2] = C;
   }
 
-  // Change the side triangles to isoceles so gradient shading works.
-  sideTri0 = makeIsoceles(sideTri0);
-  sideTri1 = makeIsoceles(sideTri1);
+
 
   // @type {vec3} vUmbra
   if ( nearCollinear ) vUmbra = baryForPoint(vVertexPosition, umbraTri);
@@ -527,8 +529,9 @@ void defineVaryings(in Wall wall, in vec2[3] penumbraTri, in vec2 F, in vec2 I) 
   // @type {vec3} vSidePenumbra0, vSidePenumbra1
   // Define side triangles in relation to the penumbra triangle.
   // If no real side penumbra, set values to -1 to avoid inclusion.
-  if ( abs(orient(sideTri0[0], sideTri0[1], sideTri0[2])) > 1.0 ) vSidePenumbra0 = baryForPoint(vVertexPosition, sideTri0);
-  if ( abs(orient(sideTri1[0], sideTri1[1], sideTri1[2])) > 1.0 ) vSidePenumbra1 = baryForPoint(vVertexPosition, sideTri1);
+  // Change the side triangles to isoceles so gradient shading works.
+  if ( abs(orient(sideTri0[0], sideTri0[1], sideTri0[2])) > 1.0 ) vSidePenumbra0 = baryForPoint(vVertexPosition, makeIsoceles(sideTri0));
+  if ( abs(orient(sideTri1[0], sideTri1[1], sideTri1[2])) > 1.0 ) vSidePenumbra1 = baryForPoint(vVertexPosition, makeIsoceles(sideTri1));
 }
 
 /**
