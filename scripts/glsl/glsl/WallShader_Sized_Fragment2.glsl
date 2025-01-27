@@ -9,7 +9,7 @@ precision ${PRECISION_VERTEX} float;
 
 // Type of algorithm to use to generate collision test points.
 // 0: random 3d, 1: random 2d, 2: fixed spacing 2d
-#define ALG_TYPE              0
+#define ALG_TYPE              1
 
 uniform sampler2D uTerrainSampler;
 uniform vec3 uLightPosition;
@@ -226,7 +226,7 @@ float shadowPercentage() {
    * Use this circle to generate random test points along the horizontal and vertical lines.
    */
   // Use cross product to find the horizontal and vertical vectors.
-  /*
+
   vec3 viewV = normalizedDirection(a, uLightPosition);
   vec3 hCross = normalize(vec3(-viewV.y, viewV.x, 0.0)); // Always align along horizontal plane.
   vec3 vCross = cross(viewV, hCross); // Tilt vertical plane to keep perpendicular with the view ray.
@@ -236,19 +236,32 @@ float shadowPercentage() {
   float totalCollisions = float(TOTAL_COLLISIONS);
   for ( int i = 0; i < TOTAL_COLLISIONS; i += 1 ) {
     float j = float(i) + 1.0;
+
+    // Random point within a 2x unit square. (-1 to 1)
     float x = (hash(uTime + j) * 2.0) - 1.0;
     float y = (hash(uTime + (j * totalCollisions)) * 2.0) - 1.0;
-    float d = hash(uTime + (j * totalCollisions * totalCollisions)) * uLightSize;
 
-    // Pseudo-Gaussian 2d distribution. (maybe?)
-    vec3 sqPt = (hCross * x) + (vCross * y);
-    vec3 dir = normalize(sqPt);
-    vec3 pos = dir * d;
+    // Random distance along the circle radius.
+    float d = hash(uTime + (j * totalCollisions * totalCollisions));
+
+    // Unit square (-1 to 1)
+    vec2 sqPt = vec2(x, y);
+
+    // Treat as direction along the circle.
+    vec2 cirDir = normalize(sqPt);
+
+    // Scale by random distance
+    vec2 cirPt = cirDir * (d * uLightSize);
+
+    // Get the 3d point within the light sphere.
+    // Pseudo-Gaussian 2d distribution.
+    vec3 pos = uLightPosition + (hCross * cirPt.x) + (vCross * cirPt.y);
     numCollisions += wallCollision(a, pos, linkPoints);
   }
   return numCollisions / totalCollisions;
-  */
 
+
+  /*
   Plane lightCircle = Plane(uLightPosition, normalizedDirection(a, uLightPosition));
   mat4 M2d;
   mat4 M3d;
@@ -267,6 +280,7 @@ float shadowPercentage() {
     numCollisions += wallCollision(a, pos.xyz / pos.w, linkPoints);
   }
   return numCollisions / totalCollisions;
+  */
 
   #elif (ALG_TYPE == 2)
 
