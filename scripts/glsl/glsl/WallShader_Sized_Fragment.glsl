@@ -226,8 +226,10 @@ float shadowPercentage() {
   // if ( inSidePenumbra1() ) side1Shadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
   float inSide0 = float(inSidePenumbra0());
   float inSide1 = float(inSidePenumbra1());
-  side0Shadow = (inSide0 * vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z)) + (1.0 - inSide0);
-  side1Shadow = (inSide1 * vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z)) + (1.0 - inSide1);
+  float denom0 = vSidePenumbra0.y + vSidePenumbra0.z;
+  float denom1 = vSidePenumbra1.y + vSidePenumbra1.z;
+  side0Shadow = denom0 == 0.0 ? 1.0 : (inSide0 * vSidePenumbra0.z / denom0) + (1.0 - inSide0);
+  side1Shadow = denom1 == 0.0 ? 1.0 : (inSide1 * vSidePenumbra1.z / denom1) + (1.0 - inSide1);
 
   /*
   1.0 * 0.0 = 0.0  / 0.25 = 0       (1 - x) = 1.0
