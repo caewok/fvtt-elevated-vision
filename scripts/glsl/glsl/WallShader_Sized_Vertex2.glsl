@@ -204,6 +204,8 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
   }
 
   // If light center is on the wall, offset.
+  // TODO: Do this for penumbra and umbra?
+  /*
   float distToWall = distanceToSegment(uLightPosition.xy, W0, W1);
   vec3 lightCenter = almostEqual(distToWall, 0.0, 1.0e-06)
     ? vec3(offsetLightFromWall(wall, 0.5), uLightPosition.z) : uLightPosition;
@@ -211,10 +213,10 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
     Ray2d(W0, normalizedDirection(lightCenter.xy, W0)),
     Ray2d(W1, normalizedDirection(lightCenter.xy, W1))
   );
+  */
 
   return ShadowRays2d(
     umbra,
-    midpenumbra,
     penumbra
   );
 }

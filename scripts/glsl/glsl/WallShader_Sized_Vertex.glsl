@@ -236,6 +236,8 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
   }
 
   // If light center is on the wall, offset.
+  // TODO: Do this for umbra and penumbra?
+  /*
   float distToWall = distanceToSegment(uLightPosition.xy, W0, W1);
   vec3 lightCenter = almostEqual(distToWall, 0.0, 1.0e-06)
     ? vec3(offsetLightFromWall(wall, 0.5), uLightPosition.z) : uLightPosition;
@@ -243,13 +245,13 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
     Ray2d(W0, normalizedDirection(lightCenter.xy, W0)),
     Ray2d(W1, normalizedDirection(lightCenter.xy, W1))
   );
+  */
 
-  // If a linked wall is present, use its direction for the penumbra, midpenumbra, and umbra.
+  // If a linked wall is present, use its direction for the penumbra and umbra.
   // If in-between mid and penumbra, change umbra and mid.
   const int UNBLOCKED = int(EV_ENDPOINT_LINKED_UNBLOCKED);
   const int BLOCKED = int(EV_ENDPOINT_LINKED_BLOCKED);
-  const int BETWEEN_UM = 1;
-  const int BETWEEN_MP = 2;
+  const int BETWEEN_UP = 1;
   for ( int i = 0; i < 2; i += 1 ) {
     vec2 W = wall.top[i].xy;
     vec2 WO = wall.top[1 - i].xy;
@@ -272,28 +274,19 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
       } else {
         // Wall <--> umbra <--> mid <--> penumbra <--> wall line on other side of W0.
         vec2 penumbraPt = projectRay(penumbra[i], 1.0);
-        vec2 midPt = projectRay(midpenumbra[i], 1.0);
         float oPenumbra = orient(W, penumbraPt, linkPt);
-        float oMid = orient(W, midPt, linkPt);
-
         if ( SAME_SIDE(oLinked, oPenumbra) ) linkStatus = BLOCKED;
-        else if ( SAME_SIDE(oLinked, oMid) ) linkStatus = BETWEEN_MP;
-        else if ( SAME_SIDE(oLinked, oUmbra) ) linkStatus = BETWEEN_UM;
+        else if ( SAME_SIDE(oLinked, oUmbra) ) linkStatus = BETWEEN_UP;
         else linkStatus = UNBLOCKED;
       }
 
       switch ( linkStatus ) {
         case BLOCKED: {
           umbra[i] = penumbra[i];
-          midpenumbra[i] = penumbra[i];
           break;
         }
-        case BETWEEN_UM: {
+        case BETWEEN_UP: {
           umbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
-        }
-        case BETWEEN_MP: {
-          umbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
-          midpenumbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
           break;
         }
       }
@@ -302,7 +295,6 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
 
   return ShadowRays2d(
     umbra,
-    midpenumbra,
     penumbra
   );
 }

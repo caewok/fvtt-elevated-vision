@@ -1543,44 +1543,41 @@ export class WallGLSLStruct {
 export const Wall = (...args) => new WallGLSLStruct(...args);
 
 /**
- * Represent the three directions of a shadow from a wall endpoint.
+ * Represent the two directions of a shadow from a wall endpoint.
  * @prop {vec3} umbra
- * @prop {vec3} midpenumbra
  * @prop {vec3} penumbra
  */
 export class ShadowDirectionsGLSLStruct {
-  constructor({ umbra, midpenumbra, penumbra } = {}) {
-    const args = { umbra, midpenumbra, penumbra };
+  constructor({ umbra, penumbra } = {}) {
+    const args = { umbra, penumbra };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
 export const ShadowDirections = (...args) => new ShadowDirectionsGLSLStruct(...args);
 
 /**
- * Represent the three directions of a shadow from a wall endpoint.
+ * Represent the two directions of a shadow from a wall endpoint.
  * @prop {vec2} umbra
- * @prop {vec2} midpenumbra
  * @prop {vec2} penumbra
  */
 export class ShadowDirections2dGLSLStruct {
-  constructor({ umbra, midpenumbra, penumbra } = {}) {
-    const args = { umbra, midpenumbra, penumbra };
+  constructor({ umbra, penumbra } = {}) {
+    const args = { umbra, penumbra };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
 export const ShadowDirections2d = (...args) => new ShadowDirections2dGLSLStruct(...args);
 
 /**
- * Represent three rays of a shadow: umbra, penumbra, midumbra.
+ * Represent two rays of a shadow: umbra, penumbra.
  * Each ray goes through a wall endpoint.
  * Each ray type has two rays. Typically one for each endpoint, but sometimes these are mixed up.
  * @prop {Ray2d[2]} umbra
- * @prop {Ray2d[2]} midpenumbra
  * @prop {Ray2d[2]} penumbra
  */
 export class ShadowRays2dGLSLStruct {
-  constructor({ umbra, midpenumbra, penumbra } = {}) {
-    const args = { umbra, midpenumbra, penumbra };
+  constructor({ umbra, penumbra } = {}) {
+    const args = { umbra, penumbra };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
@@ -1588,14 +1585,13 @@ export const ShadowRays2d = (...args) => new ShadowRays2dGLSLStruct(...args);
 
 
 /**
- * Represent the three endpoints of a shadow, opposite the wall endpoint.
+ * Represent the two endpoints of a shadow, opposite the wall endpoint.
  * @prop {vec2} umbra
- * @prop {vec2} midpenumbra
  * @prop {vec2} penumbra
  */
 export class ShadowPointsGLSLStruct {
-  constructor({ umbra, midpenumbra, penumbra } = {}) {
-    const args = { umbra, midpenumbra, penumbra };
+  constructor({ umbra, penumbra } = {}) {
+    const args = { umbra, penumbra };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }

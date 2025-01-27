@@ -1326,7 +1326,8 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     }
 
     // If light center is on the wall, offset.
-    // TODO: Remove all midpenumbra.
+    // TODO: Does this need to happen elsewhere for umbra and penumbra?
+    /*
     const distToWall = distanceToSegment(uLightPosition.xy, W0, W1);
     const lightCenter = almostEqual(distToWall, 0.0, 1.0e-06)
       ? vec3(this.offsetLightFromWall(wall, 10.0), uLightPosition.z) : uLightPosition;
@@ -1334,13 +1335,13 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       Ray2d(W0, normalizedDirection(lightCenter.xy, W0)),
       Ray2d(W1, normalizedDirection(lightCenter.xy, W1))
     ];
+    */
 
-    // If a linked wall is present, use its direction for the penumbra, midpenumbra, and umbra.
+    // If a linked wall is present, use its direction for the penumbra and umbra.
     // If in-between mid and penumbra, change umbra and mid.
     const UNBLOCKED = Number(this.constructor.EV_ENDPOINT_LINKED_UNBLOCKED); // Convert to int in glsl.
     const BLOCKED = Number(this.constructor.EV_ENDPOINT_LINKED_BLOCKED); // Convert to int in glsl.
-    const BETWEEN_UM = 1;
-    const BETWEEN_MP = 2;
+    const BETWEEN_UP = 1;
     for ( let i = 0; i < 2; i += 1 ) {
       const W = wall.top[i].xy;
       const WO = wall.top[1 - i].xy;
@@ -1363,28 +1364,19 @@ export class SizedShadowsTest extends PenumbraBasicTest {
         } else {
           // Wall <--> umbra <--> mid <--> penumbra <--> wall line on other side of W0.
           const penumbraPt = projectRay(penumbra[i], 1.0);
-          const midPt = projectRay(midpenumbra[i], 1.0);
           const oPenumbra = orient(W, penumbraPt, linkPt);
-          const oMid = orient(W, midPt, linkPt);
-
           if ( SAME_SIDE(oLinked, oPenumbra) ) linkStatus = BLOCKED;
-          else if ( SAME_SIDE(oLinked, oMid) ) linkStatus = BETWEEN_MP;
-          else if ( SAME_SIDE(oLinked, oUmbra) ) linkStatus = BETWEEN_UM;
+          else if ( SAME_SIDE(oLinked, oUmbra) ) linkStatus = BETWEEN_UP;
           else linkStatus = UNBLOCKED;
         }
 
         switch ( linkStatus ) {
           case BLOCKED: {
             umbra[i] = penumbra[i];
-            midpenumbra[i] = penumbra[i];
             break;
           }
-          case BETWEEN_UM: {
+          case BETWEEN_UP: {
             umbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
-          }
-          case BETWEEN_MP: {
-            umbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
-            midpenumbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
             break;
           }
         }
@@ -1393,7 +1385,6 @@ export class SizedShadowsTest extends PenumbraBasicTest {
 
     return ShadowRays2d({
       umbra,
-      midpenumbra,
       penumbra
     });
   }
@@ -2292,7 +2283,6 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
 
     return ShadowDirections2d({
       umbra: dirUmbra,
-      midpenumbra: dirMidPenumbra,
       penumbra: dirPenumbra
     });
   }
@@ -2345,14 +2335,8 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
     umbra[idx0] = tangentRays[1];
     umbra[1 - idx0] = tangentRays[2];
 
-    const midpenumbra = [
-      Ray2d(wall0, sideShadowDirs0.midpenumbra),
-      Ray2d(wall1, sideShadowDirs1.midpenumbra)
-    ];
-
     return ShadowRays2d({
       umbra,
-      midpenumbra,
       penumbra
     });
   }
@@ -2371,7 +2355,6 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
     const dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0).multiplyScalar(-1.0);
     return ShadowDirections({
       umbra: vec3(dirMid, zDelta[UMBRA]).normalize(),
-      midpenumbra: vec3(dirMid, zDelta[MIDPENUMBRA]).normalize(),
       penumbra: vec3(dirMid, zDelta[PENUMBRA]).normalize()
     });
   }
@@ -2388,7 +2371,6 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
     const dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0).multiplyScalar(-1.0);
     return ShadowDirections({
       umbra: vec3(dirMid, zDelta[PENUMBRA]).normalize(),
-      midpenumbra: vec3(dirMid, zDelta[MIDPENUMBRA]).normalize(),
       penumbra: vec3(dirMid, zDelta[UMBRA]).normalize()
     });
   }
