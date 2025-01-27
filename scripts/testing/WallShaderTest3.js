@@ -3411,9 +3411,7 @@ let {
 function drawRay(ray, { dist = canvas.dimensions.maxR, color = Draw.COLORS.blue } = {}) {
   Draw.segment({ a: ray.origin, b: ray.origin.add(ray.direction.multiplyScalar(dist))}, { color })
 }
-l = canvas.lighting.placeables[0];
-edge0 = canvas.walls.placeables[0].edge
-ev = l.lightSource.elevatedvision
+
 
 UMBRA = 0;
 MIDPENUMBRA = 2;
@@ -3429,6 +3427,10 @@ OPP_SIDE = (o0, o1) => o0 * o1 < 0.0;
 COLLINEAR = o => glsl.almostEqual(o, 0.0, 1.0e-06);
 COUNTERCLOCKWISE = o => o > 0.0;
 CLOCKWISE = o => o < 0.0;
+
+l = canvas.lighting.placeables[0];
+edge0 = canvas.walls.placeables[0].edge
+ev = l.lightSource.elevatedvision
 let [shader0, shader1] = SizedShadowsTest.fromMesh(ev.shadowMesh)
 
 shader0.canvasElevation = 0
@@ -3481,6 +3483,12 @@ shader0.ambientLight(W0, W1)
 pt = vec2(_token.center.x, _token.center.y)
 shader0.vertexCalculations(2)
 shader0.setVaryings(pt)
+shader0.shadowComponents(pt, 0)
+
+shader1.vertexCalculations(2)
+shader1.setVaryings(pt)
+shader1.shadowComponents(pt, 0)
+
 shader0.fragmentCalculations(pt, 0)
 shader0.shadowPercentage(pt, 0)
 shader0.shadowComponents(pt, 0)

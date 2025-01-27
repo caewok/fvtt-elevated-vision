@@ -2,14 +2,14 @@
 precision ${PRECISION_VERTEX} float;
 /* ----- NOTE: Sized Fragment 2 (LightRay sampling) ----- */
 
-// #define SHADOW true
+#define SAMPLED_SOURCE   true
 
 #define TOTAL_COLLISIONS      52
 #define TOTAL_MID_COLLISIONS  ((TOTAL_COLLISIONS / 2) - 2)
 
 // Type of algorithm to use to generate collision test points.
 // 0: random 3d, 1: random 2d, 2: fixed spacing 2d
-#define ALG_TYPE              2
+#define ALG_TYPE              0
 
 uniform sampler2D uTerrainSampler;
 uniform vec3 uLightPosition;
@@ -23,20 +23,15 @@ in vec2 vTerrainTexCoord;
 in float vEdgeDist;
 in float vLREdgeDist;
 
-flat in float fThresholdRadius2;
-flat in float fWallSenseType;
-flat in vec2 fWallHeights;
-flat in vec2 fNearDistances;
-flat in vec2 fFarDistances;
+flat in float fThresholdRadius2;    // Shared
+flat in float fWallSenseType;       // Shared
+flat in vec2 fWallHeights;          // Shared
+flat in vec2 fAmbient;
 flat in vec3 fWallTop0;
 flat in vec3 fWallTop1;
 flat in vec3 fWallBottom0;
 flat in vec3 fWallBottom1;
-flat in vec2 fFarRLPenumbraDistances;
-flat in vec2 fFarRLUmbraDistances;
-flat in vec2 fNearRLPenumbraDistances;
-flat in vec2 fNearRLUmbraDistances;
-flat in vec2 fAmbient;
+flat in vec2 fLinkValues;
 
 out vec4 fragColor;
 
@@ -52,6 +47,8 @@ ${defineFunction("normalizedDirection")}
 ${defineFunction("noise")}
 ${defineFunction("lineLineIntersection")}
 ${defineFunction("planePointTo3d")}
+${defineFunction("fromAngle")}
+${defineFunction("lineSegmentIntersects")}
 
 /**
  * Select a position on the sphere given vec3 between -1 and 1.
@@ -61,36 +58,51 @@ ${defineFunction("planePointTo3d")}
  */
 vec3 spherePosition(in vec3 dir) { return uLightPosition + (dir * uLightSize); }
 
+
 /**
  * Determine whether there is a collision with the wall at a given direction from the fragment.
- * @param {Ray2d} r     Ray to test for intersection
- * @param {vec3} dir
- * @param {float} elevation
+ * @param {vec2} a      The fragment location
+ * @param {vec2} l      The light location
+ * @param {vec2[2]} linkPoints    Points of the two linked walls, if any; otherwise the wall endpoints
  * @returns {int} 0 if no collision, 1 if collision
  */
-float wallCollision(in Ray r) {
+float wallCollision(in vec3 a, in vec3 l, in vec2[2] linkPoints) {
   vec2 hWall0 = fWallTop0.xy;
   vec2 hWall1 = fWallTop1.xy;
+
+  // Test for collision with linked wall. Assumed infinite height, so test only horizontal.
+  // Cannot use OPP_SIDE b/c the linked wall could be at a weird angle
+  // and we cannot guarantee a --> l is going past the linked wall.
+
+  if ( linkPoints[0].x != hWall0.x && linkPoints[0].y != hWall0.y ) {
+    bool hCollision = lineSegmentIntersects(hWall0, linkPoints[0], a.xy, l.xy);
+    if ( hCollision ) return 1.0;
+  }
+  if ( linkPoints[1].x != hWall1.x && linkPoints[1].y != hWall1.y ) {
+    bool hCollision = lineSegmentIntersects(hWall1, linkPoints[1], a.xy, l.xy);
+    if ( hCollision ) return 1.0;
+  }
+
+  // Check that the ray collides both horizontally and vertically.
+  // Horizontal collision. Wall endpoints are opposite sides of the light ray.
+  // Faster than lineSegmentIntersects b/c we drop an orient b/c we know we are going past the wall.
+  bool hCollision = OPP_SIDE(orient(a.xy, l.xy, hWall0), orient(a.xy, l.xy, hWall1));
+  // bool hCollision = lineSegmentIntersects(hWall0, hWall1, a.xy, l.xy);
+  if ( !hCollision ) return 0.0;
+
+  // Vertical collision. Transform coordinates based on direction to wall.
+  vec2 wallHIx;
+  lineLineIntersection(hWall0, hWall1, a.xy, l.xy, wallHIx); // Already know an intersection exists from above.
+  float distA = distance(a.xy, wallHIx);
+  float distL = -distance(l.xy, wallHIx);
+  vec2 vA = vec2(distA, a.z);
+  vec2 vL = vec2(distL, l.z);
   vec2 vWall0 = vec2(0.0, fWallTop0.z);
   vec2 vWall1 = vec2(0.0, fWallBottom0.z);
 
-  // Move 1 pixel toward the light, to measure orientation w/r/t the light ray.
-  vec3 b = projectRay(r, 1.0);
-
-  // Test for horizontal collision. Wall endpoints are opposite sides of the light ray.
-  bool hCollision = OPP_SIDE(orient(r.origin.xy, b.xy, hWall0), orient(r.origin.xy, b.xy, hWall1));
-  if ( !hCollision ) return 0.0;
-
-  // Test for vertical collision. Transform coordinates based on direction to wall.
-  Ray2d rWall = Ray2d(hWall0, hWall1 - hWall0);
-  vec2 wallIx;
-  lineLineIntersection(Ray2d(r.origin.xy, r.direction.xy), rWall, wallIx);
-
-  float distA = distance(r.origin.xy, wallIx);
-  float distB = distance(b.xy, wallIx);
-  vec2 vA = vec2(distA, r.origin.z);
-  vec2 vB = vec2(distB, b.z);
-  bool vCollision = OPP_SIDE(orient(vA, vB, vWall0), orient(vA, vB, vWall1));
+  // Again, faster than lineSegmentIntersects when we know we are moving past the wall.
+  bool vCollision = OPP_SIDE(orient(vA, vL, vWall0), orient(vA, vL, vWall1));
+  // bool vCollision = lineSegmentIntersects(vWall0, vWall1, vA, vL);
   if ( !vCollision ) return 0.0;
   return 1.0;
 }
@@ -144,6 +156,34 @@ void plane2dConversionMatrix(in Plane plane, out mat4 M, inout mat4 Minv) {
 }
 
 /**
+ * Maximum scene diagonal, squared.
+ * Used to create long walls or rays.
+ */
+float maxR2() { return (uSceneDims.z * uSceneDims.z) + (uSceneDims.w * uSceneDims.w); }
+
+/**
+ * Points representing a wall linked to each endpoint.
+ * Avoids light leakage at the endpoints.
+ * @returns {vec2[2]}
+ */
+vec2[2] linkedWallPoints() {
+  vec2[2] wallEndpoints = vec2[2](fWallTop0.xy, fWallTop1.xy);
+  vec2[2] linkPoints = vec2[2](fWallTop0.xy, fWallTop1.xy);
+  for ( int i = 0; i < 2; i += 1 ) {
+    vec2 W = wallEndpoints[i];
+    vec2 WO = wallEndpoints[1 - i];
+
+    // Extend wall straight out.
+    if ( fLinkValues[i] == EV_ENDPOINT_LINKED_BLOCKED ) linkPoints[i] = projectRay(Ray2d(W, normalizedDirection(WO, W)), maxR2());
+
+    // Extend wall along the link angle.
+    else if ( fLinkValues[i] != EV_ENDPOINT_LINKED_UNBLOCKED ) linkPoints[i] = fromAngle(W, fLinkValues[i], maxR2());
+  }
+  return linkPoints;
+}
+
+
+/**
  * Determine the shadow percentage.
  */
 float shadowPercentage() {
@@ -158,6 +198,7 @@ float shadowPercentage() {
 
   float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
   vec3 a = vec3(vVertexPosition, elevation);
+  vec2[2] linkPoints = linkedWallPoints();
 
   #if (ALG_TYPE == 0)
 
@@ -172,7 +213,7 @@ float shadowPercentage() {
     // Pseudo-Gaussian 3d distribution.
     vec3 rndDir = (x * y * z == 0.0) ? vec3(0.0) : normalize(vec3(x, y, z));
     vec3 pos = spherePosition(linearConversion(rndDir, 0.0, 1.0, -1.0, 1.0));
-    numCollisions += wallCollision(Ray(a, normalizedDirection(a, pos)));
+    numCollisions += wallCollision(a, pos, linkPoints);
   }
   // TODO: Add in adjacent pixel values as part of the average here.
   return numCollisions / totalCollisions;
@@ -203,7 +244,7 @@ float shadowPercentage() {
     vec3 sqPt = (hCross * x) + (vCross * y);
     vec3 dir = normalize(sqPt);
     vec3 pos = dir * d;
-    numCollisions += wallCollision(Ray(a, normalizedDirection(a, pos)));
+    numCollisions += wallCollision(a, pos, linkPoints);
   }
   return numCollisions / totalCollisions;
   */
@@ -223,7 +264,7 @@ float shadowPercentage() {
     vec2 rndDir = (x * y == 0.0) ? vec2(0.0) : normalize(vec2(x, y));
     vec2 pos2d = rndDir * uLightSize;
     vec4 pos = vec4(pos2d, 0.0, 1.0) * M3d;
-    numCollisions += wallCollision(Ray(a, normalizedDirection(a, vec3(pos.xyz / pos.w))));
+    numCollisions += wallCollision(a, pos.xyz / pos.w, linkPoints);
   }
   return numCollisions / totalCollisions;
 
@@ -250,28 +291,28 @@ float shadowPercentage() {
   for ( int i = 0; i < TOTAL_MID_COLLISIONS; i += 1 ) {
     float s = (stepSize * float(i + 1)) - uLightSize;
     vec3 pt3d = uLightPosition + (hCross * s);
-    hCollisions += wallCollision(Ray(a, normalizedDirection(a, pt3d)));
+    hCollisions += wallCollision(a, pt3d, linkPoints);
   }
 
   // Each edge counts as half.
   vec3 h0 = uLightPosition + (hCross * -uLightSize);
   vec3 h1 = uLightPosition + (hCross * uLightSize);
-  hCollisions += (wallCollision(Ray(a, normalizedDirection(a, h0))) * 0.5);
-  hCollisions += (wallCollision(Ray(a, normalizedDirection(a, h1))) * 0.5);
+  hCollisions += (wallCollision(a, h0, linkPoints) * 0.5);
+  hCollisions += (wallCollision(a, h1, linkPoints) * 0.5);
 
   // Add up the collisions along the vertical axis of the light circle
   float vCollisions = 0.0;
   for ( int i = 0; i < TOTAL_MID_COLLISIONS; i += 1 ) {
     float s = (stepSize * float(i + 1)) - uLightSize;
     vec3 pt3d = uLightPosition + (vCross * s);
-    vCollisions += wallCollision(Ray(a, normalizedDirection(a, pt3d)));
+    vCollisions += wallCollision(a, pt3d, linkPoints);
   }
 
   // Each edge counts as half.
   vec3 v0 = uLightPosition + (vCross * -uLightSize);
   vec3 v1 = uLightPosition + (vCross * uLightSize);
-  vCollisions += (wallCollision(Ray(a, normalizedDirection(a, v0))) * 0.5);
-  vCollisions += (wallCollision(Ray(a, normalizedDirection(a, v1))) * 0.5);
+  vCollisions += (wallCollision(a, v0, linkPoints) * 0.5);
+  vCollisions += (wallCollision(a, v1, linkPoints) * 0.5);
 
   // Multiply the amount of horizontal shadow times the amount of vertical shadow.
   // return hCollisions / float(TOTAL_MID_COLLISIONS + 1);

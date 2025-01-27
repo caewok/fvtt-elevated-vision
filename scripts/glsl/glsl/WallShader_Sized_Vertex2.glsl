@@ -2,30 +2,27 @@
 precision ${PRECISION_VERTEX} float;
 /* ----- NOTE: Sized Vertex 2 (LightRay sampling) ----- */
 
+#define SAMPLED_SOURCE   true
+
 in vec4 aWallCorner0;
 in vec4 aWallCorner1;
 in float aWallSenseType;
 in float aThresholdRadius2;
 
-out vec2 vVertexPosition;
-out vec2 vTerrainTexCoord;
-out float vEdgeDist;
-out float vLREdgeDist;
+out vec2 vVertexPosition;  // Shared
+out vec2 vTerrainTexCoord; // Shared
+out float vEdgeDist;       // Shared
+out float vLREdgeDist;     // Shared
 
-flat out float fThresholdRadius2;
-flat out float fWallSenseType;
-flat out vec2 fWallHeights;
-flat out vec2 fNearDistances;
-flat out vec2 fFarDistances;
+flat out float fThresholdRadius2;   // Shared
+flat out float fWallSenseType;      // Shared
+flat out vec2 fWallHeights;         // Shared
+flat out vec2 fAmbient;
 flat out vec3 fWallTop0;
 flat out vec3 fWallTop1;
 flat out vec3 fWallBottom0;
 flat out vec3 fWallBottom1;
-flat out vec2 fFarRLPenumbraDistances;
-flat out vec2 fFarRLUmbraDistances;
-flat out vec2 fNearRLPenumbraDistances;
-flat out vec2 fNearRLUmbraDistances;
-flat out vec2 fAmbient;
+flat out vec2 fLinkValues;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
@@ -356,6 +353,8 @@ void defineFlats(in Wall wall, in vec2 vertex0) {
   float collinear = float(almostEqual(wall.top[0].xy, vertex0, 1.0e-08));
   fAmbient.x = collinear;
   fAmbient.y = collinear;
+
+  fLinkValues = vec2(wall.linkValues[0], wall.linkValues[1]);
 }
 
 void main() {

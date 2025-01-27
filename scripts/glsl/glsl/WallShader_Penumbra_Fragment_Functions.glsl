@@ -5,6 +5,10 @@
 #define PROXIMATE_WALL    30.0
 #define DISTANCE_WALL     40.0
 
+// For walls that share an endpoint.
+#define EV_ENDPOINT_LINKED_UNBLOCKED  -10.0
+#define EV_ENDPOINT_LINKED_BLOCKED  -20.0
+
 // Enumerated parts of the shadow.
 #define UMBRA                             0
 #define MIDPENUMBRA                       2
@@ -84,6 +88,8 @@ vec4 lightEncoding(in float light) {
 
   return c;
 }
+
+#ifndef SAMPLED_SOURCE
 
 /**
  * Elevation where the border between shadow and not shadow lies for this fragment.
@@ -175,6 +181,7 @@ float nearUmbraDistance(in float elevation) { return _nearFarDistance(elevation,
 float nearLUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearRLUmbraDistances[LEFT], BOTTOM); }
 float nearRUmbraDistance(in float elevation) { return _nearFarDistance(elevation, fNearRLUmbraDistances[RIGHT], BOTTOM); }
 
+#endif
 
 /**
  * Is the fragment location in front of the wall?
