@@ -171,6 +171,10 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
       abs() { return this._componentWise(a => Math.abs(a)); }
 
       pow(x) { return this._componentWise((a, i) => Math.pow(a, x[i])); }
+
+      min(x) { return this._componentWise((a, i) => Math.min(a, x[i] ?? x)); }
+
+      max(x) { return this._componentWise((a, i) => Math.max(a, x[i] ?? x)); }
     }
 
     // Define getters and setters for each single SWIZZLE property
@@ -930,6 +934,10 @@ export function pow(a, x) {
   if ( Number.isNumeric(a) ) return Math.pow(a, x);
   return a.pow(x);
 }
+
+export function min(x, y) { return x.min(y); }
+
+export function max(x, y) { return x.max(y); }
 
 
 /**
