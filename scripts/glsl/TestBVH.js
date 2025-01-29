@@ -37,7 +37,75 @@ struct WallData {
   vec3
 }
 
+struct Segment3d {
+  vec3 origin;
+  vec3 destination;
+  vec3 direction;
+  vec3 invDirection;
+  float t;
+}
+
 */
+
+/**
+ * Build a segment used for fast intersection testing.
+ * @param {vec3} origin
+ * @param {vec3} destination
+ * @returns {Segment3d}
+ */
+function Segment3d(origin, destination) {
+  const direction = glsl.normalizedDirection(origin, destination);
+  return {
+    origin,
+    destination,
+    direction,
+    invDirection: vec3(1.0).divide(direction),
+    t: glsl.distance(origin, destination)
+  };
+}
+
+/**
+ * Intersect ray with plane
+ * https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-plane-and-ray-disk-intersection.html
+ * https://tavianator.com/2011/ray_box.html
+ * @param {Plane} plane
+ * @param {Ray} ray
+ * @returns {float|null} T-value or null if no intersection.
+ * In GLSL, t is an out variable.
+ */
+function intersectPlaneRay(plane, ray) {
+  const denom = glsl.dot(plane.normal, ray.direction);
+  if ( denom.almostEqual(0) ) return null;
+  const p0l0 = plane.point.subtract(ray.origin);
+  return glsl.dot(p0l0, plane.normal) / denom;
+}
+
+/**
+ * Intersect ray with 2d vertical rectangle.
+ * @param {Plane} plane
+ * @param {Ray} ray
+ * @param {vec3} a      Where z is the top elevation
+ * @param {vec3} b      Where z is the bottom elevation
+ * @returns {float|null} T-value or null if no intersection.
+ * In GLSL, t is an out variable.
+ */
+function intersectVerticalRectangleRay(plane, ray, a, b) {
+  const t = intersectPlaneRay(plane, ray);
+  if ( t == null ) return null;
+  if ( t < 0.0 || t > ray.t ) return null;
+  const ix = glsl.projectRay(ray, t);
+
+  // Within vertical extent.
+  if ( ix.z > a.z || ix.z < b.z ) return null;
+
+  // Within the 2d endpoints.
+  const dist2Endpoints = glsl.distanceSquared(a.xy, b.xy);
+  const dist2A = glsl.distanceSquared(a.xy, ix.xy);
+  if ( dist2A > dist2Endpoints ) return null;
+  const dist2B = glsl.distanceSquared(b.xy, ix.xy);
+  if ( dist2B > dist2Endpoints ) return null;
+  return t;
+}
 
 class EdgeData {
   /** @type {Edge} */
@@ -78,6 +146,17 @@ class EdgeData {
   /** @type {CONST.WALL_SENSE_TYPES} */
   get thresholdAttenuation() { return this.edge.threshold[this.sourceType]; }
 
+  /** @type {vec3} */
+  get normal() {
+    const { a, b, top, bottom } = this;
+    return glsl.cross(
+      glsl.normalizedDirection(vec3(a, top), vec3(b, top)),
+      glsl.normalizedDirection(vec3(a, top), vec3(a, bottom)));
+  }
+
+  /** @type {Plane} */
+  get plane() { return glsl.Plane(vec3(this.a, this.top), this.normal); }
+
   // ----- NOTE: Simple getter calculations ----- //
 
   /**
@@ -110,6 +189,16 @@ class EdgeData {
   }
 
   // ----- NOTE: Debugging ----- //
+
+  /**
+   * Intersect the edge representing a vertical wall.
+   * @param {Segment3d} ray
+   * @returns {bool}
+   */
+  hasIntersection(ray) {
+    if ( intersectVerticalRectangleRay(this.plane, ray, this.a, this.b) == null ) return false;
+    return true;
+  }
 
   /**
    * Draw this edge.
@@ -185,6 +274,26 @@ class BVHNode {
     );
   }
 
+  /**
+   * Intersect the bounding box.
+   * 2d version.
+   * TODO: See https://tavianator.com/2022/ray_box_boundary.html
+   * @param {Segment3d} ray
+   * @returns {bool}
+   */
+  hasIntersection(ray) {
+    const { min: bmin, max: bmax } = this.aabb;
+    const { origin, invDirection, t } = ray;
+    const t1 = (bmin - origin.xy) * invDirection.xy;
+    const t2 = (bmax - origin.xy) * invDirection.xy;
+
+    const minVals = glsl.min(t1, t2);
+    const maxVals = glsl.max(t1, t2);
+    const tmax = Math.min(maxVals.x, maxVals.y);
+    const tmin = Math.max(minVals.x, minVals.y);
+    return tmax > 0.0 && tmax >= tmin && t > tmin;
+  }
+
   // ----- NOTE: Debugging ----- //
 
   /**
@@ -255,7 +364,7 @@ class BVH {
     let j = i + node.objCount - 1;
     while ( i <= j ) {
       if ( this.objData[this.objIdx[i]].centroid[axis] < splitPosition ) i += 1;
-      else this._swap(i, j--);
+      else this.#swap(i, j--);
     }
 
     /* Debug
@@ -291,8 +400,38 @@ class BVH {
    * @param {int} idx1
    */
    // TODO: Make private once done debugging
-  _swap(idx0, idx1) { [this.objIdx[idx1], this.objIdx[idx0]] = [this.objIdx[idx0], this.objIdx[idx1]]; }
+  #swap(idx0, idx1) { [this.objIdx[idx1], this.objIdx[idx0]] = [this.objIdx[idx0], this.objIdx[idx1]]; }
 
+  /**
+   * Intersect the bounding boxes with a ray.
+   * TODO: Add variable to return the intersecting node to test as a caching mechanism.
+   * @param {Ray|Ray2d} ray
+   * @param {int} nodeIdx
+   * @returns {bool}
+   */
+  hasIntersection(ray, nodeIdx = 0) {
+    const node = this.nodes[nodeIdx];
+    if ( !node.hasIntersection(ray) ) return false;
+    if ( node.isLeaf ) {
+      // Test object intersections.
+      for ( let i = 0; i < node.objCount; i += 1 ) {
+        const obj = this.objData[this.objIdx[node.leftFirst + i]];
+        if ( obj.hasIntersection(ray) ) return true;
+      }
+    } else {
+      // Recurse.
+      if ( this.hasIntersection(ray, node.leftFirst) ) return true;
+      if ( this.hasIntersection(ray, node.leftFirst + 1) ) return true;
+    }
+    return false;
+  }
+
+  /**
+   * For GLSL, use a stack version.
+   */
+  intersectNonRecursive() {
+
+  }
 
   // ----- NOTE: Debugging ----- //
   static COLORS = [
