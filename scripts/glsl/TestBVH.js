@@ -47,6 +47,8 @@ struct Segment3d {
 
 */
 
+function isEven(n) { return n % 2 === 0; }
+
 function isOdd(n) { return n % 2 !== 0; }
 
 /**
@@ -164,28 +166,87 @@ Store in RGBA16F. 16 bits * 4 * 2 = 128 bits
 a.x | a.x | a.y | a.y || b.x | b.x | b.y | b.y ||
 top | top | bottom | bottom || type | threshold | threshold | ? |
 
+threshold: 2^16. 65,536 max. 0 means none.
+- light
+- sight
+- sound
+
+senseType: 2^16. {NONE: 0, LIMITED: 10, NORMAL: 20, PROXIMITY: 30, DISTANCE: 40}. Binary encode.
+- light
+- sight
+- sound
+- move
+
+--> Store in RGBA16UI.
+a.x | a.y | b.x | b.y || senseType | top | bottom | ? || thresholdLight | thresholdSight | thresholdSound | ? ||
+--> Could use alpha channels to increase resolution of top, bottom, thresholds.
+
+Remap as bit operators.
+light sight sound move
+000 000 000 000  => 2^12
+
+000 is 0 (NONE)
+001 is 1 (LIMITED)
+010 is 2 (NORMAL)
+011 is 3 (PROXIMITY)
+100 is 4 (DISTANCE)
+
+See https://bitwisecmd.com
+
+binLight = num => Math.floor(num * 0.1) << 9;
+binSight = num => Math.floor(num * 0.1) << 6;
+binSound = num => Math.floor(num * 0.1) << 3;
+binMove = num => Math.floor(num * 0.1);
+
+encodeEdgeTypes = function({ light = 0, sight = 0, sound = 0, move = 0} = {}) {
+  // light xxx 000 000 000
+  // sight 000 xxx 000 000
+  // sound 000 000 xxx 000
+  // move  000 000 000 xxx
+  return binLight(light) | binSight(sight) | binSound(sound) | binMove(move)
+}
+
+decodeEdgeTypes = function(n) {
+  const sightMask = 7 << 6; // 000 111 000 000
+  const soundMask = 7 << 3; // 000 000 111 000
+  const moveMask = 7;       // 000 000 000 111
+
+  return {
+    light: (n >> 9) * 10,
+    sight: ((n & sightMask) >>> 6) * 10,
+    sound: ((n & soundMask) >>> 3) * 10,
+    move: ((n & moveMask) >>> 0) * 10
+  }
+}
+
+function binLight(num) {
+  const n = num / 10;
+  return n << 9
+}
+function binSight(num) {}
+binLight(LIMITED)
+
 */
 
 /* Track BVH data in a data texture.
 Each row is a node.
 - leftFirst. Integer. References a wall number or a node number. 2^10 (1024) or 2^16 (65536)
-- triCount. Integer. Number of walls in this node. Likely small. 2^8 (256)?
+- type. Integer. 0 if node, 1 if leaf (wall).
 - aabbMin. ivec2. 0 to maximum canvas size, which is unlikely to exceed 32768. (2^14 to 2^16)
 - aabbMax. ivec2. Same as aabbMin.
 
+
 Uniform variable to track the objIdx?
-Store in RGBA16UI. 16 bits * 4 * 1 = 64 bits; 8 bytes
-leftFirst | triCount | aabbMin | aabbMax ||
+--> Store in RGBA16UI. 16 bits * 4 * 1 = 64 bits; 8 bytes
+leftFirst | type | ? | ? || aabbMin.x | aabbMin.y | aabbMax.x | aabbMax.y ||
+
+Store in RGB10_A2.
+aabbMin.x | aabbMin.x | leftFirst | type || aabbMin.y | aabbMin.y | leftFirst | ? ||
+aabbMax.x | aabbMax.x | ? | ? || aabbMax.y | aabbMax.y | ? | ? ||
 
 */
 
-
-class EdgesTexture {
-
-
-}
-
-class EdgeData {
+export class EdgeData {
   /** @type {Edge} */
   edge;
 
@@ -265,6 +326,164 @@ class EdgeData {
       aabb.max.x - aabb.min.x,
       aabb.max.y - aabb.min.y
     );
+  }
+
+  // ----- NOTE: Texture storage ----- //
+
+
+  /**
+   * Encode the edge top and bottom.
+   * Currently, evenly split among the 65,536 values.
+   * 0 is negative infinity; 65535 is positive infinity, 65534 / 2 is the ± split.
+   */
+  static encodeEdgeElevation(edge) {
+    const elevation = edge.elevationLibGeometry;
+    const max = 65535;
+    const split = 32768; // 2^16 / 2
+    const maxTop = max - split;
+
+    // If null, treat as infinite. If outside the range, treat as infinite.
+    // TODO: Could add more sophisticated resolution given another pixel channel to use.
+    const edgeTop = glsl.clamp(edge.a.top ?? maxTop, -split, maxTop);
+    const edgeBottom = glsl.clamp(edge.a.bottom ?? -split, -split, maxTop);
+    return {
+      top: edgeTop + split,
+      bottom: edgeBottom + split
+    };
+  }
+
+  static decodeEdgeElevation(n) {
+    const max = 65535;
+    const split = 32768;
+    if ( n === max ) return Number.POSITIVE_INFINITY;
+    if ( n === 0 ) return Number.NEGATIVE_INFINITY;
+    return (n - 32768);
+  }
+
+  static EDGE_TYPE_OFFSET = {
+    light: 9,
+    sight: 6,
+    sound: 3,
+    move: 0
+  };
+
+  /**
+   * Encode the edge types.
+   * @param {object} opts
+   * @param {CONST.WALL_SENSE_TYPES} [opts.light = 0]
+   * @param {CONST.WALL_SENSE_TYPES} [opts.sight = 0]
+   * @param {CONST.WALL_SENSE_TYPES} [opts.sound = 0]
+   * @param {CONST.WALL_SENSE_TYPES} [opts.move = 0]
+   * @returns {int}
+   */
+  static encodeEdgeTypes({ light = 0, sight = 0, sound = 0, move = 0} = {}) {
+    // Light xxx 000 000 000
+    // Sight 000 xxx 000 000
+    // Sound 000 000 xxx 000
+    // Move  000 000 000 xxx
+
+    /* Equivalent given move offset of 0:
+    binMove = num => Math.floor(num * 0.1);
+    */
+
+    const offset = this.EDGE_TYPE_OFFSET;
+    const binLight = num => Math.floor(num * 0.1) << offset.light;
+    const binSight = num => Math.floor(num * 0.1) << offset.sight;
+    const binSound = num => Math.floor(num * 0.1) << offset.sound;
+    const binMove = num => Math.floor(num * 0.1) << offset.move;
+    return binLight(light) | binSight(sight) | binSound(sound) | binMove(move);
+  }
+
+  /**
+   * Decode the edge types.
+   * @param {int} n         The value provided by encodeEdgeTypes
+   * @returns {object}
+   *   - @prop {CONST.WALL_SENSE_TYPES} light
+   *   - @prop {CONST.WALL_SENSE_TYPES} sight
+   *   - @prop {CONST.WALL_SENSE_TYPES} sound
+   *   - @prop {CONST.WALL_SENSE_TYPES} move
+   */
+  static decodeEdgeTypes(n) {
+    const offset = this.EDGE_TYPE_OFFSET;
+    const lightMask = 7 << offset.light;  // 111 000 000 000
+    const sightMask = 7 << offset.sight;  // 000 111 000 000
+    const soundMask = 7 << offset.sound;  // 000 000 111 000
+    const moveMask = 7 << offset.move;    // 000 000 000 111
+
+    /* Equivalent given light offset of 9 and move offset of 0:
+    moveMask = 7;
+    light: (n >> 9) * 10
+    */
+
+    return {
+      light: ((n & lightMask) >> offset.light) * 10,
+      sight: ((n & sightMask) >> offset.sight) * 10,
+      sound: ((n & soundMask) >> offset.sound) * 10,
+      move:  ((n & moveMask)  >> offset.move)  * 10 /* eslint-disable-line no-multi-spaces,key-spacing */
+    };
+  }
+
+  /** @type {Edge} */
+  // TODO: Add region edges from Terrain Mapper.
+  static get edges() { return [...canvas.edges.values()].filter(edge => edge.type === "wall"); }
+
+  /**
+   * Copy the relevant bvh data to an array.
+   */
+  static copyEdgesToArray(arr) {
+    const edges = this.edges;
+    const height = edges.length;
+    const width = 3;
+    const channels = 4;
+    arr ??= new Uint16Array(width * height * channels);
+    if ( arr.length !== width * height * channels ) console.error(`${MODULE_ID}|copyToArray|Array is wrong length. Should be ${width * height * channels} but is actually ${arr.length}`);
+
+    // || a.x | a.y | b.x | b.y || senseType | top | bottom | ? || threshLight | threshSight | threshSound | ? ||
+    // TODO: Use alpha channels to increase resolution of top, bottom, thresholds.
+    // Could encode ± for top,bottom, along with multiplier or divider by 10 or 100 for both.
+    // May eventually need separate top.a, bottom.a, top.b, bottom.b values.
+    const maxValue = 65535; // 2^16 - 1.
+    for ( let i = 0; i < height; i += 1 ) {
+      const edge = edges[i];
+      const r = i * width * channels;
+      const elevation = this.encodeEdgeElevation(edge);
+      const t = edge.threshold;
+
+      arr[r + 0] = edge.a.x;
+      arr[r + 1] = edge.a.y;
+      arr[r + 2] = edge.b.x;
+      arr[r + 3] = edge.b.y;
+
+      arr[r + 4] = this.encodeEdgeTypes(edge);
+      arr[r + 5] = elevation.top;
+      arr[r + 6] = elevation.bottom;
+      // Unused arr[r + 7] =
+
+      arr[r + 8] = glsl.clamp(t.attenuation ? t.light : 0, 0, maxValue);
+      arr[r + 9] = glsl.clamp(t.attenuation ? t.sight : 0, 0, maxValue);
+      arr[r + 10] = glsl.clamp(t.attenuation ? t.sound : 0, 0, maxValue);
+      // Unused arr[r + 11] =
+    }
+    return arr;
+  }
+
+  static textureConfiguration() {
+    // See https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
+    // RGBA16UI.
+    // || a.x | a.y | b.x | b.y || senseType | top | bottom | ? || threshLight | threshSight | threshSound | ? ||
+    const edges = this.edges;
+    const height = edges.length;
+    const width = 3;
+    return {
+      resolution: 1,
+      width,
+      height,
+      mipmap: PIXI.MIPMAP_MODES.OFF,
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      multisample: PIXI.MSAA_QUALITY.NONE,
+      format: PIXI.FORMATS.RGBA_INTEGER,
+      type: PIXI.TYPES.UNSIGNED_SHORT
+    };
   }
 
   // ----- NOTE: Debugging ----- //
@@ -418,7 +637,7 @@ class BVHNode {
  * To facilitate use with webGL, use a b-tree approach where each end node refers to a single
  * edge. Thus, the end node's bbox is the same as the edge's bbox.
  */
-class BVH {
+export class BVH {
   /** @type {BVHNode} */
   get root() { return this.nodes[0]; }
 
@@ -434,18 +653,18 @@ class BVH {
   /** @type {int} */
   nodesUsed = 0;
 
-  constructor(objData) {
+  constructor(objData, objIdx) {
     this.objData = objData;
-    const N = objData.length;
-    this.objIdx = Array.fromRange(N);
+    this.objIdx = objIdx;
+    const N = objIdx.length;
     this.nodes.length = (N * 2 ) - 1;
     this.nodes[0] = new BVHNode(this.objData, this.objIdx);
     this.nodesUsed += 1;
     this.root.objCount = N;
   }
 
-  static build(objData = []) {
-    const bvh = new this(objData);
+  static build(objData, objIdx) {
+    const bvh = new this(objData, objIdx);
     bvh.root.leftFirst = 0;
     bvh.root.updateBounds();
 
@@ -462,7 +681,7 @@ class BVH {
     // Terminate recursion.
     const node = this.nodes[nodeIdx];
     const N = node.objCount;
-    console.log(`nodeIdx ${nodeIdx} objCount ${N} leftFirst ${node.leftFirst}`);
+    // console.log(`nodeIdx ${nodeIdx} objCount ${N} leftFirst ${node.leftFirst}`);
 
     if ( N <= 1 ) return;
     if ( N === 2 ) return this._split(node, 1);
@@ -585,6 +804,8 @@ class BVH {
    */
   _swap(idx0, idx1) { [this.objIdx[idx1], this.objIdx[idx0]] = [this.objIdx[idx0], this.objIdx[idx1]]; }
 
+  // ----- NOTE: Intersection ----- //
+
   /**
    * Intersect the bounding boxes with a ray.
    * TODO: Add variable to return the intersecting node to test as a caching mechanism.
@@ -594,7 +815,7 @@ class BVH {
    */
   hasIntersection(ray, nodeIdx = 0) {
     const node = this.nodes[nodeIdx];
-    if ( !node.hasIntersection(ray) ) return false;
+    if ( !node.hasBoundsIntersection(ray) ) return false;
     if ( node.isLeaf ) {
       if ( node.hasObjectIntersection(ray) ) return true;
     } else {
@@ -606,12 +827,98 @@ class BVH {
   }
 
   /**
-   * For GLSL, use a stack version.
+   * TODO: For GLSL, could use a stack version that prioritizes closer bbox distances first.
    * See https://alister-chowdhury.github.io/posts/20230620-raytracing-in-2d/
+   * @param {Ray}
    */
-  hasIntersectionNonRecursive() {
+  hasIntersectionNonRecursive(ray) {
+    // For now, don't bother with fake pulling values from the texture arrays.
+    // Handle the root node and return if no collision or there is only 1 edge.
+    let currLevel = 0;
+    let currNode = this.nodes[0];
+    if ( !currNode.hasBoundsIntersection(ray) ) return false;
+    if ( currNode.isLeaf ) return currNode.hasObjectIntersection(ray);
 
+    // Track the next node for each level of the tree.
+    const stack = new Uint16Array(Math.floor(this.nodes.length * 0.5) + 2); // Plus 1 for root.
+    stack[0] = 1;  // Root left child is 1; root right child is 2.
 
+    while ( currLevel >= 0 ) {
+      // console.log(`hasIntersectionNonRecursive|currLevel ${currLevel}`, [...stack])
+
+      // Pull the current node.
+      currNode = this.nodes[stack[currLevel]];
+
+      // Set the left side for this node.
+      stack[currLevel + 1] = currNode.leftFirst;
+
+      // May have the right node remaining. Right is always 1 more than left.
+      // Note: left is odd, right is even.
+      stack[currLevel] = isEven(stack[currLevel]) ? 0 : stack[currLevel] + 1;
+
+      // Test bounds for this node; if hit, investigate further.
+      // If node is leaf, also test object intersection and possibly end early.
+      let goDown = currNode.hasBoundsIntersection(ray);
+      if ( goDown && currNode.isLeaf ) {
+        if ( currNode.hasObjectIntersection(ray) ) return true;
+        goDown = false;
+      }
+
+      // In next loop, either:
+      // 1. Move down to next level.
+      // 2. Test the right node.
+      // 3. Move up to prior level(s).
+      if ( goDown ) currLevel += 1;
+      else while ( currLevel >= 0 && stack[currLevel] === 0 ) currLevel -= 1;
+    }
+    return false;
+  }
+
+  // ----- NOTE: Texture storage ----- //
+
+  /**
+   * Copy the relevant bvh data to an array.
+   */
+  copyToArray(arr) {
+    const width = 2;
+    const height = this.nodes.length;
+    const channels = 4;
+    arr ??= new Uint16Array(width * height * channels);
+    if ( arr.length !== width * height * channels ) console.error(`${MODULE_ID}|copyToArray|Array is wrong length. Should be ${width * height * channels} but is actually ${arr.length}`);
+
+    // || leftFirst | type | ? | ? || aabbMin.x | aabbMin.y | aabbMax.x | aabbMax.y ||
+    for ( let n = 0; n < height; n += 1 ) {
+      const node = this.nodes[n];
+      const aabb = node.aabb;
+      const r = n * width * channels;
+      arr[r] = node.leftFirst;
+      arr[r + 1] = node.objCount;
+      // Unused: arr[r + 2]
+      // Unused: arr[r + 3]
+      arr[r + 4] = aabb.min.x;
+      arr[r + 5] = aabb.min.y;
+      arr[r + 6] = aabb.max.x;
+      arr[r + 7] = aabb.max.y;
+    }
+    return arr;
+  }
+
+  textureConfiguration() {
+    // See https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
+    // RGBA16UI.
+    // || leftFirst | type | ? | ? || aabbMin.x | aabbMin.y | aabbMax.x | aabbMax.y ||
+    const width = 2;
+    const height = this.nodes.length;
+    return {
+      resolution: 1,
+      width,
+      height,
+      mipmap: PIXI.MIPMAP_MODES.OFF,
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      multisample: PIXI.MSAA_QUALITY.NONE,
+      format: PIXI.FORMATS.RGBA_INTEGER,
+      type: PIXI.TYPES.UNSIGNED_SHORT
+    };
   }
 
   // ----- NOTE: Debugging ----- //
@@ -727,8 +1034,8 @@ edgeData.forEach(e => e.drawEdge());
 edgeData.forEach(e => e.drawCentroid({ color: Draw.COLORS.red }));
 edgeData.forEach(e => e.drawBounds());
 
-edgeData
-bvh = BVH.build(edgeData)
+edgeIdx = Array.fromRange(edgeData.length)
+bvh = BVH.build(edgeData, edgeIdx)
 bvh.drawBounds()
 
 
@@ -736,6 +1043,16 @@ a = vec3(canvas.tokens.controlled[0].center.x, canvas.tokens.controlled[0].cente
 b = vec3(canvas.tokens.controlled[1].center.x, canvas.tokens.controlled[1].center.y, 0)
 Draw.segment({ a, b})
 r = glsl.RayGLSLStruct.bvhRay(a, b);
+bvh.hasIntersection(r)
+bvh.hasIntersectionNonRecursive(r)
+
+fn1 = function(r) { return bvh.hasIntersection(r); }
+fn2 = function(r) { return bvh.hasIntersectionNonRecursive(r); }
+
+N = 1000
+await foundry.utils.benchmark(fn1, N, r)
+await foundry.utils.benchmark(fn2, N, r)
+
 edgeData.map(elem => elem.hasBoundsIntersection(r))
 edgeData.map(elem => elem.hasObjectIntersection(r))
 
@@ -747,61 +1064,12 @@ bvh.nodes.map(node => node.description())
 bvh.displayHierarchy()
 
 
-// edge 3 bounds outside
-// edge 1 bounds inside, edge outside
-// edge 0 bounds and edge inside
-
-bvh.nodes[]
-bvh.hasIntersection(r)
-
-bvh = new BVH(edgeData);
-bvh.root.leftFirst = 0;
-bvh.root.updateBounds();
-bvh.root.drawBounds();
 
 
-node = bvh.nodes[nodeIdx];
-if ( node.objCount <= 2 ) return;
+bvh.textureConfiguration()
+bvh.copyToArray()
 
-// Determine split axis and position.
-extent = node.aabb.max.subtract(node.aabb.min);
-axis = Number(extent.y > extent.x); // If y > x, then 1; otherwise 0.
-splitPosition = node.aabb.min[axis] + (extent[axis] * 0.5);
+EdgeData.textureConfiguration()
+EdgeData.copyEdgesToArray()
 
-// Debug
-splitTop = vec2(node.aabb.min)
-splitBottom = vec2(node.aabb.max)
-splitTop[axis] = splitPosition
-splitBottom[axis] = splitPosition
-Draw.segment({a: splitTop, b: splitBottom }, { color: Draw.COLORS.orange })
 
-// In-place partition.
-let i = node.leftFirst;
-let j = i + node.objCount - 1;
-while ( i <= j ) {
-  if ( bvh.objData[bvh.objIdx[i]].centroid[axis] < splitPosition ) i += 1;
-  else bvh._swap(i, j--);
-}
-
-// Debug
-bvh.objIdx.map(idx => bvh.objData[idx].centroid)
-
-// Abort split if one of the sides is empty.
-leftCount = i - node.leftFirst;
-if ( !leftCount || leftCount === node.objCount ) return;
-
-// Create child nodes.
-leftChildIdx = bvh.nodesUsed++;
-rightChildIdx = bvh.nodesUsed++;
-bvh.nodes[leftChildIdx] = new BVHNode(bvh.objData, bvh.objIdx);
-bvh.nodes[rightChildIdx] = new BVHNode(bvh.objData, bvh.objIdx);
-bvh.nodes[leftChildIdx].leftFirst = node.leftFirst;
-bvh.nodes[leftChildIdx].objCount = leftCount;
-bvh.nodes[rightChildIdx].leftFirst = i;
-bvh.nodes[rightChildIdx].objCount = node.objCount - leftCount;
-node.leftFirst = leftChildIdx;
-node.objCount = 0;
-bvh.nodes[leftChildIdx].updateBounds();
-bvh.nodes[rightChildIdx].updateBounds();
-
-*/
