@@ -961,6 +961,13 @@ export class Ray2dGLSLStruct {
     return new this(origin, towardsPoint.subtract(origin));
   }
 
+  static bvhRay(origin, destination) {
+    const r = new this(origin, normalizedDirection(origin, destination));
+    r.invDirection = vec3(1.0).divide(r.direction),
+    r.t2 = glsl.distanceSquared(origin, destination);
+    return r;
+  }
+
   /**
    * Normalize the ray direction.
    * @returns {RayGLSLStruct} A newly constructed ray.
@@ -1058,6 +1065,7 @@ export class RayGLSLStruct extends Ray2dGLSLStruct {
     super(origin.xy, direction.xy);
     this.origin.set(origin, 0);
     this.direction.set(direction, 0);
+
   }
 }
 export const Ray = (...args) => new RayGLSLStruct(...args);
@@ -1130,6 +1138,20 @@ export function wallKeyCoordinates(key) {
  * @returns {float} The cross product
  */
 export function cross2d(a, b) { return (a.x * b.y) - (a.y * b.x); }
+
+/**
+ * Cross two vec3
+ * @param {vec3} a  First vector
+ * @param {vec3} b  Second vector
+ * @returns {vec3} The cross product
+ */
+export function cross(a, b) {
+  return vec3(
+    a.y * b.z - b.y * a.z,
+    a.z * b.x - b.z * a.x,
+    a.x * b.y - b.x * a.y
+  );
+}
 
 /**
  * @param {Ray2dGLSLStruct} a

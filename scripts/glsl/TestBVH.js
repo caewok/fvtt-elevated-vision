@@ -47,22 +47,7 @@ struct Segment3d {
 
 */
 
-/**
- * Build a segment used for fast intersection testing.
- * @param {vec3} origin
- * @param {vec3} destination
- * @returns {Segment3d}
- */
-function Segment3d(origin, destination) {
-  const direction = glsl.normalizedDirection(origin, destination);
-  return {
-    origin,
-    destination,
-    direction,
-    invDirection: vec3(1.0).divide(direction),
-    t: glsl.distance(origin, destination)
-  };
-}
+function isOdd(n) { return n % 2 !== 0; }
 
 /**
  * Intersect ray with plane
@@ -92,7 +77,7 @@ function intersectPlaneRay(plane, ray) {
 function intersectVerticalRectangleRay(plane, ray, a, b) {
   const t = intersectPlaneRay(plane, ray);
   if ( t == null ) return null;
-  if ( t < 0.0 || t > ray.t ) return null;
+  if ( t < 0.0 || (t*t) > ray.t2 ) return null;
   const ix = glsl.projectRay(ray, t);
 
   // Within vertical extent.
@@ -105,6 +90,99 @@ function intersectVerticalRectangleRay(plane, ray, a, b) {
   const dist2B = glsl.distanceSquared(b.xy, ix.xy);
   if ( dist2B > dist2Endpoints ) return null;
   return t;
+}
+
+/**
+ * Intersect a 2d bounding box.
+ * @param {Ray|Ray2d} ray
+ * @param {vec2} bmin
+ * @param {vec2} bmax
+ */
+function intersect2dBounds(ray, bmin, bmax) {
+  const { origin, invDirection, t2 } = ray;
+  const minXY = bmin.subtract(origin.xy).multiply(invDirection.xy);
+  const maxXY = bmax.subtract(origin.xy).multiply(invDirection.xy);
+
+  const minVals = glsl.min(minXY, maxXY);
+  const maxVals = glsl.max(minXY, maxXY);
+  const tmax = Math.min(maxVals.x, maxVals.y);
+  const tmin = Math.max(minVals.x, minVals.y);
+  return tmax > 0.0 && tmax >= tmin && t2 > (tmin * tmin);
+}
+
+/** Track all edges in the scene in a data texture.
+Each row is an edge.
+Properties:
+- a.x. Integer. 0 to maximum canvas size, which is unlikely to exceed 32768.
+- a.y. Integer. 0 to maximum canvas size.
+- b.x. Integer. 0 to maximum canvas size.
+- b.y. Integer. 0 to maximum canvas size.
+- top. Float. No clear max/min although it would be rare to see negatives or large positive elevations.
+- bottom. Float. Same restrictions as top.
+  - Could use max/min values to signify infinity.
+- type. Integer. CONST.WALL_SENSE_TYPES: 0–40 at the moment, although only 5 values total.
+- threshold. Positive float. 0 if none. Distance to wall otherwise. Max distance is canvas diameter.
+  - Likely cannot exceed sqrt(32768^2 + 32768^2) ~ 46340.
+
+Ideally, use texture with small bits?
+- type: needs 3 bits (8)
+- a.x, a.y, b.x, b.y: needs 15 bits (32,768)
+- top, bottom:
+  - 2^15: store 32,768. For tenth of decimal, could store -1100 to 2100. (0 to 32000)
+  - 2^16: store 65,536. For tenth of decimal, could store -3000 to 3500 (0 to 65000)
+  - Alt: store decimals; divide by 10. 0 to 2000 would be 0 to 20,000.
+    -> 2^15 to store 32768
+- threshold: 0 to 46340.
+  -> 2^16: 65,536 (integer)
+  -> 2^19: 524,288 (tenth of decimal)
+  -> 2^32: 4.29 million (nearly one hundreth of decimal; would drop the largest thresholds)
+- type: 0 to 3. (normal, limited, proximity, distance)
+  -> 2^2
+
+(Storing squared values is too large:
+  Assume squared distances between -1000 and 1000. 0 to 2000 is 0 to 4 million.
+    -> 2^32 to store 4.29 million)
+
+Store in RBGA8. 8 bits * 4 * 4 = 128 bits; 16 bytes.
+4 pulls; maybe could get down to 3.
+a.x | a.x | a.y | a.y || b.x | b.x | b.y | b.y || top | top | bottom | bottom || type | threshold | threshold | ? |
+
+--> Store in RGBA16UI. 16 bits * 4 * 2 = 128 bits; 16 bytes.
+a.x | a.y | b.x | b.y || type | top | bottom | threshold ||
+
+Store in RGB10_A2. 32 bits * 4 = 128 bits; 16 bytes.
+Could use other alpha channels to signify positive/negative for top, bottom.
+ - 0: infinite, 1 positive, 2 negative, 3 ? multiply by 10? divide by 10?
+ - Top/bottom then could use a single channel, 2^10 = 1024?
+ - Threshold single channel would store 1024; 2 channel would be 2^20.
+- Three pulls for most data.
+a.x | a.x | a.y | type || b.x | b.x | a.y | topSwitch ||
+b.y | b.y | threshold | bottomSwitch || threshold | top | bottom | ? ||
+
+
+Store in RGBA16F. 16 bits * 4 * 2 = 128 bits
+a.x | a.x | a.y | a.y || b.x | b.x | b.y | b.y ||
+top | top | bottom | bottom || type | threshold | threshold | ? |
+
+*/
+
+/* Track BVH data in a data texture.
+Each row is a node.
+- leftFirst. Integer. References a wall number or a node number. 2^10 (1024) or 2^16 (65536)
+- triCount. Integer. Number of walls in this node. Likely small. 2^8 (256)?
+- aabbMin. ivec2. 0 to maximum canvas size, which is unlikely to exceed 32768. (2^14 to 2^16)
+- aabbMax. ivec2. Same as aabbMin.
+
+Uniform variable to track the objIdx?
+Store in RGBA16UI. 16 bits * 4 * 1 = 64 bits; 8 bytes
+leftFirst | triCount | aabbMin | aabbMax ||
+
+*/
+
+
+class EdgesTexture {
+
+
 }
 
 class EdgeData {
@@ -132,10 +210,10 @@ class EdgeData {
   get b() { return vec2(this.edge.b.x, this.edge.b.y); }
 
   /** @type {float} */
-  get top() { return this.edge.elevationLibGeometry.a ?? 1.0e06; }
+  get top() { return this.edge.elevationLibGeometry.a.top ?? 1.0e06; }
 
   /** @type {float} */
-  get bottom() { return this.edge.elevationLibGeometry.a ?? -1.0e06; }
+  get bottom() { return this.edge.elevationLibGeometry.a.bottom ?? -1.0e06; }
 
   /** @type {CONST.WALL_SENSE_TYPES} */
   get senseType() { return this.edge[this.sourceType]; }
@@ -149,9 +227,10 @@ class EdgeData {
   /** @type {vec3} */
   get normal() {
     const { a, b, top, bottom } = this;
-    return glsl.cross(
-      glsl.normalizedDirection(vec3(a, top), vec3(b, top)),
-      glsl.normalizedDirection(vec3(a, top), vec3(a, bottom)));
+    const pt0 = vec3(a, top);
+    const pt1 = vec3(b, top);
+    const pt2 = vec3(a, bottom);
+    return glsl.cross(pt1.subtract(pt0), pt2.subtract(pt0));
   }
 
   /** @type {Plane} */
@@ -195,7 +274,12 @@ class EdgeData {
    * @param {Segment3d} ray
    * @returns {bool}
    */
-  hasIntersection(ray) {
+  hasBoundsIntersection(ray) {
+    const aabb = this.aabb;
+    return intersect2dBounds(ray, aabb.min, aabb.max);
+  }
+
+  hasObjectIntersection(ray) {
     if ( intersectVerticalRectangleRay(this.plane, ray, this.a, this.b) == null ) return false;
     return true;
   }
@@ -281,17 +365,30 @@ class BVHNode {
    * @param {Segment3d} ray
    * @returns {bool}
    */
-  hasIntersection(ray) {
+  hasBoundsIntersection(ray) {
     const { min: bmin, max: bmax } = this.aabb;
-    const { origin, invDirection, t } = ray;
-    const t1 = (bmin - origin.xy) * invDirection.xy;
-    const t2 = (bmax - origin.xy) * invDirection.xy;
+    return intersect2dBounds(ray, bmin, bmax);
+  }
 
-    const minVals = glsl.min(t1, t2);
-    const maxVals = glsl.max(t1, t2);
-    const tmax = Math.min(maxVals.x, maxVals.y);
-    const tmin = Math.max(minVals.x, minVals.y);
-    return tmax > 0.0 && tmax >= tmin && t > tmin;
+  hasObjectIntersection(ray) {
+    // If more than one object, retest the bounds.
+    switch ( this.objCount ) {
+      case 0: return false;
+      case 1: return this.objData[this.objIdx[this.leftFirst]].hasObjectIntersection(ray);
+      default: {
+        for ( let i = 0; i < this.objCount; i += 1 ) {
+          const obj = this.objData[this.objIdx[this.leftFirst + i]];
+          if ( !obj.hasBoundsIntersection(ray) ) continue;
+          if ( obj.hasObjectIntersection(ray) ) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  sah() {
+    const { min: bmin, max: bmax } = this.aabb;
+    return this.objCount * glsl.distance(bmax, bmin);
   }
 
   // ----- NOTE: Debugging ----- //
@@ -300,8 +397,27 @@ class BVHNode {
    * Draw the rectangle for this node.
    */
   drawBounds(opts = {}) { Draw.shape(this.boundsRect, opts); }
+
+  /**
+   * String object describing this node.
+   */
+  description(idx = 0) {
+    return {
+      node: `node ${idx.toString().padStart(5)}`,
+      leftFirst: `lf ${this.leftFirst.toString().padStart(7)}`,
+      objCount: `objs ${this.objCount.toString().padStart(5)}`,
+      sah: `SAH ${Math.round(this.sah()).toString().padStart(6)}`
+    };
+  }
 }
 
+/**
+ * See https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+ * https://alister-chowdhury.github.io/posts/20230620-raytracing-in-2d/
+ * https://github.com/alister-chowdhury/alister-chowdhury.github.io/blob/master/_source/res/bvh_v1/generate_bvh_v1.cpp
+ * To facilitate use with webGL, use a b-tree approach where each end node refers to a single
+ * edge. Thus, the end node's bbox is the same as the edge's bbox.
+ */
 class BVH {
   /** @type {BVHNode} */
   get root() { return this.nodes[0]; }
@@ -320,11 +436,12 @@ class BVH {
 
   constructor(objData) {
     this.objData = objData;
-    this.objIdx = Array.fromRange(objData.length);
-    this.nodes.length = objData.length;
+    const N = objData.length;
+    this.objIdx = Array.fromRange(N);
+    this.nodes.length = (N * 2 ) - 1;
     this.nodes[0] = new BVHNode(this.objData, this.objIdx);
     this.nodesUsed += 1;
-    this.root.objCount = objData.length;
+    this.root.objCount = N;
   }
 
   static build(objData = []) {
@@ -344,54 +461,121 @@ class BVH {
   subdivide(nodeIdx) {
     // Terminate recursion.
     const node = this.nodes[nodeIdx];
-    if ( node.objCount <= 2 ) return;
+    const N = node.objCount;
+    console.log(`nodeIdx ${nodeIdx} objCount ${N} leftFirst ${node.leftFirst}`);
 
-    // Determine split axis and position.
-    const extent = node.aabb.max.subtract(node.aabb.min);
-    const axis = Number(extent.y > extent.x); // If y > x, then 1; otherwise 0.
-    const splitPosition = node.aabb.min[axis] + (extent[axis] * 0.5);
+    if ( N <= 1 ) return;
+    if ( N === 2 ) return this._split(node, 1);
+    if ( N === 3 ) {
+      this._split(node, 1);
+      const rightChildIdx = this.nodesUsed - 1;
+      this.subdivide(rightChildIdx);
+      return;
+    }
 
-    /* Debug
-    splitTop = vec2(node.aabb.min)
-    splitBottom = vec2(node.aabb.max)
-    splitTop[axis] = splitPosition
-    splitBottom[axis] = splitPosition
-    Draw.segment({a: splitTop, b: splitBottom }, { color: Draw.COLORS.orange })
-    */
+    // Use SAH to calculate the cost of splitting, and attempt to minimize.
+    // Force an even number of entries by pulling out the largest edge at the root node
+    // if not even.
+    if ( nodeIdx === 0 && isOdd(N) ) {
+      let largestIdx = 0;
+      let largestDiameter = 0;
+      for ( let i = 0; i < N; i += 1 ) {
+        const obj = this.objData[this.objIdx[i]];
+        const aabb = obj.aabb;
+        const diam2 = glsl.distanceSquared(obj.aabb.max, obj.aabb.min);
+        if ( diam2 > largestDiameter ) {
+          largestDiameter = diam2;
+          largestIdx = i;
+        }
+      }
+      // Split out the largest.
+      this._swap(0, largestIdx);
+      this._split(node, 1); // Pull out the largest
+    } else {
+      if ( isOdd(N) ) return console.error(`N is ${N}! at nodeIdx ${nodeIdx}`, node);
 
-    // In-place partition.
+      const cost0 = this._evaluateSAH(node, 0);
+      const cost1 = this._evaluateSAH(node, 1);
+
+      // Redo the sort for the split b/c it was changed by cost calculation.
+      const best = cost0.sah < cost1.sah ? cost0 : cost1;
+      this._swapAtPosition(node, best.splitPosition, best.axis);
+      this._split(node, best.leftCount);
+    }
+
+    // Recurse. See setting of leftChildIdx and rightChildIdx in #split.
+    const leftChildIdx = this.nodesUsed - 2;
+    const rightChildIdx = this.nodesUsed - 1;
+    this.subdivide(leftChildIdx);
+    this.subdivide(rightChildIdx);
+  }
+
+  _evaluateSAH(node, axis = 0) {
+    // Sort the object centroids from low to high; pick numLeft as the test position.
+    const n = node.objCount;
+    const splitOptions = Array(node.objCount);
+    for ( let i = 0; i < n; i += 1 ) splitOptions[i] = this.objData[this.objIdx[node.leftFirst + i]].centroid[axis];
+    splitOptions.sort((a, b) => a - b);
+
+    // Test different even splits. E.g. for n = 6: 2, 4 and 4, 2.
+    // Assumes n >= 4.
+    const out = {
+      splitPosition: splitOptions[0],
+      sah: Number.POSITIVE_INFINITY,
+      leftCount: 0,
+      axis
+    };
+    for ( let leftCount = 2; leftCount < n; leftCount += 2 ) {
+      const splitPosition = splitOptions[leftCount];
+
+      // Per above, the chosen position will split the centroids into exactly two groups
+      // unless the chosen position has multiple equal centroids.
+      // Sort along the chosen split position.
+      this._swapAtPosition(node, splitPosition, axis);
+
+      // Calculate the bboxes for each half.
+      // Because we are lazy, create new BVHNodes based on the split. See #split.
+      const leftNode = new BVHNode(this.objData, this.objIdx);
+      const rightNode = new BVHNode(this.objData, this.objIdx);
+      leftNode.leftFirst = node.leftFirst;
+      leftNode.objCount = leftCount;
+      rightNode.leftFirst = node.leftFirst + leftCount;
+      rightNode.objCount = node.objCount - leftCount;
+      const leftDist = glsl.distance(leftNode.aabb.max, leftNode.aabb.min);
+      const rightDist = glsl.distance(rightNode.aabb.max, rightNode.aabb.min);
+      const sah = leftNode.sah() + rightNode.sah();
+      if ( sah < out.sah ) {
+        out.sah = sah;
+        out.splitPosition = splitPosition;
+        out.leftCount = leftCount;
+      }
+    }
+    return out;
+  }
+
+  _swapAtPosition(node, splitPosition, axis) {
+    // Sort along the chosen split position.
     let i = node.leftFirst;
     let j = i + node.objCount - 1;
     while ( i <= j ) {
       if ( this.objData[this.objIdx[i]].centroid[axis] < splitPosition ) i += 1;
-      else this.#swap(i, j--);
+      else this._swap(i, j--);
     }
+  }
 
-    /* Debug
-    bvh.objIdx.map(idx => bvh.objData[idx].centroid)
-    */
-
-    // Abort split if one of the sides is empty.
-    const leftCount = i - node.leftFirst;
-    if ( !leftCount || leftCount === node.objCount ) return;
-
-    // Create child nodes.
+  _split(node, leftCount) {
     const leftChildIdx = this.nodesUsed++;
     const rightChildIdx = this.nodesUsed++;
     this.nodes[leftChildIdx] = new BVHNode(this.objData, this.objIdx);
     this.nodes[rightChildIdx] = new BVHNode(this.objData, this.objIdx);
     this.nodes[leftChildIdx].leftFirst = node.leftFirst;
     this.nodes[leftChildIdx].objCount = leftCount;
-    this.nodes[rightChildIdx].leftFirst = i;
+    this.nodes[rightChildIdx].leftFirst = node.leftFirst + leftCount;
     this.nodes[rightChildIdx].objCount = node.objCount - leftCount;
     node.leftFirst = leftChildIdx;
     node.objCount = 0;
     this.nodes[leftChildIdx].updateBounds();
     this.nodes[rightChildIdx].updateBounds();
-
-    // Recurse
-    this.subdivide(leftChildIdx);
-    this.subdivide(rightChildIdx);
   }
 
   /**
@@ -399,8 +583,7 @@ class BVH {
    * @param {int} idx0
    * @param {int} idx1
    */
-   // TODO: Make private once done debugging
-  #swap(idx0, idx1) { [this.objIdx[idx1], this.objIdx[idx0]] = [this.objIdx[idx0], this.objIdx[idx1]]; }
+  _swap(idx0, idx1) { [this.objIdx[idx1], this.objIdx[idx0]] = [this.objIdx[idx0], this.objIdx[idx1]]; }
 
   /**
    * Intersect the bounding boxes with a ray.
@@ -413,11 +596,7 @@ class BVH {
     const node = this.nodes[nodeIdx];
     if ( !node.hasIntersection(ray) ) return false;
     if ( node.isLeaf ) {
-      // Test object intersections.
-      for ( let i = 0; i < node.objCount; i += 1 ) {
-        const obj = this.objData[this.objIdx[node.leftFirst + i]];
-        if ( obj.hasIntersection(ray) ) return true;
-      }
+      if ( node.hasObjectIntersection(ray) ) return true;
     } else {
       // Recurse.
       if ( this.hasIntersection(ray, node.leftFirst) ) return true;
@@ -428,8 +607,10 @@ class BVH {
 
   /**
    * For GLSL, use a stack version.
+   * See https://alister-chowdhury.github.io/posts/20230620-raytracing-in-2d/
    */
-  intersectNonRecursive() {
+  hasIntersectionNonRecursive() {
+
 
   }
 
@@ -451,6 +632,82 @@ class BVH {
       this.nodes[i].drawBounds({ color });
     }
   }
+
+  /**
+   * Display in the console a node hierarchy.
+   */
+  displayHierarchy() {
+    /*    (width: 10 chars)
+          node XXXXX
+          objs XXXXX
+          SAH XXXXXX
+         /          \
+
+
+    */
+
+
+    const addLeft = (oldStr, newStr) => {
+      const out = {};
+      for ( const key of Object.keys(newStr) ) newStr[key] = newStr[key].concat("\t\t", oldStr[key]);
+      return newStr;
+    };
+    const addRight = (oldStr, newStr) => {
+      const out = {};
+      for ( const key of Object.keys(newStr) ) newStr[key] = oldStr[key].concat("\t\t", newStr[key]);
+      return newStr;
+    };
+
+    // Run left --> right.
+    const addSubNode = function(bvh, node, nodeStr, level = 1) {
+      if ( node.objCount ) return;
+
+      // Shift the prev node string by 1 tab so we can add the left here. Propagates upward.
+      let currStr = nodeStr;
+      while ( currStr ) {
+        currStr.tabs += 1;
+        currStr = currStr.prev;
+      }
+
+      const leftNode = bvh.nodes[node.leftFirst];
+      const leftNodeStr = leftNode.description(node.leftFirst);
+      leftNodeStr.tabs = nodeStr.tabs - 1;
+      leftNodeStr.prev = nodeStr;
+      const levelArr = levels[level] ??= [];
+      levelArr.push(leftNodeStr);
+      addSubNode(bvh, leftNode, leftNodeStr, level + 1);
+
+      const rightNode = bvh.nodes[node.leftFirst + 1];
+      const rightNodeStr = rightNode.description(node.leftFirst + 1);
+      rightNodeStr.tabs = 2;
+      rightNodeStr.prev = nodeStr;
+      levelArr.push(rightNodeStr);
+      addSubNode(bvh, rightNode, rightNodeStr, level + 1);
+    };
+
+    const levels = [[this.root.description(0)]];
+    levels[0][0].tabs = 0;
+    addSubNode(this, this.root, levels[0][0], 1);
+
+    let finalStr = "";
+    levels.forEach(level => {
+      let levelObj = {};
+      for ( let i = 0; i < level.length; i += 1 ) {
+        const tabs = Array.fromRange(level[i].tabs).fill("\t").join("");
+        Object.keys(level[i]).forEach(key => {
+          if ( key === "tabs" || key === "prev" ) return;
+          levelObj[key] ??= "";
+          levelObj[key] += `${tabs}${level[i][key]}`;
+        });
+      }
+      let levelStr = "";
+      Object.keys(levelObj).forEach(key => levelStr = levelStr.concat(levelObj[key], "\n"));
+      finalStr += levelStr;
+    });
+
+    console.log(finalStr);
+    return levels;
+  }
 }
 
 /* Testing
@@ -470,8 +727,32 @@ edgeData.forEach(e => e.drawEdge());
 edgeData.forEach(e => e.drawCentroid({ color: Draw.COLORS.red }));
 edgeData.forEach(e => e.drawBounds());
 
+edgeData
 bvh = BVH.build(edgeData)
 bvh.drawBounds()
+
+
+a = vec3(canvas.tokens.controlled[0].center.x, canvas.tokens.controlled[0].center.y, 0)
+b = vec3(canvas.tokens.controlled[1].center.x, canvas.tokens.controlled[1].center.y, 0)
+Draw.segment({ a, b})
+r = glsl.RayGLSLStruct.bvhRay(a, b);
+edgeData.map(elem => elem.hasBoundsIntersection(r))
+edgeData.map(elem => elem.hasObjectIntersection(r))
+
+bvh.nodes.map(node => node.objCount)
+bvh.nodes.map(node => node.hasBoundsIntersection(r))
+bvh.nodes.map(node => node.hasObjectIntersection(r))
+bvh.nodes.map(node => node.sah())
+bvh.nodes.map(node => node.description())
+bvh.displayHierarchy()
+
+
+// edge 3 bounds outside
+// edge 1 bounds inside, edge outside
+// edge 0 bounds and edge inside
+
+bvh.nodes[]
+bvh.hasIntersection(r)
 
 bvh = new BVH(edgeData);
 bvh.root.leftFirst = 0;
@@ -523,9 +804,4 @@ node.objCount = 0;
 bvh.nodes[leftChildIdx].updateBounds();
 bvh.nodes[rightChildIdx].updateBounds();
 
-
-
 */
-
-
-
