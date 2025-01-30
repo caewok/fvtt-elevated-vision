@@ -829,7 +829,6 @@ float distanceSquaredToSegment(in vec2 c, in vec2 a, in vec2 b) {
 
 GLSLFunctions.lineLineIntersection =
 `
-${defineFunction("rayFromPoints")}
 ${defineFunction("cross2d")}
 
 bool lineLineIntersection(in Ray2d a, in Ray2d b, out float t) {
@@ -851,16 +850,16 @@ bool lineLineIntersection(in Ray2d a, in Ray2d b, out vec2 ix) {
 }
 
 bool lineLineIntersection(vec2 a, vec2 b, vec2 c, vec2 d, out vec2 ix) {
-  Ray2d rayA = rayFromPoints(a, b);
-  Ray2d rayB = rayFromPoints(c, d);
+  Ray2d rayA = Ray2d(a, b - a);
+  Ray2d rayB = Ray2d(c, d - c);
   return lineLineIntersection(rayA, rayB, ix);
 }`;
 
 GLSLFunctions.lineLineIntersects =
 `
 bool lineLineIntersects(vec2 a, vec2 b, vec2 c, vec2 d) {
-  Ray2d rayA = rayFromPoints(a, b);
-  Ray2d rayB = rayFromPoints(c, d);
+  Ray2d rayA = Ray2d(a, b - a);
+  Ray2d rayB = Ray2d(c, d - c);
   return lineLineIntersects(rayA, rayB)
 }
 
@@ -869,6 +868,33 @@ bool lineLineIntersects(in Ray2d a, in Ray2d b) {
 
   // If lines are parallel, no intersection.
   return ( abs(denom) >= 0.0001 );
+}
+`;
+
+GLSLFunctions.lineSegmentIntersects =
+`
+${defineFunction("orient")}
+
+/**
+ * Same as foundry.utils.lineSegmentIntersects
+ * Quickly test whether the line segment AB intersects with the line segment CD.
+ * This method does not determine the point of intersection, for that use lineLineIntersection.
+ * @param {Point} a                   The first endpoint of segment AB
+ * @param {Point} b                   The second endpoint of segment AB
+ * @param {Point} c                   The first endpoint of segment CD
+ * @param {Point} d                   The second endpoint of segment CD
+ * @returns {boolean}                 Do the line segments intersect?
+ */
+bool lineSegmentIntersects(in vec2 a, in vec2 b, in vec2 c, in vec2 d) {
+  // First test the orientation of A and B with respect to CD to reject collinear cases.
+  float xa = orient(a, b, c);
+  float xb = orient(a, b, d);
+  if ( xa == 0.0 && xb == 0.0 ) return false;
+  bool xab = (xa * xb) <= 0.0;
+
+  // Also require an intersection of CD with respect to AB
+  bool xcd = (orient(c, d, a) * orient(c, d, b)) <= 0.0;
+  return xab && xcd;
 }
 `;
 

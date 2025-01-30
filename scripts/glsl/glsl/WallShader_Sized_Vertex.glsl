@@ -236,6 +236,8 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
   }
 
   // If light center is on the wall, offset.
+  // TODO: Do this for umbra and penumbra?
+  /*
   float distToWall = distanceToSegment(uLightPosition.xy, W0, W1);
   vec3 lightCenter = almostEqual(distToWall, 0.0, 1.0e-06)
     ? vec3(offsetLightFromWall(wall, 0.5), uLightPosition.z) : uLightPosition;
@@ -243,10 +245,56 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
     Ray2d(W0, normalizedDirection(lightCenter.xy, W0)),
     Ray2d(W1, normalizedDirection(lightCenter.xy, W1))
   );
+  */
+
+  // If a linked wall is present, use its direction for the penumbra and umbra.
+  // If in-between mid and penumbra, change umbra and mid.
+  const int UNBLOCKED = int(EV_ENDPOINT_LINKED_UNBLOCKED);
+  const int BLOCKED = int(EV_ENDPOINT_LINKED_BLOCKED);
+  const int BETWEEN_UP = 1;
+  for ( int i = 0; i < 2; i += 1 ) {
+    vec2 W = wall.top[i].xy;
+    vec2 WO = wall.top[1 - i].xy;
+    int linkStatus = int(wall.linkValues[i]);
+    if ( linkStatus != UNBLOCKED ) {
+      vec2 linkPt = fromAngle(W, wall.linkValues[i], 1.0);
+      vec2 umbraPt = projectRay(umbra[i], 1.0);
+      float oLight = orient(W, WO, uLightPosition.xy);
+      float oLinked = orient(W, WO, linkPt);
+      float oUmbra = orient(W, umbraPt, linkPt);
+
+      if ( SAME_SIDE(oLight, oLinked) ) {
+        // Negative penumbra and negative umbra are the points on the light side of the wall.
+        // Wall <--> negative penumbra <--> negative umbra <--> wall line on other side of W0.
+        // If between negative umbra and other side of W0, the linked wall blocks completely.
+        // If between negative penumbra and negative umbra, linked wall is collinear and partially blocks.
+        //   - Should set fAmbient for this situation, but probably doesn't matter much.
+        if ( SAME_SIDE(oLinked, -oUmbra) ) linkStatus = BLOCKED;
+        else linkStatus = UNBLOCKED;
+      } else {
+        // Wall <--> umbra <--> mid <--> penumbra <--> wall line on other side of W0.
+        vec2 penumbraPt = projectRay(penumbra[i], 1.0);
+        float oPenumbra = orient(W, penumbraPt, linkPt);
+        if ( SAME_SIDE(oLinked, oPenumbra) ) linkStatus = BLOCKED;
+        else if ( SAME_SIDE(oLinked, oUmbra) ) linkStatus = BETWEEN_UP;
+        else linkStatus = UNBLOCKED;
+      }
+
+      switch ( linkStatus ) {
+        case BLOCKED: {
+          umbra[i] = penumbra[i];
+          break;
+        }
+        case BETWEEN_UP: {
+          umbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
+          break;
+        }
+      }
+    }
+  }
 
   return ShadowRays2d(
     umbra,
-    midpenumbra,
     penumbra
   );
 }
@@ -413,7 +461,7 @@ vec2 ambientLight(vec2 w0, vec2 w1) {
 /**
  * Define varyings for this shader.
  */
-void defineVaryings(in Wall wall, in vec2[3] penumbraTri, in vec2 F, in vec2 I) {
+void defineVaryings(in Wall wall, in vec2[3] penumbraTri, in vec2 F, in vec2 I, in bool hasSide0, in bool hasSide1) {
   int vertexNum = gl_VertexID % 3;
 
   // Presets for varyings.
@@ -461,18 +509,15 @@ void defineVaryings(in Wall wall, in vec2[3] penumbraTri, in vec2 F, in vec2 I) 
     sideTri1 = vec2[3](W1, C, ixF);
   }
 
-  // Change the side triangles to isoceles so gradient shading works.
-  sideTri0 = makeIsoceles(sideTri0);
-  sideTri1 = makeIsoceles(sideTri1);
-
   // @type {vec3} vUmbra
   if ( nearCollinear ) vUmbra = baryForPoint(vVertexPosition, umbraTri);
 
   // @type {vec3} vSidePenumbra0, vSidePenumbra1
   // Define side triangles in relation to the penumbra triangle.
   // If no real side penumbra, set values to -1 to avoid inclusion.
-  if ( abs(orient(sideTri0[0], sideTri0[1], sideTri0[2])) > 1.0 ) vSidePenumbra0 = baryForPoint(vVertexPosition, sideTri0);
-  if ( abs(orient(sideTri1[0], sideTri1[1], sideTri1[2])) > 1.0 ) vSidePenumbra1 = baryForPoint(vVertexPosition, sideTri1);
+  // Change the side triangles to isoceles so gradient shading works.
+  if ( hasSide0 && abs(orient(sideTri0[0], sideTri0[1], sideTri0[2])) > 1.0 ) vSidePenumbra0 = baryForPoint(vVertexPosition, makeIsoceles(sideTri0));
+  if ( hasSide1 && abs(orient(sideTri1[0], sideTri1[1], sideTri1[2])) > 1.0 ) vSidePenumbra1 = baryForPoint(vVertexPosition, makeIsoceles(sideTri1));
 }
 
 /**
@@ -701,12 +746,24 @@ void main() {
   vec2[3] penumbraTri;
   vec2[3] DEF;
   vec2[3] GHI;
-  shadowPoints(wall, sideShadowRays, farPenumbraTri,
+  bool nearCollinear = shadowPoints(wall, sideShadowRays, farPenumbraTri,
     penumbraTri[0], penumbraTri[1], penumbraTri[2], DEF[0], DEF[1], DEF[2], GHI[0], GHI[1], GHI[2]);
+
+  // If a linked wall is fully blocking, don't use a side shadow.
+  bool hasSide0 = true;
+  bool hasSide1 = true;
+  if ( !nearCollinear ) {
+    hasSide0 = !almostEqual(sideShadowRays.umbra[0].direction, sideShadowRays.penumbra[0].direction, 1.0e-06);
+    hasSide1 = !almostEqual(sideShadowRays.umbra[1].direction, sideShadowRays.penumbra[1].direction, 1.0e-06);
+  }
+
+  // Debugging.
+  // hasSide0 = true;
+  // hasSide1 = true;
 
   // Varyings
   defineSharedVaryings(wall, penumbraTri);
-  defineVaryings(wall, penumbraTri, DEF[2], GHI[2]);
+  defineVaryings(wall, penumbraTri, DEF[2], GHI[2], hasSide0, hasSide1);
 
   // Flats
   if ( vertexNum == 2) {

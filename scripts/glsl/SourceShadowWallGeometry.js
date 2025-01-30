@@ -483,13 +483,11 @@ sourceOrigin = geom.sourceOrigin;
     const idxToUpdate = this._triEdgeMap.get(edge.id);
 
     const { corner0, corner1 } = this.edgeCornerCoordinates(edge);
-    let changedLink = this.getAttributeAtIndex("aWallCorner0", idxToUpdate)[3] !== corner0[3];
-    changedLink ||= this.getAttributeAtIndex("aWallCorner1", idxToUpdate)[3] !== corner1[3];
-    if ( changedLink ) {
-      this._updateBuffer(corner0, "aWallCorner0", idxToUpdate, update);
-      this._updateBuffer(corner1, "aWallCorner1", idxToUpdate, update);
-    }
-    return changedLink;
+    const changedLink0 = this.getAttributeAtIndex("aWallCorner0", idxToUpdate)[3] !== corner0[3];
+    const changedLink1 = this.getAttributeAtIndex("aWallCorner1", idxToUpdate)[3] !== corner1[3];
+    if ( changedLink0 && update ) this._updateBuffer(corner0, "aWallCorner0", idxToUpdate, update);
+    if ( changedLink1 && update ) this._updateBuffer(corner1, "aWallCorner1", idxToUpdate, update);
+    return changedLink0 || changedLink1;
   }
 
   /**
@@ -571,13 +569,11 @@ sourceOrigin = geom.sourceOrigin;
    */
   _updateEdgePosition(edge, idxToUpdate, update = true) {
     const { corner0, corner1 } = this.edgeCornerCoordinates(edge);
-    let changedPosition = this.getAttributeAtIndex("aWallCorner0", idxToUpdate).some((x, i) => x !== corner0[i]);
-    changedPosition ||= this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner1[i]);
-    if ( changedPosition ) {
-      this._updateBuffer(corner0, "aWallCorner0", idxToUpdate, update);
-      this._updateBuffer(corner1, "aWallCorner1", idxToUpdate, update);
-    }
-    return changedPosition;
+    const changedPosition0 = this.getAttributeAtIndex("aWallCorner0", idxToUpdate).some((x, i) => x !== corner0[i]);
+    const changedPosition1 = this.getAttributeAtIndex("aWallCorner1", idxToUpdate).some((x, i) => x !== corner1[i]);
+    if ( changedPosition0 ) this._updateBuffer(corner0, "aWallCorner0", idxToUpdate, update);
+    if ( changedPosition1 ) this._updateBuffer(corner1, "aWallCorner1", idxToUpdate, update);
+    return changedPosition0 || changedPosition1;
   }
 
   /**
@@ -674,7 +670,6 @@ sourceOrigin = geom.sourceOrigin;
       const edgeBufferChanged = this.updateEdge(e, opts);
       changed ||= edgeBufferChanged;
     });
-    if ( changed ) this.update();
     return changed;
   }
 
@@ -727,7 +722,7 @@ sourceOrigin = geom.sourceOrigin;
       updated ||= wasUpdated;
     });
 
-    if ( updated ) this.update();
+    // Unneeded ? if ( updated ) this.update();
     return updated;
   }
 

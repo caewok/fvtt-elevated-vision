@@ -31,6 +31,8 @@ const COLLINEAR = o => glsl.almostEqual(o, 0.0, 1.0e-06);
 const COUNTERCLOCKWISE = o => o > 0.0;
 const CLOCKWISE = o => o < 0.0;
 
+const LINKED_IDX = 3;
+
 /* Mock shader calculations.
 Use the fragment shader to test different rays back to the light for intersection with the wall
 
@@ -292,7 +294,17 @@ export class PenumbraBasicTest extends ShaderTest {
 
   /* ----- NOTE: Constants ---- */
 
+  /**
+   * Signal that a wall endpoint has no linked walls.
+   * @type {number}
+   */
   static EV_ENDPOINT_LINKED_UNBLOCKED = -10.0;
+
+  /**
+   * Signal that a linked wall to the edge will completely block the light.
+   */
+  static EV_ENDPOINT_LINKED_BLOCKED = -20.0;
+
 
   // From CONST.WALL_SENSE_TYPES
   static LIMITED_WALL = 10.0;
@@ -324,11 +336,13 @@ export class PenumbraBasicTest extends ShaderTest {
     const direction = normalizedDirection(xyCloser, xyFurther);
     const topZ = aWallCorner0.z;
     const bottomZ = aWallCorner1.z;
+    const linkValues = [aWallCorner0.w, aWallCorner1.w];
     return Wall({
       top: [vec3(xyCloser, topZ), vec3(xyFurther, topZ)],
       bottom: [vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)],
       mid: xyCloser.add(xyFurther).multiplyScalar(0.5),
-      direction
+      direction,
+      linkValues: [linkValues[closerIdx], linkValues[1 - closerIdx]]
     });
   }
 
@@ -1240,7 +1254,8 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       almostEqual,
       normalizedDirection,
       projectRay,
-      ShadowRays2d} = glsl;
+      ShadowRays2d,
+      fromAngle } = glsl;
     const { uLightPosition } = this;
     const W0 = wall.top[0].xy;
     const W1 = wall.top[1].xy;
@@ -1311,17 +1326,65 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     }
 
     // If light center is on the wall, offset.
+    // TODO: Does this need to happen elsewhere for umbra and penumbra?
+    /*
     const distToWall = distanceToSegment(uLightPosition.xy, W0, W1);
     const lightCenter = almostEqual(distToWall, 0.0, 1.0e-06)
       ? vec3(this.offsetLightFromWall(wall, 10.0), uLightPosition.z) : uLightPosition;
-    const midpenumbra = [
+    let midpenumbra = [
       Ray2d(W0, normalizedDirection(lightCenter.xy, W0)),
       Ray2d(W1, normalizedDirection(lightCenter.xy, W1))
     ];
+    */
+
+    // If a linked wall is present, use its direction for the penumbra and umbra.
+    // If in-between mid and penumbra, change umbra and mid.
+    const UNBLOCKED = Number(this.constructor.EV_ENDPOINT_LINKED_UNBLOCKED); // Convert to int in glsl.
+    const BLOCKED = Number(this.constructor.EV_ENDPOINT_LINKED_BLOCKED); // Convert to int in glsl.
+    const BETWEEN_UP = 1;
+    for ( let i = 0; i < 2; i += 1 ) {
+      const W = wall.top[i].xy;
+      const WO = wall.top[1 - i].xy;
+      let linkStatus = Number(wall.linkValues[i]); // GLSL: int
+      if ( linkStatus !== UNBLOCKED ) {
+        const linkPt = fromAngle(W, wall.linkValues[i], 1.0);
+        const umbraPt = projectRay(umbra[i], 1.0);
+        const oLight = orient(W, WO, uLightPosition.xy);
+        const oLinked = orient(W, WO, linkPt);
+        const oUmbra = orient(W, umbraPt, linkPt);
+
+        if ( SAME_SIDE(oLight, oLinked) ) {
+          // Negative penumbra and negative umbra are the points on the light side of the wall.
+          // Wall <--> negative penumbra <--> negative umbra <--> wall line on other side of W0.
+          // If between negative umbra and other side of W0, the linked wall blocks completely.
+          // If between negative penumbra and negative umbra, linked wall is collinear and partially blocks.
+          //   - Should set fAmbient for this situation, but probably doesn't matter much.
+          if ( SAME_SIDE(oLinked, -oUmbra) ) linkStatus = BLOCKED;
+          else linkStatus = UNBLOCKED;
+        } else {
+          // Wall <--> umbra <--> mid <--> penumbra <--> wall line on other side of W0.
+          const penumbraPt = projectRay(penumbra[i], 1.0);
+          const oPenumbra = orient(W, penumbraPt, linkPt);
+          if ( SAME_SIDE(oLinked, oPenumbra) ) linkStatus = BLOCKED;
+          else if ( SAME_SIDE(oLinked, oUmbra) ) linkStatus = BETWEEN_UP;
+          else linkStatus = UNBLOCKED;
+        }
+
+        switch ( linkStatus ) {
+          case BLOCKED: {
+            umbra[i] = penumbra[i];
+            break;
+          }
+          case BETWEEN_UP: {
+            umbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
+            break;
+          }
+        }
+      }
+    }
 
     return ShadowRays2d({
       umbra,
-      midpenumbra,
       penumbra
     });
   }
@@ -1555,10 +1618,13 @@ export class SizedShadowsTest extends PenumbraBasicTest {
   /**
    * Define varyings for this shader.
    * @param {Wall} wall
-   * @param {bool} nearCollinear
-   * @param {vec2[3]} penumbraTri, umbraTri, sideTri0, sideTri1
+   * @param {vec2[3]} penumbraTri
+   * @param {vec2} F
+   * @param {vec2} I
+   * @param {bool} hasSide0
+   * @param {bool} hasSide1
    */
-  defineVaryings(wall, penumbraTri, F, I) {
+  defineVaryings(wall, penumbraTri, F, I, hasSide0, hasSide1) {
     const abs = Math.abs;
     const orient = foundry.utils.orient2dFast;
     const { barycentric, almostEqual, distanceSquared, lineLineIntersection, Ray2d, normalizedDirection } = glsl;
@@ -1612,18 +1678,19 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       setTri(sideTri1, [W1, C, ixF]);
     }
 
-    // Change the side triangles to isoceles so gradient shading works.
-    setTri(sideTri0, this.makeIsoceles(sideTri0));
-    setTri(sideTri1, this.makeIsoceles(sideTri1));
-
     // @type {vec3} vUmbra
     if ( nearCollinear ) this.vUmbra = baryForPoint(vVertexPosition, umbraTri);
 
     // @type {vec3} vSidePenumbra0, vSidePenumbra1
     // Define side triangles in relation to the penumbra triangle.
     // If no real side penumbra, set values to -1 to avoid inclusion.
-    if ( abs(orient(...sideTri0)) > 1.0 ) this.vSidePenumbra0 = baryForPoint(vVertexPosition, sideTri0);
-    if ( abs(orient(...sideTri1)) > 1.0 ) this.vSidePenumbra1 = baryForPoint(vVertexPosition, sideTri1);
+    // Change the side triangles to isoceles so gradient shading works.
+    if ( hasSide0 && abs(orient(...sideTri0)) > 1.0 ) this.vSidePenumbra0 = baryForPoint(vVertexPosition, this.makeIsoceles(sideTri0));
+    if ( hasSide1 && abs(orient(...sideTri1)) > 1.0 ) this.vSidePenumbra1 = baryForPoint(vVertexPosition, this.makeIsoceles(sideTri1));
+
+    // For debugging.
+    if ( hasSide0 && abs(orient(...sideTri0)) > 1.0 ) setTri(sideTri0, this.makeIsoceles(sideTri0));
+    if ( hasSide0 && abs(orient(...sideTri1)) > 1.0 ) setTri(sideTri1, this.makeIsoceles(sideTri1));
   }
 
   /**
@@ -1654,7 +1721,16 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const orient = foundry.utils.orient2dFast;
     const { sign, max, min, sqrt } = Math;
     const uLightPosition = this.uLightPosition;
-    const { all, equal, Ray2d, almostEqual, projectRay, step, distanceSquaredToLine, distanceToLine, distanceSquared } = glsl;
+    const {
+      all,
+      equal,
+      Ray2d,
+      almostEqual,
+      projectRay,
+      step,
+      distanceSquaredToLine,
+      distanceToLine,
+      distanceSquared } = glsl;
 
     // @type {vec2} fAmbient
     const W0 = wall.top[0].xy; // Nearer wall endpoint to source.
@@ -1862,7 +1938,8 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       distanceToSegment,
       circleContainsPoint,
       projectRay,
-      normalizedDirection } = glsl;
+      normalizedDirection,
+      almostEqual } = glsl;
     const { uLightSize } = this;
     const vertexNum = this.gl_VertexID % 3;
     const wall = this.wall = this.calculateWallPositions();
@@ -1887,11 +1964,22 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     const penumbraTri = this.penumbraTri = [vec2(), vec2(), vec2()];
     const DEF = this.DEF = [vec2(), vec2(), vec2()];
     const GHI = this.GHI = [vec2(), vec2(), vec2()];
-    this.shadowPoints(wall, sideShadowRays, farPenumbraTri,
+    const nearCollinear = this.shadowPoints(wall, sideShadowRays, farPenumbraTri,
       penumbraTri[0], penumbraTri[1], penumbraTri[2], DEF[0], DEF[1], DEF[2], GHI[0], GHI[1], GHI[2]);
 
+    // If a linked wall is fully blocking, don't use a side shadow.
+    let hasSide0 = true;
+    let hasSide1 = true;
+    if ( !nearCollinear ) {
+      hasSide0 = !almostEqual(sideShadowRays.umbra[0].direction, sideShadowRays.penumbra[0].direction, 1.0e-06);
+      hasSide1 = !almostEqual(sideShadowRays.umbra[1].direction, sideShadowRays.penumbra[1].direction, 1.0e-06);
+    }
+
+    // Varyings
     this.defineSharedVaryings(wall, penumbraTri);
-    this.defineVaryings(wall, penumbraTri, DEF[2], GHI[2]);
+    this.defineVaryings(wall, penumbraTri, DEF[2], GHI[2], hasSide0, hasSide1);
+
+    // Flats
     if ( vertexNum === 2 ) {
       this.defineSharedFlats(wall, penumbraTri);
       this.defineFlats(wall, penumbraTri, farPenumbraTri, DEF, GHI, lowerTangent, upperTangent);
@@ -1968,19 +2056,24 @@ export class SizedShadowsTest extends PenumbraBasicTest {
       // float canvasElevation = uElevationRes.x;
       // float elevation = terrainElevation(uTerrainSampler, vTerrainTexCoord, uElevationRes);
       farPenumbraDist = this.farPenumbraDistance(elevation);
-      if ( vEdgeDist > farPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
+      if ( hasFar && vEdgeDist > farPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
 
       nearPenumbraDist = this.nearPenumbraDistance(elevation);
-      if ( !isCollinear && vEdgeDist < nearPenumbraDist ) return { hasShadow: 0.0 }; // In front of the wall shadow.
+      if ( hasNear && !isCollinear && vEdgeDist < nearPenumbraDist ) return { hasShadow: 0.0 }; // In front of the wall shadow.
 
       farUmbraDist = this.farUmbraDistance(elevation);
       nearUmbraDist = this.nearUmbraDistance(elevation);
 
       farLPenumbraDist = this.farLPenumbraDistance(elevation);
-      if ( isLeft && isCollinear && farLPenumbraDist !== 0.0 && vLREdgeDist > farLPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
+      if ( isLeft && isCollinear
+        && farLPenumbraDist !== 0.0
+        && vLREdgeDist > farLPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
 
       farRPenumbraDist = this.farRPenumbraDistance(elevation);
-      if ( !isLeft && isCollinear && farRPenumbraDist !== 0.0 && -vLREdgeDist > farRPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
+      if ( !isLeft
+        && isCollinear
+        && farRPenumbraDist !== 0.0
+        && -vLREdgeDist > farRPenumbraDist ) return { hasShadow: 0.0 }; // Outside the penumbra.
 
       nearLPenumbraDist = this.nearLPenumbraDistance(elevation);
       nearRPenumbraDist = this.nearRPenumbraDistance(elevation);
@@ -2018,8 +2111,10 @@ export class SizedShadowsTest extends PenumbraBasicTest {
     // if ( inSidePenumbra1() ) side1Shadow = vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z);
     const inSide0 = Number(this.inSidePenumbra0());
     const inSide1 = Number(this.inSidePenumbra1());
-    side0Shadow = (inSide0 * vSidePenumbra0.z / (vSidePenumbra0.y + vSidePenumbra0.z)) + (1.0 - inSide0);
-    side1Shadow = (inSide1 * vSidePenumbra1.z / (vSidePenumbra1.y + vSidePenumbra1.z)) + (1.0 - inSide1);
+    const denom0 = vSidePenumbra0.y + vSidePenumbra0.z;
+    const denom1 = vSidePenumbra1.y + vSidePenumbra1.z;
+    side0Shadow = denom0 === 0.0 ? 1.0 : (inSide0 * vSidePenumbra0.z / denom0) + (1.0 - inSide0);
+    side1Shadow = denom1 === 0.0 ? 1.0 : (inSide1 * vSidePenumbra1.z / denom1) + (1.0 - inSide1);
 
     /*
     1.0 * 0.0 = 0.0  / 0.25 = 0       (1 - x) = 1.0
@@ -2199,7 +2294,6 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
 
     return ShadowDirections2d({
       umbra: dirUmbra,
-      midpenumbra: dirMidPenumbra,
       penumbra: dirPenumbra
     });
   }
@@ -2252,14 +2346,8 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
     umbra[idx0] = tangentRays[1];
     umbra[1 - idx0] = tangentRays[2];
 
-    const midpenumbra = [
-      Ray2d(wall0, sideShadowDirs0.midpenumbra),
-      Ray2d(wall1, sideShadowDirs1.midpenumbra)
-    ];
-
     return ShadowRays2d({
       umbra,
-      midpenumbra,
       penumbra
     });
   }
@@ -2278,7 +2366,6 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
     const dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0).multiplyScalar(-1.0);
     return ShadowDirections({
       umbra: vec3(dirMid, zDelta[UMBRA]).normalize(),
-      midpenumbra: vec3(dirMid, zDelta[MIDPENUMBRA]).normalize(),
       penumbra: vec3(dirMid, zDelta[PENUMBRA]).normalize()
     });
   }
@@ -2295,7 +2382,6 @@ export class DirectionalShadowsTest extends SizedShadowsTest {
     const dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0).multiplyScalar(-1.0);
     return ShadowDirections({
       umbra: vec3(dirMid, zDelta[PENUMBRA]).normalize(),
-      midpenumbra: vec3(dirMid, zDelta[MIDPENUMBRA]).normalize(),
       penumbra: vec3(dirMid, zDelta[UMBRA]).normalize()
     });
   }
@@ -3325,9 +3411,7 @@ let {
 function drawRay(ray, { dist = canvas.dimensions.maxR, color = Draw.COLORS.blue } = {}) {
   Draw.segment({ a: ray.origin, b: ray.origin.add(ray.direction.multiplyScalar(dist))}, { color })
 }
-l = canvas.lighting.placeables[0];
-edge0 = canvas.walls.placeables[0].edge
-ev = l.lightSource.elevatedvision
+
 
 UMBRA = 0;
 MIDPENUMBRA = 2;
@@ -3343,7 +3427,11 @@ OPP_SIDE = (o0, o1) => o0 * o1 < 0.0;
 COLLINEAR = o => glsl.almostEqual(o, 0.0, 1.0e-06);
 COUNTERCLOCKWISE = o => o > 0.0;
 CLOCKWISE = o => o < 0.0;
-let [shader0] = SizedShadowsTest.fromMesh(ev.shadowMesh)
+
+l = canvas.lighting.placeables[0];
+edge0 = canvas.walls.placeables[0].edge
+ev = l.lightSource.elevatedvision
+let [shader0, shader1] = SizedShadowsTest.fromMesh(ev.shadowMesh)
 
 shader0.canvasElevation = 0
 shader0.vertexCalculations(2)
@@ -3392,8 +3480,15 @@ W1 = shader0.sideTri1[0]
 if ( shader0.nearCollinear ) [W0, W1] = [shader0.sideTri0[0], shader0.sideTri0[2]]
 shader0.ambientLight(W0, W1)
 
+pt = vec2(_token.center.x, _token.center.y)
 shader0.vertexCalculations(2)
 shader0.setVaryings(pt)
+shader0.shadowComponents(pt, 0)
+
+shader1.vertexCalculations(2)
+shader1.setVaryings(pt)
+shader1.shadowComponents(pt, 0)
+
 shader0.fragmentCalculations(pt, 0)
 shader0.shadowPercentage(pt, 0)
 shader0.shadowComponents(pt, 0)

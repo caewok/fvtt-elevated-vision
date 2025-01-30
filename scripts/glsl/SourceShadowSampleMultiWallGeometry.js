@@ -148,10 +148,11 @@ export class SourceShadowSampleMultiWallGeometry extends CombinedGeometry {
    * @param {boolean} [update=true]   If false, buffer will not be flagged for update.
    * @returns {boolean} True if the added edge resulted in a change.
    */
-  edgeRemoved(edge, { update = true } = {}) {
-    if ( !this.geomEdgeMap.has(edge.id) ) return false;
-    const subgeom = this.geomEdgeMap.get(edge.id);
-    this.geomEdgeMap.delete(edge.id);
+  edgeRemoved(edgeId, { update = true } = {}) {
+    if ( edgeId instanceof Edge ) edgeId = edge.id;
+    if ( !this.geomEdgeMap.has(edgeId) ) return false;
+    const subgeom = this.geomEdgeMap.get(edgeId);
+    this.geomEdgeMap.delete(edgeId);
     const idxToRemove = this.subgeometries.indexOf(subgeom);
     const changed = Boolean(this.removeSubGeometry(idxToRemove));
     if ( update && changed ) this.update();

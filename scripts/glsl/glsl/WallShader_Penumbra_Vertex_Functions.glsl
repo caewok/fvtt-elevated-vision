@@ -21,6 +21,7 @@ ${defineFunction("distanceSquared")}
 ${defineFunction("distanceToLine")}
 
 #define EV_ENDPOINT_LINKED_UNBLOCKED  -10.0
+#define EV_ENDPOINT_LINKED_BLOCKED  -20.0
 
 // From CONST.WALL_SENSE_TYPES.
 #define LIMITED_WALL      10.0
@@ -52,26 +53,24 @@ struct Wall {
   vec3[2] bottom;
   vec2 mid;
   vec2 direction;
+  float[2] linkValues;
 };
 
-/** Represent the three directions of a shadow from a wall endpoint. */
+/** Represent the two directions of a shadow from a wall endpoint. */
 struct ShadowDirections {
   vec3 umbra;
-  vec3 midpenumbra;
   vec3 penumbra;
 };
 
-/** Represent the three directions of a shadow from a wall endpoint in 2d. */
+/** Represent the two directions of a shadow from a wall endpoint in 2d. */
 struct ShadowDirections2d {
   vec2 umbra;
-  vec2 midpenumbra;
   vec2 penumbra;
 };
 
-/** Represent the three rays of a shadow from the two wall endpoints in 2d. */
+/** Represent the two rays of a shadow from the two wall endpoints in 2d. */
 struct ShadowRays2d {
   Ray2d[2] umbra;
-  Ray2d[2] midpenumbra;
   Ray2d[2] penumbra;
 };
 
@@ -87,11 +86,13 @@ Wall calculateWallPositions() {
   vec2 direction = normalizedDirection(xyCloser, xyFurther);
   float topZ = aWallCorner0.z;
   float bottomZ = aWallCorner1.z;
+  float[2] linkValues = float[2](aWallCorner0.w, aWallCorner1.w);
   return Wall(
     vec3[2](vec3(xyCloser, topZ), vec3(xyFurther, topZ)),
     vec3[2](vec3(xyCloser, bottomZ), vec3(xyFurther, bottomZ)),
     (xyCloser + xyFurther) * 0.5,
-    direction
+    direction,
+    float[2](linkValues[closerIdx], linkValues[1 - closerIdx])
   );
 }
 
@@ -142,76 +143,6 @@ Plane constructCanvasPlane() {
   vec3 planeNormal = vec3(0.0, 0.0, 1.0);
   vec3 planePoint = vec3(0.0, 0.0, canvasElevation);
   return Plane(planePoint, planeNormal);
-}
-
-/**
- * For side penumbra directions, determine if they must be moved to address light leakage
- * from linked endpoints.
- * @returns True if not blocked.
- */
-bool adjustSideShadowForLinkedEndpoints(inout ShadowDirections2d shadowDirs, in Wall wall, in int idx) {
-  vec2 wXY = wall.top[idx].xy; // Wall endpoint from which a penumbra is cast.
-
-  // If no linked wall, full penumbra is used.
-  vec2 linkValue = vec2(aWallCorner0.w, aWallCorner1.w);
-  float linkAngle = linkValue[idx];
-  if ( linkAngle == EV_ENDPOINT_LINKED_UNBLOCKED ) return true;
-  // return;
-
-  // Determine orientation relative to the mid-penumbra.
-  // 4 quadrants:
-  // 1 & 2: linked wall is on opposite side from wall, so it blocks.
-  // 3 & 4: linked wall is on same side as light:
-  // - 3: Linked wall not between wall and mid: no block (tight "V")
-  // - 4: Linked wall between wall and mid
-  //     - If umbra - linked - mid-penumbra, adjust umbra direction.
-  //     - If umbra - mid - linked - penumbra, umbra set to mid.
-
-  // Point positions.
-  vec2 linkPt = fromAngle(wXY, linkAngle, 1.0);
-  Ray2d midR = Ray2d(wXY, shadowDirs.midpenumbra);
-  vec2 midPt = projectRay(midR, 1.0);
-
-  // Orientation re mid.
-  vec2 other = (wall.top[1 - idx]).xy;
-  float oMidLink = orient(wXY, midPt, linkPt);
-  float oMidWall = orient(wXY, midPt, other);
-
-  // 1 & 2: linked wall blocks light.
-  bool linkOppositeWall = oMidWall * oMidLink <= 0.0;
-  if ( linkOppositeWall ) {
-    shadowDirs.umbra.x = shadowDirs.midpenumbra.x;
-    shadowDirs.umbra.y = shadowDirs.midpenumbra.y;
-    return false;
-  }
-
-  // 3 & 4: Linked wall between wall and mid
-  // 3: Linked wall in quadrant with light, not blocking.
-  float oLinkWall = orient(wXY, linkPt, other);
-  float oLinkMid = orient(wXY, linkPt, midPt);
-  bool linkBetweenWallAndMid = OPP_SIDE(oLinkWall, oLinkMid);
-  if ( !linkBetweenWallAndMid ) return true;
-
-  // 4. possible block.
-  // What side of umbra is the linked wall on? If not on the mid-side, it doesn't block.
-  Ray2d umbraR = Ray2d(wXY, shadowDirs.umbra);
-  vec2 umbraPt = projectRay(umbraR, 1.0);
-  float oUmbraLink = orient(wXY, umbraPt, linkPt);
-  float oUmbraMid = orient(wXY, umbraPt, midPt);
-  bool linkAfterUmbra = SAME_SIDE(oUmbraLink, oUmbraMid);
-  if ( !linkAfterUmbra ) return true;
-
-  // Linked wall is after umbra, moving toward mid.
-  float oMidUmbra = orient(wXY, midPt, umbraPt);
-
-  // Set umbra to the link direction.
-  vec2 linkDir = normalizedDirection(wXY, linkPt);
-  shadowDirs.umbra.x = linkDir.x;
-  shadowDirs.umbra.y = linkDir.y;
-  // if ( oMidUmbra * oMidLink > 0.0 ) return true;
-
-  // Linked wall is after mid.
-  return true;
 }
 
 /**

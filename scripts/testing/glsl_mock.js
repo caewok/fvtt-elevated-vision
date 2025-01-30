@@ -171,6 +171,10 @@ export function glslVectors({ precision = "highp", type = "float" } = {}) {
       abs() { return this._componentWise(a => Math.abs(a)); }
 
       pow(x) { return this._componentWise((a, i) => Math.pow(a, x[i])); }
+
+      min(x) { return this._componentWise((a, i) => Math.min(a, x[i] ?? x)); }
+
+      max(x) { return this._componentWise((a, i) => Math.max(a, x[i] ?? x)); }
     }
 
     // Define getters and setters for each single SWIZZLE property
@@ -288,7 +292,7 @@ export function barycentric(p, a, b, c) {
   const d21 = v2.dot(v1);
 
   const denom = ((d00 * d11) - (d01 * d01));
-  // TODO: Is this test needed? if ( denom == 0.0 ) return new vec3(-1.0, -1.0, -1.0);
+  // TODO: Is this test needed? if ( denom == 0.0 ) return new vec3(-1.0);
 
   const denomInv = 1.0 / denom; // Fixed for given triangle
   const v = ((d11 * d20) - (d01 * d21)) * denomInv;
@@ -931,6 +935,10 @@ export function pow(a, x) {
   return a.pow(x);
 }
 
+export function min(x, y) { return x.min(y); }
+
+export function max(x, y) { return x.max(y); }
+
 
 /**
  * Ray defined by a point and a direction from that point.
@@ -951,6 +959,13 @@ export class Ray2dGLSLStruct {
    */
   static fromPoints(origin, towardsPoint) {
     return new this(origin, towardsPoint.subtract(origin));
+  }
+
+  static bvhRay(origin, destination) {
+    const r = new this(origin, normalizedDirection(origin, destination));
+    r.invDirection = vec3(1.0).divide(r.direction),
+    r.t2 = glsl.distanceSquared(origin, destination);
+    return r;
   }
 
   /**
@@ -1050,6 +1065,7 @@ export class RayGLSLStruct extends Ray2dGLSLStruct {
     super(origin.xy, direction.xy);
     this.origin.set(origin, 0);
     this.direction.set(direction, 0);
+
   }
 }
 export const Ray = (...args) => new RayGLSLStruct(...args);
@@ -1122,6 +1138,20 @@ export function wallKeyCoordinates(key) {
  * @returns {float} The cross product
  */
 export function cross2d(a, b) { return (a.x * b.y) - (a.y * b.x); }
+
+/**
+ * Cross two vec3
+ * @param {vec3} a  First vector
+ * @param {vec3} b  Second vector
+ * @returns {vec3} The cross product
+ */
+export function cross(a, b) {
+  return vec3(
+    a.y * b.z - b.y * a.z,
+    a.z * b.x - b.z * a.x,
+    a.x * b.y - b.x * a.y
+  );
+}
 
 /**
  * @param {Ray2dGLSLStruct} a
@@ -1535,52 +1565,49 @@ export const Light = (...args) => new LightGLSLStruct(...args);
  * @prop {float} thresholdRadius2
  */
 export class WallGLSLStruct {
-  constructor({ top, bottom, mid, direction, direction2d, linkValue, type, thresholdRadius2 } = {}) {
-    const args = { top, bottom, mid, direction, direction2d, linkValue, type, thresholdRadius2 };
+  constructor({ top, bottom, mid, direction, direction2d, linkValues, type, thresholdRadius2 } = {}) {
+    const args = { top, bottom, mid, direction, direction2d, linkValues, type, thresholdRadius2 };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
 export const Wall = (...args) => new WallGLSLStruct(...args);
 
 /**
- * Represent the three directions of a shadow from a wall endpoint.
+ * Represent the two directions of a shadow from a wall endpoint.
  * @prop {vec3} umbra
- * @prop {vec3} midpenumbra
  * @prop {vec3} penumbra
  */
 export class ShadowDirectionsGLSLStruct {
-  constructor({ umbra, midpenumbra, penumbra } = {}) {
-    const args = { umbra, midpenumbra, penumbra };
+  constructor({ umbra, penumbra } = {}) {
+    const args = { umbra, penumbra };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
 export const ShadowDirections = (...args) => new ShadowDirectionsGLSLStruct(...args);
 
 /**
- * Represent the three directions of a shadow from a wall endpoint.
+ * Represent the two directions of a shadow from a wall endpoint.
  * @prop {vec2} umbra
- * @prop {vec2} midpenumbra
  * @prop {vec2} penumbra
  */
 export class ShadowDirections2dGLSLStruct {
-  constructor({ umbra, midpenumbra, penumbra } = {}) {
-    const args = { umbra, midpenumbra, penumbra };
+  constructor({ umbra, penumbra } = {}) {
+    const args = { umbra, penumbra };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
 export const ShadowDirections2d = (...args) => new ShadowDirections2dGLSLStruct(...args);
 
 /**
- * Represent three rays of a shadow: umbra, penumbra, midumbra.
+ * Represent two rays of a shadow: umbra, penumbra.
  * Each ray goes through a wall endpoint.
  * Each ray type has two rays. Typically one for each endpoint, but sometimes these are mixed up.
  * @prop {Ray2d[2]} umbra
- * @prop {Ray2d[2]} midpenumbra
  * @prop {Ray2d[2]} penumbra
  */
 export class ShadowRays2dGLSLStruct {
-  constructor({ umbra, midpenumbra, penumbra } = {}) {
-    const args = { umbra, midpenumbra, penumbra };
+  constructor({ umbra, penumbra } = {}) {
+    const args = { umbra, penumbra };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }
@@ -1588,14 +1615,13 @@ export const ShadowRays2d = (...args) => new ShadowRays2dGLSLStruct(...args);
 
 
 /**
- * Represent the three endpoints of a shadow, opposite the wall endpoint.
+ * Represent the two endpoints of a shadow, opposite the wall endpoint.
  * @prop {vec2} umbra
- * @prop {vec2} midpenumbra
  * @prop {vec2} penumbra
  */
 export class ShadowPointsGLSLStruct {
-  constructor({ umbra, midpenumbra, penumbra } = {}) {
-    const args = { umbra, midpenumbra, penumbra };
+  constructor({ umbra, penumbra } = {}) {
+    const args = { umbra, penumbra };
     for ( const [key, value] of Object.entries(args) ) this[key] = value;
   }
 }

@@ -146,13 +146,14 @@ export class SourceShadowMultiWallGeometry extends CombinedGeometry {
 
   /**
    * Update shadow data based on the removed edge, as necessary.
-   * @param {Edge} edge             Edge that was removed
+   * @param {Edge|string} edgeId             Edge or id of edge that was removed
    * @returns {boolean} True if the added edge resulted in a change.
    */
-  edgeRemoved(edge) {
-    if ( !this.geomEdgeMap.has(edge.id) ) return false;
-    const subgeom = this.geomEdgeMap.get(edge.id);
-    this.geomEdgeMap.delete(edge.id);
+  edgeRemoved(edgeId) {
+    if ( edgeId instanceof Edge ) edgeId = edge.id;
+    if ( !this.geomEdgeMap.has(edgeId) ) return false;
+    const subgeom = this.geomEdgeMap.get(edgeId);
+    this.geomEdgeMap.delete(edgeId);
     const idxToRemove = this.subgeometries.indexOf(subgeom);
     return Boolean(this.removeSubGeometry(idxToRemove));
   }
@@ -547,7 +548,9 @@ export class SourceShadowMultiWallSubGeometry extends SubGeometry {
     if ( changedSenseType ) this._updateSenseType();
 
     // If anything was updated, return true.
-    return changedPosition || changedElevation || changedThreshold || changedSenseType;
+    const anyChanges = changedPosition || changedElevation || changedThreshold || changedSenseType;
+    if ( anyChanges ) this.update();
+    return anyChanges;
   }
 
   /**

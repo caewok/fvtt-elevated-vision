@@ -254,6 +254,13 @@ export class ShadowWallShader extends AbstractEVShader {
   }
 
   /**
+   * Update based on indicated changes to the edge.
+   * Ignored here.
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   */
+  edgeUpdated() { return false; }
+
+  /**
    * Update based on indicated changes to the source.
    * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
@@ -355,6 +362,13 @@ export class DirectionalShadowWallShader extends AbstractEVShader {
   }
 
   /**
+   * Update based on indicated changes to the edge.
+   * Ignored here.
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   */
+  edgeUpdated() { return false; }
+
+  /**
    * Update based on indicated changes to the source.
    * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
@@ -390,7 +404,7 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
    * 3 vertices: light, ix for corner 1, ix for corner 2
    * @type {string}
    */
-  static vertexShader = GLSL_SIZED_VERTEX2;
+  static vertexShader = GLSL_SIZED_VERTEX;
 
   // NOTE: SizedPointSourceShadowWallShader.fragmentShader
   /**
@@ -398,7 +412,7 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
    * See lightEncoding.
    * This mask shader is binary: encodes either full light or no light.
    */
-  static fragmentShader = GLSL_SIZED_FRAGMENT2;
+  static fragmentShader = GLSL_SIZED_FRAGMENT;
 
   /**
    * Set the basic uniform structures.
@@ -451,6 +465,13 @@ export class SizedPointSourceShadowWallShader extends AbstractEVShader {
     shader.source = source;
     return shader;
   }
+
+  /**
+   * Update based on indicated changes to the edge.
+   * Ignored here.
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   */
+  edgeUpdated() { return false; }
 
   /**
    * Update based on indicated changes to the source.

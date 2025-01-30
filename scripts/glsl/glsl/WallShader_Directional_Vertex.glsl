@@ -112,7 +112,6 @@ ShadowDirections2d calculateSideShadowDirections(in int idx, in Wall wall) {
   // Normalize based on the mid penumbra for corner 0
   return ShadowDirections2d(
     dirUmbra, // umbra
-    dirMidPenumbra, // midpenumbra
     dirPenumbra // penumbra
   );
 }
@@ -196,14 +195,8 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
   umbra[idx0] = tangentRays[1];
   umbra[1 - idx0] = tangentRays[2];
 
-  Ray2d[2] midpenumbra = Ray2d[2](
-    Ray2d(wall0, sideShadowDirs0.midpenumbra),
-    Ray2d(wall1, sideShadowDirs1.midpenumbra)
-  );
-
   return ShadowRays2d(
     umbra,
-    midpenumbra,
     penumbra
   );
 }
@@ -216,7 +209,6 @@ ShadowDirections calculateFarShadowDirections() {
   vec2 dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0) * -1.0;
   return ShadowDirections(
     normalize(vec3(dirMid.xy, zDelta[UMBRA])), // umbra
-    normalize(vec3(dirMid.xy, zDelta[MIDPENUMBRA])), // midpenumbra
     normalize(vec3(dirMid.xy, zDelta[PENUMBRA])) // penumbra
   );
 }
@@ -229,7 +221,6 @@ ShadowDirections calculateNearShadowDirections() {
   vec2 dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0) * -1.0;
   return ShadowDirections(
     normalize(vec3(dirMid.xy, zDelta[PENUMBRA])), // umbra
-    normalize(vec3(dirMid.xy, zDelta[MIDPENUMBRA])), // midpenumbra
     normalize(vec3(dirMid.xy, zDelta[UMBRA])) // penumbra
   );
 }
