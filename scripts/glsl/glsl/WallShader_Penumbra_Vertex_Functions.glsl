@@ -16,7 +16,6 @@ ${defineFunction("barycentric")}
 ${defineFunction("fromAngle")}
 ${defineFunction("intersectRayPlane")}
 ${defineFunction("lineLineIntersection")}
-${defineFunction("normalizeRay")}
 ${defineFunction("distanceSquared")}
 ${defineFunction("distanceToLine")}
 

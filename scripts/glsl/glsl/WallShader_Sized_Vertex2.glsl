@@ -34,7 +34,6 @@ uniform vec4 uSceneDims;
 ${defineStruct("Plane")}
 ${defineFunction("intersectRayPlane")}
 ${defineFunction("normalizedDirection")}
-${defineFunction("normalizeRay")}
 ${defineStruct("Circle")}
 ${defineFunction("tangentPoints")}
 ${defineFunction("sameSide")}

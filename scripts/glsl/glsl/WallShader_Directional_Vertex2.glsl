@@ -39,7 +39,6 @@ uniform float uSolarAngle; // radians
 #define EV_DIRECTIONAL_LIGHT true
 
 ${defineStruct("Plane")}
-${defineFunction("normalizeRay")}
 ${defineFunction("rayFromPoints")}
 ${defineFunction("intersectRayPlane")}
 ${defineFunction("lineLineIntersection")}
@@ -339,17 +338,6 @@ void _shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadow
   Ray2d rCanvasWallE = Ray2d(E, wall.direction);
   lineLineIntersection(rD_penumbra, rCanvasWallE, B);
   lineLineIntersection(rG_penumbra, rCanvasWallE, C);
-
-  // Extend A along the rays.
-  /*
-  // lineLineIntersection(sideShadowRays.penumbra[0], sideShadowRays.penumbra[1], A);
-  Ray2d r0 = normalizeRay(rayFromPoints(A, B));
-  Ray2d r1 = normalizeRay(rayFromPoints(A, C));
-  // Ray2d r0 = Ray2d(A, normalize(sideShadowRays.penumbra[0].direction.xy));
-  // Ray2d r1 = Ray2d(A, normalize(sideShadowRays.penumbra[1].direction.xy));
-  B = projectRay(r0, 2000.0);
-  C = projectRay(r1, 2000.0);
-  */
 }
 
 /**

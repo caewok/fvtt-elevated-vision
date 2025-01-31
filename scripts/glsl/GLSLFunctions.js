@@ -655,7 +655,7 @@ Ray2d rayFromPoints(in vec2 origin, in vec2 towardsPoint) {
 }`;
 
 
-GLSLFunctions.normalizeRay =
+GLSLFunctions.normalizedRay =
 `
 ${defineStruct("Ray")}
 ${defineStruct("Ray2d")}
@@ -663,12 +663,12 @@ ${defineStruct("Ray2d")}
 /**
  * Normalize the ray direction.
  */
-Ray normalizeRay(in Ray r) {
-  return Ray(r.origin, normalize(r.direction));
+Ray normalizedRayFromPoints(in vec3 origin, in vec3 towardsPoint) {
+  return Ray(r.origin, normalize(towardsPoint - origin));
 }
 
-Ray2d normalizeRay(in Ray2d r) {
-  return Ray2d(r.origin, normalize(r.direction));
+Ray2d normalizedRayFromPoints(in vec2 origin, in vec2 towardsPoint) {
+  return Ray2d(r.origin, normalize(towardsPoint - origin));
 }`;
 
 GLSLFunctions.projectRay =
