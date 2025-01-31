@@ -34,6 +34,13 @@ ${GLSLStructs[struct]}
 
 // NOTE: Utility
 
+GLSLFunctions.isEven =
+`
+bool isEven(in float n) { n % 2.0 == 0.0; }
+bool isEven(in int n) ( n % 2 == 0; )
+
+`
+
 GLSLFunctions.almostEqual =
 `
 /**
