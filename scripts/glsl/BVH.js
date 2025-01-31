@@ -60,7 +60,7 @@ function isOdd(n) { return n % 2 !== 0; }
  * @returns {float|null} T-value or null if no intersection.
  * In GLSL, t is an out variable.
  */
-function intersectPlaneRay(plane, ray) {
+function planeRayIntersection(plane, ray) {
   const denom = glsl.dot(plane.normal, ray.direction);
   if ( denom.almostEqual(0) ) return null;
   const p0l0 = plane.point.subtract(ray.origin);
@@ -77,7 +77,7 @@ function intersectPlaneRay(plane, ray) {
  * In GLSL, t is an out variable.
  */
 function intersectVerticalRectangleRay(plane, ray, a, b) {
-  const t = intersectPlaneRay(plane, ray);
+  const t = planeRayIntersection(plane, ray);
   if ( t == null ) return null;
   if ( t < 0.0 || (t*t) > ray.t2 ) return null;
   const ix = glsl.projectRay(ray, t);
@@ -842,7 +842,6 @@ export class BVH {
     // Track the next node for each level of the tree.
     const stack = new Uint16Array(Math.floor(this.nodes.length * 0.5) + 2); // Plus 1 for root.
     stack[0] = 1;  // Root left child is 1; root right child is 2.
-
     while ( currLevel >= 0 ) {
       // console.log(`hasIntersectionNonRecursive|currLevel ${currLevel}`, [...stack])
 
