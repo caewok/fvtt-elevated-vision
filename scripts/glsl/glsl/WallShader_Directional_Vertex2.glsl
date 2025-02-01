@@ -46,6 +46,7 @@ ${defineFunction("barycentric")}
 ${defineFunction("orient")}
 ${defineFunction("fromAngle")}
 ${defineFunction("almostEqual")}
+${defineFunction("normalizedRay")}
 
 /* ----- NOTE: Functions used by Penumbra Vertex Functions ----- */
 
@@ -315,8 +316,8 @@ void _shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadow
   float[3] zDelta = _calculateZChangeRays();
   vec3 canvasIxD;
   vec3 canvasIxG;
-  Ray rD = rayFromDirection(vec3(rD_penumbra.origin, wall.top[0].z), normalize(vec3(rD_penumbra.direction, zDelta[PENUMBRA])));
-  Ray rG = rayFromDirection(vec3(rG_penumbra.origin, wall.top[0].z), normalize(vec3(rG_penumbra.direction, zDelta[PENUMBRA])));
+  Ray rD = normalizedRayFromDirection(vec3(rD_penumbra.origin, wall.top[0].z), vec3(rD_penumbra.direction, zDelta[PENUMBRA]));
+  Ray rG = normalizedRayFromDirection(vec3(rG_penumbra.origin, wall.top[0].z), vec3(rG_penumbra.direction, zDelta[PENUMBRA]));
   intersectRayPlane(rD, canvasPlane, canvasIxD);
   intersectRayPlane(rG, canvasPlane, canvasIxG);
   E = canvasIxD.xy;
@@ -324,8 +325,8 @@ void _shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadow
 
   vec3 canvasIxDu;
   vec3 canvasIxGu;
-  Ray rDu = rayFromDirection(vec3(rD_umbra.origin, wall.top[0].z), normalize(vec3(rD_umbra.direction, zDelta[PENUMBRA])));
-  Ray rGu = rayFromDirection(vec3(rG_umbra.origin, wall.top[0].z), normalize(vec3(rG_umbra.direction, zDelta[PENUMBRA])));
+  Ray rDu = normalizedRayFromDirection(vec3(rD_umbra.origin, wall.top[0].z), vec3(rD_umbra.direction, zDelta[PENUMBRA]));
+  Ray rGu = normalizedRayFromDirection(vec3(rG_umbra.origin, wall.top[0].z), vec3(rG_umbra.direction, zDelta[PENUMBRA]));
   intersectRayPlane(rDu, canvasPlane, canvasIxDu);
   intersectRayPlane(rGu, canvasPlane, canvasIxGu);
   F = canvasIxDu.xy;
@@ -397,8 +398,8 @@ void _shadowPointsNearCollinear(in ShadowRays2d sideShadowRays, in ShadowDirecti
   float[3] zDelta = _calculateZChangeRays();
   vec3 canvasIxD;
   vec3 canvasIxG;
-  Ray rD = rayFromDirection(vec3(rD_penumbra.origin, wall.top[0].z), normalize(vec3(rD_penumbra.direction, zDelta[PENUMBRA])));
-  Ray rG = rayFromDirection(vec3(rG_penumbra.origin, wall.top[0].z), normalize(vec3(rG_penumbra.direction, zDelta[PENUMBRA])));
+  Ray rD = normalizedRayFromDirection(vec3(rD_penumbra.origin, wall.top[0].z), vec3(rD_penumbra.direction, zDelta[PENUMBRA]));
+  Ray rG = normalizedRayFromDirection(vec3(rG_penumbra.origin, wall.top[0].z), vec3(rG_penumbra.direction, zDelta[PENUMBRA]));
   intersectRayPlane(rD, canvasPlane, canvasIxD);
   intersectRayPlane(rG, canvasPlane, canvasIxG);
   E = canvasIxD.xy;
@@ -561,8 +562,8 @@ void main() {
 
   // Extend A along the rays.
   /*
-  Ray2d r0 = rayFromDirection(A, normalize(sideShadowRays.penumbra[0].direction.xy));
-  Ray2d r1 = rayFromDirection(A, normalize(sideShadowRays.penumbra[1].direction.xy));
+  Ray2d r0 = normalizedRayFromDirection(A, sideShadowRays.penumbra[0].direction.xy);
+  Ray2d r1 = normalizedRayFromDirection(A, sideShadowRays.penumbra[1].direction.xy);
   vec2 B = projectRay(r0, 2000.0);
   vec2 C = projectRay(r1, 2000.0);
   penumbraTri[0] = A;

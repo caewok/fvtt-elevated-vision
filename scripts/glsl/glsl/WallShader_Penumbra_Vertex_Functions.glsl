@@ -19,6 +19,7 @@ ${defineFunction("lineLineIntersection")}
 ${defineFunction("distanceSquared")}
 ${defineFunction("distanceToLine")}
 ${defineFunction("rayFromDirection")}
+${defineFunction("normalizedRay")}
 
 #define EV_ENDPOINT_LINKED_UNBLOCKED  -10.0
 #define EV_ENDPOINT_LINKED_BLOCKED  -20.0
@@ -197,8 +198,8 @@ vec2 canvasEdgeIntersection(in Ray2d r) {
   int quad = directionalQuadrant(r.direction);
   int idx0 = (quad == TL || quad == TR) ? TL : BR;
   int idx1 = (quad == TL || quad == BL) ? TL : TR;
-  Ray2d edge0 = rayFromDirection(sceneRect[idx0], normalizedDirection(sceneRect[idx0], sceneRect[idx0 + 1]));
-  Ray2d edge1 = rayFromDirection(sceneRect[idx1], normalizedDirection(sceneRect[idx1], sceneRect[idx1 + 1]));
+  Ray2d edge0 = normalizedRayFromPoints(sceneRect[idx0], sceneRect[idx0 + 1]);
+  Ray2d edge1 = normalizedRayFromPoints(sceneRect[idx1], sceneRect[idx1 + 1]);
 
   float t0;
   float t1;
@@ -225,8 +226,8 @@ Ray2d whichCanvasEdge(in Ray2d r) {
   int idx0 = (quad + 4 - 1) % 4;
   int idx1 = quad;
   int idx2 = (quad + 1) % 4;
-  Ray2d edge0 = rayFromDirection(sceneRect[idx0], normalizedDirection(sceneRect[idx0], sceneRect[idx1]));
-  Ray2d edge1 = rayFromDirection(sceneRect[idx1], normalizedDirection(sceneRect[idx1], sceneRect[idx2]));
+  Ray2d edge0 = normalizedRayFromPoints(sceneRect[idx0], sceneRect[idx1]);
+  Ray2d edge1 = normalizedRayFromPoints(sceneRect[idx1], sceneRect[idx2]);
 
   float t0;
   float t1;
@@ -285,8 +286,8 @@ vec2[3] extendTriangleToCanvasEdge(in vec2[3] tri) {
   vec2 A = tri[0];
   vec2 B = tri[1];
   vec2 C = tri[2];
-  Ray2d AB = rayFromDirection(A, normalizedDirection(A, B));
-  Ray2d AC = rayFromDirection(A, normalizedDirection(A, C));
+  Ray2d AB = normalizedRayFromPoints(A, B);
+  Ray2d AC = normalizedRayFromPoints(A, C);
   Ray2d canvasEdge = infiniteShadowCanvasRay(Ray2d[2](AB, AC));
 
   // Use the smaller triangle edge to intersect the canvas edge.
@@ -309,7 +310,7 @@ vec2[3] extendTriangleToCanvasEdge(in vec2[3] tri) {
   lineLineIntersection(smallerEdge, canvasEdge, ixSmaller);
 
   // Then connect using the B->C (or C->B) direction to the other triangle edge.
-  Ray2d newBC = rayFromDirection(ixSmaller, normalizedDirection(B, C));
+  Ray2d newBC = normalizedRayFromDirection(ixSmaller, C - B);
   vec2 ixLarger;
   lineLineIntersection(largerEdge, newBC, ixLarger);
 
@@ -429,7 +430,7 @@ Ray2d nearFarMidRay(in Wall wall, in vec2[3] penumbraTri) {
   float dist01 = distanceSquared(penumbraTri[0], penumbraTri[1]);
   float dist02 = distanceSquared(penumbraTri[0], penumbraTri[2]);
   int closerIdx = dist02 < dist01 ? 2 : 1;
-  Ray2d lightRay2d = rayFromDirection(penumbraTri[0], normalizedDirection(penumbraTri[0], wall.mid));
+  Ray2d lightRay2d = normalizedRayFromPoints(penumbraTri[0], wall.mid);
   vec2 closerIx;
   lineLineIntersection(lightRay2d, rayFromDirection(penumbraTri[closerIdx], wall.direction), closerIx);
   return rayFromDirection(closerIx, penumbraTri[0] - closerIx);

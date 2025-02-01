@@ -74,7 +74,7 @@ void shrinkOverlappingWall(inout Wall wall) {
     // const containedIdx = circleContainsPoint(uLightPosition.xy, uLightSize, endpointsXY[0]) ? 0 : 1;
 
     // Move pixel away to be outside the circle.
-    vec2 newIx = projectRay(rayFromDirection(ixs[0], normalizedDirection(ixs[0], wall.top[1].xy)), 1.0);
+    vec2 newIx = projectRay(normalizedRayFromPoints(ixs[0], wall.top[1].xy), 1.0);
 
     // Update wall data.
     wall.top[0].xy = newIx.xy;
@@ -150,12 +150,12 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
   // t00 x t01 at W0 by definition.
   // t10 x t11 at W1 by definition.
   Ray2d[2] r0 = Ray2d[2](
-    rayFromDirection(W0, normalizedDirection(tangents0[0], W0)),
-    rayFromDirection(W0, normalizedDirection(tangents0[1], W0))
+    normalizedRayFromDirection(W0, W0 - tangents0[0]),
+    normalizedRayFromDirection(W0, W0 - tangents0[1])
   );
   Ray2d[2] r1 = Ray2d[2](
-    rayFromDirection(W1, normalizedDirection(tangents1[0], W1)),
-    rayFromDirection(W1, normalizedDirection(tangents1[1], W1))
+    normalizedRayFromDirection(W1, W1 - tangents1[0]),
+    normalizedRayFromDirection(W1, W1 - tangents1[1])
   );
 
   // If near-collinear:
@@ -206,8 +206,8 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
   vec3 lightCenter = almostEqual(distToWall, 0.0, 1.0e-06)
     ? vec3(offsetLightFromWall(wall, 0.5), uLightPosition.z) : uLightPosition;
   Ray2d[2] midpenumbra = Ray2d[2](
-    rayFromDirection(W0, normalizedDirection(lightCenter.xy, W0)),
-    rayFromDirection(W1, normalizedDirection(lightCenter.xy, W1))
+    normalizedRayFromDirection(W0, W0 - lightCenter.xy),
+    normalizedRayFromDirection(W1, W1 - lightCenter.xy)
   );
   */
 
@@ -330,8 +330,8 @@ bool shadowPoints(in Wall wall, in ShadowRays2d sideShadowRays, in vec2[3] farPe
   */
 
   /* Debugging
-  B = projectRay(rayFromDirection(A, normalize(B - A)), 2000.0);
-  C = projectRay(rayFromDirection(A, normalize(C - A)), 2000.0);
+  B = projectRay(normalizedRayFromPoints(A, B), 2000.0);
+  C = projectRay(normalizedRayFromPoints(A, C), 2000.0);
   */
 
   return nearCollinear;
