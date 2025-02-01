@@ -40,7 +40,6 @@ uniform float uSolarAngle; // radians
 
 ${defineStruct("Plane")}
 ${defineFunction("intersectRayPlane")}
-${defineFunction("rayFromPoints")}
 ${defineFunction("intersectRayPlane")}
 ${defineFunction("lineLineIntersection")}
 ${defineFunction("barycentric")}

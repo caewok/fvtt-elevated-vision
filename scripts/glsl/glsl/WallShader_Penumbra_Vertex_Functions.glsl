@@ -18,6 +18,9 @@ ${defineFunction("intersectRayPlane")}
 ${defineFunction("lineLineIntersection")}
 ${defineFunction("distanceSquared")}
 ${defineFunction("distanceToLine")}
+${defineFunction("rayFromPoints")}
+${defineFunction("rayFromDirection")}
+${defineFunction("normalizedRay")}
 
 #define EV_ENDPOINT_LINKED_UNBLOCKED  -10.0
 #define EV_ENDPOINT_LINKED_BLOCKED  -20.0

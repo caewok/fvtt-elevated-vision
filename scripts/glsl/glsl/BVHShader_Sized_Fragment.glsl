@@ -58,7 +58,6 @@ ${defineStruct("Plane")}
 ${defineFunction("distanceSquared")}
 ${defineFunction("isEven")}
 ${defineFunction("projectRay")}
-${defineFunction("rayFromPoints")}
 ${defineFunction("terrainElevation")}
 ${defineFunction("hash")}
 

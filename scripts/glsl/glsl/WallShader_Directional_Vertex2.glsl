@@ -39,7 +39,6 @@ uniform float uSolarAngle; // radians
 #define EV_DIRECTIONAL_LIGHT true
 
 ${defineStruct("Plane")}
-${defineFunction("rayFromPoints")}
 ${defineFunction("intersectRayPlane")}
 ${defineFunction("lineLineIntersection")}
 ${defineFunction("barycentric")}

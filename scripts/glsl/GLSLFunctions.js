@@ -731,6 +731,16 @@ ${defineStruct("Ray2d")}
 /**
  * Normalize the ray direction.
  */
+Ray normalizedRayFromDirection(in vec3 origin, in vec3 direction) {
+  vec3 nd = normalize(direction);
+  return Ray(origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
+}
+
+Ray2d normalizedRayFromDirection(in vec2 origin, in vec2 direction) {
+  vec2 nd = normalize(direction);
+  return Ray2d(origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
+}
+
 Ray normalizedRayFromPoints(in vec3 origin, in vec3 towardsPoint) {
   return normalizedRayFromDirection(origin, towardsPoint - origin);
 }
@@ -738,16 +748,7 @@ Ray normalizedRayFromPoints(in vec3 origin, in vec3 towardsPoint) {
 Ray2d normalizedRayFromPoints(in vec2 origin, in vec2 towardsPoint) {
   return normalizedRayFromDirection(origin, towardsPoint - origin);
 }
-
-Ray normalizedRayFromDirection(in vec3 origin, in vec3 direction) {
-  vec3 nd = normalize(direction);
-  return Ray(r.origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
-}
-
-Ray2d normalizedRayFromDirection(in vec2 origin, in vec2 direction) {
-  vec3 nd = normalize(direction);
-  return Ray2d(r.origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
-}`;
+`;
 
 GLSLFunctions.projectRay =
 `
@@ -908,6 +909,7 @@ float distanceSquaredToSegment(in vec2 c, in vec2 a, in vec2 b) {
 GLSLFunctions.lineLineIntersection =
 `
 ${defineFunction("cross2d")}
+${defineFunction("rayFromPoints")}
 
 bool lineLineIntersection(in Ray2d a, in Ray2d b, out float t) {
   float denom = cross2d(a.direction, b.direction);
@@ -1274,8 +1276,9 @@ GLSLFunctions.tangentPoints =
 `
 ${defineStruct("Circle")}
 ${defineFunction("almostEqual")}
-${defineFunction("projectRay")}
 ${defineStruct("Ray2d")}
+${defineFunction("normalizedRay")}
+${defineFunction("projectRay")}
 
 /*
  * Locate the tangents to a circle from a point.
