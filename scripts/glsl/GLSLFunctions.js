@@ -633,6 +633,8 @@ GLSLStructs.Ray =
 struct Ray {
   vec3 origin;
   vec3 direction;
+  vec3 invDirection; // Store for testing against bounds.
+  float t2; // Store for testing against bounds and intersections and projecting. dot(direction, direction) or squared ray distance.
 };`;
 
 GLSLStructs.Ray2d =
@@ -643,6 +645,8 @@ GLSLStructs.Ray2d =
 struct Ray2d {
   vec2 origin;
   vec2 direction;
+  vec2 invDirection; // Store for testing against bounds.
+  float t2; // Store for testing against bounds and intersections and projecting. dot(direction, direction) or squared ray distance.
 };`;
 
 GLSLFunctions.rayFromDirection =
@@ -656,12 +660,12 @@ ${defineStruct("Ray2d")}
  */
 Ray rayFromDirection(in vec3 origin, in vec3 direction) {
   // Magnitude squared is dot(vec, vec)
-  return Ray(origin, direction);
+  return Ray(origin, direction, 1.0 / direction, dot(direction, direction));
 }
 
 Ray2d rayFromDirection(in vec2 origin, in vec2 direction) {
   // Magnitude squared is dot(vec, vec)
-  return Ray2d(origin, direction);
+  return Ray2d(origin, direction, 1.0 / direction, dot(direction, direction));
 }
 `;
 
@@ -669,16 +673,19 @@ GLSLFunctions.rayFromPoints =
 `
 ${defineStruct("Ray")}
 ${defineStruct("Ray2d")}
+${defineFunction("distanceSquared")}
 
 /**
  * Construct a ray from two points: origin and towards point.
  */
 Ray rayFromPoints(in vec3 origin, in vec3 towardsPoint) {
-  return rayFromDirection(origin, towardsPoint - origin);
+  vec3 direction = towardsPoint - origin;
+  return Ray(origin, direction, 1.0 / direction, distanceSquared(origin, towardsPoint));
 }
 
 Ray2d rayFromPoints(in vec2 origin, in vec2 towardsPoint) {
-  return rayFromDirection(origin, towardsPoint - origin);
+  vec2 direction = towardsPoint - origin;
+  return Ray2d(origin, direction, 1.0 / direction, distanceSquared(origin, towardsPoint));
 }`;
 
 
@@ -691,12 +698,24 @@ ${defineStruct("Ray2d")}
  * Normalize the ray direction.
  */
 Ray normalizedRayFromPoints(in vec3 origin, in vec3 towardsPoint) {
-  return Ray(r.origin, normalize(towardsPoint - origin));
+  vec3 direction = normalize(towardsPoint - origin);
+  return Ray(r.origin, direction, 1.0 / direction, distanceSquared(origin, towardsPoint));
 }
 
 Ray2d normalizedRayFromPoints(in vec2 origin, in vec2 towardsPoint) {
-  return Ray2d(r.origin, normalize(towardsPoint - origin));
-}`;
+  vec2 direction = normalize(towardsPoint - origin);
+  return Ray2d(r.origin, direction, 1.0 / direction, distanceSquared(origin, towardsPoint));
+
+Ray normalizedRayFromDirection(in vec3 origin, in vec3 direction) {
+  vec3 nd = normalize(direction);
+  return Ray(r.origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
+}
+
+Ray2d normalizedRayFromDirection(in vec2 origin, in vec2 direction) {
+  vec2 nd = normalize(direction);
+  return Ray2d(r.origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
+}
+`;
 
 GLSLFunctions.projectRay =
 `
