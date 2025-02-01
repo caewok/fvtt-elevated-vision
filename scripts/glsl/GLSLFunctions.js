@@ -733,21 +733,6 @@ ${defineFunction("normalizedDirection")}
  * The ray t2 value in this case is set to 1.0, to match the ray normalization.
  * You may want to set it to distanceSquared(origin, towardsPoint).
  */
-Ray normalizedRayFromDirection(in vec3 origin, in vec3 direction) {
-  vec3 nd = normalize(direction);
-  return Ray(origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
-}
-
-Ray2d normalizedRayFromDirection(in vec2 origin, in vec2 direction) {
-  vec2 nd = normalize(direction);
-  return Ray2d(origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
-}
-
-/**
- * Normalize the ray direction.
- * The ray t2 value in this case is set to 1.0, to match the ray normalization.
- * You may want to set it to distanceSquared(origin, towardsPoint).
- */
 Ray normalizedRayFromPoints(in vec3 origin, in vec3 towardsPoint) {
   vec3 direction = normalizedDirection(origin, towardsPoint);
   return Ray(origin, direction, 1.0 / direction, 1.0);
