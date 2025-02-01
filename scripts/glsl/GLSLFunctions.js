@@ -700,7 +700,6 @@ Ray2d rayFromDirection(in vec2 origin, in vec2 direction) {
   // Magnitude squared is dot(vec, vec)
   return Ray2d(origin, direction, 1.0 / direction, dot(direction, direction));
 }
-
 `;
 
 GLSLFunctions.rayFromPoints =
@@ -727,11 +726,12 @@ GLSLFunctions.normalizedRay =
 `
 ${defineStruct("Ray")}
 ${defineStruct("Ray2d")}
+${defineFunction("normalizedDirection")}
 
 /**
  * Normalize the ray direction.
  * The ray t2 value in this case is set to 1.0, to match the ray normalization.
- * You may want to set it to length(direction).
+ * You may want to set it to distanceSquared(origin, towardsPoint).
  */
 Ray normalizedRayFromDirection(in vec3 origin, in vec3 direction) {
   vec3 nd = normalize(direction);
@@ -749,13 +749,28 @@ Ray2d normalizedRayFromDirection(in vec2 origin, in vec2 direction) {
  * You may want to set it to distanceSquared(origin, towardsPoint).
  */
 Ray normalizedRayFromPoints(in vec3 origin, in vec3 towardsPoint) {
-  vec3 direction = normalize(towardsPoint - origin);
+  vec3 direction = normalizedDirection(origin, towardsPoint);
   return Ray(origin, direction, 1.0 / direction, 1.0);
 }
 
 Ray2d normalizedRayFromPoints(in vec2 origin, in vec2 towardsPoint) {
-  vec2 direction = normalize(towardsPoint - origin);
+  vec2 direction = normalizedDirection(origin, towardsPoint);
   return Ray2d(origin, direction, 1.0 / direction, 1.0);
+}
+
+/**
+ * Normalize the ray direction.
+ * The ray t2 value in this case is set to 1.0, to match the ray normalization.
+ * You may want to set it to length(direction).
+ */
+Ray normalizedRayFromDirection(in vec3 origin, in vec3 direction) {
+  vec3 nd = normalize(direction);
+  return Ray(origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
+}
+
+Ray2d normalizedRayFromDirection(in vec2 origin, in vec2 direction) {
+  vec2 nd = normalize(direction);
+  return Ray2d(origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
 }
 `;
 
@@ -808,7 +823,7 @@ ${defineFunction("projectRay")}
  */
 vec2 projectRayDistanceSquared(in Ray2d r, in float distance2) {
   float sign = sign(distance2);
-  float t = sign * sqrt(abs(distance2)) / r.t2;  // dot(r.direction, r.direction); // Divide by magnitude(r.direction)
+  float t = sign * sqrt(abs(distance2)) / r.t2; // dot(r.direction, r.direction); // Divide by magnitude(r.direction)
   return projectRay(r, t);
 }
 
@@ -918,7 +933,7 @@ float distanceSquaredToSegment(in vec2 c, in vec2 a, in vec2 b) {
 GLSLFunctions.lineLineIntersection =
 `
 ${defineFunction("cross2d")}
-${defineFunction("rayFromPoints")}
+${defineFunction("rayFromDirection")}
 
 bool lineLineIntersection(in Ray2d a, in Ray2d b, out float t) {
   float denom = cross2d(a.direction, b.direction);
@@ -939,16 +954,16 @@ bool lineLineIntersection(in Ray2d a, in Ray2d b, out vec2 ix) {
 }
 
 bool lineLineIntersection(vec2 a, vec2 b, vec2 c, vec2 d, out vec2 ix) {
-  Ray2d rayA = rayFromPoints(a, b);
-  Ray2d rayB = rayFromPoints(c, d);
+  Ray2d rayA = rayFromDirection(a, b - a);
+  Ray2d rayB = rayFromDirection(c, d - c);
   return lineLineIntersection(rayA, rayB, ix);
 }`;
 
 GLSLFunctions.lineLineIntersects =
 `
 bool lineLineIntersects(vec2 a, vec2 b, vec2 c, vec2 d) {
-  Ray2d rayA = rayFromPoints(a, b);
-  Ray2d rayB = rayFromPoints(c, d);
+  Ray2d rayA = rayFromDirection(a, b - a);
+  Ray2d rayB = rayFromDirection(c, d - c);
   return lineLineIntersects(rayA, rayB)
 }
 
@@ -1284,10 +1299,12 @@ struct Circle  {
 GLSLFunctions.tangentPoints =
 `
 ${defineStruct("Circle")}
+${defineStruct("Ray2d")}
 ${defineFunction("almostEqual")}
 ${defineStruct("Ray2d")}
 ${defineFunction("normalizedRay")}
 ${defineFunction("projectRay")}
+${defineFunction("rayFromDirection")}
 
 /*
  * Locate the tangents to a circle from a point.
@@ -1365,7 +1382,7 @@ vec2 to2dCutaway(in vec3 currPt, in vec3 start, in vec3 end) {
  * @returns {vec3}
  */
 vec3 from2dCutaway(in vec2 cutawayPt, in vec3 start, in vec3 end) {
-  Ray2d r2d = normalizedRayFromPoints(start.xy, end.xy);
+  Ray2d r2d = rayFromDirection(start.xy, normalize(end.xy - start.xy));
   vec2 xy = projectRay(r2d, cutawayPt.x);
   return vec3(xy, cutawayPt.y);
 }

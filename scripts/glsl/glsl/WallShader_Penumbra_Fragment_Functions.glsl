@@ -31,9 +31,7 @@ ${defineFunction("between")}
 ${defineFunction("distanceSquared")}
 ${defineFunction("linearConversion")}
 ${defineFunction("barycentricPointInsideTriangle")}
-${defineFunction("rayFromPoints")}
 ${defineFunction("rayFromDirection")}
-${defineFunction("normalizedRay")}
 
 /**
  * Encode the amount of light in the fragment color to accommodate limited walls.

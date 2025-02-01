@@ -49,6 +49,7 @@ ${defineFunction("lineLineIntersection")}
 ${defineFunction("planePointTo3d")}
 ${defineFunction("fromAngle")}
 ${defineFunction("lineSegmentIntersects")}
+${defineFunction("normalizedRay")}
 
 /**
  * Select a position on the sphere given vec3 between -1 and 1.

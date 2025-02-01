@@ -150,7 +150,7 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
   // t00 x t01 at W0 by definition.
   // t10 x t11 at W1 by definition.
   Ray2d[2] r0 = Ray2d[2](
-    normalizedRayFromDirection(W0, W0 - tangents0[0]), // Opposite direction from usual rayFromPoints
+    normalizedRayFromDirection(W0, W0 - tangents0[0]),
     normalizedRayFromDirection(W0, W0 - tangents0[1])
   );
   Ray2d[2] r1 = Ray2d[2](

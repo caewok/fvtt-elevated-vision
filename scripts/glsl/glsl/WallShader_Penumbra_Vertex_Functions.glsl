@@ -18,7 +18,6 @@ ${defineFunction("intersectRayPlane")}
 ${defineFunction("lineLineIntersection")}
 ${defineFunction("distanceSquared")}
 ${defineFunction("distanceToLine")}
-${defineFunction("rayFromPoints")}
 ${defineFunction("rayFromDirection")}
 ${defineFunction("normalizedRay")}
 
@@ -346,7 +345,7 @@ bool isInfiniteBottomShadow(in vec3 samplePt) {
 bool furthestShadowPoint(in vec3 samplePt, in vec3 wallPt, out vec3 ixP) {
   // For basic version, assume an unsized light: use the centerpoint.
   Plane canvasPlane = constructCanvasPlane();
-  Ray rAWall = rayFromPoints(samplePt, wallPt);
+  Ray rAWall = rayFromDirection(samplePt, wallPt - samplePt);
   return intersectRayPlane(rAWall, canvasPlane, ixP);
 }
 
@@ -365,7 +364,7 @@ vec2[3] shadowTriangle(in vec3 O, in Wall wall, in bool top) {
     // The triangle is a line.
     if ( isInfiniteTopShadow(O) ) {
       // Where O --> wall intersects the canvas edge.
-      Ray2d rWall = rayFromPoints(O.xy, a);
+      Ray2d rWall = rayFromDirection(O.xy, a - O.xy);
       Ray2d edge = whichCanvasEdge(rWall);
       vec2 ix;
       lineLineIntersection(rWall, edge, ix);
@@ -384,9 +383,9 @@ vec2[3] shadowTriangle(in vec3 O, in Wall wall, in bool top) {
   Plane canvasPlane = constructCanvasPlane();
   vec3 ixP;
   if ( !furthestShadowPoint(O, wallPt, ixP) ) return extendTriangleToCanvasEdge(vec2[3](O.xy, a, b));
-  Ray2d rWallIx = rayFromPoints(ixP.xy, b);
-  Ray2d rOa = rayFromPoints(O.xy, a);
-  Ray2d rOb = rayFromPoints(O.xy, b);
+  Ray2d rWallIx = rayFromDirection(ixP.xy, b - a);
+  Ray2d rOa = rayFromDirection(O.xy, a - O.xy);
+  Ray2d rOb = rayFromDirection(O.xy, b - O.xy);
   vec2 B;
   vec2 C;
   lineLineIntersection(rWallIx, rOa, B);
@@ -434,7 +433,7 @@ Ray2d nearFarMidRay(in Wall wall, in vec2[3] penumbraTri) {
   Ray2d lightRay2d = normalizedRayFromPoints(penumbraTri[0], wall.mid);
   vec2 closerIx;
   lineLineIntersection(lightRay2d, rayFromDirection(penumbraTri[closerIdx], wall.direction), closerIx);
-  return rayFromPoints(closerIx, penumbraTri[0]);
+  return rayFromDirection(closerIx, penumbraTri[0] - closerIx);
 }
 
 /**

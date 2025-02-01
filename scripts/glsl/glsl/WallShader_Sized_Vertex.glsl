@@ -46,6 +46,7 @@ ${defineFunction("quadraticIntersection")}
 ${defineFunction("distanceSquared")}
 ${defineFunction("projectRayDistanceSquared")}
 ${defineFunction("distanceToLine")}
+${defineFunction("normalizedRay")}
 
 /* ----- NOTE: Functions used by Penumbra Vertex Functions ----- */
 
@@ -185,7 +186,7 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
   // t00 x t01 at W0 by definition.
   // t10 x t11 at W1 by definition.
   Ray2d[2] r0 = Ray2d[2](
-    normalizedRayFromDirection(W0, W0 - tangents0[0]), // Flipped direction from usual rayFromPoints.
+    normalizedRayFromDirection(W0, W0 - tangents0[0]),
     normalizedRayFromDirection(W0, W0 - tangents0[1])
   );
   Ray2d[2] r1 = Ray2d[2](
@@ -412,7 +413,7 @@ bool shadowPoints(in Wall wall, in ShadowRays2d sideShadowRays, in vec2[3] farPe
 
   /* Debugging
   B = projectRay(normalizedRayFromPoints(A, B), 2000.0);
-  C = projectRay(normalizedRayFromPoints(A, C)), 2000.0);
+  C = projectRay(normalizedRayFromPoints(A, C), 2000.0);
   */
 
   return nearCollinear;

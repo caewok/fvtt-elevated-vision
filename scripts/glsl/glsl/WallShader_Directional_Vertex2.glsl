@@ -45,6 +45,7 @@ ${defineFunction("barycentric")}
 ${defineFunction("orient")}
 ${defineFunction("fromAngle")}
 ${defineFunction("almostEqual")}
+${defineFunction("normalizedRay")}
 
 /* ----- NOTE: Functions used by Penumbra Vertex Functions ----- */
 
@@ -410,14 +411,14 @@ void _shadowPointsNearCollinear(in ShadowRays2d sideShadowRays, in ShadowDirecti
   lineLineIntersection(rCanvasWallH, rG_umbra, I);
 
   // Penumbra intersect the FI line to form ∆ABC.
-  Ray2d rFI = rayFromPoints(F, I);
+  Ray2d rFI = rayFromDirection(F, I - F);
   lineLineIntersection(rD_penumbra, rFI, B);
   lineLineIntersection(rG_penumbra, rFI, C);
 
   // For debugging, extend B and C.
   /*
-  Ray2d rAB2 = rayFromPoints(A, B);
-  Ray2d rAC2 = rayFromPoints(A, C));
+  Ray2d rAB2 = rayFromDirection(A, B - A);
+  Ray2d rAC2 = rayFromDirection(A, C - A));
   B = projectRay(rAB2, 2.0);
   C = projectRay(rAC2, 2.0);
   */
