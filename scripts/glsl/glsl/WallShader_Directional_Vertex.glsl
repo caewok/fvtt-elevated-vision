@@ -346,7 +346,7 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   lineLineIntersection(rHWall, rG_umbra, I);
 
   // Penumbra intersect the FI line to form ∆ABC.
-  Ray2d rFI = rayFromDirection(F, I - F);
+  Ray2d rFI = rayFromPoints(F, I);
   lineLineIntersection(rD_penumbra, rFI, B);
   lineLineIntersection(rG_penumbra, rFI, C);
 

@@ -20,6 +20,7 @@ ${defineFunction("distanceSquared")}
 ${defineFunction("distanceToLine")}
 ${defineFunction("rayFromDirection")}
 ${defineFunction("normalizedRay")}
+${defineFunction("rayFromPoints")}
 
 #define EV_ENDPOINT_LINKED_UNBLOCKED  -10.0
 #define EV_ENDPOINT_LINKED_BLOCKED  -20.0
@@ -345,7 +346,7 @@ bool isInfiniteBottomShadow(in vec3 samplePt) {
 bool furthestShadowPoint(in vec3 samplePt, in vec3 wallPt, out vec3 ixP) {
   // For basic version, assume an unsized light: use the centerpoint.
   Plane canvasPlane = constructCanvasPlane();
-  Ray rAWall = rayFromDirection(samplePt, wallPt - samplePt);
+  Ray rAWall = rayFromPoints(samplePt, wallPt);
   return intersectRayPlane(rAWall, canvasPlane, ixP);
 }
 
@@ -364,7 +365,7 @@ vec2[3] shadowTriangle(in vec3 O, in Wall wall, in bool top) {
     // The triangle is a line.
     if ( isInfiniteTopShadow(O) ) {
       // Where O --> wall intersects the canvas edge.
-      Ray2d rWall = rayFromDirection(O.xy, a - O.xy);
+      Ray2d rWall = rayFromPoints(O.xy, a);
       Ray2d edge = whichCanvasEdge(rWall);
       vec2 ix;
       lineLineIntersection(rWall, edge, ix);
@@ -384,8 +385,8 @@ vec2[3] shadowTriangle(in vec3 O, in Wall wall, in bool top) {
   vec3 ixP;
   if ( !furthestShadowPoint(O, wallPt, ixP) ) return extendTriangleToCanvasEdge(vec2[3](O.xy, a, b));
   Ray2d rWallIx = rayFromDirection(ixP.xy, b - a);
-  Ray2d rOa = rayFromDirection(O.xy, a - O.xy);
-  Ray2d rOb = rayFromDirection(O.xy, b - O.xy);
+  Ray2d rOa = rayFromPoints(O.xy, a);
+  Ray2d rOb = rayFromPoints(O.xy, b);
   vec2 B;
   vec2 C;
   lineLineIntersection(rWallIx, rOa, B);
