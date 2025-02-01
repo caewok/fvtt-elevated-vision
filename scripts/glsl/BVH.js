@@ -63,8 +63,8 @@ function isOdd(n) { return n % 2 !== 0; }
 function planeRayIntersection(plane, ray) {
   const denom = glsl.dot(plane.normal, ray.direction);
   if ( denom.almostEqual(0) ) return null;
-  const p0l0 = plane.point.subtract(ray.origin);
-  return glsl.dot(p0l0, plane.normal) / denom;
+  const delta = plane.point.subtract(ray.origin);
+  return glsl.dot(delta, plane.normal) / denom;
 }
 
 /**
@@ -890,7 +890,10 @@ export class BVH {
       const node = this.nodes[n];
       const aabb = node.aabb;
       const r = n * width * channels;
-      arr[r] = node.leftFirst;
+
+      // For leftFirst, store the actual edge index, not the objIdx.
+      // This avoids having to pass through the objIdx array, which is highly problematic b/c of its variable (and large) size.
+      arr[r] = node.isLeaf ? node.objIdx[node.leftFirst] : node.leftFirst;
       arr[r + 1] = node.objCount;
       // Unused: arr[r + 2]
       // Unused: arr[r + 3]

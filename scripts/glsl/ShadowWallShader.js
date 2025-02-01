@@ -8,7 +8,7 @@ PIXI
 import { MODULE_ID } from "../const.js";
 import { sourceAtCanvasElevation } from "../util.js";
 import { AbstractEVShader } from "./AbstractEVShader.js";
-import { defineFunction, defineStruct } from "./GLSLFunctions.js";
+import { defineFunction, defineStruct, fetchGLSLCode, interpolate } from "./GLSLFunctions.js";
 
 
 // Calculation used to construct penumbra vertices from a set of light directions.
@@ -24,35 +24,6 @@ import { defineFunction, defineStruct } from "./GLSLFunctions.js";
 - Umbra: End of the penumbra; beginning of 100% shadow.
 */
 
-/**
- * Fetch GLSL code as text.
- * @param {string} fileName     The file name without extension or directory path.
- * @returns {string}
- */
-async function fetchGLSLCode(fileName) {
-  const resp = await foundry.utils.fetchWithTimeout(`modules/${MODULE_ID}/scripts/glsl/glsl/${fileName}.glsl`);
-  return resp.text();
-}
-
-/**
- * Limited string replacement so the imported glsl code can be treated as a template literal
- * (without using eval).
- * See https://stackoverflow.com/questions/29182244/convert-a-string-to-a-template-string
- * @param {string} str      String with ${} values to replace
- * @param {object} params   Valid objects that can be replaced; either variables or function names
- * @returns {string}
- */
-function interpolate(str, params = {}) {
-  // Add in some params that are always used.
-  params["PRECISION_VERTEX"] = PIXI.settings.PRECISION_VERTEX;
-  params.defineStruct = defineStruct;
-  params.defineFunction = defineFunction;
-
-  // Replace the names with the relevant values.
-  const names = Object.keys(params);
-  const vals = Object.values(params);
-  return new Function(...names, `return \`${str}\`;`)(...vals);
-}
 
 // NOTE: GLSL Shared functions and calculations.
 const PENUMBRA_VERTEX_FUNCTIONS = interpolate(

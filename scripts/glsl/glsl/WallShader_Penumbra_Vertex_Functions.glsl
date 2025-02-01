@@ -196,8 +196,8 @@ vec2 canvasEdgeIntersection(in Ray2d r) {
   int quad = directionalQuadrant(r.direction);
   int idx0 = (quad == TL || quad == TR) ? TL : BR;
   int idx1 = (quad == TL || quad == BL) ? TL : TR;
-  Ray2d edge0 = Ray2d(sceneRect[idx0], normalizedDirection(sceneRect[idx0], sceneRect[idx0 + 1]));
-  Ray2d edge1 = Ray2d(sceneRect[idx1], normalizedDirection(sceneRect[idx1], sceneRect[idx1 + 1]));
+  Ray2d edge0 = normalizedRayFromPoints(sceneRect[idx0], sceneRect[idx0 + 1]);
+  Ray2d edge1 = normalizedRayFromPoints(sceneRect[idx1], sceneRect[idx1 + 1]);
 
   float t0;
   float t1;
@@ -224,8 +224,8 @@ Ray2d whichCanvasEdge(in Ray2d r) {
   int idx0 = (quad + 4 - 1) % 4;
   int idx1 = quad;
   int idx2 = (quad + 1) % 4;
-  Ray2d edge0 = Ray2d(sceneRect[idx0], normalizedDirection(sceneRect[idx0], sceneRect[idx1]));
-  Ray2d edge1 = Ray2d(sceneRect[idx1], normalizedDirection(sceneRect[idx1], sceneRect[idx2]));
+  Ray2d edge0 = normalizedRayFromPoints(sceneRect[idx0], sceneRect[idx1]);
+  Ray2d edge1 = normalizedRayFromPoints(sceneRect[idx1], sceneRect[idx2]);
 
   float t0;
   float t1;
@@ -254,7 +254,7 @@ Ray2d infiniteShadowCanvasRay(in Ray2d[2] lightRays) {
   // wrong side of the light rays.)
   vec2 corner;
   vec2 midDir = (lightRays[0].direction + lightRays[1].direction) * 0.5;
-  if ( lineLineIntersection(edge0, edge1, corner) ) return Ray2d(corner, vec2(midDir.y, -midDir.x));
+  if ( lineLineIntersection(edge0, edge1, corner) ) return rayFromDirection(corner, vec2(midDir.y, -midDir.x));
 
    // The rays are striking parallel edges. Test quadrants to determine edge vs corner.
    int quad0 = directionalQuadrant(lightRays[0].direction);
@@ -262,12 +262,12 @@ Ray2d infiniteShadowCanvasRay(in Ray2d[2] lightRays) {
 
    // If adjacent quadrants, use scene edge.
    if ( quad0 == ((quad1 + 1) % 4) // +3 equivalent to -1 + 4
-     || quad0 == ((quad1 + 3) % 4) ) return whichCanvasEdge(Ray2d(lightRays[0].origin, midDir));
+     || quad0 == ((quad1 + 3) % 4) ) return whichCanvasEdge(rayFromDirection(lightRays[0].origin, midDir));
 
    // Opposing quadrants; must use the corner.
    // if ( quad0 == ((quad1 + 2) % 4) ) corner = (quad0 + 1) % 4;
    int cornerIdx = directionalQuadrant(midDir);
-   return Ray2d(constructSceneRect()[cornerIdx], vec2(midDir.y, -midDir.x));
+   return rayFromDirection(constructSceneRect()[cornerIdx], vec2(midDir.y, -midDir.x));
 }
 
 /**
@@ -284,8 +284,8 @@ vec2[3] extendTriangleToCanvasEdge(in vec2[3] tri) {
   vec2 A = tri[0];
   vec2 B = tri[1];
   vec2 C = tri[2];
-  Ray2d AB = Ray2d(A, normalizedDirection(A, B));
-  Ray2d AC = Ray2d(A, normalizedDirection(A, C));
+  Ray2d AB = normalizedRayFromPoints(A, B);
+  Ray2d AC = normalizedRayFromPoints(A, C);
   Ray2d canvasEdge = infiniteShadowCanvasRay(Ray2d[2](AB, AC));
 
   // Use the smaller triangle edge to intersect the canvas edge.
@@ -308,7 +308,7 @@ vec2[3] extendTriangleToCanvasEdge(in vec2[3] tri) {
   lineLineIntersection(smallerEdge, canvasEdge, ixSmaller);
 
   // Then connect using the B->C (or C->B) direction to the other triangle edge.
-  Ray2d newBC = Ray2d(ixSmaller, normalizedDirection(B, C));
+  Ray2d newBC = normalizedRayFromDirection(ixSmaller, C - B);
   vec2 ixLarger;
   lineLineIntersection(largerEdge, newBC, ixLarger);
 
@@ -343,7 +343,7 @@ bool isInfiniteBottomShadow(in vec3 samplePt) {
 bool furthestShadowPoint(in vec3 samplePt, in vec3 wallPt, out vec3 ixP) {
   // For basic version, assume an unsized light: use the centerpoint.
   Plane canvasPlane = constructCanvasPlane();
-  Ray rAWall = Ray(samplePt, wallPt - samplePt);
+  Ray rAWall = rayFromPoints(samplePt, wallPt);
   return intersectRayPlane(rAWall, canvasPlane, ixP);
 }
 
@@ -362,7 +362,7 @@ vec2[3] shadowTriangle(in vec3 O, in Wall wall, in bool top) {
     // The triangle is a line.
     if ( isInfiniteTopShadow(O) ) {
       // Where O --> wall intersects the canvas edge.
-      Ray2d rWall = Ray2d(O.xy, a - O.xy);
+      Ray2d rWall = rayFromPoints(O.xy, a);
       Ray2d edge = whichCanvasEdge(rWall);
       vec2 ix;
       lineLineIntersection(rWall, edge, ix);
@@ -381,9 +381,9 @@ vec2[3] shadowTriangle(in vec3 O, in Wall wall, in bool top) {
   Plane canvasPlane = constructCanvasPlane();
   vec3 ixP;
   if ( !furthestShadowPoint(O, wallPt, ixP) ) return extendTriangleToCanvasEdge(vec2[3](O.xy, a, b));
-  Ray2d rWallIx = Ray2d(ixP.xy, b - a);
-  Ray2d rOa = Ray2d(O.xy, a - O.xy);
-  Ray2d rOb = Ray2d(O.xy, b - O.xy);
+  Ray2d rWallIx = rayFromPoints(ixP.xy, b);
+  Ray2d rOa = rayFromPoints(O.xy, a);
+  Ray2d rOb = rayFromPoints(O.xy, b);
   vec2 B;
   vec2 C;
   lineLineIntersection(rWallIx, rOa, B);
@@ -406,7 +406,7 @@ bool canvasIntersectionRay(in vec3 nearFarDir, in Ray2d[2] sidePenumbra, in Wall
   vec3 wallTopMid = vec3(wall.mid, wall.top[0].z);
   vec3 canvasIx;
   if ( !isInfiniteTopShadow(nearFarDir)
-    && intersectRayPlane(Ray(wallTopMid, nearFarDir), canvasPlane, canvasIx) ) {
+    && intersectRayPlane(rayFromDirection(wallTopMid, nearFarDir), canvasPlane, canvasIx) ) {
     canvasRay.origin = canvasIx.xy;
     canvasRay.direction = wall.direction;
     return true;
@@ -428,10 +428,10 @@ Ray2d nearFarMidRay(in Wall wall, in vec2[3] penumbraTri) {
   float dist01 = distanceSquared(penumbraTri[0], penumbraTri[1]);
   float dist02 = distanceSquared(penumbraTri[0], penumbraTri[2]);
   int closerIdx = dist02 < dist01 ? 2 : 1;
-  Ray2d lightRay2d = Ray2d(penumbraTri[0], normalizedDirection(penumbraTri[0], wall.mid));
+  Ray2d lightRay2d = normalizedRayFromPoints(penumbraTri[0], wall.mid);
   vec2 closerIx;
-  lineLineIntersection(lightRay2d, Ray2d(penumbraTri[closerIdx], wall.direction), closerIx);
-  return Ray2d(closerIx, penumbraTri[0] - closerIx);
+  lineLineIntersection(lightRay2d, rayFromDirection(penumbraTri[closerIdx], wall.direction), closerIx);
+  return rayFromPoints(closerIx, penumbraTri[0]);
 }
 
 /**
@@ -441,8 +441,8 @@ Ray2d nearFarMidRay(in Wall wall, in vec2[3] penumbraTri) {
  * @returns {Ray2d}
  */
 Ray2d leftRightBisector(in Wall wall, in bool isCollinear) {
-  if ( isCollinear ) return Ray2d(wall.mid, wall.direction);
-  return Ray2d(wall.mid, vec2(-wall.direction.y, wall.direction.x));
+  if ( isCollinear ) return rayFromDirection(wall.mid, wall.direction);
+  return rayFromDirection(wall.mid, vec2(-wall.direction.y, wall.direction.x));
 }
 
 /**
@@ -452,8 +452,8 @@ Ray2d leftRightBisector(in Wall wall, in bool isCollinear) {
  * @returns {Ray2d}
  */
 Ray2d frontBackBisector(in Wall wall, in bool isCollinear) {
-  if ( !isCollinear ) return Ray2d(wall.mid, wall.direction);
-  return Ray2d(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
+  if ( !isCollinear ) return rayFromDirection(wall.mid, wall.direction);
+  return rayFromDirection(wall.top[1].xy, vec2(-wall.direction.y, wall.direction.x));
 }
 
 /**

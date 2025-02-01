@@ -79,7 +79,7 @@ void shrinkOverlappingWall(inout Wall wall) {
     // const containedIdx = circleContainsPoint(uLightPosition.xy, uLightSize, endpointsXY[0]) ? 0 : 1;
 
     // Move pixel away to be outside the circle.
-    vec2 newIx = projectRay(Ray2d(ixs[0], normalizedDirection(ixs[0], wall.top[1].xy)), 1.0);
+    vec2 newIx = projectRay(normalizedRayFromPoints(ixs[0], wall.top[1].xy), 1.0);
 
     // Update wall data.
     wall.top[0].xy = newIx.xy;
@@ -110,7 +110,7 @@ bool verticalTangents(in vec3 pt, out vec3[2] tangents) {
  * @returns {vec2} New circle center
  */
 vec2 offsetLightFromWall(in Wall wall, in float d) {
-  return projectRay(Ray2d(uLightPosition.xy, vec2(wall.direction.y, -wall.direction.x)), d);
+  return projectRay(rayFromDirection(uLightPosition.xy, vec2(wall.direction.y, -wall.direction.x)), d);
 }
 
 /**
@@ -148,14 +148,14 @@ vec2[3] makeIsoceles(in vec2[3] tri) {
   float dist2AC = distanceSquared(a, c);
   if ( almostEqual(dist2AB, dist2AC, 1.0e-08) ) return tri;
   if ( dist2AB > dist2AC ) {
-    Ray2d r = Ray2d(a, normalizedDirection(a, c));
+    Ray2d r = normalizedRayFromPoints(a, c);
     return vec2[3](
       a,
       b,
       projectRayDistanceSquared(r, dist2AB)
     );
   } else { // BC distance is larger.
-    Ray2d r = Ray2d(a, normalizedDirection(a, b));
+    Ray2d r = normalizedRayFromPoints(a, b);
     return vec2[3](
       a,
       projectRayDistanceSquared(r, dist2AC),
@@ -185,12 +185,12 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
   // t00 x t01 at W0 by definition.
   // t10 x t11 at W1 by definition.
   Ray2d[2] r0 = Ray2d[2](
-    Ray2d(W0, normalizedDirection(tangents0[0], W0)),
-    Ray2d(W0, normalizedDirection(tangents0[1], W0))
+    normalizedRayFromDirection(W0, W0 - tangents0[0]), // Flipped direction from usual rayFromPoints.
+    normalizedRayFromDirection(W0, W0 - tangents0[1])
   );
   Ray2d[2] r1 = Ray2d[2](
-    Ray2d(W1, normalizedDirection(tangents1[0], W1)),
-    Ray2d(W1, normalizedDirection(tangents1[1], W1))
+    normalizedRayFromDirection(W1, W1 - tangents1[0]),
+    normalizedRayFromDirection(W1, W1 - tangents1[1])
   );
 
   // If near-collinear:
@@ -241,8 +241,8 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
   vec3 lightCenter = almostEqual(distToWall, 0.0, 1.0e-06)
     ? vec3(offsetLightFromWall(wall, 0.5), uLightPosition.z) : uLightPosition;
   Ray2d[2] midpenumbra = Ray2d[2](
-    Ray2d(W0, normalizedDirection(lightCenter.xy, W0)),
-    Ray2d(W1, normalizedDirection(lightCenter.xy, W1))
+    normalizedRayFromPoints(W0, lightCenter.xy),
+    normalizedRayFromPoints(W1, lightCenter.xy)
   );
   */
 
@@ -285,7 +285,7 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
           break;
         }
         case BETWEEN_UP: {
-          umbra[i] = Ray2d(W, normalizedDirection(W, linkPt));
+          umbra[i] = normalizedRayFromPoints(W, linkPt);
           break;
         }
       }
@@ -384,7 +384,7 @@ bool shadowPoints(in Wall wall, in ShadowRays2d sideShadowRays, in vec2[3] farPe
     vec2 meanDir = (sideShadowRays.penumbra[0].direction + sideShadowRays.penumbra[1].direction) * 0.5;
     rabDir = vec2(-meanDir.y, meanDir.x);
   }
-  Ray2d rab = Ray2d(furthestPoint, rabDir);
+  Ray2d rab = rayFromDirection(furthestPoint, rabDir);
   lineLineIntersection(sideShadowRays.penumbra[0], rab, B);
   lineLineIntersection(sideShadowRays.penumbra[1], rab, C);
 
@@ -411,8 +411,8 @@ bool shadowPoints(in Wall wall, in ShadowRays2d sideShadowRays, in vec2[3] farPe
   */
 
   /* Debugging
-  B = projectRay(Ray2d(A, normalize(B - A)), 2000.0);
-  C = projectRay(Ray2d(A, normalize(C - A)), 2000.0);
+  B = projectRay(normalizedRayFromPoints(A, B), 2000.0);
+  C = projectRay(normalizedRayFromPoints(A, C)), 2000.0);
   */
 
   return nearCollinear;
@@ -431,11 +431,11 @@ vec2 circleBisectorPercentArea(in vec2 a, in vec2 b, in vec2 center, in float ra
   // Use a line perpendicular to AB that goes through center.
   vec2 dir = normalizedDirection(a, b);
   vec2 perpDir = vec2(dir.y, -dir.x); // Moves CCW to a --> b
-  Ray2d perpRay = Ray2d(center, perpDir);
+  Ray2d perpRay = rayFromDirection(center, perpDir);
   vec2 edgeCCW = projectRay(perpRay, radius);
   vec2 edgeCW = projectRay(perpRay, -radius);
   vec2 ix;
-  lineLineIntersection(perpRay, Ray2d(a, normalizedDirection(a, b)), ix);
+  lineLineIntersection(perpRay, normalizedRayFromPoints(a, b), ix);
   float totalDist = radius * 2.0;
   float ccwDist = distance(ix, edgeCCW);
   float cwDist = distance(ix, edgeCW);
@@ -495,9 +495,9 @@ void defineVaryings(in Wall wall, in vec2[3] penumbraTri, in vec2 F, in vec2 I, 
     // edge perpendicular to the wall.
     vec2 perpDir = vec2(wall.direction.y, -wall.direction.x);
     if ( distanceSquared(W1, I) < distanceSquared(W1, F) ) {
-      lineLineIntersection(Ray2d(W1, normalizedDirection(W1, F)), Ray2d(I, perpDir), umbraTri[2]); // New F.
+      lineLineIntersection(normalizedRayFromPoints(W1, F), rayFromDirection(I, perpDir), umbraTri[2]); // New F.
     } else {
-      lineLineIntersection(Ray2d(W1, normalizedDirection(W1, I)), Ray2d(F, perpDir), umbraTri[1]); // New I.
+      lineLineIntersection(normalizedRayFromPoints(W1, I), rayFromDirection(F, perpDir), umbraTri[1]); // New I.
     }
   } else {
     vec2 ixI;

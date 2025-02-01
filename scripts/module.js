@@ -137,6 +137,7 @@ Hooks.once("init", function() {
      *   - WebGLShadows
      *   - WebGLShadowsSingleWall
      *   - WebGLShadowsMultiWall
+     *   - WebGLShadowsBVH
      * @type {class}
      */
     webGLShadowClass: WebGLShadows,

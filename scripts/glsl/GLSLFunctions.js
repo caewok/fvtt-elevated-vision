@@ -1,9 +1,44 @@
 /* globals
-
+foundry,
+PIXI
 */
 "use strict";
 
-// GLSL functions
+import { MODULE_ID } from "../const.js";
+
+// NOTE: Utility functions
+
+/**
+ * Fetch GLSL code as text.
+ * @param {string} fileName     The file name without extension or directory path.
+ * @returns {string}
+ */
+export async function fetchGLSLCode(fileName) {
+  const resp = await foundry.utils.fetchWithTimeout(`modules/${MODULE_ID}/scripts/glsl/glsl/${fileName}.glsl`);
+  return resp.text();
+}
+
+/**
+ * Limited string replacement so the imported glsl code can be treated as a template literal
+ * (without using eval).
+ * See https://stackoverflow.com/questions/29182244/convert-a-string-to-a-template-string
+ * @param {string} str      String with ${} values to replace
+ * @param {object} params   Valid objects that can be replaced; either variables or function names
+ * @returns {string}
+ */
+export function interpolate(str, params = {}) {
+  // Add in some params that are always used.
+  params.PRECISION_VERTEX = PIXI.settings.PRECISION_VERTEX;
+  params.defineStruct = defineStruct;
+  params.defineFunction = defineFunction;
+
+  // Replace the names with the relevant values.
+  const names = Object.keys(params);
+  const vals = Object.values(params);
+  return new Function(...names, `return \`${str}\`;`)(...vals); /* eslint-disable-line no-new-func */
+}
+
+// NOTE: GLSL functions
 
 export let GLSLFunctions = {};
 export let GLSLStructs = {};
@@ -13,8 +48,8 @@ export let GLSLStructs = {};
  * @param {string} method
  * @returns {string}
  */
-export const defineFunction = (method, lookup = method) =>
-`#ifndef EV_${method.toUpperCase()}
+export const defineFunction = (method, lookup = method) => `
+#ifndef EV_${method.toUpperCase()}
 #define EV_${method.toUpperCase()} true
 ${GLSLFunctions[lookup]}
 #endif
@@ -25,11 +60,12 @@ ${GLSLFunctions[lookup]}
  * @param {string} struct
  * @returns {string}
  */
-export const defineStruct = struct =>
-`#ifndef EV_${struct.toUpperCase()}
+export const defineStruct = struct => `
+#ifndef EV_${struct.toUpperCase()}
 #define EV_${struct.toUpperCase()} true
 ${GLSLStructs[struct]}
-#endif`;
+#endif
+`;
 
 
 // NOTE: Utility
@@ -38,8 +74,7 @@ GLSLFunctions.isEven =
 `
 bool isEven(in float n) { n % 2.0 == 0.0; }
 bool isEven(in int n) ( n % 2 == 0; )
-
-`
+`;
 
 GLSLFunctions.almostEqual =
 `
@@ -619,9 +654,7 @@ vec4 interpolateBarycentric(in vec3 bary, in vec4 a, in vec4 b, in vec4 c) {
   vec4 b1 = b * bary.y;
   vec4 c1 = c * bary.z;
   return a1 + b1 + c1;
-}
-
-`
+}`;
 
 
 // NOTE: Ray struct
@@ -633,6 +666,8 @@ GLSLStructs.Ray =
 struct Ray {
   vec3 origin;
   vec3 direction;
+  vec3 invDirection; // Store for testing against bounds.
+  float t2; // Store for testing against bounds and intersections and projecting. dot(direction, direction) or squared ray distance.
 };`;
 
 GLSLStructs.Ray2d =
@@ -643,22 +678,48 @@ GLSLStructs.Ray2d =
 struct Ray2d {
   vec2 origin;
   vec2 direction;
+  vec2 invDirection; // Store for testing against bounds.
+  float t2; // Store for testing against bounds and intersections and projecting. dot(direction, direction) or squared ray distance.
 };`;
 
-GLSLFunctions.rayFromPoints =
+GLSLFunctions.rayFromDirection =
 `
 ${defineStruct("Ray")}
 ${defineStruct("Ray2d")}
 
 /**
+ * Construct a ray from a point and a direction.
+ * t2 is assumed to be the direction magnitude squared.
+ */
+Ray rayFromDirection(in vec3 origin, in vec3 direction) {
+  // Magnitude squared is dot(vec, vec)
+  return Ray(origin, direction, 1.0 / direction, dot(direction, direction));
+}
+
+Ray2d rayFromDirection(in vec2 origin, in vec2 direction) {
+  // Magnitude squared is dot(vec, vec)
+  return Ray2d(origin, direction, 1.0 / direction, dot(direction, direction));
+}
+
+`;
+
+GLSLFunctions.rayFromPoints =
+`
+${defineStruct("Ray")}
+${defineStruct("Ray2d")}
+${defineFunction("distanceSquared")}
+
+/**
  * Construct a ray from two points: origin and towards point.
  */
 Ray rayFromPoints(in vec3 origin, in vec3 towardsPoint) {
-  return Ray(origin, towardsPoint - origin);
+  vec3 direction = towardsPoint - origin;
+  return Ray(origin, direction, 1.0 / direction, distanceSquared(origin, towardsPoint));
 }
 
 Ray2d rayFromPoints(in vec2 origin, in vec2 towardsPoint) {
-  return Ray2d(origin, towardsPoint - origin);
+  vec2 direction = towardsPoint - origin;
+  return Ray2d(origin, direction, 1.0 / direction, distanceSquared(origin, towardsPoint));
 }`;
 
 
@@ -671,11 +732,21 @@ ${defineStruct("Ray2d")}
  * Normalize the ray direction.
  */
 Ray normalizedRayFromPoints(in vec3 origin, in vec3 towardsPoint) {
-  return Ray(r.origin, normalize(towardsPoint - origin));
+  return normalizedRayFromDirection(origin, towardsPoint - origin);
 }
 
 Ray2d normalizedRayFromPoints(in vec2 origin, in vec2 towardsPoint) {
-  return Ray2d(r.origin, normalize(towardsPoint - origin));
+  return normalizedRayFromDirection(origin, towardsPoint - origin);
+}
+
+Ray normalizedRayFromDirection(in vec3 origin, in vec3 direction) {
+  vec3 nd = normalize(direction);
+  return Ray(r.origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
+}
+
+Ray2d normalizedRayFromDirection(in vec2 origin, in vec2 direction) {
+  vec3 nd = normalize(direction);
+  return Ray2d(r.origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
 }`;
 
 GLSLFunctions.projectRay =
@@ -706,12 +777,12 @@ ${defineFunction("projectRay")}
  * If ray is normalized, this will project the ray the given distance.
  */
 vec2 projectRayDistance(in Ray2d r, in float distance) {
-  float t = distance / length(r.direction);
+  float t = distance / sqrt(r.t2); // length(r.direction);
   return projectRay(r, t);
 }
 
 vec3 projectRayDistance(in Ray r, in float distance) {
-  float t = distance / length(r.direction);
+  float t = distance / sqrt(r.t2); // length(r.direction);
   return projectRay(r, t);
 }`;
 
@@ -727,13 +798,13 @@ ${defineFunction("projectRay")}
  */
 vec2 projectRayDistanceSquared(in Ray2d r, in float distance2) {
   float sign = sign(distance2);
-  float t = sign * sqrt(abs(distance2)) / dot(r.direction, r.direction); // Divide by magnitude(r.direction)
+  float t = sign * sqrt(abs(distance2)) / r.t2;  // dot(r.direction, r.direction); // Divide by magnitude(r.direction)
   return projectRay(r, t);
 }
 
 vec3 projectRayDistanceSquared(in Ray r, in float distance2) {
   float sign = sign(distance2);
-  float t = sign * sqrt(abs(distance2)) / dot(r.direction, r.direction); // Divide by magnitude(r.direction)
+  float t = sign * sqrt(abs(distance2)) / r.t2; // dot(r.direction, r.direction); // Divide by magnitude(r.direction)
   return projectRay(r, t);
 }`;
 
@@ -857,16 +928,16 @@ bool lineLineIntersection(in Ray2d a, in Ray2d b, out vec2 ix) {
 }
 
 bool lineLineIntersection(vec2 a, vec2 b, vec2 c, vec2 d, out vec2 ix) {
-  Ray2d rayA = Ray2d(a, b - a);
-  Ray2d rayB = Ray2d(c, d - c);
+  Ray2d rayA = rayFromPoints(a, b);
+  Ray2d rayB = rayFromPoints(c, d);
   return lineLineIntersection(rayA, rayB, ix);
 }`;
 
 GLSLFunctions.lineLineIntersects =
 `
 bool lineLineIntersects(vec2 a, vec2 b, vec2 c, vec2 d) {
-  Ray2d rayA = Ray2d(a, b - a);
-  Ray2d rayB = Ray2d(c, d - c);
+  Ray2d rayA = rayFromPoints(a, b);
+  Ray2d rayB = rayFromPoints(c, d);
   return lineLineIntersects(rayA, rayB)
 }
 
@@ -1282,7 +1353,7 @@ vec2 to2dCutaway(in vec3 currPt, in vec3 start, in vec3 end) {
  * @returns {vec3}
  */
 vec3 from2dCutaway(in vec2 cutawayPt, in vec3 start, in vec3 end) {
-  Ray2d r2d = Ray2d(start.xy, normalize(end.xy - start.xy));
+  Ray2d r2d = normalizedRayFromPoints(start.xy, end.xy);
   vec2 xy = projectRay(r2d, cutawayPt.x);
   return vec3(xy, cutawayPt.y);
 }

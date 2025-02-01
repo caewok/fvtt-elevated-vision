@@ -158,7 +158,7 @@ float shadowPercentage() {
   vec3 a = vec3(vVertexPosition, elevation);
   for ( int i = 0; i < NUM_DIRS; i += 1 ) {
     vec3 dir = dirs[i];
-    numCollisions += wallCollision(Ray2d(a, dir));
+    numCollisions += wallCollision(rayFromDirection(a, dir));
   }
 
   // TODO: Add in adjacent pixel values as part of the average here.
