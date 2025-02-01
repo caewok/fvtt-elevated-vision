@@ -57,7 +57,7 @@ ${defineFunction("fromAngle")}
 int closerEndpoint(vec2[2] pts) {
   vec2 dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0) * -1.0;
   vec2 perpDir = vec2(dirMid.y, -dirMid.x);
-  Ray2d r01 = Ray2d(pts[0], perpDir);
+  Ray2d r01 = rayFromDirection(pts[0], perpDir);
   vec2 b = projectRay(r01, 1.0);
   return int(COUNTERCLOCKWISE(orient(pts[0], b, pts[1])));
 }
@@ -146,10 +146,10 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
 
   // Build the rays for each tangent to associate them with the correct wall point.
   Ray2d[4] tangentRays = Ray2d[4](
-    Ray2d(wall0, sideShadowDirs0.umbra),
-    Ray2d(wall1, sideShadowDirs1.umbra),
-    Ray2d(wall0, sideShadowDirs0.penumbra),
-    Ray2d(wall1, sideShadowDirs1.penumbra)
+    rayFromDirection(wall0, sideShadowDirs0.umbra),
+    rayFromDirection(wall1, sideShadowDirs1.umbra),
+    rayFromDirection(wall0, sideShadowDirs0.penumbra),
+    rayFromDirection(wall1, sideShadowDirs1.penumbra)
   );
 
   // Penumbra are on the outside, umbra are on the inside.
@@ -330,10 +330,10 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
     Plane canvasPlane = constructCanvasPlane();
     vec3 canvasIx;
     // (Could use D and G but requires intersecting the plane twice.)
-    // intersectRayPlane(Ray(vec3(D, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
-    // intersectRayPlane(Ray(vec3(G, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
-    intersectRayPlane(Ray(vec3(wall.mid, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
-    Ray2d rCanvasWall = Ray2d(canvasIx.xy, wall.direction);
+    // intersectRayPlane(rayFromDirection(vec3(D, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
+    // intersectRayPlane(rayFromDirection(vec3(G, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
+    intersectRayPlane(rayFromDirection(vec3(wall.mid, wall.top[0].z), farShadowDirs.penumbra), canvasPlane, canvasIx);
+    Ray2d rCanvasWall = rayFromDirection(canvasIx.xy, wall.direction);
     canvasEdgeD = rCanvasWall;
     canvasEdgeG = rCanvasWall;
   }
@@ -341,13 +341,13 @@ bool shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadowD
   lineLineIntersection(canvasEdgeG, rG_penumbra, H);
 
   // F and I are on the line parallel to the wall that intersects E and H, accordingly.
-  Ray2d rEWall = Ray2d(E, wall.direction);
-  Ray2d rHWall = Ray2d(H, wall.direction);
+  Ray2d rEWall = rayFromDirection(E, wall.direction);
+  Ray2d rHWall = rayFromDirection(H, wall.direction);
   lineLineIntersection(rEWall, rD_umbra, F);
   lineLineIntersection(rHWall, rG_umbra, I);
 
   // Penumbra intersect the FI line to form ∆ABC.
-  Ray2d rFI = Ray2d(F, I - F);
+  Ray2d rFI = rayFromDirection(F, I - F);
   lineLineIntersection(rD_penumbra, rFI, B);
   lineLineIntersection(rG_penumbra, rFI, C);
 
@@ -468,24 +468,24 @@ void defineFlats(in Wall wall,
 
       // TODO: Can we either make the far/near directions into rays or calculate them here?
       // Determine canvas intersection of the light ray running through wall midpoint. See varyingWallRatio.
-      Ray lightRay = Ray(vec3(wall.mid, wall.top[0].z), farShadowDirs.umbra);
+      Ray lightRay = rayFromDirection(vec3(wall.mid, wall.top[0].z), farShadowDirs.umbra);
       vec3 canvasIx;
       intersectRayPlane(lightRay, canvasPlane, canvasIx);
-      lineLineIntersection(wallRatioRay, Ray2d(canvasIx.xy, wall.direction), fFarRatios[UMBRA]);
+      lineLineIntersection(wallRatioRay, rayFromDirection(canvasIx.xy, wall.direction), fFarRatios[UMBRA]);
     }
 
     if ( hasNearPenumbra ) {
-      Ray lightRay = Ray(vec3(wall.mid, wall.bottom[0].z), nearShadowDirs.penumbra);
+      Ray lightRay = rayFromDirection(vec3(wall.mid, wall.bottom[0].z), nearShadowDirs.penumbra);
       vec3 canvasIx;
       intersectRayPlane(lightRay, canvasPlane, canvasIx);
-      lineLineIntersection(wallRatioRay, Ray2d(canvasIx.xy, wall.direction), fNearRatios[PENUMBRA]);
+      lineLineIntersection(wallRatioRay, rayFromDirection(canvasIx.xy, wall.direction), fNearRatios[PENUMBRA]);
     }
 
     if ( hasNearUmbra ) {
-      Ray lightRay = Ray(vec3(wall.mid, wall.bottom[0].z), nearShadowDirs.umbra);
+      Ray lightRay = rayFromDirection(vec3(wall.mid, wall.bottom[0].z), nearShadowDirs.umbra);
       vec3 canvasIx;
       intersectRayPlane(lightRay, canvasPlane, canvasIx);
-      lineLineIntersection(wallRatioRay, Ray2d(canvasIx.xy, wall.direction), fNearRatios[UMBRA]);
+      lineLineIntersection(wallRatioRay, rayFromDirection(canvasIx.xy, wall.direction), fNearRatios[UMBRA]);
     }
   }
 }

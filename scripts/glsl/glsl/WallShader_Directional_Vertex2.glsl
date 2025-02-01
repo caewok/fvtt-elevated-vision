@@ -57,7 +57,7 @@ ${defineFunction("almostEqual")}
 int closerEndpoint(vec2[2] pts) {
   vec2 dirMid = fromAngle(vec2(0.0), uAzimuth, 1.0) * -1.0;
   vec2 perpDir = vec2(dirMid.y, -dirMid.x);
-  Ray2d r01 = Ray2d(pts[0], perpDir);
+  Ray2d r01 = rayFromDirection(pts[0], perpDir);
   vec2 b = projectRay(r01, 1.0);
   return int(CLOCKWISE(orient(pts[0], b, pts[1])));
 }
@@ -147,10 +147,10 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
 
   // Build the rays for each tangent to associate them with the correct wall point.
   Ray2d[4] tangentRays = Ray2d[4](
-    Ray2d(wall0, sideShadowDirs0.umbra),
-    Ray2d(wall1, sideShadowDirs1.umbra),
-    Ray2d(wall0, sideShadowDirs0.penumbra),
-    Ray2d(wall1, sideShadowDirs1.penumbra)
+    rayFromDirection(wall0, sideShadowDirs0.umbra),
+    rayFromDirection(wall1, sideShadowDirs1.umbra),
+    rayFromDirection(wall0, sideShadowDirs0.penumbra),
+    rayFromDirection(wall1, sideShadowDirs1.penumbra)
   );
 
   // Penumbra are on the outside, umbra are on the inside.
@@ -315,8 +315,8 @@ void _shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadow
   float[3] zDelta = _calculateZChangeRays();
   vec3 canvasIxD;
   vec3 canvasIxG;
-  Ray rD = Ray(vec3(rD_penumbra.origin, wall.top[0].z), normalize(vec3(rD_penumbra.direction, zDelta[PENUMBRA])));
-  Ray rG = Ray(vec3(rG_penumbra.origin, wall.top[0].z), normalize(vec3(rG_penumbra.direction, zDelta[PENUMBRA])));
+  Ray rD = rayFromDirection(vec3(rD_penumbra.origin, wall.top[0].z), normalize(vec3(rD_penumbra.direction, zDelta[PENUMBRA])));
+  Ray rG = rayFromDirection(vec3(rG_penumbra.origin, wall.top[0].z), normalize(vec3(rG_penumbra.direction, zDelta[PENUMBRA])));
   intersectRayPlane(rD, canvasPlane, canvasIxD);
   intersectRayPlane(rG, canvasPlane, canvasIxG);
   E = canvasIxD.xy;
@@ -324,8 +324,8 @@ void _shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadow
 
   vec3 canvasIxDu;
   vec3 canvasIxGu;
-  Ray rDu = Ray(vec3(rD_umbra.origin, wall.top[0].z), normalize(vec3(rD_umbra.direction, zDelta[PENUMBRA])));
-  Ray rGu = Ray(vec3(rG_umbra.origin, wall.top[0].z), normalize(vec3(rG_umbra.direction, zDelta[PENUMBRA])));
+  Ray rDu = rayFromDirection(vec3(rD_umbra.origin, wall.top[0].z), normalize(vec3(rD_umbra.direction, zDelta[PENUMBRA])));
+  Ray rGu = rayFromDirection(vec3(rG_umbra.origin, wall.top[0].z), normalize(vec3(rG_umbra.direction, zDelta[PENUMBRA])));
   intersectRayPlane(rDu, canvasPlane, canvasIxDu);
   intersectRayPlane(rGu, canvasPlane, canvasIxGu);
   F = canvasIxDu.xy;
@@ -335,7 +335,7 @@ void _shadowPoints(in ShadowRays2d sideShadowRays, in ShadowDirections farShadow
   // E->F is parallel to the wall
   // H->I is paralle to the wall
   // Forms a quad using the canvas wall as the far edge.
-  Ray2d rCanvasWallE = Ray2d(E, wall.direction);
+  Ray2d rCanvasWallE = rayFromDirection(E, wall.direction);
   lineLineIntersection(rD_penumbra, rCanvasWallE, B);
   lineLineIntersection(rG_penumbra, rCanvasWallE, C);
 }
@@ -397,28 +397,28 @@ void _shadowPointsNearCollinear(in ShadowRays2d sideShadowRays, in ShadowDirecti
   float[3] zDelta = _calculateZChangeRays();
   vec3 canvasIxD;
   vec3 canvasIxG;
-  Ray rD = Ray(vec3(rD_penumbra.origin, wall.top[0].z), normalize(vec3(rD_penumbra.direction, zDelta[PENUMBRA])));
-  Ray rG = Ray(vec3(rG_penumbra.origin, wall.top[0].z), normalize(vec3(rG_penumbra.direction, zDelta[PENUMBRA])));
+  Ray rD = rayFromDirection(vec3(rD_penumbra.origin, wall.top[0].z), normalize(vec3(rD_penumbra.direction, zDelta[PENUMBRA])));
+  Ray rG = rayFromDirection(vec3(rG_penumbra.origin, wall.top[0].z), normalize(vec3(rG_penumbra.direction, zDelta[PENUMBRA])));
   intersectRayPlane(rD, canvasPlane, canvasIxD);
   intersectRayPlane(rG, canvasPlane, canvasIxG);
   E = canvasIxD.xy;
   H = canvasIxG.xy;
 
   // Forms a quad using the canvas wall as the far edge.
-  Ray2d rCanvasWallE = Ray2d(E, wall.direction);
-  Ray2d rCanvasWallH = Ray2d(H, wall.direction);
+  Ray2d rCanvasWallE = rayFromDirection(E, wall.direction);
+  Ray2d rCanvasWallH = rayFromDirection(H, wall.direction);
   lineLineIntersection(rCanvasWallE, rD_umbra, F);
   lineLineIntersection(rCanvasWallH, rG_umbra, I);
 
   // Penumbra intersect the FI line to form ∆ABC.
-  Ray2d rFI = Ray2d(F, I - F);
+  Ray2d rFI = rayFromDirection(F, I - F);
   lineLineIntersection(rD_penumbra, rFI, B);
   lineLineIntersection(rG_penumbra, rFI, C);
 
   // For debugging, extend B and C.
   /*
-  Ray2d rAB2 = Ray2d(A, B - A);
-  Ray2d rAC2 = Ray2d(A, C - A));
+  Ray2d rAB2 = rayFromDirection(A, B - A);
+  Ray2d rAC2 = rayFromDirection(A, C - A));
   B = projectRay(rAB2, 2.0);
   C = projectRay(rAC2, 2.0);
   */
@@ -561,8 +561,8 @@ void main() {
 
   // Extend A along the rays.
   /*
-  Ray2d r0 = Ray2d(A, normalize(sideShadowRays.penumbra[0].direction.xy));
-  Ray2d r1 = Ray2d(A, normalize(sideShadowRays.penumbra[1].direction.xy));
+  Ray2d r0 = rayFromDirection(A, normalize(sideShadowRays.penumbra[0].direction.xy));
+  Ray2d r1 = rayFromDirection(A, normalize(sideShadowRays.penumbra[1].direction.xy));
   vec2 B = projectRay(r0, 2000.0);
   vec2 C = projectRay(r1, 2000.0);
   penumbraTri[0] = A;

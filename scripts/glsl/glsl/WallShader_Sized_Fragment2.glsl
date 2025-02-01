@@ -174,7 +174,7 @@ vec2[2] linkedWallPoints() {
     vec2 WO = wallEndpoints[1 - i];
 
     // Extend wall straight out.
-    if ( fLinkValues[i] == EV_ENDPOINT_LINKED_BLOCKED ) linkPoints[i] = projectRay(Ray2d(W, normalizedDirection(WO, W)), maxR2());
+    if ( fLinkValues[i] == EV_ENDPOINT_LINKED_BLOCKED ) linkPoints[i] = projectRay(rayFromDirection(W, normalizedDirection(WO, W)), maxR2());
 
     // Extend wall along the link angle.
     else if ( fLinkValues[i] != EV_ENDPOINT_LINKED_UNBLOCKED ) linkPoints[i] = fromAngle(W, fLinkValues[i], maxR2());

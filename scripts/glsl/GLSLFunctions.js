@@ -645,6 +645,26 @@ struct Ray2d {
   vec2 direction;
 };`;
 
+GLSLFunctions.rayFromDirection =
+`
+${defineStruct("Ray")}
+${defineStruct("Ray2d")}
+
+/**
+ * Construct a ray from a point and a direction.
+ * t2 is assumed to be the direction magnitude squared.
+ */
+Ray rayFromDirection(in vec3 origin, in vec3 direction) {
+  // Magnitude squared is dot(vec, vec)
+  return Ray(origin, direction);
+}
+
+Ray2d rayFromDirection(in vec2 origin, in vec2 direction) {
+  // Magnitude squared is dot(vec, vec)
+  return Ray2d(origin, direction);
+}
+`;
+
 GLSLFunctions.rayFromPoints =
 `
 ${defineStruct("Ray")}
@@ -654,11 +674,11 @@ ${defineStruct("Ray2d")}
  * Construct a ray from two points: origin and towards point.
  */
 Ray rayFromPoints(in vec3 origin, in vec3 towardsPoint) {
-  return Ray(origin, towardsPoint - origin);
+  return rayFromDirection(origin, towardsPoint - origin);
 }
 
 Ray2d rayFromPoints(in vec2 origin, in vec2 towardsPoint) {
-  return Ray2d(origin, towardsPoint - origin);
+  return rayFromDirection(origin, towardsPoint - origin);
 }`;
 
 
@@ -837,6 +857,7 @@ float distanceSquaredToSegment(in vec2 c, in vec2 a, in vec2 b) {
 GLSLFunctions.lineLineIntersection =
 `
 ${defineFunction("cross2d")}
+${defineFunction("rayFromDirection")}
 
 bool lineLineIntersection(in Ray2d a, in Ray2d b, out float t) {
   float denom = cross2d(a.direction, b.direction);
@@ -857,16 +878,16 @@ bool lineLineIntersection(in Ray2d a, in Ray2d b, out vec2 ix) {
 }
 
 bool lineLineIntersection(vec2 a, vec2 b, vec2 c, vec2 d, out vec2 ix) {
-  Ray2d rayA = Ray2d(a, b - a);
-  Ray2d rayB = Ray2d(c, d - c);
+  Ray2d rayA = rayFromDirection(a, b - a);
+  Ray2d rayB = rayFromDirection(c, d - c);
   return lineLineIntersection(rayA, rayB, ix);
 }`;
 
 GLSLFunctions.lineLineIntersects =
 `
 bool lineLineIntersects(vec2 a, vec2 b, vec2 c, vec2 d) {
-  Ray2d rayA = Ray2d(a, b - a);
-  Ray2d rayB = Ray2d(c, d - c);
+  Ray2d rayA = rayFromDirection(a, b - a);
+  Ray2d rayB = rayFromDirection(c, d - c);
   return lineLineIntersects(rayA, rayB)
 }
 
@@ -1202,9 +1223,10 @@ struct Circle  {
 GLSLFunctions.tangentPoints =
 `
 ${defineStruct("Circle")}
+${defineStruct("Ray2d")}
 ${defineFunction("almostEqual")}
 ${defineFunction("projectRay")}
-${defineStruct("Ray2d")}
+${defineFunction("rayFromDirection")}
 
 /*
  * Locate the tangents to a circle from a point.
@@ -1282,7 +1304,7 @@ vec2 to2dCutaway(in vec3 currPt, in vec3 start, in vec3 end) {
  * @returns {vec3}
  */
 vec3 from2dCutaway(in vec2 cutawayPt, in vec3 start, in vec3 end) {
-  Ray2d r2d = Ray2d(start.xy, normalize(end.xy - start.xy));
+  Ray2d r2d = rayFromDirection(start.xy, normalize(end.xy - start.xy));
   vec2 xy = projectRay(r2d, cutawayPt.x);
   return vec3(xy, cutawayPt.y);
 }
