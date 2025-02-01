@@ -693,6 +693,7 @@ GLSLFunctions.normalizedRay =
 `
 ${defineStruct("Ray")}
 ${defineStruct("Ray2d")}
+${defineFunction("normalizedDirection")}
 
 /**
  * Normalize the ray direction.
@@ -700,12 +701,12 @@ ${defineStruct("Ray2d")}
  * You may want to set it to distanceSquared(origin, towardsPoint).
  */
 Ray normalizedRayFromPoints(in vec3 origin, in vec3 towardsPoint) {
-  vec3 direction = normalize(towardsPoint - origin);
+  vec3 direction = normalizedDirection(origin, towardsPoint);
   return Ray(origin, direction, 1.0 / direction, 1.0);
 }
 
 Ray2d normalizedRayFromPoints(in vec2 origin, in vec2 towardsPoint) {
-  vec2 direction = normalize(towardsPoint - origin);
+  vec2 direction = normalizedDirection(origin, towardsPoint);
   return Ray2d(origin, direction, 1.0 / direction, 1.0);
 }
 
