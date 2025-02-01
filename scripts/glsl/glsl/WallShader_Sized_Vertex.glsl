@@ -241,8 +241,8 @@ ShadowRays2d calculateSideShadowRays(in Wall wall) {
   vec3 lightCenter = almostEqual(distToWall, 0.0, 1.0e-06)
     ? vec3(offsetLightFromWall(wall, 0.5), uLightPosition.z) : uLightPosition;
   Ray2d[2] midpenumbra = Ray2d[2](
-    normalizedRayFromPoints(W0, lightCenter.xy),
-    normalizedRayFromPoints(W1, lightCenter.xy)
+    normalizedRayFromDirection(W0, W0 - lightCenter.xy),
+    normalizedRayFromDirection(W1, W1 - lightCenter.xy)
   );
   */
 
