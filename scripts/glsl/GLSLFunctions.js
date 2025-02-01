@@ -696,16 +696,23 @@ ${defineStruct("Ray2d")}
 
 /**
  * Normalize the ray direction.
+ * The ray t2 value in this case is set to 1.0, to match the ray normalization.
+ * You may want to set it to distanceSquared(origin, towardsPoint).
  */
 Ray normalizedRayFromPoints(in vec3 origin, in vec3 towardsPoint) {
   vec3 direction = normalize(towardsPoint - origin);
-  return Ray(r.origin, direction, 1.0 / direction, distanceSquared(origin, towardsPoint));
+  return Ray(r.origin, direction, 1.0 / direction, 1.0);
 }
 
 Ray2d normalizedRayFromPoints(in vec2 origin, in vec2 towardsPoint) {
   vec2 direction = normalize(towardsPoint - origin);
-  return Ray2d(r.origin, direction, 1.0 / direction, distanceSquared(origin, towardsPoint));
+  return Ray2d(r.origin, direction, 1.0 / direction, 1.0);
 
+/**
+ * Normalize the ray direction.
+ * The ray t2 value in this case is set to 1.0, to match the ray normalization.
+ * You may want to set it to length(direction).
+ */
 Ray normalizedRayFromDirection(in vec3 origin, in vec3 direction) {
   vec3 nd = normalize(direction);
   return Ray(r.origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
@@ -745,12 +752,12 @@ ${defineFunction("projectRay")}
  * If ray is normalized, this will project the ray the given distance.
  */
 vec2 projectRayDistance(in Ray2d r, in float distance) {
-  float t = distance / length(r.direction);
+  float t = distance / sqrt(r.t2); // length(r.direction);
   return projectRay(r, t);
 }
 
 vec3 projectRayDistance(in Ray r, in float distance) {
-  float t = distance / length(r.direction);
+  float t = distance / sqrt(r.t2); // length(r.direction);
   return projectRay(r, t);
 }`;
 
@@ -766,13 +773,13 @@ ${defineFunction("projectRay")}
  */
 vec2 projectRayDistanceSquared(in Ray2d r, in float distance2) {
   float sign = sign(distance2);
-  float t = sign * sqrt(abs(distance2)) / dot(r.direction, r.direction); // Divide by magnitude(r.direction)
+  float t = sign * sqrt(abs(distance2)) / r.t2; // dot(r.direction, r.direction); // Divide by magnitude(r.direction)
   return projectRay(r, t);
 }
 
 vec3 projectRayDistanceSquared(in Ray r, in float distance2) {
   float sign = sign(distance2);
-  float t = sign * sqrt(abs(distance2)) / dot(r.direction, r.direction); // Divide by magnitude(r.direction)
+  float t = sign * sqrt(abs(distance2)) / r.t2; // dot(r.direction, r.direction); // Divide by magnitude(r.direction)
   return projectRay(r, t);
 }`;
 
