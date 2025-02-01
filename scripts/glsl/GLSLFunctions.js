@@ -701,12 +701,13 @@ ${defineStruct("Ray2d")}
  */
 Ray normalizedRayFromPoints(in vec3 origin, in vec3 towardsPoint) {
   vec3 direction = normalize(towardsPoint - origin);
-  return Ray(r.origin, direction, 1.0 / direction, 1.0);
+  return Ray(origin, direction, 1.0 / direction, 1.0);
 }
 
 Ray2d normalizedRayFromPoints(in vec2 origin, in vec2 towardsPoint) {
   vec2 direction = normalize(towardsPoint - origin);
-  return Ray2d(r.origin, direction, 1.0 / direction, 1.0);
+  return Ray2d(origin, direction, 1.0 / direction, 1.0);
+}
 
 /**
  * Normalize the ray direction.
@@ -715,12 +716,12 @@ Ray2d normalizedRayFromPoints(in vec2 origin, in vec2 towardsPoint) {
  */
 Ray normalizedRayFromDirection(in vec3 origin, in vec3 direction) {
   vec3 nd = normalize(direction);
-  return Ray(r.origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
+  return Ray(origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
 }
 
 Ray2d normalizedRayFromDirection(in vec2 origin, in vec2 direction) {
   vec2 nd = normalize(direction);
-  return Ray2d(r.origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
+  return Ray2d(origin, nd, 1.0 / nd, 1.0); // Saves measuring the t2 value.
 }
 `;
 
