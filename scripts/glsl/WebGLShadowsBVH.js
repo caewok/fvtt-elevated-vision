@@ -37,9 +37,6 @@ export class WebGLShadowsBVH {
   /** @type {BVH} */
   bvh;
 
-  /** @type {PIXI.RenderTexture} */
-  bvhTexture;
-
   /** @type {EVUpdatingQuadMesh} */
   shadowMesh;
 
@@ -102,7 +99,7 @@ export class WebGLShadowsBVH {
     // Determine which edges need to be placed in the index.
     const edges = this._getEdges();
 
-    const allEdges = CONFIG[MODULE_ID].edgeData;
+    const allEdges = CONFIG[MODULE_ID].edgeData ?? [];
     const edgeIds = new Set(edges.map(e => e.id));
     const edgeIdx = [];
     const nEdges = allEdges.length;

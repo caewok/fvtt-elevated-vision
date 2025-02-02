@@ -267,6 +267,10 @@ vec3 samplePositionLightSphere(in vec3 fragmentPosition, in float seed) {
 
 /* ------ NOTE: Fragment Main ----- */
 void main() {
+  // Debug.
+  lightPercentage = vec4(0.0, 1.0, 1.0, 1.0);
+  return;
+
   lightPercentage = vec4(1.0); // Fully lit.
 
   // If the terrain is above the light, the terrain is not lit.

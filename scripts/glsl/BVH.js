@@ -693,7 +693,7 @@ export class BVH {
     this.objData = objData;
     this.objIdx = objIdx;
     const N = objIdx.length;
-    this.nodes.length = (N * 2 ) - 1;
+    this.nodes.length = Math.max(1, (N * 2 ) - 1);
     this.nodes[0] = new BVHNode(this.objData, this.objIdx);
     this.nodesUsed += 1;
     this.root.objCount = N;
