@@ -10,7 +10,7 @@ Token
 import { MODULE_ID } from "../const.js";
 import { BVH } from "./BVH.js";
 import { tokenIsOnGround, waypointIsOnGround, edgeElevationZ } from "../util.js";
-import { ShadowBVHShader } from "./ShadowBVHShader.js";
+import { ShadowBVHShader, SizedSourceShadowBVHShader } from "./ShadowBVHShader.js";
 import { EVUpdatingQuadMesh } from "./EVQuadMesh.js";
 import { PixelCache } from "../geometry/PixelCache.js";
 import { GlobalLightWebGLShadows, PointVisionWebGLShadows } from "./WebGLShadows.js";
@@ -72,7 +72,7 @@ export class WebGLShadowsBVH {
     if ( source instanceof DirectionalLightSource ) cl = DirectionalLightWebGLShadowsBVH;
     else if ( source instanceof srcs.PointVisionSource ) cl = PointVisionWebGLShadows;
     else if ( source instanceof srcs.GlobalLightSource ) cl = GlobalLightWebGLShadows;
-    else if ( source instanceof srcs.PointLightSource ) cl = PointLightWebGLShadowsBVH;
+    else if ( source instanceof srcs.PointLightSource ) cl = SizedPointLightWebGLShadowsBVH;
     return new cl(source);
   }
 
@@ -419,7 +419,10 @@ export class WebGLShadowsBVH {
   }
 }
 
-export class PointLightWebGLShadowsBVH extends WebGLShadowsBVH {
+export class SizedPointLightWebGLShadowsBVH extends WebGLShadowsBVH {
+
+  /** @type {AbstractEVShader} */
+  static shaderClass = SizedSourceShadowBVHShader;
 
    /**
    * Update based on indicated changes to the source.
