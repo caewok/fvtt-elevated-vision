@@ -529,6 +529,7 @@ export class WebGLShadowsSingleWall {
     const origin = PIXI.Point.fromObject(src);
     bounds ??= this.bounds;
     const collisionTest = o => this._testEdgeInclusion(o.t, origin);
+    if ( !canvas.edges.size ) return new Set();
     return canvas.edges.quadtree.getObjects(bounds, { collisionTest });
   }
 

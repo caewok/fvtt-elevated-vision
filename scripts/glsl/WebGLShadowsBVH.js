@@ -13,6 +13,10 @@ import { tokenIsOnGround, waypointIsOnGround, edgeElevationZ } from "../util.js"
 import { ShadowBVHShader } from "./ShadowBVHShader.js";
 import { EVUpdatingQuadMesh } from "./EVQuadMesh.js";
 import { PixelCache } from "../geometry/PixelCache.js";
+import { GlobalLightWebGLShadows, PointVisionWebGLShadows } from "./WebGLShadows.js";
+import { DirectionalLightSource } from "../DirectionalLightSource.js";
+import { ShadowTextureRenderer, ShadowDirectionalTextureRenderer } from "./ShadowTextureRenderer.js";
+import { ShadowVisionMaskShader, ShadowVisionMaskTokenLOSShader } from "./ShadowVisionMaskShader.js";
 
 export class WebGLShadowsBVH {
   /** @type {AbstractEVShader} */
@@ -20,6 +24,12 @@ export class WebGLShadowsBVH {
 
   /** @type {PIXI.Mesh} */
   static quadMeshClass = EVUpdatingQuadMesh;
+
+  /** @type {ShadowTextureRenderer} */
+  static shadowRendererClass = ShadowTextureRenderer;
+
+  /** @type {AbstractEVShader} */
+  static shadowMaskClass = ShadowVisionMaskShader;
 
   /** @type {RenderedPointSource} */
   source;
@@ -48,6 +58,28 @@ export class WebGLShadowsBVH {
   }
 
   /**
+   * Retrieve the shadow texture corresponding to this source.
+   * Used for lighting shaders and vision masking.
+   * @type {PIXI.RenderTexture}
+   */
+  get shadowTexture() { return this.shadowRenderer.renderTexture; }
+
+  /**
+   * Create a new shadow handler specific to the source type.
+   * @param {RenderedEffectSource} source
+   * @returns {WebGLShadows}
+   */
+  static fromSource(source) {
+    const srcs = foundry.canvas.sources;
+    let cl;
+    if ( source instanceof DirectionalLightSource ) cl = DirectionalLightWebGLShadowsBVH;
+    else if ( source instanceof srcs.PointVisionSource ) cl = PointVisionWebGLShadows;
+    else if ( source instanceof srcs.GlobalLightSource ) cl = GlobalLightWebGLShadows;
+    else if ( source instanceof srcs.PointLightSource ) cl = PointLightWebGLShadowsBVH;
+    return new cl(source);
+  }
+
+  /**
    * Initialize the shadow properties for this source.
    */
   #initialized = false;
@@ -56,7 +88,7 @@ export class WebGLShadowsBVH {
 
   initializeShadows() {
     if ( this.#initialized ) return;
-    this._buildBHV();
+    this._buildBVH();
     this._initializeShadowMesh();
     this._initializeShadowRenderer();
     this._initializeShadowMask();
@@ -79,14 +111,8 @@ export class WebGLShadowsBVH {
       if ( edgeIds.has(edgeDat.id) ) edgeIdx.push(i);
     }
     this.bvh = BVH.build(CONFIG[MODULE_ID].edgeData, edgeIdx);
-
-    const config = this.bvh.textureConfiguration();
-    this.bvhTexture = PIXI.RenderTexture.create(config);
-    this.bvhCache = PixelCache.fromTexture(
-      this.bvhTexture,
-      { arrayClass: Uint16Array }
-    );
-    this.bvh.copyToArray(this.bvhCache.pixels);
+    this.bvh.createTexture();
+    this.bvh.createTextureCache();
   }
 
   /**
@@ -96,7 +122,7 @@ export class WebGLShadowsBVH {
    * Terrain shadows drawn into this.
    */
   _initializeShadowMesh() {
-    const shader = new this.constructor.shaderClass.create(this.source, this.bvhTexture, CONFIG[MODULE_ID].edgeTexture);
+    const shader = this.constructor.shaderClass.create(this.source, this.bvhTexture, CONFIG[MODULE_ID].edgeTexture);
     this.shadowMesh = new this.constructor.quadMeshClass(this.bounds, shader);
   }
 
@@ -169,6 +195,7 @@ export class WebGLShadowsBVH {
     const origin = PIXI.Point.fromObject(src);
     bounds ??= this.bounds;
     const collisionTest = o => this._testEdgeInclusion(o.t, origin);
+    if ( !canvas.edges.size ) return new Set();
     return canvas.edges.quadtree.getObjects(bounds, { collisionTest });
   }
 
@@ -211,6 +238,15 @@ export class WebGLShadowsBVH {
     return true;
   }
 
+  /**
+   * For threshold edges, determine if threshold applies.
+   * @param {Edge} edge
+   * @returns {boolean} True if the threshold applies.
+   */
+  thresholdApplies(edge) {
+    const src = this.source;
+    return edge.applyThreshold(src.constructor.sourceType, src, src.data.externalRadius);
+  }
 
   /**
    * Detect whether a point is in partial or full shadow based on testing wall collisions.
@@ -384,7 +420,40 @@ export class WebGLShadowsBVH {
     this.shadowVisionMask?.destroy();
     this.#destroyed = true;
   }
-
-
 }
+
+export class PointLightWebGLShadowsBVH extends WebGLShadowsBVH {
+
+   /**
+   * Update based on indicated changes to the source.
+   * @param {Set<string>} changes         Change keys for the source.
+   * @returns {boolean} True if the indicated changes resulted in a change to the shader.
+   */
+  sourceUpdated(changes) {
+    // Update the uniforms b/c they are not necessarily updated in drag operations.
+    for ( const layer of Object.values(this.source.layers) ) {
+      const shader = layer.shader;
+      this._updateCommonUniforms(shader);
+    }
+    return super.sourceUpdated(changes);
+  }
+
+  /**
+   * Update uniforms for the source shader.
+   * @param {PIXI.Shader} shader
+   */
+  _updateCommonUniforms(shader) {
+    // TODO: Fix and possibly move to the shader class.
+    const u = shader.uniforms;
+    const src = this.source;
+    u.uEVCanvasDimensions = [canvas.dimensions.width, canvas.dimensions.height];
+    u.uEVSourceOrigin = [src.x, src.y];
+    u.uEVSourceRadius = src.radius;
+    u.uEVShadowSampler = this.shadowTexture.baseTexture;
+    u.uEVShadows = true;
+    u.uEVDirectional = false;
+  }
+}
+
+export class DirectionalLightWebGLShadowsBVH extends WebGLShadowsBVH {}
 

@@ -5,7 +5,7 @@ precision ${PRECISION_VERTEX} float;
 #define TOTAL_COLLISIONS        50
 #define TOTAL_COLLISIONS_INV    1.0 / float(TOTAL_COLLISIONS)
 
-#define MAX_STACK_SIZE      100 // Need to set this somehow? ${defineConstant(MAX_STACK_SIZE)}
+#define MAX_STACK_SIZE      100 // Need to set this somehow? Could use a defineConstant function
 #define OFFSET_LIGHT        9
 #define OFFSET_SIGHT        6
 #define OFFSET_SOUND        3

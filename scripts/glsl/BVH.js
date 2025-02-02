@@ -9,8 +9,9 @@ PIXI
 
 import { MODULE_ID } from "../const.js";
 import { Draw } from "../geometry/Draw.js";
-import { vec2, vec3, vec4 } from "./glsl_mock.js";
-import * as glsl from "./glsl_mock.js";
+import { vec2, vec3, vec4 } from "../testing/glsl_mock.js";
+import * as glsl from "../testing/glsl_mock.js";
+import { extractPixelsAdvanced } from "../geometry/extract-pixels.js";
 
 
 /* Bounded Volume Hierarchy (BVH)
@@ -486,6 +487,35 @@ export class EdgeData {
     };
   }
 
+  /**
+   * Create a texture that can store the edge data.
+   * @param {object} [config={}]    Changes from textureConfiguration.
+   * @returns {PIXI.RenderTexture}
+   */
+  static createTexture(config = {}) {
+    config = foundry.utils.mergeObject(this.textureConfiguration(), config);
+    return PIXI.RenderTexture.create(config);
+  }
+
+  /**
+   * Create a pixel cache from the texture.
+   * @param {PIXI.RenderTexture}
+   * @returns {object}
+   * - @prop {Uint16Array} pixels
+   * - @prop {number} x
+   * - @prop {number} y
+   * - @prop {number} width
+   * - @prop {number} height
+   */
+  static createPixelCache(texture) {
+    texture ??= this.createTexture();
+    const gl = canvas.app.renderer.gl;
+    const edgeCache = extractPixelsAdvanced(canvas.app.renderer, texture,
+      { format: gl.RGBA_INTEGER, type: gl.UNSIGNED_SHORT });
+    this.copyEdgesToArray(edgeCache.pixels);
+    return edgeCache;
+  }
+
   // ----- NOTE: Debugging ----- //
 
   /**
@@ -652,6 +682,12 @@ export class BVH {
 
   /** @type {int} */
   nodesUsed = 0;
+
+  /** @type {PIXI.RenderTexture} */
+  texture; // Store the bvh data for use in shader.
+
+  /** @type {Uint16Array} */
+  cache; // Pixel cache for the bvh texture.
 
   constructor(objData, objIdx) {
     this.objData = objData;
@@ -892,7 +928,8 @@ export class BVH {
       const r = n * width * channels;
 
       // For leftFirst, store the actual edge index, not the objIdx.
-      // This avoids having to pass through the objIdx array, which is highly problematic b/c of its variable (and large) size.
+      // This avoids having to pass through the objIdx array,
+      // which is highly problematic b/c of its variable (and large) size.
       arr[r] = node.isLeaf ? node.objIdx[node.leftFirst] : node.leftFirst;
       arr[r + 1] = node.objCount;
       // Unused: arr[r + 2]
@@ -921,6 +958,36 @@ export class BVH {
       format: PIXI.FORMATS.RGBA_INTEGER,
       type: PIXI.TYPES.UNSIGNED_SHORT
     };
+  }
+
+
+  /**
+   * Construct a texture to store this bvh data.
+   * @returns {PIXI.RenderTexture}
+   */
+  createTexture() {
+    this.texture = PIXI.RenderTexture.create(this.textureConfiguration());
+    return this.texture;
+  }
+
+  /**
+   * Construct a pixel cache from the bvh texture.
+   * @param {PIXI.RenderTexture} [texture]    The texture for this bvh
+   * @returns {object}
+   * - @prop {Uint16Array} pixels
+   * - @prop {number} x
+   * - @prop {number} y
+   * - @prop {number} width
+   * - @prop {number} height
+   */
+  createTextureCache() {
+    this.texture ??= this.createTexture();
+    const gl = canvas.app.renderer.gl;
+    const bvhCache = extractPixelsAdvanced(canvas.app.renderer, this.texture,
+      { format: gl.RGBA_INTEGER, type: gl.UNSIGNED_SHORT });
+    this.copyToArray(bvhCache.pixels);
+    this.cache = bvhCache;
+    return bvhCache;
   }
 
   // ----- NOTE: Debugging ----- //
@@ -1065,13 +1132,11 @@ bvh.nodes.map(node => node.sah())
 bvh.nodes.map(node => node.description())
 bvh.displayHierarchy()
 
-
-
-
 bvh.textureConfiguration()
 bvh.copyToArray()
 
 EdgeData.textureConfiguration()
 EdgeData.copyEdgesToArray()
+*/
 
 

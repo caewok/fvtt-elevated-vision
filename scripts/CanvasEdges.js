@@ -8,7 +8,7 @@ Wall
 import { MODULE_ID } from "./const.js";
 import { EdgeData } from "./glsl/BVH.js";
 import { WebGLShadowsBVH } from "./glsl/WebGLShadowsBVH.js";
-import { PixelCache } from "./geometry/PixelCache.js";
+import { extractPixelsAdvanced } from "./geometry/extract-pixels.js";
 
 // Track wall creation, update, and deletion, constructing WallTracerEdges as we go.
 // Use to update the pathfinding triangulation.
@@ -28,13 +28,8 @@ function initializeEdges() {
 
   // See ElevationTextureHandler.js.
   CONFIG[MODULE_ID].edgeData = EdgeData.edges.map(edge => new EdgeData(edge));
-  const config = EdgeData.textureConfiguration();
-  CONFIG[MODULE_ID].edgeTexture = PIXI.RenderTexture.create(config);
-  CONFIG[MODULE_ID].edgeCache = PixelCache.fromTexture(
-    CONFIG[MODULE_ID].edgeTexture,
-    { arrayClass: Uint16Array }
-  );
-  EdgeData.copyEdgesToArray(CONFIG[MODULE_ID].edgeCache.pixels)
+  const texture = CONFIG[MODULE_ID].edgeTexture = EdgeData.createTexture();
+  CONFIG[MODULE_ID].edgeCache = EdgeData.createPixelCache(texture);
 
   const t1 = performance.now();
   console.debug(`${MODULE_ID}|Created edge cache in ${t1 - t0} ms.`);

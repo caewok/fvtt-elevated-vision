@@ -118,6 +118,10 @@ import {
   DirectionalLightWebGLShadowsMultiWall
 } from "./glsl/WebGLShadowsMultiWall.js";
 
+import {
+  WebGLShadowsBVH
+} from "./glsl/WebGLShadowsBVH.js";
+
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
@@ -140,7 +144,7 @@ Hooks.once("init", function() {
      *   - WebGLShadowsBVH
      * @type {class}
      */
-    webGLShadowClass: WebGLShadows,
+    webGLShadowClass: WebGLShadowsBVH,
 
     /**
      * For WebGLShadowsSingleWall and WebGLShadowsMultiWall, how many shadow triangles per edge.

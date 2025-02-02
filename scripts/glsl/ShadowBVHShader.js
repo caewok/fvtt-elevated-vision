@@ -110,7 +110,7 @@ export class ShadowBVHShader extends AbstractEVShader {
     if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
     defaultUniforms.uLightRadius2 = Math.pow(source.data.lightSize, 2);
-    defaultUniforms.uSourceType = CONST.WALL_RESTRICTION_TYPES.findIndex(source.constructor.sourceType);
+    defaultUniforms.uSourceType = CONST.WALL_RESTRICTION_TYPES.findIndex(elem => elem === source.constructor.sourceType);
 
     // Uniforms related to samling.
     defaultUniforms.uTime = this.time;
