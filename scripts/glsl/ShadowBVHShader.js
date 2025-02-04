@@ -71,7 +71,7 @@ export class ShadowBVHShader extends AbstractEVShader {
     uBVHSampler: 0,
     uEdgeSampler: 0,
     uLightPosition: [0, 0, 0],
-    uLightRadius2: 0,
+    uLightSize: 0,
     uSourceType: 0,
     uTime: this.time
   };
@@ -109,7 +109,7 @@ export class ShadowBVHShader extends AbstractEVShader {
     const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
     if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
     defaultUniforms.uLightPosition = [lightPosition.x, lightPosition.y, lightPosition.z];
-    defaultUniforms.uLightRadius2 = Math.pow(source.data.lightSize, 2);
+    defaultUniforms.uLightSize = source.data.lightSize;
     defaultUniforms.uSourceType = CONST.WALL_RESTRICTION_TYPES.findIndex(elem => elem === source.constructor.sourceType);
 
     // Uniforms related to samling.
@@ -147,7 +147,7 @@ export class ShadowBVHShader extends AbstractEVShader {
    * Update the light size.
    * TODO: Handle setting light size to 0.
    */
-  updateLightSize() { this.uniforms.uLightRadius2 = Math.pow(this.source.data.lightSize, 2); }
+  updateLightSize() { this.uniforms.uLightSize = this.source.data.lightSize; }
 
   /**
    * Remove links to large objects.
