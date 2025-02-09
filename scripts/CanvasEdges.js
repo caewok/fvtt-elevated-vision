@@ -28,8 +28,9 @@ function initializeEdges() {
 
   // See ElevationTextureHandler.js.
   CONFIG[MODULE_ID].edgeData = EdgeData.edges.map(edge => new EdgeData(edge));
-  const texture = CONFIG[MODULE_ID].edgeTexture = EdgeData.createTexture();
-  CONFIG[MODULE_ID].edgeCache = EdgeData.createPixelCache(texture);
+
+  CONFIG[MODULE_ID].edgeCache = EdgeData.createPixelCache();
+  CONFIG[MODULE_ID].edgeTexture = EdgeData.createTexture();
 
   const t1 = performance.now();
   console.debug(`${MODULE_ID}|Created edge cache in ${t1 - t0} ms.`);

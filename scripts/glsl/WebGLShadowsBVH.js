@@ -108,8 +108,9 @@ export class WebGLShadowsBVH {
       if ( edgeIds.has(edgeDat.id) ) edgeIdx.push(i);
     }
     this.bvh = BVH.build(CONFIG[MODULE_ID].edgeData, edgeIdx);
-    this.bvh.createTexture();
     this.bvh.createTextureCache();
+    this.bvh.createTexture();
+
   }
 
   /**

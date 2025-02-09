@@ -493,9 +493,11 @@ export class EdgeData {
    * @returns {PIXI.RenderTexture}
    */
   static createTexture(config = {}) {
-    config = foundry.utils.mergeObject(this.textureConfiguration(), config);
-    return PIXI.RenderTexture.create(config);
+    this.texture = PIXI.Texture.fromBuffer(this.cache.pixels, this.cache.width, this.cache.height,
+      {  mipmap: PIXI.MIPMAP_MODES.OFF, scaleMode: PIXI.SCALE_MODES.NEAREST, multisample: PIXI.MSAA_QUALITY.NONE });
+    return this.texture;
   }
+
 
   /**
    * Create a pixel cache from the texture.
@@ -508,12 +510,12 @@ export class EdgeData {
    * - @prop {number} height
    */
   static createPixelCache(texture) {
-    texture ??= this.createTexture();
-    const gl = canvas.app.renderer.gl;
-    const edgeCache = extractPixelsAdvanced(canvas.app.renderer, texture,
-      { format: gl.RGBA_INTEGER, type: gl.UNSIGNED_SHORT });
-    this.copyEdgesToArray(edgeCache.pixels);
-    return edgeCache;
+    const cfg = this.textureConfiguration();
+    const { width, height } = cfg;
+    const pixels = new Uint16Array(width * height * 4);
+    this.cache = { pixels, width, height };
+    this.copyEdgesToArray(this.cache.pixels);
+    return this.cache;
   }
 
   // ----- NOTE: Debugging ----- //
@@ -966,7 +968,8 @@ export class BVH {
    * @returns {PIXI.RenderTexture}
    */
   createTexture() {
-    this.texture = PIXI.RenderTexture.create(this.textureConfiguration());
+    this.texture = PIXI.Texture.fromBuffer(this.cache.pixels, this.cache.width, this.cache.height,
+      {  mipmap: PIXI.MIPMAP_MODES.OFF, scaleMode: PIXI.SCALE_MODES.NEAREST, multisample: PIXI.MSAA_QUALITY.NONE });
     return this.texture;
   }
 
@@ -981,13 +984,12 @@ export class BVH {
    * - @prop {number} height
    */
   createTextureCache() {
-    this.texture ??= this.createTexture();
-    const gl = canvas.app.renderer.gl;
-    const bvhCache = extractPixelsAdvanced(canvas.app.renderer, this.texture,
-      { format: gl.RGBA_INTEGER, type: gl.UNSIGNED_SHORT });
-    this.copyToArray(bvhCache.pixels);
-    this.cache = bvhCache;
-    return bvhCache;
+    const cfg = this.textureConfiguration();
+    const { width, height } = cfg;
+    const pixels = new Uint16Array(width * height * 4);
+    this.cache = { pixels, width, height };
+    this.copyToArray(this.cache.pixels);
+    return this.cache;
   }
 
   // ----- NOTE: Debugging ----- //

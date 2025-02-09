@@ -283,6 +283,7 @@ void main() {
     lightPercentage.x = 0.0;
     return;
   }
+  // return;
 
   // Test for intersections along the ray for a sample of light positions.
   // (See WallShader_Sized_Fragment2.glsl for different sampling options.)
@@ -294,5 +295,8 @@ void main() {
     collisions += hasIntersection(lightRay);
   }
   lightPercentage.x = 1.0 - (collisions * TOTAL_COLLISIONS_INV);
+
+  if ( collisions > 0.0 ) lightPercentage.x = 0.0;
+  else lightPercentage.x = 1.0;
 }
 
