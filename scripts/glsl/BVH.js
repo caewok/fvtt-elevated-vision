@@ -512,7 +512,8 @@ export class EdgeData {
   static createPixelCache(texture) {
     const cfg = this.textureConfiguration();
     const { width, height } = cfg;
-    const pixels = new Uint16Array(width * height * 4);
+    // const pixels = new Uint16Array(width * height * 4);
+    const pixels = new Float32Array(width * height * 4);
     this.cache = { pixels, width, height };
     this.copyEdgesToArray(this.cache.pixels);
     return this.cache;
@@ -986,7 +987,8 @@ export class BVH {
   createTextureCache() {
     const cfg = this.textureConfiguration();
     const { width, height } = cfg;
-    const pixels = new Uint16Array(width * height * 4);
+    // const pixels = new Uint16Array(width * height * 4);
+    const pixels = new Float32Array(width * height * 4);
     this.cache = { pixels, width, height };
     this.copyToArray(this.cache.pixels);
     return this.cache;

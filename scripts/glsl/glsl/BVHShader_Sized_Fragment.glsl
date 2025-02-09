@@ -38,8 +38,8 @@ in vec2 vTerrainTexCoord;
 
 /* ----- NOTE: Uniform Variables ----- */
 uniform sampler2D uTerrainSampler;
-uniform highp usampler2D uBVHSampler;
-uniform highp usampler2D uEdgeSampler;
+uniform highp sampler2D uBVHSampler;
+uniform highp sampler2D uEdgeSampler;
 
 uniform vec4 uElevationRes; // min, step, maxpixel, multiplier
 uniform vec3 uLightPosition;
@@ -64,6 +64,7 @@ ${defineFunction("hash")}
 ${defineFunction("almostEqual")}
 ${defineFunction("linearConversion")}
 ${defineFunction("rayFromPoints")}
+${defineFunction("distanceToLine")}
 
 /** Represent node data in the BVH */
 struct BVHNode {
@@ -73,23 +74,11 @@ struct BVHNode {
   bool isLeaf;
 };
 
-/**
- * Pull node data from the texture.
- * @param {uint} idx
- * @returns {BVHNode}
- */
-BVHNode getNode(in int idx) {
-  // TODO: is this row, column or column, row?
-  uvec4 dat = texelFetch(uBVHSampler, ivec2(0, idx), 0);
-  uvec4 bounds = texelFetch(uBVHSampler, ivec2(1, idx), 0);
-  return BVHNode(
-    vec2(bounds.xy),  // Min
-    vec2(bounds.zw),  // Max
-    dat[0],      // leftFirst
-    int(dat[1]) == 1  // isLeaf
-  );
-}
-
+struct Edge {
+  vec3 a;
+  vec3 b;
+  int type;
+};
 
 /**
  * Decode the edge types.
@@ -120,6 +109,40 @@ float decodeEdgeElevation(in int n) {
   if ( n == EDGE_ELEVATION_MIN ) return -1.0e06;
   return float(n - EDGE_ELEVATION_SPLIT);
 }
+
+/**
+ * Pull node data from the texture.
+ * @param {uint} idx
+ * @returns {BVHNode}
+ */
+BVHNode getNode(in int idx) {
+  // TODO: is this row, column or column, row?
+  vec4 dat = texelFetch(uBVHSampler, ivec2(0, idx), 0);
+  vec4 bounds = texelFetch(uBVHSampler, ivec2(1, idx), 0);
+  return BVHNode(
+    vec2(bounds.xy),  // Min
+    vec2(bounds.zw),  // Max
+    uint(dat[0]),      // leftFirst
+    int(dat[1]) == 1  // isLeaf
+  );
+}
+
+Edge getEdge(in int idx) {
+  vec4 dat0 = texelFetch(uEdgeSampler, ivec2(0, idx), 0);
+  vec4 dat1 = texelFetch(uEdgeSampler, ivec2(1, idx), 0);
+  return Edge(
+    vec3(dat0.xy, decodeEdgeElevation(int(dat1[1]))),
+    vec3(dat0.zw, decodeEdgeElevation(int(dat1[2]))),
+    decodeEdgeTypes(int(dat1[0]))
+  );
+}
+
+void drawEdge(in Edge edge) {
+  if ( distanceSquaredToSegment(vVertexPosition, edge.a.xy, edge.b.xy) < 2.0 ) lightPercentage = vec4(1.0);
+}
+
+
+
 
 /**
  * Test a node's min/max bounds for a ray intersection.
@@ -157,11 +180,11 @@ bool planeRayIntersection(in Plane plane, in Ray ray, out float t) {
 
 float nodeHasObjectIntersection(in Ray ray, in BVHNode node) {
   // TODO: Can this be done with less texel fetches? Maybe fetch one to test horizontal first?
-  uvec4 dat1 = texelFetch(uEdgeSampler, ivec2(1, node.leftFirst), 0);
+  vec4 dat1 = texelFetch(uEdgeSampler, ivec2(1, node.leftFirst), 0);
   int wallSenseType = decodeEdgeTypes(int(dat1[0]));
   if ( wallSenseType == WALL_NONE ) return 0.0;
 
-  uvec4 dat0 = texelFetch(uEdgeSampler, ivec2(0, node.leftFirst), 0);
+  vec4 dat0 = texelFetch(uEdgeSampler, ivec2(0, node.leftFirst), 0);
 
   vec2 a = vec2(dat0.xy);
   vec2 b = vec2(dat0.zw);
@@ -203,7 +226,7 @@ float hasIntersection(in Ray ray) {
   float collision = 0.0; // For terrain walls, which return 0.5 for each collision.
   int currLevel = 0;
   BVHNode currNode = getNode(0);
-  if ( nodeHasBoundsIntersection(ray, currNode) ) return 0.0;
+  if ( nodeHasBoundsIntersection(ray, currNode) ) return 1.0;
   if ( currNode.isLeaf ) {
     collision += nodeHasObjectIntersection(ray, currNode);
     if ( collision >= 1.0 ) return 1.0;
@@ -271,8 +294,10 @@ vec3 samplePositionLightSphere(in vec3 fragmentPosition, in float seed) {
 /* ------ NOTE: Fragment Main ----- */
 void main() {
   // Debug.
-  // lightPercentage = vec4(0.0, 1.0, 1.0, 1.0);
-  // return;
+  lightPercentage = vec4(0.0, 1.0, 1.0, 1.0);
+  Edge edge = getEdge(0);
+  drawEdge(edge);
+  return;
 
   lightPercentage = vec4(1.0); // Fully lit.
   // return;
@@ -296,7 +321,7 @@ void main() {
   }
   lightPercentage.x = 1.0 - (collisions * TOTAL_COLLISIONS_INV);
 
-  if ( collisions > 0.0 ) lightPercentage.x = 0.0;
-  else lightPercentage.x = 1.0;
+  // if ( collisions > 0.0 ) lightPercentage.x = 0.0;
+  // else lightPercentage.x = 1.0;
 }
 
