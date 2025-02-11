@@ -141,7 +141,12 @@ void drawEdge(in Edge edge) {
   if ( distanceSquaredToSegment(vVertexPosition, edge.a.xy, edge.b.xy) < 2.0 ) lightPercentage = vec4(1.0);
 }
 
-
+void drawNodeBounds(in BVHNode node) {
+  // if ( node.aabbMin.x == 2450.0 ) lightPercentage = vec4(1.0);
+  // if ( node.aabbMin.x > -1.0 && node.aabbMin.x < 1.0 ) lightPercentage = vec4(1.0);
+  // if ( vVertexPosition.x > node.aabbMin.x ) lightPercentage = vec4(1.0);
+  if ( all(greaterThanEqual(vVertexPosition, node.aabbMin)) && all(lessThan(vVertexPosition, node.aabbMax)) ) lightPercentage = vec4(0.5, 1.0, 1.0, 1.0);
+}
 
 
 /**
@@ -201,6 +206,8 @@ float nodeHasObjectIntersection(in Ray ray, in BVHNode node) {
 
   // Within vertical extent.
   if ( ix.z > top || ix.z < bottom ) return 0.0;
+
+  // return 1.0; // Debugging.
 
   // Within the 2d endpoints.
   float dist2Endpoints = distanceSquared(a.xy, b.xy);
@@ -295,9 +302,28 @@ vec3 samplePositionLightSphere(in vec3 fragmentPosition, in float seed) {
 void main() {
   // Debug.
   lightPercentage = vec4(0.0, 1.0, 1.0, 1.0);
-  Edge edge = getEdge(0);
-  drawEdge(edge);
+
+
+  // BVHNode node = getNode(1);
+  // drawNodeBounds(node);
+  // return;
+
+  /*
+  int bvhSize = textureSize(uBVHSampler, 0).y;
+  for ( int i = 0; i < MAX_STACK_SIZE; i += 1 ) {
+    if ( i >= bvhSize ) break;
+    BVHNode node = getNode(i);
+    drawNodeBounds(node);
+  }
+
+  int nEdges = textureSize(uEdgeSampler, 0).y;
+  for ( int i = 0; i < MAX_STACK_SIZE; i += 1 ) {
+    if ( i >= nEdges ) break;
+    Edge edge = getEdge(i);
+    drawEdge(edge);
+  }
   return;
+  */
 
   lightPercentage = vec4(1.0); // Fully lit.
   // return;

@@ -120,7 +120,7 @@ export class WebGLShadowsBVH {
    * Terrain shadows drawn into this.
    */
   _initializeShadowMesh() {
-    const shader = this.constructor.shaderClass.create(this.source, this.bvhTexture, CONFIG[MODULE_ID].edgeTexture);
+    const shader = this.constructor.shaderClass.create(this.source, this.bvh.texture, CONFIG[MODULE_ID].edgeTexture);
     this.shadowMesh = new this.constructor.quadMeshClass(this.bounds, shader);
   }
 
