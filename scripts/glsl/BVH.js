@@ -437,7 +437,7 @@ export class EdgeData {
     const width = 3;
     const channels = 4;
     arr ??= new Uint16Array(width * height * channels);
-    if ( arr.length !== width * height * channels ) console.error(`${MODULE_ID}|copyToArray|Array is wrong length. Should be ${width * height * channels} but is actually ${arr.length}`);
+    if ( arr.length < (width * height * channels) ) console.error(`${MODULE_ID}|copyToArray|Array is wrong length. Should be ${width * height * channels} but is actually ${arr.length}`);
 
     // || a.x | a.y | b.x | b.y || senseType | top | bottom | ? || threshLight | threshSight | threshSound | ? ||
     // TODO: Use alpha channels to increase resolution of top, bottom, thresholds.
@@ -471,19 +471,18 @@ export class EdgeData {
   static textureConfiguration() {
     // See https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
     // RGBA16UI.
-    // || a.x | a.y | b.x | b.y || senseType | top | bottom | ? || threshLight | threshSight | threshSound | ? ||
-    const edges = this.edges;
-    const height = edges.length;
     const width = 3;
+
+    // Set texture height to 2^X. Will likely fail at between 2^13 and 2^16.
+    const MIN_HEIGHT_EXP = 5;    // 2^5 = 32.
+    const height = Math.max(MIN_HEIGHT_EXP, Math.ceil(Math.sqrt(this.edges.length)));
     return {
-      resolution: 1,
       width,
       height,
       mipmap: PIXI.MIPMAP_MODES.OFF,
       scaleMode: PIXI.SCALE_MODES.NEAREST,
       multisample: PIXI.MSAA_QUALITY.NONE,
-      format: PIXI.FORMATS.RGBA_INTEGER,
-      type: PIXI.TYPES.UNSIGNED_SHORT
+      arrayCl: Float32Array // Uint16Array
     };
   }
 
@@ -492,16 +491,16 @@ export class EdgeData {
    * @param {object} [config={}]    Changes from textureConfiguration.
    * @returns {PIXI.RenderTexture}
    */
-  static createTexture(config = {}) {
-    this.texture = PIXI.Texture.fromBuffer(this.cache.pixels, this.cache.width, this.cache.height,
-      {  mipmap: PIXI.MIPMAP_MODES.OFF, scaleMode: PIXI.SCALE_MODES.NEAREST, multisample: PIXI.MSAA_QUALITY.NONE });
+  static createTexture() {
+    this.cache ??= this.createPixelCache();
+    const { pixels, width, height } = this.cache;
+    this.texture = PIXI.Texture.fromBuffer(pixels, width, height, this.textureConfiguration());
     return this.texture;
   }
 
 
   /**
-   * Create a pixel cache from the texture.
-   * @param {PIXI.RenderTexture}
+   * Create a pixel cache.
    * @returns {object}
    * - @prop {Uint16Array} pixels
    * - @prop {number} x
@@ -509,15 +508,20 @@ export class EdgeData {
    * - @prop {number} width
    * - @prop {number} height
    */
-  static createPixelCache(texture) {
+  static createPixelCache() {
     const cfg = this.textureConfiguration();
-    const { width, height } = cfg;
+    const { width, height, arrayCl } = cfg;
     // const pixels = new Uint16Array(width * height * 4);
-    const pixels = new Float32Array(width * height * 4);
+    const pixels = new arrayCl(width * height * 4);
     this.cache = { pixels, width, height };
     this.copyEdgesToArray(this.cache.pixels);
     return this.cache;
   }
+
+  // TODO: Increase cache size.
+  // TODO: Handle edge addition.
+  // TODO: Handle edge deletion.
+  // TODO: Handle edge updates.
 
   // ----- NOTE: Debugging ----- //
 
@@ -922,7 +926,7 @@ export class BVH {
     const height = this.nodes.length;
     const channels = 4;
     arr ??= new Uint16Array(width * height * channels);
-    if ( arr.length !== width * height * channels ) console.error(`${MODULE_ID}|copyToArray|Array is wrong length. Should be ${width * height * channels} but is actually ${arr.length}`);
+    if ( arr.length < (width * height * channels) ) console.error(`${MODULE_ID}|copyToArray|Array is wrong length. Should be ${width * height * channels} but is actually ${arr.length}`);
 
     // || leftFirst | type | ? | ? || aabbMin.x | aabbMin.y | aabbMax.x | aabbMax.y ||
     for ( let n = 0; n < height; n += 1 ) {
@@ -949,17 +953,19 @@ export class BVH {
     // See https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
     // RGBA16UI.
     // || leftFirst | type | ? | ? || aabbMin.x | aabbMin.y | aabbMax.x | aabbMax.y ||
+
     const width = 2;
-    const height = this.nodes.length;
+
+    // Set texture height to 2^X, where X is min 5 (32), max 16 (65536).
+    const MIN_HEIGHT_EXP = 5;    // 2^5 = 32.
+    const height = Math.max(MIN_HEIGHT_EXP, Math.ceil(Math.sqrt(this.nodes.length)));
     return {
-      resolution: 1,
       width,
       height,
       mipmap: PIXI.MIPMAP_MODES.OFF,
       scaleMode: PIXI.SCALE_MODES.NEAREST,
       multisample: PIXI.MSAA_QUALITY.NONE,
-      format: PIXI.FORMATS.RGBA_INTEGER,
-      type: PIXI.TYPES.UNSIGNED_SHORT
+      arrayCl: Float32Array // Uint16Array
     };
   }
 
@@ -969,10 +975,23 @@ export class BVH {
    * @returns {PIXI.RenderTexture}
    */
   createTexture() {
-    this.texture = PIXI.Texture.fromBuffer(this.cache.pixels, this.cache.width, this.cache.height,
-      {  mipmap: PIXI.MIPMAP_MODES.OFF, scaleMode: PIXI.SCALE_MODES.NEAREST, multisample: PIXI.MSAA_QUALITY.NONE });
-    return this.texture;
+    const { pixels, width, height } = this.cache ??= this.createTextureCache();
+    return (this.texture = PIXI.Texture.fromBuffer(pixels, width, height, this.textureConfiguration()));
   }
+
+  /**
+   * Make existing wall texture larger.
+   */
+  _growTexture() {
+    const { pixels: oldPixels, height: oldHeight } = this.cache;
+    // TODO: Complete.
+
+  }
+
+  // TODO: Increase cache size.
+  // TODO: Handle edge addition.
+  // TODO: Handle edge deletion.
+  // TODO: Handle edge updates.
 
   /**
    * Construct a pixel cache from the bvh texture.
@@ -986,9 +1005,9 @@ export class BVH {
    */
   createTextureCache() {
     const cfg = this.textureConfiguration();
-    const { width, height } = cfg;
+    const { width, height, arrayCl } = cfg;
     // const pixels = new Uint16Array(width * height * 4);
-    const pixels = new Float32Array(width * height * 4);
+    const pixels = new arrayCl(width * height * 4);
     this.cache = { pixels, width, height };
     this.copyToArray(this.cache.pixels);
     return this.cache;
@@ -1090,6 +1109,7 @@ export class BVH {
   }
 }
 
+
 /* Testing
 MODULE_ID = "elevatedvision"
 Point3d = CONFIG.GeometryLib.threeD.Point3d
@@ -1097,6 +1117,19 @@ Draw = CONFIG.GeometryLib.Draw;
 api = game.modules.get("elevatedvision").api
 let { vec2, vec3, vec4 } = api.testing.glsl_mock
 glsl = api.testing.glsl_mock
+
+let [l] = canvas.lighting.placeables;
+source = l.lightSource;
+ev = source.elevatedvision
+bvh = ev.bvh
+uLightPosition = vec3(...Point3d.fromPointSource(source))
+fragmentPosition = vec3(_token.center.x, _token.center.y, 0)
+ray = glsl.RayGLSLStruct.bvhRay(fragmentPosition, glsl.normalizedDirection(fragmentPosition, uLightPosition))
+bvh.hasIntersection(ray)
+bvh.hasIntersectionNonRecursive(ray)
+
+
+
 
 // Get wall edges.
 edges = [...canvas.edges.values()].filter(edge => edge.type === "wall")

@@ -11,6 +11,7 @@ import { MODULE_ID, FLAGS } from "../const.js";
 import { sourceAtCanvasElevation } from "../util.js";
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { fetchGLSLCode, interpolate } from "./GLSLFunctions.js";
+import { EdgeData } from "./BVH.js";
 
 /* BVH shadow shader
 One per rendered source.
@@ -35,6 +36,9 @@ const GLSL_SIZED_FRAGMENT = interpolate(
 export class ShadowBVHShader extends AbstractEVShader {
   /** @type {RenderedSource} */
   source;
+
+  /** @type {BVH} */
+  bvh;
 
   /**
    * Vertices are light --> wall corner to intersection on surface.
@@ -73,7 +77,9 @@ export class ShadowBVHShader extends AbstractEVShader {
     uLightPosition: [0, 0, 0],
     uLightSize: 0,
     uSourceType: 0,
-    uTime: this.time
+    uTime: this.time,
+    uNumEdges: 0,
+    uNumNodes: 0
   };
 
   /**
@@ -81,7 +87,7 @@ export class ShadowBVHShader extends AbstractEVShader {
    * @param {object} defaultUniforms    Changes from the default uniforms set here.
    * @returns {ShadowMaskWallShader}
    */
-  static create(source, bvhTexture, defaultUniforms = {}) {
+  static create(source, bvh, defaultUniforms = {}) {
     const { sceneRect, distancePixels } = canvas.dimensions;
     defaultUniforms.uSceneDims ??= [
       sceneRect.x,
@@ -102,8 +108,10 @@ export class ShadowBVHShader extends AbstractEVShader {
     // TODO: Create an edge texture handler that mimics ElevationTextureHandler found at ev.
     //   Store at ev, so it is ev.elevation._texture and ev.edges._texture.
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
-    defaultUniforms.uBVHSampler = bvhTexture;
+    defaultUniforms.uBVHSampler = bvh.texture;
     defaultUniforms.uEdgeSampler = CONFIG[MODULE_ID].edgeTexture;
+    defaultUniforms.uNumEdges = EdgeData.edges.length;
+    defaultUniforms.uNumNodes = bvh.nodes.length;
 
     // Uniforms related to the source.
     const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
@@ -112,11 +120,12 @@ export class ShadowBVHShader extends AbstractEVShader {
     defaultUniforms.uLightSize = source.data.lightSize;
     defaultUniforms.uSourceType = CONST.WALL_RESTRICTION_TYPES.findIndex(elem => elem === source.constructor.sourceType);
 
-    // Uniforms related to samling.
+    // Uniforms related to sampling.
     defaultUniforms.uTime = this.time;
 
     const shader = super.create(defaultUniforms);
     shader.source = source;
+    shader.bvh = bvh;
     return shader;
   }
 
@@ -148,6 +157,14 @@ export class ShadowBVHShader extends AbstractEVShader {
    * TODO: Handle setting light size to 0.
    */
   updateLightSize() { this.uniforms.uLightSize = this.source.data.lightSize; }
+
+  /**
+   * Update the bvh and edge lengths.
+   */
+  updateBVH() {
+    defaultUniforms.uNumEdges = EdgeData.edges.length;
+    defaultUniforms.uNumNodes = this.bvh.nodes.length;
+  }
 
   /**
    * Remove links to large objects.

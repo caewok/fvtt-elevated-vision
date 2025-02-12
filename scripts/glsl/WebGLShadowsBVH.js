@@ -18,6 +18,8 @@ import { DirectionalLightSource } from "../DirectionalLightSource.js";
 import { ShadowTextureRenderer, ShadowDirectionalTextureRenderer } from "./ShadowTextureRenderer.js";
 import { ShadowVisionMaskShader, ShadowVisionMaskTokenLOSShader } from "./ShadowVisionMaskShader.js";
 
+const PIXEL_INV = 1 / 255;
+
 export class WebGLShadowsBVH {
   /** @type {AbstractEVShader} */
   static shaderClass = ShadowBVHShader;
@@ -120,7 +122,7 @@ export class WebGLShadowsBVH {
    * Terrain shadows drawn into this.
    */
   _initializeShadowMesh() {
-    const shader = this.constructor.shaderClass.create(this.source, this.bvh.texture, CONFIG[MODULE_ID].edgeTexture);
+    const shader = this.constructor.shaderClass.create(this.source, this.bvh, CONFIG[MODULE_ID].edgeTexture);
     this.shadowMesh = new this.constructor.quadMeshClass(this.bounds, shader);
   }
 
@@ -399,6 +401,11 @@ export class WebGLShadowsBVH {
     return onGround
       ? this.constructor._shadowPercentageFromCache(shadowRenderer.pixelCache, testPoint.x, testPoint.y)
       : this.elevatedPointInShadow(testPoint);
+  }
+
+  static _shadowPercentageFromCache(pixelCache, x, y) {
+    const lightAmount = pixelCache.pixelAtCanvas(x, y);
+    return 1 - (lightAmount * PIXEL_INV);
   }
 
   /** @type {boolean} */

@@ -787,11 +787,13 @@ ${defineFunction("projectRay")}
  * If ray is normalized, this will project the ray the given distance.
  */
 vec2 projectRayDistance(in Ray2d r, in float distance) {
+  if ( r.t2 === 0.0 ) return r.origin;
   float t = distance / sqrt(r.t2); // length(r.direction);
   return projectRay(r, t);
 }
 
 vec3 projectRayDistance(in Ray r, in float distance) {
+  if ( this.t2 === 0.0 ) return this.origin;
   float t = distance / sqrt(r.t2); // length(r.direction);
   return projectRay(r, t);
 }`;
@@ -807,14 +809,16 @@ ${defineFunction("projectRay")}
  * If ray is normalized, this will project the ray the given distance.
  */
 vec2 projectRayDistanceSquared(in Ray2d r, in float distance2) {
+  if ( r.t2 === 0.0 ) return r.origin;
   float sign = sign(distance2);
-  float t = sign * sqrt(abs(distance2)) / r.t2; // dot(r.direction, r.direction); // Divide by magnitude(r.direction)
+  float t = (sign * sqrt(abs(distance2))) / r.t2; // dot(r.direction, r.direction); // Divide by magnitude(r.direction)
   return projectRay(r, t);
 }
 
 vec3 projectRayDistanceSquared(in Ray r, in float distance2) {
+  if ( r.t2 === 0.0 ) return r.origin;
   float sign = sign(distance2);
-  float t = sign * sqrt(abs(distance2)) / r.t2; // dot(r.direction, r.direction); // Divide by magnitude(r.direction)
+  float t = (sign * sqrt(abs(distance2))) / r.t2; // dot(r.direction, r.direction); // Divide by magnitude(r.direction)
   return projectRay(r, t);
 }`;
 

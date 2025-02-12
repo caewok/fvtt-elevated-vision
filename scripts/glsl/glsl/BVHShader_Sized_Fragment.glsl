@@ -112,11 +112,10 @@ float decodeEdgeElevation(in int n) {
 
 /**
  * Pull node data from the texture.
- * @param {uint} idx
+ * @param {int} idx
  * @returns {BVHNode}
  */
 BVHNode getNode(in int idx) {
-  // TODO: is this row, column or column, row?
   vec4 dat = texelFetch(uBVHSampler, ivec2(0, idx), 0);
   vec4 bounds = texelFetch(uBVHSampler, ivec2(1, idx), 0);
   return BVHNode(
@@ -127,6 +126,11 @@ BVHNode getNode(in int idx) {
   );
 }
 
+/**
+ * Pull edge data from the texture.
+ * @param {int} idx
+ * @returns {Edge}
+ */
 Edge getEdge(in int idx) {
   vec4 dat0 = texelFetch(uEdgeSampler, ivec2(0, idx), 0);
   vec4 dat1 = texelFetch(uEdgeSampler, ivec2(1, idx), 0);
@@ -163,7 +167,7 @@ bool nodeHasBoundsIntersection(in Ray ray, in BVHNode node) {
   vec2 maxVals = max(minXY, maxXY);
   float tmax = min(maxVals.x, maxVals.y);
   float tmin = max(minVals.x, minVals.y);
-  return tmax > 0.0 && tmax >= tmin && ray.t2 > (tmin * tmin);
+  return tmax > 0.0 && tmax >= tmin && tmin < 1.0;
 }
 
 /**
@@ -198,7 +202,7 @@ float nodeHasObjectIntersection(in Ray ray, in BVHNode node) {
   vec3 a3d = vec3(a, top);
   vec3 edgeNormal = cross(vec3(b, top) - a3d, vec3(a, bottom) - a3d);
 
-  Plane edgePlane = Plane(a3d, edgeNormal);
+  Plane edgePlane = Plane(a3d, normalize(edgeNormal));
   float t;
   if ( !planeRayIntersection(edgePlane, ray, t) ) return 0.0;
   if ( t < 0.0 || (t * t) > ray.t2 ) return 0.0;
@@ -233,11 +237,8 @@ float hasIntersection(in Ray ray) {
   float collision = 0.0; // For terrain walls, which return 0.5 for each collision.
   int currLevel = 0;
   BVHNode currNode = getNode(0);
-  if ( nodeHasBoundsIntersection(ray, currNode) ) return 1.0;
-  if ( currNode.isLeaf ) {
-    collision += nodeHasObjectIntersection(ray, currNode);
-    if ( collision >= 1.0 ) return 1.0;
-  };
+  if ( !nodeHasBoundsIntersection(ray, currNode) ) return 0.0;
+  if ( currNode.isLeaf ) return nodeHasObjectIntersection(ray, currNode) >= 1.0 ? 1.0 : 0.0;
 
   // Track the next node for each level of the tree.
   int[MAX_STACK_SIZE] stack;
@@ -301,7 +302,7 @@ vec3 samplePositionLightSphere(in vec3 fragmentPosition, in float seed) {
 /* ------ NOTE: Fragment Main ----- */
 void main() {
   // Debug.
-  lightPercentage = vec4(0.0, 1.0, 1.0, 1.0);
+  lightPercentage = vec4(1.0);
 
 
   // BVHNode node = getNode(1);
@@ -325,7 +326,7 @@ void main() {
   return;
   */
 
-  lightPercentage = vec4(1.0); // Fully lit.
+  // lightPercentage = vec4(1.0); // Fully lit.
   // return;
 
   // If the terrain is above the light, the terrain is not lit.

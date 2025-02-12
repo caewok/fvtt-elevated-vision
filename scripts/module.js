@@ -74,6 +74,9 @@ import {
   DirectionalRandomShadowsTest } from "./testing/WallShaderTest3.js";
 
 import {
+  BVHTest } from "./testing/WallShaderTest_BVH.js";
+
+import {
   SourceShadowSampleSingleWallGeometry,
   PointSourceShadowSampleSingleWallGeometry,
   DirectionalSourceShadowSampleSingleWallGeometry,
@@ -256,7 +259,9 @@ Hooks.once("init", function() {
       DirectionalSourceShadowSampleMultiWallGeometry,
       SourceShadowMultiWallSubGeometry,
       PointSourceShadowMultiWallSubGeometry,
-      DirectionalSourceShadowMultiWallSubGeometry
+      DirectionalSourceShadowMultiWallSubGeometry,
+
+      BVHTest
     }
   };
 
