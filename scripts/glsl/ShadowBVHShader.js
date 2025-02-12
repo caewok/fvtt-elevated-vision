@@ -11,7 +11,6 @@ import { MODULE_ID, FLAGS } from "../const.js";
 import { sourceAtCanvasElevation } from "../util.js";
 import { AbstractEVShader } from "./AbstractEVShader.js";
 import { fetchGLSLCode, interpolate } from "./GLSLFunctions.js";
-import { EdgeData } from "./BVH.js";
 
 /* BVH shadow shader
 One per rendered source.
@@ -109,9 +108,7 @@ export class ShadowBVHShader extends AbstractEVShader {
     //   Store at ev, so it is ev.elevation._texture and ev.edges._texture.
     defaultUniforms.uTerrainSampler = ev._elevationTexture;
     defaultUniforms.uBVHSampler = bvh.texture;
-    defaultUniforms.uEdgeSampler = CONFIG[MODULE_ID].edgeTexture;
-    defaultUniforms.uNumEdges = EdgeData.edges.length;
-    defaultUniforms.uNumNodes = bvh.nodes.length;
+    defaultUniforms.uEdgeSampler = CONFIG[MODULE_ID].edgePixelCache.texture;
 
     // Uniforms related to the source.
     const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
@@ -157,14 +154,6 @@ export class ShadowBVHShader extends AbstractEVShader {
    * TODO: Handle setting light size to 0.
    */
   updateLightSize() { this.uniforms.uLightSize = this.source.data.lightSize; }
-
-  /**
-   * Update the bvh and edge lengths.
-   */
-  updateBVH() {
-    defaultUniforms.uNumEdges = EdgeData.edges.length;
-    defaultUniforms.uNumNodes = this.bvh.nodes.length;
-  }
 
   /**
    * Remove links to large objects.

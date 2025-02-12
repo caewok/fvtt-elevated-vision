@@ -1,6 +1,7 @@
 /* globals
 canvas,
 CONFIG,
+foundry,
 PIXI,
 Token
 */
@@ -8,11 +9,10 @@ Token
 "use strict";
 
 import { MODULE_ID } from "../const.js";
-import { BVH } from "./BVH.js";
+import { BVH, EdgeData } from "./BVH.js";
 import { tokenIsOnGround, waypointIsOnGround, edgeElevationZ } from "../util.js";
 import { ShadowBVHShader, SizedSourceShadowBVHShader } from "./ShadowBVHShader.js";
 import { EVUpdatingQuadMesh } from "./EVQuadMesh.js";
-import { PixelCache } from "../geometry/PixelCache.js";
 import { GlobalLightWebGLShadows, PointVisionWebGLShadows } from "./WebGLShadows.js";
 import { DirectionalLightSource } from "../DirectionalLightSource.js";
 import { ShadowTextureRenderer, ShadowDirectionalTextureRenderer } from "./ShadowTextureRenderer.js";
@@ -105,20 +105,14 @@ export class WebGLShadowsBVH {
    */
   _buildBVH() {
     // Determine which edges need to be placed in the index.
-    const edges = this._getEdges();
-
-    const allEdges = CONFIG[MODULE_ID].edgeData ?? [];
-    const edgeIds = new Set(edges.map(e => e.id));
-    const edgeIdx = [];
-    const nEdges = allEdges.length;
-    for ( let i = 0; i < nEdges; i += 1 ) {
-      const edgeDat = allEdges[i];
-      if ( edgeIds.has(edgeDat.id) ) edgeIdx.push(i);
+    const edgePixelCache = CONFIG[MODULE_ID].edgePixelCache;
+    const edges = [...this._getEdges()];
+    if ( !edgePixelCache.edgeIndexMap.size ) this.bvh = BVH.build([], []);
+    else {
+      const edgeIdx = edges.map(edge => edgePixelCache.edgeIndexMap.get(edge.id));
+      const edgeData = edges.map(edge => new EdgeData(edge, this.sourceType));
+      this.bvh = BVH.build(edgeData, edgeIdx);
     }
-    this.bvh = BVH.build(CONFIG[MODULE_ID].edgeData, edgeIdx);
-    this.bvh.createTextureCache();
-    this.bvh.createTexture();
-
   }
 
   /**
@@ -167,28 +161,61 @@ export class WebGLShadowsBVH {
    * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
-  sourceUpdated(_changes) {
+  sourceUpdated(changes) {
+    return this.shadowVisionMask.shader.sourceUpdated(changes);
   }
 
   /**
    * Update shadow data based on the added edge, as necessary.
-   * @param {Edge} edge     Edge that was added to the scene.
+   * @param {Edge} edge             Edge that was updated in the scene.
+   * @param {object} [opts]
+   * @param {boolean} [opts.render=true]    Cause the shadow to re-render
+   * @returns {boolean} True if the updated edge resulted in a change.
    */
-  edgeAdded(_edge) {}
+  edgeAdded(edge, { render = true } = {}) {
+    CONFIG[MODULE_ID].edgePixelCache.edgeAdded(edge);
+    if ( !this._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source)) ) return false;
+    this.bvh.addObjects(
+      [new EdgeData(edge, this.sourceType)],
+      [CONFIG[MODULE_ID].edgePixelCache.edgeIndexMap.get(edge.id)]);
+    if ( render ) this.shadowRenderer.update(); // Also update the bvh texture buffer?
+    return true;
+  }
 
   /**
-   * New method: RenderedEffectSource.prototype.edgeUpdated
    * Update shadow data based on the updated edge, as necessary.
-   * @param {Edge} edge     Edge that was updated in the scene.
+   * @param {Edge} edge             Edge that was updated in the scene.
+   * @param {object} [opts]
+   * @param {boolean} [opts.render=true]    Cause the shadow to re-render
+   * @returns {boolean} True if the updated edge resulted in a change.
    */
-  edgeUpdated(_edge, _changes) {}
+  edgeUpdated(edge, changes, { render = true } = {}) {
+    CONFIG[MODULE_ID].edgePixelCache.edgeUpdated(edge, changes);
+    if ( !this._testEdgeInclusion(edge, PIXI.Point.fromObject(this.source)) ) {
+      return this.edgeRemoved(edge.id, { render });
+    }
+    const i = this.bvh.findIndex(elem => elem.id === edge.id);
+    if ( !~i ) return false;
+    this.bvh.updateObjects(new Set([i]));
+    if ( render ) this.shadowRenderer.update(); // Also update the bvh texture buffer?
+    return true;
+  }
 
   /**
-   * New method: RenderedEffectSource.prototype.edgeRemoved
    * Update shadow data based on the removed edge, as necessary.
-   * @param {Edge|string} edgeId     Edge or id of edge that was removed from the scene.
+   * @param {Edge} edge             Edge that was updated in the scene.
+   * @param {object} [opts]
+   * @param {boolean} [opts.render=true]    Cause the shadow to re-render
+   * @returns {boolean} True if the updated edge resulted in a change.
    */
-  edgeRemoved(_edgeId) {}
+  edgeRemoved(edgeId, { render = true } = {}) {
+    CONFIG[MODULE_ID].edgePixelCache.edgeRemoved(edgeId);
+    const i = this.bvh.findIndex(elem => elem.id === edgeId);
+    if ( !~i ) return false;
+    this.bvh.removeObjects(new Set([i]));
+    if ( render ) this.shadowRenderer.update(); // Also update the bvh texture buffer?
+    return true;
+  }
 
   /**
    * Find the set of of walls that could potentially interact with this source.
@@ -426,6 +453,7 @@ export class WebGLShadowsBVH {
     // Unneeded? this.graphicsFOV.destroy();
     this.shadowRenderer?.destroy();
     this.shadowVisionMask?.destroy();
+    this.bvh?.destroy();
     this.#destroyed = true;
   }
 }

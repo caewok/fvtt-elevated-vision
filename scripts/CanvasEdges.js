@@ -6,7 +6,7 @@ Wall
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { EdgeData } from "./glsl/BVH.js";
+import { EdgePixelCache } from "./glsl/BVH.js";
 import { WebGLShadowsBVH } from "./glsl/WebGLShadowsBVH.js";
 import { extractPixelsAdvanced } from "./geometry/extract-pixels.js";
 
@@ -24,16 +24,24 @@ PATCHES.BASIC = {};
  */
 function initializeEdges() {
   if ( CONFIG[MODULE_ID].webGLShadowClass !== WebGLShadowsBVH ) return;
-  const t0 = performance.now();
 
   // See ElevationTextureHandler.js.
-  CONFIG[MODULE_ID].edgeData = EdgeData.edges.map(edge => new EdgeData(edge));
+  CONFIG[MODULE_ID].edgePixelCache.resetEdges();
 
-  CONFIG[MODULE_ID].edgeCache = EdgeData.createPixelCache();
-  CONFIG[MODULE_ID].edgeTexture = EdgeData.createTexture();
 
-  const t1 = performance.now();
-  console.debug(`${MODULE_ID}|Created edge cache in ${t1 - t0} ms.`);
+  // Wipe any existing shadows.
+  canvas.effects.visionSources.forEach(s => {
+    if ( s._elevatedvision ) {
+      s._elevatedvision.destroy();
+      s._elevatedvision = undefined;
+    }
+  });
+  canvas.effects.lightSources.forEach(s => {
+    if ( s._elevatedvision ) {
+      s._elevatedvision.destroy();
+      s._elevatedvision = undefined;
+    }
+  });
 }
 
 PATCHES.BASIC.HOOKS = { initializeEdges };

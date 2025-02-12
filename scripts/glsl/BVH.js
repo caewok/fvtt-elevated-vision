@@ -2,16 +2,15 @@
 canvas,
 CONFIG,
 CONST,
+Edge,
 foundry,
 PIXI
 */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
 import { Draw } from "../geometry/Draw.js";
 import { vec2, vec3, vec4 } from "../testing/glsl_mock.js";
 import * as glsl from "../testing/glsl_mock.js";
-import { extractPixelsAdvanced } from "../geometry/extract-pixels.js";
 
 
 /* Bounded Volume Hierarchy (BVH)
@@ -48,9 +47,39 @@ struct Segment3d {
 
 */
 
+/**
+ * Test if a number is even.
+ */
 function isEven(n) { return n % 2 === 0; }
 
+/**
+ * Test if a number is odd.
+ */
 function isOdd(n) { return n % 2 !== 0; }
+
+/**
+ * Pop the first element of a set, deleting it from that set.
+ * @param {Set} s
+ * @returns {*}
+ */
+function popSet(s) {
+  const out = s.first();
+  s.delete(out);
+  return out;
+}
+
+/**
+ * Remove a set of positive indices from an array, in place.
+ * Using negative indices will fail silently. Indices larger than the array are ignored.
+ * @param {*[]} arr
+ * @param {Set<number>|number[]} indices
+ */
+function arrayMultiDelete(arr, indices) {
+  // Reverse sort the indices and splice each in turn.
+  indices = [...indices];
+  indices.sort((a, b) => b - a);
+  indices.forEach(i => arr.splice(i, 1));
+}
 
 /**
  * Intersect ray with plane
@@ -247,90 +276,211 @@ aabbMax.x | aabbMax.x | ? | ? || aabbMax.y | aabbMax.y | ? | ? ||
 
 */
 
-export class EdgeData {
-  /** @type {Edge} */
-  edge;
+export class EdgePixelCache {
 
-  /** @type {string} */
-  id = "";
+  /** @type {Map<string (edge id), number (texture row)>} */
+  edgeIndexMap = new Map();
 
-  /** @type {CONST.WALL_RESTRICTION_TYPES} */
-  sourceType = "light";
+  /** @type {Set<number>} */
+  emptyIndices = new Set();
 
-  constructor(edge, sourceType = "light") {
-    this.edge = edge;
-    this.id = edge.id;
-    this.sourceType = sourceType;
-  }
-
-  // ---- NOTE: Property getters ----- //
-
-  /** @type {vec2} */
-  get a() { return vec2(this.edge.a.x, this.edge.a.y); }
-
-  /** @type {vec2} */
-  get b() { return vec2(this.edge.b.x, this.edge.b.y); }
-
-  /** @type {float} */
-  get top() { return this.edge.elevationLibGeometry.a.top ?? 1.0e06; }
-
-  /** @type {float} */
-  get bottom() { return this.edge.elevationLibGeometry.a.bottom ?? -1.0e06; }
-
-  /** @type {CONST.WALL_SENSE_TYPES} */
-  get senseType() { return this.edge[this.sourceType]; }
-
-  /** @type {bool} */
-  get thresholdIsAttenuated() { return this.edge.threshold.attenuation; }
-
-  /** @type {CONST.WALL_SENSE_TYPES} */
-  get thresholdAttenuation() { return this.edge.threshold[this.sourceType]; }
-
-  /** @type {vec3} */
-  get normal() {
-    const { a, b, top, bottom } = this;
-    const pt0 = vec3(a, top);
-    const pt1 = vec3(b, top);
-    const pt2 = vec3(a, bottom);
-    return glsl.cross(pt1.subtract(pt0), pt2.subtract(pt0));
-  }
-
-  /** @type {Plane} */
-  get plane() { return glsl.Plane(vec3(this.a, this.top), this.normal); }
-
-  // ----- NOTE: Simple getter calculations ----- //
+  /** @type {PIXI.Texture} */
+  _texture;
 
   /**
    * @type {object}
-   * - @prop {vec2} min
-   * - @prop {vec2} max
+   * - @prop {number} height
+   * - @prop {number} width
+   * - @prop {TypedArray[height * width * channels]} pixels
    */
-  get aabb() {
-    const { a, b } = this;
-    const xMinMax = Math.minMax(a.x, b.x);
-    const yMinMax = Math.minMax(a.y, b.y);
-    return {
-      min: vec2(xMinMax.min, yMinMax.min),
-      max: vec2(xMinMax.max, yMinMax.max)
-    };
+  _cache;
+
+  // ----- NOTE: Instantiation ----- //
+
+  get texture() { return this._texture ?? this.createTexture(); }
+
+  get cache() { return this._cache ?? this.createPixelCache(); }
+
+  /** @type {Edge} */
+  get edges() { return [...canvas.edges.values()].filter(edge => this.includeEdge(edge)); }
+
+  // ----- NOTE: Cache and Texture creation ----- //
+
+  /**
+   * Configuration object for the texture.
+   * @returns {object}
+   */
+  textureConfiguration() {
+    // See https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
+    // Set texture height to 2^X. Will likely fail at between 2^13 and 2^16.
+    const MIN_HEIGHT_EXP = 5;    // 2^5 = 32.
+    const heightExp = Math.max(MIN_HEIGHT_EXP, Math.ceil(Math.sqrt(this.edges.length)));
+    const height = Math.pow(2, heightExp);
+    return { height, ...this.constructor.TEXTURE_CONFIG };
   }
 
-  /** @type {vec2} */
-  get centroid() { return this.a.add(this.b).multiplyScalar(0.5); }
-
-  /** @type {PIXI.Rectangle} */
-  get boundsRect() {
-    const aabb = this.aabb;
-    return new PIXI.Rectangle(
-      aabb.min.x,
-      aabb.min.y,
-      aabb.max.x - aabb.min.x,
-      aabb.max.y - aabb.min.y
-    );
+  /**
+   * Create a texture that can store the edge data.
+   * @param {object} [config={}]    Changes from textureConfiguration.
+   * @returns {PIXI.RenderTexture}
+   */
+  createTexture() {
+    const { pixels, width, height } = this.cache;
+    this._texture = PIXI.Texture.fromBuffer(pixels, width, height, this.textureConfiguration());
+    return this._texture;
   }
 
-  // ----- NOTE: Texture storage ----- //
+  /**
+   * Create a pixel cache.
+   * @returns {object}
+   * - @prop {Uint16Array} pixels
+   * - @prop {number} x
+   * - @prop {number} y
+   * - @prop {number} width
+   * - @prop {number} height
+   */
+  createPixelCache() {
+    const cfg = this.textureConfiguration();
+    const { width, height, arrayCl } = cfg;
+    const pixels = new arrayCl(width * height * 4);
+    this._cache = { pixels, width, height };
+    this.edges.forEach(edge => this.#updateEdge(edge));
+    return this._cache;
+  }
 
+  /**
+   * Increase the cache size.
+   */
+  #increaseCacheSize() {
+    const { height, width, arrayCl, channels } = this.textureConfiguration();
+    const cache = this.cache;
+    const oldPixels = cache.pixels;
+    const oldHeight = cache.height;
+    cache.height = height;
+    cache.width = width;
+    cache.pixels = new arrayCl(height * width * channels);
+    cache.pixels.set(oldPixels);
+    this.texture.baseTexture.updateSourceImage(cache, width, height);
+  }
+
+  // ----- NOTE: Edge updates ----- //
+
+  /**
+   * Should the edge be included?
+   * @param {Edge} edge
+   * @returns {boolean}
+   */
+  includeEdge(edge) { return edge.type === "wall" || edge.type === "regionWall"; }
+
+  /**
+   * Reset all edges in the cache. Faster than processing individually.
+   */
+  resetEdges() {
+    this.edgeIndexMap.clear();
+    this.emptyIndices.clear();
+    const edges = this.edges;
+    if ( edges.length > this.cache.height ) this.#increaseCacheSize();
+    for ( const edge of edges ) this.#updateEdge(edge);
+  }
+
+  /**
+   * Handle adding an edge to the scene.
+   * @param {Edge} edge
+   * @returns {boolean} True if it resulted in a potential change.
+   */
+  edgeAdded(edge) {
+    if ( !this.includeEdge(edge) ) return false;
+    if ( !this.edgeIndexMap.has(edge.id)
+      && this.edgeIndexMap.size > this.cache.height ) this.#increaseCacheSize();
+    this.#updateEdge(edge);
+    return true;
+  }
+
+  /**
+   * Handle updating an edge in the scene.
+   * @param {Edge} edge
+   * @param {Set<string>} changes
+   * @returns {boolean} True if it resulted in a potential change.
+   */
+  edgeUpdated(edge, changes) {
+    const changedPosition = changes.has("c");
+    const changedElevation = [
+      "flags.wall-height.top",
+      "flags.wall-height.bottom",
+      "flags.elevatedvision.elevation.top",
+      "flags.elevatedvision.elevation.bottom"].some(prop => changes.has(prop));
+    const changedThreshold = changes.has(`threshold.${this.sourceType}`) || changes.has("threshold.attenuation");
+    const changedSenseType = changes.has(`${this.sourceType}`);
+    const requiresUpdate = changedPosition || changedElevation || changedThreshold || changedSenseType;
+    if ( requiresUpdate ) this.#updateEdge(edge);
+    return requiresUpdate;
+  }
+
+  /**
+   * Handle removing an edge from the scene.
+   * Does not modify the underlying texture row but marks it for possible overwrite.
+   * @param {Edge} edge
+   * @returns {boolean} True if it resulted in a potential change.
+   */
+  edgeRemoved(edgeId) {
+    if ( edgeId instanceof Edge ) edgeId = edgeId.id;
+    const i = this.edgeIndexMap.get(edgeId);
+    if ( typeof i === "undefined" ) return false;
+
+    // Store the index so the texture row can be reused later.
+    this.emptyIndices.add(i);
+    this.edgeIndexMap.delete(edgeId);
+    return true;
+  }
+
+  #updateEdge(edge) {
+    // || a.x | a.y | b.x | b.y || senseType | top | bottom | ? || threshLight | threshSight | threshSound | ? ||
+    // TODO: Use alpha channels to increase resolution of top, bottom, thresholds.
+    // Could encode ± for top,bottom, along with multiplier or divider by 10 or 100 for both.
+    // May eventually need separate top.a, bottom.a, top.b, bottom.b values.
+    const { width, channels } = this.constructor.TEXTURE_CONFIG;
+    const maxValue = 65535; // 2^16 - 1.
+
+    // Determine which edge in the texture cache we are dealing with.
+    const edgeIndexMap = this.edgeIndexMap;
+    const i = edgeIndexMap.get(edge.id) ?? popSet(this.emptyIndices) ?? edgeIndexMap.size;
+    if ( !edgeIndexMap.has(edge.id) ) edgeIndexMap.set(edge.id, i);
+
+    // Update the edge data.
+    const arr = this.cache.pixels;
+    const r = i * width * channels;
+    const elevation = this.constructor.encodeEdgeElevation(edge);
+    const t = edge.threshold;
+
+    arr[r + 0] = edge.a.x;
+    arr[r + 1] = edge.a.y;
+    arr[r + 2] = edge.b.x;
+    arr[r + 3] = edge.b.y;
+
+    arr[r + 4] = this.constructor.encodeEdgeTypes(edge);
+    arr[r + 5] = elevation.top;
+    arr[r + 6] = elevation.bottom;
+    // Unused arr[r + 7] =
+
+    arr[r + 8] = glsl.clamp(t.attenuation ? t.light : 0, 0, maxValue);
+    arr[r + 9] = glsl.clamp(t.attenuation ? t.sight : 0, 0, maxValue);
+    arr[r + 10] = glsl.clamp(t.attenuation ? t.sound : 0, 0, maxValue);
+  }
+
+
+  // ----- NOTE: Static properties ----- //
+
+  /** @type {object} */
+  static TEXTURE_CONFIG = {
+    channels: 4,
+    width: 3,
+    mipmap: PIXI.MIPMAP_MODES.OFF,
+    scaleMode: PIXI.SCALE_MODES.NEAREST,
+    multisample: PIXI.MSAA_QUALITY.NONE,
+    arrayCl: Float32Array // Uint16Array  // RGBA16UI.
+  };
+
+  // ----- NOTE: Static methods ----- //
 
   /**
    * Encode the edge top and bottom.
@@ -424,105 +574,89 @@ export class EdgeData {
       move:  ((n & moveMask)  >> offset.move)  * 10 /* eslint-disable-line no-multi-spaces,key-spacing */
     };
   }
+}
 
+export class EdgeData {
   /** @type {Edge} */
-  // TODO: Add region edges from Terrain Mapper.
-  static get edges() { return [...canvas.edges.values()].filter(edge => edge.type === "wall"); }
+  edge;
 
-  /**
-   * Copy the relevant bvh data to an array.
-   */
-  static copyEdgesToArray(arr) {
-    const edges = this.edges;
-    const height = edges.length;
-    const width = 3;
-    const channels = 4;
-    arr ??= new Uint16Array(width * height * channels);
-    if ( arr.length < (width * height * channels) ) console.error(`${MODULE_ID}|copyToArray|Array is wrong length. Should be ${width * height * channels} but is actually ${arr.length}`);
+  /** @type {string} */
+  id = "";
 
-    // || a.x | a.y | b.x | b.y || senseType | top | bottom | ? || threshLight | threshSight | threshSound | ? ||
-    // TODO: Use alpha channels to increase resolution of top, bottom, thresholds.
-    // Could encode ± for top,bottom, along with multiplier or divider by 10 or 100 for both.
-    // May eventually need separate top.a, bottom.a, top.b, bottom.b values.
-    const maxValue = 65535; // 2^16 - 1.
-    for ( let i = 0; i < height; i += 1 ) {
-      const edge = edges[i];
-      const r = i * width * channels;
-      const elevation = this.encodeEdgeElevation(edge);
-      const t = edge.threshold;
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  sourceType = "light";
 
-      arr[r + 0] = edge.a.x;
-      arr[r + 1] = edge.a.y;
-      arr[r + 2] = edge.b.x;
-      arr[r + 3] = edge.b.y;
-
-      arr[r + 4] = this.encodeEdgeTypes(edge);
-      arr[r + 5] = elevation.top;
-      arr[r + 6] = elevation.bottom;
-      // Unused arr[r + 7] =
-
-      arr[r + 8] = glsl.clamp(t.attenuation ? t.light : 0, 0, maxValue);
-      arr[r + 9] = glsl.clamp(t.attenuation ? t.sight : 0, 0, maxValue);
-      arr[r + 10] = glsl.clamp(t.attenuation ? t.sound : 0, 0, maxValue);
-      // Unused arr[r + 11] =
-    }
-    return arr;
+  constructor(edge, sourceType = "light") {
+    this.edge = edge;
+    this.id = edge.id;
+    this.sourceType = sourceType;
   }
 
-  static textureConfiguration() {
-    // See https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
-    // RGBA16UI.
-    const width = 3;
+  // ---- NOTE: Property getters ----- //
 
-    // Set texture height to 2^X. Will likely fail at between 2^13 and 2^16.
-    const MIN_HEIGHT_EXP = 5;    // 2^5 = 32.
-    const height = Math.max(MIN_HEIGHT_EXP, Math.ceil(Math.sqrt(this.edges.length)));
+  /** @type {vec2} */
+  get a() { return vec2(this.edge.a.x, this.edge.a.y); }
+
+  /** @type {vec2} */
+  get b() { return vec2(this.edge.b.x, this.edge.b.y); }
+
+  /** @type {float} */
+  get top() { return this.edge.elevationLibGeometry.a.top ?? 1.0e06; }
+
+  /** @type {float} */
+  get bottom() { return this.edge.elevationLibGeometry.a.bottom ?? -1.0e06; }
+
+  /** @type {CONST.WALL_SENSE_TYPES} */
+  get senseType() { return this.edge[this.sourceType]; }
+
+  /** @type {bool} */
+  get thresholdIsAttenuated() { return this.edge.threshold.attenuation; }
+
+  /** @type {CONST.WALL_SENSE_TYPES} */
+  get thresholdAttenuation() { return this.edge.threshold[this.sourceType]; }
+
+  /** @type {vec3} */
+  get normal() {
+    const { a, b, top, bottom } = this;
+    const pt0 = vec3(a, top);
+    const pt1 = vec3(b, top);
+    const pt2 = vec3(a, bottom);
+    return glsl.cross(pt1.subtract(pt0), pt2.subtract(pt0));
+  }
+
+  /** @type {Plane} */
+  get plane() { return glsl.Plane(vec3(this.a, this.top), this.normal); }
+
+  // ----- NOTE: Simple getter calculations ----- //
+
+  /**
+   * @type {object}
+   * - @prop {vec2} min
+   * - @prop {vec2} max
+   */
+  get aabb() {
+    const { a, b } = this;
+    const xMinMax = Math.minMax(a.x, b.x);
+    const yMinMax = Math.minMax(a.y, b.y);
     return {
-      width,
-      height,
-      mipmap: PIXI.MIPMAP_MODES.OFF,
-      scaleMode: PIXI.SCALE_MODES.NEAREST,
-      multisample: PIXI.MSAA_QUALITY.NONE,
-      arrayCl: Float32Array // Uint16Array
+      min: vec2(xMinMax.min, yMinMax.min),
+      max: vec2(xMinMax.max, yMinMax.max)
     };
   }
 
-  /**
-   * Create a texture that can store the edge data.
-   * @param {object} [config={}]    Changes from textureConfiguration.
-   * @returns {PIXI.RenderTexture}
-   */
-  static createTexture() {
-    this.cache ??= this.createPixelCache();
-    const { pixels, width, height } = this.cache;
-    this.texture = PIXI.Texture.fromBuffer(pixels, width, height, this.textureConfiguration());
-    return this.texture;
+  /** @type {vec2} */
+  get centroid() { return this.a.add(this.b).multiplyScalar(0.5); }
+
+  /** @type {PIXI.Rectangle} */
+  get boundsRect() {
+    const aabb = this.aabb;
+    return new PIXI.Rectangle(
+      aabb.min.x,
+      aabb.min.y,
+      aabb.max.x - aabb.min.x,
+      aabb.max.y - aabb.min.y
+    );
   }
-
-
-  /**
-   * Create a pixel cache.
-   * @returns {object}
-   * - @prop {Uint16Array} pixels
-   * - @prop {number} x
-   * - @prop {number} y
-   * - @prop {number} width
-   * - @prop {number} height
-   */
-  static createPixelCache() {
-    const cfg = this.textureConfiguration();
-    const { width, height, arrayCl } = cfg;
-    // const pixels = new Uint16Array(width * height * 4);
-    const pixels = new arrayCl(width * height * 4);
-    this.cache = { pixels, width, height };
-    this.copyEdgesToArray(this.cache.pixels);
-    return this.cache;
-  }
-
-  // TODO: Increase cache size.
-  // TODO: Handle edge addition.
-  // TODO: Handle edge deletion.
-  // TODO: Handle edge updates.
 
   // ----- NOTE: Debugging ----- //
 
@@ -692,10 +826,14 @@ export class BVH {
   nodesUsed = 0;
 
   /** @type {PIXI.RenderTexture} */
-  texture; // Store the bvh data for use in shader.
+  _texture; // Store the bvh data for use in shader.
+
+  get texture() { return this._texture ?? this.createTexture(); }
 
   /** @type {Uint16Array} */
-  cache; // Pixel cache for the bvh texture.
+  _cache; // Pixel cache for the bvh texture.
+
+  get cache() { return this._cache ?? this.createPixelCache(); }
 
   constructor(objData, objIdx) {
     this.objData = objData;
@@ -709,13 +847,10 @@ export class BVH {
 
   static build(objData, objIdx) {
     const bvh = new this(objData, objIdx);
-    bvh.root.leftFirst = 0;
-    bvh.root.updateBounds();
-
-    // Subdivide recursively
-    bvh.subdivide(0);
+    bvh.rebuild();
     return bvh;
   }
+
 
   /**
    * Subdivide the BVH tree.
@@ -725,7 +860,7 @@ export class BVH {
     // Terminate recursion.
     const node = this.nodes[nodeIdx];
     const N = node.objCount;
-    // console.log(`nodeIdx ${nodeIdx} objCount ${N} leftFirst ${node.leftFirst}`);
+    // Debug: console.log(`nodeIdx ${nodeIdx} objCount ${N} leftFirst ${node.leftFirst}`);
 
     if ( N <= 1 ) return;
     if ( N === 2 ) return this._split(node, 1);
@@ -887,7 +1022,7 @@ export class BVH {
     const stack = new Uint16Array(Math.floor(this.nodes.length * 0.5) + 2); // Plus 1 for root.
     stack[0] = 1;  // Root left child is 1; root right child is 2.
     while ( currLevel >= 0 ) {
-      // console.log(`hasIntersectionNonRecursive|currLevel ${currLevel}`, [...stack])
+      // Debug: console.log(`hasIntersectionNonRecursive|currLevel ${currLevel}`, [...stack])
 
       // Pull the current node.
       currNode = this.nodes[stack[currLevel]];
@@ -919,80 +1054,139 @@ export class BVH {
 
   // ----- NOTE: Texture storage ----- //
 
+  /** @type {object} */
+  static TEXTURE_CONFIG = {
+    channels: 4,
+    width: 2,
+    mipmap: PIXI.MIPMAP_MODES.OFF,
+    scaleMode: PIXI.SCALE_MODES.NEAREST,
+    multisample: PIXI.MSAA_QUALITY.NONE,
+    arrayCl: Float32Array // Uint16Array  // RGBA16UI.
+  };
+
   /**
-   * Copy the relevant bvh data to an array.
+   * Update the pixel cache for all nodes.
    */
-  copyToArray(arr) {
-    const width = 2;
-    const height = this.nodes.length;
-    const channels = 4;
-    arr ??= new Uint16Array(width * height * channels);
-    if ( arr.length < (width * height * channels) ) console.error(`${MODULE_ID}|copyToArray|Array is wrong length. Should be ${width * height * channels} but is actually ${arr.length}`);
-
-    // || leftFirst | type | ? | ? || aabbMin.x | aabbMin.y | aabbMax.x | aabbMax.y ||
-    for ( let n = 0; n < height; n += 1 ) {
-      const node = this.nodes[n];
-      const aabb = node.aabb;
-      const r = n * width * channels;
-
-      // For leftFirst, store the actual edge index, not the objIdx.
-      // This avoids having to pass through the objIdx array,
-      // which is highly problematic b/c of its variable (and large) size.
-      arr[r] = node.isLeaf ? node.objIdx[node.leftFirst] : node.leftFirst;
-      arr[r + 1] = node.objCount;
-      // Unused: arr[r + 2]
-      // Unused: arr[r + 3]
-      arr[r + 4] = aabb.min.x;
-      arr[r + 5] = aabb.min.y;
-      arr[r + 6] = aabb.max.x;
-      arr[r + 7] = aabb.max.y;
-    }
-    return arr;
+  #updateAllNodes() {
+    const nNodes = this.nodes.length;
+    for ( let n = 0; n < nNodes; n += 1 ) this.#updateNode(n);
   }
 
-  textureConfiguration() {
-    // See https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
-    // RGBA16UI.
+  #updateNode(n) {
+    const { width, channels } = this.constructor.TEXTURE_CONFIG;
+    const arr = this.cache.pixels;
+    const node = this.nodes[n];
+    const aabb = node.aabb;
+    const r = n * width * channels;
+
     // || leftFirst | type | ? | ? || aabbMin.x | aabbMin.y | aabbMax.x | aabbMax.y ||
-
-    const width = 2;
-
-    // Set texture height to 2^X, where X is min 5 (32), max 16 (65536).
-    const MIN_HEIGHT_EXP = 5;    // 2^5 = 32.
-    const height = Math.max(MIN_HEIGHT_EXP, Math.ceil(Math.sqrt(this.nodes.length)));
-    return {
-      width,
-      height,
-      mipmap: PIXI.MIPMAP_MODES.OFF,
-      scaleMode: PIXI.SCALE_MODES.NEAREST,
-      multisample: PIXI.MSAA_QUALITY.NONE,
-      arrayCl: Float32Array // Uint16Array
-    };
+    // For leftFirst, store the actual edge index, not the objIdx.
+    // This avoids having to pass through the objIdx array,
+    // which is highly problematic b/c of its variable (and large) size.
+    arr[r] = node.isLeaf ? node.objIdx[node.leftFirst] : node.leftFirst;
+    arr[r + 1] = node.objCount;
+    // Unused: arr[r + 2]
+    // Unused: arr[r + 3]
+    arr[r + 4] = aabb.min.x;
+    arr[r + 5] = aabb.min.y;
+    arr[r + 6] = aabb.max.x;
+    arr[r + 7] = aabb.max.y;
   }
-
 
   /**
    * Construct a texture to store this bvh data.
    * @returns {PIXI.RenderTexture}
    */
   createTexture() {
-    const { pixels, width, height } = this.cache ??= this.createTextureCache();
-    return (this.texture = PIXI.Texture.fromBuffer(pixels, width, height, this.textureConfiguration()));
+    const { pixels, width, height } = this.cache;
+    return (this._texture = PIXI.Texture.fromBuffer(pixels, width, height, this.textureConfiguration()));
   }
 
   /**
-   * Make existing wall texture larger.
+   * Add an object to the bvh.
+   * Causes a full recalculation of the bvh.
+   * @param {Object[]} objData
+   * @param {number[]} idx
    */
-  _growTexture() {
-    const { pixels: oldPixels, height: oldHeight } = this.cache;
-    // TODO: Complete.
-
+  addObjects(objData, objIdx) {
+    this.objData.splice(this.objData.length, ...objData);
+    this.objIdx.splice(this.objIdx.length, ...objIdx);
+    this.rebuild();
   }
 
-  // TODO: Increase cache size.
-  // TODO: Handle edge addition.
-  // TODO: Handle edge deletion.
-  // TODO: Handle edge updates.
+  /**
+   * Update an existing object in the bvh.
+   * Causes the bvh to refit.
+   * @param {Set<number>} indices
+   */
+  updateObjects(indices) {
+    if ( !(indices instanceof Set) ) indices = new Set(indices);
+    this.refit(indices);
+  }
+
+  /**
+   * Remove an object from the bvh.
+   * Causes a full recalculation of the bvh.
+   * @param {Set<number>} indices     Indices of objData/objIdx to remove.
+   */
+  removeObjects(indices) {
+    if ( !(indices instanceof Set) ) indices = new Set(indices);
+    arrayMultiDelete(this.objData, indices);
+    arrayMultiDelete(this.objIdx, indices);
+    this.rebuild();
+  }
+
+  rebuild() {
+    this.nodesUsed = 1;
+    this.root.leftFirst = 0; // Set already but just to be sure.
+    this.root.updateBounds();
+
+    // Subdivide recursively
+    this.subdivide(0);
+
+    if ( this.nodesUsed > this.cache.height ) this.#increaseCacheSize();
+    this.#updateAllNodes();
+  }
+
+  /**
+   * Refit the bvh and update the texture cache accordingly.
+   * Size of the bvh does not change.
+   * May result in a less efficient bvh tree structure.
+   * See https://jacco.ompf2.com/2022/04/26/how-to-build-a-bvh-part-4-animation/
+   * @param {Set<number>} [indices]     Optional (leaf) indices to refit.
+   */
+  refit(indices) {
+    indices ??= new Set(Array.fromRange(this.nodesUsed));
+    for ( let i = this.nodesUsed - 1; i >= 0; i -= 1 ) {
+      if ( i === 1 ) continue;
+      const node = this.nodes[i];
+      if ( node.isLeaf && indices.has(i) ) {
+        node.updateBounds();
+        this.#updateNode(i);
+        continue;
+      }
+
+      // Interior node: Adjust bounds to child node bounds.
+      const leftChild = this.nodes[node.leftFirst];
+      const rightChild = this.nodes[node.leftFirst + 1];
+      node.aabb.min = glsl.min(leftChild.aabb.min, rightChild.aabb.min);
+      node.aabb.max = glsl.max(leftChild.aabb.max, rightChild.aabb.max);
+      this.#updateNode(i);
+    }
+  }
+
+  /**
+   * Configuration object for the texture.
+   * @returns {object}
+   */
+  textureConfiguration() {
+    // See https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
+    // Set texture height to 2^X. Will likely fail at between 2^13 and 2^16.
+    const MIN_HEIGHT_EXP = 5;    // 2^5 = 32.
+    const heightExp = Math.max(MIN_HEIGHT_EXP, Math.ceil(Math.sqrt(this.nodes.length)));
+    const height = Math.pow(2, heightExp);
+    return { height, ...this.constructor.TEXTURE_CONFIG };
+  }
 
   /**
    * Construct a pixel cache from the bvh texture.
@@ -1004,14 +1198,41 @@ export class BVH {
    * - @prop {number} width
    * - @prop {number} height
    */
-  createTextureCache() {
+  createPixelCache() {
     const cfg = this.textureConfiguration();
     const { width, height, arrayCl } = cfg;
-    // const pixels = new Uint16Array(width * height * 4);
     const pixels = new arrayCl(width * height * 4);
-    this.cache = { pixels, width, height };
-    this.copyToArray(this.cache.pixels);
-    return this.cache;
+    this._cache = { pixels, width, height };
+    return this._cache;
+  }
+
+  /**
+   * Increase the cache size.
+   */
+  #increaseCacheSize() {
+    const { height, width, arrayCl, channels } = this.textureConfiguration();
+    const cache = this.cache;
+    const oldPixels = cache.pixels;
+    const oldHeight = cache.height;
+    cache.height = height;
+    cache.width = width;
+    cache.pixels = new arrayCl(height * width * channels);
+    cache.pixels.set(oldPixels);
+    this.texture.baseTexture.updateSourceImage(cache, width, height);
+  }
+
+  /** @type {boolean} */
+  #destroyed = false;
+
+  get destroyed() { return this.#destroyed; }
+
+  destroy() {
+    if ( this.#destroyed ) return;
+    this.texture.destroy();
+    this.cache.pixels = null;
+    this.objData.length = 0;
+    this.objIdx.length = 0;
+    this.#destroyed = true;
   }
 
   // ----- NOTE: Debugging ----- //
@@ -1129,9 +1350,6 @@ ray = glsl.RayGLSLStruct.bvhRay(fragmentPosition, glsl.normalizedDirection(fragm
 bvh.hasIntersection(ray)
 bvh.hasIntersectionNonRecursive(ray)
 
-
-
-
 // Get wall edges.
 edges = [...canvas.edges.values()].filter(edge => edge.type === "wall")
 
@@ -1173,8 +1391,6 @@ bvh.displayHierarchy()
 bvh.textureConfiguration()
 bvh.copyToArray()
 
-EdgeData.textureConfiguration()
-EdgeData.copyEdgesToArray()
 */
 
 
