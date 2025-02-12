@@ -345,8 +345,9 @@ export class EdgeData {
 
     // If null, treat as infinite. If outside the range, treat as infinite.
     // TODO: Could add more sophisticated resolution given another pixel channel to use.
-    const edgeTop = glsl.clamp(edge.a.top ?? maxTop, -split, maxTop);
-    const edgeBottom = glsl.clamp(edge.a.bottom ?? -split, -split, maxTop);
+    // NOTE: Currently a and b elevations are the same.
+    const edgeTop = glsl.clamp(elevation.a.top ?? maxTop, -split, maxTop);
+    const edgeBottom = glsl.clamp(elevation.a.bottom ?? -split, -split, maxTop);
     return {
       top: edgeTop + split,
       bottom: edgeBottom + split

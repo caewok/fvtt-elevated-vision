@@ -128,7 +128,7 @@ export class BVHTest extends ShaderTest {
 
     if ( n === EDGE_ELEVATION.MAX ) return 1.0e06;
     if ( n === EDGE_ELEVATION.MIN ) return -1.0e06;
-    return Number(n - EDGE_ELEVATION.SPLIT);
+    return glsl.gridUnitsToPixels(Number(n - EDGE_ELEVATION.SPLIT), this.uElevationRes.a);
   }
 
   /**
@@ -440,7 +440,7 @@ Draw.segment({ A: ray.origin, B: ray.project(1.0) }, { color: Draw.COLORS.yellow
 lightCir = new PIXI.Circle(bvhTest.uLightPosition.x, bvhTest.uLightPosition.y, bvhTest.uLightSize)
 Draw.shape(lightCir, { fillAlpha: 0.5, fill: Draw.COLORS.yellow })
 
-
+bvhTest.canvasElevation = 0
 node = bvhTest.getNode(0)
 bvhTest.nodeHasBoundsIntersection(ray, node)
 bvhTest.nodeHasObjectIntersection(ray, node)

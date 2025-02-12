@@ -65,6 +65,7 @@ ${defineFunction("almostEqual")}
 ${defineFunction("linearConversion")}
 ${defineFunction("rayFromPoints")}
 ${defineFunction("distanceToLine")}
+${defineFunction("gridUnitsToPixels")}
 
 /** Represent node data in the BVH */
 struct BVHNode {
@@ -107,7 +108,7 @@ int decodeEdgeTypes(in int n) {
 float decodeEdgeElevation(in int n) {
   if ( n == EDGE_ELEVATION_MAX ) return 1.0e06;
   if ( n == EDGE_ELEVATION_MIN ) return -1.0e06;
-  return float(n - EDGE_ELEVATION_SPLIT);
+  return gridUnitsToPixels(float(n - EDGE_ELEVATION_SPLIT), uElevationRes.a);
 }
 
 /**
