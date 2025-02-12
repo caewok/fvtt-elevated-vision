@@ -16,6 +16,7 @@ import { PATCHES as PATCHES_ActiveEffect } from "./ActiveEffect.js";
 import { PATCHES as PATCHES_AdaptiveLightingShader } from "./glsl/AdaptiveLightingShader.js";
 import { PATCHES as PATCHES_AmbientLight } from "./AmbientLight.js";
 import { PATCHES as PATCHES_AmbientLightConfig } from "./AmbientLightConfig.js";
+import { PATCHES as PATCHES_CanvasEdges } from "./CanvasEdges.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_PointLightSource } from "./PointLightSource.js";
 import { PATCHES as PATCHES_PointVisionSource } from "./PointVisionSource.js";
@@ -51,6 +52,7 @@ export const PATCHES = {
   AdaptiveLightingShader: PATCHES_AdaptiveLightingShader,
   AmbientLight: PATCHES_AmbientLight,
   "foundry.applications.sheets.AmbientLightConfig": PATCHES_AmbientLightConfig,
+  "foundry.canvas.edges.CanvasEdges": PATCHES_CanvasEdges,
   CanvasVisibility: PATCHES_CanvasVisibility,
   DetectionMode: PATCHES_DetectionMode,
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,

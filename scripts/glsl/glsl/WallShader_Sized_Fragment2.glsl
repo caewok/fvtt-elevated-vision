@@ -49,6 +49,7 @@ ${defineFunction("lineLineIntersection")}
 ${defineFunction("planePointTo3d")}
 ${defineFunction("fromAngle")}
 ${defineFunction("lineSegmentIntersects")}
+${defineFunction("normalizedRay")}
 
 /**
  * Select a position on the sphere given vec3 between -1 and 1.
@@ -174,7 +175,7 @@ vec2[2] linkedWallPoints() {
     vec2 WO = wallEndpoints[1 - i];
 
     // Extend wall straight out.
-    if ( fLinkValues[i] == EV_ENDPOINT_LINKED_BLOCKED ) linkPoints[i] = projectRay(Ray2d(W, normalizedDirection(WO, W)), maxR2());
+    if ( fLinkValues[i] == EV_ENDPOINT_LINKED_BLOCKED ) linkPoints[i] = projectRay(normalizedRayFromDirection(W, W - WO), maxR2());
 
     // Extend wall along the link angle.
     else if ( fLinkValues[i] != EV_ENDPOINT_LINKED_UNBLOCKED ) linkPoints[i] = fromAngle(W, fLinkValues[i], maxR2());
@@ -337,6 +338,15 @@ float shadowPercentage() {
 
   #endif
 }
+
+// TODO: Use lookAt matrix to transform array of 2d points at light elevation to look at the fragment.
+// Start with light center point
+// Create by spacing:
+// 1. light quarters (half, half again) with points at 0, 1/7, 2/7, ...
+// 2. light eighths with points at 1/5, 2/5,...
+// 3. light sixteenths with points at 1/3, 2/3,...
+// 7 * 2 + 5 * 2 + 3 * 4 = 36 + 16 for the borders = 52.
+// For more, narrow the spacing, so 1/14, 3/14,..., 1/10, 3/10, ...
 
 
 void main() {

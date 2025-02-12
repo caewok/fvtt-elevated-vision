@@ -39,6 +39,8 @@ import { EVQuadMesh } from "./glsl/EVQuadMesh.js";
 
 import { DirectionalLightSource } from "./DirectionalLightSource.js";
 
+import { EdgePixelCache } from "./glsl/BVH.js";
+
 // Register methods, patches, settings
 import { PATCHER, initializePatching, registerPatchesForSceneSettings } from "./patching.js";
 import { registerGeometry } from "./geometry/registration.js";
@@ -72,6 +74,9 @@ import {
   SizedRandomShadowsTest,
   DirectionalShadowsTest,
   DirectionalRandomShadowsTest } from "./testing/WallShaderTest3.js";
+
+import {
+  BVHTest } from "./testing/WallShaderTest_BVH.js";
 
 import {
   SourceShadowSampleSingleWallGeometry,
@@ -118,6 +123,10 @@ import {
   DirectionalLightWebGLShadowsMultiWall
 } from "./glsl/WebGLShadowsMultiWall.js";
 
+import {
+  WebGLShadowsBVH
+} from "./glsl/WebGLShadowsBVH.js";
+
 // Imported elsewhere: import "./scenes.js";
 
 Hooks.once("init", function() {
@@ -137,9 +146,10 @@ Hooks.once("init", function() {
      *   - WebGLShadows
      *   - WebGLShadowsSingleWall
      *   - WebGLShadowsMultiWall
+     *   - WebGLShadowsBVH
      * @type {class}
      */
-    webGLShadowClass: WebGLShadows,
+    webGLShadowClass: WebGLShadowsBVH,
 
     /**
      * For WebGLShadowsSingleWall and WebGLShadowsMultiWall, how many shadow triangles per edge.
@@ -187,7 +197,13 @@ Hooks.once("init", function() {
      * See minElevation.
      * @type {number}
      */
-    elevationStep: 0.1
+    elevationStep: 0.1,
+
+    /**
+     * The edge cache that stores edge data used by the BVH shader.
+     * @type {EdgePixelCache}
+     */
+    edgePixelCache: new EdgePixelCache()
   };
 
   game.modules.get(MODULE_ID).api = {
@@ -251,7 +267,9 @@ Hooks.once("init", function() {
       DirectionalSourceShadowSampleMultiWallGeometry,
       SourceShadowMultiWallSubGeometry,
       PointSourceShadowMultiWallSubGeometry,
-      DirectionalSourceShadowMultiWallSubGeometry
+      DirectionalSourceShadowMultiWallSubGeometry,
+
+      BVHTest
     }
   };
 
