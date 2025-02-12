@@ -242,6 +242,8 @@ float hasIntersection(in Ray ray) {
   if ( currNode.isLeaf ) return nodeHasObjectIntersection(ray, currNode) >= 1.0 ? 1.0 : 0.0;
 
   // Track the next node for each level of the tree.
+  // TODO Replace stack with parent index in the bvh texture.
+
   int[MAX_STACK_SIZE] stack;
   stack[0] = 1; // Root left child is 1; root right child is 2.
   while ( currLevel >= 0 ) {

@@ -339,6 +339,15 @@ float shadowPercentage() {
   #endif
 }
 
+// TODO: Use lookAt matrix to transform array of 2d points at light elevation to look at the fragment.
+// Start with light center point
+// Create by spacing:
+// 1. light quarters (half, half again) with points at 0, 1/7, 2/7, ...
+// 2. light eighths with points at 1/5, 2/5,...
+// 3. light sixteenths with points at 1/3, 2/3,...
+// 7 * 2 + 5 * 2 + 3 * 4 = 36 + 16 for the borders = 52.
+// For more, narrow the spacing, so 1/14, 3/14,..., 1/10, 3/10, ...
+
 
 void main() {
   ${PENUMBRA_FRAGMENT_CALCULATIONS}
