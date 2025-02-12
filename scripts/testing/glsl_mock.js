@@ -935,10 +935,17 @@ export function pow(a, x) {
   return a.pow(x);
 }
 
-export function min(x, y) { return x.min(y); }
+export function min(x, y) {
+  if ( Number.isNumeric(x) ) return Math.min(x, y);
+  return x.min(y);
+}
 
-export function max(x, y) { return x.max(y); }
+export function max(x, y) {
+  if ( Number.isNumeric(x) ) return Math.max(x, y);
+  return x.max(y);
+}
 
+export function isEven(n) { return n % 2 === 0; }
 
 /**
  * Ray defined by a point and a direction from that point.
@@ -948,9 +955,15 @@ export class Ray2dGLSLStruct {
 
   direction = vec2();
 
+  invDirection = vec2();
+
+  t2 = 0;
+
   constructor(origin, direction) {
     this.origin.set(origin, 0);
     this.direction.set(direction, 0);
+    this.invDirection.set(vec2(1.0).divide(direction), 0);
+    this.t2 = direction.dot(direction);
   }
 
   /**
@@ -958,13 +971,21 @@ export class Ray2dGLSLStruct {
    * @param {vec3} towardsPoint
    */
   static fromPoints(origin, towardsPoint) {
-    return new this(origin, towardsPoint.subtract(origin));
+    const r = new this(origin, towardsPoint.subtract(origin));
+    r.t2 = distanceSquared(origin, towardsPoint);
+    return r;
   }
 
-  static bvhRay(origin, destination) {
-    const r = new this(origin, normalizedDirection(origin, destination));
-    r.invDirection = vec3(1.0).divide(r.direction),
-    r.t2 = glsl.distanceSquared(origin, destination);
+  static normalizedRayFromPoints(origin, towardsPoint) {
+    const r = new this(origin, normalizedDirection(origin, towardsPoint));
+    r.t2 = 1.0;
+    return r;
+  }
+
+  static normalizedRayFromDirection(origin, direction) {
+    const nd = direction.normalize();
+    const r = new this(origin, nd);
+    r.t2 = 1.0;
     return r;
   }
 
@@ -993,7 +1014,7 @@ export class Ray2dGLSLStruct {
    * @returns {vec2} A newly constructed vector.
    */
   projectDistance(distance) {
-    const t = distance / this.direction.magnitude();
+    const t = distance / Math.sqrt(this.t2);
     return this.project(t);
   }
 
@@ -1003,8 +1024,10 @@ export class Ray2dGLSLStruct {
    * @returns {vec2} A newly constructed vector
    */
   projectDistanceSquared(distance2) {
+    if ( this.t2 === 0.0 ) return this.origin;
+
     const sign = Math.sign(distance2);
-    const t = sign * Math.sqrt(Math.abs(distance2) / this.direction.magnitudeSquared());
+    const t = (sign * Math.sqrt(Math.abs(distance2))) / this.t2;
     return this.project(t);
   }
 
@@ -1040,7 +1063,8 @@ export const Ray2d = (...args) => new Ray2dGLSLStruct(...args);
  * @returns {Ray2d}
  */
 export function rayFromPoints(origin, towardsPoint) {
-  return Ray2d(origin, towardsPoint.subtract(origin));
+  if ( typeof origin.z === "undefined" ) return Ray2dGLSLStruct.fromPoints(origin, towardsPoint);
+  return RayGLSLStruct.fromPoints(origin, towardsPoint);
 }
 
 /**
@@ -1050,7 +1074,8 @@ export function rayFromPoints(origin, towardsPoint) {
  * @returns {Ray2d}
  */
 export function normalizedRayFromPoints(origin, towardsPoint) {
-  return Ray2d(origin, normalizedDirection(origin, towardsPoint));
+  if ( typeof origin.z === "undefined" ) return Ray2dGLSLStruct.normalizedRayFromPoints(origin, towardsPoint);
+  return RayGLSLStruct.normalizedRayFromPoints(origin, towardsPoint)
 }
 
 /**
@@ -1061,10 +1086,16 @@ export class RayGLSLStruct extends Ray2dGLSLStruct {
 
   direction = vec3();
 
+  invDirection = vec3();
+
+  t2 = 0;
+
   constructor(origin, direction) {
     super(origin.xy, direction.xy);
     this.origin.set(origin, 0);
     this.direction.set(direction, 0);
+    this.invDirection.set(vec3(1.0).divide(direction), 0);
+    this.t2 = direction.dot(direction);
 
   }
 }

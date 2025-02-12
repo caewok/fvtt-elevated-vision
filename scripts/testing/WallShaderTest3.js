@@ -170,6 +170,7 @@ export class ShaderTest {
   static fromShader(shader) {
     const out = new this();
     out.config({ uniforms: shader.uniforms });
+    out.shader = shader;
     return out;
   }
 
