@@ -381,6 +381,7 @@ export class EdgePixelCache {
     const edges = this.edges;
     if ( edges.length > this.cache.height ) this.#increaseCacheSize();
     for ( const edge of edges ) this.#updateEdge(edge);
+    this.texture.update();
   }
 
   /**
@@ -393,6 +394,7 @@ export class EdgePixelCache {
     if ( !this.edgeIndexMap.has(edge.id)
       && this.edgeIndexMap.size > this.cache.height ) this.#increaseCacheSize();
     this.#updateEdge(edge);
+    this.texture.update();
     return true;
   }
 
@@ -412,7 +414,10 @@ export class EdgePixelCache {
     const changedThreshold = changes.has(`threshold.${this.sourceType}`) || changes.has("threshold.attenuation");
     const changedSenseType = changes.has(`${this.sourceType}`);
     const requiresUpdate = changedPosition || changedElevation || changedThreshold || changedSenseType;
-    if ( requiresUpdate ) this.#updateEdge(edge);
+    if ( requiresUpdate ) {
+      this.#updateEdge(edge);
+      this.texture.update();
+    }
     return requiresUpdate;
   }
 
@@ -430,6 +435,7 @@ export class EdgePixelCache {
     // Store the index so the texture row can be reused later.
     this.emptyIndices.add(i);
     this.edgeIndexMap.delete(edgeId);
+    this.texture.update();
     return true;
   }
 
@@ -1146,6 +1152,7 @@ export class BVH {
 
     if ( this.nodesUsed > this.cache.height ) this.#increaseCacheSize();
     this.#updateAllNodes();
+    this.texture.update();
   }
 
   /**
@@ -1173,6 +1180,7 @@ export class BVH {
       node.aabb.max = glsl.max(leftChild.aabb.max, rightChild.aabb.max);
       this.#updateNode(i);
     }
+    this.texture.update();
   }
 
   /**
