@@ -63,6 +63,12 @@ export class WebGLShadowsBVH {
    */
   get shadowTexture() { return this.shadowRenderer.renderTexture; }
 
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  get sourceType() { return this.source.constructor.sourceType; }
+
+  /** @type {number} */
+  get sourceElevationZ() { return this.source.elevationZ; }
+
   /**
    * Create a new shadow handler specific to the source type.
    * @param {RenderedEffectSource} source
@@ -208,22 +214,19 @@ export class WebGLShadowsBVH {
    * @returns {boolean}
    */
   _testEdgeInclusion(edge, origin) {
-    const src = this.source;
 
     // Ignore walls that are non-blocking for this type.
-    const type = src.constructor.sourceType;
-    if ( !edge[type] || edge.isOpen ) return false;
+    if ( !edge[this.sourceType] || edge.isOpen ) return false;
 
     // TODO: Handle elevation for ramps where walls are not equal
     const { topZ, bottomZ } = edgeElevationZ(edge);
 
     // If edge is entirely above the light, do not keep.
-    const elevationZ = src.elevationZ;
-    if ( bottomZ > elevationZ ) return false;
+    if ( bottomZ > this.sourceElevationZ ) return false;
 
     // If wall is entirely below the canvas and source is above, do not keep.
     const minCanvasE = canvas.scene[MODULE_ID]?.minElevation ?? canvas.scene.getFlag(MODULE_ID, "elevationmin") ?? 0;
-    if ( topZ <= minCanvasE && elevationZ > minCanvasE ) return false;
+    if ( topZ <= minCanvasE && this.sourceElevationZ > minCanvasE ) return false;
 
     // Ignore collinear walls
     const side = edge.orientPoint(origin);
@@ -245,7 +248,7 @@ export class WebGLShadowsBVH {
    */
   thresholdApplies(edge) {
     const src = this.source;
-    return edge.applyThreshold(src.constructor.sourceType, src, src.data.externalRadius);
+    return edge.applyThreshold(this.sourceType, src, src.data.externalRadius);
   }
 
   /**
@@ -432,7 +435,7 @@ export class SizedPointLightWebGLShadowsBVH extends WebGLShadowsBVH {
   /** @type {AbstractEVShader} */
   static shaderClass = SizedSourceShadowBVHShader;
 
-   /**
+  /**
    * Update based on indicated changes to the source.
    * @param {Set<string>} changes         Change keys for the source.
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
@@ -464,4 +467,26 @@ export class SizedPointLightWebGLShadowsBVH extends WebGLShadowsBVH {
 }
 
 export class DirectionalLightWebGLShadowsBVH extends WebGLShadowsBVH {}
+
+/* Testing point light
+MODULE_ID = "elevatedvision"
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+Draw = CONFIG.GeometryLib.Draw;
+api = game.modules.get("elevatedvision").api
+
+let [l] = canvas.lighting.placeables;
+ev = l.lightSource.elevatedvision
+
+
+geom = ev.shadowMesh.geometry
+shader = ev.shadowMesh.shader
+
+geom = ev.shadowMesh.children[0].geometry
+shader = ev.shadowMesh.children[0].shader
+
+
+shadowMesh = ev.shadowMesh
+canvas.stage.addChild(shadowMesh.children[0])
+
+*/
 
