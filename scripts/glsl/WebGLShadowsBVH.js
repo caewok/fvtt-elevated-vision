@@ -10,7 +10,7 @@ Token
 
 import { MODULE_ID } from "../const.js";
 import { BVH, EdgeData } from "./BVH.js";
-import { tokenIsOnGround, waypointIsOnGround, edgeElevationZ } from "../util.js";
+import { tokenIsOnGround, waypointIsOnGround, edgeElevationZ, sourceAtCanvasElevation } from "../util.js";
 import { ShadowBVHShader, SizedSourceShadowBVHShader } from "./ShadowBVHShader.js";
 import { EVUpdatingQuadMesh } from "./EVQuadMesh.js";
 import { GlobalLightWebGLShadows, PointVisionWebGLShadows } from "./WebGLShadows.js";
@@ -162,7 +162,10 @@ export class WebGLShadowsBVH {
    * @returns {boolean} True if the indicated changes resulted in a change to the shader.
    */
   sourceUpdated(changes) {
-    return this.shadowVisionMask.shader.sourceUpdated(changes);
+    const shadowChanges = this.shadowMesh.shader.sourceUpdated(changes);
+    if ( shadowChanges ) this.shadowRenderer.update();
+    const maskChanges = this.shadowVisionMask.shader.sourceUpdated(changes);
+    return shadowChanges || maskChanges;
   }
 
   /**
@@ -484,10 +487,14 @@ export class SizedPointLightWebGLShadowsBVH extends WebGLShadowsBVH {
   _updateCommonUniforms(shader) {
     // TODO: Fix and possibly move to the shader class.
     const u = shader.uniforms;
-    const src = this.source;
+    const source = this.source;
+    const lightPosition = CONFIG.GeometryLib.threeD.Point3d.fromPointSource(source);
+    if ( sourceAtCanvasElevation(lightPosition) ) lightPosition.z += 1;
+
+    // All still needed?
     u.uEVCanvasDimensions = [canvas.dimensions.width, canvas.dimensions.height];
-    u.uEVSourceOrigin = [src.x, src.y];
-    u.uEVSourceRadius = src.radius;
+    u.uEVSourceOrigin = [source.x, source.y];
+    u.uEVSourceRadius = source.radius;
     u.uEVShadowSampler = this.shadowTexture.baseTexture;
     u.uEVShadows = true;
     u.uEVDirectional = false;
